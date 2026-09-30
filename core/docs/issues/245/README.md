@@ -111,3 +111,12 @@ cache-ineligible latency. The [#232 POSIX count diagnostic](../232/evidence/posi
 shows repeated full-piece-list work. Historical receipts remain unchanged.
 The prior [ioctl campaign](../232/evidence/phase2-all-ioctl/REPORT.md) is
 opt-in evidence and does not qualify the arbitrary-shell route.
+
+## Phase 5 two-lane execution — 2026-09-30
+
+The owner opens a Core lane for bounded Commit/namespace streaming and later
+concurrency, and a deferred optimization lane for focused C1/write-amplification
+work. The [dated ownership and execution plan](PHASE5-TWO-LANE-PLAN-20260930.md)
+maps #248/#256/#249/#219, the selected #276 optimization subset, source ownership,
+proof reuse and remaining deferred boundaries. It changes no historical receipt
+or release/numeric qualification status.
