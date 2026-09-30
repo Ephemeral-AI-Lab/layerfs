@@ -549,3 +549,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family7 fund diagnostic r077
 
 [Cause confirmed, functional/full proof PASS](experiments/20260930-workspace-shell-package-sdk-fund-cause-r077.md),same1044dirty/4153updates but54additional credits/221184B fromunchangedquota; complete19336638417ns<25s, Commit9639508125ns, clean cleanup and full old/new/head proof PASS. Sourcea54cda244 adds24LOC (combined135696, PhaseB+257). Next original quiet1025 +first retained129 gate tail/proof, then current native refund/observer control; six passing/earlier proofs reused, failures preserved. No codec/memory/quota/worker change, numericINELIGIBLE.
+
+## Family7 original SDK tail r078
+
+[2/2 original SDK commands/full proofs/cleanup PASS](experiments/20260930-workspace-shell-package-sdk-checkpoint-r078.md):1025 complete18795341167ns<25s, Exec8315172083/Commit9629237416ns, proof627150042ns; retained129 complete4529116833ns<15s, finalExec579326125/Commit1290983791ns plus timed G1prelude, full pin and proof186680333ns. All8SDK currentcases covered withr071 six reused, numericINELIGIBLE. Next current native custody/refund control/checkpointchecks; no earlier-family or codec change. Combined135696, PhaseB+257.
