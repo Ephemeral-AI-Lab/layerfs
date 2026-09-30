@@ -1,0 +1,233 @@
+{
+  "driver_stdout": "CONTROL\t{\"stopping_observed\":true,\"retained_unmount_known\":true,\"new_pin_refused_known_busy\":true,\"new_posix_read_refused_busy\":false,\"holder_released\":false,\"pin_release_ok\":true}\nSTOPPING_DETAIL\tbefore=WorkspaceStatus { mounted: true, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 1, cookies: 0, consumer_accounted_bytes: 768504, projection: [(\"lookup\", 1), (\"getattr\", 3), (\"read\", 0), (\"write\", 0), (\"readdir\", 0), (\"open\", 1), (\"setattr\", 0), (\"rename\", 0), (\"other\", 0)], upstream_calls: 1 } unmount=Err(Retained { id: WorkspaceId(\"81ce6c11c57f9017b5ceb08fdf5c08ca\"), cause: Deadline }) stopped=Ok(WorkspaceStatus { mounted: true, stopping: true, closed: false, active_operations: 0, nodes: 2, handles: 1, cookies: 0, consumer_accounted_bytes: 768504, projection: [(\"lookup\", 1), (\"getattr\", 3), (\"read\", 0), (\"write\", 0), (\"readdir\", 0), (\"open\", 1), (\"setattr\", 0), (\"rename\", 0), (\"other\", 0)], upstream_calls: 1 }) pin=Err(Failure(Failure { code: Busy, unknown: false, cleanup: None, history: None })) read=Err(Failure(Failure { code: Io, unknown: false, cleanup: None, history: None })) release=Err(Failure(Failure { code: Io, unknown: false, cleanup: None, history: None }))\n",
+  "external_cleanup": {
+    "custody.json": {
+      "external_only": true,
+      "original_product_cleanup": "UNKNOWN",
+      "owned_container": "layerfs-956b7c45d7e20879fafb0c529a1ed1e8",
+      "volumes": [
+        "layerfs-956b7c45d7e20879fafb0c529a1ed1e8-root"
+      ]
+    },
+    "inspect.json": {
+      "command": [
+        "docker",
+        "inspect",
+        "layerfs-956b7c45d7e20879fafb0c529a1ed1e8"
+      ],
+      "exit_code": 0,
+      "started_ns": 5880775604708,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "6702d68adb9065e4930d77a1079b891d95b713d51791dfdde2b7c71fbb508cfd",
+      "timeout": false,
+      "wall_ns": 27882292
+    },
+    "logs.json": {
+      "command": [
+        "docker",
+        "logs",
+        "layerfs-956b7c45d7e20879fafb0c529a1ed1e8"
+      ],
+      "exit_code": 0,
+      "started_ns": 5880804456750,
+      "stderr_sha256": "e4ede8e29a3e29f0ef44f557edf069fc0ec37114331d3c92b00853a1398304f9",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "timeout": false,
+      "wall_ns": 29364958
+    },
+    "remove-container.json": {
+      "command": [
+        "docker",
+        "rm",
+        "-f",
+        "layerfs-956b7c45d7e20879fafb0c529a1ed1e8"
+      ],
+      "exit_code": 0,
+      "started_ns": 5880834697125,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "71c228f9386745828859ad8d2dbc68170e6a5d990b0fbedcfbb840017facb835",
+      "timeout": false,
+      "wall_ns": 54412166
+    },
+    "remove-volume-0.json": {
+      "command": [
+        "docker",
+        "volume",
+        "rm",
+        "layerfs-956b7c45d7e20879fafb0c529a1ed1e8-root"
+      ],
+      "exit_code": 0,
+      "started_ns": 5880890622125,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "020375d689f4b1e9c229e4ceffe5876e2cd3bf306dac755493779011189447d0",
+      "timeout": false,
+      "wall_ns": 29170000
+    }
+  },
+  "proof": {
+    "performance_manifest_sha256": "2a55dcf2bb682284a19dd73b7abc6b52f6c970171b2e343bfe12372a67d0ac0f",
+    "performance_run": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-commit-sdk-stopping-r057",
+    "rows": [
+      {
+        "case": "workspace-commit-sdk-stopping-refusal-v1",
+        "performance_receipt_sha256": "0b6a64745517cb5b93eb644dfced69e144c80bc6323d5a166cd42a4b3c446998",
+        "reason": "performance/route/pin/cleanup did not complete",
+        "sample_count": 0,
+        "status": "NOT_RUN"
+      }
+    ],
+    "schema": "core-workspace-commit-proof-v2",
+    "source": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "becf9074e6bec702827a883ea0fd056577494119ccc86c940bd8d0b6825569be",
+      "product_seal": "baeca38657149d617e60e55a16bc1139f98870855b981d703b64ea2f915e3cd3",
+      "source_commit": "d5ccb53dbddd785f1a411bed810a136de537ea8d",
+      "source_dirty": false,
+      "source_tree": "f1f09aab45003159ee3d8799344d81180d03d51b"
+    },
+    "status": "INCOMPLETE"
+  },
+  "proof_manifest_sha256": "545367a715720452f530ce1b7e2325455328ae64cb74fa2381f8d77ddd303cda",
+  "raw_manifest_sha256": "2a55dcf2bb682284a19dd73b7abc6b52f6c970171b2e343bfe12372a67d0ac0f",
+  "receipt": {
+    "artifacts": {
+      "benchmark_shell": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/72a8622b4a84c027cc0ad03e803a37bdf05877e9707983e813a7b839df07ade8/benchmark_shell",
+        "sha256": "72a8622b4a84c027cc0ad03e803a37bdf05877e9707983e813a7b839df07ade8"
+      },
+      "layerfs-daemon": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/5d82fadd7e0c5a4c7c053fb577a32f57d141a438c22012cc91b23098f52ab51b/layerfs-daemon",
+        "sha256": "5d82fadd7e0c5a4c7c053fb577a32f57d141a438c22012cc91b23098f52ab51b"
+      },
+      "verify_checkpoint5": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/abfbe9f75efa3c0d397a81c4e6eeaf5a9f317737acd068e405eee4b543a60985/verify_checkpoint5",
+        "sha256": "abfbe9f75efa3c0d397a81c4e6eeaf5a9f317737acd068e405eee4b543a60985"
+      }
+    },
+    "cache_contract": "host/container cache uncontrolled; whole Commit cache domain unproved",
+    "case": "workspace-commit-sdk-stopping-refusal-v1",
+    "cleanup_scope": "checked lease release, unmount and SDK delete",
+    "cleanup_status": "UNKNOWN",
+    "clone_method": "shutil.copyfile independent writable byte copy",
+    "command_budget_ns": 15000000000,
+    "command_status": "FAIL",
+    "control": {
+      "holder_released": false,
+      "new_pin_refused_known_busy": true,
+      "new_posix_read_refused_busy": false,
+      "pin_release_ok": true,
+      "retained_unmount_known": true,
+      "stopping_observed": true
+    },
+    "driver": null,
+    "family_id": "workspace_commit",
+    "functional_status": "INCOMPLETE",
+    "image_id": "sha256:97d1df653e2efa73723c07ca7315bc1649d95715defc15e7c58e4865105f94e8",
+    "image_reuse": {
+      "command": null,
+      "daemon_sha256": "5d82fadd7e0c5a4c7c053fb577a32f57d141a438c22012cc91b23098f52ab51b",
+      "image_id": "sha256:97d1df653e2efa73723c07ca7315bc1649d95715defc15e7c58e4865105f94e8",
+      "mode": "exact-image-reuse",
+      "wall_ns": 0
+    },
+    "master": {
+      "branch_id": "11094cc9de4f7dd10dabd617bb074906e8",
+      "genesis_layer": "326a560e44b5fe83f523a19227fd2b166dc2553eef53ab43a04416c94644829143",
+      "genesis_root": "91f1706b248c3da05e1acfa8a53b83cd2cb0954b3b4b03609aa711c6dd0ed5d0",
+      "genesis_root_serial": 1,
+      "history_sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19",
+      "old_commit": "12c0b3b66db8c63d5cc068e8d96c22e545e70a70633dc81b813bfbfcc44a3a62a7",
+      "path": "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/fourhop-patterns-prepared-v1/master",
+      "prepared": "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/fourhop-patterns-prepared-v1/prepared.json",
+      "project_id": "31bf50228be038338dd77c4822bf4f886d",
+      "proof_sha256": "d2f535e0a405eca68746b7968350118b85ddbe69b95a66416a38238a7da5f6c0",
+      "store_sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+    },
+    "numeric_latency_status": "INELIGIBLE",
+    "performance": {
+      "command": [
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/72a8622b4a84c027cc0ad03e803a37bdf05877e9707983e813a7b839df07ade8/benchmark_shell",
+        "run",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-commit-sdk-stopping-r057/workspace-commit-sdk-stopping-refusal-v1/case.before",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-commit-sdk-stopping-r057/workspace-commit-sdk-stopping-refusal-v1/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-commit-sdk-stopping-r057/workspace-commit-sdk-stopping-refusal-v1/history.sqlite",
+        "sha256:97d1df653e2efa73723c07ca7315bc1649d95715defc15e7c58e4865105f94e8"
+      ],
+      "exit_code": null,
+      "started_ns": 5783225282375,
+      "stderr_sha256": "1ae1e15d996856c8503b58c4de9a9efee3d7d9d2cbc736c80038e0b46691e205",
+      "stdout_sha256": "87f44f5aed8632cd2ca12c24ed6ff08cf022758920ce6efdff8b1606adcb3f62",
+      "timeout": true,
+      "wall_ns": 15004065166
+    },
+    "performance_claim": false,
+    "pin_oracle_sha256": "31c45fc43c108fdfe65faa79d3568d4b64a3496cc75f29c2d441f98120bbfff5",
+    "pin_status": "PASS",
+    "pin_verification_status": "SKIPPED",
+    "prelude_command": null,
+    "profile": "sdk-live-retained-commit-fast-v3",
+    "role": "functional-oracle",
+    "route_status": "FAIL",
+    "sample_count": 1,
+    "schema": "core-workspace-commit-fast-attempt-v2",
+    "setup": "clone",
+    "shell_command": "held FD/readiness and release FIFOs",
+    "source": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "becf9074e6bec702827a883ea0fd056577494119ccc86c940bd8d0b6825569be",
+      "product_seal": "baeca38657149d617e60e55a16bc1139f98870855b981d703b64ea2f915e3cd3",
+      "source_commit": "d5ccb53dbddd785f1a411bed810a136de537ea8d",
+      "source_dirty": false,
+      "source_tree": "f1f09aab45003159ee3d8799344d81180d03d51b"
+    },
+    "status": "FAIL",
+    "verification": {
+      "reason": "fast lane; prove retained Stores separately without performance replay",
+      "status": "SKIPPED"
+    },
+    "write_callbacks": null
+  },
+  "run": {
+    "earlier_family_policy": "reuse unaffected evidence; no automatic earlier-family benchmark runs",
+    "identity": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "becf9074e6bec702827a883ea0fd056577494119ccc86c940bd8d0b6825569be",
+      "product_seal": "baeca38657149d617e60e55a16bc1139f98870855b981d703b64ea2f915e3cd3",
+      "source_commit": "d5ccb53dbddd785f1a411bed810a136de537ea8d",
+      "source_dirty": false,
+      "source_tree": "f1f09aab45003159ee3d8799344d81180d03d51b"
+    },
+    "profile": "sdk-live-retained-commit-fast-v3",
+    "remaining": {
+      "issue273-clean-commit-v1": "historical committed/reattached control cannot hold its live private journal; use distinct v2 scenario",
+      "issue273-one-edit-commit-v1": "historical committed/reattached control cannot hold its live private journal; use distinct v2 scenario",
+      "workspace-commit-full-lowering-size-64mib-v1": "native 64 MiB/eight-literal-byte lowering proof pending",
+      "workspace-commit-headroom-quota-4mib-v1": "occupied Commit/same-fund allocation and refund proof pending",
+      "workspace-commit-known-unknown-local-c5-v1": "source-matched failure custody proof pending",
+      "workspace-commit-live-g1-g2-v1": "deterministic live successor/known Commit proof pending",
+      "workspace-commit-reordered-base-copy-v1": "public SDK old/new/G2/pinned-byte copy proof pending",
+      "workspace-commit-sdk-stopping-refusal-v1": "deterministic live SDK stopping/refusal proof pending",
+      "workspace-commit-stage-headroom-quota-2mib-v1": "occupied Stage/same-fund allocation and refund proof pending"
+    },
+    "rows": [
+      {
+        "case": "workspace-commit-sdk-stopping-refusal-v1",
+        "status": "FAIL"
+      }
+    ],
+    "schema": "core-workspace-commit-fast-run-v2",
+    "selected": [
+      "workspace-commit-sdk-stopping-refusal-v1"
+    ],
+    "status": "INCOMPLETE"
+  }
+}

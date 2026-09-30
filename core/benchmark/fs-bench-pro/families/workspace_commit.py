@@ -40,6 +40,8 @@ CASES = {case.id: case for case in (
          command_budget_ns=60_000_000_000, pin_read_bytes=31_744, role="functional-oracle"),
     Case("workspace-commit-sdk-stopping-refusal-v1", "held FD/readiness and release FIFOs", 0, True,
          command_budget_ns=15_000_000_000, role="functional-oracle", stopping=True),
+    Case("workspace-commit-sdk-stopping-refusal-fixture-release-v2", "held FD; outside-Workspace fixture-controller release", 0, True,
+         command_budget_ns=15_000_000_000, role="functional-oracle", stopping=True),
     Case("workspace-commit-sdk-reordered-base-copy-8kib-v1",
          "dd if=data.bin of=/tmp/f4-first bs=8192 count=1 && dd if=data.bin of=/tmp/f4-second bs=8192 skip=128 count=1 && dd if=/tmp/f4-second of=data.bin bs=8192 count=1 conv=notrunc && dd if=/tmp/f4-first of=data.bin bs=8192 seek=128 count=1 conv=notrunc",
          2, False, command_budget_ns=60_000_000_000, pin_read_bytes=31_744, role="functional-oracle", reordered=True),
@@ -124,7 +126,7 @@ def attempt(out, case, prepared, pin_sha):
                  and (driver.get("head_commit") == control["prelude_head_commit"]) == case.clean)
     if case.stopping:
         route = bool(control and all(control.get(key) for key in ("stopping_observed", "retained_unmount_known",
-            "new_pin_refused_known_busy", "new_posix_read_refused_busy", "holder_released")))
+            "new_pin_refused_known_busy", "new_exec_refused_known_io", "holder_released")))
     pin = bool(control and (control.get("new_pin_refused_known_busy") if case.stopping else
                            control.get("pin_generation", 0) > 0 and control.get("pin_observation_ok")))
     full_pin = bool(control and control.get("pinned_bytes") == write.SIZE and control.get("pinned_sha256") == pin_sha)

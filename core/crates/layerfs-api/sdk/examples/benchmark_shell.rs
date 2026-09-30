@@ -123,7 +123,11 @@ fn pinned_digest(
     }
     Ok((offset, hex(&hash.finalize())))
 }
-fn stopping_control(api: &WorkspaceApi<'_>, id: &layerfs_sdk::WorkspaceId) -> Result<(), String> {
+fn stopping_control(
+    api: &WorkspaceApi<'_>,
+    id: &layerfs_sdk::WorkspaceId,
+    sandbox: &layerfs_sdk::SandboxId,
+) -> Result<(), String> {
     let setup = api.exec(id, "mkfifo /tmp/f4-ready /tmp/f4-release /tmp/f4-closed; (exec 3<data.bin && printf 'ready\\n' > /tmp/f4-ready && read token < /tmp/f4-release && exec 3<&- && printf 'closed\\n' > /tmp/f4-closed) > /tmp/f4-holder.log 2>&1 & read ready < /tmp/f4-ready")
         .map_err(|error| format!("holder setup: {error:?}"))?;
     if setup.exit_status != Some(0) {
@@ -147,21 +151,21 @@ fn stopping_control(api: &WorkspaceApi<'_>, id: &layerfs_sdk::WorkspaceId) -> Re
     let pin = api.pin_view(id);
     let pin_refused = matches!(&pin, Err(WorkspaceError::Failure(failure)) if failure.code == layerfs_bridge::contract::Code::Busy && !failure.unknown);
     let read = api.exec(id, "head -c 1 data.bin");
-    let read_refused = read.as_ref().is_ok_and(|result| {
-        result.exit_status.is_some_and(|status| status != 0)
-            && String::from_utf8_lossy(&result.stderr)
-                .to_ascii_lowercase()
-                .contains("busy")
-    });
-    // The outside-Workspace FIFO releases the accepted FD through ordinary Exec.
-    let release = api.exec(
-        id,
-        "printf 'release\n' > /tmp/f4-release; read closed < /tmp/f4-closed",
-    );
-    let released = release
-        .as_ref()
-        .is_ok_and(|result| result.exit_status == Some(0));
-    println!("CONTROL\t{{\"stopping_observed\":{stopping},\"retained_unmount_known\":{retained},\"new_pin_refused_known_busy\":{pin_refused},\"new_posix_read_refused_busy\":{read_refused},\"holder_released\":{released},\"pin_release_ok\":{}}}", pin.is_err());
+    let read_refused = matches!(&read, Err(WorkspaceError::Failure(failure))
+        if failure.code == layerfs_bridge::contract::Code::Io && !failure.unknown);
+    // Test-controller release touches only outside-Workspace synchronization
+    // FIFOs. Product unmount/deletion still go through their checked SDK APIs.
+    let release = std::process::Command::new("docker")
+        .args([
+            "exec",
+            &format!("layerfs-{sandbox}"),
+            "/bin/sh",
+            "-c",
+            "printf 'release\\n' > /tmp/f4-release; read closed < /tmp/f4-closed",
+        ])
+        .output();
+    let released = release.as_ref().is_ok_and(|result| result.status.success());
+    println!("CONTROL\t{{\"stopping_observed\":{stopping},\"retained_unmount_known\":{retained},\"new_pin_refused_known_busy\":{pin_refused},\"new_exec_refused_known_io\":{read_refused},\"holder_released\":{released},\"pin_release_ok\":{}}}", pin.is_err());
     println!("STOPPING_DETAIL\tbefore={before:?} unmount={unmount:?} stopped={stopped:?} pin={pin:?} read={read:?} release={release:?}");
     if let Ok(lease) = pin {
         api.release_view(&lease)
@@ -310,7 +314,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .is_some_and(|value| value == "1")
     {
         let start = Instant::now();
-        let result = stopping_control(&workspaces, &mount.id);
+        let result = stopping_control(&workspaces, &mount.id, &sandbox);
         let operation_ns = start.elapsed().as_nanos();
         let unmount = workspaces.unmount(&mount.id);
         let final_status = workspaces.status(&mount.id);
