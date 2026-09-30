@@ -1,0 +1,402 @@
+{
+  "attempt": {
+    "artifacts": {
+      "benchmark_init": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+        "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+      },
+      "benchmark_shell": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/3fa41b08fb250de42755f18a3f1d97f778797cef24b8a3d31ddabd330af1b715/benchmark_shell",
+        "sha256": "3fa41b08fb250de42755f18a3f1d97f778797cef24b8a3d31ddabd330af1b715"
+      },
+      "layerfs-daemon": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/a84b996863852aebacfa18f5633627cda020f1f03224b15c24aaed42cd2545f4/layerfs-daemon",
+        "sha256": "a84b996863852aebacfa18f5633627cda020f1f03224b15c24aaed42cd2545f4"
+      },
+      "verify_checkpoint5": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+        "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+      }
+    },
+    "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+    "case": "workspace-shell-package-many-1025-sdk-cause-diagnostic-v1",
+    "changed_file_count": 1025,
+    "cleanup_status": "PASS",
+    "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+    "command_budget_ns": 25000000000,
+    "command_status": "PASS",
+    "control": {
+      "pin_generation": 0,
+      "pin_observation_ok": true,
+      "pin_read_bytes": 16384,
+      "pin_release_ok": true,
+      "pinned_bytes": 0,
+      "pinned_sha256": "",
+      "prelude_commit_ns": 0,
+      "prelude_exec_ns": 0,
+      "prelude_head_commit": "",
+      "recovery_complete": false,
+      "unmounted_before_recovery": false,
+      "up_to_date": false
+    },
+    "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+    "diagnostic_cause": true,
+    "driver": {
+      "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+      "cleanup_ns": 566687917,
+      "commit_called": true,
+      "commit_ns": 9639508125,
+      "daemon_log_attempted": true,
+      "daemon_log_bytes": 2250990,
+      "daemon_log_error": "None",
+      "daemon_log_truncated": false,
+      "detail": "",
+      "exec_exit_status": 0,
+      "exec_ns": 8758171000,
+      "head_commit": "12ab6656269816d25e32413bf3ef65725daba90b43e604214f0e2879563fe57743",
+      "host_disk_read_bytes": 0,
+      "mode": "run",
+      "operation_ns": 18397691166,
+      "projection_counts": "lookup=6255,getattr=9385,read=0,write=2068,readdir=36,open=0,setattr=0,rename=0,other=18",
+      "sandbox_delete_ok": true,
+      "scenario_id": "workspace-shell-package-many-1025-sdk-cause-diagnostic-v1",
+      "schema": "issue243-shell-driver-v1",
+      "status": "COMPLETE",
+      "unmount_ok": true
+    },
+    "expected_exec_failure": false,
+    "expected_failure": false,
+    "explicit_recovery": false,
+    "family_id": "workspace_shell_package",
+    "image_id": "sha256:2777db7207f86695f5122c55e5a469b98037e654eba03f1bbd3c95975c904b48",
+    "master": {
+      "binding_key_hex": "6c6179657266732d62656e63682d70726f",
+      "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+      "files": {
+        "fixture.before": "c67e15b5ca6c5de79bed58c54510b8194d07c38fdd6da3e0142b4df92c4e598d",
+        "history.sqlite": "de34cfcb14b9d8b481e3f077668f81108e82e9a782f5288fed8eb60d70bb592c",
+        "store.sqlite": "a0628c5cee06c8bed44caedf4d30f84aa2d4853d0d4f931bc33e92d8dcb3bc2e"
+      },
+      "layout": "package",
+      "old_commit": "12b8fc793f6b3268259d1cc637a48feaf592b94b051dc370c333d689fac15c9154",
+      "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+      "preparation": {
+        "full_proof": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/verify.case",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 14133594807708,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "3fabae0bab27c84740434d765d3e98d27f60faa28e8ad52cc5b9367fbed49fab",
+          "timeout": false,
+          "wall_ns": 21958958
+        },
+        "init": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/source",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+            "family7-package"
+          ],
+          "exit_code": 0,
+          "started_ns": 14132682211541,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "f9c82fc1738dfa09916d2a14b9019a3e7757e782a2f2c36e599b0dd58b7a39a2",
+          "timeout": false,
+          "wall_ns": 34063667
+        },
+        "seed": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+            "seed",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/seed.case",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+            "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+          ],
+          "exit_code": 0,
+          "started_ns": 14132717096375,
+          "stderr_sha256": "93b69e37eae762c773c1030074b4dfda55d2192e73b3b850ffdfe208a8387674",
+          "stdout_sha256": "bb80a9fd88a34e4731cafc01135052cec4ed200db319624b14b980432b73cf02",
+          "timeout": false,
+          "wall_ns": 876472458
+        }
+      },
+      "producer_identity": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+        "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+        "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+        "source_dirty": false,
+        "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+      },
+      "reuse": true
+    },
+    "numeric_latency_status": "INELIGIBLE",
+    "original_case_id": null,
+    "performance": {
+      "command": [
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/3fa41b08fb250de42755f18a3f1d97f778797cef24b8a3d31ddabd330af1b715/benchmark_shell",
+        "run",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-fund-cause-r077/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/case.before",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-fund-cause-r077/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-fund-cause-r077/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/history.sqlite",
+        "sha256:2777db7207f86695f5122c55e5a469b98037e654eba03f1bbd3c95975c904b48"
+      ],
+      "exit_code": 0,
+      "started_ns": 16676887919708,
+      "stderr_sha256": "be9ac41e960980ad4fbb955fe4648bf4a7cebe0d4e83206ff9b7a4a494699550",
+      "stdout_sha256": "2c343de4ddff81c6a7aef4a723adfe0c083fa29c3303a44c0951d5d50c86bb22",
+      "timeout": false,
+      "wall_ns": 19336638417
+    },
+    "performance_claim": false,
+    "pin_status": "PASS",
+    "profile": "package-many-file-functional-clone-v2",
+    "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+    "route_status": "PASS",
+    "sample_count": 1,
+    "source": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "f3990da5002290b21f6940881c254920180dfe8254c4e74efe7b199d6701f93b",
+      "product_seal": "f02b009741c9511e9dfa17af0384298ec92294fea4ed5182c8535dded4287b37",
+      "source_commit": "a54cda244f4ad4f99b87a852c6dbe0395633c3d3",
+      "source_dirty": false,
+      "source_tree": "96643655e0014e4181d6fce7688560b8192bc1a2"
+    },
+    "status": "COMPLETE_DIAGNOSTIC",
+    "verification": {
+      "reason": "separate prove, without performance replay",
+      "status": "SKIPPED"
+    },
+    "workload_source_sha256": "1a29dfb7d9734dfb13b660f544c7d0ff70f22ba44656a59d0e1cabd4735413f4"
+  },
+  "c5_charge_lines": [
+    "LFS_C5_CHARGE v=1 phase=prepared dirty_rows=1044 deletion_keys=2050 deletion_key_bytes=45100 rows_charge=467712 deletion_charge=196800 updates_charge=1036212 budget_before=1438288 budget_after_prepare=2102800 budget_after_updates=3139012",
+    "LFS_C5_CHARGE v=1 phase=map_transferred updates=4153 original_map_charge=1036212 key_capacity=72379 value_capacity=434304 ordered_capacity=4153 ordered_charge=199344 buffers_charge=506683 budget_after_transfer=2615762",
+    "LFS_C5_CHARGE v=1 phase=index_prepare updates=4153 updates_charge=506683 ordered_scratch=199344 budget_before_plan=2945947 budget_after_plan=2945947 budget_before_index=2615762 compaction_sources=0"
+  ],
+  "fund_additional_bytes": 221184,
+  "fund_additional_requests": 54,
+  "fund_admission_lines": [
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096",
+    "LFS_FUND_ADMISSION v=1 requested=4096 prior=0 additional=4096"
+  ],
+  "proof": {
+    "identity": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "f3990da5002290b21f6940881c254920180dfe8254c4e74efe7b199d6701f93b",
+      "product_seal": "f02b009741c9511e9dfa17af0384298ec92294fea4ed5182c8535dded4287b37",
+      "source_commit": "a54cda244f4ad4f99b87a852c6dbe0395633c3d3",
+      "source_dirty": false,
+      "source_tree": "96643655e0014e4181d6fce7688560b8192bc1a2"
+    },
+    "rows": [
+      {
+        "case": "workspace-shell-package-many-1025-sdk-cause-diagnostic-v1",
+        "child": {
+          "advanced": true,
+          "head_commit": "12ab6656269816d25e32413bf3ef65725daba90b43e604214f0e2879563fe57743",
+          "namespace_identities": 1,
+          "new_bytes": 1121591,
+          "new_files": 1034,
+          "new_paths": 1060,
+          "old_bytes": 1114501,
+          "old_commit": "12b8fc793f6b3268259d1cc637a48feaf592b94b051dc370c333d689fac15c9154",
+          "old_files": 9,
+          "old_paths": 17,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "property_assertions": 0,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "5b8673e19082936154d393b420da4da0ffd5fa78b0c3a8ef2088c524502a1fec",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-fund-cause-r077/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-fund-cause-r077/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-fund-cause-r077/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-fund-cause-r077/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-fund-cause-r077/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 16716069808791,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "7052c019b2baedda9dffd52c8f1f572b2422f6ce293cc640ccc511e8ef7ed424",
+          "timeout": false,
+          "wall_ns": 633383084
+        },
+        "verifier_budget_ns": 9000000000
+      }
+    ],
+    "run": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-fund-cause-r077",
+    "schema": "core-workspace-shell-package-proof-v2",
+    "status": "PASS"
+  },
+  "proof_manifest_sha256": "ad8ee7f7cfb53af67c8a8a59855a7d14dfda84b7630b91c32c888327355f95a4",
+  "raw_manifest_sha256": "2016f604fabb595bbc024dffb51566249c14452acbf8ac22c18bbfe8e6926d61",
+  "run": {
+    "deferred_cases": [
+      {
+        "case": "failed-command-no-commit-v1",
+        "reason": "OWNER-DEFERRED #276: unmount does not discard dirty changes; original method remains historical, no repeated dirty-close attempt",
+        "status": "OWNER-DEFERRED"
+      }
+    ],
+    "identity": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "f3990da5002290b21f6940881c254920180dfe8254c4e74efe7b199d6701f93b",
+      "product_seal": "f02b009741c9511e9dfa17af0384298ec92294fea4ed5182c8535dded4287b37",
+      "source_commit": "a54cda244f4ad4f99b87a852c6dbe0395633c3d3",
+      "source_dirty": false,
+      "source_tree": "96643655e0014e4181d6fce7688560b8192bc1a2"
+    },
+    "prepared": {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+          "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/3fa41b08fb250de42755f18a3f1d97f778797cef24b8a3d31ddabd330af1b715/benchmark_shell",
+          "sha256": "3fa41b08fb250de42755f18a3f1d97f778797cef24b8a3d31ddabd330af1b715"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/a84b996863852aebacfa18f5633627cda020f1f03224b15c24aaed42cd2545f4/layerfs-daemon",
+          "sha256": "a84b996863852aebacfa18f5633627cda020f1f03224b15c24aaed42cd2545f4"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "build_mode": "worktree-local locked release; exact daemon/image reuse when sealed",
+      "identity": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "f3990da5002290b21f6940881c254920180dfe8254c4e74efe7b199d6701f93b",
+        "product_seal": "f02b009741c9511e9dfa17af0384298ec92294fea4ed5182c8535dded4287b37",
+        "source_commit": "a54cda244f4ad4f99b87a852c6dbe0395633c3d3",
+        "source_dirty": false,
+        "source_tree": "96643655e0014e4181d6fce7688560b8192bc1a2"
+      },
+      "image_build": {
+        "command": [
+          "docker",
+          "build",
+          "-q",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-fund-cause-r077/image-context"
+        ],
+        "exit_code": 0,
+        "mode": "build",
+        "started_ns": 16673589232083,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "d48fb3eb3c5cc79e8fe2cdf2e3e0ff52a7ed020d2fa67bb929e6a748ef35bcf7",
+        "timeout": false,
+        "wall_ns": 2288569250
+      },
+      "image_dockerfile_sha256": "d351105281e5e33ecf4b861cdb4f7a42e199830723a73b7226b933223d7cf3e3",
+      "image_id": "sha256:2777db7207f86695f5122c55e5a469b98037e654eba03f1bbd3c95975c904b48",
+      "package_image": {
+        "image_id": "sha256:2777db7207f86695f5122c55e5a469b98037e654eba03f1bbd3c95975c904b48",
+        "mode": "build",
+        "seal": "7d3042fd91cf1c029c8289379f38fe943bf958fbe65850c741b9a732f1245f69",
+        "wall_ns": 469427125
+      },
+      "writer_binary_sha256": "f293d71f2a16aaeecb4de6c1c2cf5b74dfcb0e616204e591f83c3ef802a686d3"
+    },
+    "profile": "package-many-file-functional-clone-v2",
+    "reused_proof_identities": {
+      "dirty_cleanup": "r069 FAIL, #276 comment5903530127",
+      "earlier_families": "FAMILY1/2/4/5/6-CHECKPOINT; F3 r063+unchanged eight rows; product unchanged"
+    },
+    "rows": [
+      {
+        "case": "workspace-shell-package-many-1025-sdk-cause-diagnostic-v1",
+        "status": "COMPLETE_DIAGNOSTIC"
+      }
+    ],
+    "schema": "core-workspace-shell-package-run-v2",
+    "selected": [
+      "workspace-shell-package-many-1025-sdk-cause-diagnostic-v1"
+    ],
+    "status": "COMPLETE_DIAGNOSTIC"
+  }
+}

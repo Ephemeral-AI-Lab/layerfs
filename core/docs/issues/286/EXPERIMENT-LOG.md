@@ -545,3 +545,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family7 SDK count/custody r076
 
 [Diagnostic cause recovered; gate FAIL](experiments/20260930-workspace-shell-package-sdk-cause-r076.md),complete25010761125ns/25s. Typed Reconcile KnownCommitLocalFailure Capacity;1044dirty/4153updates; recorded index-admission3.785MB<8MiB. Separate full canonical old/new/head/parent proof PASS641885125ns, but local/cleanup remainsFAIL. Archive ownership then external teardown. Next test one explicit same-quota C5 credit admission change, counted additional bytes; no quota lift/retry/codec/frontier refactor.
+
+## Family7 fund diagnostic r077
+
+[Cause confirmed, functional/full proof PASS](experiments/20260930-workspace-shell-package-sdk-fund-cause-r077.md),same1044dirty/4153updates but54additional credits/221184B fromunchangedquota; complete19336638417ns<25s, Commit9639508125ns, clean cleanup and full old/new/head proof PASS. Sourcea54cda244 adds24LOC (combined135696, PhaseB+257). Next original quiet1025 +first retained129 gate tail/proof, then current native refund/observer control; six passing/earlier proofs reused, failures preserved. No codec/memory/quota/worker change, numericINELIGIBLE.
