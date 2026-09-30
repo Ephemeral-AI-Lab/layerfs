@@ -529,3 +529,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family7 native progress/refusal r072
 
 [Current native control PASS](experiments/20260930-workspace-shell-package-native-progress-r072.md),359827417ns<15s. Same-thread callbacks, refusal after known saved/local facts preserves full old/private pins and36864+843776B custody with0 canonical calls/no replay; acceptance3callbacks/1canonical/full tree/clean0/0. Source9f12f8be9 adds34 productionLOC (combined135672, PhaseB+233); no new worker, timeout, quota or codec. Next only original failed1025 and unattempted retained129 SDK tail/proof; six r071 passing/earlier proofs reused.
+
+## Family7 SDK tail r073
+
+[1025 TIMEOUT/FAIL,retained129 NOT_RUN](experiments/20260930-workspace-shell-package-sdk-tail-r073.md). Progress fixes5s delivery loss, but Commit returns error after9.387s; cleanup pushes complete25.008s past25s and final typed receipt is absent. Retained matched daemon/private state archived before external owned teardown. Next count-driven native1025 diagnostic/typed physical custody, plus example interim outcome logging; no unchanged SDK resample/timeout lift. Passing six r071/r072 custody proofs remain reused; production135672 unchanged.

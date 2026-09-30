@@ -15,7 +15,10 @@ PROOF_SCHEMA = "core-workspace-shell-package-proof-v2"
 NATIVE_SCHEMA = "core-workspace-shell-package-native-run-v2"
 NATIVE = {"workspace-shell-package-progress-custody-native-v2": native.Case(
     "workspace-shell-package-progress-custody-native-v2", "phase_b_mutations::progress_custody",
-    clones=2, retained=True, budget_ns=15_000_000_000, ignored=True)}
+    clones=2, retained=True, budget_ns=15_000_000_000, ignored=True),
+    "workspace-shell-package-many-1025-cause-diagnostic-v1": native.Case(
+        "workspace-shell-package-many-1025-cause-diagnostic-v1", "phase_b_mutations::many_commit_diagnostic",
+        retained=True, budget_ns=15_000_000_000, ignored=True, environment=(("LFS_CAPACITY_DIAGNOSTIC", "1"),))}
 PROFILE = "package-many-file-functional-clone-v2"
 DEFERRED = "failed-command-no-commit-v1"
 DEFER_REASON = "OWNER-DEFERRED #276: unmount does not discard dirty changes; original method remains historical, no repeated dirty-close attempt"

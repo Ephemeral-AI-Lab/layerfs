@@ -24,3 +24,16 @@ claims remain INELIGIBLE and no homogeneous final-source numeric comparison is
 claimed. New tail is collected at committed changed product source and verified
 separately. Current callback/refusal transport tests cover shared behavior;
 earlier Family2 and all unchanged canonical/C5 scope proofs are reused.
+
+## Labelled cause diagnostic after r073
+
+`workspace-shell-package-many-1025-cause-diagnostic-v1` creates1025 distinct
+`new-<i>` files across17 `many/d<j>` directories through public native APIs,
+with distinct deterministic per-file mtime(i,0). It records exact dirty count,
+callback/canonical calls, typed Commit outcome and before/after owned physical
+allocation/reservation with existing capacity-charge diagnostics. One prepared
+clone, one construction worker, unchanged Budget/quota,15s complete child bound;
+no SDK time/speed or clean Commit gate claim. If canonical head exists, fully
+compare all1025 bytes through public APIs; if failed, require Busy no-replay
+retention and archive Linux state before external teardown. This measures the
+mechanism's cause, not another sample of the unchanged failed SDK arm.

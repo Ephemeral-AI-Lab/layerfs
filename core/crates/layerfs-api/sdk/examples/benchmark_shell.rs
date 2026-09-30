@@ -594,8 +594,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             detail = format!("{detail}; pin release failed");
         }
     }
+    eprintln!("BENCH_PHASE_OUTCOME status={status} exec_ns={exec_ns} commit_ns={commit_ns} head={head_commit} detail={detail}");
     let cleanup_start = Instant::now();
     let post_status = workspaces.status(&mount.id);
+    eprintln!("BENCH_POST_STATUS {post_status:?}");
     let unmount = if early_unmount_ok {
         Ok(())
     } else {

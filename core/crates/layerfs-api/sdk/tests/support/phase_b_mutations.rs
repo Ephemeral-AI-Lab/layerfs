@@ -640,3 +640,98 @@ fn progress_custody() {
         }
     }
 }
+
+#[test]
+#[ignore = "Family7 labelled count-driven 1025-inode Commit cause diagnostic"]
+fn many_commit_diagnostic() {
+    let f = Fixture::new();
+    let many = f
+        .workspace
+        .mkdir(f.workspace.root().serial, b"many", 0o755, 0, deadline())
+        .unwrap()
+        .serial;
+    let dirs: Vec<_> = (0..17)
+        .map(|i| {
+            f.workspace
+                .mkdir(many, format!("d{i}").as_bytes(), 0o755, 0, deadline())
+                .unwrap()
+                .serial
+        })
+        .collect();
+    let mut values = Vec::new();
+    for i in 0..1025 {
+        let file = f
+            .workspace
+            .mknod(
+                dirs[i % 17],
+                format!("f{i}").as_bytes(),
+                0o644,
+                0,
+                deadline(),
+            )
+            .unwrap()
+            .serial;
+        let handle = f.open(file);
+        let bytes = format!("new-{i}").into_bytes();
+        write(&f, handle, 0, &bytes);
+        f.workspace
+            .set_attributes(
+                file,
+                PortableAttributes {
+                    mtime: Some((i as i64, 0)),
+                    ..Default::default()
+                },
+                deadline(),
+            )
+            .unwrap();
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file, u64::MAX, ReferenceScope::Local);
+        values.push(bytes);
+    }
+    println!(
+        "PHASE_B_MANY_DIAGNOSTIC files=1025 dirs=18 dirty={} backing_before={:?}",
+        f.workspace.status().unwrap().dirty_inodes,
+        f.workspace.backing_status().unwrap()
+    );
+    let mut callbacks = 0;
+    let result = f.workspace.commit_with_progress(deadline(), &mut || {
+        callbacks += 1;
+        Ok(())
+    });
+    println!("PHASE_B_MANY_DIAGNOSTIC callbacks={callbacks} canonical_calls={} result={result:?} status={:?} backing_after={:?}", f.canonical_calls.load(Ordering::Acquire), f.workspace.status().unwrap(), f.workspace.backing_status().unwrap());
+    let head = branch(&f);
+    println!(
+        "PHASE_B_MANY_DIAGNOSTIC public_head={:?}",
+        head.branch.head_commit
+    );
+    if head.branch.head_commit.is_some() {
+        for (i, wanted) in values.iter().enumerate() {
+            assert_eq!(
+                f.content_bytes(
+                    head.effective_root,
+                    format!("many/d{}/f{i}", i % 17).as_bytes()
+                ),
+                *wanted
+            );
+        }
+        println!("PHASE_B_MANY_DIAGNOSTIC canonical_full_1025_bytes=true");
+    }
+    if result.is_err() {
+        assert!(matches!(
+            f.workspace.commit(deadline()),
+            Err(WorkspaceError::Busy)
+        ));
+        assert!(matches!(
+            f.workspace.close_clean(),
+            Err(WorkspaceError::Busy)
+        ));
+        println!("PHASE_B_MANY_DIAGNOSTIC retained=true no_replay=true diagnostic_only=true");
+        std::mem::forget(f);
+    } else {
+        for serial in dirs.into_iter().chain([many]) {
+            f.workspace.forget(serial, u64::MAX, ReferenceScope::Local);
+        }
+        f.workspace.close_clean().unwrap();
+        println!("PHASE_B_MANY_DIAGNOSTIC cleanup=true diagnostic_only=true");
+    }
+}
