@@ -1,0 +1,29 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "filesystem_ordering_scan",
+    "--test",
+    "filesystem_ordering_consolidate",
+    "--test",
+    "filesystem_ordering",
+    "--test",
+    "filesystem_run_seek",
+    "--test",
+    "filesystem_reference",
+    "--test",
+    "filesystem_hardlinks",
+    "--",
+    "--nocapture"
+  ],
+  "exit": 0,
+  "complete_command_wall_seconds": 10.057746666992898,
+  "purpose": "correctness proof wall; not performance measurement"
+}

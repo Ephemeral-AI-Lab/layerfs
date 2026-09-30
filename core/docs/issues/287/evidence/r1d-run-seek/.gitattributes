@@ -1,0 +1,2 @@
+# Immutable command output retains its original bytes.
+*.log -whitespace

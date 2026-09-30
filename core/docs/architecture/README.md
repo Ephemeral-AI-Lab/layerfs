@@ -305,7 +305,7 @@ Source files cited above, by package:
 `src/file/edit/{apply,tree,compare,input,split,concat,finish}.rs` ·
 `src/filesystem/{root,identity,input,objects,update,validate,limits,path,symlink}.rs` ·
 `src/filesystem/sorted/{format,page,merge,finish,budget}.rs` ·
-`src/filesystem/references/{backing,runs,merge,reduce,release,record}.rs`
+`src/filesystem/references/{backing,runs,merge,seek,reduce,release,record}.rs`
 
 **C2 `layerfs-storage`**
 `src/policy.rs` · `src/cas/{store,owner,pool_lane,placement,lifecycle,selection,batch,save,finish,read,membership,dependencies,provider}.rs` ·

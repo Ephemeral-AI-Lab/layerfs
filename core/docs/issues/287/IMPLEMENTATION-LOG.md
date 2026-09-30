@@ -700,3 +700,124 @@ checkpoint will be confirmed after the commit; this log guesses no future SHA.
 Next: R1d-run-seek, the selected exact point lookup/high-water work law in
 R1D-RUN-SEEK-FREEZE. Record the actual published parent and owned files before
 that product work, then continue autonomously. Other R1d/R1e gates stay open.
+
+## R1c published; R1d-run-seek ownership begins
+
+Actual commit `43c977c00e342d207757cd8bf5f6e2cd15041650` recounted exact first
+parent/committed product archives to135957 ->138994 (+3037), reference65417
+unchanged/Core70540 ->73577. The normal fast-forward push succeeded; exact
+remote branch equality confirmed. #287 body/comment5916679885 link the actual
+source/contracts/raw failures/checks/LOC/gaps and leave full R1 unchecked.
+No force push, other issue message, benchmark or merge occurred.
+
+R1d-run-seek parent is that actual published commit; SC-03/05/06/07 affected.
+Selected representation/work law and independent expected rows are frozen in
+R1D-RUN-SEEK-FREEZE. The cohesive caller is existing ReferenceReducer entry/state
+and release through RunStore::find. Backward exact96-byte search cannot reset
+an immutable tier's permanently advancing cursor; pending/newest precedence,
+strict finalized row/key/order/count/length and terminal errors remain exact.
+Expected complete rows/effects come from an independent event/last-assignment
+map, not candidate consolidation or warm scan output. Real-file scalar calls/
+bytes count the work; no speed verdict or benchmark selection is requested.
+
+r1_catalog owns references/runs.rs/merge.rs/focused seek.rs/mod.rs and external
+ordering/count tests/support. Root owns integration/Bridge/docs/counter/acceptance/
+checks/commit/publication/issues. Worker is not alone and preserves others'
+edits; root runs the covering Cargo gate after source freeze. Legacy backing
+native identity/partial-append/refund/release-tempt custody gaps remain separate;
+other paged populations/engine/protected/physical and full final Core gates stay
+open. Current next action: deliver and independently check this exact point/
+high-water operation, then its checkpoint. No #288 campaign/issue edit.
+
+## Independent R1e-bootstrap ownership and exact interface freeze
+
+Alongside C1-only R1d-run-seek, Root selected the independent early native
+SQLite guard slice at published43c977c00. Its smallest complete caller is native
+main before host::run/Store/history/worker effects, not an unused guard API.
+R1E-BOOTSTRAP-FREEZE records the unsafe exclusive authority, defined prior-init
+refusal, one cached success/original failure, MEMSTATUS-before-any-initializing-
+query order, fixed33554432 hardlimit and actual8192 native tracking/free probe.
+Unforgeable guard/current/lifetime observations never claim physical or phase
+memory; terminal validation mismatch gets no repair/reset/retry.
+
+r0_oracles owns Storage engine/ffi plus safe guard/profile/types and external
+fresh-process tests. Root owns binary caller, exact norm boundary/guard/self-tests,
+docs/acceptance/count/commit/publication. No overlaps with r1_catalog's C1 runs.
+The guard allowlist now permits only existing codec FFI/new exact engine FFI
+and native Server startup; sibling/bin denial and existing product purity are
+externally checked.11 guard self-tests PASS; product/provider gates remain unrun.
+The original entry-lifetime safety wording was refined before FFI implementation:
+exclusive concurrency/config authority is unsafe; prior initialization is a
+defined eligibility refusal. Native main establishes actual earliest startup.
+StrictServerMemory/healthy shapes/native protection/physical/factory-drain remain
+disabled and no #288 campaign/issue change occurs. Root's current next checkpoint
+remains R1d-run-seek while this non-overlapping source is developed independently.
+
+## R1d live-run admission refinement from source
+
+r1_catalog identified an adjacent pre-effect accounting defect in its owned
+runs.rs: consolidate subtracts an adopted input while the combined handle still
+lives outside levels, and spill carry keeps only its initial new-run charge as
+later combined handles grow. A backing peak observed afterwards cannot repair
+RunStore.limit admission when backing capacity is larger. Root included the
+local live-current/input charge transfer in this same cohesive responsibility,
+without changing limit, backing profile, interfaces or quotas. The covering
+real-file test must make backing capacity exceed the smaller RunStore allowance
+and assert refusal before the next output creation. Actual row/read-work and
+native/physical custody proofs remain distinct; legacy stronger backing gaps
+are not silently claimed solved by this accounting correction.
+
+
+## R1d-run-seek frozen exits and staged-source checkpoint
+
+The frozen8-file source/test seal2c9d5a3c5fb46c116e78740e175c93391e5aa1eca804b2b732cb038a25818a7a
+passed the exact selected locked Content command41 tests: hardlinks6,
+ordering18, consolidation1, scan3, sealed independent reference2, run-seek11.
+The actual real-file count evidence and complete-row/event oracles establish
+point/high-water/precedence/error/admission behavior; they make no speed or
+physical-memory claim. Clippy all-targets and owning locked examples pass.
+No unchanged passing test or benchmark was repeated. Raw command/result logs
+are in evidence/r1d-run-seek; R1D-RUN-SEEK-DELIVERY records exact commands,
+counts, walls, supported responsibility and unresolved legacy/native gates.
+
+The exact staged Core source subtree8c9d576b977ffc4f43016c63c569f751c43418a2
+passed whole-Core fmt and product boundary380. Its selected governing boundary
+module passed7 tests; the2 unaffected SDK-telemetry self-tests were not repeated.
+This archive deliberately excludes developing unstaged R1e policy/engine/binary
+work, so a later unsafe allowlist does not replace this commit's governing policy.
+The same revised counter blob a1cb6c064dd150dbc3aa19648a3748b5aeb741b5,
+SHA2560d798f53263c0f18636d96ccdfdc3728f501f53b066e90577d251859f1f117b2,
+on exact first-parent/staged Git product archives counted:
+Production LOC:138994 ->139180 (delta+186).
+Reference:65417 ->65417 (delta+0).
+Core:73577 ->73763 (delta+186).
+Imports/declarations/delegation/shipped SQL count; inline/test-only source,
+tests/examples/tools/docs/generated/third-party do not. Per-file classification
+is retained in PRODUCTION-LOC.json. Native identity/partial-append/refund and
+Drop/release retry custody, paged remaining populations/engine/protection/global/
+physical, Linux/final Core checks and #288 qualification remain open. No
+canonical algorithm duplication or legacy retirement occurred. The committed
+archive equality/normal push/remote/#287 confirmation follow the actual commit.
+
+## Independent R1e first provider gate: explicit Darwin capability failure
+
+At the separately frozen engine/proof seal654abcf5725c3aaffbe929088d13dc127e168cdc0af718fd04e3d5166fd699b9,
+the exact locked Storage engine_bootstrap target exits101. Two primary refusal
+cases PASS: query-before-config auto-initialization and already-initialized
+foreign provider/cached failure. Four supported cases FAIL at Readback: owned
+Store/scratch, native-cap, SQL-NOMEM and foreign-limit quarantine. The empty-env
+helper body is excluded. Actual MEMSTATUS config/init acknowledgements are0,
+setter returns0, required33554432 query returns0; no native probe or physical
+proof was reached. Raw failure remains evidence/r1e-bootstrap/02-engine-tests.log.
+No library/provider/limit was altered or retried to turn that failure into PASS.
+
+The actual binary links /usr/lib/libsqlite3.dylib; matching FFI width and upstream
+setter source do not explain Apple-selected readback0. Its internal compile
+macro/implementation is not guessed. One bounded labelled8192 native cause
+probe may establish actual tracking/source/stub behavior separately; it is not
+an unchanged eligible-arm sample or32MiB pressure campaign. An eligible Linux
+functional provider may be tested separately, source-pinned and explicitly
+Docker-scoped. Neither possibility replaces unavailable native physical Server
+proof. Current single next checkpoint: exact R1e provider support/refusal and
+known custody, while independent binding-input design can continue. R1 remains
+open and strict/concurrent/benchmark/release admission stays disabled.

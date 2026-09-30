@@ -10,15 +10,15 @@ use support::filesystem::{synthetic, value, RecordingBacking, TempDir};
 
 mod support;
 
-fn row(serial: u64) -> Row {
+fn row(serial: u64, generation: u64) -> Row {
     Row::Effect {
         serial,
         value: Some(value(
             InodeKind::RegularFile,
-            synthetic(&format!("alias/{serial}")),
-            synthetic("alias/meta"),
+            synthetic(&format!("alias/{generation}/{serial}")),
+            synthetic(&format!("alias/meta/{generation}")),
         )),
-        delta: 1,
+        delta: generation as i64 - serial as i64,
     }
 }
 
@@ -53,16 +53,19 @@ fn consolidation_never_writes_into_a_run_it_merges() {
     // Twelve spills of 64 rows: the tier carries leave several runs live.
     const BATCHES: u64 = 12;
     const ROWS: u64 = 64;
+    let mut expected = BTreeMap::new();
     for batch in 0..BATCHES {
         let mut pending = BTreeMap::new();
         for index in 0..ROWS {
-            let mut entry = row(batch * ROWS + index + 1);
-            // Every fourth batch updates a serial an earlier batch wrote, so the
-            // consolidated stream is a real newest-wins merge and not a concat.
+            let mut serial = batch * ROWS + index + 1;
+            // Four rows in every later batch replace earlier keys with different
+            // complete rows, so this is a newest-wins merge rather than a concat.
             if index % 16 == 0 && batch > 0 {
-                entry = row(batch * ROWS + index + 1);
+                serial = index + 1;
             }
+            let entry = row(serial, batch + 1);
             pending.insert(entry.serial(), entry);
+            expected.insert(entry.serial(), entry);
         }
         store.spill(&pending).expect("spill");
     }
@@ -78,12 +81,19 @@ fn consolidation_never_writes_into_a_run_it_merges() {
             Ok(true)
         })
         .expect("view before consolidation");
+    let original_latest = expected.values().copied().collect::<Vec<_>>();
+    assert_eq!(
+        before, original_latest,
+        "before view matches original latest snapshots"
+    );
     // The control handle was created before the seal and must refuse an append
     // after it: the detector is live, so a success below is evidence rather than
     // a silently dead probe.
     probe.seal();
     assert!(
-        control.append(&row(1).encode().expect("encode")).is_err(),
+        control
+            .append(&row(1, 0).encode().expect("encode"))
+            .is_err(),
         "a sealed run refuses an append"
     );
     drop(control);
@@ -99,6 +109,10 @@ fn consolidation_never_writes_into_a_run_it_merges() {
             Ok(true)
         })
         .expect("view after consolidation");
-    assert_eq!(after, before, "consolidation preserves the row stream");
+    assert_eq!(
+        after, original_latest,
+        "consolidation matches the independent last-assignment oracle"
+    );
     assert_eq!(store.live_runs(), 1, "one run survives");
+    store.release().expect("checked cleanup");
 }

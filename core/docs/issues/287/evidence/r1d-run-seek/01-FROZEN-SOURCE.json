@@ -1,0 +1,76 @@
+{
+  "parent": "43c977c00e342d207757cd8bf5f6e2cd15041650",
+  "branch": "codex/issue287-implementation",
+  "worktree": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs",
+  "source_test_sha256": "2c9d5a3c5fb46c116e78740e175c93391e5aa1eca804b2b732cb038a25818a7a",
+  "seal_method": "sorted relative UTF8 path + NUL + content length u64BE + raw content",
+  "files": [
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/merge.rs",
+      "bytes": 12017,
+      "sha256": "a73bdc408292e9f850b5efc3c98b3d8d13ee0c669f6bdd7e75abe91c6d6c94f8"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/mod.rs",
+      "bytes": 586,
+      "sha256": "d8f4ebb337e187b8b532e8486760e142bc5a866cebde87b9e029f067b6faf91d"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/runs.rs",
+      "bytes": 26206,
+      "sha256": "6d59a3fa1b7c627bc901767ac85b05dfff78131bcf498c83f903917943d86109"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/seek.rs",
+      "bytes": 1946,
+      "sha256": "6aa3b2e2ef9b6996a0f59217e21fbdb5656d3071adc988091cfc59fff4c6c2aa"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/filesystem_ordering_consolidate.rs",
+      "bytes": 4558,
+      "sha256": "7aca2654dffef569b349285be1f5acfb6828df98add21fc2fe317c73a4c87a9e"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/filesystem_ordering_scan.rs",
+      "bytes": 7250,
+      "sha256": "721bcd89d69ef0c59b187c5a4c84f229df992728b555f39964d0b34e9a36e9fe"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/filesystem_run_seek.rs",
+      "bytes": 20655,
+      "sha256": "5fcaa6eb9f06f86085e915ed558cb339d53a51e178eadfe49645c137114f731f"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/support/ordering_observer.rs",
+      "bytes": 3209,
+      "sha256": "f405ff0862cfecebfb0122c391089c461057b6ab330b93088796e0a143406b65"
+    }
+  ],
+  "host": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "purpose": "implementation correctness and labeled count diagnostics; no speed admission",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "filesystem_ordering_scan",
+    "--test",
+    "filesystem_ordering_consolidate",
+    "--test",
+    "filesystem_ordering",
+    "--test",
+    "filesystem_run_seek",
+    "--test",
+    "filesystem_reference",
+    "--test",
+    "filesystem_hardlinks",
+    "--",
+    "--nocapture"
+  ],
+  "started_utc": "2026-09-30T18:32:05.831617+00:00"
+}

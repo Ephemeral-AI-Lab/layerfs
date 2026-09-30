@@ -1,5 +1,15 @@
 # Filesystem trees
 
+> **#287 R1d reference-run lookup:** The source in this checkpoint, against
+> parent `43c977c00e342d207757cd8bf5f6e2cd15041650`, keeps each immutable tier's
+> forward cursor permanently advancing. Behind-cursor points search its exact
+> fixed96-byte rows independently; they never restart or reseed that cursor.
+> Actual live adopted/merged runs remain charged through the next output
+> reservation. The owning contract and distinct native-custody gates are in
+> [R1d-run-seek](../issues/287/R1D-RUN-SEEK-FREEZE.md); its append-only
+> [implementation log](../issues/287/IMPLEMENTATION-LOG.md) records checks and
+> failures. Canonical v1, ordering quotas and construction workers are unchanged.
+
 > **#287 R1c indexed DirectoryRoots:** The source in this commit, against parent
 > `06fe8363d5c317c49876d5189d374c1a34cc6010`, supplies one append-only indexed
 > directory-root authority to the common build/update algorithm. A maximum128
@@ -296,10 +306,24 @@ show.
 For a sparse run, an overshoot proves the half-open interval between the
 requested serial and the next row contains no record in that tier. Its scan
 remembers one such interval, so an ascending request in that gap continues to
-older tiers without rereading the sparse run's low prefix. A backward request
-outside the interval keeps the ordinary restart. Replacing a run clears its
-scan and this interval. This changes neither the row grammar nor the ordering
-memory and disk quotas.
+older tiers without rereading the sparse run's low prefix. The current #287
+route keeps one decoded overshoot row and a permanent demand high-water.
+A backward or repeated request outside the known gap uses allocation-free
+binary search over96-byte rows without changing the forward scan. For an
+unchanged n-row tier, sequential physical reads cost at most96*n bytes;
+Q backward points add at most96*Q*(ceil(log2(n+1))+1). Replaced tiers and
+merge reads/writes have their own actual charges. Replacing a run clears its
+scan and interval. This changes neither the row grammar nor the ordering quotas.
+
+Spill validates map-key/row-serial equality and strictly rising positive keys
+before creating backing. Producers finalize first/last/count and exact encoded
+length; sequential and point reads check their selected bounds and ordering.
+A newer-tier error propagates without an older-tier rescue. During spill carry
+and consolidation, adopted inputs and growing intermediates remain charged
+until their handles drop and the charge transfers to the actual finalized
+output. Checked backing release precedes logical credit return. This admission
+accounting does not certify native identity, partial-append cleanup, RSS or
+page-cache behavior of the existing OrderingBacking.
 
 ### 5.6 The operation boundary
 

@@ -1,0 +1,84 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.37s
+     Running tests/filesystem_hardlinks.rs (core/target/debug/deps/filesystem_hardlinks-63a7485f91aaf1f9)
+
+running 6 tests
+test a_declared_new_inode_cannot_lose_a_binding ... ok
+test a_regular_file_keeps_at_least_one_binding ... ok
+test a_child_moved_out_of_a_removed_subtree_survives ... ok
+test a_move_across_directories_keeps_the_count_and_the_inode ... ok
+test removing_one_alias_leaves_the_other_and_removing_the_last_removes_it ... ok
+test two_aliases_reach_one_derived_count ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_ordering.rs (core/target/debug/deps/filesystem_ordering-b07997645b40395c)
+
+running 18 tests
+test a_failed_run_removal_keeps_the_file_and_its_bytes_in_the_account ... ok
+test records_are_fixed_width_and_every_malformed_field_is_rejected ... ok
+test a_fresh_build_counts_bindings_without_ordering_runs ... ok
+test a_removal_that_fails_is_visible_instead_of_being_hidden_in_drop ... ok
+test a_stale_run_file_does_not_block_a_later_backing ... ok
+test the_operation_ceiling_is_enforced_before_the_rows_are_written ... ok
+test growth_is_reserved_before_it_happens_and_cleanup_returns_the_bytes ... ok
+test a_fresh_build_charges_its_count_array_to_the_ordering_ceiling ... ok
+test the_parent_membership_charges_parents_not_bindings ... ok
+test tier_carries_keep_the_newest_row_and_accumulate_counts ... ok
+test append_read_flush_and_release_failures_fail_the_operation_without_a_root ... ok
+test a_high_pending_ceiling_runs_spill_free_to_the_byte_bound ... ok
+test run_lookup_answers_every_serial_in_every_order ... ok
+test a_successful_operation_releases_its_ordering_resources_once ... ok
+test carried_state_removes_the_zero_count_re_pass ... ok
+test a_spilled_lookup_agrees_with_a_full_scan_of_every_tier ... ok
+test a_spill_keeps_the_scans_of_tiers_above_its_level ... ok
+test the_pending_threshold_changes_only_where_the_rows_live ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/filesystem_ordering_consolidate.rs (core/target/debug/deps/filesystem_ordering_consolidate-fe5582263e7e7fa5)
+
+running 1 test
+test consolidation_never_writes_into_a_run_it_merges ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/filesystem_ordering_scan.rs (core/target/debug/deps/filesystem_ordering_scan-1031f588b8d6fa8c)
+
+running 3 tests
+test descending_points_match_original_rows_after_a_fresh_forward_pass ... ok
+test a_sparse_newer_tier_skips_its_gap_and_finds_older_rows ... ok
+test lookups_allocate_nothing_after_the_tiers_are_built ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/filesystem_reference.rs (core/target/debug/deps/filesystem_reference-a68f0cc5be2a48a2)
+
+running 2 tests
+test construction_matches_the_sealed_reference_roots_and_pages ... ok
+test updates_match_the_sealed_reference_operation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests/filesystem_run_seek.rs (core/target/debug/deps/filesystem_run_seek-d2c13b7d53de11dd)
+
+running 11 tests
+test spill_refuses_map_key_mismatch_and_zero_before_creating_or_appending ... ok
+test repeated_largest_serial_is_an_independent_point_without_saturating_resume_loss ... ok
+test backward_and_gap_queries_leave_forward_lookahead_and_buffer_intact ... ok
+test supplied_run_metadata_and_sequential_order_are_checked_against_real_file_rows ... ok
+DIAGNOSTIC consolidation-admission live_input_bytes=288 proposed_output_bytes=288 limit=480 backing_capacity=8388608 refusal_before_create=true
+test consolidation_admits_both_live_inputs_before_creating_its_output ... ok
+DIAGNOSTIC fresh-ascending rows=103 read_at=15 requested_bytes=9888 decoded_rows=103 buffer=672
+test fresh_ascending_hits_and_gaps_pay_one_sequential_file_pass ... ok
+DIAGNOSTIC carry-admission current_inputs_bytes=768 pending_bytes=96 proposed_output_bytes=768 limit=1536 backing_capacity=8388608 last_output_creates=0
+test spill_carry_admits_the_actual_growing_intermediate_before_the_next_output ... ok
+test genuinely_overlapping_tiers_use_complete_newest_rows_and_exact_gap_owners ... ok
+test real_short_and_corrupt_newest_point_reads_propagate_without_older_fallback ... ok
+DIAGNOSTIC primed-alternating-descending rows=1021 queries=3063 read_at=27583 requested_bytes=2647968 max_point_request=96 bound_reads=33693
+test primed_prime_population_alternating_and_descending_points_have_logarithmic_reads ... ok
+DIAGNOSTIC reducer pending_limit=3 serials=67 spilled_rows=267 merges=88 read_at=3470 requested_bytes=523104
+test real_reducer_spills_preserve_independent_retained_removed_and_value_events ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+

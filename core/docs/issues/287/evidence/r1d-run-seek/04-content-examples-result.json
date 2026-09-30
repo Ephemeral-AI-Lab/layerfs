@@ -1,0 +1,16 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--examples"
+  ],
+  "exit": 0,
+  "complete_command_wall_seconds": 3.1290919159946498,
+  "purpose": "owning examples compilation only; no workload or measurement"
+}

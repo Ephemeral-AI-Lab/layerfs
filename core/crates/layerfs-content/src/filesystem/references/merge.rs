@@ -24,6 +24,44 @@ pub struct Run {
     pub last: u64,
 }
 
+impl Run {
+    pub(crate) fn finish(
+        handle: Box<dyn OrderingRun>,
+        count: u64,
+        first: u64,
+        last: u64,
+    ) -> ContentResult<Self> {
+        let run = Self {
+            handle,
+            count,
+            first,
+            last,
+        };
+        run.check()?;
+        Ok(run)
+    }
+
+    /// Scalar finalized metadata only; the backing owns native identity.
+    pub(crate) fn check(&self) -> ContentResult<()> {
+        let bytes = self
+            .count
+            .checked_mul(ROW_BYTES as u64)
+            .ok_or(ContentError::LengthOverflow)?;
+        if self.count == 0
+            || self.first == 0
+            || self.first > self.last
+            || self.count - 1 > self.last - self.first
+            || (self.count == 1 && self.first != self.last)
+        {
+            return Err(ContentError::InvalidOrderingRecord("run bounds"));
+        }
+        if self.handle.len() != bytes {
+            return Err(ContentError::InvalidOrderingRecord("run length"));
+        }
+        Ok(())
+    }
+}
+
 /// Work one merge or spill performed.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct MergeWork {
@@ -60,6 +98,12 @@ pub struct RunScan {
     filled: usize,
     /// Bytes of `buffer` already consumed.
     consumed: usize,
+    /// Finalized encoded length and bounds selected by `start`.
+    expected_bytes: u64,
+    first: u64,
+    last: u64,
+    /// Last decoded serial in this sequential pass.
+    previous: Option<u64>,
 }
 
 impl RunScan {
@@ -75,6 +119,10 @@ impl RunScan {
             buffer: vec![0; rows * ROW_BYTES],
             filled: 0,
             consumed: 0,
+            expected_bytes: 0,
+            first: 0,
+            last: 0,
+            previous: None,
         }
     }
 
@@ -84,6 +132,7 @@ impl RunScan {
     /// this scan returns is the one at that position. Positioning invalidates
     /// the buffered bytes; it does not allocate.
     pub fn start(&mut self, run: &Run, offset: u64) -> ContentResult<()> {
+        run.check()?;
         if offset % ROW_BYTES as u64 != 0 {
             return Err(ContentError::InvalidOrderingRecord("run seek offset"));
         }
@@ -95,6 +144,13 @@ impl RunScan {
         self.remaining = run.count - skipped;
         self.filled = 0;
         self.consumed = 0;
+        self.expected_bytes = run
+            .count
+            .checked_mul(ROW_BYTES as u64)
+            .ok_or(ContentError::LengthOverflow)?;
+        self.first = run.first;
+        self.last = run.last;
+        self.previous = None;
         Ok(())
     }
 
@@ -107,6 +163,7 @@ impl RunScan {
             self.consumed -= ROW_BYTES;
             self.offset -= ROW_BYTES as u64;
             self.remaining += 1;
+            self.previous = None;
         }
     }
 
@@ -115,6 +172,9 @@ impl RunScan {
     /// The row is served from the retained buffer when it is already held and
     /// from one bounded `read_at` when it is not.
     pub fn next(&mut self, handle: &dyn OrderingRun) -> ContentResult<Option<Row>> {
+        if handle.len() != self.expected_bytes {
+            return Err(ContentError::InvalidOrderingRecord("run length"));
+        }
         if self.remaining == 0 {
             return Ok(None);
         }
@@ -129,6 +189,18 @@ impl RunScan {
             .try_into()
             .map_err(|_| ContentError::UnexpectedEof)?;
         let row = Row::decode(bytes)?;
+        let serial = row.serial();
+        if serial < self.first
+            || serial > self.last
+            || (self.offset == 0 && serial != self.first)
+            || (self.remaining == 1 && serial != self.last)
+        {
+            return Err(ContentError::InvalidOrderingRecord("run row bounds"));
+        }
+        if self.previous.is_some_and(|previous| previous >= serial) {
+            return Err(ContentError::InvalidOrderingRecord("run row order"));
+        }
+        self.previous = Some(serial);
         self.consumed += ROW_BYTES;
         self.offset += ROW_BYTES as u64;
         self.remaining -= 1;
@@ -155,16 +227,18 @@ impl RunScan {
 pub struct RunReader<'a> {
     handle: &'a dyn OrderingRun,
     scan: RunScan,
+    failure: Option<ContentError>,
 }
 
 impl<'a> RunReader<'a> {
     /// A reader over `run`, buffering whole rows only.
     pub fn new(run: &'a Run, buffer_bytes: usize) -> Self {
         let mut scan = RunScan::new(buffer_bytes);
-        scan.remaining = run.count;
+        let failure = scan.start(run, 0).err();
         Self {
             handle: run.handle.as_ref(),
             scan,
+            failure,
         }
     }
 
@@ -179,6 +253,9 @@ impl<'a> RunReader<'a> {
     /// Next row in serial order, if any remains.
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> ContentResult<Option<Row>> {
+        if let Some(error) = &self.failure {
+            return Err(error.clone());
+        }
         self.scan.next(self.handle)
     }
 
@@ -204,6 +281,8 @@ pub fn merge_runs(
     buffer_bytes: usize,
     work: &mut MergeWork,
 ) -> ContentResult<Run> {
+    older.check()?;
+    newer.check()?;
     let output_rows = older
         .count
         .checked_add(newer.count)
@@ -212,9 +291,8 @@ pub fn merge_runs(
     work.runs_created = work.runs_created.saturating_add(1);
     let mut older_reader = RunReader::new(older, buffer_bytes);
     let mut newer_reader = RunReader::new(newer, buffer_bytes);
-    let mut old = older_reader.next()?;
-    let mut new = newer_reader.next()?;
-    work.rows_read = work.rows_read.saturating_add(older.count + newer.count);
+    let mut old = read_row(&mut older_reader, work)?;
+    let mut new = read_row(&mut newer_reader, work)?;
     let mut count = 0_u64;
     let mut first = None;
     let mut last = 0_u64;
@@ -231,30 +309,43 @@ pub fn merge_runs(
                 .as_ref()
                 .is_some_and(|entry| entry.serial() == row.serial())
             {
-                old = older_reader.next()?;
+                old = read_row(&mut older_reader, work)?;
             }
-            new = newer_reader.next()?;
+            new = read_row(&mut newer_reader, work)?;
             row
         } else {
             let row = old.take().ok_or(ContentError::UnexpectedEof)?;
-            old = older_reader.next()?;
+            old = read_row(&mut older_reader, work)?;
             row
         };
+        if row.serial() == 0 || (count != 0 && last >= row.serial()) {
+            return Err(ContentError::InvalidOrderingRecord("merge row order"));
+        }
+        let next_count = count.checked_add(1).ok_or(ContentError::LengthOverflow)?;
         handle.append(&row.encode()?)?;
         first.get_or_insert(row.serial());
         last = row.serial();
-        count = count.saturating_add(1);
+        count = next_count;
         work.rows_written = work.rows_written.saturating_add(1);
     }
     handle.flush()?;
-    work.merges = work.merges.saturating_add(1);
     if count > output_rows {
         return Err(ContentError::InvalidOrderingRecord("merge rows"));
     }
-    Ok(Run {
+    let run = Run::finish(
         handle,
         count,
-        first: first.ok_or(ContentError::InvalidOrderingRecord("empty merge"))?,
+        first.ok_or(ContentError::InvalidOrderingRecord("empty merge"))?,
         last,
-    })
+    )?;
+    work.merges = work.merges.saturating_add(1);
+    Ok(run)
+}
+
+fn read_row(reader: &mut RunReader<'_>, work: &mut MergeWork) -> ContentResult<Option<Row>> {
+    let row = reader.next()?;
+    if row.is_some() {
+        work.rows_read = work.rows_read.saturating_add(1);
+    }
+    Ok(row)
 }

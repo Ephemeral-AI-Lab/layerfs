@@ -32,6 +32,7 @@ use crate::error::{ContentError, ContentResult};
 use crate::filesystem::references::backing::OrderingBacking;
 use crate::filesystem::references::merge::{merge_runs, MergeWork, Run, RunReader, RunScan};
 use crate::filesystem::references::record::{Row, ROW_BYTES};
+use crate::filesystem::references::seek::find_run;
 
 /// Default bytes of one merge buffer.
 pub const DEFAULT_MERGE_BUFFER_BYTES: usize = 16 * 1024;
@@ -157,9 +158,14 @@ impl<'r, 'b> RunStore<'r, 'b> {
     /// Bytes the operation owns right now: live runs, spilled-but-unmerged
     /// inputs, the pending rows about to be spilled and any reserved output.
     pub fn owned_bytes(&self) -> u64 {
-        self.run_bytes()
-            .saturating_add(self.pending_bytes)
-            .saturating_add(self.merge_input_bytes)
+        let handles = self.run_bytes().saturating_add(self.merge_input_bytes);
+        // A dropped handle whose removal failed may remain owned by the backing.
+        // Its reported held bytes stay charged; this is no native-identity proof.
+        let storage = self
+            .backing
+            .as_deref()
+            .map_or(handles, |backing| handles.max(backing.held_bytes()));
+        storage.saturating_add(self.pending_bytes)
     }
 
     /// Reserves `bytes` of storage this operation is about to create.
@@ -228,8 +234,16 @@ impl<'r, 'b> RunStore<'r, 'b> {
         if pending.is_empty() {
             return Ok(());
         }
+        let mut previous = 0_u64;
+        for (key, row) in pending {
+            if *key != row.serial() || row.serial() == 0 || previous >= row.serial() {
+                return Err(ContentError::InvalidOrderingRecord("spill row order/key"));
+            }
+            previous = row.serial();
+        }
+        let count = u64::try_from(pending.len()).map_err(|_| ContentError::LengthOverflow)?;
         // Reserve the batch this spill is about to write before creating it.
-        self.charge_pending(pending.len() as u64)?;
+        self.charge_pending(count)?;
         self.reserve(self.pending_bytes)?;
         let level = self
             .levels
@@ -257,12 +271,12 @@ impl<'r, 'b> RunStore<'r, 'b> {
             self.work.rows_written = self.work.rows_written.saturating_add(1);
         }
         handle.flush()?;
-        let mut run = Run {
+        let mut run = Run::finish(
             handle,
-            count: pending.len() as u64,
-            first: first.ok_or(ContentError::InvalidOrderingRecord("spill rows"))?,
+            count,
+            first.ok_or(ContentError::InvalidOrderingRecord("spill rows"))?,
             last,
-        };
+        )?;
         // The tiers this batch merges into are taken out of the store first, so
         // each obsolete run is dropped (its bytes and its file returned) as soon
         // as its rows have been merged into the surviving run.
@@ -296,16 +310,25 @@ impl<'r, 'b> RunStore<'r, 'b> {
                 .ok_or(ContentError::ResourceUnavailable {
                     what: "ordering backing",
                 })?;
-            run = merge_runs(backing, &older, &run, self.merge_buffer, &mut self.work)?;
-            // The older input is dropped here: its bytes leave the owned set
-            // with it, and the surviving run still counts the newer input.
+            let older_bytes = older.count * ROW_BYTES as u64;
+            let newer_bytes = run.count * ROW_BYTES as u64;
+            let merged = merge_runs(backing, &older, &run, self.merge_buffer, &mut self.work)?;
+            drop(older);
+            drop(run);
+            // Transfer the actual live intermediate only after both consumed
+            // input handles are dropped. The next output coexists with this run.
             self.merge_input_bytes = self
                 .merge_input_bytes
-                .saturating_sub(older.count * ROW_BYTES as u64);
+                .checked_sub(older_bytes)
+                .and_then(|bytes| bytes.checked_sub(newer_bytes))
+                .and_then(|bytes| bytes.checked_add(merged.count * ROW_BYTES as u64))
+                .ok_or(ContentError::LengthOverflow)?;
+            run = merged;
         }
         self.merge_input_bytes = self
             .merge_input_bytes
-            .saturating_sub(run.count * ROW_BYTES as u64);
+            .checked_sub(run.count * ROW_BYTES as u64)
+            .ok_or(ContentError::LengthOverflow)?;
         // Obsolete tiers were dropped above, which returned their bytes and
         // removed their files; only the surviving run stays owned.
         for slot in &mut self.levels[..level] {
@@ -325,14 +348,11 @@ impl<'r, 'b> RunStore<'r, 'b> {
 
     /// Finds the newest run row for `serial`, if any tier holds one.
     ///
-    /// Each tier keeps one reader - a [`RunScan` with its own retained buffer -
-    /// for the lifetime of the tier's run, so a lookup continues the scan that
-    /// the previous lookup left in place instead of rebuilding a reader. An
-    /// ascending sweep therefore neither allocates nor re-reads bytes it
-    /// already holds; only a request the cursor has passed restarts the run
-    /// from the front, and that restart keeps the buffer and invalidates its
-    /// bytes. Rows read here are charged to `rows_read`, which is what makes
-    /// the reported work describe the operation instead of only its spills.
+    /// Each tier retains one [`RunScan`] and an inline lookahead for its exact
+    /// immutable run. Fresh forward demands advance its high-water permanently;
+    /// a backward or repeated demand uses an independent fixed-row binary search.
+    /// Point seeking never rewinds, reseeds or invalidates the forward buffer.
+    /// Decoded rows are charged to `rows_read`; physical requests are distinct.
     ///
     /// The lookup scans retain at most `MAXIMUM_LEVELS` buffers of
     /// `merge_buffer` bytes each, bounded by the tier count and dropped
@@ -342,52 +362,59 @@ impl<'r, 'b> RunStore<'r, 'b> {
             let Some(run) = self.levels[index].as_ref() else {
                 continue;
             };
+            run.check()?;
             if serial < run.first || serial > run.last {
                 continue;
             }
             while self.scans.len() <= index {
                 self.scans.push(None);
             }
-            let buffer_bytes = self.merge_buffer;
-            let scan = self.scans[index].get_or_insert_with(|| LookupScan::new(buffer_bytes));
+            if self.scans[index].is_none() {
+                self.scans[index] = Some(LookupScan::new(run, self.merge_buffer)?);
+            }
+            let scan = self.scans[index]
+                .as_mut()
+                .ok_or(ContentError::UnexpectedEof)?;
             if scan
                 .gap
                 .is_some_and(|(start, end)| start <= serial && serial < end)
             {
                 continue;
             }
-            // A request the cursor has already passed needs this run from the
-            // front: the rows in between were never compared with it. A request
-            // at or beyond the cursor continues the tier's scan where it
-            // stopped, with the buffer it already holds.
-            match scan.resume {
-                Some(resume) if serial >= resume => {}
-                _ => scan.reader.start(run, 0)?,
+            if scan.high_water.is_some_and(|previous| serial <= previous) {
+                if let Some(row) = find_run(run, serial, &mut self.work)? {
+                    return Ok(Some(row));
+                }
+                continue;
             }
             let mut found = None;
-            let mut resume = None;
-            while let Some(row) = scan.reader.next(run.handle.as_ref())? {
-                self.work.rows_read = self.work.rows_read.saturating_add(1);
+            loop {
+                let row = match scan.head.take() {
+                    Some(row) => Some(row),
+                    None => {
+                        let row = scan.reader.next(run.handle.as_ref())?;
+                        if row.is_some() {
+                            self.work.rows_read = self.work.rows_read.saturating_add(1);
+                        }
+                        row
+                    }
+                };
+                let Some(row) = row else {
+                    break;
+                };
                 if row.serial() == serial {
                     found = Some(row);
                     break;
                 }
                 if row.serial() > serial {
-                    // This row was not compared with the request: leave it at the
-                    // cursor so a later request still sees it.
-                    scan.reader.rewind();
+                    // The physical cursor already advanced. Keep one decoded
+                    // lookahead rather than rewinding its cursor or buffered bytes.
                     scan.gap = Some((serial, row.serial()));
-                    resume = Some(row.serial());
+                    scan.head = Some(row);
                     break;
                 }
-                resume = Some(row.serial().saturating_add(1));
             }
-            if found.is_some() {
-                // The run is sorted and holds one row per serial, so the row after
-                // the one that matched is above this serial.
-                resume = Some(serial.saturating_add(1));
-            }
-            scan.resume = resume;
+            scan.high_water = Some(serial);
             if let Some(row) = found {
                 return Ok(Some(row));
             }
@@ -422,22 +449,6 @@ impl<'r, 'b> RunStore<'r, 'b> {
         }
         let mut combined: Option<Run> = None;
         for run in sources {
-            let consumed = run.count * ROW_BYTES as u64;
-            let output_rows = run
-                .count
-                .checked_add(combined.as_ref().map_or(0, |run| run.count))
-                .ok_or(ContentError::LengthOverflow)?;
-            self.reserve(
-                output_rows
-                    .checked_mul(ROW_BYTES as u64)
-                    .ok_or(ContentError::LengthOverflow)?,
-            )?;
-            let backing = self
-                .backing
-                .as_deref_mut()
-                .ok_or(ContentError::ResourceUnavailable {
-                    what: "ordering backing",
-                })?;
             combined = match combined {
                 // The newest input is adopted, not copied. A merge reads both of
                 // its inputs and appends only to a run it created, so the handle
@@ -448,21 +459,47 @@ impl<'r, 'b> RunStore<'r, 'b> {
                 // (P2-7), which seals every input before the merge and fails if
                 // any append reaches one.
                 None => Some(run),
-                Some(newer) => Some(merge_runs(
-                    backing,
-                    &run,
-                    &newer,
-                    self.merge_buffer,
-                    &mut self.work,
-                )?),
+                Some(newer) => {
+                    let output_rows = run
+                        .count
+                        .checked_add(newer.count)
+                        .ok_or(ContentError::LengthOverflow)?;
+                    self.reserve(
+                        output_rows
+                            .checked_mul(ROW_BYTES as u64)
+                            .ok_or(ContentError::LengthOverflow)?,
+                    )?;
+                    let backing =
+                        self.backing
+                            .as_deref_mut()
+                            .ok_or(ContentError::ResourceUnavailable {
+                                what: "ordering backing",
+                            })?;
+                    let older_bytes = run.count * ROW_BYTES as u64;
+                    let newer_bytes = newer.count * ROW_BYTES as u64;
+                    let merged =
+                        merge_runs(backing, &run, &newer, self.merge_buffer, &mut self.work)?;
+                    drop(run);
+                    drop(newer);
+                    self.merge_input_bytes = self
+                        .merge_input_bytes
+                        .checked_sub(older_bytes)
+                        .and_then(|bytes| bytes.checked_sub(newer_bytes))
+                        .and_then(|bytes| bytes.checked_add(merged.count * ROW_BYTES as u64))
+                        .ok_or(ContentError::LengthOverflow)?;
+                    Some(merged)
+                }
             };
-            self.merge_input_bytes = self.merge_input_bytes.saturating_sub(consumed);
         }
         // Dropping the input tiers here returns their bytes; the consolidated run
         // is the only one left owned.
         self.levels.clear();
         self.reset_scans();
         if let Some(run) = combined {
+            self.merge_input_bytes = self
+                .merge_input_bytes
+                .checked_sub(run.count * ROW_BYTES as u64)
+                .ok_or(ContentError::LengthOverflow)?;
             self.levels.push(Some(run));
         }
         self.work.peak_live_runs = self.work.peak_live_runs.max(self.live_runs());
@@ -545,27 +582,20 @@ impl<'r, 'b> RunStore<'r, 'b> {
             *slot = None;
         }
         self.reset_scans();
-        match self.backing.as_deref_mut() {
-            Some(backing) => backing.release(),
-            None => Ok(()),
+        if let Some(backing) = self.backing.as_deref_mut() {
+            backing.release()?;
         }
+        // Only known checked completion returns the operation's logical credits.
+        self.pending_bytes = 0;
+        self.merge_input_bytes = 0;
+        Ok(())
     }
 }
 
-/// One tier's resumable lookup scan.
+/// One exact immutable tier's permanently advancing sequential lookup state.
 ///
-/// `find` is called once per touched serial, once per released child and again
-/// for every row state the reducer samples. Each run is sorted and the reducer's
-/// demands ascend, so the scan keeps both its position and its buffered reader:
-/// a request the tier already settled is answered from the buffer the scan
-/// holds, one beyond the position continues the scan, and one behind it starts
-/// the scan again. That makes an ascending sweep cost one pass over a run's
-/// rows instead of one pass per serial - and no allocation per lookup, because
-/// the buffer belongs to the tier and is allocated once.
-///
-/// `resume` is the smallest serial the cursor at `reader`'s position may still
-/// answer. `None` means the row at the cursor was not read, so nothing below
-/// the cursor is safe.
+/// Name-order demands may descend or repeat. Those points use a separate stack
+/// buffer; they never change this high-water, lookahead or buffered position.
 ///
 /// The scan belongs to the tier's current run: `RunStore` drops every scan
 /// whenever a run is replaced, which returns the buffers with the positions.
@@ -573,21 +603,25 @@ struct LookupScan {
     /// The tier's retained buffered reader: one buffer, positioned by the
     /// cursor below and reused by every lookup this tier answers.
     reader: RunScan,
-    /// Smallest serial the cursor may still answer. `None` means the row at
-    /// the cursor was not read, so nothing below the cursor is safe.
-    resume: Option<u64>,
+    /// Largest demand settled by the forward scan; never decreases.
+    high_water: Option<u64>,
+    /// One overshoot row already physically read, pending a future forward demand.
+    head: Option<Row>,
     /// Serials proved absent between a missed request and the next run row.
     gap: Option<(u64, u64)>,
 }
 
 impl LookupScan {
     /// A scan with one bounded buffer of `buffer_bytes`.
-    fn new(buffer_bytes: usize) -> Self {
-        Self {
-            reader: RunScan::new(buffer_bytes),
-            resume: None,
+    fn new(run: &Run, buffer_bytes: usize) -> ContentResult<Self> {
+        let mut reader = RunScan::new(buffer_bytes);
+        reader.start(run, 0)?;
+        Ok(Self {
+            reader,
+            high_water: None,
+            head: None,
             gap: None,
-        }
+        })
     }
 }
 

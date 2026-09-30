@@ -6,6 +6,7 @@ pub mod record;
 pub mod reduce;
 pub mod release;
 pub mod runs;
+mod seek;
 
 pub use backing::{FileBacking, OrderingBacking, OrderingRun};
 pub use merge::{merge_runs, MergeWork, Run, RunReader};

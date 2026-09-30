@@ -58,7 +58,8 @@ change older evidence or establish a released contract.
 Implementation amendments describe their own source and delivered scope:
 [R1a typed Server admission](R1A-SERVER-ADMISSION.md),
 [R1b cache ownership](R1B-CACHE-OWNERSHIP.md) and
-[R1c indexed construction metadata](R1C-INDEXED-CONSTRUCTION.md). Exact passing,
+[R1c indexed construction metadata](R1C-INDEXED-CONSTRUCTION.md) and
+[R1d exact run-seek delivery](../../../issues/287/R1D-RUN-SEEK-DELIVERY.md). Exact passing,
 partial and unsupported outcomes belong to the append-only
 [implementation log](../../../issues/287/IMPLEMENTATION-LOG.md); these selective
 deliveries do not turn the R0 research packet into a completed R1–R7 product.

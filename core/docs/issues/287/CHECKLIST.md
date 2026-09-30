@@ -1,15 +1,16 @@
 # Issue287 current implementation checklist
 
 > **Status: Current planning checklist; no release candidate exists.**
-> Current published checkpoint: `06fe8363d5c317c49876d5189d374c1a34cc6010`
-> (R1b-cache PARTIAL; R1 remains open).
+> Current published checkpoint: `43c977c00e342d207757cd8bf5f6e2cd15041650`
+> (R1c scoped exits pass; full R1 remains PARTIAL/open).
 
 Assignment: #287 implementation only. Benchmark qualification is delegated/unrun
 under #288. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
 packet; [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) is append-only.
 
-Current milestone: **R1c checkpoint publication**; next is
-**R1d-run-seek exact point/high-water lookup** ([freeze](R1D-RUN-SEEK-FREEZE.md)).
+Current milestone: **R1e-bootstrap exact native provider decision**
+([freeze](R1E-BOOTSTRAP-FREEZE.md)). R1d-run-seek scoped exits passed; its
+commit/publication checkpoint is being finalized from the counted staged tree.
 R0 is published and linked in #287 comment5911332695. Native/engine/physical
 protection and concurrent enablement remain gated on their owning proofs.
 
@@ -52,9 +53,27 @@ R1c current gates ([concrete freeze](R1C-FROZEN-STATE.md)):
 - [x] Actual native allocation/identity, single cleanup and bounded retained failures/Unknown (Darwin scope; stronger/global gaps explicit).
 - [x] Server pre-Save admission, exact typed failure and cleanup-before-publication composition (actual successful/failed known-Save cleanup under scratch Unknown).
 - [x] SQL LOC classification repair/tests and unchanged parent classification.
-- [x] Same revised counter on exact first-parent/final staged snapshots; committed recount follows publication work.
+- [x] Same revised counter on exact first-parent/final staged/committed snapshots; exact archive recount matches.
 - [x] Independent roots/bytes/provider/resource checks and scoped owning locked checks; platform/global gaps recorded.
-- [ ] Checkpoint exact LOC, commit/recount/push/publication and #287 update.
+- [x] Checkpoint exact LOC, commit/recount/push/publication and #287 update (comment5916679885).
+
+R1d-run-seek current gates:
+
+- [x] Record actual published parent, source contract, ownership, work law and independent oracle.
+- [x] Fixed-row exact point search never rewinds/reseeds forward high-water.
+- [x] Finalized spill/merge row/key/order/count/length checks and exact tier precedence.
+- [x] Real-file observer, independent complete-row/effect oracle and alternating/descending/gap/error proof.
+- [x] Scoped owning checks, actual counts/custody gaps and current architecture/log.
+- [ ] Exact staged/committed LOC, commit/push/publication and #287 checkpoint.
+
+R1e-bootstrap current gates:
+
+- [x] Exact exclusive startup/API/unsafe boundary and original failure custody frozen.
+- [x] Native main calls guard before host/Store/history/worker effects (source integration; successful provider body unrun).
+- [ ] Actual32MiB hardlimit/tracking/native allocation/SQL-NOMEM and known cleanup supported proof (Darwin readback0:4 FAIL;2 refusal primary PASS; helper excluded).
+- [ ] Actual native Server ready/EOF/reaped proof on an eligible provider; Darwin startup is unsupported.
+- [ ] Scoped owning checks, exact supported/refused platform authority and provider gaps.
+- [ ] Exact LOC commit/push/publication and #287 checkpoint.
 
 Named submilestones and dependencies:
 

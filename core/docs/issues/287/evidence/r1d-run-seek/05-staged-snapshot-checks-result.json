@@ -1,0 +1,43 @@
+{
+  "staged_source_tree": "73eee2f8e99e017910200fdc63bd789ea4e343b0",
+  "core_tree": "8c9d576b977ffc4f43016c63c569f751c43418a2",
+  "scope": "exact staged snapshot excludes independent unstaged R1e engine/policy/binary work",
+  "checks": [
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "fmt",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "wall_seconds": 2.232189542002743
+    },
+    {
+      "command": [
+        "python3",
+        "core/tools/check_product_boundary.py"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.14517670799978077
+    },
+    {
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "core/tools",
+        "-p",
+        "test_check_product_boundary.py"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.07335500000044703
+    }
+  ]
+}
