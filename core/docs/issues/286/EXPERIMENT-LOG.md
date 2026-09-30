@@ -415,3 +415,11 @@ R043 issue publication: [#286 comment5901345893](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-workspace-write-cold-r044 | full Workspace write matrix: append/dispersed/repeated × 100/512/4097, one new-method sample each | `6844f072a` | **9/9 PASS**: zero Store/history residency at launch, 712704 device-read B ≥641433-B frozen floor, direct-I/O source seal, exact old/new bytes, known parented Commit, callback counts and cleanup; full commands 0.974–10.213 s under unchanged 15/25 s; verifiers 0.093–0.117 s under 9 s. No numeric-ineligible or unrun cell. | [Round report](experiments/20260930-workspace-write-cold-r044.md), [compact receipts](experiments/20260930-workspace-write-cold-r044-receipts.json) | Publish after report commit; earlier-family regression checkpoint next |
+
+## Family 1 regression round 20260930-init-regression-r045
+
+R044 issue publication: [#286 comment5901468648](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5901468648), Family 3 PASS report commit `530dfa536` (production delta+0). The once-due earlier-family default Init check used that clean source and one sample per selected case; the explicit 10,000/100,000 tiers were not selected or resampled.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-init-regression-r045 | public release SDK Init 100 then1,000 files | `530dfa536` | **Functional PASS/PASS**: raw SDK34.812/114.956 ms, full commands56.743/127.828 ms<15 s, separate verifiers38.252/49.708 ms<9.5 s, registered scope and cleanup PASS. Numeric latency INELIGIBLE under unchanged Init cache profile; explicit10,000/100,000 NOT_RUN. | [Round report](experiments/20260930-init-regression-r045.md), [compact receipts](experiments/20260930-init-regression-r045-receipts.json) | Publish after report commit; Family 2 regression next |

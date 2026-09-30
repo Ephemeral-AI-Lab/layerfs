@@ -1,0 +1,128 @@
+{
+  "build": {
+    "binaries": {
+      "benchmark_init": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+        "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+      },
+      "verify_namespace": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7c9fe69fd4a7977a78bf9b9f9b0169eba7fefddba5ca6ce55ccc4243dd74bab3/verify_namespace",
+        "sha256": "7c9fe69fd4a7977a78bf9b9f9b0169eba7fefddba5ca6ce55ccc4243dd74bab3"
+      }
+    },
+    "budget_ns": 30000000000,
+    "build_profile": "release",
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "build",
+      "--release",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-sdk",
+      "-p",
+      "layerfs-server",
+      "--example",
+      "benchmark_init",
+      "--example",
+      "verify_namespace"
+    ],
+    "compiled_units": 0,
+    "exit_code": 0,
+    "mode": "changed-product",
+    "status": "PASS",
+    "target": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target",
+    "wall_ns": 100237500
+  },
+  "family_cycle_wall_ns": 397567041,
+  "raw_manifest_sha256": "1aef828f5f503cb925233afc446c9aa02cf2ab27737dec5494f77c08ea734465",
+  "raw_output": "benchmark-results/fs-bench-pro/issue286-init-regression-r045",
+  "rows": [
+    {
+      "case": "namespace-100-compact-v3",
+      "cleanup": "PASS",
+      "command_bound_ns": 15000000000,
+      "command_ns": 56742834,
+      "functional": "PASS",
+      "paths": 102,
+      "raw_receipt": "benchmark-results/fs-bench-pro/issue286-init-regression-r045/sdk-host/init_namespace/namespace-100-compact-v3/receipt.json",
+      "raw_receipt_sha256": "f2195e44b46b6b8929f1f4444f2142bf04952376fcb03d4c9be4d2a428565515",
+      "raw_sdk_ns": 34812375,
+      "registration": "REGISTERED_SDK_RELEASE_V5_LITE",
+      "sample_count": 1,
+      "sampled_bytes": 3354003,
+      "sampled_files": 53,
+      "status": "INELIGIBLE",
+      "verifier_bound_ns": 9500000000,
+      "verifier_ns": 38251666
+    },
+    {
+      "case": "namespace-1000-compact-v3",
+      "cleanup": "PASS",
+      "command_bound_ns": 15000000000,
+      "command_ns": 127827791,
+      "functional": "PASS",
+      "paths": 1011,
+      "raw_receipt": "benchmark-results/fs-bench-pro/issue286-init-regression-r045/sdk-host/init_namespace/namespace-1000-compact-v3/receipt.json",
+      "raw_receipt_sha256": "45a1ada376555caa46cf0ebf4f0190a96141539c006b37e1f178ad23f61b9677",
+      "raw_sdk_ns": 114956291,
+      "registration": "REGISTERED_SDK_RELEASE_V5_LITE",
+      "sample_count": 1,
+      "sampled_bytes": 6430827,
+      "sampled_files": 70,
+      "status": "INELIGIBLE",
+      "verifier_bound_ns": 9500000000,
+      "verifier_ns": 49708208
+    },
+    {
+      "case": "namespace-10000",
+      "cleanup": null,
+      "command_bound_ns": null,
+      "command_ns": null,
+      "functional": "NOT_RUN",
+      "paths": null,
+      "raw_receipt": "benchmark-results/fs-bench-pro/issue286-init-regression-r045/sdk-host/init_namespace/namespace-10000/receipt.json",
+      "raw_receipt_sha256": "d503f885f4b8b0f89f2855ce3c872eb9f50f1470631e18b13cd7fd2621ed6af8",
+      "raw_sdk_ns": null,
+      "registration": null,
+      "sample_count": 0,
+      "sampled_bytes": null,
+      "sampled_files": null,
+      "status": "NOT_RUN",
+      "verifier_bound_ns": null,
+      "verifier_ns": null
+    },
+    {
+      "case": "namespace-100000",
+      "cleanup": null,
+      "command_bound_ns": null,
+      "command_ns": null,
+      "functional": "NOT_RUN",
+      "paths": null,
+      "raw_receipt": "benchmark-results/fs-bench-pro/issue286-init-regression-r045/sdk-host/init_namespace/namespace-100000/receipt.json",
+      "raw_receipt_sha256": "bb92522ca52293511e1d11657de669a049e25a1525d0d595acef0f4d59bc5cb9",
+      "raw_sdk_ns": null,
+      "registration": null,
+      "sample_count": 0,
+      "sampled_bytes": null,
+      "sampled_files": null,
+      "status": "NOT_RUN",
+      "verifier_bound_ns": null,
+      "verifier_ns": null
+    }
+  ],
+  "schema": "core-init-regression-compact-v1",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "aa620053c306727791654f6879f84a57b2b15ef383f4bb9b37d1bc4024f3d75f",
+    "product_seal": "e67bbe4e80924ee49d044d90e6d90fe24f95f42ec5866295c5c99fa54d62b47b",
+    "source_commit": "530dfa5363c7e0bd38d6ab6daf94a30da65302b5",
+    "source_dirty": false,
+    "source_tree": "d3642c234b8bf681ccc8fb0c6add4a7082794470"
+  }
+}
