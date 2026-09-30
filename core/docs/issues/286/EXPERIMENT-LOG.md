@@ -423,3 +423,11 @@ R044 issue publication: [#286 comment5901468648](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-init-regression-r045 | public release SDK Init 100 then1,000 files | `530dfa536` | **Functional PASS/PASS**: raw SDK34.812/114.956 ms, full commands56.743/127.828 ms<15 s, separate verifiers38.252/49.708 ms<9.5 s, registered scope and cleanup PASS. Numeric latency INELIGIBLE under unchanged Init cache profile; explicit10,000/100,000 NOT_RUN. | [Round report](experiments/20260930-init-regression-r045.md), [compact receipts](experiments/20260930-init-regression-r045-receipts.json) | Publish after report commit; Family 2 regression next |
+
+## Family 2 selected regression round 20260930-history-regression-r046
+
+R045 issue publication: [#286 comment5901496249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5901496249), Family 1 report commit `a12ab932e` (production delta+0). At that clean source, the current v4 stride10/17 and stride3/53 selection used one new sample each. The exact same worktree-local release backend binary was reused by compilation seal, but the changed broad harness identity required a new receipt. Old profiles and the explicit stride1 remain unrun in this selected invocation.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-regression-r046 | compound retained history v4 stride10/17 then stride3/53 | `a12ab932e` | **PASS/PASS**: C2+C5 allocated52,473,856<54,278,964 and65,142,784<70,427,034 B (+6.342%/+1.747% vs original strict target); independent roots, O3, full trees/selected bytes, cleanup PASS; driver32.153/52.446 s<60/170 s, separate verifier3.034/8.407 s<10/20 s. Numeric time INELIGIBLE under unchanged component cache profile. | [Round report](experiments/20260930-history-regression-r046.md), [compact receipts](experiments/20260930-history-regression-r046-receipts.json) | Publish after report commit; explicit stride1 v4 next |
