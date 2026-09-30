@@ -14,6 +14,14 @@ SPEC.loader.exec_module(write)
 
 
 class WorkspaceWriteRegistry(unittest.TestCase):
+    def test_cold_source_and_direct_io_do_not_qualify_complete_commit(self):
+        row = {"family_id": "workspace_write", "cache_contract": write.CACHE_CONTRACT,
+               "source_cache_status": "PASS", "host_disk_read_bytes": 712704,
+               "device_read_floor_bytes": 641433, "performance_budget_status": "PASS"}
+        result = write.assess_numeric_cache(row)
+        self.assertEqual(result["status"], "INELIGIBLE")
+        self.assertIn("Commit cache domain", result["reason"])
+
     def test_nine_schedules(self):
         self.assertEqual(len(write.CASES), 9)
         self.assertEqual(tuple(write.CASES), write.SELECTED)

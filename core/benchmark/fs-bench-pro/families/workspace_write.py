@@ -138,6 +138,15 @@ def receipt_line(stdout):
     return json.loads(lines[0]) if len(lines) == 1 else None
 
 
+def assess_numeric_cache(row):
+    if row.get("family_id") != "workspace_write":
+        raise ValueError("Family 3 cache assessment requires a Workspace write row")
+    # The frozen #273 checkpoint-5 spec explicitly says host source eviction
+    # and private O_DIRECT do not establish the whole Exec-to-Commit cache state.
+    return {"status": "INELIGIBLE",
+            "reason": "Commit cache domain is not proved by cold host source plus private direct I/O"}
+
+
 def build(out, runner, identity):
     if sys.platform != "darwin":
         raise RuntimeError("this cold-source profile requires Darwin mincore/msync and libproc")
@@ -304,7 +313,7 @@ def case_run(out, case, prepared):
         cache_reasons.append("source check stale at launch")
     if not isinstance(device_bytes, int) or device_bytes < device_floor:
         cache_reasons.append("host device-read attestation below frozen floor")
-    cache_eligible = not cache_reasons
+    source_cache_eligible = not cache_reasons
     functional = bool(performance["exit_code"] == 0 and under_budget and driver
                       and driver.get("status") == "COMPLETE" and route and cleanup
                       and verification["status"] == "PASS")
@@ -316,6 +325,7 @@ def case_run(out, case, prepared):
            "cold_source": cold, "device_read_floor_bytes": device_floor,
            "host_disk_read_bytes": device_bytes,
            "cache_eligibility_reasons": cache_reasons,
+           "source_cache_status": "PASS" if source_cache_eligible else "INELIGIBLE",
            "direct_io_source_sha256": prepared["direct_io_source_sha256"],
            "operation_surface": "public WorkspaceApi mount/exec/commit; ordinary POSIX-FUSE writer",
            "shell_command": case.command, "performance": performance,
@@ -328,10 +338,10 @@ def case_run(out, case, prepared):
            "new_manifest_sha256": sha256(out / f"{case.id}.tsv"),
            "cleanup_status": "PASS" if cleanup else "UNKNOWN" if performance["timeout"] else "FAIL",
            "functional_status": "PASS" if functional else "FAIL",
-           "numeric_latency_status": ("PASS" if cache_eligible and under_budget else
-                                      "TARGET_MISS" if cache_eligible else "INELIGIBLE"),
            "sample_count": 1,
-           "row_status": "PASS" if functional and cache_eligible else "INELIGIBLE" if functional else "FAIL"}
+           "row_status": "INELIGIBLE" if functional else "FAIL"}
+    row["numeric_cache_assessment"] = assess_numeric_cache(row)
+    row["numeric_latency_status"] = row["numeric_cache_assessment"]["status"]
     save(folder / "receipt.json", row)
     return row
 
@@ -413,5 +423,6 @@ def report(out):
             seconds(perf.get("wall_ns")), seconds(receipt.get("performance_budget_ns")),
             seconds(driver.get("exec_ns")), seconds(driver.get("commit_ns")),
             seconds(check.get("wall_ns")), receipt.get("functional_status", "NOT_RUN"),
-            receipt.get("numeric_latency_status", "NOT_RUN"), receipt.get("cleanup_status", "NOT_RUN"))))
+            assess_numeric_cache(receipt)["status"] if receipt.get("family_id") == "workspace_write"
+            else "NOT_RUN", receipt.get("cleanup_status", "NOT_RUN"))))
     return "\n".join(rows) + "\n"
