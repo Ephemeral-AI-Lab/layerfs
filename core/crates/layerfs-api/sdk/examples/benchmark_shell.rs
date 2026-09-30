@@ -123,6 +123,57 @@ fn pinned_digest(
     }
     Ok((offset, hex(&hash.finalize())))
 }
+fn stopping_control(api: &WorkspaceApi<'_>, id: &layerfs_sdk::WorkspaceId) -> Result<(), String> {
+    let setup = api.exec(id, "mkfifo /tmp/f4-ready /tmp/f4-release /tmp/f4-closed; (exec 3<data.bin && printf r > /tmp/f4-ready && read token < /tmp/f4-release && exec 3<&- && printf c > /tmp/f4-closed) > /tmp/f4-holder.log 2>&1 & read ready < /tmp/f4-ready")
+        .map_err(|error| format!("holder setup: {error:?}"))?;
+    if setup.exit_status != Some(0) {
+        return Err(format!("holder setup: {setup:?}"));
+    }
+    let before = api
+        .status(id)
+        .map_err(|error| format!("before: {error:?}"))?;
+    let unmount = api.unmount(id);
+    let retained = matches!(
+        &unmount,
+        Err(WorkspaceError::Retained {
+            cause: layerfs_bridge::contract::Code::Deadline,
+            ..
+        })
+    );
+    let stopped = api.status(id);
+    let stopping = stopped
+        .as_ref()
+        .is_ok_and(|status| status.mounted && status.stopping && status.handles > 0);
+    let pin = api.pin_view(id);
+    let pin_refused = matches!(&pin, Err(WorkspaceError::Failure(failure)) if failure.code == layerfs_bridge::contract::Code::Busy && !failure.unknown);
+    let read = api.exec(id, "head -c 1 data.bin");
+    let read_refused = read.as_ref().is_ok_and(|result| {
+        result.exit_status.is_some_and(|status| status != 0)
+            && String::from_utf8_lossy(&result.stderr)
+                .to_ascii_lowercase()
+                .contains("busy")
+    });
+    // The outside-Workspace FIFO releases the accepted FD through ordinary Exec.
+    let release = api.exec(
+        id,
+        "printf 'release\n' > /tmp/f4-release; read closed < /tmp/f4-closed",
+    );
+    let released = release
+        .as_ref()
+        .is_ok_and(|result| result.exit_status == Some(0));
+    println!("CONTROL\t{{\"stopping_observed\":{stopping},\"retained_unmount_known\":{retained},\"new_pin_refused_known_busy\":{pin_refused},\"new_posix_read_refused_busy\":{read_refused},\"holder_released\":{released},\"pin_release_ok\":{}}}", pin.is_err());
+    println!("STOPPING_DETAIL\tbefore={before:?} unmount={unmount:?} stopped={stopped:?} pin={pin:?} read={read:?} release={release:?}");
+    if let Ok(lease) = pin {
+        api.release_view(&lease)
+            .map_err(|error| format!("unexpected pin custody: {error:?}"))?;
+    }
+    if retained && stopping && pin_refused && read_refused && released {
+        Ok(())
+    } else {
+        Err("stopping/refusal or holder-release condition failed".into())
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let disk_read_before = disk_read_bytes();
     let args: Vec<_> = std::env::args().collect();
@@ -253,6 +304,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("workspace mount".into());
         }
     };
+    if case
+        .0
+        .get("stopping_control")
+        .is_some_and(|value| value == "1")
+    {
+        let start = Instant::now();
+        let result = stopping_control(&workspaces, &mount.id);
+        let operation_ns = start.elapsed().as_nanos();
+        let unmount = workspaces.unmount(&mount.id);
+        let final_status = workspaces.status(&mount.id);
+        let (delete, _) = sandboxes.delete_with_logs(sandbox, &mut std::io::stderr());
+        let complete = result.is_ok()
+            && unmount.is_ok()
+            && delete.is_ok()
+            && final_status
+                .as_ref()
+                .is_ok_and(|status| !status.mounted && !status.stopping);
+        println!("RECEIPT\t{{\"status\":{:?},\"scenario_id\":{:?},\"detail\":{:?},\"head_commit\":{:?},\"commit_called\":false,\"exec_ns\":null,\"commit_ns\":null,\"operation_ns\":{operation_ns},\"unmount_ok\":{},\"sandbox_delete_ok\":{}}}",
+            if complete { "COMPLETE" } else { "FAIL" }, case.get("scenario_id")?, format!("{result:?}; final={final_status:?}"), case.get("old_commit")?, unmount.is_ok(), delete.is_ok());
+        drop(owner);
+        server.shutdown();
+        return if complete {
+            Ok(())
+        } else {
+            Err("stopping control incomplete".into())
+        };
+    }
     let mut exec_ns = 0;
     let mut commit_ns = 0;
     let mut commit_called = false;

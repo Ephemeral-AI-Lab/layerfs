@@ -24,6 +24,8 @@ class Case:
     verifier_budget_ns: int = 9_000_000_000
     pin_read_bytes: int = 0
     role: str = "performance-diagnostic"
+    stopping: bool = False
+    reordered: bool = False
 
 
 CASES = {case.id: case for case in (
@@ -36,6 +38,11 @@ CASES = {case.id: case for case in (
     Case("workspace-commit-full-pin-retained-writes-4097-read-31kib-v1",
          "/fixtures/bin/write-separated data.bin 1", 1, False,
          command_budget_ns=60_000_000_000, pin_read_bytes=31_744, role="functional-oracle"),
+    Case("workspace-commit-sdk-stopping-refusal-v1", "held FD/readiness and release FIFOs", 0, True,
+         command_budget_ns=15_000_000_000, role="functional-oracle", stopping=True),
+    Case("workspace-commit-sdk-reordered-base-copy-8kib-v1",
+         "dd if=data.bin of=/tmp/f4-first bs=8192 count=1 && dd if=data.bin of=/tmp/f4-second bs=8192 skip=128 count=1 && dd if=/tmp/f4-second of=data.bin bs=8192 count=1 conv=notrunc && dd if=/tmp/f4-first of=data.bin bs=8192 seek=128 count=1 conv=notrunc",
+         2, False, command_budget_ns=60_000_000_000, pin_read_bytes=31_744, role="functional-oracle", reordered=True),
 )}
 SELECTED = tuple(name for name in CASES if name.endswith("-v3"))
 REMAINING = {
@@ -55,8 +62,11 @@ def oracle():
     retained = write.expected("dispersed", 4097)
     one_edit = bytearray(retained)
     one_edit[0] = ord("X")
-    return {"retained": write.manifest(retained),
-            **{case.id: write.manifest(retained if case.clean else one_edit) for case in CASES.values()}}, hashlib.sha256(retained).hexdigest()
+    reordered = bytearray(retained)
+    reordered[:8192], reordered[1 << 20:(1 << 20) + 8192] = retained[1 << 20:(1 << 20) + 8192], retained[:8192]
+    baseline = write.manifest(b"A" * write.SIZE)
+    return {"retained": write.manifest(retained), "baseline": baseline,
+            **{case.id: baseline if case.stopping else write.manifest(reordered if case.reordered else retained if case.clean else one_edit) for case in CASES.values()}}, hashlib.sha256(retained).hexdigest()
 
 
 def control_line(stdout):
@@ -92,6 +102,9 @@ def attempt(out, case, prepared, pin_sha):
                   prelude_command_hex=PRELUDE.encode().hex(), clean_commit=str(int(case.clean)),
                   pin_read_bytes=str(case.pin_read_bytes),
                   telemetry_run=str(int.from_bytes(os.urandom(16), "big") or 1))
+    if case.stopping:
+        fields.pop("prelude_command_hex")
+        fields.update(stopping_control="1", expected_failure="1")
     case_spec(folder / "case.before", fields)
     command = [prepared["artifacts"]["benchmark_shell"]["path"], "run", str(folder / "case.before"),
                str(folder / "store.sqlite"), str(folder / "history.sqlite"), prepared["image_id"]]
@@ -109,7 +122,11 @@ def attempt(out, case, prepared, pin_sha):
                  and bool(control.get("up_to_date")) == case.clean
                  and control.get("prelude_head_commit")
                  and (driver.get("head_commit") == control["prelude_head_commit"]) == case.clean)
-    pin = bool(control and control.get("pin_generation", 0) > 0 and control.get("pin_observation_ok"))
+    if case.stopping:
+        route = bool(control and all(control.get(key) for key in ("stopping_observed", "retained_unmount_known",
+            "new_pin_refused_known_busy", "new_posix_read_refused_busy", "holder_released")))
+    pin = bool(control and (control.get("new_pin_refused_known_busy") if case.stopping else
+                           control.get("pin_generation", 0) > 0 and control.get("pin_observation_ok")))
     full_pin = bool(control and control.get("pinned_bytes") == write.SIZE and control.get("pinned_sha256") == pin_sha)
     if case.pin_read_bytes:
         pin = pin and full_pin
@@ -121,7 +138,7 @@ def attempt(out, case, prepared, pin_sha):
            "role": case.role,
            "artifacts": prepared["artifacts"], "image_id": prepared["image_id"], "image_reuse": prepared["image_build"],
            "master": master, "clone_method": prepared["clone_method"], "setup": "clone",
-           "prelude_command": PRELUDE, "shell_command": case.command, "performance": perf,
+           "prelude_command": None if case.stopping else PRELUDE, "shell_command": case.command, "performance": perf,
            "command_budget_ns": case.command_budget_ns, "command_status": "PASS" if budget else "FAIL",
            "driver": driver, "control": control, "write_callbacks": counts.get("write"),
            "route_status": "PASS" if route else "FAIL", "pin_status": "PASS" if pin else "FAIL",
@@ -212,12 +229,14 @@ def prove(performance_out, output, common):
                      "status": "NOT_RUN", "reason": "performance/route/pin/cleanup did not complete"}
             if receipt["status"] == "COMPLETE_DIAGNOSTIC":
                 fields = dict(line.split("=", 1) for line in (source / "case.before").read_text().splitlines())
-                fields.update(old_commit=receipt["control"]["prelude_head_commit"],
+                fields.update(old_commit=receipt["master"]["old_commit"] if CASES[name].stopping else receipt["control"]["prelude_head_commit"],
                               expected_old_parent=receipt["master"]["old_commit"],
                               expected_head_commit=receipt["driver"]["head_commit"])
+                if CASES[name].stopping:
+                    fields.pop("expected_old_parent")
                 case_spec(folder / "case.verify", fields)
                 command = [verifier["path"], str(folder / "case.verify"), str(source / "store.sqlite"),
-                           str(source / "history.sqlite"), str(performance_out / "retained.tsv"),
+                           str(source / "history.sqlite"), str(performance_out / ("baseline.tsv" if CASES[name].stopping else "retained.tsv")),
                            str(performance_out / f"{name}.tsv")]
                 check, stdout, _ = write.execute(command, folder / "verifier", timeout=9,
                     env={**os.environ, "LAYERFS_CONSTRUCTION_WORKERS": "1", "LAYERFS_HISTORY_CURSOR_KEY": prepared["cursor_key"]})
@@ -227,7 +246,8 @@ def prove(performance_out, output, common):
                     child = None
                 passed = bool(child and child.get("status") == "PASS" and
                               child.get("advanced") == (not CASES[name].clean) and
-                              child.get("old_bytes") == child.get("new_bytes") == write.SIZE
+                              child.get("old_bytes") == write.SIZE
+                              and (child.get("new_bytes") is None if CASES[name].stopping else child.get("new_bytes") == write.SIZE)
                               and check["wall_ns"] <= CASES[name].verifier_budget_ns and not check["timeout"])
                 proof.update(status="PASS" if passed else "FAIL", verification=check, child=child,
                              verifier_sha256=verifier["sha256"], numeric_latency_status="INELIGIBLE")
