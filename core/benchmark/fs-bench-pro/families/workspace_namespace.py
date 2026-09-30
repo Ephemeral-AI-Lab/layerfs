@@ -155,13 +155,13 @@ def fields(master, scenario, command):
     fixture = dict(line.split("=", 1) for line in (Path(master["path"]) / "fixture.before").read_text().splitlines())
     return {"project_id": fixture["project_id"], "genesis_layer": fixture["genesis_layer"],
             "genesis_root": fixture["root"], "genesis_root_serial": fixture["root_serial"],
-            "branch_id": fixture["branch_id"], "binding_key_hex": b"inherited-workspace".hex(),
+            "branch_id": fixture["branch_id"], "binding_key_hex": master.get("binding_key_hex", b"inherited-workspace".hex()),
             "component_oracle": "1", "scenario_id": scenario, "command_hex": command.encode().hex(),
             "expected_failure": "0", "telemetry_run": str(int.from_bytes(os.urandom(16), "big") or 1)}
 
 
-def env():
-    return {**os.environ, "LAYERFS_CONSTRUCTION_WORKERS": "1", "LAYERFS_HISTORY_CURSOR_KEY": CURSOR}
+def env(cursor=CURSOR):
+    return {**os.environ, "LAYERFS_CONSTRUCTION_WORKERS": "1", "LAYERFS_HISTORY_CURSOR_KEY": cursor}
 
 
 def sdk_master(out, layout, common, artifacts):
@@ -226,7 +226,7 @@ def sdk_attempt(out, case, master, prepared, *, profile=PROFILE, oracle_builder=
     (folder / "old.tsv").write_text(old)
     (folder / "new.tsv").write_text(new)
     record, stdout, stderr = shared.execute([prepared["artifacts"]["benchmark_shell"]["path"], "run", str(folder / "case.before"),
-        str(folder / "store.sqlite"), str(folder / "history.sqlite"), prepared["image_id"]], folder / "driver", timeout=case.budget_ns / 1e9, env=env())
+        str(folder / "store.sqlite"), str(folder / "history.sqlite"), prepared["image_id"]], folder / "driver", timeout=case.budget_ns / 1e9, env=env(master.get("cursor_key", CURSOR)))
     driver, control = shared.receipt_line(stdout), commit.control_line(stdout)
     cleanup = commit.cleanup_complete(driver, control, stderr)
     counts = dict(item.split("=", 1) for item in (driver or {}).get("projection_counts", "").split(",") if "=" in item)
@@ -245,6 +245,7 @@ def sdk_attempt(out, case, master, prepared, *, profile=PROFILE, oracle_builder=
            "expected_exec_failure": expected_exec_failure, "explicit_recovery": recovery,
            "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
            "master": master, "artifacts": prepared["artifacts"], "image_id": prepared["image_id"],
+           "cursor_key": master.get("cursor_key", CURSOR),
            "performance": record, "command_budget_ns": case.budget_ns,
            "command_status": "PASS" if not record["timeout"] and record["wall_ns"] <= case.budget_ns else "FAIL",
            "driver": driver, "control": control, "route_status": "PASS" if route else "FAIL", "pin_status": "PASS" if pin else "FAIL",
@@ -310,7 +311,7 @@ def prove(run, output, common, *, schema=PROOF_SCHEMA):
             if shared.sha256(verifier["path"]) != verifier["sha256"]:
                 raise ValueError("verifier binary seal changed")
             record, stdout, _ = shared.execute([verifier["path"], str(folder / "case.verify"), str(folder / "store.sqlite"),
-                str(folder / "history.sqlite"), str(folder / "old.tsv"), str(folder / "new.tsv")], out / item["case"], timeout=9, env=env())
+                str(folder / "history.sqlite"), str(folder / "old.tsv"), str(folder / "new.tsv")], out / item["case"], timeout=9, env=env(receipt.get("cursor_key", CURSOR)))
             child = json.loads(stdout) if record["exit_code"] == 0 else None
             row = {"case": item["case"], "verification": record, "verifier_budget_ns": 9_000_000_000,
                    "child": child, "status": "PASS" if child and child.get("status") == "PASS" and child.get("advanced") == (not receipt.get("expected_failure", False)) and record["wall_ns"] < 9_000_000_000 else "FAIL",
