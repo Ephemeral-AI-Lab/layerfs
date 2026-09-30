@@ -126,7 +126,7 @@ impl<'a> EditObjects<'a> {
     /// Empty operation state over `reader`, publishing to `consumer`.
     ///
     /// `pages` is the operation's shared mapping-page memo: a page the comparison
-    /// pass acquired is served from it here instead of being demanded again.
+    /// pass retained is served from it here while it remains cached.
     pub fn new(
         reader: &'a dyn AuthenticatedObjects,
         consumer: &'a mut dyn FinalizedConsumer,
@@ -159,8 +159,8 @@ impl<'a> EditObjects<'a> {
     /// Reads and decodes one mapping page under its root/non-root context.
     pub fn load_node(&mut self, summary: NodeSummary, root: bool) -> ContentResult<ExtentNode> {
         // The memo is consulted before the charge and before the demand: a page an
-        // earlier pass of this operation acquired is neither read nor demanded
-        // again, so `nodes_read` keeps counting what this operation actually read.
+        // earlier pass retained is neither read nor demanded again while cached,
+        // so `nodes_read` counts this operation's actual acquisitions.
         if let Some(canonical) = self.pages.get(summary.id, root) {
             let node = decode_node_with_context(canonical, root)?;
             if node.level() != summary.level
@@ -172,13 +172,15 @@ impl<'a> EditObjects<'a> {
             return Ok(node);
         }
         self.counters.nodes_read = self.counters.nodes_read.saturating_add(1);
+        let mut fetched = None;
         let node = match self.drafts.get(&summary.id) {
             Some(Draft::Node(node)) => node.clone(),
             Some(Draft::Page(object)) => decode_node_with_context(object.canonical(), root)?,
             None => {
                 let canonical = self.reader.read_canonical(summary.id)?;
-                self.pages.insert(summary.id, root, canonical.clone());
-                decode_node_with_context(&canonical, root)?
+                let (canonical, node) = PageCache::decode_owned(canonical, root)?;
+                fetched = Some(canonical);
+                node
             }
         };
         if node.level() != summary.level
@@ -186,6 +188,9 @@ impl<'a> EditObjects<'a> {
             || node.extent_count() != summary.extents
         {
             return Err(ContentError::InvalidRecord("extent summary"));
+        }
+        if let Some(canonical) = fetched {
+            self.pages.retain(summary.id, canonical)?;
         }
         Ok(node)
     }

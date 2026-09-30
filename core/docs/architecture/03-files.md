@@ -14,6 +14,12 @@ canonical edit builder. A fresh file uses the same wire operation and C1's
 streaming constructor. This changes the Service input route, not the file's
 canonical format or C1 partition rules; older sections keep their source pin.
 
+The #287 R1b-cache change describes mapping retention/current-batch ownership in
+the same commit as this note, audited against parent
+`765202c45e11b3c96b2b16c40b35e810a7270d34`. The read section below records this
+algorithm change. Canonical formats and partition rules remain at their existing
+versions; global supplied-I/O and physical memory qualification remain separate.
+
 ---
 
 ## 3. File construction (C1)
@@ -338,14 +344,18 @@ published and the largest frontier it held.
   mapping pages.
 - `read_range` reads a logical sub-range under the same discipline.
 - `RangeCursor` (`mapping/read.rs`) serves a sequence of ascending sub-ranges of
-  one chunked file through the same traversal, keeping the mapping pages it has
-  already acquired in a `PageCache` the caller owns. A page two ranges share — the root of every one of them, and
-  every other ancestor of their union path — is one provider demand and one
-  `nodes_read` charge for the whole sequence instead of one per range. The cache
-  holds at most `READ_NAVIGATION_CACHE_PAGES` (2 × `READ_NAVIGATION_WAVE` = 64)
-  pages and is emptied wholesale when it would exceed that, so a long operation's
-  retained pages stay inside a declared ceiling; a whole-file base never builds a
-  cursor at all, because its retained ranges are slices of the one payload.
+  one chunked file through the same traversal, retaining canonical pages in a
+  caller-owned `PageCache`. A later demand reuses a page while it remains
+  retained; eviction can require another grouped acquisition. Both `new()` and
+  `Default` select64 pages (2 × `READ_NAVIGATION_WAVE`); `bounded(limit)` selects
+  that caller's count, with zero retaining its existing one-page meaning.
+  Insertion checks mapping context, canonical width and actual Vec capacity and
+  enforces that count itself, including localized-edit insertion. Wholesale
+  eviction cannot remove an in-progress batch's only page owner: the bounded
+  navigation batch owns all hit snapshots before retention changes and owns
+  fetched pages independently. A cache smaller than the32-page navigation wave
+  still serves the same grouped demands and exact bytes. A whole-file base never
+  builds a cursor because its retained ranges slice the one payload.
 
 `read_all_bounded` is the form that takes a caller-declared maximum; `read_all` is
 the unbounded convenience wrapper. A caller that must bound its work uses the

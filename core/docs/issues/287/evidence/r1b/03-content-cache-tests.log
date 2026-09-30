@@ -1,0 +1,17 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.03s
+     Running tests/mapping_cache.rs (core/target/debug/deps/mapping_cache-9c79d272277510ec)
+
+running 10 tests
+test public_insert_checks_actual_owner_width_context_and_replacement_before_retention ... ok
+test repeated_leaf_demands_keep_logical_order_but_acquire_one_immutable_id_once ... ok
+test mixed_hit_wave_keeps_its_evicted_hit_and_fetches_only_the_31_missing_pages ... ok
+test parent_child_summary_mismatch_is_refused_before_current_batch_output_or_retention ... ok
+test a_later_bad_batch_leaves_only_the_previously_validated_output_prefix ... ok
+test default_matches_new_and_zero_still_means_one_page ... ok
+test edit_node_loading_retains_at_most_the_requested_count_and_checks_summary_first ... ok
+test entire_navigation_batch_is_checked_before_any_leaf_retention_or_payload_output ... ok
+test requested_limits_smaller_than_a_wave_preserve_grouped_and_exact_ascending_reads ... ok
+test ordinary_65_page_edit_preserves_independent_new_bytes_and_selected_old_file ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

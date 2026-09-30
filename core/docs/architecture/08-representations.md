@@ -11,6 +11,12 @@ below, and adds the returned-read byte bound and bounded ordinal window. The
 older source-pinned sections remain historical descriptions; they do not qualify
 the pending implementation or a performance change.
 
+The #287 R1b-cache shared-memo/current-batch change is described in the same
+commit as this note, audited against parent
+`765202c45e11b3c96b2b16c40b35e810a7270d34`. Its section13.2.1 clarifies finite
+retention and checked insertion; older performance observations keep their
+historical identities and are not promoted to this source.
+
 Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
 [index](README.md).
@@ -288,12 +294,13 @@ So shrinking a 1 GiB file to 128 KiB reads **128 KiB**, not 1 GiB. The discarded
 range is never touched. Because a whole-file result is definitionally below `T`,
 **large → small is bounded by the cutoff regardless of how large the base was.**
 
-The cursor changes the *provider demands* of that read, never its bytes: R retained
-runs pay `O(R·h)` mapping-page demands without it — one root-down traversal each,
-even for the root they all share — and `O(h + shared)` with it. Payload demands are
-unchanged: a chunk that straddles two retained runs is still read once per run,
-because a run is served exactly and independently. Emission order and the emitted
-object are untouched.
+The cursor changes provider demands through retained reuse, while preserving
+logical bytes. Without reuse, R retained runs each traverse from the root and
+can issue `O(R·h)` mapping demands. A page shared by their paths needs no new
+demand while retained; finite-cache eviction can reacquire it, so the64-page
+cache does not establish a once-per-union-path bound for arbitrary populations.
+Payload demands are unchanged: a chunk that straddles two retained runs is still
+read once per run because each run is served exactly and independently.
 
 ### 13.2.1 The operation's shared page memo
 
@@ -301,10 +308,14 @@ One `apply_edits` builds one `PageCache` and hands it to both passes. The
 comparison pass navigates the base through a `RangeCursor` over it — one descent
 for all of a replacement's windows instead of one per 64 KiB window — and the
 construction pass consults the same memo in `EditObjects::load_node` **before** the
-`nodes_read` charge and before the reader demand, so a mapping page the comparison
-already acquired is neither read nor charged twice. A memo hit still decodes under
-the caller's root context: only canonical bytes are shared, never decoded nodes,
-because the two contexts validate different partition rules.
+`nodes_read` charge and before the reader demand. A page still retained from
+comparison is not acquired or charged again; one evicted before construction may
+be reacquired. A memo hit still decodes under the caller's root context: only
+canonical bytes are shared because the contexts validate different partition
+rules. A fetched edit page is decoded and its expected summary checked before
+the same fallible retention boundary used by reads. Invalid bytes, excess actual
+Vec capacity and table reservation failure cannot create an unchecked retained
+entry. The current read batch owns hits/fetched pages independently of eviction.
 
 That is where the chunked route's `nodes_read` saving comes from: on the D27 shape
 the mapping root and one leaf are each demanded once by the comparison and again by

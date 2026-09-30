@@ -62,8 +62,8 @@ pub fn apply_edits(
         let final_len = request.edits.final_len();
         let representation = policy.representation(final_len);
         // One mapping-page memo for the whole operation. The comparison pass fills
-        // it as it navigates, and the construction pass reads the pages it names
-        // from it instead of demanding them a second time.
+        // it as it navigates, and construction reuses those pages while they
+        // remain retained. Wholesale eviction may require reacquisition.
         let mut pages = crate::file::mapping::PageCache::new();
         if let NoOpVerdict::Equal = compare_replacements(
             &view,
@@ -174,8 +174,8 @@ fn assemble_inner(
 ) -> ContentResult<u64> {
     let payload_start = out.len();
     // The plan is read once, into the segment list the assembly walks: a chunked
-    // base then assembles through one cursor, so a mapping page two retained runs
-    // share is demanded once for the whole assembly instead of once per run.
+    // base then assembles through one cursor, so retained mapping pages can be
+    // reused across runs while they remain in the operation's bounded cache.
     let mut plan = Plan::new(stream);
     let mut segments: Vec<Segment> = Vec::new();
     while let Some(segment) = plan.advance()? {

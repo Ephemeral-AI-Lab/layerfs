@@ -1,0 +1,19 @@
+{
+  "parent": "765202c45e11b3c96b2b16c40b35e810a7270d34",
+  "algorithm": "SHA256 sorted UTF-8 path + NUL + frozen working/staged bytes + NUL",
+  "covering_files": [
+    "core/crates/layerfs-content/src/file/edit/apply.rs",
+    "core/crates/layerfs-content/src/file/edit/compare.rs",
+    "core/crates/layerfs-content/src/file/edit/tree.rs",
+    "core/crates/layerfs-content/src/file/mapping/cache.rs",
+    "core/crates/layerfs-content/src/file/mapping/mod.rs",
+    "core/crates/layerfs-content/src/file/mapping/read.rs",
+    "core/crates/layerfs-content/tests/mapping_cache.rs",
+    "core/crates/layerfs-content/tests/support/cache_oracle.rs",
+    "core/crates/layerfs-storage/tests/mapping_cache.rs",
+    "core/crates/layerfs-storage/tests/support/allocation_observer.rs"
+  ],
+  "covering_sha256": "ce3a423fc64867ec840cd30244f4686fb4593c326ec5b672739727cc5b31dc0d",
+  "phase": "first coherent source; all Cargo checks pending",
+  "scope": "R1b-cache, no performance campaign/global/physical admission"
+}

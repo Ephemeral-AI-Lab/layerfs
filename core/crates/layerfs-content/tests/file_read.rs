@@ -404,11 +404,12 @@ fn a_state_that_overstates_its_mapping_is_refused_not_partly_served() {
         matches!(error, ContentError::InvalidRecord("mapping coverage")),
         "an overstated state produced {error}"
     );
-    assert_eq!(
-        out.len(),
-        bytes.len(),
-        "the read emitted what the real tree covers, never a short result"
-    );
+    // Both leaves belong to the same navigation batch. Their exact byte totals
+    // are checked against the parent before that batch emits any payload, so the
+    // forged final-child summary now refuses before the formerly provisional
+    // whole-tree output. A mismatch in a later batch can retain an earlier
+    // independently validated prefix; this is not whole-read buffering.
+    assert!(out.is_empty(), "the inconsistent batch emitted payload");
 }
 
 #[test]

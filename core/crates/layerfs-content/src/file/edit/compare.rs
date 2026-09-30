@@ -33,9 +33,9 @@ pub enum NoOpVerdict {
 /// Compares every replacement with its base range, bounded and in order.
 ///
 /// `pages` is the operation's shared mapping-page memo. A chunked base reads its
-/// windows through a cursor over it, so the pages this pass acquires are already
-/// held when the construction pass reaches them; a whole-file base has no mapping
-/// to navigate and leaves the memo untouched.
+/// windows through a cursor over it, so retained pages can serve construction
+/// while they remain cached; a whole-file base has no mapping to navigate and
+/// leaves the memo untouched.
 pub fn compare_replacements(
     view: &FileView,
     reader: &dyn AuthenticatedObjects,

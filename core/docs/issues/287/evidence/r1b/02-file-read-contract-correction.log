@@ -1,0 +1,9 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.68s
+     Running tests/file_read.rs (core/target/debug/deps/file_read-6076eeb8874e5100)
+
+running 1 test
+test a_state_that_overstates_its_mapping_is_refused_not_partly_served ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.01s
+

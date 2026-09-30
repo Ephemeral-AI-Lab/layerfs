@@ -1,0 +1,65 @@
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-telemetry)
+   Compiling cc v1.4.5
+   Compiling blake3 v1.8.5
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 7.96s
+     Running tests/edit_localized.rs (core/target/debug/deps/edit_localized-6b3e672532146568)
+
+running 8 tests
+test a_page_two_passes_reach_is_demanded_once_for_the_operation ... ok
+test an_overwrite_still_demands_the_predecessor_path ... ok
+test a_pure_deletion_never_walks_the_rightmost_path ... ok
+test a_mid_extent_overwrite_reads_only_the_straddling_extents ... ok
+test an_append_at_end_of_file_touches_only_the_right_boundary ... ok
+test many_localized_edits_keep_each_edit_on_its_own_path ... ok
+test localized_work_is_independent_of_file_size ... ok
+test an_extent_aligned_overwrite_reads_only_its_path_and_the_replaced_extents ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/edit_reference.rs (core/target/debug/deps/edit_reference-8670d2abe57506d1)
+
+running 3 tests
+test the_oracle_fixtures_are_the_sealed_reference_revision ... ok
+test an_interior_join_reads_its_boundary_child_once ... ok
+test the_candidate_reproduces_the_reference_root_and_partition ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/file_read.rs (core/target/debug/deps/file_read-6076eeb8874e5100)
+
+running 16 tests
+test a_short_page_is_accepted_as_a_root_and_refused_as_a_non_root ... ok
+test a_provider_failure_is_returned_once_and_stops_the_read ... ok
+test full_read_returns_exact_bytes_for_every_representation ... ok
+test empty_range_at_end_of_file_is_empty_and_at_eof_bound_is_allowed ... ok
+test whole_file_root_rejects_a_range_beyond_its_payload ... ok
+test a_leaf_slice_outside_the_chunk_grammar_is_refused_at_decode ... ok
+test repeated_demands_of_one_payload_read_it_once_and_emit_it_every_time ... ok
+test out_of_bounds_and_inverted_ranges_fail ... ok
+test a_state_that_contradicts_its_root_page_is_refused_before_the_walk ... ok
+test the_payload_wave_enforces_both_its_object_and_its_byte_ceiling ... ok
+test ranges_cross_extents_and_page_boundaries ... ok
+test a_wave_is_released_before_the_next_one_is_read ... ok
+test a_state_that_overstates_its_mapping_is_refused_not_partly_served ... FAILED
+test a_range_read_serves_a_tree_with_more_than_one_branch_level ... ok
+test navigation_acquires_a_whole_level_per_provider_call ... ok
+test a_large_read_acquires_payloads_in_bounded_batches ... ok
+
+failures:
+
+---- a_state_that_overstates_its_mapping_is_refused_not_partly_served stdout ----
+
+thread 'a_state_that_overstates_its_mapping_is_refused_not_partly_served' panicked at crates/layerfs-content/tests/file_read.rs:407:5:
+assertion `left == right` failed: the read emitted what the real tree covers, never a short result
+  left: 0
+ right: 5242881
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_state_that_overstates_its_mapping_is_refused_not_partly_served
+
+test result: FAILED. 15 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+error: test failed, to rerun pass `-p layerfs-content --test file_read`

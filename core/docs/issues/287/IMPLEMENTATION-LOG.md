@@ -226,3 +226,167 @@ R1 remains unchecked. #288 receives this changed admission mechanism for later
 qualification; no campaign, family runner, speed PASS or #288 issue edit occurred.
 Next: R1b-cache, demand-owned mapping batches and insertion-enforced bounded
 retention, with independent valid-tree/cache-crossing and actual-allocation proof.
+
+## R1a published; R1b-cache ownership and prospective gate
+
+R1a actual commit is `765202c45e11b3c96b2b16c40b35e810a7270d34`. Exact committed
+parent/tree archives reproduce135696 ->135765 (+69), reference65417 unchanged,
+Core70279 ->70348. Normal push and remote-ref equality confirm publication.
+#287 comment5912196829 records PARTIAL; its body preserves original requirements
+and R1 unchecked. The raw logs are unchanged. No foreign target/artifact was used.
+
+R1b-cache parent is that commit; SC-01/02/04/06/07 affected. The cohesive delivery
+replaces evictable-cache ownership of in-progress navigation with a bounded
+current batch. Cache insertion becomes fallible and enforces actual canonical
+Vec capacity, mapping context/width and requested retained count. Default64 and
+bounded0=>1 remain explicit; the32-page grouped provider mechanism remains.
+Edit insertion validates node/summary before sharing this same retention policy.
+No unplanned rescue query, larger minimum cache or new lookup algorithm is used.
+
+File ownership: r1_catalog owns C1 file/mapping cache/read/module and edit/tree
+plus legitimate content callers/external tests. r0_oracles owns the independent
+finite cache fixture and real Storage/provider/allocation tests. Root owns
+Bridge/global-provider interfaces, architecture/log/checklist, acceptance/count,
+Cargo checking and publication. Workers preserve each other's edits and share
+the public PageCache/fixture interface before implementation. No Cargo command
+runs until root freezes the integrated source; targets remain worktree-local.
+
+Independent expected result: separately encoded valid wide v1 mapping pages,
+selected deterministic chunk bytes and exact logical output. Mixed64-cache
+prefill creates one hit plus31 misses in the next32-page navigation wave. That
+hit stays owned even when retention evicts; no second demand repairs the lost
+hit. Limits1/31/32/64 must retain at most their declared count and preserve
+grouped acquisition/bytes. Existing v1 localized-edit/reference checks cover
+unchanged codec/partition laws; a wide edit covers retention through construction.
+
+Resource exit: actual retained Vec capacities and conservative16KiB standard
+cache table/descriptor allowance are checked using real System requested
+allocations, with fixture/provider/output/oracle domains stated separately.
+Incoming provider allocations still precede a caller ReadWindowPermit: this
+slice cannot claim upfront whole-provider/global/physical admission. Whole
+frontier/draft/graph state, C2 scratch/SQLite guard and protected native capacity
+remain separate R1 gates. Larger caller-requested cache classes retain their
+explicit compatibility scope; strict byte admission does not silently apply.
+
+Next action: implement/review the complete cache/current-batch path, freeze it,
+then run meaningful independent content and real Storage covering checks once.
+No benchmark selection, diagnostic performance row or campaign is authorized.
+
+## R1b-cache first covering run and exact provisional-output correction
+
+Frozen product/test covering seal:
+`ce3a423fc64867ec840cd30244f4686fb4593c326ec5b672739727cc5b31dc0d`
+(evidence/r1b/FROZEN-SOURCE.json). Whole-Core fmt exit0; boundary PASS359 and
+guard self-tests PASS9. First command was `cargo +1.85.1 test --manifest-path
+core/Cargo.toml --locked -p layerfs-content --test mapping_cache --test file_read
+--test edit_reference --test edit_localized`, exit101. Localized8/reference3
+PASS; file_read15 PASS/1 FAIL; new mapping_cache target was not reached.
+Raw output is retained in evidence/r1b/01-content-tests.log.
+
+The failed test's authenticated-provider forgery moves the branch/FileState
+length and last child end together, so the root's own codec remains consistent
+while its final child's exact totals disagree. New selected-child summary
+validation checks both leaves in their complete navigation batch before payload
+output. The error remains `InvalidRecord("mapping coverage")`; actual output is
+zero, whereas the old external assertion expected5,242,881 provisional bytes.
+This is the intentionally stricter batch boundary, established by source
+propagation of parent totals and the independent malformed-parent test design.
+The correction requires exact empty output in that external test and documents
+that a later failing wave can still retain an earlier validated prefix. Product
+source/valid-tree behavior is unchanged. The failed test alone and the previously
+unrun new target are covering commands; the26 unchanged passing tests are reused.
+
+## R1b-cache corrected functional and real-provider requested-allocation gates
+
+The isolated corrected `file_read` test exited0 (1 PASS/15 filtered); unchanged
+passing tests are reused. New `mapping_cache` target exited0 (10 PASS). Raw
+covering commands/output are02-file-read-contract-correction.log and
+03-content-cache-tests.log. Product source is unchanged by the external
+provisional-output correction. Content coverage totals37 passing cases, including
+the sealed independent v1 root/partition reference; the wide65-page edit proves
+independent final/old bytes and required old-page visits, not a predicted new
+wide root/partition matrix.
+
+`cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage
+--test mapping_cache --test edit_pipeline -- --nocapture`, exit0:6 existing
+integrated edit tests and1 new real Store/provider/resource test PASS. All98
+independent canonical fixtures are saved child-first with exact IDs/bytes.
+Default/mixed1hit31miss and limits0=>1/1/31/32/64 pass exact266240 output,
+grouped32 acquisition, requested retained count and8193-capacity refusal. The
+existing edit target's read-amplification line is a functional count diagnostic,
+not a speed row/campaign or promoted historical performance receipt.
+
+Actual System requested-allocation diagnostics (04-storage-tests.log):
+
+- Cache64-prefill: live328496 encoded +8328 table/other; decoded live0.
+  Peaks encoded328496/decoded-size5120/table-other12496; actual simultaneous
+  peak341944 bytes,670604 cumulative requested bytes/134 allocation events.
+  Captured owners drop to live0; cache stack descriptor56 bytes. This observed
+  standard target fits524288 encoded +16384 table/other +5120 decode arithmetic.
+- Real-provider full read: simultaneous requested Rust peak1966029 bytes;
+  encoded-size peak493744, decoded-size peak10240, other peak1490428;
+  largest request1048576,4392757 cumulative bytes/1943 allocations/130 reallocs.
+  After provider drop, live10328 encoded +8328 table; cache drop returns live0.
+- Both fixed external ledgers report no overflow. Exact Layout-size attribution
+  can collide (payload-demand and decoded extent vectors both5120 bytes here).
+  Fixture/oracle/preallocated output/observer/pre-existing shared Store ownership
+  is stated separately. C heap, allocator overhead, stack beyond stated metadata,
+  RSS/cache/kernel and upfront provider/global permit admission are unavailable.
+  Cumulative requested bytes are work evidence, not live memory or a phase peak.
+
+No benchmark was selected. Global ReadWindowPermit, broad C1 populations,
+engine/native/physical envelopes and Linux proofs remain open. The scoped
+cache-owner and provider observations do not advertise StrictServerMemory.
+
+Scoped warning-denying all-target Clippy for content/storage exited0 on the
+first command. Existing passing checks are reused; locked examples are built
+separately and no example workload is executed as a benchmark.
+
+Locked content/storage examples build exited0. Formatting/boundary/self-tests
+remain reused from the coherent source check; the external file_read assertion
+was rustfmt-formatted after its demonstrated correction. Product source did not
+change during that correction. Broader full-workspace owning tests/examples/
+Clippy and Linux/strict native/physical proof remain later/final gates. No
+passing benchmark or test target was rerun to improve a reported number.
+
+R1b-cache disposition is PARTIAL for the larger admitted-window milestone:
+checked retention/current-batch correctness and scoped requested-allocation
+gates pass, while upstream global ReadWindowPermit, population/engine/control/
+physical composition remain open. R1 stays unchecked and dependent concurrent
+enablement stays disabled. Next eligible responsibility is R1c: genuinely used
+typed DirectoryRoots state, bounded sealed cursors and C2 metadata-only scratch;
+freeze compact session-selection keys before that producer so full component
+names fit the existing288-byte key bound without truncation or limit growth.
+
+## R1b-cache exact staged checkpoint
+
+Production LOC:135765 ->135957 (delta+192).
+Reference:65417 ->65417 (delta+0). Core:70348 ->70540 (delta+192).
+Parent `765202c45e11b3c96b2b16c40b35e810a7270d34`; same unchanged counter blob
+`c7dd2b9c6aa9db63393a4ff3ebca9327529d146e`, SHA-256
+`c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb`, exact
+first-parent/final staged Git product archives and unchanged production/SQL/
+inline-test exclusions. Reference subtree remains
+`498dd1917812ae90efb8841f57e22bfc284e96fb`; final Core subtree
+`1a92b14800ac0be772772c3fb86f3a26b34d29a5`. Cache ownership moves from read.rs
+into cache.rs within the same counted scope; unchecked retention is replaced,
+without duplicate live authority or legacy tree retirement. Final covering
+product/test seal (including external assertion correction) is
+`2764bd5e0ab5df0817aedfb36162a48110ab08805566d0ea3bed00630b676305`.
+Exact method/counts/files are evidence/r1b/PRODUCTION-LOC.json.
+
+Owning commands: content first combined target exit101 with the one preserved
+assertion failure; isolated corrected file_read test and new mapping_cache
+target exit0,26 unchanged passed tests reused. Storage mapping_cache/edit_pipeline
+exit0. `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked -p
+layerfs-content -p layerfs-storage --all-targets -- -D warnings` exit0;
+`cargo +1.85.1 build --manifest-path core/Cargo.toml --locked -p layerfs-content
+-p layerfs-storage --examples` exit0. Whole-Core fmt exit0, later external test
+rustfmt exit0; boundary PASS359/self-tests PASS9.37 local Markdown targets resolve
+and staged whitespace passes. This source has44 selected passing functional
+cases in total; allocator diagnostics have the narrower scope above. No Linux,
+upfront/global byte, native-engine or physical PASS is reported.
+
+Actual committed archive equality, push and #287 partial checkpoint will be
+confirmed against the resulting commit; no future self-referential SHA is guessed.
+Continue R1c after publication. #288 campaign/issue remain delegated/unrun.

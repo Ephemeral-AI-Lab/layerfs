@@ -3,6 +3,7 @@
 //! Entry module: declarations and re-exports only.
 
 mod build;
+mod cache;
 mod codec;
 mod predecessor;
 mod read;
@@ -10,6 +11,8 @@ mod types;
 
 pub(crate) use build::build_streaming_with_predecessor;
 pub use build::{build_streaming, emit_empty_leaf, emit_file_state, ExtentBuilder, MappingBuild};
+pub(crate) use cache::CheckedPage;
+pub use cache::{PageCache, READ_NAVIGATION_CACHE_PAGES};
 pub use codec::{
     chunk_canonical_len, decode_chunk_payload, decode_file_state, decode_node,
     decode_node_with_context, encode_chunk_object, encode_file_state, encode_node, profile_id,
@@ -18,8 +21,7 @@ pub use codec::{
 pub use predecessor::PredecessorBase;
 pub(crate) use predecessor::PredecessorCursor;
 pub use read::{
-    read_range, PageCache, RangeCursor, ReadCounters, READ_NAVIGATION_CACHE_PAGES,
-    READ_NAVIGATION_WAVE, READ_WAVE_BYTES, READ_WAVE_OBJECTS,
+    read_range, RangeCursor, ReadCounters, READ_NAVIGATION_WAVE, READ_WAVE_BYTES, READ_WAVE_OBJECTS,
 };
 pub use types::{
     ChildDescriptor, ExtentNode, ExtentSlice, FileState, NodeSummary, MAX_ENTRIES, MAX_LEVEL,

@@ -1,0 +1,46 @@
+{
+  "method": {
+    "counter_blob": "c7dd2b9c6aa9db63393a4ff3ebca9327529d146e",
+    "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+    "snapshots": "git archive <HEAD|git write-tree> crates core/crates; same counter over both exact extracted trees",
+    "scope": "reference/core first-party src Rust and runtime package SQL; legacy inline/test-only source excluded; tests/examples/fixtures/tools/docs/manifests/generated/third-party excluded"
+  },
+  "parent": "765202c45e11b3c96b2b16c40b35e810a7270d34",
+  "before": {
+    "reference": 65417,
+    "core": 70348,
+    "combined": 135765,
+    "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+    "core_tree": "91b8738d4a5017da7187ba14aa0f7ce537880fc3"
+  },
+  "after": {
+    "reference": 65417,
+    "core": 70540,
+    "combined": 135957,
+    "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+    "core_tree": "1a92b14800ac0be772772c3fb86f3a26b34d29a5"
+  },
+  "delta": {
+    "reference": 0,
+    "core": 192,
+    "combined": 192
+  },
+  "covering_source": {
+    "files": [
+      "core/crates/layerfs-content/src/file/edit/apply.rs",
+      "core/crates/layerfs-content/src/file/edit/compare.rs",
+      "core/crates/layerfs-content/src/file/edit/tree.rs",
+      "core/crates/layerfs-content/src/file/mapping/cache.rs",
+      "core/crates/layerfs-content/src/file/mapping/mod.rs",
+      "core/crates/layerfs-content/src/file/mapping/read.rs",
+      "core/crates/layerfs-content/tests/file_read.rs",
+      "core/crates/layerfs-content/tests/mapping_cache.rs",
+      "core/crates/layerfs-content/tests/support/cache_oracle.rs",
+      "core/crates/layerfs-storage/tests/mapping_cache.rs",
+      "core/crates/layerfs-storage/tests/support/allocation_observer.rs"
+    ],
+    "sha256": "2764bd5e0ab5df0817aedfb36162a48110ab08805566d0ea3bed00630b676305",
+    "algorithm": "SHA256 sorted UTF-8 path + NUL + final staged bytes + NUL",
+    "correction": "external file_read invalid-summary output assertion only; unchanged passing product targets reused"
+  }
+}

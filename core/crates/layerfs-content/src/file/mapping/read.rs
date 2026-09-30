@@ -12,9 +12,9 @@
 //! A caller that reads several ascending ranges of the same file - the retained
 //! runs of one known edit are the case this exists for - uses [`RangeCursor`]
 //! instead of calling [`read_range`] once per range. The cursor keeps the mapping
-//! pages it has already acquired, so a page shared by several ranges is demanded
-//! once for the whole sequence instead of once per range; every other part of the
-//! traversal is the bounded one above, unchanged.
+//! pages it has retained, so later ranges reuse those pages while they remain
+//! cached. Eviction may require a later grouped demand; current navigation owns
+//! its pages independently of that disposable retained cache.
 
 use std::io::Write;
 use std::ops::Range;
@@ -26,6 +26,8 @@ use crate::file::cdc;
 use crate::file::mapping::codec::{decode_chunk_payload, decode_node_with_context};
 use crate::file::mapping::types::{ExtentNode, ExtentSlice, FileState};
 use crate::object::{AuthenticatedObjects, ObjectId};
+
+use super::{CheckedPage, PageCache};
 
 /// Distinct payloads a single wave may hold.
 pub const READ_WAVE_OBJECTS: usize = 32;
@@ -81,70 +83,6 @@ struct Frontier {
     expected_root: Option<(u64, u64)>,
 }
 
-/// Mapping pages one operation has already acquired, keyed by identity.
-///
-/// A page is navigation state, not payload: the same page reached again - by a
-/// later range of one cursor, or by the pass that follows the one that read it -
-/// is served from here, so the provider demand (and the `nodes_read` charge that
-/// goes with it) happens once. The cache is bounded by
-/// [`READ_NAVIGATION_CACHE_PAGES`] and emptied wholesale when it overflows, which
-/// keeps a long operation's retained pages inside a declared ceiling instead of
-/// growing with the file.
-#[derive(Default)]
-pub struct PageCache {
-    pages: std::collections::HashMap<(ObjectId, bool), Vec<u8>>,
-    /// Pages this cache refuses to exceed before it empties wholesale.
-    limit: usize,
-}
-
-impl PageCache {
-    /// Cache bounded by the module's declared page ceiling.
-    pub fn new() -> Self {
-        Self::bounded(READ_NAVIGATION_CACHE_PAGES)
-    }
-
-    /// Cache bounded by `limit` pages.
-    pub fn bounded(limit: usize) -> Self {
-        Self {
-            pages: std::collections::HashMap::new(),
-            limit: limit.max(1),
-        }
-    }
-
-    /// The page `id` decoded under `root` context, if this cache holds it.
-    pub fn get(&self, id: ObjectId, root: bool) -> Option<&[u8]> {
-        self.pages.get(&(id, root)).map(Vec::as_slice)
-    }
-
-    /// Holds one page.
-    ///
-    /// The bound is enforced by [`PageCache::make_room_for`] before a batch is
-    /// inserted, never here: a page this call has just been handed must stay
-    /// readable by the pass that is about to use it.
-    pub fn insert(&mut self, id: ObjectId, root: bool, canonical: Vec<u8>) {
-        self.pages.insert((id, root), canonical);
-    }
-
-    /// Empties the cache when `incoming` more pages would exceed the bound.
-    ///
-    /// The eviction is wholesale rather than per page: a page is only useful
-    /// through the traversal that reached it, so dropping all of them is the state
-    /// that keeps the bound honest without a replacement policy.
-    pub fn make_room_for(&mut self, incoming: usize) {
-        if self.pages.len() + incoming > self.limit {
-            self.pages.clear();
-        }
-    }
-
-    /// True when the cache holds nothing.
-    pub fn is_empty(&self) -> bool {
-        self.pages.is_empty()
-    }
-}
-
-/// Pages one cursor may retain.
-pub const READ_NAVIGATION_CACHE_PAGES: usize = 2 * READ_NAVIGATION_WAVE;
-
 struct Wave<'a, 'r, 's> {
     reader: &'a dyn AuthenticatedObjects,
     sink: &'a mut dyn Write,
@@ -175,29 +113,61 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
 
     /// Acquires one level's pages, serving what the cache already holds.
     ///
-    /// The returned pages are in demand order; each is either a cache hit or a
-    /// page this call read, and only the read ones are charged - the same order
-    /// and the same grouping one uncached navigation wave produces. A page is
-    /// cached as it is decoded, so a later range of the same cursor never asks
-    /// the provider for it again; the cache is emptied wholesale rather than
-    /// page by page once it would exceed [`READ_NAVIGATION_CACHE_PAGES`].
-    fn pages(&mut self, nodes: &[&Frontier]) -> ContentResult<Vec<Vec<u8>>> {
-        let mut wanted: Vec<(ObjectId, bool)> = Vec::new();
+    /// All hits gain a batch owner before retained-cache eviction. Each missing
+    /// identity is acquired once, even when it is demanded under two contexts.
+    /// Provider vectors move into their first demand; only duplicate demands
+    /// need another owned copy. Complete validation precedes any retention.
+    fn pages(&mut self, nodes: &[&Frontier]) -> ContentResult<Vec<CheckedPage>> {
+        if nodes.len() > READ_NAVIGATION_WAVE {
+            return Err(ContentError::BoundedCapacityExceeded {
+                what: "mapping.navigation_pages",
+                limit: READ_NAVIGATION_WAVE as u64,
+                actual: nodes.len() as u64,
+            });
+        }
+        let mut pages: Vec<Option<CheckedPage>> = Vec::new();
+        pages
+            .try_reserve_exact(nodes.len())
+            .map_err(|_| ContentError::ResourceUnavailable {
+                what: "mapping.navigation_owners",
+            })?;
         for node in nodes {
-            let key = (node.id, node.root);
-            if !wanted.contains(&key) {
-                wanted.push(key);
+            pages.push(match self.cache.get(node.id, node.root) {
+                Some(canonical) => {
+                    Some(PageCache::decode_owned(PageCache::copy_page(canonical)?, node.root)?.0)
+                }
+                None => None,
+            });
+        }
+        // A hit from another context owns the same immutable canonical bytes;
+        // the receiving context is independently checked below.
+        for index in 0..nodes.len() {
+            if pages[index].is_none() {
+                if let Some(hit) = nodes
+                    .iter()
+                    .enumerate()
+                    .position(|(other, node)| node.id == nodes[index].id && pages[other].is_some())
+                {
+                    pages[index] = Some(
+                        pages[hit]
+                            .as_ref()
+                            .ok_or(ContentError::InvalidRecord("navigation hit owner"))?
+                            .copy_for(nodes[index].root)?,
+                    );
+                }
             }
         }
-        let mut missing: Vec<(ObjectId, bool)> = Vec::new();
-        for key in &wanted {
-            if self.cache.get(key.0, key.1).is_none() {
-                missing.push(*key);
+        let mut ids = Vec::new();
+        ids.try_reserve_exact(nodes.len())
+            .map_err(|_| ContentError::ResourceUnavailable {
+                what: "mapping.navigation_ids",
+            })?;
+        for (node, page) in nodes.iter().zip(&pages) {
+            if page.is_none() && !ids.contains(&node.id) {
+                ids.push(node.id);
             }
         }
-        if !missing.is_empty() {
-            self.cache.make_room_for(missing.len());
-            let ids: Vec<ObjectId> = missing.iter().map(|(id, _)| *id).collect();
+        if !ids.is_empty() {
             let values = self
                 .reader
                 .read_canonical_batch_scoped(&ids, self.scope.child("mapping.navigate"))?;
@@ -207,22 +177,51 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
                     returned: values.len(),
                 });
             }
-            for (index, key) in missing.iter().enumerate() {
-                self.cache.insert(key.0, key.1, values[index].clone());
+            for (id, canonical) in ids.iter().copied().zip(values) {
+                let first = nodes
+                    .iter()
+                    .position(|node| node.id == id)
+                    .ok_or(ContentError::InvalidRecord("navigation identity"))?;
+                // The original supplied owner is checked before any duplicate
+                // copy. A copy preserves facts or checks its different context.
+                pages[first] = Some(PageCache::decode_owned(canonical, nodes[first].root)?.0);
+                for index in first + 1..nodes.len() {
+                    if nodes[index].id == id {
+                        pages[index] = Some(
+                            pages[first]
+                                .as_ref()
+                                .ok_or(ContentError::InvalidRecord("navigation supplied owner"))?
+                                .copy_for(nodes[index].root)?,
+                        );
+                    }
+                }
             }
             self.counters.nodes_read = self.counters.nodes_read.saturating_add(ids.len() as u64);
             self.counters.node_batches_read = self.counters.node_batches_read.saturating_add(1);
             self.counters.max_node_batch = self.counters.max_node_batch.max(ids.len() as u64);
         }
-        nodes
-            .iter()
-            .map(|node| {
-                self.cache
-                    .get(node.id, node.root)
-                    .map(<[u8]>::to_vec)
-                    .ok_or(ContentError::MissingObject)
-            })
-            .collect()
+        for (node, page) in nodes.iter().zip(&pages) {
+            page.as_ref()
+                .ok_or(ContentError::InvalidRecord("navigation checked owner"))?
+                .check_summary(node.level, node.expected_root)?;
+        }
+        let mut result = Vec::new();
+        result
+            .try_reserve_exact(nodes.len())
+            .map_err(|_| ContentError::ResourceUnavailable {
+                what: "mapping.navigation_result",
+            })?;
+        for (node, page) in nodes.iter().zip(pages) {
+            let page = page.ok_or(ContentError::InvalidRecord("navigation result owner"))?;
+            if self.cache.get(node.id, node.root).is_none() {
+                // Every hit is already owned above. The hint drops old retained
+                // owners before this copy; retain independently enforces count.
+                self.cache.make_room_for(1);
+                self.cache.retain(node.id, page.copy_for(node.root)?)?;
+            }
+            result.push(page);
+        }
+        Ok(result)
     }
 
     fn push(&mut self, id: ObjectId, source_offset: u32, length: u32) -> ContentResult<()> {
@@ -353,9 +352,8 @@ pub fn read_range(
 /// Ordered reader of ascending ranges of one chunked file.
 ///
 /// Each range is served by the same bounded traversal [`read_range`] uses, but the
-/// pages that traversal acquires are retained: a mapping page two ranges share is
-/// demanded once for the whole sequence instead of once per range, so a caller
-/// reading R retained runs pays for the union of their paths rather than R paths.
+/// pages that traversal acquires may be retained: a page shared by several ranges
+/// is reused while cached, and eviction may cause later grouped reacquisition.
 /// Ranges must be ascending and inside the file, and each one is served exactly or
 /// refused - never partly served under an `Ok`.
 pub struct RangeCursor<'a, 'r, 's> {
@@ -479,7 +477,7 @@ fn traverse(
             let nodes: Vec<&Frontier> = chunk.iter().collect();
             let pages = wave.pages(&nodes)?;
             for (node, canonical) in chunk.iter().zip(pages.iter()) {
-                let page = decode_node_with_context(canonical, node.root)?;
+                let page = decode_node_with_context(canonical.canonical(), node.root)?;
                 if page.level() != node.level {
                     return Err(ContentError::InvalidRecord("mapping level"));
                 }
@@ -501,6 +499,7 @@ fn traverse(
                             .checked_sub(1)
                             .ok_or(ContentError::MappingDepthExceeded)?;
                         let mut previous = node.origin;
+                        let mut previous_extents = 0;
                         for child in children {
                             // A child's cumulative end is cumulative within *this*
                             // page, so it is relative to the page's own origin while
@@ -513,6 +512,14 @@ fn traverse(
                                 .origin
                                 .checked_add(child.cumulative_logical_end)
                                 .ok_or(ContentError::LengthOverflow)?;
+                            let expected_bytes = end
+                                .checked_sub(previous)
+                                .ok_or(ContentError::NonCanonicalOrdering)?;
+                            let expected_extents = child
+                                .cumulative_extent_end
+                                .checked_sub(previous_extents)
+                                .ok_or(ContentError::NonCanonicalOrdering)?;
+                            previous_extents = child.cumulative_extent_end;
                             if end <= range.start {
                                 previous = end;
                                 continue;
@@ -526,7 +533,7 @@ fn traverse(
                                 root: false,
                                 level: child_level,
                                 origin: previous,
-                                expected_root: None,
+                                expected_root: Some((expected_bytes, expected_extents)),
                             });
                             previous = end;
                         }

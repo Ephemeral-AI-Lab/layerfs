@@ -1,13 +1,14 @@
 # Issue287 current implementation checklist
 
 > **Status: Current planning checklist; no release candidate exists.**
-> Current checkpoint: `1d2fc8c2987a46acb906a1b9e720bb4cac116c7e` (R0).
+> Current published checkpoint: `765202c45e11b3c96b2b16c40b35e810a7270d34`
+> (R1a PARTIAL; R1 remains open).
 
 Assignment: #287 implementation only. Benchmark qualification is delegated/unrun
 under #288. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
 packet; [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) is append-only.
 
-Current milestone: **R1a typed catalog admission and real Save-slot progress**.
+Current milestone: **R1b-cache current navigation ownership and bounded retention**.
 R0 is published and linked in #287 comment5911332695. Native/engine/physical
 protection and concurrent enablement remain gated on their owning proofs.
 
@@ -30,7 +31,17 @@ R1a current gates:
 - [x] Real two-active-Save StageChanges barrier and ordinary authorized range refill (direct Service; Workspace lease exhaustion remains later).
 - [x] Third C2/no-effect refusal, exact catalog conflict/grant/identity/custody checks (real-provider Unknown induction remains unrun).
 - [x] Freeze/review source; run covering locked tests/examples/fmt/Clippy and boundary checks.
-- [ ] Exact LOC comparison, checkpoint commit/push/#287 update.
+- [x] Exact LOC comparison, checkpoint commit/push/#287 update (comment5912196829; partial disposition preserved).
+
+R1b-cache current gates:
+
+- [x] Current batches own every hit/fetched page before retained-cache eviction.
+- [x] Insertion enforces requested count, mapping validity and actual Vec capacity.
+- [x] Default64/limits1,31,32,64; grouped32 demands and mixed-hit eviction preserve independent bytes.
+- [x] Local edit route uses the same checked retention; independent wide old/new bytes and separate sealed v1 roots/partitions pass.
+- [x] Real StoreProvider and requested-allocation/table/release evidence; global/native admission gaps explicit.
+- [x] Freeze/review and run scoped owning locked tests/examples/fmt/Clippy/boundary (exact failure/correction/reuse retained).
+- [ ] Exact LOC comparison, committed recount, push/confirmation and #287 checkpoint.
 
 Named submilestones and dependencies:
 
