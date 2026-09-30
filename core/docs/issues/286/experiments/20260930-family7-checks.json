@@ -1,0 +1,197 @@
+{
+  "checks": {
+    "bridge-tests": {
+      "applicable_rust_passed": 4,
+      "command": "cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-bridge --test workspace_commit --features native",
+      "log": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-family7-checks-v1/bridge-tests.log",
+      "log_sha256": "83bc4668502df4a289cb84fa02477437b0e866fee14e300979c1efd66c25a2cd",
+      "source_scope": "current product a54cda244; bridge tests reuse unchanged client behavior from9f12f8be9",
+      "status": "PASS"
+    },
+    "final-boundary": {
+      "applicable_rust_passed": 0,
+      "command": "python3 core/tools/check_product_boundary.py",
+      "log": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-family7-checks-v1/final-boundary.log",
+      "log_sha256": "997a38ad916f06fe8e6ccf0d99c8a8029983725750bebd320d4dc1ca6c2bc1aa",
+      "source_scope": "current product and final owned source",
+      "status": "PASS"
+    },
+    "final-boundary-self-tests": {
+      "applicable_rust_passed": 0,
+      "command": "python3 -m unittest discover -s core/tools -p 'test_*.py'",
+      "log": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-family7-checks-v1/final-boundary-self-tests.log",
+      "log_sha256": "ca76ae23d74a4f8311220fb98bf9133410292fe2127b0b3238e002043c23db77",
+      "source_scope": "current product and final owned source",
+      "status": "PASS"
+    },
+    "final-fmt": {
+      "applicable_rust_passed": 0,
+      "command": "cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check",
+      "log": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-family7-checks-v1/final-fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_scope": "current product and final owned source",
+      "status": "PASS"
+    },
+    "final-host-clippy": {
+      "applicable_rust_passed": 0,
+      "command": "cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --workspace --all-targets -- -D warnings",
+      "log": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-family7-checks-v1/final-host-clippy.log",
+      "log_sha256": "f4986f910ccceaea11fc5bb04c6b7eda80da362ed5678275bfda175e9f8afddb",
+      "source_scope": "current product and final owned source",
+      "status": "PASS"
+    },
+    "final-linux-clippy": {
+      "applicable_rust_passed": 0,
+      "command": "CC_aarch64_unknown_linux_musl=/Users/yifanxu/Library/Caches/cargo-zigbuild/0.23.0/wrappers/682f/zigcc-aarch64-unknown-linux-musl-5d3b.sh cargo +1.85.1 clippy --release --manifest-path core/Cargo.toml --locked --offline --target aarch64-unknown-linux-musl -p layerfs-sdk -p layerfs-storage --features rusqlite/bundled --test inherited_workspace -- -D warnings",
+      "log": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-family7-checks-v1/final-linux-clippy.log",
+      "log_sha256": "577332feec8571a7c07e4d6d5376dad0003e99623cf8eceb6ba54e1920c39ec6",
+      "source_scope": "current product and final owned source",
+      "status": "PASS"
+    },
+    "final-owning-tests": {
+      "applicable_rust_passed": 26,
+      "command": "cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-workspace -p layerfs-sdk -p layerfs-daemon --lib --tests",
+      "log": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-family7-checks-v1/final-owning-tests.log",
+      "log_sha256": "99dc7965669e53188a2751d86478bf70ad372013a220d1cd3d05c3c4b7bcb161",
+      "source_scope": "current product and final owned source",
+      "status": "PASS"
+    },
+    "final-package-guards": {
+      "applicable_rust_passed": 0,
+      "command": "python3 -m unittest discover -s core/benchmark/fs-bench-pro/tests -p test_workspace_shell_package.py",
+      "log": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-family7-checks-v1/final-package-guards.log",
+      "log_sha256": "8b6d1cdf68ee89398dc98663b0cb2dbfb7ff4a959c7c674f86ee72c48f0df441",
+      "source_scope": "current product and final owned source",
+      "status": "PASS"
+    },
+    "retained_manifests": {
+      "commands": [
+        "runner.py verify --run issue286-workspace-shell-package-native-checkpoint-r079",
+        "runner.py verify --run issue286-workspace-shell-package-sdk-checkpoint-r078",
+        "runner.py verify --run issue286-workspace-shell-package-proof-checkpoint-r078"
+      ],
+      "scope": "custody hashes only, no performance replay",
+      "status": "PASS"
+    }
+  },
+  "counts": {
+    "applicable_host_tests": 26,
+    "boundary_files": 357,
+    "boundary_self_tests": 9,
+    "bridge_tests": 4,
+    "package_python_guards": 6
+  },
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "f3990da5002290b21f6940881c254920180dfe8254c4e74efe7b199d6701f93b",
+    "product_seal": "f02b009741c9511e9dfa17af0384298ec92294fea4ed5182c8535dded4287b37",
+    "source_commit": "6599e64a60ee99e17bb9080c2cdcba019676a432",
+    "source_dirty": false,
+    "source_tree": "236962357979a9a939f9c375cb23f0c95ada6e41"
+  },
+  "limits": "No CI/preflight; Darwin skips Linux-only test bodies, actual current Linux native/SDK proofs cover changed behavior; unrelated C1/C2/C5 tests reused from Family4",
+  "native_current_proof": {
+    "cache_contract": "uncontrolled, functional only",
+    "case": "workspace-shell-package-progress-custody-native-v2",
+    "cleanup_status": "EXPECTED_RETAINED",
+    "clone_method": "independent byte copy; Linux setup ownership 0:0; host and Linux byte hashes matched; closed prepared master",
+    "functional": {
+      "command": [
+        "docker",
+        "exec",
+        "-e",
+        "LAYERFS_PHASE_B_CLONES=/work/workspace-shell-package-progress-custody-native-v2",
+        "-e",
+        "LAYERFS_TEST_BACKING_ROOT=/work/workspace-shell-package-progress-custody-native-v2",
+        "-e",
+        "LAYERFS_CONSTRUCTION_WORKERS=1",
+        "issue286-native-eecb08db4fe14a25",
+        "/test",
+        "--exact",
+        "phase_b_mutations::progress_custody",
+        "--test-threads=1",
+        "--nocapture",
+        "--include-ignored"
+      ],
+      "exit_code": 0,
+      "started_ns": 17136527126583,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "30f5a3c866aa5d1c3f9c66e449328ddd93fa96d12e6404c3c039fe2c4bf04bf4",
+      "timeout": false,
+      "wall_ns": 383237667
+    },
+    "functional_budget_ns": 15000000000,
+    "functional_status": "PASS",
+    "numeric_latency_status": "INELIGIBLE",
+    "observations": [
+      "PHASE_B_PROGRESS refused=true callbacks=1 same_thread=true full_old_private_pins=true canonical_calls=0 known_saved_custody=true allocated=36864 reserved=843776 retained=true",
+      "PHASE_B_FIXTURE clone=/work/workspace-shell-package-progress-custody-native-v2/clone-1 root=b9d723fc5615cd284ef48da2eb9c86c2d6043b74c3b5cf6fea51d9d757a32968 initialized=false",
+      "PHASE_B_MUTATIONS full_old_g1_g2_pin_tree=true modes_mtimes_links_targets=true cleanup=true",
+      "PHASE_B_PROGRESS refused=false callbacks=3 same_thread=true full_canonical_pins=true canonical_calls=1 cleanup=true"
+    ],
+    "performance_claim": false,
+    "prepared": {
+      "files": {
+        "fixture.before": "b8b5fd39b6ec90facaf5c034361d0ddc7059dc4017186a59faaa5cc71a2f4925",
+        "history.sqlite": "e4c224209219a9bd3167684cf81640aa0e17c47c0b399b7e4cfa93ac2aeca0f4",
+        "store.sqlite": "93c00ef53373e34ecf061526ca19ed01db7940c9d4afc27636ffac799abbe7b0"
+      },
+      "oracle": "grand-base/sibling-base; large data[i]=i%251; full relevant bytes checked in native child",
+      "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-commit-native-master-v1/small",
+      "preparation": {
+        "command": [
+          "docker",
+          "exec",
+          "-e",
+          "LAYERFS_PHASE_B_PREPARE=/work/master-small",
+          "-e",
+          "LAYERFS_PHASE_B_SIZE=0",
+          "issue286-native-b262e96aa7cf4fc1",
+          "/test",
+          "--exact",
+          "phase_b_commit::prepare_master",
+          "--ignored",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "started_ns": 5117125951875,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "dacea8c5b3eb599f0171401df28f231538ba2b42c6fecdd5b70f46276e62cafe",
+        "timeout": false,
+        "wall_ns": 99599000
+      },
+      "producer_binary": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542/inherited_workspace",
+        "sha256": "6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542"
+      },
+      "producer_source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "3146775f13e464adff41b48d758c1876e50f30eeaabf99448f4676e8cd6c7112",
+        "product_seal": "6faef099d307495607bb60a9ed5be40628880bcd770cc307228b3d89d37c7043",
+        "source_commit": "ca9253e0b873aaa3847ac32fd76787b086785799",
+        "source_dirty": false,
+        "source_tree": "2479035e9fcc27aabcd3b0dfd2004ba3cfb45a77"
+      },
+      "reuse": true,
+      "size": 0
+    },
+    "route": "Linux native Workspace + in-process production Server",
+    "sample_count": 1,
+    "sdk_time": "N/A: native component route",
+    "status": "PASS",
+    "test": "phase_b_mutations::progress_custody",
+    "verification_scope": "in-child full relevant old/new/G1/G2/pin bytes, quota/custody assertions; no separate speed arm"
+  },
+  "preserved_failures": [
+    "standalone legacy Linux check missing LAYERFS_ENDPOINT before product entry",
+    "r074 import declaration failure/no sample",
+    "r075 diagnostic15s miss",
+    "r071/r073/r076 known failures retained"
+  ]
+}

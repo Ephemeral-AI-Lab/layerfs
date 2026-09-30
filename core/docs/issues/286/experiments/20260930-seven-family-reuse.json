@@ -1,0 +1,71 @@
+{
+  "current_family7": "r071 six original source-linked; r078 two current; r079 native current; no homogeneous final-source numeric comparison",
+  "current_identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "f3990da5002290b21f6940881c254920180dfe8254c4e74efe7b199d6701f93b",
+    "product_seal": "f02b009741c9511e9dfa17af0384298ec92294fea4ed5182c8535dded4287b37",
+    "source_commit": "6599e64a60ee99e17bb9080c2cdcba019676a432",
+    "source_dirty": false,
+    "source_tree": "236962357979a9a939f9c375cb23f0c95ada6e41"
+  },
+  "family3_other8": "r044 functional receipts with append-only cache audit; numeric INELIGIBLE; see Family4 checkpoint",
+  "reused_evidence": [
+    {
+      "path": "core/docs/issues/286/experiments/20260930-init-regression-r045-receipts.json",
+      "reason": "unchanged component/canonical/content/history scope; local C5 small-credit branch remains prepaid; no new numeric arm",
+      "scope": "Family1 registered100/1000",
+      "sha256": "5469556d5164b3d53aaba95d34d327027056a14666a8d54d9e76840bc27f1e4f"
+    },
+    {
+      "path": "core/docs/issues/286/experiments/20260930-init-100000-v4-r041/sdk-host/init_namespace/namespace-100000/receipt.json",
+      "reason": "unchanged component/canonical/content/history scope; local C5 small-credit branch remains prepaid; no new numeric arm",
+      "scope": "Family1 explicit100000",
+      "sha256": "0ac7d89bff179c49be7998427b97c5aab571544d94aecaa8c92fc90aeb53b870"
+    },
+    {
+      "path": "core/docs/issues/286/experiments/20260930-init-10000-v4-r042/sdk-host/init_namespace/namespace-10000/receipt.json",
+      "reason": "unchanged component/canonical/content/history scope; local C5 small-credit branch remains prepaid; no new numeric arm",
+      "scope": "Family1 explicit10000",
+      "sha256": "bec89dbb6adb557b3a5cbb8be048c956d439bebe170fdcc5d27e65476632b120"
+    },
+    {
+      "path": "core/docs/issues/286/experiments/20260930-history-regression-r046-receipts.json",
+      "reason": "unchanged component/canonical/content/history scope; local C5 small-credit branch remains prepaid; no new numeric arm",
+      "scope": "Family2 strides10/3",
+      "sha256": "3545b04c219d96ce42cebb3e5517f586149db3cfcec82a964f283d94ce1bace0"
+    },
+    {
+      "path": "core/docs/issues/286/experiments/20260930-history-stride1-regression-r047-receipts.json",
+      "reason": "unchanged component/canonical/content/history scope; local C5 small-credit branch remains prepaid; no new numeric arm",
+      "scope": "Family2 stride1",
+      "sha256": "1a9664c51c21226c855684e38699d7a008d371b3d7d4a9b49c9e0961d740cb39"
+    },
+    {
+      "path": "core/docs/issues/286/experiments/20260930-workspace-write-reconciliation-r063-receipts.json",
+      "reason": "unchanged component/canonical/content/history scope; local C5 small-credit branch remains prepaid; no new numeric arm",
+      "scope": "Family3 affected4097",
+      "sha256": "9fd7c6376bcd105030962224701b5919c31b13cb2389482b748d44ad6c150b73"
+    },
+    {
+      "path": "core/docs/issues/286/FAMILY4-CHECKPOINT-20260930.md",
+      "reason": "unchanged scopes cited in checkpoint; no resampling; relevant current physical/pin/refund behavior supplemented by Family7",
+      "scope": "Family4 scoped evidence and its linked identities",
+      "sha256": "f75ca390150dd5bb931f8b048c3a4b7d91cb7369054b4bdc6eea8a54e9eae524"
+    },
+    {
+      "path": "core/docs/issues/286/FAMILY5-CHECKPOINT-20260930.md",
+      "reason": "unchanged scopes cited in checkpoint; no resampling; relevant current physical/pin/refund behavior supplemented by Family7",
+      "scope": "Family5 scoped evidence and its linked identities",
+      "sha256": "97ec469fd46396ce12f16f193e530ed68e3141c41626b4c33982bb59aab8b521"
+    },
+    {
+      "path": "core/docs/issues/286/FAMILY6-CHECKPOINT-20260930.md",
+      "reason": "unchanged scopes cited in checkpoint; no resampling; relevant current physical/pin/refund behavior supplemented by Family7",
+      "scope": "Family6 scoped evidence and its linked identities",
+      "sha256": "edb0b7900a42a6438f31201586c8226eecb2d8604fd0f2f228f528bf287f42ff"
+    }
+  ]
+}

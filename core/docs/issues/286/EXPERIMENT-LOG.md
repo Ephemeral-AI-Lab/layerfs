@@ -553,3 +553,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family7 original SDK tail r078
 
 [2/2 original SDK commands/full proofs/cleanup PASS](experiments/20260930-workspace-shell-package-sdk-checkpoint-r078.md):1025 complete18795341167ns<25s, Exec8315172083/Commit9629237416ns, proof627150042ns; retained129 complete4529116833ns<15s, finalExec579326125/Commit1290983791ns plus timed G1prelude, full pin and proof186680333ns. All8SDK currentcases covered withr071 six reused, numericINELIGIBLE. Next current native custody/refund control/checkpointchecks; no earlier-family or codec change. Combined135696, PhaseB+257.
+
+## Family7 current native/final checkpoint r079
+
+[Current native custody/refund PASS](experiments/20260930-workspace-shell-package-native-checkpoint-r079.md),383237667ns<15s. Typed refusal retains old/private full pins/880640B and0canonical/no replay; acceptance3callbacks/1canonical/fulltree/clean0/0. [Family7 eight SDK+native checkpoint](FAMILY7-CHECKPOINT-20260930.md), [all-seven scope/reuse map](SEVEN-FAMILY-CHECKPOINT-20260930.md), [owning checks](experiments/20260930-family7-checks.json). All earlier groups reused, current numeric qualification remainsINELIGIBLE; historical dirty failures/10240/deep270 deferred#276, general#256open. Family7+58LOC, PhaseB+257, combined135696; report-only delta0. No release/admission/merge claim.

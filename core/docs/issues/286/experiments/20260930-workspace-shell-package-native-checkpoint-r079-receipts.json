@@ -1,0 +1,172 @@
+{
+  "backing": "ef53 4096",
+  "build": {
+    "binary": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/cbde293cb77929a1bebd412f133c27d36ba176dfa5bbd5276b7b439b65d968d9/inherited_workspace",
+      "sha256": "cbde293cb77929a1bebd412f133c27d36ba176dfa5bbd5276b7b439b65d968d9"
+    },
+    "build_budget_ns": 30000000000,
+    "build_status": "PASS",
+    "inputs": {
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "product_seal": "f02b009741c9511e9dfa17af0384298ec92294fea4ed5182c8535dded4287b37",
+      "profile": "release",
+      "sqlite_provider": "locked published rusqlite/bundled; native functional binary only",
+      "test_source_seal": "c54d8ae8294e33d38cb22c8d68f04462987121a143bd1d615d00aa07e23992f6"
+    },
+    "mode": "locked-release-build",
+    "wall_ns": 9685726041
+  },
+  "earlier_family_policy": "unaffected production and earlier evidence reused; no earlier resampling",
+  "external_cleanup": [
+    {
+      "command": [
+        "docker",
+        "rm",
+        "-f",
+        "issue286-native-eecb08db4fe14a25"
+      ],
+      "exit_code": 0,
+      "started_ns": 17136954199833,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "34244eab097ab9579b9bdc797b85ad1c6edddb5b0bafe7d6a6e78f2b042610cc",
+      "timeout": false,
+      "wall_ns": 150856542
+    },
+    {
+      "command": [
+        "docker",
+        "volume",
+        "rm",
+        "issue286-native-eecb08db4fe14a25-backing"
+      ],
+      "exit_code": 0,
+      "started_ns": 17137105825083,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "f93b9fed71a1ea1668cfcbf14cfb11a4a4078a15f409fc4ebbd4a2041c05ef32",
+      "timeout": false,
+      "wall_ns": 24736375
+    }
+  ],
+  "external_ownership": {
+    "container_requested": true,
+    "volume_requested": true
+  },
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "f3990da5002290b21f6940881c254920180dfe8254c4e74efe7b199d6701f93b",
+    "product_seal": "f02b009741c9511e9dfa17af0384298ec92294fea4ed5182c8535dded4287b37",
+    "source_commit": "6599e64a60ee99e17bb9080c2cdcba019676a432",
+    "source_dirty": false,
+    "source_tree": "236962357979a9a939f9c375cb23f0c95ada6e41"
+  },
+  "image": "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+  "profile": "package-many-file-functional-clone-v2",
+  "raw_manifest_sha256": "aa2b6572016dc1d80cf23048a106df576af7fb59c1d7f34d1b6708a29bbba1f8",
+  "reused_proof_identities": {},
+  "rows": [
+    {
+      "cache_contract": "uncontrolled, functional only",
+      "case": "workspace-shell-package-progress-custody-native-v2",
+      "cleanup_status": "EXPECTED_RETAINED",
+      "clone_method": "independent byte copy; Linux setup ownership 0:0; host and Linux byte hashes matched; closed prepared master",
+      "functional": {
+        "command": [
+          "docker",
+          "exec",
+          "-e",
+          "LAYERFS_PHASE_B_CLONES=/work/workspace-shell-package-progress-custody-native-v2",
+          "-e",
+          "LAYERFS_TEST_BACKING_ROOT=/work/workspace-shell-package-progress-custody-native-v2",
+          "-e",
+          "LAYERFS_CONSTRUCTION_WORKERS=1",
+          "issue286-native-eecb08db4fe14a25",
+          "/test",
+          "--exact",
+          "phase_b_mutations::progress_custody",
+          "--test-threads=1",
+          "--nocapture",
+          "--include-ignored"
+        ],
+        "exit_code": 0,
+        "started_ns": 17136527126583,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "30f5a3c866aa5d1c3f9c66e449328ddd93fa96d12e6404c3c039fe2c4bf04bf4",
+        "timeout": false,
+        "wall_ns": 383237667
+      },
+      "functional_budget_ns": 15000000000,
+      "functional_status": "PASS",
+      "numeric_latency_status": "INELIGIBLE",
+      "observations": [
+        "PHASE_B_PROGRESS refused=true callbacks=1 same_thread=true full_old_private_pins=true canonical_calls=0 known_saved_custody=true allocated=36864 reserved=843776 retained=true",
+        "PHASE_B_FIXTURE clone=/work/workspace-shell-package-progress-custody-native-v2/clone-1 root=b9d723fc5615cd284ef48da2eb9c86c2d6043b74c3b5cf6fea51d9d757a32968 initialized=false",
+        "PHASE_B_MUTATIONS full_old_g1_g2_pin_tree=true modes_mtimes_links_targets=true cleanup=true",
+        "PHASE_B_PROGRESS refused=false callbacks=3 same_thread=true full_canonical_pins=true canonical_calls=1 cleanup=true"
+      ],
+      "performance_claim": false,
+      "prepared": {
+        "files": {
+          "fixture.before": "b8b5fd39b6ec90facaf5c034361d0ddc7059dc4017186a59faaa5cc71a2f4925",
+          "history.sqlite": "e4c224209219a9bd3167684cf81640aa0e17c47c0b399b7e4cfa93ac2aeca0f4",
+          "store.sqlite": "93c00ef53373e34ecf061526ca19ed01db7940c9d4afc27636ffac799abbe7b0"
+        },
+        "oracle": "grand-base/sibling-base; large data[i]=i%251; full relevant bytes checked in native child",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-commit-native-master-v1/small",
+        "preparation": {
+          "command": [
+            "docker",
+            "exec",
+            "-e",
+            "LAYERFS_PHASE_B_PREPARE=/work/master-small",
+            "-e",
+            "LAYERFS_PHASE_B_SIZE=0",
+            "issue286-native-b262e96aa7cf4fc1",
+            "/test",
+            "--exact",
+            "phase_b_commit::prepare_master",
+            "--ignored",
+            "--nocapture"
+          ],
+          "exit_code": 0,
+          "started_ns": 5117125951875,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "dacea8c5b3eb599f0171401df28f231538ba2b42c6fecdd5b70f46276e62cafe",
+          "timeout": false,
+          "wall_ns": 99599000
+        },
+        "producer_binary": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542/inherited_workspace",
+          "sha256": "6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542"
+        },
+        "producer_source": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "3146775f13e464adff41b48d758c1876e50f30eeaabf99448f4676e8cd6c7112",
+          "product_seal": "6faef099d307495607bb60a9ed5be40628880bcd770cc307228b3d89d37c7043",
+          "source_commit": "ca9253e0b873aaa3847ac32fd76787b086785799",
+          "source_dirty": false,
+          "source_tree": "2479035e9fcc27aabcd3b0dfd2004ba3cfb45a77"
+        },
+        "reuse": true,
+        "size": 0
+      },
+      "route": "Linux native Workspace + in-process production Server",
+      "sample_count": 1,
+      "sdk_time": "N/A: native component route",
+      "status": "PASS",
+      "test": "phase_b_mutations::progress_custody",
+      "verification_scope": "in-child full relevant old/new/G1/G2/pin bytes, quota/custody assertions; no separate speed arm"
+    }
+  ],
+  "schema": "core-workspace-shell-package-native-run-v2",
+  "selected": [
+    "workspace-shell-package-progress-custody-native-v2"
+  ],
+  "status": "PASS"
+}
