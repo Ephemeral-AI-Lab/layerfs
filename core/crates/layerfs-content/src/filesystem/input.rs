@@ -19,7 +19,7 @@ use crate::filesystem::identity::InodeScope;
 use crate::filesystem::path::PathName;
 use crate::filesystem::root::FilesystemRootId;
 use crate::filesystem::rows::{
-    DirectoryRowSource, InodeRowSource, PreparedRows, RowSource, SerialRowSource,
+    BindingLookup, DirectoryRowSource, InodeRowSource, PreparedRows, RowSource, SerialRowSource,
     SliceDirectoryRows, SliceInodeRows, SliceSerialRows,
 };
 use crate::object::inode_leaf::InodeValue;
@@ -173,6 +173,14 @@ impl RowSource for FilesystemInput<'_> {
             .binary_search_by_key(&parent, |update| update.parent)
             .ok()
             .map(|index| self.directories[index].clone()))
+    }
+    fn legacy_binding_lookup(&self, parent: u64, name: &[u8]) -> ContentResult<BindingLookup> {
+        let row = self
+            .directories
+            .binary_search_by_key(&parent, |row| row.parent)
+            .ok()
+            .map(|index| &self.directories[index]);
+        crate::filesystem::rows::lookup_binding(row, name)
     }
     fn value_for(&self, serial: u64) -> ContentResult<Option<InodeValue>> {
         Ok(self

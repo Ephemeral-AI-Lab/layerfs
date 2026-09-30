@@ -8,12 +8,13 @@
 //! History arrives as a declared stream rather than as resident rows, so the
 //! update is received into a charged [`RowSpool`] first and C1 is then fed from
 //! that spool. The base precondition the resident form checked over a collected
-//! serial list is checked in waves over the same spool, so the service holds no
-//! vector proportional to the rows of a generation at any point.
+//! serial list is checked in waves over the same sealed spool. Receive/subject
+//! checking retains scalar names and bounded waves; C1's remaining graph and
+//! reference populations have their separately recorded admission/proof gates.
 use super::prepared::{check_subjects, receive, Received};
 use crate::service::{error::content, read::content::id};
 use layerfs_bridge::contract::*;
-use layerfs_content::filesystem::rows::PreparedUpdate as StreamedUpdate;
+use layerfs_content::filesystem::rows::PreparedBindingUpdate as StreamedUpdate;
 use layerfs_content::filesystem::state::{IndexedState, StateScope};
 use layerfs_content::filesystem::{root::FilesystemRootId, FilesystemRead, InodeScope};
 use layerfs_content::{
@@ -83,7 +84,7 @@ pub(crate) fn update(
         resources,
         rows: &rows,
     };
-    let result = layerfs_content::filesystem::update::update_filesystem_with_state_timed(
+    let result = layerfs_content::filesystem::update::update_filesystem_binding_rows_with_state(
         &mut objects,
         &input,
         None,

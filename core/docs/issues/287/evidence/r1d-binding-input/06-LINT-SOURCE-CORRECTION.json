@@ -1,0 +1,6 @@
+{
+  "path": "core/crates/layerfs-content/src/filesystem/update.rs",
+  "sha256": "f0a5b1c35cf2a100100bbd18476e0d7a11d0af777338b033c8616ece83d0a53d",
+  "reason": "elide three needless wrapper/public lifetimes from05 Clippy output; common internal borrow lifetime unchanged",
+  "functional_proofs": "Bridge30/Content75/Server41 unchanged and reused; no performance rerun"
+}

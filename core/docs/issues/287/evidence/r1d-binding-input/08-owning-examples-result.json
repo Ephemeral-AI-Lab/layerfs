@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-bridge",
+    "-p",
+    "layerfs-content",
+    "-p",
+    "layerfs-storage",
+    "-p",
+    "layerfs-server",
+    "--examples"
+  ],
+  "exit": 0,
+  "wall_seconds": 5.309495458990568,
+  "scope": "locked owning/dependent examples compile only; no workload/performance"
+}

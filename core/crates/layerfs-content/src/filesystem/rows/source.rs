@@ -1,10 +1,9 @@
-//! The row contract: ordered cursors, key lookups and the declared totals.
+//! Retained whole-directory compatibility and scalar inode/fresh row contracts.
 //!
 //! A cursor is a pass over one sequence, replayable from its start, and it returns
-//! one decoded row. The lookup methods answer one key each; an implementation whose
-//! rows are outside the process answers them from its own bounded window rather
-//! than from a resident vector.
-use crate::error::ContentResult;
+//! one decoded row. A DirectoryUpdate contains the complete changed directory;
+//! callers needing scalar name residency select BindingRows explicitly instead.
+use crate::error::{ContentError, ContentResult};
 use crate::filesystem::identity::InodeScope;
 use crate::filesystem::input::FilesystemResources;
 use crate::filesystem::input::{DirectoryUpdate, InodeUpdate};
@@ -44,7 +43,7 @@ pub trait SerialRowSource {
 /// row; the cursor methods open a pass; the lookup methods answer one key. An
 /// implementation may hold its rows in memory or outside it - the operation only
 /// requires that a cursor starts at the beginning of its sequence and that the
-/// two lookups answer the same rows the cursors would reach.
+/// key lookups answer the same rows the cursors would reach.
 pub trait RowSource {
     /// Directory rows this update declares.
     fn directory_rows(&self) -> usize;
@@ -60,6 +59,18 @@ pub trait RowSource {
     fn new_inodes(&self) -> ContentResult<Box<dyn SerialRowSource + '_>>;
     /// The final bindings of one changed directory, when it has a row.
     fn directory_for(&self, parent: u64) -> ContentResult<Option<DirectoryUpdate>>;
+    /// Exact name lookup for the explicitly selected legacy representation.
+    /// First-party sources override this with borrowed or indexed point access.
+    /// The default preserves old external providers by loading their whole row;
+    /// its allocation/work costs do not qualify a bounded name-query profile.
+    fn legacy_binding_lookup(
+        &self,
+        parent: u64,
+        name: &[u8],
+    ) -> ContentResult<super::BindingLookup> {
+        let row = self.directory_for(parent)?;
+        lookup_binding(row.as_ref(), name)
+    }
     /// The typed value the caller supplied for one serial, when it supplied one.
     fn value_for(&self, serial: u64) -> ContentResult<Option<InodeValue>>;
     /// The position of one fresh serial in the fresh sequence, when it is one.
@@ -67,6 +78,26 @@ pub trait RowSource {
     /// True when the caller's allocator just created one serial.
     fn is_new(&self, serial: u64) -> ContentResult<bool> {
         Ok(self.new_position(serial)?.is_some())
+    }
+}
+
+pub(crate) fn lookup_binding(
+    row: Option<&DirectoryUpdate>,
+    name: &[u8],
+) -> ContentResult<super::BindingLookup> {
+    let Some(row) = row else {
+        return Ok(super::BindingLookup::Unmentioned);
+    };
+    let Ok(at) = row
+        .changes
+        .binary_search_by(|(key, _)| key.as_bytes().cmp(name))
+    else {
+        return Ok(super::BindingLookup::Unmentioned);
+    };
+    match row.changes[at].1 {
+        None => Ok(super::BindingLookup::Absent),
+        Some(serial) if serial_in_range(serial) => Ok(super::BindingLookup::Present(serial)),
+        Some(_) => Err(ContentError::InvalidRecord("inode serial")),
     }
 }
 

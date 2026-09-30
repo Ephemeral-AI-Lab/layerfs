@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-bridge",
+    "--test",
+    "prepared_bindings",
+    "--test",
+    "prepared_stream",
+    "--test",
+    "history_protocol",
+    "--",
+    "--nocapture"
+  ],
+  "exit": 0,
+  "wall_seconds": 8.573264082995593,
+  "scope": "owning unchangedwire/stream budget/EOF proof; no measurement"
+}

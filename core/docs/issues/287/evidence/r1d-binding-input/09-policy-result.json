@@ -1,0 +1,41 @@
+{
+  "checks": [
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "fmt",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "wall_seconds": 2.365081124997232
+    },
+    {
+      "command": [
+        "python3",
+        "core/tools/check_product_boundary.py"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.15081724998890422
+    },
+    {
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "core/tools",
+        "-p",
+        "test_check_product_boundary.py"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.13010833399312105
+    }
+  ],
+  "scope": "whole current Core formatting/boundary and selected guard module; unaffected checks reused"
+}

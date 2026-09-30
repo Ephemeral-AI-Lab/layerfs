@@ -1,0 +1,51 @@
+   Compiling nix v0.31.3
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-bridge)
+    Finished `test` profile [optimized + debuginfo] target(s) in 6.36s
+     Running tests/history_protocol.rs (core/target/debug/deps/history_protocol-6f3e95d9e10500a4)
+
+running 19 tests
+test failure_codes_round_trip_and_stay_typed ... ok
+test classification_is_exhaustive_and_semantic ... ok
+test a_reply_tag_outside_the_closed_union_is_refused ... ok
+test identity_widths_and_tags_are_checked ... ok
+test history_failure_context_round_trips_without_changing_legacy_frames ... ok
+test invalid_terminal_reservation_and_descriptor_serial_are_refused ... ok
+test every_reply_round_trips ... ok
+test a_prepared_declaration_is_the_exact_body_it_describes ... ok
+test history_page_budget_includes_tags_counts_and_continuation ... ok
+test minimum_and_maximum_record_encodings_match_the_frozen_widths ... ok
+test every_query_and_command_round_trips ... ok
+test page_and_count_bounds_are_checked ... ok
+test native_import_declares_progress_response_budget ... ok
+test permission_bits_are_total_and_legacy_mask_grants_nothing ... ok
+test profile_and_opcode_must_agree ... ok
+test the_retired_pathless_init_tag_is_refused_and_unassigned ... ok
+test a_prepared_update_wider_than_one_metadata_frame_round_trips ... ok
+test unknown_suboperations_are_refused_before_mutation ... ok
+test the_retired_init_and_the_prepared_commands_are_the_only_replaced_encodings ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/prepared_bindings.rs (core/target/debug/deps/prepared_bindings-1767dde69342a022)
+
+running 6 tests
+test actual_fresh_roles_must_match_the_declared_fresh_total ... ok
+test name_budget_refuses_before_copying_or_emitting_oversized_name ... ok
+test order_error_at_record129_never_emits_that_record_or_completion ... ok
+test oversized_count_cannot_borrow_identity_bytes_or_begin_a_sink_row ... ok
+test full_names_and_tombstones_stream_with_exact_completion_and_bounded_reads ... ok
+test row_completion_does_not_credit_missing_or_surplus_global_eof ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/prepared_stream.rs (core/target/debug/deps/prepared_stream-8245a3f3fb07f7c7)
+
+running 5 tests
+test a_declaration_past_the_charged_bound_is_refused ... ok
+test an_io_error_at_the_trailing_byte_check_is_not_eof ... ok
+test a_stream_whose_rows_are_out_of_order_is_refused ... ok
+test a_declared_stream_round_trips_row_for_row ... ok
+test a_stream_that_lies_about_its_rows_is_refused ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

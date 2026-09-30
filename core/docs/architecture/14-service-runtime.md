@@ -1,5 +1,16 @@
 # Service, bridge, daemon and hosted telemetry
 
+> **#287 R1d receive composition:** Against parent
+> `e977700173af331daf9c92ae9931b1aab7d7775e`, a pure declared spool-size plan
+> precedes lazy scratch/Save/body effects. The common unchanged-v1 decoder
+> checks name and role budgets before dependent callbacks, streams full names
+> and requires globalEOF before private seal. Subject/semantic/canonical work
+> then consumes exact scalar source views through known cleanup and Stage.
+> [Owning delivery](../issues/287/R1D-BINDING-INPUT-DELIVERY.md) separates actual
+> direct-library behavior and scoped input allocation from native executable,
+> engine/global/physical or complete Commit qualification. No worker/quota/
+> profile or protected/concurrent capability is enlarged.
+
 > **#287 R1e native startup:** Against parent
 > `d1e478ffb97905eb77acdeef288fa091c40cae2d`, the actual native Server binary
 > borrows its unforgeable required32MiB SQLite guard before host configuration,

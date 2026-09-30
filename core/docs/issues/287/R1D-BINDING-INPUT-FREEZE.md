@@ -171,3 +171,37 @@ points deliberately select compatibility; slice callers explicitly choose
 SliceBindingRows plus bounded entry (no runtime subtype recognition). Constructors
 are fallible. PreparedBindingUpdate/six-argument bounded entry and generic legacy/
 bounded CheckedInput preserve shared metadata without Rust1.85 trait upcasting.
+
+
+### Selected descriptor correction before the first functional gate
+
+Source review found that recovering a universal numeric ordinal from the old
+RowSource point API would add a D-prefix scan to each of D header demands.
+DirectoryHeader.ordinal is therefore an opaque source-local stable selection
+descriptor. Spool and Slice retain exact table/slice ordinals; the explicit
+Compatibility source uses its existing parent key consistently in sequential
+and point headers. No new resident index or quota is introduced. Logical
+checkers prove exact count, strict parent order and completion/issuer identity;
+the issuing source independently verifies the selected descriptor/row/span.
+They do not impose array indexing on another provider. Physical spool checks
+remain exact and unchanged. A narrow old-source observer must prove zero
+sequence opens for point selections and identical point/sequential headers.
+This refines the port before any functional PASS, with no historical proof edit.
+
+
+### Pre-effect roles and retained first-party point work
+
+Common Bridge checks every actual patch/declaration/fresh upper bound before
+its identity callback, retaining exact final equality/EOF. Compact root serial
+is refused before input read when zero or above i64MAX. Bounded build/update
+public wrappers have separate names and base=None/Some preconditions, sharing
+one algorithm/state body. Server remains the six-argument update wrapper.
+
+The old RowSource compatibility surface has an explicit legacy_binding_lookup
+producer method: default old external providers retain full-row lookup and no
+bounded work claim; all actual first-party slice/spool/PreparedUpdate sources
+delegate borrowed/indexed point access. Compatibility calls that declared method
+directly without catches, caches or a new population. This prevents a B-wide
+first-party row from being cloned for each of B name queries. The bounded
+BindingRows route is unchanged. A count-driven borrowed-input observer covers
+repeated/descending point demands before claiming actual product work.

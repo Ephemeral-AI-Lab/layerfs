@@ -1,5 +1,18 @@
 # Filesystem trees
 
+> **#287 R1d scalar prepared input:** Against parent
+> `e977700173af331daf9c92ae9931b1aab7d7775e`, the actual Server/common C1
+> path selects exact scalar directory headers, binding cursors/completion and
+> sparse full-name probes. Private spoolformat2 keeps the slot/header sizes and
+> existing declaration allowance while retiring redundant payload fields.
+> Alias/cycle consumers and canonical merges use the same selected source;
+> complete changed/base/effective name vectors are retired. Explicit first-party
+> legacy points delegate borrowed/indexed access, without prefix recovery or
+> per-name complete-row cloning. Remaining graph/frontier/reference populations
+> are still open. [Delivery and source/proof scope](../issues/287/R1D-BINDING-INPUT-DELIVERY.md)
+> records the shared grammar/interfaces, independent v1/custody/work evidence
+> and incomplete global/native/physical gates; this is no completeR1 admission.
+
 > **#287 R1d reference-run lookup:** The source in this checkpoint, against
 > parent `43c977c00e342d207757cd8bf5f6e2cd15041650`, keeps each immutable tier's
 > forward cursor permanently advancing. Behind-cursor points search its exact

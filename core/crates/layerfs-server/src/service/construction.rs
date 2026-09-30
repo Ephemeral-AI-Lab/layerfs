@@ -52,6 +52,7 @@ impl Construction {
 
     /// Admits before Save/body effects after catalog/head/scope validation.
     pub(crate) fn begin(&self, changes: &PreparedChanges) -> Result<ScratchSession, Failure> {
+        super::save::prepared::planned_spool_admission(changes)?;
         let authority = {
             let mut cell = self.authority.try_lock().map_err(|_| Code::Ownership)?;
             if matches!(*cell, Authority::Unopened) {

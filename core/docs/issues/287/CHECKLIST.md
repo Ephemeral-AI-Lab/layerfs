@@ -1,17 +1,18 @@
 # Issue287 current implementation checklist
 
 > **Status: Current planning checklist; no release candidate exists.**
-> Current published checkpoint: `d1e478ffb97905eb77acdeef288fa091c40cae2d`
-> (R1d-run-seek scoped exits pass; full R1 remains PARTIAL/open).
+> Current published checkpoint: `e977700173af331daf9c92ae9931b1aab7d7775e`
+> (R1e-bootstrap CAPABILITY-LIMITED; full R1 remains PARTIAL/open).
 
 Assignment: #287 implementation only. Benchmark qualification is delegated/unrun
 under #288. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
 packet; [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) is append-only.
 
-Current milestone: **R1e-bootstrap exact native provider decision**
-([freeze](R1E-BOOTSTRAP-FREEZE.md)). R1d-run-seek commit/recount/normal push and
-#287 comment5917668281 are confirmed. [Binding-input freeze](R1D-BINDING-INPUT-FREEZE.md)
-defines the independent next C1/Bridge/Server integration; exits remain unrun.
+Current milestone: **R1d-binding-input real Server/C1 composition**
+([freeze](R1D-BINDING-INPUT-FREEZE.md)). R1e-bootstrap commit/recount/normal push
+and #287 comment5918350630 are confirmed with explicit selected-provider refusal.
+Binding-input scoped exits PASS; exact staged141630 count and commit/publication
+checkpoint are being finalized. Larger graph/engine/physical gates stay open.
 R0 is published and linked in #287 comment5911332695. Native/engine/physical
 protection and concurrent enablement remain gated on their owning proofs.
 
@@ -74,8 +75,17 @@ R1e-bootstrap current gates:
 - [ ] Actual32MiB hardlimit/tracking/native allocation/SQL-NOMEM and known cleanup supported proof (Darwin readback0:4 FAIL;2 refusal primary PASS; helper excluded).
 - [x] Actual Darwin native pre-effect refusal/cached original custody, including missing/configured host and unchanged Store marker; guard-capability success is not claimed.
 - [ ] Actual native Server ready/EOF/reaped proof on an eligible provider; Darwin startup is unsupported.
-- [ ] Scoped owning checks, exact supported/refused platform authority and provider gaps.
-- [ ] Exact LOC commit/push/publication and #287 checkpoint.
+- [x] Scoped owning checks and explicit selected-provider refusal/platform gaps; eligible32MiB/LINUX/physical bodies remain incomplete.
+- [x] Exact LOC commit/push/publication and #287 checkpoint (e97770017/comment5918350630; CAPABILITY-LIMITED).
+
+R1d-binding-input current gates:
+
+- [x] Actual published parent/SC IDs, sparse16 format2, exact shared interfaces/ownership/admission preservation frozen before edits.
+- [x] Common Bridge scalar decoder and exact aggregate row/EOF/no-effect refusal.
+- [x] Real declared private spool/source/header/cursor/index/issuer/completion proof, unchanged admission.
+- [x] Actual Server receive→seal→validation→canonical build→known cleanup/Stage, scalar cursors throughout.
+- [x] Independent names/roots/count/byte/source/liveness proof and scoped checks; graph/global/physical gaps explicit.
+- [ ] Exact source/count/commit/recount/push/#287 checkpoint.
 
 Named submilestones and dependencies:
 

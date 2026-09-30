@@ -1,0 +1,9 @@
+COMMAND ["cargo", "+1.85.1", "fmt", "--manifest-path", "core/Cargo.toml", "--all", "--", "--check"]
+COMMAND ["python3", "core/tools/check_product_boundary.py"]
+PASS: scanned 399 production Rust/SQL files; semantic review still required
+COMMAND ["python3", "-m", "unittest", "discover", "-s", "core/tools", "-p", "test_check_product_boundary.py"]
+.........
+----------------------------------------------------------------------
+Ran 9 tests in 0.011s
+
+OK

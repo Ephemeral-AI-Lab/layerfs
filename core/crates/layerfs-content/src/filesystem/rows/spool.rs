@@ -1,69 +1,73 @@
-//! A charged, file-backed row spool: fixed-stride slots, payloads behind them.
+//! One owned prepared input: typed slots and streamed, indexed final names.
 //!
-//! The spool is where a prepared namespace lives between the transport that
-//! delivered it and the operation that applies it. It stores the rows themselves
-//! and nothing else: one fixed 32-byte slot per row - the row's key, the offset of
-//! its payload, its length and how many bindings it carries - followed by the
-//! payload region. Because the slot table is fixed-stride and grouped by kind in
-//! key order, a lookup is a binary search over slots read straight from the file,
-//! and a pass is one sequential walk of a kind's slots. The resident cost of either
-//! is one slot and one row, whatever the row count.
-//!
-//! **The slot table is sized from the declared totals, before the first row is
-//! written.** A spool is created for an update that already stated how many
-//! directory rows, typed values and fresh serials it holds, so the payload region
-//! begins at a known offset and the spool never has to grow a resident index or
-//! rewrite a slot to make room. [`RowSpool::seal`] refuses an update that wrote
-//! fewer rows than it declared, and a row beyond the declared totals is refused
-//! where it is written.
-//!
-//! **Every byte is charged, and the file is removed rather than leaked.** A spool
-//! owns a declared capacity; the slot table is reserved when the spool is created
-//! and every payload against it as it is written, so a row that would exceed the
-//! capacity fails before it grows. Dropping the spool removes its file, and
-//! [`RowSpool::cleanup`] is the checked form of the same act.
+//! Format2 retains the48-byte header and32-byte slots. Scalar slot fields replace
+//! duplicated payload identities, and one immutable offset per16 names supports
+//! exact lookup without replaying a whole directory prefix. All cursors use the
+//! same live file; flush/seal provide visibility and exact shape, not durability
+//! or a cryptographic/native tamper guarantee.
 
+use std::cell::Cell;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-use super::{DirectoryRowSource, InodeRowSource, RowSource, SerialRowSource};
+use super::binding::BindingAuthority;
+use super::declaration::{table_bytes, FORMAT_VERSION, HEADER_BYTES};
+use super::spool_writer::DirectoryWrite;
+use super::{InodeRowSource, RowSource, SerialRowSource, SpoolDeclaration};
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::input::{DirectoryUpdate, InodeUpdate};
-use crate::filesystem::path::PathName;
-use crate::object::inode_leaf::{InodeKind, InodeValue};
-use crate::object::ObjectId;
+use crate::filesystem::input::DirectoryUpdate;
+use crate::object::inode_leaf::InodeValue;
 
-/// Bytes one row occupies in the slot table.
+/// Bytes one row occupies in the fixed typed slot table.
 pub const SPOOL_SLOT_BYTES: u64 = 32;
-/// Bytes the spool header occupies before the slot table.
-const SPOOL_HEADER_BYTES: u64 = 48;
-const KIND_DIRECTORY: u8 = 1;
-const KIND_INODE: u8 = 2;
-const KIND_SERIAL: u8 = 3;
+pub(super) const KIND_DIRECTORY: u8 = 1;
+pub(super) const KIND_INODE: u8 = 2;
+pub(super) const KIND_SERIAL: u8 = 3;
 
-/// One file-backed, charged spool of prepared rows.
+/// Application read work of the actual spool, distinct from kernel/cache work.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct SpoolReadWork {
+    /// Absolute read_exact requests attempted, including failed I/O.
+    pub read_requests: u64,
+    /// Bytes acknowledged by successful read_exact requests.
+    pub read_bytes: u64,
+    /// Fixed typed slots requested.
+    pub slot_reads: u64,
+    /// Checkpoint offsets read by traversal or point lookup.
+    pub checkpoint_reads: u64,
+    /// Full-name checkpoints compared by a point lookup.
+    pub checkpoint_probes: u64,
+    /// Binding records decoded by traversal or point lookup.
+    pub bindings_decoded: u64,
+}
+
+/// One first-party private file containing a prepared update.
 pub struct RowSpool {
-    path: PathBuf,
-    file: File,
-    directory_rows: usize,
-    inode_rows: usize,
-    new_rows: usize,
-    written: [usize; 3],
-    bytes: u64,
-    capacity: u64,
-    sealed: bool,
-    /// Highest key written in each kind's run. A run is searched by slot, so a
-    /// key that does not rise would make a later binary search answer the wrong
-    /// row; the invariant is enforced where the row is written.
-    last: [u64; 4],
+    pub(super) path: PathBuf,
+    pub(super) file: File,
+    pub(super) directory_rows: usize,
+    pub(super) inode_rows: usize,
+    pub(super) new_rows: usize,
+    pub(super) written: [usize; 3],
+    pub(super) bytes: u64,
+    pub(super) table_end: u64,
+    pub(super) directory_end: u64,
+    pub(super) capacity: u64,
+    pub(super) sealed: bool,
+    pub(super) last: [u64; 4],
+    pub(super) authority: BindingAuthority,
+    pub(super) declaration: Option<SpoolDeclaration>,
+    pub(super) bindings: u64,
+    pub(super) wire_name_bytes: u64,
+    pub(super) active: Option<DirectoryWrite>,
+    pub(super) failure: Option<ContentError>,
+    pub(super) work: Cell<SpoolReadWork>,
 }
 
 impl RowSpool {
-    /// Creates an empty spool for an update with these declared row totals.
-    ///
-    /// The slot table is reserved immediately, so the payload region's first
-    /// offset is known before the first row is written.
+    /// Explicit compatibility creation with row counts but undeclared name totals.
+    /// Actual name totals are accumulated and written at seal; they are not guessed.
     pub fn create(
         path: PathBuf,
         directory_rows: usize,
@@ -71,177 +75,151 @@ impl RowSpool {
         new_rows: usize,
         capacity: u64,
     ) -> ContentResult<Self> {
-        let table = u64::try_from(directory_rows + inode_rows + new_rows)
-            .ok()
-            .and_then(|rows| rows.checked_mul(SPOOL_SLOT_BYTES))
-            .and_then(|bytes| bytes.checked_add(SPOOL_HEADER_BYTES))
-            .ok_or(ContentError::LengthOverflow)?;
-        if table > capacity {
+        Self::create_inner(path, directory_rows, inode_rows, new_rows, capacity, None)
+    }
+
+    /// Admits the complete declared shape before file creation or any write.
+    pub fn create_declared(
+        path: PathBuf,
+        declaration: SpoolDeclaration,
+        capacity: u64,
+    ) -> ContentResult<Self> {
+        if declaration.required_bytes_upper()? > capacity {
             return Err(ContentError::ResourceUnavailable {
                 what: "prepared row spool",
             });
         }
-        let mut file = OpenOptions::new()
+        Self::create_inner(
+            path,
+            declaration.directories,
+            declaration.inodes,
+            declaration.fresh,
+            capacity,
+            Some(declaration),
+        )
+    }
+
+    fn create_inner(
+        path: PathBuf,
+        directory_rows: usize,
+        inode_rows: usize,
+        new_rows: usize,
+        capacity: u64,
+        declaration: Option<SpoolDeclaration>,
+    ) -> ContentResult<Self> {
+        let table_end = table_bytes(directory_rows, inode_rows, new_rows)?;
+        if table_end > capacity {
+            return Err(ContentError::ResourceUnavailable {
+                what: "prepared row spool",
+            });
+        }
+        let authority = BindingAuthority::new()?;
+        let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create_new(true)
             .open(&path)
             .map_err(|_| ContentError::Io)?;
-        let mut header = [0_u8; SPOOL_HEADER_BYTES as usize];
-        header[..8].copy_from_slice(&(directory_rows as u64).to_be_bytes());
-        header[8..16].copy_from_slice(&(inode_rows as u64).to_be_bytes());
-        header[16..24].copy_from_slice(&(new_rows as u64).to_be_bytes());
-        file.write_all(&header).map_err(|_| ContentError::Io)?;
-        file.set_len(table).map_err(|_| ContentError::Io)?;
-        Ok(Self {
+        let mut spool = Self {
             path,
             file,
             directory_rows,
             inode_rows,
             new_rows,
             written: [0; 3],
-            bytes: table,
+            bytes: table_end,
+            table_end,
+            directory_end: table_end,
             capacity,
             sealed: false,
             last: [0; 4],
-        })
+            authority,
+            declaration,
+            bindings: 0,
+            wire_name_bytes: 0,
+            active: None,
+            failure: None,
+            work: Cell::new(SpoolReadWork::default()),
+        };
+        let header = spool.header_bytes(false)?;
+        spool.write_at(0, &header)?;
+        spool
+            .file
+            .set_len(table_end)
+            .map_err(|_| ContentError::Io)?;
+        Ok(spool)
     }
 
-    /// The file this spool owns.
+    /// Path of the owned private file; no reopen/adoption API is provided.
     pub fn path(&self) -> &Path {
         &self.path
     }
-
-    /// Bytes this spool currently holds, including its reserved slot table.
+    /// Acknowledged bytes including the reserved slot table and active region.
     pub fn held_bytes(&self) -> u64 {
         self.bytes
     }
-
-    /// Directory rows written so far.
+    /// Acknowledged directory rows, excluding an unfinished streaming row.
     pub fn written_directories(&self) -> usize {
         self.written[0]
     }
-
-    /// Typed inode values written so far.
+    /// Acknowledged typed values.
     pub fn written_inodes(&self) -> usize {
         self.written[1]
     }
-
-    /// Fresh serials written so far.
+    /// Acknowledged fresh serials.
     pub fn written_new(&self) -> usize {
         self.written[2]
     }
-
-    /// Writes one directory row's final bindings.
-    pub fn push_directory(&mut self, row: &DirectoryUpdate) -> ContentResult<()> {
-        if self.written[0] >= self.directory_rows {
-            return Err(ContentError::InvalidRecord("directory row count"));
-        }
-        let mut payload = Vec::new();
-        payload.extend_from_slice(&row.parent.to_be_bytes());
-        let count = u32::try_from(row.changes.len()).map_err(|_| ContentError::LengthOverflow)?;
-        payload.extend_from_slice(&count.to_be_bytes());
-        for (name, serial) in &row.changes {
-            let bytes = name.as_bytes();
-            let length = u8::try_from(bytes.len()).map_err(|_| ContentError::LengthOverflow)?;
-            payload.push(length);
-            payload.extend_from_slice(bytes);
-            payload.extend_from_slice(&serial.unwrap_or(0).to_be_bytes());
-        }
-        self.write_slot(KIND_DIRECTORY, row.parent, row.changes.len(), &payload)
+    /// Read-work snapshot; differences establish selected-phase application work.
+    /// These are not kernel syscall, storage-read or physical-residency counters.
+    pub fn read_work(&self) -> SpoolReadWork {
+        self.work.get()
+    }
+    /// True when every row was acknowledged and no streaming row is unfinished.
+    pub fn is_complete(&self) -> bool {
+        self.active.is_none()
+            && self.failure.is_none()
+            && self.written == [self.directory_rows, self.inode_rows, self.new_rows]
+            && self.declaration.is_none_or(|d| {
+                d.bindings == self.bindings && d.wire_name_bytes == self.wire_name_bytes
+            })
     }
 
-    /// Writes one typed final inode value.
-    pub fn push_inode(&mut self, row: &InodeUpdate) -> ContentResult<()> {
-        if self.written[1] >= self.inode_rows {
-            return Err(ContentError::InvalidRecord("inode row count"));
-        }
-        super::serial_in_range(row.serial)
-            .then_some(())
-            .ok_or(ContentError::InvalidRecord("inode serial"))?;
-        let mut payload = Vec::with_capacity(73);
-        payload.extend_from_slice(&row.serial.to_be_bytes());
-        payload.push(row.value.kind.code());
-        payload.extend_from_slice(row.value.content_root.as_bytes());
-        payload.extend_from_slice(row.value.metadata_root.as_bytes());
-        self.write_slot(KIND_INODE, row.serial, 0, &payload)
+    /// Narrow receive-time presence check for an acknowledged directory slot.
+    /// It does not read names, require global seal, or expose a partial row.
+    pub fn completed_directory(&self, parent: u64) -> ContentResult<bool> {
+        self.ensure_known()?;
+        Ok(self.find(KIND_DIRECTORY, parent)?.is_some())
     }
 
-    /// Writes one serial the caller's allocator just created.
-    pub fn push_serial(&mut self, serial: u64) -> ContentResult<()> {
-        if self.written_new() >= self.new_rows {
-            return Err(ContentError::InvalidRecord("new inode row count"));
-        }
-        super::serial_in_range(serial)
-            .then_some(())
-            .ok_or(ContentError::InvalidRecord("new inode serial"))?;
-        self.write_slot(KIND_SERIAL, serial, 0, &serial.to_be_bytes())
-    }
-
-    /// Reserves a payload and records its slot at the end of its kind's run.
-    fn write_slot(
-        &mut self,
-        kind: u8,
-        key: u64,
-        records: usize,
-        payload: &[u8],
-    ) -> ContentResult<()> {
-        // Every row kind is one run in the table, in the order the kinds are
-        // numbered: directories, then typed values, then fresh serials.
-        let seen = usize::from(kind) - 1;
-        if self.written[seen] > 0 && self.last[seen] >= key {
-            return Err(ContentError::NonCanonicalOrdering);
-        }
-        let length = payload.len() as u64;
-        let end = self
-            .bytes
-            .checked_add(length)
-            .ok_or(ContentError::LengthOverflow)?;
-        if end > self.capacity {
-            return Err(ContentError::ResourceUnavailable {
-                what: "prepared row spool",
-            });
-        }
-        let (start, _) = self.run(kind);
-        let offset = self.bytes;
-        let slot = SPOOL_HEADER_BYTES + (start + self.written[seen]) as u64 * SPOOL_SLOT_BYTES;
-        let mut record = [0_u8; SPOOL_SLOT_BYTES as usize];
-        record[..8].copy_from_slice(&key.to_be_bytes());
-        record[8..16].copy_from_slice(&offset.to_be_bytes());
-        record[16..24].copy_from_slice(&length.to_be_bytes());
-        record[24..28].copy_from_slice(&(records as u32).to_be_bytes());
-        record[28] = kind;
-        self.file
-            .seek(SeekFrom::Start(slot))
-            .and_then(|_| self.file.write_all(&record))
-            .and_then(|_| self.file.seek(SeekFrom::Start(offset)))
-            .and_then(|_| self.file.write_all(payload))
-            .map_err(|_| ContentError::Io)?;
-        self.written[seen] += 1;
-        self.bytes = end;
-        self.last[seen] = key;
-        Ok(())
-    }
-
-    /// Refuses a spool that does not hold every row its update declared.
+    /// Confirms exact acknowledged shape/layout, then flushes ordinary visibility.
     pub fn seal(&mut self) -> ContentResult<()> {
-        if self.written[0] != self.directory_rows
-            || self.written[1] != self.inode_rows
-            || self.written[2] != self.new_rows
-        {
+        self.ensure_known()?;
+        if self.sealed {
+            return Err(ContentError::InvalidRecord("spool already sealed"));
+        }
+        let result = self.seal_once();
+        if let Err(error) = &result {
+            self.failure = Some(error.clone());
+        }
+        result
+    }
+
+    fn seal_once(&mut self) -> ContentResult<()> {
+        if !self.is_complete() {
             return Err(ContentError::InvalidRecord("prepared row count"));
         }
+        self.validate_layout()?;
+        self.check_header()?;
+        let header = self.header_bytes(true)?;
+        self.write_at(0, &header)?;
         self.file.flush().map_err(|_| ContentError::Io)?;
         self.sealed = true;
         Ok(())
     }
 
-    /// True once every declared row has been written.
-    pub fn is_sealed(&self) -> bool {
-        self.sealed
-    }
-
-    /// Removes the spool's file. A failure to remove it is reported.
+    /// Removes the owned legacy private file with a checked result.
+    /// Its retained Drop retry/native authority limitation is unchanged.
     pub fn cleanup(&mut self) -> ContentResult<()> {
         if self.path.as_os_str().is_empty() {
             return Ok(());
@@ -251,124 +229,97 @@ impl RowSpool {
         Ok(())
     }
 
-    /// Reads one slot of a kind's run, or `None` past its end.
-    ///
-    /// A slot is answered only once its run has written it: the table is
-    /// reserved whole when the spool is created, so an unwritten slot would
-    /// otherwise read as the key the run has not reached yet.
-    fn slot(&self, kind: u8, index: usize) -> ContentResult<Option<Slot>> {
-        if index >= self.written[usize::from(kind) - 1] {
-            return Ok(None);
+    pub(super) fn ensure_known(&self) -> ContentResult<()> {
+        if self.path.as_os_str().is_empty() {
+            return Err(ContentError::IncompleteOperation);
         }
-        let (start, count) = self.run(kind);
-        if index >= count {
-            return Ok(None);
+        match &self.failure {
+            Some(error) => Err(error.clone()),
+            None => Ok(()),
         }
-        let at = SPOOL_HEADER_BYTES + (start + index) as u64 * SPOOL_SLOT_BYTES;
-        let mut record = [0_u8; SPOOL_SLOT_BYTES as usize];
+    }
+
+    pub(super) fn ensure_sealed(&self) -> ContentResult<()> {
+        self.ensure_known()?;
+        if !self.sealed {
+            return Err(ContentError::IncompleteOperation);
+        }
+        self.check_header()
+    }
+
+    pub(super) fn ensure_writable(&self) -> ContentResult<()> {
+        self.ensure_known()?;
+        if self.sealed {
+            return Err(ContentError::InvalidRecord("spool sealed"));
+        }
+        Ok(())
+    }
+
+    pub(super) fn write_at(&mut self, at: u64, bytes: &[u8]) -> ContentResult<()> {
+        self.file
+            .seek(SeekFrom::Start(at))
+            .and_then(|_| self.file.write_all(bytes))
+            .map_err(|_| ContentError::Io)
+    }
+
+    pub(super) fn read_at(&self, at: u64, bytes: &mut [u8]) -> ContentResult<()> {
+        let end = at
+            .checked_add(bytes.len() as u64)
+            .ok_or(ContentError::LengthOverflow)?;
+        if end > self.bytes {
+            return Err(ContentError::InvalidRecord("spool read span"));
+        }
+        let mut work = self.work.get();
+        work.read_requests = work.read_requests.saturating_add(1);
+        self.work.set(work);
         let mut file = &self.file;
         file.seek(SeekFrom::Start(at))
-            .and_then(|_| file.read_exact(&mut record))
-            .map_err(|_| ContentError::Io)?;
-        let word = |from: usize| u64::from_be_bytes(record[from..from + 8].try_into().unwrap());
-        let slot = Slot {
-            key: word(0),
-            offset: word(8),
-            bytes: word(16),
-            records: u32::from_be_bytes(record[24..28].try_into().unwrap()),
-            kind: record[28],
+            .and_then(|_| file.read_exact(bytes))
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::UnexpectedEof {
+                    ContentError::UnexpectedEof
+                } else {
+                    ContentError::Io
+                }
+            })?;
+        let mut work = self.work.get();
+        work.read_bytes = work.read_bytes.saturating_add(bytes.len() as u64);
+        self.work.set(work);
+        Ok(())
+    }
+
+    fn header_bytes(&self, actual: bool) -> ContentResult<[u8; 48]> {
+        let (bindings, name_bytes) = if actual {
+            (self.bindings, self.wire_name_bytes)
+        } else {
+            self.declaration
+                .map_or((0, 0), |d| (d.bindings, d.wire_name_bytes))
         };
-        if slot.kind != kind || slot.offset + slot.bytes > self.bytes {
-            return Err(ContentError::InvalidRecord("row slot"));
+        let values = [
+            u64::try_from(self.directory_rows).map_err(|_| ContentError::LengthOverflow)?,
+            u64::try_from(self.inode_rows).map_err(|_| ContentError::LengthOverflow)?,
+            u64::try_from(self.new_rows).map_err(|_| ContentError::LengthOverflow)?,
+            bindings,
+            name_bytes,
+            FORMAT_VERSION,
+        ];
+        let mut header = [0; HEADER_BYTES as usize];
+        for (index, value) in values.into_iter().enumerate() {
+            header[index * 8..index * 8 + 8].copy_from_slice(&value.to_be_bytes());
         }
-        Ok(Some(slot))
+        Ok(header)
     }
 
-    /// The slot run one kind owns, as `(first, count)`.
-    const fn run(&self, kind: u8) -> (usize, usize) {
-        match kind {
-            KIND_DIRECTORY => (0, self.directory_rows),
-            KIND_INODE => (self.directory_rows, self.inode_rows),
-            _ => (self.directory_rows + self.inode_rows, self.new_rows),
+    pub(super) fn check_header(&self) -> ContentResult<()> {
+        let mut header = [0; HEADER_BYTES as usize];
+        self.read_at(0, &mut header)?;
+        if header != self.header_bytes(self.sealed)? {
+            return Err(ContentError::InvalidRecord("spool header"));
         }
-    }
-
-    /// Decodes the payload of one slot.
-    fn read(&self, slot: &Slot) -> ContentResult<Vec<u8>> {
-        let length = usize::try_from(slot.bytes).map_err(|_| ContentError::LengthOverflow)?;
-        let mut payload = vec![0_u8; length];
-        let mut file = &self.file;
-        file.seek(SeekFrom::Start(slot.offset))
-            .and_then(|_| file.read_exact(&mut payload))
-            .map_err(|_| ContentError::Io)?;
-        Ok(payload)
-    }
-
-    /// Decodes one directory row from its payload.
-    fn directory(&self, slot: &Slot) -> ContentResult<DirectoryUpdate> {
-        let payload = self.read(slot)?;
-        let mut reader = PayloadReader::new(&payload);
-        let parent = reader.word()?;
-        let count = reader.count()?;
-        if count != slot.records {
-            return Err(ContentError::InvalidRecord("directory row count"));
+        if self.file.metadata().map_err(|_| ContentError::Io)?.len() != self.bytes {
+            return Err(ContentError::InvalidRecord("spool file length"));
         }
-        let mut changes = Vec::with_capacity(count as usize);
-        for _ in 0..count {
-            let length = reader.byte()? as usize;
-            let name = PathName::from_bytes(reader.take(length)?)
-                .map_err(|_| ContentError::InvalidRecord("directory row name"))?;
-            let serial = reader.word()?;
-            changes.push((name, (serial != 0).then_some(serial)));
-        }
-        if !reader.is_empty() {
-            return Err(ContentError::InvalidRecord("directory row"));
-        }
-        Ok(DirectoryUpdate { parent, changes })
-    }
-
-    /// Decodes one typed inode value from its payload.
-    fn inode(&self, slot: &Slot) -> ContentResult<InodeUpdate> {
-        let payload = self.read(slot)?;
-        let mut reader = PayloadReader::new(&payload);
-        let serial = reader.word()?;
-        let kind = InodeKind::from_code(reader.byte()?)
-            .map_err(|_| ContentError::InvalidRecord("inode kind"))?;
-        let content_root = ObjectId::from_bytes(reader.take(32)?)
-            .map_err(|_| ContentError::InvalidRecord("content root"))?;
-        let metadata_root = ObjectId::from_bytes(reader.take(32)?)
-            .map_err(|_| ContentError::InvalidRecord("metadata root"))?;
-        if !reader.is_empty() {
-            return Err(ContentError::InvalidRecord("inode row"));
-        }
-        Ok(InodeUpdate {
-            serial,
-            value: InodeValue {
-                kind,
-                namespace_ref_count: 0,
-                content_root,
-                metadata_root,
-            },
-        })
-    }
-
-    /// The slot of one key in a kind's run, by binary search over the run.
-    fn find(&self, kind: u8, key: u64) -> ContentResult<Option<Slot>> {
-        let (_, count) = self.run(kind);
-        let mut low = 0_usize;
-        let mut high = count;
-        while low < high {
-            let middle = low + (high - low) / 2;
-            let slot = self
-                .slot(kind, middle)?
-                .ok_or(ContentError::InvalidRecord("row slot"))?;
-            match slot.key.cmp(&key) {
-                std::cmp::Ordering::Less => low = middle + 1,
-                std::cmp::Ordering::Greater => high = middle,
-                std::cmp::Ordering::Equal => return Ok(Some(slot)),
-            }
-        }
-        Ok(None)
+        Ok(())
     }
 }
 
@@ -382,43 +333,39 @@ impl RowSource for RowSpool {
     fn new_rows(&self) -> usize {
         self.new_rows
     }
-    fn directories(&self) -> ContentResult<Box<dyn DirectoryRowSource + '_>> {
-        Ok(Box::new(SpoolDirectories { spool: self, at: 0 }))
+    fn directories(&self) -> ContentResult<Box<dyn super::DirectoryRowSource + '_>> {
+        self.ensure_sealed()?;
+        Ok(Box::new(super::spool_compatibility::SpoolDirectories::new(
+            self,
+        )))
     }
     fn inodes(&self) -> ContentResult<Box<dyn InodeRowSource + '_>> {
-        Ok(Box::new(SpoolInodes { spool: self, at: 0 }))
+        self.ensure_sealed()?;
+        Ok(Box::new(super::spool_slots::SpoolInodes::new(self)))
     }
     fn new_inodes(&self) -> ContentResult<Box<dyn SerialRowSource + '_>> {
-        Ok(Box::new(SpoolSerials { spool: self, at: 0 }))
+        self.ensure_sealed()?;
+        Ok(Box::new(super::spool_slots::SpoolSerials::new(self)))
     }
     fn directory_for(&self, parent: u64) -> ContentResult<Option<DirectoryUpdate>> {
-        match self.find(KIND_DIRECTORY, parent)? {
-            Some(slot) => Ok(Some(self.directory(&slot)?)),
-            None => Ok(None),
-        }
+        self.compatibility_directory(parent)
+    }
+    fn legacy_binding_lookup(
+        &self,
+        parent: u64,
+        name: &[u8],
+    ) -> ContentResult<super::BindingLookup> {
+        super::BindingRows::binding_for(self, parent, name)
     }
     fn value_for(&self, serial: u64) -> ContentResult<Option<InodeValue>> {
-        match self.find(KIND_INODE, serial)? {
-            Some(slot) => Ok(Some(self.inode(&slot)?.value)),
-            None => Ok(None),
-        }
+        self.ensure_sealed()?;
+        self.find(KIND_INODE, serial)?
+            .map(|(_, slot)| self.inode(&slot).map(|row| row.value))
+            .transpose()
     }
     fn new_position(&self, serial: u64) -> ContentResult<Option<usize>> {
-        let (_, count) = self.run(KIND_SERIAL);
-        let mut low = 0_usize;
-        let mut high = count;
-        while low < high {
-            let middle = low + (high - low) / 2;
-            let slot = self
-                .slot(KIND_SERIAL, middle)?
-                .ok_or(ContentError::InvalidRecord("row slot"))?;
-            match slot.key.cmp(&serial) {
-                std::cmp::Ordering::Less => low = middle + 1,
-                std::cmp::Ordering::Greater => high = middle,
-                std::cmp::Ordering::Equal => return Ok(Some(middle)),
-            }
-        }
-        Ok(None)
+        self.ensure_sealed()?;
+        Ok(self.find(KIND_SERIAL, serial)?.map(|(index, _)| index))
     }
 }
 
@@ -427,111 +374,5 @@ impl Drop for RowSpool {
         if !self.path.as_os_str().is_empty() {
             let _ = std::fs::remove_file(&self.path);
         }
-    }
-}
-
-/// One row's entry in the spool's slot table.
-#[derive(Clone, Copy, Debug)]
-struct Slot {
-    key: u64,
-    offset: u64,
-    bytes: u64,
-    records: u32,
-    kind: u8,
-}
-
-struct SpoolDirectories<'a> {
-    spool: &'a RowSpool,
-    at: usize,
-}
-
-impl DirectoryRowSource for SpoolDirectories<'_> {
-    fn next_row(&mut self) -> ContentResult<Option<DirectoryUpdate>> {
-        match self.spool.slot(KIND_DIRECTORY, self.at)? {
-            Some(slot) => {
-                self.at += 1;
-                Ok(Some(self.spool.directory(&slot)?))
-            }
-            None => Ok(None),
-        }
-    }
-}
-
-struct SpoolInodes<'a> {
-    spool: &'a RowSpool,
-    at: usize,
-}
-
-impl InodeRowSource for SpoolInodes<'_> {
-    fn next_row(&mut self) -> ContentResult<Option<InodeUpdate>> {
-        match self.spool.slot(KIND_INODE, self.at)? {
-            Some(slot) => {
-                self.at += 1;
-                Ok(Some(self.spool.inode(&slot)?))
-            }
-            None => Ok(None),
-        }
-    }
-}
-
-struct SpoolSerials<'a> {
-    spool: &'a RowSpool,
-    at: usize,
-}
-
-impl SerialRowSource for SpoolSerials<'_> {
-    fn next_row(&mut self) -> ContentResult<Option<u64>> {
-        match self.spool.slot(KIND_SERIAL, self.at)? {
-            Some(slot) => {
-                self.at += 1;
-                Ok(Some(slot.key))
-            }
-            None => Ok(None),
-        }
-    }
-}
-
-impl RowSpool {
-    /// True once every row of every run has been written.
-    pub fn is_complete(&self) -> bool {
-        self.written[0] == self.directory_rows
-            && self.written[1] == self.inode_rows
-            && self.written[2] == self.new_rows
-    }
-}
-
-/// A bounded reader over one decoded payload.
-struct PayloadReader<'a> {
-    bytes: &'a [u8],
-    at: usize,
-}
-
-impl<'a> PayloadReader<'a> {
-    const fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, at: 0 }
-    }
-    fn take(&mut self, count: usize) -> ContentResult<&'a [u8]> {
-        let end = self
-            .at
-            .checked_add(count)
-            .ok_or(ContentError::LengthOverflow)?;
-        let slice = self
-            .bytes
-            .get(self.at..end)
-            .ok_or(ContentError::InvalidRecord("row payload"))?;
-        self.at = end;
-        Ok(slice)
-    }
-    fn byte(&mut self) -> ContentResult<u8> {
-        Ok(self.take(1)?[0])
-    }
-    fn word(&mut self) -> ContentResult<u64> {
-        Ok(u64::from_be_bytes(self.take(8)?.try_into().unwrap()))
-    }
-    fn count(&mut self) -> ContentResult<u32> {
-        Ok(u32::from_be_bytes(self.take(4)?.try_into().unwrap()))
-    }
-    fn is_empty(&self) -> bool {
-        self.at == self.bytes.len()
     }
 }

@@ -869,3 +869,98 @@ benchmark/release admission. Current next action R1d-binding-input complete
 Server caller and independent names/root/resource/EOF/knowncleanup proofs;
 remaining graph/paged/engine/provider gates stay open. #288 delegated/unrun,
 no campaign/runner/family/issue edit or historical receipt rewrite.
+
+
+## R1e published; R1d-binding-input current ownership
+
+Actuale977700173af331daf9c92ae9931b1aab7d7775e archive recount139582/
+reference65417/Core74165 matches. Normal push/remote equality and #287
+comment5918350630/body append confirmed; capability-limited refusal remains
+explicit, R1 unchecked. No benchmark/other issue/merge/close occurred.
+
+Current R1d-binding-input parent is that published checkpoint (freeze began at
+its publishedd1e478ffb parent). SC-03/05/06/07. Typed private spoolformat2
+retains48/32-byte header/slots, sparse16 full-name offsets and removes duplicate
+payload fields to preserve every old-fitting body+1MiB declaration. Public
+source/checkable completion uses issued owner/ordinal; generic compatibility
+is explicitly chosen, never bounded-error fallback. No cryptographic/tamper/
+physical-source proof is invented for the current private spool.
+
+Ownership: r0_resources rows/input/adapters/real row tests; r1_catalog Server
+prepared/filesystem/narrow real Stage fixtures; r0_oracles validation/cycles/
+streamed effective entries/owning topology proofs. Root sole Bridge/common
+canonical update/construction pre-admission/docs/check/count/commit/issues.
+All workers preserve others and run no Cargo. Shared refinements (fallible
+adapter construction, PreparedBindingUpdate, checked public iterator-completion
+port, generic legacy CheckedInput/bounded CheckedBindingInput) were confirmed
+before integration; no Rust1.85 trait upcast or hidden whole-row route.
+
+Root common Bridge now decodes fixed current/previous names with remaining
+count/NB checks before sink effects, exact identity roles/fresh/root/globalEOF;
+old reader explicitly collects through the same codec. Root canonical body
+keeps at most32 scalar headers and one active exact cursor, including empty/
+unreachable completion. Existing graph membership/demanded/site/base-fact/
+frontier/reference/release populations remain later paged gates. Server pure
+spool upper plan runs before native scratch/Save/body, and successful complete
+input is sealed before subject/semantic/canonical work. Source is in progress,
+no functional gate has run, and none of these changes is yet a bounded global/
+physical/completeR1 claim. Next: freeze this actual complete Server caller and
+run independent name/root/EOF/count/admission/knowncleanup proofs once coherent.
+
+
+## R1d selected-descriptor refinement and prospective gate scope
+
+Before first functional gate, root source review identified a new compatibility
+regression: recovering sequence position for each old RowSource.directory_for
+header required repeated prefixes. The port descriptor is now opaque within
+its issuing source. Spool/Slice retain exact physical/table ordinals; explicit
+legacy compatibility uses existing parent key consistently, requiring no new
+resident index/quota. Common shape checks retain exact counts, strict parent
+order, selected parent/issuer/completion; the provider validates actual descriptor.
+A real legacy source observer must prove point selections open no sequence and
+match the sequential headers. No passed/historical evidence changes.
+
+Server source/tests are frozen4703c716b083ca2bde04efd7bbd600781c8db968f20c9fc7385441e413fc2f22
+(sorted path/NUL/u64BE byte length/content), four files,6 primary unrun. Validation
+six-file corrected sealc8af06699e12a1485fb68beadc5012fcb8a3576e2aed8ad6f93c07a9a945463a
+(path/NUL/bytes/NUL) has8 unrun scalar/topology proofs. Root Bridge6 independent
+wire/budget/EOF proofs and common C1/constructor integration are prepared.
+Row owner adds the legacy no-prefix observer before its final freeze. No
+normal-workspace Cargo has run while source is incoherent. First gate selects
+these owning targets plus independent sealed v1/bounds/updates/hardlinks/topology;
+actual outcomes/source/remaining populations will be appended. No benchmark
+selection, speed verdict, new family/runner or #288 issue edit.
+
+
+## R1d-binding-input coherent source exits and counted checkpoint
+
+All owners froze after pre-gate descriptor/cheap producer point/per-role/base
+refinements. Root Bridge30/C175/direct legacy Server41 primary PASS (one helper
+excluded):146 primary. Exact commands/raw02/03/04 and R1D-BINDING-INPUT-DELIVERY
+preserve canonical/semantic/work/input-only allocation/custody distinctions.
+Real typed spool14000 shape actually fits W+1MiB;4097 name255 lookup obeys
+checkpoint/local16/application-byte bounds; actual Stage wide4088/4096/4097/
+4120 facts/cleanup and known faults pass. Existing2Save/C5 and real scratch
+Unknown/known-Save cleanup compositions still pass. Native required Apple
+hardcap/physical admission is not inferred from direct logical library tests.
+
+Original05 Clippy FAIL has3 needless public/wrapper lifetimes; equivalent06
+elision only, unchanged common borrow behavior/proofs reused.07 Clippy PASS,
+08 locked owning/dependent examples compile,09 whole-Core fmt/boundary399/
+guard9 PASS; SDK2/counter checks unaffected reused. No full final Core/Linux/
+physical/benchmark gate. No unchanged passing suite or performance arm repeated.
+
+Final changed owned core/crates staged seal7aab0034cda68d86cb8bc24c69472c9b7bc13aea6eaa13de4338b61b30e8022e
+(path/NUL/exact bytes/NUL), Core subtree887125124e35dd39593dff92816debf58a108ad9.
+Same revised root counter/version/scope on exact first-parent/staged archives:
+Production LOC:139582 ->141630 (delta+2048).
+Reference:65417 ->65417 (delta+0).
+Core:74165 ->76213 (delta+2048).
+Per-file production classification/runtime SQL/exclusions retained. One shared
+decoder/algorithm with explicit old compatibility, no legacy retirement/scope
+change. Current graph/index/frontier/reference/release population and stronger
+native identity/cleanup/global/engine/physical remain incomplete; fullR1 open.
+Actual commit/recount/normal push/remote/#287 follow, no futureSHA guessed.
+Next: select R1d-graph complete paged authority and exact native/algorithm
+contract before edits, from current source audit. #288 qualification unrun,
+no campaign/runner/family/issue update or release/speed claim.

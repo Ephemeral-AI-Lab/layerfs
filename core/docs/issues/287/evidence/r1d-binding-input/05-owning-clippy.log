@@ -1,0 +1,63 @@
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-api-core v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-api/core)
+    Checking layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-sandbox)
+error: the following explicit lifetimes could be elided: 'b
+   --> crates/layerfs-content/src/filesystem/update.rs:249:19
+    |
+249 | fn run_with_state<'b>(
+    |                   ^^
+...
+252 |     backing: Option<&'b mut dyn OrderingBacking>,
+    |                      ^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_lifetimes
+    = note: `-D clippy::needless-lifetimes` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_lifetimes)]`
+help: elide the lifetimes
+    |
+249 ~ fn run_with_state(
+250 |     objects: &mut FilesystemObjects<'_>,
+251 |     input: &impl PreparedRows,
+252 ~     backing: Option<&mut dyn OrderingBacking>,
+    |
+
+error: the following explicit lifetimes could be elided: 'b
+   --> crates/layerfs-content/src/filesystem/update.rs:263:50
+    |
+263 | pub fn update_filesystem_binding_rows_with_state<'b>(
+    |                                                  ^^
+...
+266 |     backing: Option<&'b mut dyn OrderingBacking>,
+    |                      ^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_lifetimes
+help: elide the lifetimes
+    |
+263 ~ pub fn update_filesystem_binding_rows_with_state(
+264 |     objects: &mut FilesystemObjects<'_>,
+265 |     input: &dyn PreparedBindingRows,
+266 ~     backing: Option<&mut dyn OrderingBacking>,
+    |
+
+error: the following explicit lifetimes could be elided: 'b
+   --> crates/layerfs-content/src/filesystem/update.rs:278:49
+    |
+278 | pub fn build_filesystem_binding_rows_with_state<'b>(
+    |                                                 ^^
+...
+281 |     backing: Option<&'b mut dyn OrderingBacking>,
+    |                      ^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_lifetimes
+help: elide the lifetimes
+    |
+278 ~ pub fn build_filesystem_binding_rows_with_state(
+279 |     objects: &mut FilesystemObjects<'_>,
+280 |     input: &dyn PreparedBindingRows,
+281 ~     backing: Option<&mut dyn OrderingBacking>,
+    |
+
+error: could not compile `layerfs-content` (lib test) due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-content` (lib) due to 3 previous errors

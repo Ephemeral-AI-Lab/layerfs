@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "clippy",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-bridge",
+    "-p",
+    "layerfs-content",
+    "-p",
+    "layerfs-server",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "exit": 0,
+  "wall_seconds": 4.388406749989372,
+  "scope": "covering failed lint after lifetime elision; behavior unchanged"
+}

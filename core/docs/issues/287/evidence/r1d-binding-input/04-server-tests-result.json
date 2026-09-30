@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "prepared_bindings",
+    "--test",
+    "history",
+    "--test",
+    "catalog_admission",
+    "--",
+    "--nocapture"
+  ],
+  "exit": 0,
+  "wall_seconds": 15.77355566600454,
+  "scope": "real direct legacy Service/Store/catalog composition and typed failure custody; native required Apple hardcap unavailable remains separate"
+}

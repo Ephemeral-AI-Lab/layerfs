@@ -22,7 +22,7 @@ use crate::filesystem::references::backing::OrderingBacking;
 use crate::filesystem::references::reduce::{PendingState, ReferenceReducer, ReferenceWork};
 use crate::filesystem::references::release::{release_zero_count, ReleaseWork};
 use crate::filesystem::root::{profile_id, FilesystemRoot, FilesystemRootId};
-use crate::filesystem::rows::PreparedRows;
+use crate::filesystem::rows::{CompatibilityBindingRows, PreparedBindingRows, PreparedRows};
 use crate::filesystem::sorted::finish::DirectoryRoot;
 use crate::filesystem::sorted::SortedWork;
 use crate::filesystem::state::{
@@ -191,6 +191,16 @@ fn run(
     backing: Option<&mut dyn OrderingBacking>,
     phases: &FilesystemPhases<'_>,
 ) -> ContentResult<FilesystemResult> {
+    let selected = CompatibilityBindingRows::new(input)?;
+    run_bindings(objects, &selected, backing, phases)
+}
+
+fn run_bindings(
+    objects: &mut FilesystemObjects<'_>,
+    input: &dyn PreparedBindingRows,
+    backing: Option<&mut dyn OrderingBacking>,
+    phases: &FilesystemPhases<'_>,
+) -> ContentResult<FilesystemResult> {
     let resources = input.resources();
     resources.check()?;
     let declared = input
@@ -233,12 +243,55 @@ fn run(
     selection.bind_owner(*binding.finalize().as_bytes())?;
     let scope = StateScope::new(selection, 1, StateTable::DirectoryRoots)?;
     let mut state = ResidentState::new(scope.clone(), input.directory_rows())?;
-    run_with_state(objects, input, backing, &mut state, &scope, phases)
+    run_binding_state(objects, input, backing, &mut state, &scope, phases)
 }
 
-fn run_with_state<'b>(
+fn run_with_state(
     objects: &mut FilesystemObjects<'_>,
     input: &impl PreparedRows,
+    backing: Option<&mut dyn OrderingBacking>,
+    state: &mut dyn IndexedState,
+    scope: &StateScope,
+    phases: &FilesystemPhases<'_>,
+) -> ContentResult<FilesystemResult> {
+    let selected = CompatibilityBindingRows::new(input)?;
+    run_binding_state(objects, &selected, backing, state, scope, phases)
+}
+
+/// Applies scalar binding rows through the same canonical algorithm and exact state.
+/// The explicitly selected source never falls back to complete directory rows.
+pub fn update_filesystem_binding_rows_with_state(
+    objects: &mut FilesystemObjects<'_>,
+    input: &dyn PreparedBindingRows,
+    backing: Option<&mut dyn OrderingBacking>,
+    state: &mut dyn IndexedState,
+    scope: &StateScope,
+    phases: &FilesystemPhases<'_>,
+) -> ContentResult<FilesystemResult> {
+    if input.base().is_none() {
+        return Err(ContentError::InvalidRecord("update base root"));
+    }
+    run_binding_state(objects, input, backing, state, scope, phases)
+}
+
+/// Builds scalar binding rows with supplied exact state and coarse phase scopes.
+pub fn build_filesystem_binding_rows_with_state(
+    objects: &mut FilesystemObjects<'_>,
+    input: &dyn PreparedBindingRows,
+    backing: Option<&mut dyn OrderingBacking>,
+    state: &mut dyn IndexedState,
+    scope: &StateScope,
+    phases: &FilesystemPhases<'_>,
+) -> ContentResult<FilesystemResult> {
+    if input.base().is_some() {
+        return Err(ContentError::InvalidRecord("initial build base"));
+    }
+    run_binding_state(objects, input, backing, state, scope, phases)
+}
+
+fn run_binding_state<'b>(
+    objects: &mut FilesystemObjects<'_>,
+    input: &dyn PreparedBindingRows,
     backing: Option<&'b mut dyn OrderingBacking>,
     state: &mut dyn IndexedState,
     scope: &StateScope,
@@ -246,7 +299,6 @@ fn run_with_state<'b>(
 ) -> ContentResult<FilesystemResult> {
     input.resources().check()?;
     let mut contents = DirectoryRoots::new(state, scope.clone(), input.directory_rows())?;
-    let input: &dyn PreparedRows = input;
     let mut backing = backing;
     // The flag is set by the body the moment the checked completion runs, so the
     // failure path below never releases the same backing twice and never depends
@@ -283,7 +335,7 @@ fn run_with_state<'b>(
 
 fn run_body<'b>(
     objects: &mut FilesystemObjects<'_>,
-    input: &dyn PreparedRows,
+    input: &dyn PreparedBindingRows,
     backing: Option<&mut (dyn OrderingBacking + 'b)>,
     phases: &FilesystemPhases<'_>,
     cleanup_attempted: &mut bool,
@@ -295,7 +347,7 @@ fn run_body<'b>(
     let unreachable = unreachable_parents(input)?;
     let mut validation = ValidationWork::default();
     let checked = phases.phase("validate", || {
-        validate::check(objects.reader(), input, &unreachable, &mut validation)
+        validate::check_bindings(objects.reader(), input, &unreachable, &mut validation)
     })?;
     let reader = objects.reader();
     let mut counters = FilesystemUpdateCounters {
@@ -334,14 +386,13 @@ fn run_body<'b>(
     phases.phase("directories", || -> ContentResult<()> {
         // Validation already proved parent ordering and uniqueness. Only one
         // final batch is retained for reuse after every binding effect is known.
-        // One declared batch of rows is resident at a time: the window is the
-        // caller's own base-read batch, so the resident cost of reading the
-        // prepared namespace does not grow with the number of rows in it.
-        let mut waves = input.directories()?;
+        // Retain only one admitted batch of scalar headers. Each directory's
+        // names are consumed separately through its exact selected cursor.
+        let mut waves = input.directory_headers()?;
         loop {
             let mut updates = Vec::with_capacity(batch);
             while updates.len() < batch {
-                match waves.next_row()? {
+                match waves.next_header()? {
                     Some(row) => updates.push(row),
                     None => break,
                 }
@@ -352,20 +403,21 @@ fn run_body<'b>(
             let mut parents = Vec::with_capacity(updates.len());
             for update in &updates {
                 if checked.topology.table.is_some()
-                    && !unreachable.contains_key(&update.parent)
-                    && !input.is_new(update.parent)?
+                    && !unreachable.contains_key(&update.parent())
+                    && !input.is_new(update.parent())?
                 {
-                    parents.push(update.parent);
+                    parents.push(update.parent());
                 }
             }
             let bases = lookup_many(reader, table, &parents, &mut InodeReadWork::default())?;
             for update in &updates {
-                if unreachable.contains_key(&update.parent) {
+                if unreachable.contains_key(&update.parent()) {
                     // Nothing binds this directory in the result, so no page of it
                     // is worth building. Its bindings are still this operation's
                     // edges and stay accounted: every final binding of a directory
                     // this operation allocates is an addition.
-                    for (_, binding) in &update.changes {
+                    let mut bindings = input.bindings(update)?;
+                    while let Some((_, binding)) = bindings.next_binding()? {
                         let Some(child) = binding else {
                             continue;
                         };
@@ -373,27 +425,34 @@ fn run_body<'b>(
                             &mut reducer,
                             initial_counts.as_deref_mut(),
                             input,
-                            *child,
+                            child,
                         )?;
                         counters.bindings_added = counters.bindings_added.saturating_add(1);
+                    }
+                    if !bindings.finish()?.matches(update) {
+                        return Err(ContentError::InvalidRecord("directory completion"));
                     }
                     continue;
                 }
                 let base = parents
-                    .binary_search(&update.parent)
+                    .binary_search(&update.parent())
                     .ok()
                     .and_then(|index| bases[index]);
-                let content_root = if update.changes.is_empty() {
+                let mut bindings = input.bindings(update)?;
+                let content_root = if update.binding_count() == 0 {
+                    if bindings.next_binding()?.is_some() {
+                        return Err(ContentError::InvalidRecord("directory binding count"));
+                    }
                     // An unchanged directory retains its root; a new directory
                     // needs one actual empty page.
-                    if input.is_new(update.parent)? || checked.topology.table.is_none() {
+                    if input.is_new(update.parent())? || checked.topology.table.is_none() {
                         crate::filesystem::directory::update::empty_directory(objects)?.0
                     } else {
                         base.ok_or(ContentError::InvalidRecord("directory parent record"))?
                             .content_root
                     }
                 } else {
-                    let base_directory = if input.is_new(update.parent)? {
+                    let base_directory = if input.is_new(update.parent())? {
                         None
                     } else if checked.topology.table.is_some() {
                         let record =
@@ -431,10 +490,7 @@ fn run_body<'b>(
                     let (root, work) = apply_bindings(
                         objects,
                         base_directory,
-                        update
-                            .changes
-                            .iter()
-                            .map(|(name, binding)| Ok((name.clone(), *binding))),
+                        std::iter::from_fn(|| bindings.next_binding().transpose()),
                         resources.scratch_bytes,
                         &mut observe,
                     )?;
@@ -465,7 +521,10 @@ fn run_body<'b>(
                     counters.directory_updates = counters.directory_updates.saturating_add(1);
                     root.0
                 };
-                contents.append(update.parent, content_root)?;
+                if !bindings.finish()?.matches(update) {
+                    return Err(ContentError::InvalidRecord("directory completion"));
+                }
+                contents.append(update.parent(), content_root)?;
             }
             if !parents.is_empty() {
                 retained_parents = parents;
@@ -680,7 +739,7 @@ fn run_body<'b>(
 /// building: its bindings are accounted by the walk that dropped it. Only a
 /// declared-new parent can be in that state - an existing directory that is not
 /// rebound keeps the record it already has.
-fn unreachable_parents(input: &dyn PreparedRows) -> ContentResult<BTreeMap<u64, ()>> {
+fn unreachable_parents(input: &dyn PreparedBindingRows) -> ContentResult<BTreeMap<u64, ()>> {
     let limit = usize::try_from(input.resources().ordering_bytes / 1024).unwrap_or(usize::MAX);
     let root = input.root_serial();
     // The retained membership is the targeted set itself: one entry per
@@ -689,9 +748,9 @@ fn unreachable_parents(input: &dyn PreparedRows) -> ContentResult<BTreeMap<u64, 
     // ordering ceiling as the scratch it is; unrelated child bindings are never
     // retained, so a wide directory does not multiply this charge.
     let mut parents: BTreeMap<u64, bool> = BTreeMap::new();
-    let mut rows = input.directories()?;
-    while let Some(update) = rows.next_row()? {
-        let parent = update.parent;
+    let mut rows = input.directory_headers()?;
+    while let Some(update) = rows.next_header()? {
+        let parent = update.parent();
         if parent == root || parents.contains_key(&parent) {
             continue;
         }
@@ -712,14 +771,18 @@ fn unreachable_parents(input: &dyn PreparedRows) -> ContentResult<BTreeMap<u64, 
     // probe and nothing more, so the charge above is the whole working set.
     // An empty binding list is the "keep the bindings you have" form, and a
     // directory this operation allocates has none to keep.
-    let mut rows = input.directories()?;
-    while let Some(update) = rows.next_row()? {
-        for (_, binding) in &update.changes {
+    let mut rows = input.directory_headers()?;
+    while let Some(update) = rows.next_header()? {
+        let mut bindings = input.bindings(&update)?;
+        while let Some((_, binding)) = bindings.next_binding()? {
             if let Some(child) = binding {
-                if let Some(bound) = parents.get_mut(child) {
+                if let Some(bound) = parents.get_mut(&child) {
                     *bound = true;
                 }
             }
+        }
+        if !bindings.finish()?.matches(&update) {
+            return Err(ContentError::InvalidRecord("directory completion"));
         }
     }
     drop(rows);
@@ -732,7 +795,7 @@ fn unreachable_parents(input: &dyn PreparedRows) -> ContentResult<BTreeMap<u64, 
 
 fn register_values(
     reducer: &mut ReferenceReducer<'_, '_>,
-    input: &dyn PreparedRows,
+    input: &dyn PreparedBindingRows,
     unreachable: &BTreeMap<u64, ()>,
 ) -> ContentResult<()> {
     let mut serials = input.new_inodes()?;
@@ -758,7 +821,7 @@ fn register_values(
 fn note_retained_binding(
     reducer: &mut ReferenceReducer<'_, '_>,
     initial_counts: Option<&mut [u64]>,
-    input: &dyn PreparedRows,
+    input: &dyn PreparedBindingRows,
     serial: u64,
 ) -> ContentResult<()> {
     if let Some(counts) = initial_counts {

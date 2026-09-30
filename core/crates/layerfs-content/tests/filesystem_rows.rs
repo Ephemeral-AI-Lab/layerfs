@@ -8,19 +8,23 @@
 //! input the service already accepted.
 //!
 //! The spool is the product's own ([`RowSpool`]): fixed 32-byte slots in key
-//! order, payloads behind them, every byte charged, the file removed when the
-//! update is done. A pass reads one slot and one row at a time, so the wide case
-//! applies 1,025 rows whose resident footprint is one row - the property the
-//! resident vector it replaces could not offer, and the reason a frame-sized
-//! admission was the only bound left.
+//! order, streamed names with sparse offsets behind them, every byte charged,
+//! the file removed when the update is done. The wide case uses the explicit
+//! scalar binding entry, so no complete directory is decoded by that route.
+//! Resident slices and old external providers keep their compatibility entry.
 //!
 //! Three refusals are checked as well: an update that wrote fewer rows than it
 //! declared, a row beyond the declared totals or beyond the charged capacity, and
 //! a key that does not rise inside its run.
 
+#[path = "support/binding_only.rs"]
+mod binding_only;
 mod support;
 
-use layerfs_content::filesystem::rows::{PreparedUpdate, RowSource, RowSpool, SPOOL_SLOT_BYTES};
+use layerfs_content::filesystem::rows::{
+    PreparedBindingUpdate, PreparedUpdate, RowSource, RowSpool, SPOOL_SLOT_BYTES,
+};
+use layerfs_content::filesystem::state::{ResidentState, StateScope, StateSelection, StateTable};
 use layerfs_content::filesystem::{
     update_filesystem, DirectoryUpdate, FilesystemResources, FilesystemRootId, InodeUpdate,
     LogicalPath, PathName,
@@ -114,6 +118,28 @@ fn apply(
     update: &PreparedUpdate<'_>,
 ) -> layerfs_content::ContentResult<ObjectId> {
     let result = with_objects(store, |objects| update_filesystem(objects, update, None))?;
+    Ok(result.root.0)
+}
+
+/// Exercises the real scalar common builder with explicit logical state.
+fn apply_bindings(
+    store: &mut TreeStore,
+    update: &PreparedBindingUpdate<'_>,
+) -> layerfs_content::ContentResult<ObjectId> {
+    let mut selection = StateSelection::issue([0x71; 32])?;
+    selection.bind_owner([0x72; 32])?;
+    let scope = StateScope::new(selection, 1, StateTable::DirectoryRoots)?;
+    let mut state = ResidentState::new(scope.clone(), update.directory_rows())?;
+    let result = with_objects(store, |objects| {
+        layerfs_content::filesystem::update::update_filesystem_binding_rows_with_state(
+            objects,
+            update,
+            None,
+            &mut state,
+            &scope,
+            &layerfs_content::filesystem::FilesystemPhases::disabled(),
+        )
+    })?;
     Ok(result.root.0)
 }
 
@@ -249,8 +275,7 @@ fn a_wide_spooled_generation_applies_every_row_from_the_file() {
     inodes.sort_by_key(|row| row.serial);
 
     let (_path, spool) = spool("wide", &directories, &inodes, &serials);
-    // The spool holds one fixed slot per row and the payloads behind them; the
-    // resident side of the same update is one row at a time.
+    // Actual input is a scalar header/name source backed by this owned file.
     let table = (directories.len() + inodes.len() + serials.len()) as u64 * SPOOL_SLOT_BYTES;
     assert!(spool.held_bytes() >= table, "every row owns one slot");
     assert_eq!(spool.written_directories(), directories.len());
@@ -258,14 +283,15 @@ fn a_wide_spooled_generation_applies_every_row_from_the_file() {
     assert_eq!(spool.written_new(), serials.len());
 
     let mut store = session.store.clone();
-    let update = PreparedUpdate {
+    let bounded = binding_only::BindingOnly::new(&spool);
+    let update = PreparedBindingUpdate {
         base: Some(FilesystemRootId(session.root)),
         scope: session.scope,
         root_serial: session.root_serial,
         resources: FilesystemResources::default(),
-        rows: &spool,
+        rows: &bounded,
     };
-    let root = apply(&mut store, &update).expect("wide spooled update");
+    let root = apply_bindings(&mut store, &update).expect("wide scalar spooled update");
 
     let mut read = layerfs_content::filesystem::FilesystemRead::new(&store, FilesystemRootId(root))
         .expect("read");
