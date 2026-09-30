@@ -1,5 +1,18 @@
 # Storage (C2, `layerfs-storage`)
 
+> **#287 R1d phased construction state:** The source developed against parent
+> `d3a10aadbb7506772552474478b14ef25947c899` adds explicit LFCS private schema2
+> for claims1/table2 followed by roots2/table1 in one already admitted16MiB native
+> owner. Legacy `begin` keeps private schema1; there is no temporary-file reopen,
+> migration or error-selected fallback. Claims use bounded unordered transactions,
+> one indexed maximum/ordered seal scan and exact bounded retirement. Native
+> allocation observation and known empty-phase acknowledgement precede roots;
+> logical abandonment/Unknown retains exact custody and credit. Store schema,
+> capacity, worker count and SQLite connection profile stay unchanged.
+> [Contract and qualification distinctions](../issues/287/R1D-BINDING-CLAIMS-FREEZE.md)
+> separate declared maxima from actual native file/SQL proofs and unavailable
+> engine/global/physical healthy progress. No speed or release claim follows.
+
 > **#287 R1e-bootstrap capability boundary:** Against parent
 > `d1e478ffb97905eb77acdeef288fa091c40cae2d`, the native process bootstrap
 > configures tracked memory before initialization, requests exactly32MiB,

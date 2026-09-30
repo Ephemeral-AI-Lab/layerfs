@@ -4,12 +4,13 @@ use rusqlite::{limits::Limit, Connection, OpenFlags};
 
 use crate::error::{StorageError, StorageResult};
 
-use super::{native::RESERVED_BYTES, status::ScratchProfile};
+use super::{native::RESERVED_BYTES, plan::Plan, status::ScratchProfile};
 
 pub(crate) const APPLICATION_ID: i64 = 0x4c46_4353;
 pub(crate) const ROW_LIMIT: u64 = 65_536;
 pub(crate) const RECORD_BYTES: u64 = 63;
 const SCHEMA: &str = include_str!("../../sql/construction_scratch.sql");
+const PHASED_SCHEMA: &str = include_str!("../../sql/construction_phased.sql");
 
 const LIMITS: &[(Limit, i32)] = &[
     (Limit::SQLITE_LIMIT_LENGTH, 65_536),
@@ -38,6 +39,8 @@ pub(crate) fn open(path: &std::path::Path) -> StorageResult<Connection> {
 pub(crate) fn initialize(
     connection: &Connection,
     header: &[u8; 192],
+    plan: Plan,
+    claim_scope: Option<&[u8; 81]>,
 ) -> StorageResult<ScratchProfile> {
     let journal: String =
         connection.query_row("PRAGMA journal_mode = MEMORY", [], |row| row.get(0))?;
@@ -58,12 +61,26 @@ pub(crate) fn initialize(
     }
     crate::sqlite::write::begin_immediate(connection)?;
     let schema = (|| {
-        connection.execute_batch(SCHEMA)?;
-        if connection.execute(
-            "INSERT INTO session_owner VALUES (1,?1,NULL,0,0,0,NULL)",
-            [header.as_slice()],
-        )? != 1
-        {
+        let affected = match plan {
+            Plan::Legacy => {
+                connection.execute_batch(SCHEMA)?;
+                connection.execute(
+                    "INSERT INTO session_owner VALUES (1,?1,NULL,0,0,0,NULL)",
+                    [header.as_slice()],
+                )?
+            }
+            Plan::ClaimsThenRoots {
+                directories,
+                bindings,
+            } => {
+                let scope = claim_scope
+                    .ok_or(StorageError::Integrity("construction scratch phased scope"))?;
+                connection.execute_batch(PHASED_SCHEMA)?;
+                connection.execute("INSERT INTO session_owner VALUES (1,?1,NULL,0,0,0,NULL,?2,?3,?4,0,0,0,NULL,NULL,NULL)",
+                    rusqlite::params![header.as_slice(), directories as i64, bindings as i64, scope.as_slice()])?
+            }
+        };
+        if affected != 1 {
             return Err(StorageError::Integrity(
                 "construction scratch header insertion",
             ));
@@ -77,15 +94,22 @@ pub(crate) fn initialize(
             field: "construction scratch logical page limit",
         });
     }
-    readback(connection)
+    readback(connection, plan.version())
 }
 
 pub(crate) fn finish_write(
     connection: &Connection,
     result: StorageResult<()>,
 ) -> StorageResult<()> {
+    finish_transaction(connection, result)
+}
+
+pub(crate) fn finish_transaction<T>(
+    connection: &Connection,
+    result: StorageResult<T>,
+) -> StorageResult<T> {
     match result {
-        Ok(()) => crate::sqlite::write::commit(connection),
+        Ok(value) => crate::sqlite::write::commit(connection).map(|()| value),
         Err(original) => match crate::sqlite::write::rollback(connection) {
             Ok(()) => Err(original),
             Err(cleanup) => Err(StorageError::UnknownOutcome {
@@ -98,7 +122,7 @@ pub(crate) fn finish_write(
     }
 }
 
-pub(crate) fn readback(connection: &Connection) -> StorageResult<ScratchProfile> {
+pub(crate) fn readback(connection: &Connection, version: u16) -> StorageResult<ScratchProfile> {
     let read =
         |sql: &str| -> StorageResult<i64> { Ok(connection.query_row(sql, [], |row| row.get(0))?) };
     let profile = ScratchProfile {
@@ -117,7 +141,7 @@ pub(crate) fn readback(connection: &Connection) -> StorageResult<ScratchProfile>
     if profile
         != (ScratchProfile {
             application_id: APPLICATION_ID,
-            version: 1,
+            version: i64::from(version),
             page_size: 4096,
             cache_size: -512,
             mmap_size: 0,

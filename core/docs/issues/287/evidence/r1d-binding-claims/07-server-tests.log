@@ -1,0 +1,32 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 8.60s
+     Running tests/binding_claims.rs (core/target/debug/deps/binding_claims-a9d7111de02db813)
+
+running 2 tests
+
+thread 'duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cleanup' panicked at crates/layerfs-server/tests/binding_claims.rs:78:5:
+selected-library observation failed: stdout= stderr=Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-server/tests/support/claim_phase_assertion.py", line 36, in <module>
+    assert opened == 0, (opened, database, library)
+           ^^^^^^^^^^^
+AssertionError: (14, '/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-prepared-bindings-claim-duplicate-45730-1/store.sqlite', '/usr/lib/libsqlite3.dylib')
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'stage_with_257_exclusive_directories_retires_claims_before_first_root_insert' panicked at crates/layerfs-server/tests/binding_claims.rs:233:33:
+called `Result::unwrap()` on an `Err` value: PoisonError { .. }
+test duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cleanup ... FAILED
+test stage_with_257_exclusive_directories_retires_claims_before_first_root_insert ... FAILED
+
+failures:
+
+failures:
+    duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cleanup
+    stage_with_257_exclusive_directories_retires_claims_before_first_root_insert
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+error: test failed, to rerun pass `-p layerfs-server --test binding_claims`

@@ -101,12 +101,14 @@ impl StateSelection {
     }
 }
 
-/// The one table with an implemented producer and private codec.
+/// Closed tables with implemented producers and distinct private codecs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum StateTable {
     /// Ordered serial-to-directory-root facts produced by filesystem construction.
     DirectoryRoots = 1,
+    /// Exclusive directory/symlink binding membership during validation.
+    BindingClaims = 2,
 }
 
 impl StateTable {

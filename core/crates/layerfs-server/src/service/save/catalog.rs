@@ -16,10 +16,7 @@ use crate::service::{
 };
 use layerfs_bridge::contract::HistoryResult;
 use layerfs_bridge::contract::*;
-use layerfs_content::filesystem::{
-    scope_for_seed,
-    state::{StateScope, StateTable},
-};
+use layerfs_content::filesystem::{scope_for_seed, state::ConstructionScopes};
 use layerfs_history::*;
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, TimingScope};
@@ -261,18 +258,17 @@ fn stage(
         return Err(Code::Deadline.into());
     }
     let mut state = construction.begin(changes)?;
-    let state_scope =
-        match StateScope::new(state.selection().clone(), 1, StateTable::DirectoryRoots) {
-            Ok(scope) => scope,
-            Err(error) => {
-                let mut error = content(error);
-                if let Err(cleanup) = state.release().map_err(storage) {
-                    error.cleanup = Some(cleanup.code);
-                    error.unknown |= cleanup.unknown;
-                }
-                return Err(error);
+    let state_scope = match ConstructionScopes::new(state.selection().clone()) {
+        Ok(scope) => scope,
+        Err(error) => {
+            let mut error = content(error);
+            if let Err(cleanup) = state.release().map_err(storage) {
+                error.cleanup = Some(cleanup.code);
+                error.unknown |= cleanup.unknown;
             }
-        };
+            return Err(error);
+        }
+    };
     if Instant::now() >= deadline {
         let mut error = Failure::from(Code::Deadline);
         if let Err(cleanup) = state.release().map_err(storage) {

@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::binding::{selected, Bindings, Headers};
 use super::effective::EffectiveEntries;
-use super::{charge_site, walk_limit, CheckedBindingInput, ValidationState, ValidationWork};
+use super::{charge_site, walk_limit, CheckedTopologyInput, ValidationState, ValidationWork};
 use crate::error::{ContentError, ContentResult};
 use crate::object::inode_leaf::InodeKind;
 use crate::object::AuthenticatedObjects;
@@ -16,7 +16,7 @@ use crate::object::AuthenticatedObjects;
 /// Walks each rebound directory's effective subtree looking for its new parent.
 pub(super) fn check_effective_cycles(
     reader: &dyn AuthenticatedObjects,
-    checked: &CheckedBindingInput<'_>,
+    checked: &CheckedTopologyInput<'_>,
     unreachable: &BTreeMap<u64, ()>,
     work: &mut ValidationWork,
     state: &mut ValidationState,
@@ -90,7 +90,7 @@ pub(super) fn check_effective_cycles(
 
 /// Proves that a build's stated directory bindings are reached from its root.
 fn check_build_reachability(
-    checked: &CheckedBindingInput<'_>,
+    checked: &CheckedTopologyInput<'_>,
     unreachable: &BTreeMap<u64, ()>,
     work: &mut ValidationWork,
 ) -> ContentResult<()> {

@@ -1,0 +1,22 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.20s
+     Running tests/construction_claims.rs (core/target/debug/deps/construction_claims-49ea96ee4d5c81d3)
+
+running 1 test
+LFCS2 actual reader provider: version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; current executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_claims-49ea96ee4d5c81d3, READ_ONLY|NOFOLLOW, busy0
+LFCS2 SHARED barrier acknowledged by actual BEGIN+SELECT records=0 before writer
+
+
+LFCS2 actual reader provider: version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; current executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_claims-49ea96ee4d5c81d3, READ_ONLY|NOFOLLOW, busy0
+LFCS2 SHARED barrier acknowledged by actual BEGIN+SELECT records=2 before writer
+
+
+LFCS2 actual reader provider: version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; current executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_claims-49ea96ee4d5c81d3, READ_ONLY|NOFOLLOW, busy0
+LFCS2 SHARED barrier acknowledged by actual BEGIN+SELECT records=2 before writer
+
+
+test unix::real_shared_reader_commit_unknown_retains_exact_capsule_and_class ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.05s
+

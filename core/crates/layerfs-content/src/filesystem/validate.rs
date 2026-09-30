@@ -18,6 +18,9 @@ use crate::filesystem::root::{FilesystemRoot, FilesystemRootId};
 use crate::filesystem::rows::{
     check_binding_input, CompatibilityBindingRows, PreparedBindingRows, PreparedRows,
 };
+use crate::filesystem::state::{
+    BindingClaimState, BindingClaims, ResidentClaims, StateScope, StateSelection, StateTable,
+};
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::{AuthenticatedObjects, ObjectId};
 
@@ -198,14 +201,109 @@ pub fn check<'a>(
     })
 }
 
-/// Checks membership, identity and effective topology from scalar binding cursors.
+/// Checked source and topology without a resident additions result.
+pub struct CheckedTopologyInput<'a> {
+    /// Exact addressed scalar source.
+    pub input: &'a dyn PreparedBindingRows,
+    /// Checked base state.
+    pub topology: FilesystemTopology,
+}
+
+/// Checks scalar inputs using explicitly selected resident legacy claims/results.
 pub fn check_bindings<'a>(
     reader: &dyn AuthenticatedObjects,
     input: &'a dyn PreparedBindingRows,
     unreachable: &BTreeMap<u64, ()>,
     work: &mut ValidationWork,
 ) -> ContentResult<CheckedBindingInput<'a>> {
+    let mut additions = BTreeMap::new();
+    let checked = check_resident(reader, input, unreachable, work, Some(&mut additions))?;
+    Ok(CheckedInput {
+        input,
+        topology: checked.topology,
+        additions,
+    })
+}
+
+pub(crate) fn check_resident_topology<'a>(
+    reader: &dyn AuthenticatedObjects,
+    input: &'a dyn PreparedBindingRows,
+    unreachable: &BTreeMap<u64, ()>,
+    work: &mut ValidationWork,
+) -> ContentResult<CheckedTopologyInput<'a>> {
+    check_resident(reader, input, unreachable, work, None)
+}
+
+fn check_resident<'a>(
+    reader: &dyn AuthenticatedObjects,
+    input: &'a dyn PreparedBindingRows,
+    unreachable: &BTreeMap<u64, ()>,
+    work: &mut ValidationWork,
+    additions: Option<&mut BTreeMap<u64, u64>>,
+) -> ContentResult<CheckedTopologyInput<'a>> {
     check_binding_input(input)?;
+    let declared = claim_shape(input)?;
+    let mut selector = blake3::Hasher::new();
+    selector.update(b"layerfs/binding-claims/resident-selection/v1\0");
+    selector.update(input.scope().object().as_bytes());
+    selector.update(&input.root_serial().to_be_bytes());
+    let mut selection = StateSelection::issue(*selector.finalize().as_bytes())?;
+    let mut binding = blake3::Hasher::new();
+    binding.update(b"layerfs/binding-claims/resident-owner/v1\0");
+    binding.update(selection.selector());
+    binding.update(&selection.token().to_be_bytes());
+    selection.bind_owner(*binding.finalize().as_bytes())?;
+    let scope = StateScope::new(selection, 1, StateTable::BindingClaims)?;
+    let mut state = ResidentClaims::new(scope.clone(), declared)?;
+    let mut claims = BindingClaims::new(&mut state, scope, declared)?;
+    let checked = check_semantics(reader, input, unreachable, work, &mut claims, additions)?;
+    claims.finish()?;
+    Ok(checked)
+}
+
+/// Checks all scalar semantics, verifies the exact claim seal and retires it.
+/// No additions population is built; DirectoryRoots may start after success.
+pub fn check_with_claims<'a, S: BindingClaimState + ?Sized>(
+    reader: &dyn AuthenticatedObjects,
+    input: &'a dyn PreparedBindingRows,
+    unreachable: &BTreeMap<u64, ()>,
+    work: &mut ValidationWork,
+    state: &mut S,
+    scope: &StateScope,
+) -> ContentResult<CheckedTopologyInput<'a>> {
+    let outcome = (|| {
+        check_binding_input(input)?;
+        let declared = claim_shape(input)?;
+        let mut claims = BindingClaims::new(state, scope.clone(), declared)?;
+        let checked = check_semantics(reader, input, unreachable, work, &mut claims, None)?;
+        claims.finish()?;
+        Ok(checked)
+    })();
+    if outcome.is_err() {
+        let _ = state.claim_abandon(scope);
+    }
+    outcome
+}
+
+fn claim_shape(input: &dyn PreparedBindingRows) -> ContentResult<usize> {
+    let mut headers = Headers::new(input)?;
+    let mut count = 0usize;
+    while let Some(header) = headers.next()? {
+        count = count
+            .checked_add(header.binding_count() as usize)
+            .ok_or(ContentError::LengthOverflow)?;
+    }
+    Ok(count)
+}
+
+fn check_semantics<'a, S: BindingClaimState + ?Sized>(
+    reader: &dyn AuthenticatedObjects,
+    input: &'a dyn PreparedBindingRows,
+    unreachable: &BTreeMap<u64, ()>,
+    work: &mut ValidationWork,
+    claims: &mut BindingClaims<'_, S>,
+    mut additions: Option<&mut BTreeMap<u64, u64>>,
+) -> ContentResult<CheckedTopologyInput<'a>> {
     let declared = declared_limit(input);
     let rows = input
         .directory_rows()
@@ -219,7 +317,6 @@ pub fn check_bindings<'a>(
     }
     let topology =
         FilesystemTopology::load(reader, input.base(), input.scope(), input.root_serial())?;
-    let mut additions: BTreeMap<u64, u64> = BTreeMap::new();
     // Children with a stored record that this batch binds exactly once, by the
     // parent that binds them: the final pass decides whether that binding is the
     // one the base already has or a second parent.
@@ -334,10 +431,9 @@ pub fn check_bindings<'a>(
             // A same-batch duplicate is refused here, before any base record is
             // consulted: a directory or a symlink has one binding outside the
             // root and the batch already names it twice.
-            let added = additions.entry(child).or_insert(0);
-            *added = added.checked_add(1).ok_or(ContentError::LengthOverflow)?;
-            if *added > 1 {
-                return Err(ContentError::InvalidRecord("multiple parents"));
+            claims.claim(child)?;
+            if let Some(additions) = additions.as_deref_mut() {
+                additions.insert(child, 1);
             }
             // The batch names it once; a stored record may already own that one
             // binding, and the base name decides whether this is the same
@@ -368,16 +464,19 @@ pub fn check_bindings<'a>(
         &mut state,
     )?;
     charge_site(work, aliases_before, |sites| &mut sites.aliases);
-    let mut rows = Headers::new(input)?;
-    while let Some(header) = rows.next()? {
-        let mut bindings = Bindings::new(input, header)?;
-        while let Some((_, binding)) = bindings.next()? {
-            if let Some(child) = binding {
-                let _ = additions.entry(child).or_insert(0);
+    // Only the old public result owns this population. The bounded route has
+    // neither a regular-file marker nor a second map of exclusive claims.
+    if let Some(additions) = additions {
+        let mut rows = Headers::new(input)?;
+        while let Some(header) = rows.next()? {
+            let mut bindings = Bindings::new(input, header)?;
+            while let Some((_, binding)) = bindings.next()? {
+                if let Some(child) = binding {
+                    additions.entry(child).or_insert(0);
+                }
             }
         }
     }
-    drop(rows);
     check_root_invariants(input)?;
     if input.base().is_none() {
         let mut values = input.inodes()?;
@@ -389,11 +488,7 @@ pub fn check_bindings<'a>(
             }
         }
     }
-    let checked = CheckedInput {
-        input,
-        topology,
-        additions,
-    };
+    let checked = CheckedTopologyInput { input, topology };
     cycles::check_effective_cycles(reader, &checked, unreachable, work, &mut state)?;
     Ok(checked)
 }

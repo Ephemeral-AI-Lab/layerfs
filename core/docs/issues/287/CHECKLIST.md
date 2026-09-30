@@ -1,18 +1,19 @@
 # Issue287 current implementation checklist
 
 > **Status: Current planning checklist; no release candidate exists.**
-> Current published checkpoint: `e977700173af331daf9c92ae9931b1aab7d7775e`
-> (R1e-bootstrap CAPABILITY-LIMITED; full R1 remains PARTIAL/open).
+> Current published checkpoint: `d3a10aadbb7506772552474478b14ef25947c899`
+> (R1d-binding-input scoped exits PASS; full R1 remains PARTIAL/open).
 
 Assignment: #287 implementation only. Benchmark qualification is delegated/unrun
 under #288. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
 packet; [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) is append-only.
 
-Current milestone: **R1d-binding-input real Server/C1 composition**
-([freeze](R1D-BINDING-INPUT-FREEZE.md)). R1e-bootstrap commit/recount/normal push
-and #287 comment5918350630 are confirmed with explicit selected-provider refusal.
-Binding-input scoped exits PASS; exact staged141630 count and commit/publication
-checkpoint are being finalized. Larger graph/engine/physical gates stay open.
+Current milestone: **R1d-binding-claims complete paged validation authority**.
+R1d-binding-input commit/recount/normal push and #287 comment5919341427 confirmed;
+[current delivery](R1D-BINDING-INPUT-DELIVERY.md) records actual scoped proofs.
+Graph authority/engine/physical remain open, native selected-provider refusal
+stays explicit. [Selected claim contract](R1D-BINDING-CLAIMS-FREEZE.md) freezes
+typed exclusive claims and known retirement before DirectoryRoots construction.
 R0 is published and linked in #287 comment5911332695. Native/engine/physical
 protection and concurrent enablement remain gated on their owning proofs.
 
@@ -85,7 +86,17 @@ R1d-binding-input current gates:
 - [x] Real declared private spool/source/header/cursor/index/issuer/completion proof, unchanged admission.
 - [x] Actual Server receive→seal→validation→canonical build→known cleanup/Stage, scalar cursors throughout.
 - [x] Independent names/roots/count/byte/source/liveness proof and scoped checks; graph/global/physical gaps explicit.
-- [ ] Exact source/count/commit/recount/push/#287 checkpoint.
+- [x] Exact source/count/commit/recount/push/#287 checkpoint (d3a10aadb/comment5919341427).
+
+R1d-binding-claims current gates:
+
+- [x] Published parent/source, SC IDs, typed records/phases/work law and ownership selected before edits.
+- [x] Common topology-only validation, exact immediate duplicate precedence and explicit legacy additions result.
+- [x] Typed unordered128 claims, ordered exact seal/verification and known retirement before DirectoryRoots.
+- [x] Real phased C2 scope/declared refusal/SQLite/native16MiB accounting, exact failure/Unknown custody (direct Darwin provider scope; aggregate engine/physical progress remains open).
+- [x] Complete real direct Service non-file Stage, phase fence, prior Stage preservation and known Save cleanup.
+- [x] Independent byte/digest/semantic/provider/window/work proofs and scoped owning locked checks (168 distinct primary; exact failures/corrections retained).
+- [ ] Exact staged/committed LOC, checkpoint commit/push/publication and #287 update.
 
 Named submilestones and dependencies:
 

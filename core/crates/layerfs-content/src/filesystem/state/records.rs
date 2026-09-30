@@ -2,7 +2,7 @@
 use crate::error::{ContentError, ContentResult};
 use crate::object::ObjectId;
 
-use super::selection::StateScope;
+use super::selection::{StateScope, StateTable};
 
 /// Actual DirectoryRoots key width, including compact scope prefix.
 pub const STATE_KEY_BYTES: usize = 25;
@@ -26,6 +26,9 @@ pub struct StateKey([u8; STATE_KEY_BYTES]);
 impl StateKey {
     /// Builds one positive in-range serial under the selected compact prefix.
     pub fn directory_root(scope: &StateScope, serial: u64) -> ContentResult<Self> {
+        if scope.table() != StateTable::DirectoryRoots {
+            return Err(ContentError::InvalidOrderingRecord("state table"));
+        }
         if serial == 0 || serial > i64::MAX as u64 {
             return Err(ContentError::InvalidOrderingRecord("state serial"));
         }

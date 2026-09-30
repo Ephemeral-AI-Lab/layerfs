@@ -964,3 +964,159 @@ Actual commit/recount/normal push/remote/#287 follow, no futureSHA guessed.
 Next: select R1d-graph complete paged authority and exact native/algorithm
 contract before edits, from current source audit. #288 qualification unrun,
 no campaign/runner/family/issue update or release/speed claim.
+
+
+## R1d-binding-input published; next paged authority selection
+
+Actuald3a10aadbb7506772552474478b14ef25947c899 first-parent/committed archives
+recount139582→141630(+2048), reference65417 unchanged/Core74165→76213, matched.
+Normal push/remote exact equality and #287 comment5919341427/body append
+confirmed. Git product tree clean at publication. FullR1 remains partial;
+no other issue/task message, benchmark, merge or issue close. Current next
+R1d-graph selection must name one complete growing authority/real consumer,
+typed records/order/seal/admission, independent expected result and work law
+before code. Source audit is read-only. Existing DirectoryRoots fixed63/key25/
+valueRoot32/table1 cannot be misused as generic data or have its16MiB class
+silently expanded. Current provider/physical/graph residuals remain explicit.
+
+
+## R1d-binding-claims selected contract and implementation ownership
+
+Parentd3a10aadbb7506772552474478b14ef25947c899 is the confirmed published source.
+SC-03/05/07/08; selected complete delivery is exact same-operation non-file
+binding uniqueness through a typed claim authority, common C1 topology-only
+validation and real Server phased scratch, followed by known claim retirement
+before DirectoryRoots construction. R1D-BINDING-CLAIMS-FREEZE records private
+key25/value1/frame32/seal130/table2, exact claims1→roots2 scopes, unchanged
+16MiB/native/max65536/4128768 class, batch128 and ordered seal/verification/
+retirement work. Wider base-fact/demand graph cannot simply fit the existing
+class; it remains a later gate, without quota expansion.
+
+Read-only review found batch-deferred duplicate verdict precedence: repeated
+child129 after a committed128 window must fail before a later bad parent.
+Immediate known-open claim_present plus fixed local128 membership is frozen
+before code. C1/C2 and independent Server proofs have non-overlapping ownership;
+root alone owns integration/Bridge/docs/checks/count/commits/publication/issues.
+Workers preserve others and run no Cargo. Server integration switches to
+explicit begin_phased(D,names), fixed ConstructionScopes and the new common C1
+construction entry. Independent transcripts, real provider phase/Unknown and
+canonical behavior remain unrun until coherent source. Globalengine/native
+Apple hardcap readback0/physical/protected progress, other graph populations,
+R2–R7 and #288 qualification stay open. No benchmark or issue288 update.
+
+Before first gate, independent review identified same-owner reuse after a
+duplicate in the first unflushed claim window: no native batch had yet changed
+providerOpen, so another public check could previously seal/retire that scope.
+Explicit exact-scope claim_abandon is now a required logical terminal port;
+every common-check error calls it once, with no SQL/native/cleanup/refund/query
+effects, preserving original typed failure/Unknown and retaining the capsule.
+Subsequent claims/roots on that attempt are denied. Resident compatibility has
+the same sticky rule. No hidden Drop action or retry; new external same-owner
+refusal proof is prospective. Shared freeze amended before tests/Cargo.
+
+
+## R1d-binding-claims first C1 gate and further source review
+
+01-content-tests runs the exact locked owning command/source closure recorded
+under evidence/r1d-binding-claims.97 primary PASS:21 new claim proofs,7 indexed
+state and69 scalar/bounds/hardlink/reference/topology/update cases. C1+Telemetry/
+manifest/lock/rootflags tested closure1015a84f33d4b5d4c114171a54ccfff6856b96cddaaf802d62149855b390833e
+remained unchanged. One unused external test import warning was removed from
+the exact compiler evidence before Clippy; no production/functional behavior
+changed, and those passing tests are reused for that correction.
+
+Before the first C2 gate, independent source review found early Duplicate batch
+return could mask a later malformed selected class. Provider now validates all
+bounded selected results before known Duplicate rollback, with a new real SQL
+corrupt-class proof prospective. C1 immediate first-binding duplicate precedence
+is unchanged. Root then found new high-level C1 base/resource/unreachable-source
+errors could precede checker-owned abandonment; those entry paths must explicitly
+terminalize exact scope once without duplicate abandonment. Focused regression
+and covering validation checks follow the correction; unchanged indexed/canonical
+suites remain reused. No unchanged performance arm/suite selection occurs.
+
+Real C2 Unknown proof is prospectively extended to distinct Batch/Seal/Retire
+owners under actual process-held SHARED locks, with exact attempted keys/counts/
+proposed seal, no root/refund/cleanup/retry and reaped helpers. C2/Server functional
+gates remain unrun. Native Apple32MiB unsupported/globalphysical/protected progress
+and all remaining graph/rollout/qualification gates retain their verdicts.
+
+
+## R1d-binding-claims narrow C1 cover and C2 compile refusal
+
+03-entry-terminalization-tests PASS16, including3 new early-entry custody cases;
+C1 unique primary proofs now100. Exact closure587ebc9cb285713b07338cbfe6f6f36752a5e9996b80fe43167c931f95a70020
+remained unchanged. Original97/covering16 are retained, not counted as113 unique
+cases. Final source review additionally identified pure DirectoryRoots constructor
+refusal after successful claim retirement could leave a generic supplied root
+port usable. High-level errors after checker success must logically abandon once;
+checker error keeps its existing single abandonment. New focused post-retirement
+refusal proof follows that demonstrated correction.
+
+04-storage-tests FAIL101 at compilation, exact all-Core closuree4917e5979c4fcebdb0ca2d6cc7d38b0a6ead4954fd725d37689bf59459baffd
+unchanged. Four external test observations request u64 FromSql (lines69/200/215/
+263), unsupported by the locked rusqlite API. No provider body ran. Read i64 and
+convert nonnegative counts with checked u64 conversion; no dependency/production
+patch, quota/profile/timeout change or third-party modification. Raw command,
+source and all four errors remain in04 evidence; the covering command will use a
+fresh append-only output after this test correction and C1 final source freeze.
+Native/provider/physical/remaining rollout verdicts remain open.
+
+
+## R1d-binding-claims scoped exits, owning checks and final counted source
+
+05 covering C1 PASS17: pure root-constructor refusal after known claims retirement
+now abandons once and denies raw root ports/reentry; C1 unique total101.06 C2
+PASS24primary (16new+8v1;5 empty helper invocations excluded); actual65536claims/
+2097152framedB →knownretire→65536roots/4128768framedB share one16MiB native file.
+SQLiteclaim pages570, retiredfree565, finalroots pages1836; allocation and retained
+credit16777216. Three fresh actualSHARED cases pass originalBusyUnknown at Batch/
+Seal/Retire, with exact attempted/proposed custody and denied roots/refund/release.
+These are actual file/SQL proofs, not aggregateheap/cache/RSS/protectedprogress.
+
+07 Server FAIL101: helperNOFOLLOW open14 on owned /var/folders Store alias;
+secondtestblockedmutexpoison, othertargetsunrun. Actual /var→private/var source
+observation and SQLite opening contract support the08 correction: regular owned
+file canonicalized before one retainedNOFOLLOW/library open; no fallback/retry/
+product policy change.09 ServerPASS43primary(2new+41affected;1emptyhelperexcluded):
+257non-file Stage and externalphase3 FK negative787, duplicate257 across128
+windows, actualSavebeforebody/knowncleanup/priorStage and real2Save/C5/Unknown
+composition. Distinctfunctional primary total168, without repeatedcovers/helpers.
+
+10ClippyFAIL1unneededprivate lifetime; equivalentelision.13FAIL12non-owning
+FilesystemObjects drops; removedno-destructor statements plus2same-pattern
+borrowedScratchAdapter drops.14FAILchildhandlelintassociation despite priorwait;
+retainthesame childownerthroughwait/outputreads, thentake.16all-targetowningClippy
+PASS0.17narrow threeUnknown helper lifecycle coverPASS1, maximum/canonical suites
+reused.18owninglockedexamplesPASS0,19wholeCorefmtPASS0; finalinputclosure
+0e1c1112e224d00c122a3ca946a806349e8925040b19c9cb8a5a6cfb4fff87e2 unchanged.
+11boundary415/12guard9PASS; equivalentlifetime/test-onlyeditsreuse unchangedguard,
+unaffectedSDK2/counter24proofsreused. AllrawFAILs/corrections retained. Independent
+final review20reports no reviewedsource blocker. FullCore/Linux/nativeguard/
+physical/remaininggraph/R2-R7/#288 admission remains open; no campaignrun.
+
+Next count finalstaged source against exact firstparentd3a10aadb using same revised
+root counter/scope/archives. Source/header/canonical/work/custody notes commit with
+implementation; actualcommit/recount/push/#287follow, no futureSHA guessed. Then
+select/freeze R1d-prefetch64 producer, retiring whole demanded/missing/answer union
+while retaining separate memo/alias/graph gates. No otherissue/task message.
+
+
+## R1d-binding-claims exact staged LOC and checkpoint publication preparation
+
+Actual firstparentd3a10aadbb7506772552474478b14ef25947c899 archives versus final
+staged product source using revised rootcounter a1cb6c064dd150dbc3aa19648a3748b5aeb741b5/
+SHA2560d798f53263c0f18636d96ccdfdc3728f501f53b066e90577d251859f1f117b2:
+Production LOC:141630 ->143585(delta+1955).
+Reference:65417 ->65417(delta+0).
+Core:76213 ->78168(delta+1955).
+Perfile/runtimeSQL/testonly classification same bothsnapshots; details captured
+PRODUCTION-LOC.json. Source/test44file stagedseal80d5dc3c2307d75257d231be079e45bdb0bc100491a077ce8197adc6d265f0e0,
+Coretreea46bb725fc01f2a14e10e97fb4a8ccdc624dd5aa/reference498dd1917812ae90efb8841f57e22bfc284e96fb.
+Reference unchanged; compatibility/construction file split is relocation and no
+legacypublic/canonicalv1 scope is dropped. Newtyped metadata/C2phase authority
+accounts for growth, no algorithmicLOCsavings claim. 168distinct primary/owning
+checks pass in stated directprovider scope; allFAILs/gaps are retained.
+Stageonlyownedcode/tests/docs/evidence, confirmproductsubtrees after docs, commit
+thenrecountactualcommittedtree/normalpush/#287. FullR1/R2-R7/#288 remainopen.
+Next:R1d-prefetch64 exact producer/window/count/original-failure contract freeze.

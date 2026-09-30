@@ -1,5 +1,17 @@
 # Service, bridge, daemon and hosted telemetry
 
+> **#287 R1d claim-to-root composition:** The source developed against parent
+> `d3a10aadbb7506772552474478b14ef25947c899` selects explicit phased scratch
+> before Save/body effects from exact directory/name declarations. The same
+> scalar receive and canonical body now use typed claim validation, complete
+> sealed verification and known claim retirement before root production. Known
+> native cleanup still precedes Save finish/Stage; scratch Unknown still leaves
+> a known unfinished Save responsible for its own explicit abort. The existing
+> whole-request legacy allowance remains until versioned result custody. No
+> Bridge opcode/profile, worker or quota grows. [Owning contract](../issues/287/R1D-BINDING-CLAIMS-FREEZE.md)
+> preserves native Apple guard refusal and later protected/concurrent/resource
+> qualification gates.
+
 > **#287 R1d receive composition:** Against parent
 > `e977700173af331daf9c92ae9931b1aab7d7775e`, a pure declared spool-size plan
 > precedes lazy scratch/Save/body effects. The common unchanged-v1 decoder

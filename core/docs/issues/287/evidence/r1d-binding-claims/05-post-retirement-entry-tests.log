@@ -1,0 +1,26 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.29s
+     Running tests/binding_claim_validation.rs (core/target/debug/deps/binding_claim_validation-6df40dd8cc3c2c85)
+
+running 17 tests
+test shape_admission_refuses_before_claim_batch_root_and_canonical_effects ... ok
+test first_unflushed_duplicate_terminalizes_same_owner_before_any_root_work ... ok
+test provider_acknowledgement_error_is_preserved_and_abandoned_without_seal_or_retirement ... ok
+test early_fallible_binding_source_refusal_abandons_once_and_denies_reentry ... ok
+test early_resource_refusal_abandons_once_releases_ordering_and_denies_reentry ... ok
+test postchecker_root_shape_refusal_terminalizes_even_after_known_claim_retirement ... ok
+test early_build_and_update_base_refusals_terminalize_the_selected_owner ... ok
+test legacy_result_preserves_one_for_each_directory_symlink_and_zero_for_files ... ok
+test regular_aliases_emit_no_claims_and_legacy_additions_are_zero ... ok
+test second_partial_window_duplicates_are_detected_without_a_second_transaction ... ok
+test cross_batch_duplicate_wins_over_a_later_bad_parent_kind_and_cannot_retry ... ok
+test source_shape_failure_precedes_duplicate_or_provider_effects ... ok
+test retirement_failure_releases_ordering_once_and_denies_root_allocation_and_bytes ... ok
+test stored_regular_kind_wins_over_caller_directory_value_and_allows_aliases ... ok
+C1 dispatch count proof: K257, claim transactions3, verifier pages3, window128; explicit resident provider, no physical/speed qualification
+test wide_exclusive_bindings_use_three_transactions_and_three_verification_pages ... ok
+test complete_existing_directory_permutation_uses_one_claim_then_keeps_alias_work_linear ... ok
+test full_257_directory_build_retires_claims_before_root_admission_and_emission ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

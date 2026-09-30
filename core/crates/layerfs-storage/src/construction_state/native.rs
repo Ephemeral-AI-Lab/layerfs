@@ -490,14 +490,23 @@ impl NativeFile {
         selector: &[u8; 32],
         token: u64,
         binding: &[u8; 32],
+        version: u16,
     ) -> StorageResult<[u8; 192]> {
         let directory = self
             .directory
             .lock()
             .map_err(|_| StorageError::Integrity("construction scratch directory lock"))?;
         let mut header = [0; 192];
-        header[..8].copy_from_slice(b"LFCSOWN1");
-        header[8..10].copy_from_slice(&1u16.to_be_bytes());
+        header[..8].copy_from_slice(match version {
+            1 => b"LFCSOWN1",
+            2 => b"LFCSOWN2",
+            _ => {
+                return Err(StorageError::Integrity(
+                    "construction scratch header version",
+                ))
+            }
+        });
+        header[8..10].copy_from_slice(&version.to_be_bytes());
         header[16..24].copy_from_slice(&token.to_be_bytes());
         header[24..56].copy_from_slice(selector);
         header[56..88].copy_from_slice(binding);

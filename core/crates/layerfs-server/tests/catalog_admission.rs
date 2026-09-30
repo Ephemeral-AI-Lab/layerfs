@@ -243,7 +243,7 @@ fn scratch_files(parent: &Path) -> Vec<PathBuf> {
                 sql_number(&path, "PRAGMA application_id", None),
                 0x4c46_4353
             );
-            assert_eq!(sql_number(&path, "PRAGMA user_version", None), 1);
+            assert_eq!(sql_number(&path, "PRAGMA user_version", None), 2);
             assert_eq!(
                 sql_number(&path, "SELECT length(header) FROM session_owner", None),
                 192

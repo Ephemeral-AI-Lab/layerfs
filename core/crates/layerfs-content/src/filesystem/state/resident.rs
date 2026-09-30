@@ -3,7 +3,7 @@ use crate::error::{ContentError, ContentResult};
 
 use super::{
     IndexedState, PageLimit, StateCapacity, StateKey, StateLedger, StatePage, StateRecord,
-    StateScope, StateSeal, DIRECTORY_ROOT_RECORD_BYTES,
+    StateScope, StateSeal, StateTable, DIRECTORY_ROOT_RECORD_BYTES,
 };
 
 /// Explicitly admitted logical compatibility table with fallible native storage.
@@ -20,6 +20,9 @@ pub struct ResidentState {
 impl ResidentState {
     /// Exact caller-declared compatibility shape; no new 64 KiB population clamp.
     pub fn new(scope: StateScope, maximum_records: usize) -> ContentResult<Self> {
+        if scope.table() != StateTable::DirectoryRoots {
+            return Err(ContentError::InvalidOrderingRecord("state table"));
+        }
         let count = u64::try_from(maximum_records).map_err(|_| ContentError::LengthOverflow)?;
         let bytes = count
             .checked_mul(DIRECTORY_ROOT_RECORD_BYTES as u64)

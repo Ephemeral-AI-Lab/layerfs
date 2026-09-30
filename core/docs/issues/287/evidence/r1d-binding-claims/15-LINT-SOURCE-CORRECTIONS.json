@@ -1,0 +1,11 @@
+{
+  "first_failure": "10-owning-clippy.log: needless explicit lifetime in the private construction run wrapper; exit101",
+  "production_correction": "elide the private run function and local OrderingBacking borrow lifetimes; same inferred borrowing and algorithm",
+  "second_failure": "13-owning-clippy-corrected.log: twelve drop_non_drop calls on non-owning FilesystemObjects references in external validation tests; exit101",
+  "test_correction": "remove those twelve explicit drops; Rust borrow lifetimes end at last use",
+  "same_pattern_static_review": "remove two non-owning ScratchAdapter explicit drops in the new provider test before the covering Clippy; these two were not reported by the stopped Clippy invocation",
+  "retained_actual_owner_drops": ["page/cursor", "SQLite connections/statements", "native ScratchSession", "process reader"],
+  "functional_checks_reused": true,
+  "reason": "inferred lifetime and non-destructor borrow-only edits change no operation, allocation or cleanup behavior; warning-denying all-target Clippy covers the final source",
+  "all_original_outputs_preserved": true
+}

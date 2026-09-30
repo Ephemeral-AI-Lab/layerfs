@@ -1,0 +1,163 @@
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-history)
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:386:5
+    |
+386 |     drop(objects);
+    |     ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:386:10
+    |
+386 |     drop(objects);
+    |          ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+    = note: `-D clippy::drop-non-drop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::drop_non_drop)]`
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:430:5
+    |
+430 |     drop(objects);
+    |     ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:430:10
+    |
+430 |     drop(objects);
+    |          ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:464:5
+    |
+464 |     drop(objects);
+    |     ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:464:10
+    |
+464 |     drop(objects);
+    |          ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:607:5
+    |
+607 |     drop(objects);
+    |     ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:607:10
+    |
+607 |     drop(objects);
+    |          ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:660:9
+    |
+660 |         drop(objects);
+    |         ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:660:14
+    |
+660 |         drop(objects);
+    |              ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:678:9
+    |
+678 |         drop(objects);
+    |         ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:678:14
+    |
+678 |         drop(objects);
+    |              ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:712:5
+    |
+712 |     drop(objects);
+    |     ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:712:10
+    |
+712 |     drop(objects);
+    |          ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:731:5
+    |
+731 |     drop(objects);
+    |     ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:731:10
+    |
+731 |     drop(objects);
+    |          ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:761:5
+    |
+761 |     drop(objects);
+    |     ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:761:10
+    |
+761 |     drop(objects);
+    |          ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:781:5
+    |
+781 |     drop(objects);
+    |     ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:781:10
+    |
+781 |     drop(objects);
+    |          ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:817:5
+    |
+817 |     drop(objects);
+    |     ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:817:10
+    |
+817 |     drop(objects);
+    |          ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:843:5
+    |
+843 |     drop(objects);
+    |     ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_claim_validation.rs:843:10
+    |
+843 |     drop(objects);
+    |          ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: could not compile `layerfs-content` (test "binding_claim_validation") due to 12 previous errors
+warning: build failed, waiting for other jobs to finish...

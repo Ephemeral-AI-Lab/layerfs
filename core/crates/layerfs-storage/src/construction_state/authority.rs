@@ -8,6 +8,7 @@ use layerfs_content::filesystem::state::StateSelection;
 use crate::error::{StorageError, StorageResult};
 
 use super::native::{NativeDirectory, NativeFile, RESERVED_BYTES};
+use super::plan::Plan;
 use super::session::{Resource, ScratchSession};
 use super::status::{ScratchDisposition, ScratchOwnerStatus};
 
@@ -97,6 +98,22 @@ impl ScratchAuthority {
                 actual: declared_bytes,
             });
         }
+        self.admit(selector, Plan::Legacy)
+    }
+
+    /// Admit exclusive claims followed by roots in the same native class.
+    /// Both declarations and their maximum simultaneous framed size precede
+    /// token, slot, file and SQL effects. Claims never reserve a second owner.
+    pub fn begin_phased(
+        &self,
+        selector: [u8; 32],
+        directories: u64,
+        bindings: u64,
+    ) -> StorageResult<ScratchSession> {
+        self.admit(selector, Plan::phased(directories, bindings)?)
+    }
+
+    fn admit(&self, selector: [u8; 32], plan: Plan) -> StorageResult<ScratchSession> {
         let selection = StateSelection::issue(selector)?;
         let status = {
             let directory = self
@@ -157,7 +174,7 @@ impl ScratchAuthority {
                 }
             }
         };
-        let resource = Resource::new(selection, native);
+        let resource = Resource::new(selection, native, plan);
         let mut session = ScratchSession::new(self.shared.clone(), slot, resource);
         session.initialize()?;
         Ok(session)

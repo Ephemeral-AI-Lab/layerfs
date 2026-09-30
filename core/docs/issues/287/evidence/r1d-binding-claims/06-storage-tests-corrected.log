@@ -1,0 +1,68 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.83s
+     Running tests/construction_claims.rs (core/target/debug/deps/construction_claims-49ea96ee4d5c81d3)
+
+running 18 tests
+test unix::exact_abandon_is_sticky_metadata_and_foreign_abandon_changes_no_owner ... ok
+test unix::closed_primary_key_queries_have_no_temp_sort_or_prefix_count ... ok
+test unix::empty_and_header_only_sealed_pages_complete_without_allocating_records ... ok
+test unix::shared_reader_child ... ok
+test unix::unknown_writer_child ... ok
+test unix::roots_keep_the_exact_declared_limit_after_retirement ... ok
+test unix::claimed_pages_middle_maximum_and_small_byte_bounds_use_exact_primary_keys ... ok
+test unix::existing_duplicate_does_not_mask_a_later_selected_corrupt_class ... ok
+test unix::known_partial_retirement_keeps_remaining_rows_and_blocks_roots ... ok
+test unix::phased_admission_and_per_batch_declaration_refuse_before_effects ... ok
+test unix::root_capacity_and_effects_are_denied_until_exact_claim_retirement ... ok
+test unix::short_header_only_nonempty_refuses_without_a_page_or_mutation ... ok
+test unix::same_and_cross_window_duplicates_acknowledge_no_current_rows_and_terminalize ... ok
+test unix::real_malformed_class_and_key_refuse_seal_with_known_cleanup ... ok
+test unix::foreign_keys_wrong_owner_and_forged_seals_never_change_rows ... ok
+test unix::sealed_surplus_and_missing_rows_refuse_without_unlocking_roots ... ok
+LFCS2 actual reader provider: version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; current executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_claims-49ea96ee4d5c81d3, READ_ONLY|NOFOLLOW, busy0
+LFCS2 SHARED barrier acknowledged by actual BEGIN+SELECT records=0 before writer
+
+
+LFCS2 actual reader provider: version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; current executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_claims-49ea96ee4d5c81d3, READ_ONLY|NOFOLLOW, busy0
+LFCS2 SHARED barrier acknowledged by actual BEGIN+SELECT records=2 before writer
+
+
+LFCS2 actual reader provider: version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; current executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_claims-49ea96ee4d5c81d3, READ_ONLY|NOFOLLOW, busy0
+LFCS2 SHARED barrier acknowledged by actual BEGIN+SELECT records=2 before writer
+
+
+test unix::real_shared_reader_commit_unknown_retains_exact_capsule_and_class ... ok
+LFCS2 correctness/resource diagnostic: claims=65536/2097152frameB, roots=65536/4128768frameB, claim_pages=570, retired_free_pages=565, final_pages=1836, same_file=Some(NativeIdentity { device: 16777230, inode: 856413782, uid: 501, mode: 33152 }), allocated=Some(16777216), retained_class=16777216; claim native_element=25, wave128=3200B; no speed/global heap/RSS/protected-progress claim
+test unix::maximum_claims_retire_then_maximum_roots_share_one_native_class ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+
+     Running tests/construction_state.rs (core/target/debug/deps/construction_state-c6776b32353acc5f)
+
+running 11 tests
+test unix::release_identity_child ... ok
+test unix::unknown_shared_reader_child ... ok
+test unix::unknown_commit_child ... ok
+LFCS indexed-query diagnostic: ["SEARCH directory_roots USING PRIMARY KEY (key=?)"]
+LFCS indexed-query diagnostic: ["SEARCH directory_roots USING PRIMARY KEY (key<?)"]
+LFCS indexed-query diagnostic: ["SEARCH directory_roots USING PRIMARY KEY (key>? AND key<?)"]
+test unix::indexed_queries_and_real_sql_ownership_preserve_original_error ... ok
+test unix::append_count_and_order_refuse_before_batch_rows_and_keep_typed_failure ... ok
+test unix::owner_admission_and_native_path_authority_refuse_before_effects ... ok
+test unix::explicit_identity_failure_and_restoration_never_authorize_retry ... ok
+test unix::changed_phase_and_borrowed_malformed_rows_fail_closed ... ok
+test unix::byte_limit_empty_and_small_pages_have_exact_eof_and_selected_seal ... ok
+LFCS writer actual runtime: binary=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_state-c6776b32353acc5f version=3.51.0; supplied ScratchAuthority/ScratchSession, no alternate provider
+LFCS reader selected library: /usr/lib/libsqlite3.dylib (compatibility version 9.0.0, current version 358.0.0)
+LFCS reader actual runtime: binary=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_state-c6776b32353acc5f version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; same current executable/provider, READ_ONLY|NOFOLLOW, busy0
+LFCS reader barrier: BEGIN and SELECT acknowledged, SHARED retained until control RELEASE
+LFCS reader completion: ROLLBACK acknowledged and selected connection closed before release acknowledgement
+
+
+test unix::real_failed_commit_keeps_unknown_owner_credit_after_error_handoff ... ok
+LFCS correctness/resource diagnostic: rows=65536, record_bytes=4128768, SQLite_pages=1835, apparent_bytes=7516160, allocated_bytes=16777216, class=16777216; no speed/heap/RSS claim
+test unix::directory_roots_65536_stream_seal_pages_and_native_release ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+

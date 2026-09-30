@@ -15,7 +15,7 @@ use super::prepared::{check_subjects, receive, Received};
 use crate::service::{error::content, read::content::id};
 use layerfs_bridge::contract::*;
 use layerfs_content::filesystem::rows::PreparedBindingUpdate as StreamedUpdate;
-use layerfs_content::filesystem::state::{IndexedState, StateScope};
+use layerfs_content::filesystem::state::{ConstructionScopes, ConstructionState};
 use layerfs_content::filesystem::{root::FilesystemRootId, FilesystemRead, InodeScope};
 use layerfs_content::{
     AuthenticatedObjects, FilesystemObjects, FilesystemResources, FinalizedConsumer,
@@ -42,8 +42,8 @@ pub(crate) fn update(
     provider: &dyn AuthenticatedObjects,
     update: &mut PreparedUpdate<'_>,
     consumer: &mut dyn FinalizedConsumer,
-    state: &mut dyn IndexedState,
-    state_scope: &StateScope,
+    state: &mut dyn ConstructionState,
+    state_scope: &ConstructionScopes,
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<(Root, u64), Failure> {
@@ -84,14 +84,15 @@ pub(crate) fn update(
         resources,
         rows: &rows,
     };
-    let result = layerfs_content::filesystem::update::update_filesystem_binding_rows_with_state(
-        &mut objects,
-        &input,
-        None,
-        state,
-        state_scope,
-        &layerfs_content::filesystem::FilesystemPhases::new(scope),
-    );
+    let result =
+        layerfs_content::filesystem::update::update_filesystem_binding_rows_with_construction_state(
+            &mut objects,
+            &input,
+            None,
+            state,
+            state_scope,
+            &layerfs_content::filesystem::FilesystemPhases::new(scope),
+        );
     let cleaned = rows.cleanup();
     let result = result.map_err(content)?;
     cleaned.map_err(content)?;

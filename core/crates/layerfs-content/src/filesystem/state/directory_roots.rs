@@ -4,7 +4,7 @@ use crate::object::ObjectId;
 
 use super::{
     IndexedState, StateCursor, StateKey, StateLedger, StateRecord, StateScope, StateSeal,
-    STATE_MAX_PAGE_RECORDS,
+    StateTable, STATE_MAX_PAGE_RECORDS,
 };
 
 pub(crate) struct DirectoryRoots<'a> {
@@ -23,6 +23,9 @@ impl<'a> DirectoryRoots<'a> {
         scope: StateScope,
         declared: usize,
     ) -> ContentResult<Self> {
+        if scope.table() != StateTable::DirectoryRoots {
+            return Err(ContentError::InvalidOrderingRecord("state table"));
+        }
         state.capacity(&scope)?.check_requested(declared)?;
         let mut pending = Vec::new();
         pending

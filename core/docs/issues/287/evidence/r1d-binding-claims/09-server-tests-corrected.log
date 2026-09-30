@@ -1,0 +1,113 @@
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.77s
+     Running tests/binding_claims.rs (core/target/debug/deps/binding_claims-a9d7111de02db813)
+
+running 2 tests
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC direct-legacy selected-provider Stage: duplicate257 repeatsclaim1 across two128-key windows; InvalidInput known, priorStage/base preserved and unfinishedSave/scratch/spool removed; no fallback/retry/performance admission.
+test duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cleanup ... ok
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC direct-legacy selected-provider Stage: claims257 directories258, one native16MiB owner; external required-phase3 FK held at every actual rootinsert, triggerdepth0 unchanged; known scratch/spool/Save cleanup. Provider proof separately owns exactemptyphase3; no heap/physical/progress/speed admission.
+test stage_with_257_exclusive_directories_retires_claims_before_first_root_insert ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+
+     Running tests/catalog_admission.rs (core/target/debug/deps/catalog_admission-ca6d7075056c0650)
+
+running 8 tests
+test server_scratch_unknown_child ... ok
+test catalog_grants_read_only_authority_and_wrong_prepared_scope_refuse_before_save ... ok
+test aliases_share_one_catalog_allowance_and_distinct_provider_cells_keep_their_own ... ok
+test declared_directory_state_over_capacity_refuses_before_scratch_save_or_body ... ok
+test scratch_parent_refusal_precedes_save_and_body_without_a_hidden_retry ... ok
+test real_catalog_contention_and_range_exhaustion_preserve_allocator_and_content ... ok
+Server scratch proof selected SQLite: binary=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/catalog_admission-ca6d7075056c0650 library=/usr/lib/libsqlite3.dylib
+Server provider lock acknowledged: {"access": "READ_ONLY|NOFOLLOW", "barrier": "BEGIN+SELECT records=0/sealed=0, SHARED held", "busy_ms": 0, "library": "/usr/lib/libsqlite3.dylib", "mode": "read", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+Server source gate proof: persistedSave=1, nativeScratch16MiB=1, BEGIN+SELECT scratchSHARED acknowledged, storeLocked=false; body not yet released
+Server independent fixture grammar: candidate_objects=3, candidate_canonical_bytes=486, one68-byte directory leaf before scratchappend; actual Store thresholds objects=512, canonical_bytes=4194303
+Server scratch failure proof: Provider unknown=true cleanup=None history=None; activeSave=0 before external lock release
+Server provider lock completion: {"access": "READ_ONLY|NOFOLLOW", "barrier": "BEGIN+SELECT records=0/sealed=0, SHARED held", "busy_ms": 0, "completion": "ROLLBACK acknowledged, exact selected connection closed", "library": "/usr/lib/libsqlite3.dylib", "mode": "read", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+Server publication proof: C5Stage absent, Branch unchanged, two independent finished-file roots/bytes intact, retained scratch identity=(16777230, 856417258, 501, 33152, 1, 16777216); no query-based Unknown adoption or speed/resource admission
+
+Server scratch proof selected SQLite: binary=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/catalog_admission-ca6d7075056c0650 library=/usr/lib/libsqlite3.dylib
+Server provider lock acknowledged: {"access": "READ_ONLY|NOFOLLOW", "barrier": "BEGIN+SELECT records=0/sealed=0, SHARED held", "busy_ms": 0, "library": "/usr/lib/libsqlite3.dylib", "mode": "read", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+Server provider lock acknowledged: {"access": "READ_WRITE|NOFOLLOW", "barrier": "BEGIN IMMEDIATE+SELECT activeSave=1, RESERVED held", "busy_ms": 0, "library": "/usr/lib/libsqlite3.dylib", "mode": "write", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+Server source gate proof: persistedSave=1, nativeScratch16MiB=1, BEGIN+SELECT scratchSHARED acknowledged, storeLocked=true; body not yet released
+Server independent fixture grammar: candidate_objects=3, candidate_canonical_bytes=486, one68-byte directory leaf before scratchappend; actual Store thresholds objects=512, canonical_bytes=4194303
+Server scratch failure proof: Provider unknown=true cleanup=Some(Ownership) history=None; activeSave=1 before external lock release
+Server provider lock completion: {"access": "READ_WRITE|NOFOLLOW", "barrier": "BEGIN IMMEDIATE+SELECT activeSave=1, RESERVED held", "busy_ms": 0, "completion": "ROLLBACK acknowledged, exact selected connection closed", "library": "/usr/lib/libsqlite3.dylib", "mode": "write", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+Server provider lock completion: {"access": "READ_ONLY|NOFOLLOW", "barrier": "BEGIN+SELECT records=0/sealed=0, SHARED held", "busy_ms": 0, "completion": "ROLLBACK acknowledged, exact selected connection closed", "library": "/usr/lib/libsqlite3.dylib", "mode": "read", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+Server publication proof: C5Stage absent, Branch unchanged, two independent finished-file roots/bytes intact, retained scratch identity=(16777230, 856417275, 501, 33152, 1, 16777216); no query-based Unknown adoption or speed/resource admission
+
+test scratch_unknown_preserves_publication_and_reports_owned_save_cleanup ... ok
+test allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.21s
+
+     Running tests/history.rs (core/target/debug/deps/history-ac27a3eea255cde9)
+
+running 28 tests
+test encoded_record_widths_match_the_catalog_bounds ... ok
+test inode_reservations_are_scope_wide_and_never_recycled ... ok
+test history_profile_and_opcode_must_agree ... ok
+test legacy_mask_grants_no_history ... ok
+test empty_namespace_initializes_and_reads_back ... ok
+test history_pages_are_bounded_and_cursors_are_bound_to_their_range ... ok
+test daemon_control_is_refused_by_service_even_with_every_store_grant ... ok
+test branch_root_descriptor_validates_content_scope_profile_and_actual_serial ... ok
+test metadata_refusals_preserve_admission_and_never_use_legacy_grants ... ok
+test metadata_only_commands_never_touch_the_content_store ... ok
+test already_published_source_is_up_to_date_before_stale_head_refusal ... ok
+test complete_read_attributes_match_over_authenticated_transport ... ok
+test delayed_discard_token_cannot_consume_a_replacement_stage ... ok
+test multiple_no_change_stages_are_up_to_date ... ok
+test native_import_initialization_builds_a_real_namespace ... ok
+test read_only_reopen_supports_reads_and_refuses_every_mutation ... ok
+test rebasing_by_editing_a_token_is_refused ... ok
+test portable_metadata_update_saves_one_tree_and_preserves_all_generic_roots ... ok
+test empty_and_interleaved_directories_have_real_canonical_pages ... ok
+test disjoint_file_edits_still_refuse_stale_publication_without_merging ... ok
+test native_import_gives_each_file_its_own_content_root ... ok
+test refreshed_stack_head_reports_typed_stale_base_on_direct_and_native_routes ... ok
+test stage_commit_add_layer_and_read_back ... ok
+test wrong_role_root_is_refused ... ok
+test stale_loser_retains_its_exact_stage ... ok
+test composite_failure_keeps_acknowledged_stage_distinct_from_absence ... ok
+test native_directory_import_exceeds_bootstrap_and_reads_bytes ... ok
+test native_directory_import_spills_ordering_without_an_entry_cap ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s
+
+     Running tests/prepared_bindings.rs (core/target/debug/deps/prepared_bindings-b3eb61f59abe49cd)
+
+running 6 tests
+test declared_overflow_refuses_without_body_or_new_scratch_and_spool_effects ... ok
+DIAGNOSTIC direct-legacy name-receive names=15 body_bytes=343 read_calls=49 maximum_read=12 allocation_calls=30 maximum_single_rust_allocation=12 native_spools=1 removed=true
+DIAGNOSTIC direct-legacy name-receive names=16 body_bytes=365 read_calls=52 maximum_read=12 allocation_calls=32 maximum_single_rust_allocation=12 native_spools=1 removed=true
+DIAGNOSTIC direct-legacy name-receive names=17 body_bytes=387 read_calls=55 maximum_read=12 allocation_calls=34 maximum_single_rust_allocation=12 native_spools=1 removed=true
+DIAGNOSTIC direct-legacy name-receive names=127 body_bytes=2807 read_calls=385 maximum_read=12 allocation_calls=254 maximum_single_rust_allocation=12 native_spools=1 removed=true
+DIAGNOSTIC direct-legacy name-receive names=128 body_bytes=2829 read_calls=388 maximum_read=12 allocation_calls=256 maximum_single_rust_allocation=12 native_spools=1 removed=true
+DIAGNOSTIC direct-legacy name-receive names=129 body_bytes=3094 read_calls=391 maximum_read=255 allocation_calls=258 maximum_single_rust_allocation=255 native_spools=1 removed=true
+DIAGNOSTIC direct-legacy name-receive names=1024 body_bytes=22541 read_calls=3076 maximum_read=12 allocation_calls=2048 maximum_single_rust_allocation=12 native_spools=1 removed=true
+DIAGNOSTIC direct-legacy name-receive names=4088 body_bytes=89949 read_calls=12268 maximum_read=12 allocation_calls=8176 maximum_single_rust_allocation=12 native_spools=1 removed=true
+DIAGNOSTIC direct-legacy name-receive names=4096 body_bytes=90125 read_calls=12292 maximum_read=12 allocation_calls=8192 maximum_single_rust_allocation=12 native_spools=1 removed=true
+DIAGNOSTIC direct-legacy name-receive names=4097 body_bytes=90147 read_calls=12295 maximum_read=12 allocation_calls=8194 maximum_single_rust_allocation=12 native_spools=1 removed=true
+DIAGNOSTIC direct-legacy name-receive names=4120 body_bytes=90653 read_calls=12364 maximum_read=12 allocation_calls=8240 maximum_single_rust_allocation=12 native_spools=1 removed=true
+test wide_alias_stages_keep_exact_names_refs_base_bytes_and_bounded_name_receive ... ok
+test tombstone_and_unmentioned_names_preserve_distinct_alias_effects ... ok
+test malformed_global_eof_count_order_and_name_width_keep_the_prior_exact_stage ... ok
+test empty_maintained_row_and_real_empty_declaration_complete_without_name_collection ... ok
+test externally_truncated_or_corrupt_owned_spool_fails_before_stage_publication ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.88s
+

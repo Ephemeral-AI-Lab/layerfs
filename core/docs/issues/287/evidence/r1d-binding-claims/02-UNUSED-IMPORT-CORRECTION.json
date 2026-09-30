@@ -1,0 +1,10 @@
+{
+  "cause_evidence": "01-content-tests.log: successful functional suite reported unused ContentError import in binding_claim_codecs.rs:5",
+  "functional_exit": 0,
+  "functional_primary_passed": 97,
+  "correction": "remove only unused ContentError from the external test import; retain ContentResult",
+  "production_change": false,
+  "functional_checks_reused": true,
+  "reason": "warning-only import removal changes no behavior; warning-denying owning Clippy will cover the corrected source",
+  "original_warning_preserved": true
+}

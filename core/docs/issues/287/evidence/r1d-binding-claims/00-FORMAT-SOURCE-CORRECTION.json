@@ -1,0 +1,13 @@
+{
+  "scope": "pre-freeze external test source formatting; no Cargo or functional gate ran",
+  "failed_command": ["rustfmt", "+1.85.1", "--edition", "2021", "core/crates/layerfs-content/tests/binding_claim_validation.rs"],
+  "failed_exit": 1,
+  "failed_stderr": "error: expected at least one digit in exponent\n  --> /Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content/tests/binding_claim_validation.rs:42:4\n   |\n42 | fn 257_exclusive_bindings_use_three_transactions_and_three_verification_pages() {\n   |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nerror: expected identifier, found `257_exclusive_bindings_use_three_transactions_and_three_verification_pages`\n  --> /Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content/tests/binding_claim_validation.rs:42:4\n   |\n42 | fn 257_exclusive_bindings_use_three_transactions_and_three_verification_pages() {\n   |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected identifier",
+  "correction": "rename only the illegal numeric-leading function identifier to wide_exclusive_bindings_use_three_transactions_and_three_verification_pages",
+  "corrected_command": ["rustfmt", "+1.85.1", "--edition", "2021", "core/crates/layerfs-content/tests/binding_claim_validation.rs"],
+  "corrected_exit": 0,
+  "corrected_stdout": "",
+  "corrected_stderr": "",
+  "reported_by": "C1 owning current-thread agent; original formatter output preserved",
+  "unavailable": "no prospectively captured source seal for the invalid pre-freeze identifier; no source hash or functional PASS is inferred"
+}

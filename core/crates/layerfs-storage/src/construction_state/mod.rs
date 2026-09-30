@@ -2,8 +2,13 @@
 
 mod adapter;
 mod authority;
+mod claim_index;
+mod claim_lifecycle;
+mod claim_session;
 mod index;
 mod native;
+mod phased;
+mod plan;
 mod profile;
 mod session;
 mod status;

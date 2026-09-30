@@ -1,0 +1,18 @@
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-server)
+error: spawned process is never `wait()`ed on
+  --> crates/layerfs-storage/tests/support/construction_claim_process.rs:85:25
+   |
+85 |         let mut child = self.child.take().unwrap();
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: consider calling `.wait()`
+   = note: not doing so might leave behind zombie processes
+   = note: see https://doc.rust-lang.org/stable/std/process/struct.Child.html#warning
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#zombie_processes
+   = note: `-D clippy::zombie-processes` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::zombie_processes)]`
+
+error: could not compile `layerfs-storage` (test "construction_claims") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

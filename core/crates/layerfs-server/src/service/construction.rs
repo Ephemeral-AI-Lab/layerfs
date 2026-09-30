@@ -78,9 +78,10 @@ impl Construction {
         context.extend_from_slice(&changes.scope);
         context.extend_from_slice(&changes.root_serial.to_be_bytes());
         authority
-            .begin(
+            .begin_phased(
                 *ObjectId::for_bytes(&context).as_bytes(),
                 changes.totals.directories,
+                changes.totals.names,
             )
             .map_err(storage)
     }

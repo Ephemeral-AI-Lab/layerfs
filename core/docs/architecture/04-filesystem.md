@@ -1,5 +1,18 @@
 # Filesystem trees
 
+> **#287 R1d binding claims:** The source developed against parent
+> `d3a10aadbb7506772552474478b14ef25947c899` supplies a separate typed non-file
+> claim authority to the scalar validator. New construction returns topology
+> without an additions map, uses at most128 pending keys, checks immediate
+> duplicate precedence and verifies the exact ordered claim seal before known
+> retirement. Directory-root construction starts only after that acknowledgement.
+> Legacy public validators retain their additions result explicitly; old
+> construction uses resident topology validation without that unused result map.
+> [Owning contract](../issues/287/R1D-BINDING-CLAIMS-FREEZE.md) fixes distinct
+> key25/value1/frame32/page/seal arithmetic, terminal abandonment and unchanged
+> canonical v1. Other graph/reference populations and engine/physical progress
+> remain open; this is not full R1 admission.
+
 > **#287 R1d scalar prepared input:** Against parent
 > `e977700173af331daf9c92ae9931b1aab7d7775e`, the actual Server/common C1
 > path selects exact scalar directory headers, binding cursors/completion and

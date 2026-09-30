@@ -1,0 +1,21 @@
+{
+  "cause_evidence": "07-server-tests.log: selected SQLite NOFOLLOW open returned14 on owned /var/folders fixture Store pathname; second test body blocked by poisoned test mutex",
+  "cause_observation": {
+    "var_is_symlink": true,
+    "var_target": "private/var",
+    "canonical_folders": "/private/var/folders"
+  },
+  "source": "https://www.sqlite.org/c3ref/open.html",
+  "source_contract": "SQLITE_OPEN_NOFOLLOW does not allow symbolic links in the database filename",
+  "correction": "confirm owned fixture database is a regular non-symlink file and canonicalize its pathname before the single helper SQLite open",
+  "retained_policy": [
+    "same selected SQLite library",
+    "READ_ONLY/READ_WRITE plus NOFOLLOW",
+    "one open attempt, no flag removal/retry/fallback",
+    "production unchanged"
+  ],
+  "reported_failures": 2,
+  "primary_bodies_entered": 1,
+  "second_primary_disposition": "blocked by serial test mutex poison",
+  "other_selected_targets": "not run after first target failed"
+}

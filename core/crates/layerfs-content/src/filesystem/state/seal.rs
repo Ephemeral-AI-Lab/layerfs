@@ -54,6 +54,9 @@ impl StateSeal {
     /// Checks framing, scope and terminal arithmetic against an issued owner.
     /// Callers still compare this seal with the owner's acknowledged exact seal.
     pub fn decode(scope: StateScope, bytes: &[u8]) -> ContentResult<Self> {
+        if scope.table() != super::StateTable::DirectoryRoots {
+            return Err(ContentError::InvalidOrderingRecord("state table"));
+        }
         if bytes.len() != STATE_SEAL_BYTES || bytes[0] != 1 || bytes[1..82] != scope.as_bytes() {
             return Err(ContentError::InvalidOrderingRecord("state seal framing"));
         }
@@ -114,6 +117,9 @@ impl StateLedger {
 
     /// All widths/order/count/bytes and terminal arithmetic precede append effects.
     pub fn validate_append(&self, records: &[StateRecord]) -> ContentResult<()> {
+        if self.scope.table() != super::StateTable::DirectoryRoots {
+            return Err(ContentError::InvalidOrderingRecord("state table"));
+        }
         if records.len() > STATE_MAX_PAGE_RECORDS {
             return Err(ContentError::BoundedCapacityExceeded {
                 what: "indexed_state.append_records",

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use layerfs_content::filesystem::state::{
     PageLimit, StateCapacity, StateKey, StateLedger, StatePage, StateRecord, StateScope, StateSeal,
-    StateSelection,
+    StateSelection, StateTable,
 };
 use layerfs_content::ContentError;
 use rusqlite::Connection;
@@ -14,23 +14,27 @@ use crate::error::{StorageError, StorageResult};
 
 use super::authority::{Shared, Slot};
 use super::native::{NativeFile, RESERVED_BYTES};
+use super::phased::Phased;
+use super::plan::Plan;
 use super::status::{ScratchDisposition, ScratchOwnerStatus, ScratchProfile};
 use super::{index, profile};
 
 pub(crate) struct Resource {
     pub(crate) selection: StateSelection,
-    native: NativeFile,
-    connection: Option<Connection>,
+    pub(crate) native: NativeFile,
+    pub(crate) connection: Option<Connection>,
     header: Option<[u8; 192]>,
     ledger: Option<StateLedger>,
     seal: Option<StateSeal>,
     logical_released: bool,
+    plan: Plan,
+    pub(crate) phased: Option<Phased>,
     pub(crate) release_attempted: bool,
     pub(crate) unknown: Cell<bool>,
 }
 
 impl Resource {
-    pub(crate) fn new(selection: StateSelection, native: NativeFile) -> Self {
+    pub(crate) fn new(selection: StateSelection, native: NativeFile, plan: Plan) -> Self {
         Self {
             selection,
             native,
@@ -39,6 +43,8 @@ impl Resource {
             ledger: None,
             seal: None,
             logical_released: false,
+            plan,
+            phased: None,
             release_attempted: false,
             unknown: Cell::new(false),
         }
@@ -51,6 +57,32 @@ impl Resource {
         unknown: bool,
         retained: bool,
     ) -> ScratchOwnerStatus {
+        let failure = match self
+            .phased
+            .as_ref()
+            .and_then(|state| state.attempt.as_ref())
+        {
+            Some(attempt) => Some(match failure {
+                Some(failure) => format!("{failure}; {}", attempt.description()),
+                None => attempt.description(),
+            }),
+            None => failure,
+        };
+        let failure = match self
+            .phased
+            .as_ref()
+            .and_then(|state| state.proposed_seal.as_ref())
+        {
+            Some((seal, maximum)) => Some(format!(
+                "{}; proposed claim seal: records={}, bytes={}, digest={:?}, maximum={:?}",
+                failure.unwrap_or_default(),
+                seal.records(),
+                seal.encoded_bytes(),
+                seal.digest(),
+                maximum.map(|key| key.serial())
+            )),
+            None => failure,
+        };
         ScratchOwnerStatus {
             token: self.selection.token(),
             selector: *self.selection.selector(),
@@ -69,7 +101,7 @@ impl Resource {
         }
     }
 
-    fn verify(&self) -> StorageResult<&Connection> {
+    pub(crate) fn verify(&self) -> StorageResult<&Connection> {
         if self.unknown.get() || self.native.quarantined || self.release_attempted {
             return Err(StorageError::Integrity(
                 "construction scratch quarantined/ended owner",
@@ -86,14 +118,23 @@ impl Resource {
             ))?,
             self.seal.as_ref(),
         )?;
+        if let Some(phased) = &self.phased {
+            super::claim_index::verify(connection, phased)?;
+        }
         Ok(connection)
     }
 
     fn check_scope(&self, scope: &StateScope) -> StorageResult<()> {
-        if scope.selection() != &self.selection || self.logical_released {
+        if scope.selection() != &self.selection
+            || self.logical_released
+            || scope.table() != StateTable::DirectoryRoots
+        {
             return Err(StorageError::Integrity(
                 "construction scratch scope/phase released",
             ));
+        }
+        if let Some(phased) = &self.phased {
+            phased.check_roots(scope)?;
         }
         if self
             .ledger
@@ -206,6 +247,9 @@ impl ScratchSession {
             resource
                 .unknown
                 .set(resource.unknown.get() || self.quarantined.get());
+            if let Some(phased) = &resource.phased {
+                phased.failed.set(true);
+            }
         }
         if self.description.borrow().is_none() {
             *self.description.borrow_mut() = Some(error.to_string());
@@ -231,7 +275,12 @@ impl ScratchSession {
                 ScratchDisposition::Unknown
             } else if resource.release_attempted {
                 ScratchDisposition::ReleaseFailed
-            } else if self.failed.get() {
+            } else if self.failed.get()
+                || resource
+                    .phased
+                    .as_ref()
+                    .is_some_and(|state| state.failed.get())
+            {
                 ScratchDisposition::Failed
             } else if resource.seal.is_some() {
                 ScratchDisposition::Sealed
@@ -253,7 +302,7 @@ impl ScratchSession {
         Ok(())
     }
 
-    fn finish<T>(&self, result: StorageResult<T>) -> StorageResult<T> {
+    pub(crate) fn finish<T>(&self, result: StorageResult<T>) -> StorageResult<T> {
         if let Err(error) = &result {
             self.note(error);
         }
@@ -296,12 +345,29 @@ impl ScratchSession {
                 resource.selection.selector(),
                 resource.selection.token(),
                 &binding,
+                resource.plan.version(),
             )?;
             resource.header = Some(header);
+            if let Plan::ClaimsThenRoots {
+                directories,
+                bindings,
+            } = resource.plan
+            {
+                resource.phased = Some(Phased::new(&resource.selection, directories, bindings)?);
+            }
             let connection = profile::open(&resource.native.path)?;
             resource.connection = Some(connection);
             resource.native.verify()?;
-            profile::initialize(resource.connection.as_ref().unwrap(), &header)?;
+            let claims = resource
+                .phased
+                .as_ref()
+                .map(|state| state.claims.as_bytes());
+            profile::initialize(
+                resource.connection.as_ref().unwrap(),
+                &header,
+                resource.plan,
+                claims.as_ref(),
+            )?;
             resource.native.verify()?;
             Ok(())
         })();
@@ -339,7 +405,7 @@ impl ScratchSession {
                 .resource
                 .as_ref()
                 .ok_or(StorageError::Integrity("construction scratch released"))?;
-            profile::readback(resource.verify()?)
+            profile::readback(resource.verify()?, resource.plan.version())
         })();
         self.finish(result)
     }
@@ -354,8 +420,8 @@ impl ScratchSession {
             resource.check_scope(scope)?;
             resource.verify()?;
             Ok(StateCapacity::new(
-                profile::ROW_LIMIT,
-                profile::ROW_LIMIT * profile::RECORD_BYTES,
+                resource.plan.root_limit(),
+                resource.plan.root_limit() * profile::RECORD_BYTES,
             )?)
         })())
     }
@@ -382,10 +448,10 @@ impl ScratchSession {
                 .records()
                 .checked_add(records.len() as u64)
                 .ok_or(StorageError::Integrity("construction scratch row overflow"))?;
-            if count > profile::ROW_LIMIT {
+            if count > resource.plan.root_limit() {
                 return Err(StorageError::CapacityExceeded {
                     what: "construction scratch rows",
-                    limit: profile::ROW_LIMIT,
+                    limit: resource.plan.root_limit(),
                     actual: count,
                 });
             }

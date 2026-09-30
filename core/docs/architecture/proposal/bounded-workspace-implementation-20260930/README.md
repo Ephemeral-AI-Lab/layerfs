@@ -12,6 +12,15 @@ The subsequent owner assignment starts implementation under #287. Its
 implementation authority. This packet retains its original research status and
 historical source/evidence; support is recorded at each implementation checkpoint.
 
+The R1d binding-claims source developed after published parent
+`d3a10aadbb7506772552474478b14ef25947c899` now uses distinct typed claim records,
+complete ordered verification and known retirement before directory-root
+construction. [Current contract](../../../issues/287/R1D-BINDING-CLAIMS-FREEZE.md)
+and [delivery/proof scope](../../../issues/287/R1D-BINDING-CLAIMS-DELIVERY.md)
+record actual direct-provider and canonical evidence, unchanged quotas and all
+retained native engine/physical/graph/rollout/#288 gates. Full R1 stays open;
+these implementation facts do not rewrite the research observations below.
+
 The owner requests one deep implementation design combining bounded-memory
 live backing and Commit, targeted optimization/bug fixes, concurrent opaque
 commands and multiple Workspaces. Three subagents research Workspace,

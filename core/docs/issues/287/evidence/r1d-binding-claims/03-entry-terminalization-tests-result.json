@@ -1,0 +1,30 @@
+{
+  "parent": "d3a10aadbb7506772552474478b14ef25947c899",
+  "branch": "codex/issue287-implementation",
+  "worktree": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "binding_claim_validation",
+    "--",
+    "--nocapture"
+  ],
+  "source_scope": "content",
+  "tested_inputs_before_sha256": "587ebc9cb285713b07338cbfe6f6f36752a5e9996b80fe43167c931f95a70020",
+  "seal_method": "sorted relative UTF8 path + NUL + exact filebytes + NUL",
+  "cargo_target_dir": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target",
+  "explicit_rustflags": null,
+  "started_utc": "2026-09-30T21:45:56.629782+00:00",
+  "scope": "implementation contract/provider/count/resource checks; no benchmark/speed/release admission",
+  "wall_seconds": 5.196823125006631,
+  "exit": 0,
+  "tested_inputs_after_sha256": "587ebc9cb285713b07338cbfe6f6f36752a5e9996b80fe43167c931f95a70020",
+  "tested_inputs_unchanged": true
+}
