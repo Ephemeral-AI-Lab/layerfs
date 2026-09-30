@@ -1,6 +1,6 @@
 //! Checked conversion of portable Workspace results into kernel replies.
 use fuser::{Errno, FileAttr, FileType, INodeNo};
-use layerfs_workspace::{NodeAttributes, NodeKind, ServiceCode, WorkspaceError};
+use layerfs_workspace::{BackingStatus, NodeAttributes, NodeKind, ServiceCode, WorkspaceError};
 use std::time::{Duration, UNIX_EPOCH};
 
 pub(crate) fn errno(error: WorkspaceError) -> Errno {
@@ -109,4 +109,15 @@ pub(crate) fn attributes(value: NodeAttributes, root: u64) -> Result<FileAttr, E
         blksize: 4096,
         flags: 0,
     })
+}
+
+/// `statfs` totals and free fragments of 4096 bytes: the Workspace host's
+/// private-backing quota and what write admission would still accept from it.
+pub(crate) fn capacity(backing: BackingStatus) -> Result<(u64, u64), Errno> {
+    let free = backing
+        .quota_bytes
+        .checked_sub(backing.allocated_bytes)
+        .and_then(|free| free.checked_sub(backing.reserved_bytes))
+        .ok_or(Errno::EIO)?;
+    Ok((backing.quota_bytes / 4096, free / 4096))
 }
