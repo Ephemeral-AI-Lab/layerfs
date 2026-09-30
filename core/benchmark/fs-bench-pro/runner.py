@@ -399,7 +399,7 @@ def main():
                   "selected")
         for case in commit.CASES.values():
             print(f"{case.id}\tSDK same-Workspace retained pin\tcommand <= {case.command_budget_ns / 1e9:g} s; separate proof <= 9 s\t"
-                  f"{'fast lane selected' if case.id in commit.SELECTED else 'explicit-only ' + case.role}")
+                  f"{'historical method retired' if case.retired else 'fast lane selected' if case.id in commit.SELECTED else 'explicit-only ' + case.role}")
         for case in native.CASES.values():
             print(f"{case.id}\tnative functional component; command <= 60 s; no SDK time\tselected")
         for name, reason in commit.REMAINING.items():

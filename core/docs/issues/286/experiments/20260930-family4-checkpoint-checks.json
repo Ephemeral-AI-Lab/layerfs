@@ -1,0 +1,86 @@
+{
+  "10240_cause_diagnostic": {
+    "artifact_source": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "403477f5ad40efa8cb26fb4276bd279532353e15463342deaddd6c8908ecfd2d",
+      "product_seal": "0c88a1af7678ec6f64e58e65907d922a4a3f68bbf4c9819cb06fd86c858fe775",
+      "source_commit": "94af0d79b13ea563f8ded6281ca06b625ece73e1",
+      "source_dirty": false,
+      "source_tree": "d4d4cd46e75785ea22f7d598a6a6ec2c8f3e4b4c"
+    },
+    "binary": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/94dded806c83a8a4e6294c52c8c3f6549ec6945aa8745a0e8ce38251a78698b6/inherited_workspace",
+      "sha256": "94dded806c83a8a4e6294c52c8c3f6549ec6945aa8745a0e8ce38251a78698b6"
+    },
+    "cause_lines": [
+      "LFS_C5_FAILURE_CONTEXT v=1 known=true installed_revision=NA class=capacity budget_used=1081884 allocated=4513792 reserved=843776 quota=67108864 active_revision=10241 pages=1100 pins=0"
+    ],
+    "controller_source": "2b1302454 relevant native.py/workspace_write.py byte-matched",
+    "observations": [
+      "PHASE_B_COUNT writes=10240 memory_budget=8388608 commit_ns=2008406584 known_canonical_local_failure=true full_old_new_pin=true retained=true backing=BackingStatus { quota_bytes: 67108864, allocated_bytes: 4513792, reserved_bytes: 843776, payloads: 0, retained_payloads: 0, failed_payloads: 0, routine_scans: 10240, lookup_scans: 0, metadata_reads: 1, metadata_writes: 1, ledger_reads: 4, ledger_writes: 3, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true }"
+    ],
+    "parent_gate_preserved": "r060 expected retained custody PASS",
+    "performance_claim": false,
+    "raw_manifest_sha256": "597f5c13b7bde49539f48cb1de0f92bbd966992d7f375685a5894f2674bc3413",
+    "role": "count-driven exact refusal cause; no latency comparison or replacement gate"
+  },
+  "checks": {
+    "boundary": {
+      "command": "python3 core/tools/check_product_boundary.py",
+      "production_files": 357,
+      "status": "PASS"
+    },
+    "boundary_self_tests": {
+      "command": "python3 core/tools/test_check_product_boundary.py",
+      "status": "PASS",
+      "tests": 7
+    },
+    "fmt": {
+      "command": "cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check",
+      "status": "PASS"
+    },
+    "harness_retired_profile_guard": {
+      "command": "python3 core/benchmark/fs-bench-pro/tests/test_workspace_commit.py",
+      "scope": "new retired-method guard, oracle/selection/custody checks",
+      "status": "PASS",
+      "tests": 4
+    },
+    "host_core_clippy": {
+      "command": "cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --workspace --all-targets -- -D warnings",
+      "log": "issue286-final-core-clippy-r063.log",
+      "sha256": "e71e3c52d0be106fb2a0aed499897cd099a99146f61260b16d627b734dc9b32f",
+      "status": "PASS"
+    },
+    "host_core_tests": {
+      "command": "cargo +1.85.1 test --manifest-path core/Cargo.toml --locked --workspace --all-targets",
+      "ignored_tests": 4,
+      "log": "issue286-final-core-tests-r063.log",
+      "passing_tests": 754,
+      "scope": "host; Linux-gated/optional-live tests do not count as native/Docker execution",
+      "sha256": "c404c6ced4db4515239ff095a5e14b58cb60953d9969df4ba595babeb4c00fe7",
+      "status": "PASS"
+    },
+    "linux_clippy_fixed": {
+      "command": "same Linux Clippy after external formatter uses String/write!",
+      "log": "issue286-final-linux-clippy-fixed-r063.log",
+      "sha256": "4d1a09ddd34109eb262e2d1da304407bbad6db78f7356cec7941200eda83e4f7",
+      "status": "PASS"
+    },
+    "linux_clippy_initial": {
+      "command": "CC_aarch64_unknown_linux_musl=<existing cargo-zigbuild wrapper> cargo +1.85.1 clippy --release --manifest-path core/Cargo.toml --locked --offline --target aarch64-unknown-linux-musl -p layerfs-sdk -p layerfs-storage --features rusqlite/bundled --test inherited_workspace -- -D warnings",
+      "expected": "FAIL: external-test hex format_collect",
+      "log": "issue286-final-linux-clippy-r063.log",
+      "sha256": "c95fb0e4e49a1ff3cb4267fb42713eeb3cf933c7a477a67b4be9aa96134c5760",
+      "status": "FAIL"
+    },
+    "no_aggregate_gate": {
+      "ci": "disabled",
+      "preflight": "not run; permanently retired"
+    }
+  },
+  "native_execution": "r060 +r061; other unaffected native proof reusedr054",
+  "sdk_execution": "r062; unaffected full pin/reordered/stopping proof reusedr051/r056/r058"
+}

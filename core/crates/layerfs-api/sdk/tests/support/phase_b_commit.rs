@@ -8,7 +8,12 @@ fn unhex<const N: usize>(text: &str) -> [u8; N] {
     std::array::from_fn(|index| u8::from_str_radix(&text[index * 2..index * 2 + 2], 16).unwrap())
 }
 fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    use std::fmt::Write as _;
+    let mut text = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(&mut text, "{byte:02x}").unwrap();
+    }
+    text
 }
 pub(super) fn open_prepared(extra: usize, deep: bool) -> Option<(Arc<Server>, Project, [u8; 17])> {
     let directory = std::env::var_os("LAYERFS_PHASE_B_CLONES")?;

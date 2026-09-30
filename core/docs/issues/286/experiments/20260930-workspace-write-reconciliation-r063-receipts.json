@@ -1,0 +1,268 @@
+{
+  "raw_manifest_sha256": "fa2e2b93c69ae855b2843904ef5978f6cc4140c58f26a1c06542dcd41e0d566b",
+  "receipt": {
+    "artifacts": {
+      "benchmark_shell": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ef907c0bdff2d9ade5387e159e78da4c81f3a4634ce56c835e21513709d371b1/benchmark_shell",
+        "sha256": "ef907c0bdff2d9ade5387e159e78da4c81f3a4634ce56c835e21513709d371b1"
+      },
+      "layerfs-daemon": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+        "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+      },
+      "verify_checkpoint5": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/abfbe9f75efa3c0d397a81c4e6eeaf5a9f317737acd068e405eee4b543a60985/verify_checkpoint5",
+        "sha256": "abfbe9f75efa3c0d397a81c4e6eeaf5a9f317737acd068e405eee4b543a60985"
+      }
+    },
+    "cache_contract": "darwin-zero-source-residency-linux-direct-backing-v1",
+    "cache_eligibility_reasons": [],
+    "callback_counts": {
+      "getattr": "3",
+      "lookup": "1",
+      "open": "1",
+      "other": "0",
+      "read": "0",
+      "readdir": "0",
+      "rename": "0",
+      "setattr": "0",
+      "write": "4097"
+    },
+    "cleanup_status": "PASS",
+    "clone": {
+      "history": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-write-reconciliation-check-r063/workspace-write-dispersed-writes-4097-v1/history.sqlite",
+      "store": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-write-reconciliation-check-r063/workspace-write-dispersed-writes-4097-v1/store.sqlite"
+    },
+    "clone_method": "shutil.copyfile independent writable byte copy",
+    "cold_source": {
+      "final_residency": {
+        "history": {
+          "length_bytes": 86016,
+          "page_size_bytes": 16384,
+          "resident_pages": 0,
+          "total_pages": 6
+        },
+        "store": {
+          "length_bytes": 626688,
+          "page_size_bytes": 16384,
+          "resident_pages": 0,
+          "total_pages": 39
+        }
+      },
+      "finished_ns": 6855702235000,
+      "history": {
+        "allocated_bytes": 86016,
+        "invalidated": true,
+        "resident_after": 0,
+        "resident_first": 6,
+        "total_pages": 6
+      },
+      "launch_gap_ns": 83458,
+      "store": {
+        "allocated_bytes": 626688,
+        "invalidated": true,
+        "resident_after": 0,
+        "resident_first": 39,
+        "total_pages": 39
+      }
+    },
+    "device_read_floor_bytes": 641433,
+    "direct_io_source_sha256": {
+      "core/crates/layerfs-fuse/src/adapter.rs": "e361037d9c87ac42dda651e06a708053b999bfa54a69a7e5038a3e1398380fa7",
+      "core/crates/layerfs-workspace/src/backing/segments.rs": "dd2286500231693d0498379f7825af3314cc902f65bdc0b27c122b74b24c735d"
+    },
+    "driver": {
+      "branch_id": "11094cc9de4f7dd10dabd617bb074906e8",
+      "cleanup_ns": 489908709,
+      "commit_called": true,
+      "commit_ns": 558908125,
+      "daemon_log_attempted": true,
+      "daemon_log_bytes": 16049,
+      "daemon_log_error": "None",
+      "daemon_log_truncated": false,
+      "detail": "",
+      "exec_ns": 8286253042,
+      "head_commit": "12a2fb897a0bf9e3a661c59cc72343d3803ba93a5dc92d98f325b45b9870bcab7e",
+      "host_disk_read_bytes": 712704,
+      "mode": "run",
+      "operation_ns": 8845168625,
+      "projection_counts": "lookup=1,getattr=3,read=0,write=4097,readdir=0,open=1,setattr=0,rename=0,other=0",
+      "sandbox_delete_ok": true,
+      "scenario_id": "workspace-write-dispersed-writes-4097-v1",
+      "schema": "issue243-shell-driver-v1",
+      "status": "COMPLETE",
+      "unmount_ok": true
+    },
+    "family_id": "workspace_write",
+    "functional_status": "PASS",
+    "host_disk_read_bytes": 712704,
+    "image_id": "sha256:aa7b881cfef24476909fa7e9d65838a715dd0cb7a5d4b752eeb88b73452fb86a",
+    "lft1": {
+      "event_count": 58,
+      "operation": {
+        "clock": "local-monitor",
+        "closed_ns": 9165367834,
+        "concurrency": 2,
+        "cpu_shared_ns": [
+          290590000,
+          152539000
+        ],
+        "first_ns": 310749834,
+        "gaps": 0,
+        "incarnation": 164536859311,
+        "key": 243000,
+        "kind": "operation",
+        "largest_gap_ns": 12493625,
+        "last_ns": 9162169375,
+        "last_probe_ns": 2875,
+        "namespace": 7,
+        "opened_ns": 320200834,
+        "pid": 27237,
+        "resource_status": "sampled",
+        "role": 1,
+        "run": "f18ba07546294e77922931d3567060b1",
+        "sampled_max_rss": 36323328,
+        "samples": 886,
+        "scope": "process-shared",
+        "selected": 3,
+        "source": "getrusage+libproc",
+        "success": true,
+        "timing": {
+          "children": [
+            {
+              "children": [],
+              "elapsed_ns": 8286253459,
+              "name": "exec"
+            },
+            {
+              "children": [],
+              "elapsed_ns": 558908542,
+              "name": "commit"
+            }
+          ],
+          "elapsed_ns": 8845165417,
+          "name": "sdk.shell_package"
+        },
+        "v": 1
+      },
+      "operation_event_count": 1
+    },
+    "master": {
+      "branch_id": "11094cc9de4f7dd10dabd617bb074906e8",
+      "genesis_layer": "326a560e44b5fe83f523a19227fd2b166dc2553eef53ab43a04416c94644829143",
+      "genesis_root": "91f1706b248c3da05e1acfa8a53b83cd2cb0954b3b4b03609aa711c6dd0ed5d0",
+      "genesis_root_serial": 1,
+      "history_sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19",
+      "old_commit": "12c0b3b66db8c63d5cc068e8d96c22e545e70a70633dc81b813bfbfcc44a3a62a7",
+      "path": "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/fourhop-patterns-prepared-v1/master",
+      "prepared": "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/fourhop-patterns-prepared-v1/prepared.json",
+      "project_id": "31bf50228be038338dd77c4822bf4f886d",
+      "proof_sha256": "d2f535e0a405eca68746b7968350118b85ddbe69b95a66416a38238a7da5f6c0",
+      "store_sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+    },
+    "new_manifest_sha256": "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7",
+    "numeric_cache_assessment": {
+      "reason": "Commit cache domain is not proved by cold host source plus private direct I/O",
+      "status": "INELIGIBLE"
+    },
+    "numeric_latency_status": "INELIGIBLE",
+    "old_manifest_sha256": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927",
+    "operation_surface": "public WorkspaceApi mount/exec/commit; ordinary POSIX-FUSE writer",
+    "pattern": "dispersed",
+    "performance": {
+      "command": [
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ef907c0bdff2d9ade5387e159e78da4c81f3a4634ce56c835e21513709d371b1/benchmark_shell",
+        "run",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-write-reconciliation-check-r063/workspace-write-dispersed-writes-4097-v1/case.before",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-write-reconciliation-check-r063/workspace-write-dispersed-writes-4097-v1/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-write-reconciliation-check-r063/workspace-write-dispersed-writes-4097-v1/history.sqlite",
+        "sha256:aa7b881cfef24476909fa7e9d65838a715dd0cb7a5d4b752eeb88b73452fb86a"
+      ],
+      "exit_code": 0,
+      "started_ns": 6855702318458,
+      "stderr_sha256": "ebf51f743ba815af881353b8449ba89f30cc572974d82fa98595265806f1a800",
+      "stdout_sha256": "bc69972c685d52e46bd94f3baec24d86e22eafd56a3ec6749d19501ab500309e",
+      "timeout": false,
+      "wall_ns": 9768942167
+    },
+    "performance_budget_ns": 25000000000,
+    "performance_budget_status": "PASS",
+    "route_status": "PASS",
+    "row_status": "INELIGIBLE",
+    "sample_count": 1,
+    "scenario_id": "workspace-write-dispersed-writes-4097-v1",
+    "schema": "core-workspace-write-attempt-v1",
+    "shell_command": "/fixtures/bin/write-separated dispersed data.bin 4097",
+    "source": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "0fdfbb32cbaeb2d07447f83d5d51a2b44849b7d1b3115baa1a2ae50cf9c29a49",
+      "product_seal": "0c88a1af7678ec6f64e58e65907d922a4a3f68bbf4c9819cb06fd86c858fe775",
+      "source_commit": "2b1302454ed78f19ba82814d8005276f2f33f2d4",
+      "source_dirty": false,
+      "source_tree": "ede7f58b3e23ce6cb7d4ca50991d6af13db061c0"
+    },
+    "source_cache_status": "PASS",
+    "verification": {
+      "child": {
+        "advanced": true,
+        "head_commit": "12a2fb897a0bf9e3a661c59cc72343d3803ba93a5dc92d98f325b45b9870bcab7e",
+        "new_bytes": 10485760,
+        "new_files": 1,
+        "new_paths": 2,
+        "old_bytes": 10485760,
+        "old_commit": "12c0b3b66db8c63d5cc068e8d96c22e545e70a70633dc81b813bfbfcc44a3a62a7",
+        "old_files": 1,
+        "old_paths": 2,
+        "oracle": "issue273-checkpoint5-v1",
+        "pattern_runs": 4097,
+        "separated_runs": null,
+        "status": "PASS"
+      },
+      "command": [
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/abfbe9f75efa3c0d397a81c4e6eeaf5a9f317737acd068e405eee4b543a60985/verify_checkpoint5",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-write-reconciliation-check-r063/workspace-write-dispersed-writes-4097-v1/case.verify",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-write-reconciliation-check-r063/workspace-write-dispersed-writes-4097-v1/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-write-reconciliation-check-r063/workspace-write-dispersed-writes-4097-v1/history.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-write-reconciliation-check-r063/old.tsv",
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-write-reconciliation-check-r063/workspace-write-dispersed-writes-4097-v1.tsv"
+      ],
+      "exit_code": 0,
+      "started_ns": 6865472595041,
+      "status": "PASS",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "93b52360f38ba69460869b779349f714900abaea42475a4a2b6ba1346def0647",
+      "timeout": false,
+      "wall_ns": 120278917
+    },
+    "verification_budget_ns": 9000000000,
+    "writes": 4097
+  },
+  "run": {
+    "identity": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "0fdfbb32cbaeb2d07447f83d5d51a2b44849b7d1b3115baa1a2ae50cf9c29a49",
+      "product_seal": "0c88a1af7678ec6f64e58e65907d922a4a3f68bbf4c9819cb06fd86c858fe775",
+      "source_commit": "2b1302454ed78f19ba82814d8005276f2f33f2d4",
+      "source_dirty": false,
+      "source_tree": "ede7f58b3e23ce6cb7d4ca50991d6af13db061c0"
+    },
+    "rows": [
+      {
+        "row_status": "INELIGIBLE",
+        "scenario_id": "workspace-write-dispersed-writes-4097-v1"
+      }
+    ],
+    "schema": "core-workspace-write-run-v1",
+    "selected": [
+      "workspace-write-dispersed-writes-4097-v1"
+    ],
+    "selection": "workspace-write-dispersed-writes-4097-v1",
+    "status": "FUNCTIONAL_PASS_NUMERIC_INELIGIBLE"
+  }
+}

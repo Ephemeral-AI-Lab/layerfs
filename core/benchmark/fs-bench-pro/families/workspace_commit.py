@@ -26,6 +26,7 @@ class Case:
     role: str = "performance-diagnostic"
     stopping: bool = False
     reordered: bool = False
+    retired: bool = False
 
 
 CASES = {case.id: case for case in (
@@ -39,7 +40,7 @@ CASES = {case.id: case for case in (
          "/fixtures/bin/write-separated data.bin 1", 1, False,
          command_budget_ns=60_000_000_000, pin_read_bytes=31_744, role="functional-oracle"),
     Case("workspace-commit-sdk-stopping-refusal-v1", "held FD/readiness and release FIFOs", 0, True,
-         command_budget_ns=15_000_000_000, role="functional-oracle", stopping=True),
+         command_budget_ns=15_000_000_000, role="functional-oracle", stopping=True, retired=True),
     Case("workspace-commit-sdk-stopping-refusal-fixture-release-v2", "held FD; outside-Workspace fixture-controller release", 0, True,
          command_budget_ns=15_000_000_000, role="functional-oracle", stopping=True),
     Case("workspace-commit-sdk-reordered-base-copy-8kib-v1",
@@ -48,15 +49,15 @@ CASES = {case.id: case for case in (
 )}
 SELECTED = tuple(name for name in CASES if name.endswith("-v3"))
 REMAINING = {
-    "issue273-clean-commit-v1": "historical committed/reattached control cannot hold its live private journal; use distinct v2 scenario",
-    "issue273-one-edit-commit-v1": "historical committed/reattached control cannot hold its live private journal; use distinct v2 scenario",
-    "workspace-commit-full-lowering-size-64mib-v1": "native 64 MiB/eight-literal-byte lowering proof pending",
-    "workspace-commit-stage-headroom-quota-2mib-v1": "occupied Stage/same-fund allocation and refund proof pending",
-    "workspace-commit-headroom-quota-4mib-v1": "occupied Commit/same-fund allocation and refund proof pending",
-    "workspace-commit-reordered-base-copy-v1": "public SDK old/new/G2/pinned-byte copy proof pending",
-    "workspace-commit-live-g1-g2-v1": "deterministic live successor/known Commit proof pending",
-    "workspace-commit-known-unknown-local-c5-v1": "source-matched failure custody proof pending",
-    "workspace-commit-sdk-stopping-refusal-v1": "deterministic live SDK stopping/refusal proof pending",
+    "issue273-clean-commit-v1": "original historical profile NOT_RUN; retained live v3 control PASS r062, no old-ID promotion",
+    "issue273-one-edit-commit-v1": "original historical profile NOT_RUN; retained live v3 control PASS r062, no old-ID promotion",
+    "workspace-commit-full-lowering-size-64mib-v1": "original profile NOT_RUN; integrated native-v2 full-byte proof PASS r061",
+    "workspace-commit-stage-headroom-quota-2mib-v1": "original profile NOT_RUN; integrated native-v2 occupied/same-fund custody proof PASS r054, unaffected reuse",
+    "workspace-commit-headroom-quota-4mib-v1": "original profile NOT_RUN; integrated native-v2 occupied/refund/cleanup proof PASS r061",
+    "workspace-commit-reordered-base-copy-v1": "original profile NOT_RUN; separate native-v2 normalization PASS r061 and public SDK full copy/pin PASS r056",
+    "workspace-commit-live-g1-g2-v1": "original profile NOT_RUN; integrated native-v2 deterministic live successor proof PASS r061",
+    "workspace-commit-known-unknown-local-c5-v1": "original profile NOT_RUN; native known/unknown custody PASS r054, same-selector local-C5 resume PASS r061",
+    "workspace-commit-sdk-stopping-refusal-v1": "immutable v1 FAIL r055/r057; distinct fixture-release-v2 stopping/refusal and cleanup PASS r058, unaffected reuse",
 }
 
 
@@ -165,6 +166,18 @@ def run(selection, output, common):
     summary = {"schema": "core-workspace-commit-fast-run-v2", "profile": PROFILE,
                "selected": list(selected), "identity": identity, "status": "INCOMPLETE", "rows": [],
                "earlier_family_policy": "reuse unaffected evidence; no automatic earlier-family benchmark runs"}
+    if any(CASES[name].retired for name in selected):
+        for name in selected:
+            folder = out / name
+            folder.mkdir()
+            row = {"case": name, "status": "NOT_RUN", "sample_count": 0,
+                   "reason": "historical method requires its archived source/artifact; current driver uses distinct fixture-release-v2"}
+            write.save(folder / "receipt.json", row)
+            summary["rows"].append({"case": name, "status": "NOT_RUN"})
+        summary["remaining"] = REMAINING
+        write.save(out / "run.json", summary)
+        common.manifest_run(out)
+        return out
     try:
         with (common.RESULTS / ".run.lock").open("a+b") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

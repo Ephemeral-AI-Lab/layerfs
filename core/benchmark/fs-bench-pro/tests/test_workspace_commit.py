@@ -1,5 +1,9 @@
 """Independent retained-control oracle and fast-lane registry."""
 import hashlib
+import json
+import tempfile
+from types import SimpleNamespace
+from unittest.mock import patch
 from pathlib import Path
 import sys
 import unittest
@@ -24,6 +28,18 @@ class WorkspaceCommit(unittest.TestCase):
         retained[:8192], retained[1 << 20:(1 << 20) + 8192] = second, first
         self.assertIn(hashlib.sha256(retained).hexdigest(), manifests["workspace-commit-sdk-reordered-base-copy-8kib-v1"])
         self.assertEqual(manifests["workspace-commit-sdk-stopping-refusal-v1"], manifests["baseline"])
+
+    def test_historical_stopping_cannot_use_new_controller_method(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            out = Path(temporary) / "retained"
+            common = SimpleNamespace(owned=lambda path: out,
+                                     identities=lambda: {"source_dirty": False},
+                                     manifest_run=lambda path: None)
+            with patch.object(commit.write, "build", side_effect=AssertionError("retired method must not build")):
+                commit.run("workspace-commit-sdk-stopping-refusal-v1", str(out), common)
+            self.assertEqual(json.loads((out / "run.json").read_text())["rows"][0]["status"], "NOT_RUN")
+            receipt = json.loads((out / "workspace-commit-sdk-stopping-refusal-v1/receipt.json").read_text())
+            self.assertEqual(receipt["sample_count"], 0)
 
     def test_live_retained_oracles_and_limits(self):
         manifests, pin = commit.oracle()
