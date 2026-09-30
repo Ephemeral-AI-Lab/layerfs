@@ -451,3 +451,11 @@ The r044 cache correction was published in [#286 comment5901691380](https://gith
 | Round | Family / selection | Measured source | Results / required gates | Report | Next action |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-workspace-commit-fast-r048 | SDK clean then one-edit retained 4097-write controls v2 | `13a9273d8` | **FAIL / NOT_RUN**: clean outer command15.006 s timeout at unchanged15 s, no final SDK receipt, full pin digest incomplete53/640 reads, product cleanup UNKNOWN; separate external cleanup PASS. One-edit stopped before invocation. Verifier SKIPPED, numeric INELIGIBLE. | [Report](experiments/20260930-workspace-commit-fast-r048.md), [compact evidence](experiments/20260930-workspace-commit-fast-r048-receipts.json) | Separate full pin oracle from fast performance in a prospectively versioned profile, preserve all15/60/9 s bounds and earlier-family proof reuse |
+
+## Family 4 v3 fast controls and retained proof r049
+
+R048 was published in [#286 comment5901873223](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5901873223). New profile/fix commit `9bdc11dc1` prospectively separates full pin bytes into a distinct functional selection, keeping both fast controls at 15 s. No earlier-family benchmark reran.
+
+| Round | Selection | Measured source | Outcomes | Report | Next action |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-workspace-commit-fast-r049 + separate proof | SDK clean then one-edit retained controls v3, one attempt each; proof reads retained outputs without performance replay | `9bdc11dc1` | Clean **COMPLETE_DIAGNOSTIC**: full13.957 s<15 s, final Exec1.507 ms/Commit5.884 ms known UpToDate, held lease/release/cleanup PASS; independent old/new canonical proof **PASS**103.849 ms<9 s, full pin bytes SKIPPED. One-edit **FAIL**123.118 ms at create InvalidInput from overlong label, no owned resource, proof NOT_RUN. Numeric INELIGIBLE. | [Report](experiments/20260930-workspace-commit-fast-r049.md), [compact receipts](experiments/20260930-workspace-commit-fast-r049-receipts.json) | Bounded shared label fix; rerun only refused one-edit at new driver identity; reuse clean proof and all unchanged earlier-family evidence |

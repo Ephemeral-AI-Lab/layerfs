@@ -64,6 +64,13 @@ def control_line(stdout):
     return json.loads(lines[0]) if len(lines) == 1 else None
 
 
+def cleanup_complete(driver, control, stderr):
+    if driver and driver.get("stage") == "sandbox_create" and driver.get("resources_owned") is False:
+        return True
+    return bool(driver and driver.get("unmount_ok") and driver.get("sandbox_delete_ok")
+                and control and control.get("pin_release_ok") and b"sandbox shutdown retained" not in stderr)
+
+
 def attempt(out, case, prepared, pin_sha):
     from shell_package import case_spec
 
@@ -95,8 +102,8 @@ def attempt(out, case, prepared, pin_sha):
     driver, control = write.receipt_line(stdout), control_line(stdout)
     counts = dict(item.split("=", 1) for item in (driver or {}).get("projection_counts", "").split(",")
                   if "=" in item)
-    cleanup = bool(driver and driver.get("unmount_ok") and driver.get("sandbox_delete_ok")
-                   and control and control.get("pin_release_ok") and b"sandbox shutdown retained" not in stderr)
+    no_owned_resource = bool(driver and driver.get("stage") == "sandbox_create" and driver.get("resources_owned") is False)
+    cleanup = cleanup_complete(driver, control, stderr)
     route = bool(driver and control and driver.get("commit_called")
                  and int(counts.get("write", -1)) == 4097 + case.final_writes
                  and bool(control.get("up_to_date")) == case.clean
@@ -120,6 +127,7 @@ def attempt(out, case, prepared, pin_sha):
            "route_status": "PASS" if route else "FAIL", "pin_status": "PASS" if pin else "FAIL",
            "pin_verification_status": "PASS" if case.pin_read_bytes and full_pin else "FAIL" if case.pin_read_bytes else "SKIPPED",
            "pin_oracle_sha256": pin_sha, "cleanup_status": "PASS" if cleanup else "UNKNOWN" if perf["timeout"] else "FAIL",
+           "cleanup_scope": "no resource admitted" if no_owned_resource else "checked lease release, unmount and SDK delete",
            "verification": {"status": "SKIPPED", "reason": "fast lane; prove retained Stores separately without performance replay"},
            "functional_status": "INCOMPLETE", "performance_claim": False,
            "cache_contract": "host/container cache uncontrolled; whole Commit cache domain unproved",

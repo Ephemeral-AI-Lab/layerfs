@@ -9,6 +9,11 @@ from families import workspace_commit as commit
 
 
 class WorkspaceCommit(unittest.TestCase):
+    def test_refusal_before_ownership_needs_no_invented_delete(self):
+        self.assertTrue(commit.cleanup_complete({"stage": "sandbox_create", "resources_owned": False}, None, b""))
+        self.assertFalse(commit.cleanup_complete({"stage": "sandbox_create", "resources_owned": True}, None, b""))
+        self.assertFalse(commit.cleanup_complete(None, None, b""))
+
     def test_live_retained_oracles_and_limits(self):
         manifests, pin = commit.oracle()
         self.assertEqual(len(commit.SELECTED), 2)

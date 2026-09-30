@@ -221,15 +221,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sandbox = match sandboxes.create(
         &args[5],
         &format!(
-            "shell243-{}-{}",
-            case.get("scenario_id")?,
+            "bench-{}-{}",
+            hex(&Sha256::digest(case.get("scenario_id")?.as_bytes())[..8]),
             std::process::id()
         ),
     ) {
         Ok(value) => value,
         Err(error) => {
+            let resources_owned = error.sandbox.is_some();
             let cleanup = error.sandbox.map(|id| sandboxes.delete(id));
-            println!("RECEIPT\t{{\"status\":\"FAIL\",\"stage\":\"sandbox_create\",\"detail\":{:?},\"sandbox_delete_ok\":{}}}", format!("{error:?}"), cleanup.as_ref().is_some_and(Result::is_ok));
+            println!("RECEIPT\t{{\"status\":\"FAIL\",\"stage\":\"sandbox_create\",\"detail\":{:?},\"resources_owned\":{resources_owned},\"sandbox_delete_attempted\":{resources_owned},\"sandbox_delete_ok\":{}}}", format!("{error:?}"), cleanup.as_ref().is_none_or(Result::is_ok));
             drop(owner);
             server.shutdown();
             return Err("sandbox create".into());
