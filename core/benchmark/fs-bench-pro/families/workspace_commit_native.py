@@ -25,6 +25,7 @@ class Case:
     budget_ns: int = 60_000_000_000
     ignored: bool = False
     owner_deferred: bool = False
+    environment: tuple[tuple[str, str], ...] = ()
 
 
 CASES = {case.id: case for case in (

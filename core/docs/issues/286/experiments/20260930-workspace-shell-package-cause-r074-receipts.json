@@ -1,0 +1,21 @@
+{
+  "schema": "issue286-entrypoint-setup-failure-v1",
+  "source_commit": "c4b802484785b618876f94f9a23e8d79fdc7c7ae",
+  "source_tree": "f5dc5510546ccc432f97b1406d011bd247443bb0",
+  "case": "workspace-shell-package-many-1025-cause-diagnostic-v1",
+  "status": "INCOMPLETE",
+  "sample_count": 0,
+  "measurement": "NOT_RUN",
+  "resource_acquisition": false,
+  "error": "TypeError: Case.__init__() got an unexpected keyword argument 'environment'",
+  "command": [
+    "python3",
+    "core/benchmark/fs-bench-pro/runner.py",
+    "run",
+    "--case",
+    "workspace-shell-package-many-1025-cause-diagnostic-v1",
+    "--out",
+    "benchmark-results/fs-bench-pro/issue286-workspace-shell-package-cause-r074"
+  ],
+  "raw_manifest_sha256": "b55c317484b64c22795e56f00fb75f4d57cb60c6e0854d859cb0fce3e30880da"
+}

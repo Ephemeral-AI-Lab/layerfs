@@ -533,3 +533,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family7 SDK tail r073
 
 [1025 TIMEOUT/FAIL,retained129 NOT_RUN](experiments/20260930-workspace-shell-package-sdk-tail-r073.md). Progress fixes5s delivery loss, but Commit returns error after9.387s; cleanup pushes complete25.008s past25s and final typed receipt is absent. Retained matched daemon/private state archived before external owned teardown. Next count-driven native1025 diagnostic/typed physical custody, plus example interim outcome logging; no unchanged SDK resample/timeout lift. Passing six r071/r072 custody proofs remain reused; production135672 unchanged.
+
+## Family7 cause setup r074
+
+[INCOMPLETE before acquisition; sample NOT_RUN](experiments/20260930-workspace-shell-package-cause-r074.md). Registry passes environment to native Case but its dataclass does not declare the existing optional invocation field. Add default empty field/guard imports, then first diagnostic child at changed harness r075. No product measurement/resource/new limits, original SDK failures preserved; production delta0.
