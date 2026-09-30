@@ -1,0 +1,291 @@
+{
+  "diagnostic": {
+    "container-cleanup.json": {
+      "command": [
+        "docker",
+        "rm",
+        "-f",
+        "issue286-native-permissions-r052"
+      ],
+      "exit_code": 0,
+      "started_ns": 5176713210250,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "6653083427aa44e58a24a9c07e1dbb9f120f0655eca3b358915c2a0b8ce077e4",
+      "timeout": false,
+      "wall_ns": 132797458
+    },
+    "copy.json": {
+      "command": [
+        "docker",
+        "cp",
+        "benchmark-results/fs-bench-pro/issue286-workspace-commit-native-r052/workspace-commit-full-lowering-size-64mib-native-v2/clone-0",
+        "issue286-native-permissions-r052:/work/"
+      ],
+      "exit_code": 0,
+      "started_ns": 5176623598750,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "timeout": false,
+      "wall_ns": 27465625
+    },
+    "create.json": {
+      "command": [
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        "issue286-native-permissions-r052",
+        "--mount",
+        "type=volume,source=issue286-native-permissions-r052-backing,target=/work",
+        "alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+        "sleep",
+        "120"
+      ],
+      "exit_code": 0,
+      "started_ns": 5176462603458,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "fe0aa2867f5b9477818c85e09dce265beefb1869c767aef9466cdaa0739a780d",
+      "timeout": false,
+      "wall_ns": 160202833
+    },
+    "permissions.json": {
+      "command": [
+        "docker",
+        "exec",
+        "issue286-native-permissions-r052",
+        "stat",
+        "-c",
+        "%n %u %g %a",
+        "/",
+        "/work",
+        "/work/clone-0"
+      ],
+      "exit_code": 0,
+      "started_ns": 5176651603000,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "05e15bf4b874ac7c86362cae9a86b8291b452dc6212600d1e8f1d488a88d6ea3",
+      "timeout": false,
+      "wall_ns": 60972791
+    },
+    "volume-cleanup.json": {
+      "command": [
+        "docker",
+        "volume",
+        "rm",
+        "issue286-native-permissions-r052-backing"
+      ],
+      "exit_code": 0,
+      "started_ns": 5176846644166,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "af90d44b1fa463739afb87caf4d5b8db2308a5e19d46c98ede64b7490b038143",
+      "timeout": false,
+      "wall_ns": 21482875
+    }
+  },
+  "diagnostic_observation": "/ 0 0 755; /work 0 0 755; /work/clone-0 501 20 755",
+  "failure_stderr": "\nthread 'phase_b_commit::full_lowering_64mib' panicked at crates/layerfs-api/sdk/tests/inherited_workspace.rs:221:14:\ncalled `Result::unwrap()` on an `Err` value: Denied\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+  "failure_stdout": "\nrunning 1 test\ntest phase_b_commit::full_lowering_64mib ... PHASE_B_FIXTURE clone=/work/workspace-commit-full-lowering-size-64mib-native-v2/clone-0 root=73e53c036cb98e07fbd06eb5f3f7bbc874ed211727becff11d77a7203cd03853 initialized=false\nFAILED\n\nfailures:\n\nfailures:\n    phase_b_commit::full_lowering_64mib\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.01s\n\n",
+  "raw_manifest_sha256": "ad759fe81e5ae2cdb29de419abe7bed148441e7daa338e4dc1375d90ad8bb6cc",
+  "run": {
+    "backing": "ef53 4096",
+    "build": {
+      "binary": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542/inherited_workspace",
+        "sha256": "6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542"
+      },
+      "build_budget_ns": 30000000000,
+      "build_status": "PASS",
+      "inputs": {
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "product_seal": "6faef099d307495607bb60a9ed5be40628880bcd770cc307228b3d89d37c7043",
+        "profile": "release",
+        "sqlite_provider": "locked published rusqlite/bundled; native functional binary only",
+        "test_source_seal": "2040681fea82b571518cc30ac4d66d5fab0380510ed4ceee3bfd7fb23f0da042"
+      },
+      "mode": "locked-release-build",
+      "wall_ns": 676361375
+    },
+    "earlier_family_policy": "unaffected production and earlier evidence reused; no earlier resampling",
+    "external_cleanup": [
+      {
+        "command": [
+          "docker",
+          "rm",
+          "-f",
+          "issue286-native-b262e96aa7cf4fc1"
+        ],
+        "exit_code": 0,
+        "started_ns": 5118065696500,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "66970047db5e07f8a4f50e82bbc01d2a344f4b4f16b3482190468c90e1be6cb9",
+        "timeout": false,
+        "wall_ns": 170817666
+      },
+      {
+        "command": [
+          "docker",
+          "volume",
+          "rm",
+          "issue286-native-b262e96aa7cf4fc1-backing"
+        ],
+        "exit_code": 0,
+        "started_ns": 5118237324291,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "909b408e58e71c7df70c5431aa63f12d55a9ed83a0a20be299b4212796c22a8d",
+        "timeout": false,
+        "wall_ns": 23891792
+      }
+    ],
+    "identity": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "3146775f13e464adff41b48d758c1876e50f30eeaabf99448f4676e8cd6c7112",
+      "product_seal": "6faef099d307495607bb60a9ed5be40628880bcd770cc307228b3d89d37c7043",
+      "source_commit": "ca9253e0b873aaa3847ac32fd76787b086785799",
+      "source_dirty": false,
+      "source_tree": "2479035e9fcc27aabcd3b0dfd2004ba3cfb45a77"
+    },
+    "image": "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+    "profile": "native-inprocess-commit-functional-clone-v1",
+    "rows": [
+      {
+        "cache_contract": "uncontrolled, functional only",
+        "case": "workspace-commit-full-lowering-size-64mib-native-v2",
+        "cleanup_status": "UNKNOWN",
+        "clone_method": "independent byte copy; host and Linux hashes matched; closed prepared master",
+        "functional": {
+          "command": [
+            "docker",
+            "exec",
+            "-e",
+            "LAYERFS_PHASE_B_CLONES=/work/workspace-commit-full-lowering-size-64mib-native-v2",
+            "-e",
+            "LAYERFS_TEST_BACKING_ROOT=/work/workspace-commit-full-lowering-size-64mib-native-v2",
+            "-e",
+            "LAYERFS_CONSTRUCTION_WORKERS=1",
+            "issue286-native-b262e96aa7cf4fc1",
+            "/test",
+            "--exact",
+            "phase_b_commit::full_lowering_64mib",
+            "--test-threads=1",
+            "--nocapture"
+          ],
+          "exit_code": 101,
+          "started_ns": 5117985449333,
+          "stderr_sha256": "c5efa002b345663095fd72338d129e105640e88b07f805dc9ab5953641cd7503",
+          "stdout_sha256": "4544619b853370e739026f70cbea4e0e79d170a358f215d6629f2f0f6c4fd456",
+          "timeout": false,
+          "wall_ns": 55464125
+        },
+        "functional_budget_ns": 60000000000,
+        "functional_status": "FAIL",
+        "numeric_latency_status": "INELIGIBLE",
+        "observations": [],
+        "performance_claim": false,
+        "prepared": {
+          "files": {
+            "fixture.before": "f1ee77c98f3d16a743754c1152b32667c8778da6344128a73a4baa02afdbc51c",
+            "history.sqlite": "b62451df30919316af2f444fbc9929c7a6908104cc97b4e9db89432ca6e6300d",
+            "store.sqlite": "944c4ea556c1cc08c5e8c30c9b59d969d5a202ee636c957dbef2e7d87e555fb0"
+          },
+          "oracle": "grand-base/sibling-base; large data[i]=i%251; full relevant bytes checked in native child",
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-commit-native-master-v1/large",
+          "preparation": {
+            "command": [
+              "docker",
+              "exec",
+              "-e",
+              "LAYERFS_PHASE_B_PREPARE=/work/master-large",
+              "-e",
+              "LAYERFS_PHASE_B_SIZE=67108864",
+              "issue286-native-b262e96aa7cf4fc1",
+              "/test",
+              "--exact",
+              "phase_b_commit::prepare_master",
+              "--ignored",
+              "--nocapture"
+            ],
+            "exit_code": 0,
+            "started_ns": 5117298549583,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "13a4dd21afe855d465711be376b80d153c65ae1bc452cac3b8eed1fe3908227b",
+            "timeout": false,
+            "wall_ns": 415092625
+          },
+          "producer_binary": {
+            "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542/inherited_workspace",
+            "sha256": "6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542"
+          },
+          "producer_source": {
+            "build_profile": "release",
+            "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+            "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+            "dirty_paths": [],
+            "harness_seal": "3146775f13e464adff41b48d758c1876e50f30eeaabf99448f4676e8cd6c7112",
+            "product_seal": "6faef099d307495607bb60a9ed5be40628880bcd770cc307228b3d89d37c7043",
+            "source_commit": "ca9253e0b873aaa3847ac32fd76787b086785799",
+            "source_dirty": false,
+            "source_tree": "2479035e9fcc27aabcd3b0dfd2004ba3cfb45a77"
+          },
+          "reuse": false,
+          "size": 67108864
+        },
+        "route": "Linux native Workspace + in-process production Server",
+        "sample_count": 1,
+        "sdk_time": "N/A: native component route",
+        "status": "FAIL",
+        "test": "phase_b_commit::full_lowering_64mib",
+        "verification_scope": "in-child full relevant old/new/G1/G2/pin bytes, quota/custody assertions; no separate speed arm"
+      },
+      {
+        "case": "workspace-commit-stage-headroom-quota-2mib-native-v2",
+        "reason": "prior case failed",
+        "status": "NOT_RUN"
+      },
+      {
+        "case": "workspace-commit-headroom-quota-4mib-native-v2",
+        "reason": "prior case failed",
+        "status": "NOT_RUN"
+      },
+      {
+        "case": "workspace-commit-live-g1-g2-native-v2",
+        "reason": "prior case failed",
+        "status": "NOT_RUN"
+      },
+      {
+        "case": "workspace-commit-pin-custody-native-v2",
+        "reason": "prior case failed",
+        "status": "NOT_RUN"
+      },
+      {
+        "case": "workspace-commit-known-unknown-native-v2",
+        "reason": "prior case failed",
+        "status": "NOT_RUN"
+      },
+      {
+        "case": "workspace-commit-local-c5-native-v2",
+        "reason": "prior case failed",
+        "status": "NOT_RUN"
+      },
+      {
+        "case": "workspace-commit-reordered-base-copy-native-v2",
+        "reason": "prior case failed",
+        "status": "NOT_RUN"
+      }
+    ],
+    "schema": "core-workspace-commit-native-run-v1",
+    "selected": [
+      "workspace-commit-full-lowering-size-64mib-native-v2",
+      "workspace-commit-stage-headroom-quota-2mib-native-v2",
+      "workspace-commit-headroom-quota-4mib-native-v2",
+      "workspace-commit-live-g1-g2-native-v2",
+      "workspace-commit-pin-custody-native-v2",
+      "workspace-commit-known-unknown-native-v2",
+      "workspace-commit-local-c5-native-v2",
+      "workspace-commit-reordered-base-copy-native-v2"
+    ],
+    "status": "INCOMPLETE"
+  }
+}

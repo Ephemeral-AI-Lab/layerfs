@@ -139,6 +139,7 @@ def attempt(out, case, prepared, container):
             if shared.sha256(clone / file) != sha:
                 raise ValueError("clone hash mismatch")
     checked(["docker", "cp", str(folder), f"{container}:/work/"], folder / "copy")
+    checked(["docker", "exec", container, "chown", "-R", "0:0", f"/work/{case.id}"], folder / "clone-owner")
     for index in range(case.clones):
         for file, sha in prepared["files"].items():
             output = checked(["docker", "exec", container, "sha256sum", f"/work/{case.id}/clone-{index}/{file}"], folder / f"hash-{index}-{file}")
@@ -157,7 +158,7 @@ def attempt(out, case, prepared, container):
            "sample_count": 1, "performance_claim": False, "numeric_latency_status": "INELIGIBLE",
            "verification_scope": "in-child full relevant old/new/G1/G2/pin bytes, quota/custody assertions; no separate speed arm",
            "cleanup_status": "EXPECTED_RETAINED" if ok and case.retained else "PASS" if ok else "UNKNOWN",
-           "clone_method": "independent byte copy; host and Linux hashes matched; closed prepared master",
+           "clone_method": "independent byte copy; Linux setup ownership 0:0; host and Linux byte hashes matched; closed prepared master",
            "prepared": prepared, "observations": [line for line in stdout.decode(errors="replace").splitlines() if line.startswith("PHASE_")],
            "sdk_time": "N/A: native component route", "cache_contract": "uncontrolled, functional only"}
     shared.save(folder / "receipt.json", row)
