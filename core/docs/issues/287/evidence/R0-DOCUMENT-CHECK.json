@@ -1,0 +1,7 @@
+{
+  "status": "PASS",
+  "markdown_files": 24,
+  "local_links": 347,
+  "method": "R0 staged Markdown local target/heading check; exact staged whitespace check",
+  "product_tests": "NOT_RUN: no product changes at R0"
+}

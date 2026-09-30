@@ -6,6 +6,14 @@ Applies recursively to `core/`. Read the repository [AGENTS.md](../AGENTS.md)
 first; its measurement, release, dependency and evidence rules still apply.
 This file adds the owner's product-source and module-structure requirements.
 
+For Workspace, live-backing, file/namespace, Commit, resource/admission,
+SDK/daemon or scalability work, read [Workspace workload scenarios](../scenarios.md) first.
+Map the change to applicable SC IDs and preserve their real product route,
+selected-view correctness, bounded-resource goals and failure custody. Its
+larger tiers are research targets, not supported profiles or permission to run
+every case. Freeze only necessary affected evidence, reuse unchanged proofs,
+and keep current limits, normative contracts and historical verdicts explicit.
+
 ## Scope and ownership
 
 - `core/` is the replacement product workspace. Existing root `crates/` is a

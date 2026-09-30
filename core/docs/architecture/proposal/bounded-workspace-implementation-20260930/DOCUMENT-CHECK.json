@@ -1,0 +1,95 @@
+{
+  "status": "PASS",
+  "scope": "Documentation/link/ASCII/JSON/source-unchanged checks; no product tests or performance measurements",
+  "source_commit": "7edddbdb8e8512627aed0ed42533ef099d802384",
+  "checked_utc": "2026-09-30T11:57:57.838087+00:00",
+  "local_links": 246,
+  "ascii_text_blocks": 56,
+  "production_delta": 0,
+  "baseline_reference": 65417,
+  "baseline_core": 70279,
+  "baseline_combined": 135696,
+  "errors": [],
+  "documents": [
+    {
+      "path": "core/docs/architecture/proposal/bounded-workspace-implementation-20260930/ISSUE276-AND-SCALING.md",
+      "physical_document_lines": 235,
+      "sha256": "c535046d7fcc27ddf58080c391c4d6a8fca7883fc86152e13eba66e60fe20118"
+    },
+    {
+      "path": "core/docs/architecture/proposal/bounded-workspace-implementation-20260930/WORKSPACE.md",
+      "physical_document_lines": 1172,
+      "sha256": "9c5adf542f155e01f75a2cf7a41e945cd242e363974062a62e8307aecc9ca976"
+    },
+    {
+      "path": "core/docs/architecture/proposal/bounded-workspace-implementation-20260930/README.md",
+      "physical_document_lines": 501,
+      "sha256": "5846bb6e010e22736557c44005a1cfdf4f0f132c6467a80249459d9382cc1215"
+    },
+    {
+      "path": "core/docs/architecture/proposal/bounded-workspace-implementation-20260930/SERVER.md",
+      "physical_document_lines": 1320,
+      "sha256": "d185091b30ddaac5e33ac0e40cbbfc387aae9dd0fcf8a3e0948d61b9ea5dfa30"
+    },
+    {
+      "path": "core/docs/architecture/proposal/bounded-workspace-implementation-20260930/LAYOUT.md",
+      "physical_document_lines": 337,
+      "sha256": "e6830cbd0b32155db6c271632c562560a92fdaf23b74d86f52581408f01557c5"
+    },
+    {
+      "path": "core/docs/architecture/proposal/bounded-workspace-implementation-20260930/CONCURRENCY.md",
+      "physical_document_lines": 1131,
+      "sha256": "119c012ce38ce1a20a5909184400794e6bf9feffb8fd336b4588aef2c7a609bf"
+    },
+    {
+      "path": "core/docs/architecture/proposal/bounded-workspace-implementation-20260930/ACCEPTANCE.md",
+      "physical_document_lines": 322,
+      "sha256": "b62c7b2766a70a47efabc6ee3b3a0c4bc271799dd6d404cd7663d8bce2ec8e83"
+    },
+    {
+      "path": "scenarios.md",
+      "physical_document_lines": 407,
+      "sha256": "44b06da6582106975c60eb57a38318e052846a55623f60141a4bd5f2b62f3732"
+    },
+    {
+      "path": "core/docs/architecture/proposal/bounded-memory-commit-20260930.md",
+      "physical_document_lines": 835,
+      "sha256": "319b2efe0fd40d152c462db04aebdbca99172f3da4e7b505beab0c3c579af2a9"
+    },
+    {
+      "path": "AGENTS.md",
+      "physical_document_lines": 339,
+      "sha256": "ac2ea403b5939f5d49d0d31c9ff33ae7432fdbb8b1a5c950bc12ce7356ae9489"
+    },
+    {
+      "path": "core/AGENTS.md",
+      "physical_document_lines": 240,
+      "sha256": "8831d08d9d7690ae3343d782e139a6199bda464c2bce41a724204f320bbdc8a6"
+    },
+    {
+      "path": "core/docs/architecture/proposal/bounded-workspace-implementation-20260930/ROLLOUT.md",
+      "physical_document_lines": 257,
+      "sha256": "791f63e9ece0886528a61ff8b73600f9aaa55d6cef72d888f11669585c8007e5"
+    },
+    {
+      "path": "core/docs/architecture/proposal/bounded-workspace-implementation-20260930/ISSUE-CLOSURE.md",
+      "physical_document_lines": 99,
+      "sha256": "fb6808f934a102cb14abf72914a07c84b91d4178804f52e1a3c8437aca3148d1"
+    },
+    {
+      "path": "core/docs/architecture/proposal/bounded-workspace-implementation-20260930/EVALUATION.md",
+      "physical_document_lines": 252,
+      "sha256": "f2ab1f0c101358cec0a3432fb738a7f89679890e5111b4549e9ecfa04fa293b9"
+    },
+    {
+      "path": "benchmark_agent_report.md",
+      "physical_document_lines": 146,
+      "sha256": "bbe5da4e6156c300ba6b82b01567afedc8f10411b9719a8ec5a6bb3a691e2996"
+    },
+    {
+      "path": "core/docs/issues/287/HANDOFF_IMPLEMENTATION.md",
+      "physical_document_lines": 310,
+      "sha256": "30c08b0e8fc6d2da561bc5de17ad45726dd7512adcd95250dcb8e3311478f930"
+    }
+  ]
+}

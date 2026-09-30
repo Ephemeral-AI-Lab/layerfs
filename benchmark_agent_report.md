@@ -109,6 +109,14 @@ control to an end-to-end Workspace result.
 
 ## Server, transport and daemon attribution beneath each Workspace row
 
+For a registered concurrent Workspace selection, also report per-command and
+per-Workspace/Commit identities and timings, actual overlap/progress evidence,
+makespan, protected-control responsiveness, aggregate admission and retained
+owners. Do not sum overlapping operation spans. The proposed
+[concurrency evaluation tables](core/docs/architecture/proposal/bounded-workspace-implementation-20260930/EVALUATION.md#7-reports-and-evaluation-order)
+provide a draft extension; that research plan does not register cases or replace
+their prospectively frozen gates.
+
 | Scope | Time/count evidence | Resource evidence | Verdict or availability |
 | --- | --- | --- | --- |
 | Host Server / C1–C5 / SQLite | `<measured nested spans, calls, objects and bytes>` | `<host CPU/RSS, C2+C5 allocated B>` | `<status or UNAVAILABLE: reason>` |

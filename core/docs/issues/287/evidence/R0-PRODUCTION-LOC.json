@@ -1,0 +1,28 @@
+{
+  "method": {
+    "counter_blob": "c7dd2b9c6aa9db63393a4ff3ebca9327529d146e",
+    "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+    "snapshots": "git archive <HEAD|git write-tree> crates core/crates; same counter over both exact extracted trees",
+    "scope": "reference/core first-party src Rust and runtime package SQL; legacy inline/test-only source excluded; tests/examples/fixtures/tools/docs/manifests/generated/third-party excluded"
+  },
+  "parent": "7edddbdb8e8512627aed0ed42533ef099d802384",
+  "before": {
+    "reference": 65417,
+    "core": 70279,
+    "combined": 135696,
+    "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+    "core_tree": "b527e9c56d12a69cdb4cb5b802e21fa45b8fb403"
+  },
+  "after": {
+    "reference": 65417,
+    "core": 70279,
+    "combined": 135696,
+    "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+    "core_tree": "b527e9c56d12a69cdb4cb5b802e21fa45b8fb403"
+  },
+  "delta": {
+    "reference": 0,
+    "core": 0,
+    "combined": 0
+  }
+}

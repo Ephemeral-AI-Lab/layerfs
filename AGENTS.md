@@ -12,6 +12,16 @@ rules apply to the replacement tree; existing root `crates/` remains reference
 code during migration. Follow the core-specific checks before claiming core work
 is verified; the root checks alone do not exercise that workspace.
 
+Before Workspace architecture, live-backing, file/namespace, Commit, admission,
+SDK/daemon integration or scalability work, read [scenarios.md](scenarios.md).
+It combines the owner workload goals with source-pinned load-bearing cases.
+Identify the relevant SC scenario IDs in plans/reports and address live behavior,
+canonical completion, memory/space, selected views and failure custody. Distinguish
+current verified scope from proposed larger workloads. Scenarios guide design
+and focused evidence selection; they do not authorize automatic benchmark sweeps,
+limit/worker/timeout changes or promotion of historical receipts. Reuse unaffected
+proofs and follow the measurement rules below when a selected case is run.
+
 Read before touching measurement, benchmark or release work:
 
 - [`docs/general/benchmark_rules.md`](docs/general/benchmark_rules.md) — the measurement contract

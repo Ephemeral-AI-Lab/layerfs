@@ -1,0 +1,33 @@
+{
+  "schema": "layerfs-issue287-reference-defect/v1",
+  "disposition": "DRAFT_INELIGIBLE_CORRECTED_IN_NEW_LEDGER",
+  "source_commit": "7edddbdb8e8512627aed0ed42533ef099d802384",
+  "source_path": "core/crates/layerfs-content/src/filesystem/symlink.rs",
+  "source_sha256": "e7033c7bdbcb5219ec615466141c34df5311119424950a10aff8a699f0bfebbd",
+  "source_lines": {
+    "role": 16,
+    "encode_header": 43,
+    "length": 46
+  },
+  "cause": "Draft encoded magic8/version2/length2/target; omitted inner role5 and flags0. Source requires magic8/version2/role1/flags1/length2/target. Original reference certification had not decoded the symlink child role.",
+  "draft_object": {
+    "canonical_bytes": 31,
+    "canonical_hex": "4c46534f0100000016000000124c4653344c4e4b0000010006746172676574",
+    "id": "e38c5ae4a6c6f402c762f27fd626292ed0eacfefb86fcd8ff49c2f6da285d4c2",
+    "persisted_role": 13,
+    "sha256": "32e16cf451e742a741be5887ca55cb5b9a7a7d06971fab9e2eea7ea64932d453"
+  },
+  "corrected_object": {
+    "canonical_bytes": 33,
+    "canonical_hex": "4c46534f0100000018000000144c4653344c4e4b00000105000006746172676574",
+    "id": "b144b0482b42be9305179db913ea000a9d5a62b6ca734301e97d547456fb400a",
+    "persisted_role": 13,
+    "sha256": "351d86c30da7dad04a95a49c87e56642bb7d62334b5b8d76bf953eb4821f3d03"
+  },
+  "draft_value_hex": "4c4653344c4e4b0000010006746172676574",
+  "corrected_value_hex": "4c4653344c4e4b00000105000006746172676574",
+  "covering_change": "correct role5/flags0; certify_filesystem independently decodes symlink content magic/version/role/flags/exact target length",
+  "covering_command": "python3 core/docs/issues/287/oracle/verify.py --write core/docs/issues/287/oracle/vectors.json",
+  "covering_exit": 0,
+  "result": "PASS only for final finite reference scope; draft kept INELIGIBLE"
+}
