@@ -21,6 +21,7 @@ sys.path.insert(0, str(HERE))
 from families import init_namespace as init  # noqa: E402
 from families import history_retention as history  # noqa: E402
 from families import workspace_write as write  # noqa: E402
+from families import workspace_commit as commit  # noqa: E402
 
 CONTRACT_COMMIT = "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2"
 BUILD_PROFILE = "release"
@@ -376,8 +377,11 @@ def main():
     run_parser = commands.add_parser("run")
     selector = run_parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--case")
-    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write"])
+    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit"])
     run_parser.add_argument("--out", required=True)
+    proof_parser = commands.add_parser("prove")
+    proof_parser.add_argument("--run", required=True)
+    proof_parser.add_argument("--out", required=True)
     for name in ("verify", "report"):
         commands.add_parser(name).add_argument("--run", required=True)
     args = parser.parse_args()
@@ -392,6 +396,10 @@ def main():
             print(f"{case.id}\t{case.writes} {case.pattern} writes\t"
                   f"command <= {case.command_budget_ns / 1e9:g} s; verifier <= 9 s\t"
                   "selected")
+        for case in commit.CASES.values():
+            print(f"{case.id}\tSDK same-Workspace retained pin\tcommand <= 15 s; separate proof <= 9 s\tfast lane selected")
+        for name, reason in commit.REMAINING.items():
+            print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":
         selection = args.case or args.family
         if selection in (*history.CASES, "history-retention"):
@@ -400,15 +408,26 @@ def main():
         if selection in (*write.CASES, "workspace_write"):
             print(write.run(selection, args.out, sys.modules[__name__]))
             return
+        if selection in (*commit.CASES, "workspace-commit"):
+            print(commit.run(selection, args.out, sys.modules[__name__]))
+            return
         if selection not in (*init.CASES, "init_namespace"):
             parser.error("unknown or deferred SDK case")
         print(run(selection, args.out))
+    elif args.command == "prove":
+        path = owned(args.run, existing=True)
+        if json.loads((path / "run.json").read_text()).get("schema") != "core-workspace-commit-fast-run-v2":
+            parser.error("separate prove currently covers Family 4 fast-lane receipts")
+        print(commit.prove(path, args.out, sys.modules[__name__]))
     elif args.command == "verify":
         path = owned(args.run, existing=True)
         if json.loads((path / "run.json").read_text()).get("schema") in ("core-history-retention-run-v1", "core-history-retention-run-v2", "core-history-retention-run-v3", "core-history-retention-run-v4"):
             print(history.verify(path, sys.modules[__name__]))
         elif json.loads((path / "run.json").read_text()).get("schema") == "core-workspace-write-run-v1":
             print(write.verify(path, sys.modules[__name__]))
+        elif json.loads((path / "run.json").read_text()).get("schema") in ("core-workspace-commit-fast-run-v2", "core-workspace-commit-proof-v2"):
+            verify_run_manifest(path)
+            print("PASS: retained evidence custody only")
         else:
             print(verify_run(path))
     else:
@@ -417,6 +436,8 @@ def main():
             print(history.report(path), end="")
         elif json.loads((path / "run.json").read_text()).get("schema") == "core-workspace-write-run-v1":
             print(write.report(path), end="")
+        elif json.loads((path / "run.json").read_text()).get("schema") in ("core-workspace-commit-fast-run-v2", "core-workspace-commit-proof-v2"):
+            print(commit.report(path), end="")
         else:
             print(report(path), end="")
 

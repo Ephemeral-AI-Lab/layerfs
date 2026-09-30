@@ -291,6 +291,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .map_err(|_| "old commit identity")?;
     let old_record = history.commit(old)?.ok_or("missing old Commit")?;
+    if let Some(parent) = case.get("expected_old_parent") {
+        if old_record.parent.map(|id| hex(&id.to_bytes())).as_ref() != Some(parent) {
+            return Err("retained prelude Commit parent mismatch".into());
+        }
+    }
     let expected_failure = get("expected_failure")? == "1";
     if expected_failure && head != old {
         return Err("failure advanced Branch head".into());
@@ -313,6 +318,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let old_tree = verify_tree(&provider, old_record.root, &manifest(&args[4])?)?;
     let new_tree = match &committed {
         Some(record) => Some(verify_tree(&provider, record.root, &manifest(&args[5])?)?),
+        None if !expected_failure => Some(verify_tree(
+            &provider,
+            old_record.root,
+            &manifest(&args[5])?,
+        )?),
         None => None,
     };
     let separated_runs = match (case.get("separated_count"), committed.as_ref()) {

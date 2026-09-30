@@ -147,7 +147,7 @@ def assess_numeric_cache(row):
             "reason": "Commit cache domain is not proved by cold host source plus private direct I/O"}
 
 
-def build(out, runner, identity):
+def build(out, runner, identity, *, reuse_image=None):
     if sys.platform != "darwin":
         raise RuntimeError("this cold-source profile requires Darwin mincore/msync and libproc")
     for name, expected in DIRECT_IO_FILES.items():
@@ -201,11 +201,20 @@ def build(out, runner, identity):
     (context / "Dockerfile").write_text(
         f"FROM {BASE}\nCOPY layerfs-daemon /layerfs-daemon\nCOPY bin /fixtures/bin\n"
         'ENTRYPOINT ["/layerfs-daemon"]\n')
-    image, stdout, _ = execute(["docker", "build", "-q", str(context)], out / "image-build")
+    if (reuse_image and reuse_image["artifacts"]["layerfs-daemon"]["sha256"] == artifacts["layerfs-daemon"]["sha256"]
+            and reuse_image["writer_binary_sha256"] == WRITER_SHA256
+            and reuse_image["image_dockerfile_sha256"] == sha256(context / "Dockerfile")):
+        image_id = reuse_image["image_id"]
+        image = {"mode": "exact-image-reuse", "image_id": image_id, "wall_ns": 0,
+                 "daemon_sha256": artifacts["layerfs-daemon"]["sha256"], "command": None}
+    else:
+        image, stdout, _ = execute(["docker", "build", "-q", str(context)], out / "image-build")
+        image["mode"] = "build"
+        if image["exit_code"] != 0:
+            save(out / "image-build.json", image)
+            raise RuntimeError("current-daemon image build failed")
+        image_id = stdout.decode().strip()
     save(out / "image-build.json", image)
-    if image["exit_code"] != 0:
-        raise RuntimeError("current-daemon image build failed")
-    image_id = stdout.decode().strip()
     if subprocess.check_output(["docker", "image", "inspect", image_id, "--format", "{{.Id}}"], text=True).strip() != image_id:
         raise ValueError("image ID mismatch")
     old = master()
@@ -225,6 +234,7 @@ def build(out, runner, identity):
     prepared = {"identity": identity, "artifacts": artifacts, "image_id": image_id,
                 "image_dockerfile_sha256": sha256(context / "Dockerfile"),
                 "writer_source_sha256": WRITER_SOURCE_SHA256, "writer_binary_sha256": WRITER_SHA256,
+                "image_build": image,
                 "master": old, "cursor_key": cursor, "master_reproof": proof,
                 "clone_method": "shutil.copyfile independent writable byte copy",
                 "cache_contract": CACHE_CONTRACT,

@@ -152,6 +152,17 @@ exploratory performance-only default below; see
    do not verify or test iteratively.** A red test is diagnosed from its output
    and the source, the fix is applied once, and the covering commands then run
    once. Do not rerun an unchanged performance arm to select a better number.
+
+   **Earlier-family fast path (owner direction, 2026-09-30):** reuse unaffected
+   earlier-family evidence instead of routinely rerunning it, especially the
+   Family 2 retained-history group. Benchmark, example, report or observer
+   changes alone do not trigger an earlier-family sweep merely because a broad
+   harness/source seal changed. Record the unchanged relevant product,
+   compilation and binary scope and the reused receipts. For a disruptive
+   production/API/format/policy change, identify the families it can affect and
+   run only their necessary regression checkpoint. This direction supersedes
+   #286's older broad-harness-seal regression trigger; it does not permit reuse
+   across a changed measured mechanism or relabel a historical receipt.
 5. Respect the measurement lock — it is **per worktree** (owner direction,
    2026-09-21): builds and measurements in different worktrees do not exclude each
    other, two runs in one worktree still never overlap, and no build may take a

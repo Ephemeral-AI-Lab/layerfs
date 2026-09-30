@@ -1,12 +1,13 @@
 //! Public SDK driver for the #243 ordinary Workspace shell scenario.
 use layerfs_sdk::{
     CommitOutcomeWire, HistoryMode, Project, ProjectApi, SandboxApi, Server, ServerConfig,
-    WorkspaceApi, WorkspaceError,
+    WorkspaceApi, WorkspaceError, WorkspaceViewLease, WorkspaceViewRelease,
 };
 use layerfs_telemetry::{
     output::{Identity, OutputConfig},
     runtime::{Configuration, MonitorConfig, Runtime},
 };
+use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, fmt::Write as _, time::Instant};
 
 #[cfg(target_os = "macos")]
@@ -98,6 +99,29 @@ fn key(text: &str) -> Result<[u8; 32], Box<dyn std::error::Error>> {
         .collect::<Result<_, _>>()?;
     Ok(value.try_into().map_err(|_| "cursor key width")?)
 }
+
+fn pinned_digest(
+    api: &WorkspaceApi<'_>,
+    lease: &WorkspaceViewLease,
+) -> Result<(u64, String), String> {
+    let file = api
+        .view_lookup(lease, lease.root(), b"data.bin")
+        .map_err(|e| format!("pin lookup: {e:?}"))?;
+    let mut offset = 0;
+    let mut hash = Sha256::new();
+    while offset < file.size {
+        let length = (file.size - offset).min(16_384) as usize;
+        let read = api
+            .view_read(lease, &file, offset, length)
+            .map_err(|e| format!("pin read: {e:?}"))?;
+        if read.bytes.len() != length || read.size != file.size {
+            return Err("short or changed pinned file".into());
+        }
+        hash.update(&read.bytes);
+        offset += read.bytes.len() as u64;
+    }
+    Ok((offset, hex(&hash.finalize())))
+}
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let disk_read_before = disk_read_bytes();
     let args: Vec<_> = std::env::args().collect();
@@ -110,6 +134,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let case = Case::load(&args[2])?;
     let expected_failure = !seed && case.get("expected_failure")? == "1";
+    let expected_clean = case.0.get("clean_commit").is_some_and(|value| value == "1");
+    let prelude = case
+        .0
+        .get("prelude_command_hex")
+        .map(|_| {
+            case.bytes("prelude_command_hex")
+                .and_then(|bytes| String::from_utf8(bytes).map_err(Into::into))
+        })
+        .transpose()?;
     let command = String::from_utf8(case.bytes("command_hex")?)?;
     let run: u128 = case.get("telemetry_run")?.parse()?;
     let runtime = Runtime::start(Configuration {
@@ -212,10 +245,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut exec_ns = 0;
     let mut commit_ns = 0;
     let mut commit_called = false;
+    let mut prelude_exec_ns = 0;
+    let mut prelude_commit_ns = 0;
+    let mut prelude_head = String::new();
+    let mut lease = None;
     let start = Instant::now();
     let (outcome, diagnostic) = runtime
         .recorder()
         .run(243_000, "sdk.shell_package", |scope| {
+            if let Some(command) = &prelude {
+                let began = Instant::now();
+                let exec = workspaces
+                    .exec(&mount.id, command)
+                    .map_err(|e| format!("prelude exec: {e:?}"))?;
+                prelude_exec_ns = began.elapsed().as_nanos();
+                if exec.exit_status != Some(0) || exec.stdout_truncated || exec.stderr_truncated {
+                    return Err(format!("prelude Exec: {exec:?}"));
+                }
+                lease = Some(
+                    workspaces
+                        .pin_view(&mount.id)
+                        .map_err(|e| format!("pin: {e:?}"))?,
+                );
+                let began = Instant::now();
+                let committed = workspaces
+                    .commit(&mount.id)
+                    .map_err(|e| format!("prelude commit: {e:?}"))?;
+                prelude_commit_ns = began.elapsed().as_nanos();
+                match committed.outcome {
+                    CommitOutcomeWire::Committed(record) => prelude_head = hex(&record.commit),
+                    other => return Err(format!("prelude outcome: {other:?}")),
+                }
+            }
             let exec = scope
                 .child("exec")
                 .run(|_| {
@@ -256,9 +317,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let operation_ns = start.elapsed().as_nanos();
     runtime.publish(diagnostic);
     let (mut status, mut detail, mut head_commit) = ("COMPLETE", String::new(), String::new());
+    let mut up_to_date = false;
     match outcome {
         Ok(Some(report)) => match report.outcome {
             CommitOutcomeWire::Committed(record) => head_commit = hex(&record.commit),
+            CommitOutcomeWire::UpToDate {
+                head: Some(head), ..
+            } if expected_clean => {
+                head_commit = hex(&head);
+                up_to_date = true;
+            }
             other => {
                 status = "FAIL";
                 detail = format!("commit outcome {other:?}");
@@ -272,6 +340,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(error) => {
             status = "FAIL";
             detail = error;
+        }
+    }
+    let mut pinned_bytes = 0;
+    let mut pinned_sha256 = String::new();
+    let mut pin_release_ok = lease.is_none();
+    let pin_generation = lease.as_ref().map_or(0, WorkspaceViewLease::generation);
+    if let Some(held) = &lease {
+        match pinned_digest(&workspaces, held) {
+            Ok((bytes, digest)) => {
+                pinned_bytes = bytes;
+                pinned_sha256 = digest;
+            }
+            Err(error) => {
+                status = "FAIL";
+                detail = format!("{detail}; {error}");
+            }
+        }
+        pin_release_ok = matches!(
+            workspaces.release_view(held),
+            Ok(WorkspaceViewRelease::Completed)
+        );
+        if !pin_release_ok {
+            status = "FAIL";
+            detail = format!("{detail}; pin release failed");
         }
     }
     let cleanup_start = Instant::now();
@@ -296,6 +388,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_default();
     let disk_read_delta =
         disk_read_before.and_then(|before| disk_read_bytes()?.checked_sub(before));
+    println!("CONTROL\t{{\"prelude_exec_ns\":{prelude_exec_ns},\"prelude_commit_ns\":{prelude_commit_ns},\"prelude_head_commit\":{prelude_head:?},\"up_to_date\":{up_to_date},\"pin_generation\":{pin_generation},\"pinned_bytes\":{pinned_bytes},\"pinned_sha256\":{pinned_sha256:?},\"pin_release_ok\":{pin_release_ok}}}");
     println!("RECEIPT\t{{\"schema\":\"issue243-shell-driver-v1\",\"status\":\"{status}\",\"detail\":{:?},\"mode\":{:?},\"scenario_id\":{:?},\"branch_id\":{:?},\"head_commit\":{:?},\"commit_called\":{commit_called},\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"operation_ns\":{operation_ns},\"cleanup_ns\":{cleanup_ns},\"projection_counts\":{:?},\"unmount_ok\":{},\"sandbox_delete_ok\":{},\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":{:?},\"host_disk_read_bytes\":{}}}",
         detail, args[1], case.get("scenario_id")?, hex(&branch), head_commit, counts,
         unmount.is_ok(), delete.is_ok(), capture.attempted, capture.bytes, capture.truncated,
