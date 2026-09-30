@@ -171,7 +171,7 @@ def run(selection, output, common):
     if identity["source_dirty"]:
         raise ValueError("commit the native control before collection")
     out.mkdir(parents=True)
-    selected = SELECTED if selection == "workspace-commit-native" else (selection,)
+    selected = SELECTED if selection == "workspace-commit-native" else SELECTED[1:] if selection == "workspace-commit-native-tail" else (selection,)
     summary = {"schema": SCHEMA, "profile": PROFILE, "identity": identity, "selected": list(selected), "rows": [],
                "earlier_family_policy": "unaffected production and earlier evidence reused; no earlier resampling"}
     container = "issue286-native-" + uuid.uuid4().hex[:16]

@@ -378,7 +378,7 @@ def main():
     run_parser = commands.add_parser("run")
     selector = run_parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--case")
-    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit", "workspace-commit-native"])
+    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit", "workspace-commit-native", "workspace-commit-native-tail"])
     run_parser.add_argument("--out", required=True)
     proof_parser = commands.add_parser("prove")
     proof_parser.add_argument("--run", required=True)
@@ -412,7 +412,7 @@ def main():
         if selection in (*write.CASES, "workspace_write"):
             print(write.run(selection, args.out, sys.modules[__name__]))
             return
-        if selection in (*native.CASES, "workspace-commit-native"):
+        if selection in (*native.CASES, "workspace-commit-native", "workspace-commit-native-tail"):
             print(native.run(selection, args.out, sys.modules[__name__]))
             return
         if selection in (*commit.CASES, "workspace-commit"):

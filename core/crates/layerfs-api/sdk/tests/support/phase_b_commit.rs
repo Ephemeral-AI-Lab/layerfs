@@ -304,6 +304,7 @@ fn grand(f: &Fixture) -> (Vec<u64>, HandleId) {
 }
 
 fn occupy(f: &Fixture) -> layerfs_workspace::OwnedPayload {
+    f.workspace.reclaim_payloads(deadline()).unwrap();
     let before = f.workspace.backing_status().unwrap();
     let available = before.quota_bytes - before.allocated_bytes - before.reserved_bytes;
     let mut blocks = available / 4096;
@@ -316,7 +317,10 @@ fn occupy(f: &Fixture) -> layerfs_workspace::OwnedPayload {
         .own_payload(bytes.len() as u64, &mut bytes.as_slice(), deadline())
         .unwrap();
     let full = f.workspace.backing_status().unwrap();
-    assert!(full.quota_bytes - full.allocated_bytes - full.reserved_bytes <= 4096);
+    assert!(
+        full.quota_bytes - full.allocated_bytes - full.reserved_bytes <= 4096,
+        "before={before:?} full={full:?} blocks={blocks}"
+    );
     spare
 }
 
