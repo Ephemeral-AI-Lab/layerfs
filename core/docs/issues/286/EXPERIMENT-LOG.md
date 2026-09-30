@@ -541,3 +541,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family7 native count diagnostic r075
 
 [FAIL/TIMEOUT](experiments/20260930-workspace-shell-package-cause-r075.md),15008345833ns>15s. Reaches1025files/18dirs/1044dirty,1269760allocated+851968reservedB under64MiBquota, then killed before typed outcome; no gate/Commit proof. Custody retained. Keep bound and MISS. Next distinct count-driven SDK cause diagnostic at original1025 workload/25s bound with existing counters/interim typed outcome logging; not a speed repeat, no product change.
+
+## Family7 SDK count/custody r076
+
+[Diagnostic cause recovered; gate FAIL](experiments/20260930-workspace-shell-package-sdk-cause-r076.md),complete25010761125ns/25s. Typed Reconcile KnownCommitLocalFailure Capacity;1044dirty/4153updates; recorded index-admission3.785MB<8MiB. Separate full canonical old/new/head/parent proof PASS641885125ns, but local/cleanup remainsFAIL. Archive ownership then external teardown. Next test one explicit same-quota C5 credit admission change, counted additional bytes; no quota lift/retry/codec/frontier refactor.

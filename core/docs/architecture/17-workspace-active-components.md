@@ -156,3 +156,20 @@ remain ON HOLD/NOT_RUN. Historical numeric rows remain INELIGIBLE; earlier contr
 `48b51e874a41b3e1e6c6661e145316df8b408f07` remains NOT_RUN. Host memory qualification
 is #283; the 32 KiB pinned-read Io observation, #248 streaming/progress and >65,535
 runs, #256 many-file scope and #276 parent indexing remain open limitations.
+
+## C5 page credit admission after the prepaid floor
+
+The #286 source in this commit after0b2cf37aa admits an active C5 page credit
+through the captured completion fund and the same configured physical quota.
+The208-page prepaid escrow is unchanged. If a requested page credit exceeds
+the fund's remaining reservation, the difference is explicitly reserved from
+MetadataHost before allocating the page and then deducted once. This is one
+admission path, not a failed take followed by fallback/retry. Quota refusal
+leaves the fund unchanged and returns the existing typed local failure; known
+canonical outcome and any partial candidate/refunds remain in their existing
+custody. Page give/recycle and fund finish/drop return both original and
+additional credits to the same quota; no configured quota or memory bound is
+raised. It removes an internal fixed completion-size refusal for larger
+candidates, without changing the whole-frontier memory strategy, canonical
+format, C5 history or construction worker count. Runtime capacity diagnostics
+record requested/prior/additional credits.

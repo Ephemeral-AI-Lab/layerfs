@@ -1,0 +1,320 @@
+{
+  "attempts": [
+    {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+          "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/3fa41b08fb250de42755f18a3f1d97f778797cef24b8a3d31ddabd330af1b715/benchmark_shell",
+          "sha256": "3fa41b08fb250de42755f18a3f1d97f778797cef24b8a3d31ddabd330af1b715"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/e2b82f42e74c7d8f0e7d5ac81e03365846639361dcb3b56573bbb0176a0da8aa/layerfs-daemon",
+          "sha256": "e2b82f42e74c7d8f0e7d5ac81e03365846639361dcb3b56573bbb0176a0da8aa"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-shell-package-many-1025-sdk-cause-diagnostic-v1",
+      "changed_file_count": 1025,
+      "cleanup_status": "UNKNOWN",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_budget_ns": 25000000000,
+      "command_status": "FAIL",
+      "control": null,
+      "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+      "diagnostic_cause": true,
+      "driver": null,
+      "expected_exec_failure": false,
+      "expected_failure": false,
+      "explicit_recovery": false,
+      "family_id": "workspace_shell_package",
+      "image_id": "sha256:86c07368bd8f92193afcff28db13982ebbd2db53b08925366b73c6fb6b38d15a",
+      "master": {
+        "binding_key_hex": "6c6179657266732d62656e63682d70726f",
+        "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+        "files": {
+          "fixture.before": "c67e15b5ca6c5de79bed58c54510b8194d07c38fdd6da3e0142b4df92c4e598d",
+          "history.sqlite": "de34cfcb14b9d8b481e3f077668f81108e82e9a782f5288fed8eb60d70bb592c",
+          "store.sqlite": "a0628c5cee06c8bed44caedf4d30f84aa2d4853d0d4f931bc33e92d8dcb3bc2e"
+        },
+        "layout": "package",
+        "old_commit": "12b8fc793f6b3268259d1cc637a48feaf592b94b051dc370c333d689fac15c9154",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+        "preparation": {
+          "full_proof": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/verify.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv"
+            ],
+            "exit_code": 0,
+            "started_ns": 14133594807708,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "3fabae0bab27c84740434d765d3e98d27f60faa28e8ad52cc5b9367fbed49fab",
+            "timeout": false,
+            "wall_ns": 21958958
+          },
+          "init": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/source",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "family7-package"
+            ],
+            "exit_code": 0,
+            "started_ns": 14132682211541,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "f9c82fc1738dfa09916d2a14b9019a3e7757e782a2f2c36e599b0dd58b7a39a2",
+            "timeout": false,
+            "wall_ns": 34063667
+          },
+          "seed": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+              "seed",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/seed.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+            ],
+            "exit_code": 0,
+            "started_ns": 14132717096375,
+            "stderr_sha256": "93b69e37eae762c773c1030074b4dfda55d2192e73b3b850ffdfe208a8387674",
+            "stdout_sha256": "bb80a9fd88a34e4731cafc01135052cec4ed200db319624b14b980432b73cf02",
+            "timeout": false,
+            "wall_ns": 876472458
+          }
+        },
+        "producer_identity": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+          "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+          "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+          "source_dirty": false,
+          "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+        },
+        "reuse": true
+      },
+      "numeric_latency_status": "INELIGIBLE",
+      "original_case_id": null,
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/3fa41b08fb250de42755f18a3f1d97f778797cef24b8a3d31ddabd330af1b715/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-cause-r076/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-cause-r076/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-cause-r076/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/history.sqlite",
+          "sha256:86c07368bd8f92193afcff28db13982ebbd2db53b08925366b73c6fb6b38d15a"
+        ],
+        "exit_code": null,
+        "started_ns": 16027164606833,
+        "stderr_sha256": "2b94bcd3166ddba3973ce7f7a9c640f45c9b4330991b19b7132f4499a6033b3b",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timeout": true,
+        "wall_ns": 25010761125
+      },
+      "performance_claim": false,
+      "pin_status": "PASS",
+      "profile": "package-many-file-functional-clone-v2",
+      "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+      "route_status": "FAIL",
+      "sample_count": 1,
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "f3990da5002290b21f6940881c254920180dfe8254c4e74efe7b199d6701f93b",
+        "product_seal": "da255fdcaa551c986dddcea4a1da54a7d6f9b93eded89771bb1be7172dc19424",
+        "source_commit": "0b2cf37aa803eb7837979a293dec7bc35dfc5740",
+        "source_dirty": false,
+        "source_tree": "65ea32db538508f6d938ec2355638aca917aa8cd"
+      },
+      "status": "FAIL",
+      "verification": {
+        "reason": "separate prove, without performance replay",
+        "status": "SKIPPED"
+      },
+      "workload_source_sha256": "1a29dfb7d9734dfb13b660f544c7d0ff70f22ba44656a59d0e1cabd4735413f4"
+    }
+  ],
+  "canonical_failure_custody_proof": {
+    "child": {
+      "advanced": true,
+      "head_commit": "1224bb12152e034a31c8b2f865b1eb9869346130289ced7f240679ddb0452e6b57",
+      "namespace_identities": 1,
+      "new_bytes": 1121591,
+      "new_files": 1034,
+      "new_paths": 1060,
+      "old_bytes": 1114501,
+      "old_commit": "12b8fc793f6b3268259d1cc637a48feaf592b94b051dc370c333d689fac15c9154",
+      "old_files": 9,
+      "old_paths": 17,
+      "oracle": "issue273-checkpoint5-v1",
+      "pattern_runs": null,
+      "property_assertions": 0,
+      "separated_runs": null,
+      "status": "PASS"
+    },
+    "record": {
+      "command": [
+        "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+        "benchmark-results/fs-bench-pro/issue286-workspace-shell-package-r076-custody-v1/failure-custody.case",
+        "benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-cause-r076/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/store.sqlite",
+        "benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-cause-r076/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/history.sqlite",
+        "benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-cause-r076/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/old.tsv",
+        "benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-cause-r076/workspace-shell-package-many-1025-sdk-cause-diagnostic-v1/new.tsv"
+      ],
+      "exit_code": 0,
+      "started_ns": 16396378114041,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "61e936e92888d71249d01a97eedda4f98c6ad28cd7d0018aba411267a59d754e",
+      "timeout": false,
+      "wall_ns": 641885125
+    },
+    "scope": "failure custody only: exact known canonical old/new/head/parent; not successful local Commit, performance or graceful cleanup"
+  },
+  "custody_manifest_sha256": "757dd58bee4a1769114a5a43d31a8a94472f46ef4ac8569d33bdc9c724ae01b7",
+  "external_cleanup": {
+    "commands": [
+      {
+        "command": [
+          "docker",
+          "rm",
+          "3b456db1e42afa42158053cbefe4c6a655316f5a0352f7e09f616e5f86e43894"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "wall_ns": 46211250
+      },
+      {
+        "command": [
+          "docker",
+          "volume",
+          "rm",
+          "layerfs-b6eda3fe05877e588cabd6a1e27371a4-root"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "wall_ns": 28424833
+      }
+    ],
+    "scope": "external after archived retention, not graceful-close PASS"
+  },
+  "interim_phase_observations": [
+    "BENCH_PHASE_OUTCOME status=FAIL exec_ns=8842957917 commit_ns=9575685000 head= detail=commit: Commit(WorkspaceCommitFailureWire { generation: 1, phase: Reconcile, disposition: KnownCommitLocalFailure, cause: Failure { code: Capacity, unknown: false, cleanup: None, history: None }, known_stage: None, observed_stage: None, known_outcome: Some(Committed(CommitWire { commit: [18, 36, 187, 18, 21, 46, 3, 74, 49, 200, 178, 248, 101, 177, 235, 152, 105, 52, 97, 48, 40, 156, 237, 127, 36, 6, 121, 221, 176, 69, 46, 107, 87], stack: [49, 4, 18, 228, 20, 220, 4, 75, 238, 31, 232, 207, 55, 7, 160, 88, 157], root: [112, 141, 30, 12, 145, 72, 235, 242, 75, 8, 67, 163, 192, 247, 145, 241, 50, 32, 144, 41, 80, 244, 9, 133, 140, 29, 88, 179, 9, 107, 62, 172], parent: Some([18, 184, 252, 121, 63, 107, 50, 104, 37, 157, 28, 198, 55, 164, 143, 234, 245, 146, 185, 75, 5, 29, 195, 112, 195, 51, 214, 137, 250, 193, 92, 145, 84]), base_layer: [50, 205, 37, 143, 138, 61, 207, 226, 51, 233, 101, 235, 244, 168, 34, 43, 42, 154, 178, 1, 31, 139, 70, 94, 87, 43, 94, 128, 255, 65, 75, 178, 5] })), observed_outcome: Some(Committed(CommitWire { commit: [18, 36, 187, 18, 21, 46, 3, 74, 49, 200, 178, 248, 101, 177, 235, 152, 105, 52, 97, 48, 40, 156, 237, 127, 36, 6, 121, 221, 176, 69, 46, 107, 87], stack: [49, 4, 18, 228, 20, 220, 4, 75, 238, 31, 232, 207, 55, 7, 160, 88, 157], root: [112, 141, 30, 12, 145, 72, 235, 242, 75, 8, 67, 163, 192, 247, 145, 241, 50, 32, 144, 41, 80, 244, 9, 133, 140, 29, 88, 179, 9, 107, 62, 172], parent: Some([18, 184, 252, 121, 63, 107, 50, 104, 37, 157, 28, 198, 55, 164, 143, 234, 245, 146, 185, 75, 5, 29, 195, 112, 195, 51, 214, 137, 250, 193, 92, 145, 84]), base_layer: [50, 205, 37, 143, 138, 61, 207, 226, 51, 233, 101, 235, 244, 168, 34, 43, 42, 154, 178, 1, 31, 139, 70, 94, 87, 43, 94, 128, 255, 65, 75, 178, 5] })), installed_revision: None })LFT1 {\"v\":1,\"namespace\":7,\"run\":\"295ac499cc96793cc4b84c60505a83b7\",\"pid\":49157,\"role\":1,\"kind\":\"operation\",\"key\":243000,\"timing\":{  \"name\": \"sdk.shell_package\",  \"elapsed_ns\": 18418756459,  \"outcome\": \"error\",  \"children\": [    {\"name\": \"exec\", \"elapsed_ns\": 8842958292, \"children\": []},    {\"name\": \"commit\", \"elapsed_ns\": 9575685334, \"outcome\": \"error\", \"children\": []}  ]},\"success\":false,\"resource_status\":\"sampled\",\"samples\":1843,\"gaps\":0,\"concurrency\":2,\"cpu_shared_ns\":[1867174000,2176980000],\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":302082584,\"opened_ns\":308550167,\"closed_ns\":18727311417,\"last_ns\":18722008792,\"incarnation\":384651955307,\"largest_gap_ns\":13358416,\"source\":\"getrusage+libproc\",\"last_probe_ns\":24084,\"selected\":3,\"sampled_max_rss\":41041920}",
+    "BENCH_POST_STATUS Ok(WorkspaceStatus { mounted: true, stopping: false, closed: false, active_operations: 0, nodes: 1044, handles: 0, cookies: 0, consumer_accounted_bytes: 1347866, projection: [(\"lookup\", 6255), (\"getattr\", 9385), (\"read\", 0), (\"write\", 2068), (\"readdir\", 36), (\"open\", 0), (\"setattr\", 0), (\"rename\", 0), (\"other\", 18)], upstream_calls: 2053 })"
+  ],
+  "raw_manifest_sha256": "0f4ac6a9d0ac6bd18c541169bedf74a038068a44db5fa1d4adf7eda6be261368",
+  "recorded_counts": [
+    "LFS_C5_CHARGE v=1 phase=prepared dirty_rows=1044 deletion_keys=2050 deletion_key_bytes=45100 rows_charge=467712 deletion_charge=196800 updates_charge=1036212 budget_before=1438288 budget_after_prepare=2102800 budget_after_updates=3139012",
+    "LFS_C5_CHARGE v=1 phase=map_transferred updates=4153 original_map_charge=1036212 key_capacity=72379 value_capacity=434304 ordered_capacity=4153 ordered_charge=199344 buffers_charge=506683 budget_after_transfer=2615762",
+    "LFS_C5_CHARGE v=1 phase=index_prepare updates=4153 updates_charge=506683 ordered_scratch=199344 budget_before_plan=2945947 budget_after_plan=2945947 budget_before_index=2615762 compaction_sources=0",
+    "LFS_INDEX_SCRATCH v=1 generation=2 revision=2070 updates=4153 key_bytes=72379 value_bytes=434304 scratch_prior=131072 scratch_target=1169339 budget_used=2746834 captures=1 frozen_revisions=1"
+  ],
+  "run": {
+    "deferred_cases": [
+      {
+        "case": "failed-command-no-commit-v1",
+        "reason": "OWNER-DEFERRED #276: unmount does not discard dirty changes; original method remains historical, no repeated dirty-close attempt",
+        "status": "OWNER-DEFERRED"
+      }
+    ],
+    "identity": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "f3990da5002290b21f6940881c254920180dfe8254c4e74efe7b199d6701f93b",
+      "product_seal": "da255fdcaa551c986dddcea4a1da54a7d6f9b93eded89771bb1be7172dc19424",
+      "source_commit": "0b2cf37aa803eb7837979a293dec7bc35dfc5740",
+      "source_dirty": false,
+      "source_tree": "65ea32db538508f6d938ec2355638aca917aa8cd"
+    },
+    "prepared": {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+          "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/3fa41b08fb250de42755f18a3f1d97f778797cef24b8a3d31ddabd330af1b715/benchmark_shell",
+          "sha256": "3fa41b08fb250de42755f18a3f1d97f778797cef24b8a3d31ddabd330af1b715"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/e2b82f42e74c7d8f0e7d5ac81e03365846639361dcb3b56573bbb0176a0da8aa/layerfs-daemon",
+          "sha256": "e2b82f42e74c7d8f0e7d5ac81e03365846639361dcb3b56573bbb0176a0da8aa"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "build_mode": "worktree-local locked release; exact daemon/image reuse when sealed",
+      "identity": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "f3990da5002290b21f6940881c254920180dfe8254c4e74efe7b199d6701f93b",
+        "product_seal": "da255fdcaa551c986dddcea4a1da54a7d6f9b93eded89771bb1be7172dc19424",
+        "source_commit": "0b2cf37aa803eb7837979a293dec7bc35dfc5740",
+        "source_dirty": false,
+        "source_tree": "65ea32db538508f6d938ec2355638aca917aa8cd"
+      },
+      "image_build": {
+        "command": [
+          "docker",
+          "build",
+          "-q",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-cause-r076/image-context"
+        ],
+        "exit_code": 0,
+        "mode": "build",
+        "started_ns": 16023660176916,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "b962872021ac3dbcd694b11c4fbeb71a97a964e82e0c9cfb8dc012fcf5d35e69",
+        "timeout": false,
+        "wall_ns": 2885666542
+      },
+      "image_dockerfile_sha256": "d351105281e5e33ecf4b861cdb4f7a42e199830723a73b7226b933223d7cf3e3",
+      "image_id": "sha256:86c07368bd8f92193afcff28db13982ebbd2db53b08925366b73c6fb6b38d15a",
+      "package_image": {
+        "image_id": "sha256:86c07368bd8f92193afcff28db13982ebbd2db53b08925366b73c6fb6b38d15a",
+        "mode": "build",
+        "seal": "1407ea3fdce60a6c8d0883f0cc6efba28f420df40653b8290f4fd62698b46cee",
+        "wall_ns": 367982084
+      },
+      "writer_binary_sha256": "f293d71f2a16aaeecb4de6c1c2cf5b74dfcb0e616204e591f83c3ef802a686d3"
+    },
+    "profile": "package-many-file-functional-clone-v2",
+    "reused_proof_identities": {
+      "dirty_cleanup": "r069 FAIL, #276 comment5903530127",
+      "earlier_families": "FAMILY1/2/4/5/6-CHECKPOINT; F3 r063+unchanged eight rows; product unchanged"
+    },
+    "rows": [
+      {
+        "case": "workspace-shell-package-many-1025-sdk-cause-diagnostic-v1",
+        "status": "FAIL"
+      }
+    ],
+    "schema": "core-workspace-shell-package-run-v2",
+    "selected": [
+      "workspace-shell-package-many-1025-sdk-cause-diagnostic-v1"
+    ],
+    "status": "INCOMPLETE"
+  }
+}

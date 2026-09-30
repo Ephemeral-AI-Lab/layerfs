@@ -672,6 +672,33 @@ impl ProgressFund {
             .ok_or(WorkspaceError::Capacity)?;
         Ok(())
     }
+    /// Admit a C5 page credit from this fund and the same configured quota.
+    /// The initial escrow remains prepaid; larger candidates must account for
+    /// each additional credit before creating a page, with no retry on refusal.
+    pub(crate) fn reserve_credit(&self, bytes: u64) -> Result<(), WorkspaceError> {
+        let mut available = self.available.lock().map_err(|_| WorkspaceError::Io)?;
+        if available.finished {
+            return Err(WorkspaceError::Busy);
+        }
+        let additional = bytes.saturating_sub(available.bytes);
+        if additional != 0 {
+            self.host
+                .upgrade()
+                .ok_or(WorkspaceError::Closed)?
+                .reserve(additional)?;
+            if std::env::var_os("LFS_CAPACITY_DIAGNOSTIC").as_deref()
+                == Some(std::ffi::OsStr::new("1"))
+            {
+                eprintln!(
+                    "LFS_FUND_ADMISSION v=1 requested={bytes} prior={} additional={additional}",
+                    available.bytes
+                );
+            }
+            available.bytes = bytes;
+        }
+        available.bytes -= bytes;
+        Ok(())
+    }
     pub fn give(&self, bytes: u64) -> Result<(), WorkspaceError> {
         let mut available = self.available.lock().map_err(|_| WorkspaceError::Io)?;
         if available.finished {

@@ -237,7 +237,7 @@ impl PageStore {
             .map_err(|_| WorkspaceError::Io)?
             .clone();
         if let Some(fund) = &fund {
-            fund.take(bytes)?;
+            fund.reserve_credit(bytes)?;
         } else {
             self.host.reserve(bytes)?;
         }
