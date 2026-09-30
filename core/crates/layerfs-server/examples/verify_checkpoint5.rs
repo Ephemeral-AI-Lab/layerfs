@@ -9,7 +9,7 @@
 use layerfs_content::{
     filesystem::{read::FilesystemRead, root::FilesystemRootId},
     inode_leaf::InodeKind,
-    read_all, LogicalPath,
+    read_all, LogicalPath, PathName,
 };
 use layerfs_history::{sqlite::open_read_only, BranchId, HistoryCatalog, LayerStackId};
 use layerfs_storage::{Store, StoreProvider};
@@ -100,27 +100,39 @@ fn verify_tree(
     provider: &StoreProvider<'_>,
     root: layerfs_content::ObjectId,
     expected: &BTreeMap<String, Expected>,
+    components: bool,
 ) -> Result<(usize, usize, u64), Box<dyn std::error::Error>> {
     let mut tree = FilesystemRead::new(provider, FilesystemRootId(root))?;
-    let mut queue = VecDeque::from([String::new()]);
+    let root_serial = tree.resolve(&LogicalPath::new("")?)?.serial;
+    let mut queue = VecDeque::from([(String::new(), root_serial)]);
     let mut seen = BTreeSet::new();
     let mut files = 0;
     let mut bytes = 0;
-    while let Some(path) = queue.pop_front() {
+    while let Some((path, serial)) = queue.pop_front() {
         if !seen.insert(path.clone()) {
             return Err("duplicate actual path".into());
         }
         let wanted = expected
             .get(&path)
             .ok_or_else(|| format!("unexpected path {path}"))?;
-        let logical = LogicalPath::new(&path)?;
-        let value = tree.resolve(&logical)?.value;
+        let logical = if components {
+            None
+        } else {
+            Some(LogicalPath::new(&path)?)
+        };
+        let value = match &logical {
+            Some(path) => tree.resolve(path)?.value,
+            None => tree.resolve_inode(serial)?.value,
+        };
         let kind = match value.kind {
             InodeKind::Directory => 'd',
             InodeKind::RegularFile => 'f',
             InodeKind::Symlink => return Err("unexpected symlink".into()),
         };
-        let portable = tree.read_portable(&logical)?;
+        let portable = match &logical {
+            Some(path) => tree.read_portable(path)?,
+            None => tree.read_portable_inode(serial)?,
+        };
         if kind != wanted.kind || portable.mode != wanted.mode {
             return Err(format!("type/mode mismatch {path}").into());
         }
@@ -141,13 +153,19 @@ fn verify_tree(
         } else {
             let mut after = None;
             loop {
-                let page = tree.list(&logical, after.as_ref(), 128, 16_384)?;
-                for (name, _) in &page.entries {
-                    queue.push_back(if path.is_empty() {
-                        name.as_str().to_owned()
-                    } else {
-                        format!("{path}/{}", name.as_str())
-                    });
+                let page = match &logical {
+                    Some(path) => tree.list(path, after.as_ref(), 128, 16_384)?,
+                    None => tree.list_inode(serial, after.as_ref(), 128, 16_384)?,
+                };
+                for (name, child) in &page.entries {
+                    queue.push_back((
+                        if path.is_empty() {
+                            name.as_str().to_owned()
+                        } else {
+                            format!("{path}/{}", name.as_str())
+                        },
+                        *child,
+                    ));
                 }
                 after = page.continuation;
                 if after.is_none() {
@@ -173,6 +191,56 @@ fn read_one(
     })
     .0?;
     Ok(bytes)
+}
+
+fn verify_namespace_identities(
+    provider: &StoreProvider<'_>,
+    old: layerfs_content::ObjectId,
+    new: layerfs_content::ObjectId,
+    expected: &BTreeMap<String, Expected>,
+    case: &BTreeMap<String, String>,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let before = case
+        .get("identity_old_prefix")
+        .ok_or("old identity prefix")?;
+    let after = case
+        .get("identity_new_prefix")
+        .ok_or("new identity prefix")?;
+    let replaced = case.get("identity_replaced");
+    let mut old_tree = FilesystemRead::new(provider, FilesystemRootId(old))?;
+    let mut new_tree = FilesystemRead::new(provider, FilesystemRootId(new))?;
+    let resolve =
+        |tree: &mut FilesystemRead<'_>, path: &str| -> Result<u64, Box<dyn std::error::Error>> {
+            let mut serial = tree.resolve(&LogicalPath::new("")?)?.serial;
+            for name in path.split('/').filter(|name| !name.is_empty()) {
+                serial = tree.resolve_child(serial, &PathName::new(name)?)?.serial;
+            }
+            Ok(serial)
+        };
+    let mut count = 0;
+    for path in expected.keys().filter(|path| {
+        before.is_empty() || *path == before || path.starts_with(&format!("{before}/"))
+    }) {
+        let moved = if before.is_empty() {
+            path.clone()
+        } else {
+            format!("{after}{}", &path[before.len()..])
+        };
+        let old_serial = resolve(&mut old_tree, path)?;
+        let new_serial = resolve(&mut new_tree, &moved)?;
+        if replaced == Some(&moved) {
+            if old_serial == new_serial {
+                return Err("replacement retained old inode identity".into());
+            }
+        } else if old_serial != new_serial {
+            return Err(format!("moved inode identity changed: {path}").into());
+        }
+        count += 1;
+    }
+    if count == 0 {
+        return Err("empty namespace identity scope".into());
+    }
+    Ok(count)
 }
 /// Re-derive the declared matrix schedule for `count` bytes and check the
 /// unchanged old head, every new byte, the final length and changed-run count.
@@ -262,7 +330,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cursor: [u8; 32] = unhex(&std::env::var("LAYERFS_HISTORY_CURSOR_KEY")?)?
         .try_into()
         .map_err(|_| "cursor width")?;
-    let history = open_read_only(Path::new(&args[3]), b"layerfs-bench-pro", cursor)?;
+    let binding = case
+        .get("binding_key_hex")
+        .map(|value| unhex(value))
+        .transpose()?;
+    let history = open_read_only(
+        Path::new(&args[3]),
+        binding.as_deref().unwrap_or(b"layerfs-bench-pro"),
+        cursor,
+    )?;
     let project = unhex(get("project_id")?)?;
     let stack: [u8; 16] = project[1..].try_into()?;
     let stack = history
@@ -315,13 +391,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let store = Timing::disabled("open", |scope| Store::open(&args[2], scope.child("store"))).0?;
     let provider = StoreProvider::new(&store);
-    let old_tree = verify_tree(&provider, old_record.root, &manifest(&args[4])?)?;
+    let components = case
+        .get("component_oracle")
+        .is_some_and(|value| value == "1");
+    let old_tree = verify_tree(&provider, old_record.root, &manifest(&args[4])?, components)?;
     let new_tree = match &committed {
-        Some(record) => Some(verify_tree(&provider, record.root, &manifest(&args[5])?)?),
+        Some(record) => Some(verify_tree(
+            &provider,
+            record.root,
+            &manifest(&args[5])?,
+            components,
+        )?),
         None if !expected_failure => Some(verify_tree(
             &provider,
             old_record.root,
             &manifest(&args[5])?,
+            components,
         )?),
         None => None,
     };
@@ -348,8 +433,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?),
         _ => None,
     };
+    let namespace_identities = if case.contains_key("identity_old_prefix") {
+        let record = committed
+            .as_ref()
+            .ok_or("namespace selection needs a new Commit")?;
+        Some(verify_namespace_identities(
+            &provider,
+            old_record.root,
+            record.root,
+            &manifest(&args[4])?,
+            &case,
+        )?)
+    } else {
+        None
+    };
     println!(
-        "{{\"status\":\"PASS\",\"oracle\":\"issue273-checkpoint5-v1\",\"old_commit\":{:?},\"head_commit\":{:?},\"advanced\":{},\"old_paths\":{},\"old_files\":{},\"old_bytes\":{},\"new_paths\":{},\"new_files\":{},\"new_bytes\":{},\"separated_runs\":{},\"pattern_runs\":{}}}",
+        "{{\"status\":\"PASS\",\"oracle\":\"issue273-checkpoint5-v1\",\"old_commit\":{:?},\"head_commit\":{:?},\"advanced\":{},\"old_paths\":{},\"old_files\":{},\"old_bytes\":{},\"new_paths\":{},\"new_files\":{},\"new_bytes\":{},\"separated_runs\":{},\"pattern_runs\":{},\"namespace_identities\":{}}}",
         hex(&old.to_bytes()),
         hex(&head.to_bytes()),
         advanced,
@@ -361,6 +460,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         new_tree.map_or("null".to_owned(), |tree| tree.2.to_string()),
         separated_runs.map_or("null".to_owned(), |runs| runs.to_string()),
         pattern_runs.map_or("null".to_owned(), |runs| runs.to_string()),
+        namespace_identities.map_or("null".to_owned(), |count| count.to_string()),
     );
     Ok(())
 }

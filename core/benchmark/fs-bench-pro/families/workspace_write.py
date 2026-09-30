@@ -147,7 +147,7 @@ def assess_numeric_cache(row):
             "reason": "Commit cache domain is not proved by cold host source plus private direct I/O"}
 
 
-def build(out, runner, identity, *, reuse_image=None):
+def build(out, runner, identity, *, reuse_image=None, artifacts_only=False):
     if sys.platform != "darwin":
         raise RuntimeError("this cold-source profile requires Darwin mincore/msync and libproc")
     for name, expected in DIRECT_IO_FILES.items():
@@ -217,6 +217,13 @@ def build(out, runner, identity, *, reuse_image=None):
     save(out / "image-build.json", image)
     if subprocess.check_output(["docker", "image", "inspect", image_id, "--format", "{{.Id}}"], text=True).strip() != image_id:
         raise ValueError("image ID mismatch")
+    if artifacts_only:
+        prepared = {"identity": identity, "artifacts": artifacts, "image_id": image_id,
+                    "image_dockerfile_sha256": sha256(context / "Dockerfile"),
+                    "writer_binary_sha256": WRITER_SHA256, "image_build": image,
+                    "build_mode": "worktree-local locked release; exact daemon/image reuse when sealed"}
+        save(out / "prepared-artifacts.json", prepared)
+        return prepared
     old = master()
     oracle = manifests()
     (out / "old.tsv").write_text(oracle.pop("old"))

@@ -65,7 +65,7 @@ def checked(command, destination, timeout=60):
 
 def build(out, common, identity):
     files = [common.ROOT / "core/crates/layerfs-api/sdk/tests/inherited_workspace.rs",
-             common.ROOT / "core/crates/layerfs-api/sdk/tests/support/phase_b_commit.rs"]
+             *sorted((common.ROOT / "core/crates/layerfs-api/sdk/tests/support").glob("*.rs"))]
     test_seal = common.seal(files)
     inputs = {"product_seal": identity["product_seal"], "test_source_seal": test_seal,
               "cargo_lock_sha256": identity["cargo_lock_sha256"], "profile": "release",
@@ -100,10 +100,11 @@ def build(out, common, identity):
     return result
 
 
-def masters(out, container, common, identity, binary, needed):
+def masters(out, container, common, identity, binary, needed, *, layouts=None):
     root = common.RESULTS / "workspace-commit-native-master-v1"
     result = {}
-    for name, size in (("small", 0), ("large", 64 << 20), ("count", 327_680)):
+    layouts = layouts or {"small": (0, 0, False, 0), "large": (64 << 20, 0, False, 0), "count": (327_680, 0, False, 0)}
+    for name, (size, extra, deep, unrelated) in layouts.items():
         if name not in needed:
             continue
         path = root / name
@@ -111,14 +112,16 @@ def masters(out, container, common, identity, binary, needed):
         reused = seal.exists()
         if reused:
             prepared = json.loads(seal.read_text())
-            if prepared["size"] != size:
-                raise ValueError("prepared size mismatch")
+            if (prepared["size"], prepared.get("extra", 0), prepared.get("deep", False), prepared.get("unrelated", 0)) != (size, extra, deep, unrelated):
+                raise ValueError("prepared layout mismatch")
         else:
             if path.exists():
                 raise ValueError("incomplete master retained; no overwrite")
             path.mkdir(parents=True)
             record, stdout, _ = invoke(["docker", "exec", "-e", f"LAYERFS_PHASE_B_PREPARE=/work/master-{name}",
-                                       "-e", f"LAYERFS_PHASE_B_SIZE={size}", container, "/test",
+                                       "-e", f"LAYERFS_PHASE_B_SIZE={size}",
+                                       "-e", f"LAYERFS_PHASE_B_EXTRA={extra}", "-e", f"LAYERFS_PHASE_B_DEEP={int(deep)}",
+                                       "-e", f"LAYERFS_PHASE_B_UNRELATED={unrelated}", container, "/test",
                                        "--exact", "phase_b_commit::prepare_master", "--ignored", "--nocapture"],
                                       out / f"prepare-{name}")
             if record["exit_code"] != 0 or b"closed=true" not in stdout:
@@ -126,7 +129,7 @@ def masters(out, container, common, identity, binary, needed):
             for file in ("store.sqlite", "history.sqlite", "fixture.before"):
                 checked(["docker", "cp", f"{container}:/work/master-{name}/{file}", str(path / file)], out / f"acquire-{name}-{file}")
                 (path / file).chmod(0o444)
-            prepared = {"size": size, "path": str(path), "preparation": record,
+            prepared = {"size": size, "extra": extra, "deep": deep, "unrelated": unrelated, "path": str(path), "preparation": record,
                         "producer_source": identity, "producer_binary": binary,
                         "files": {file: shared.sha256(path / file) for file in ("store.sqlite", "history.sqlite", "fixture.before")},
                         "oracle": "grand-base/sibling-base; large data[i]=i%251; full relevant bytes checked in native child"}
@@ -164,8 +167,10 @@ def attempt(out, case, prepared, container):
                container, "/test", "--exact", case.test, "--test-threads=1", "--nocapture"]
     if case.ignored:
         command.append("--include-ignored")
+    for key, value in getattr(case, "environment", ()):
+        command[2:2] = ["-e", f"{key}={value}"]
     record, stdout, stderr = invoke(command, folder / "functional", case.budget_ns / 1e9)
-    ok = record["exit_code"] == 0 and not record["timeout"] and b"1 passed" in stdout and b"initialized=false" in stdout
+    ok = record["exit_code"] == 0 and not record["timeout"] and record["wall_ns"] <= case.budget_ns and b"1 passed" in stdout and b"initialized=false" in stdout
     expected_retained = case.retained or any(line.startswith(b"PHASE_B_COUNT") and b"retained=true" in line for line in stdout.splitlines())
     if expected_retained or not ok:
         checked(["docker", "cp", f"{container}:/work/{case.id}", str(folder / "retained-linux-state")], folder / "custody-copy")
@@ -176,22 +181,23 @@ def attempt(out, case, prepared, container):
            "verification_scope": "in-child full relevant old/new/G1/G2/pin bytes, quota/custody assertions; no separate speed arm",
            "cleanup_status": "EXPECTED_RETAINED" if ok and expected_retained else "PASS" if ok else "UNKNOWN",
            "clone_method": "independent byte copy; Linux setup ownership 0:0; host and Linux byte hashes matched; closed prepared master",
-           "prepared": prepared, "observations": [line for line in stdout.decode(errors="replace").splitlines() if line.startswith("PHASE_")],
+           "prepared": prepared, "observations": [line for line in stdout.decode(errors="replace").splitlines() if line.startswith(("PHASE_", "INHERITED_", "RENAME_"))],
            "sdk_time": "N/A: native component route", "cache_contract": "uncontrolled, functional only"}
     shared.save(folder / "receipt.json", row)
     return row
 
 
-def run(selection, output, common):
+def run(selection, output, common, *, cases=None, selected=None, profile=PROFILE, schema=SCHEMA, prepare=masters):
     out = common.owned(output)
     identity = common.identities()
     if identity["source_dirty"]:
         raise ValueError("commit the native control before collection")
     out.mkdir(parents=True)
-    selected = SELECTED if selection == "workspace-commit-native" else SELECTED[1:] if selection == "workspace-commit-native-tail" else COUNTS if selection == "workspace-commit-native-counts" else RECONCILIATION if selection == "workspace-commit-native-reconciliation" else (selection,)
-    summary = {"schema": SCHEMA, "profile": PROFILE, "identity": identity, "selected": list(selected), "rows": [],
+    cases = CASES if cases is None else cases
+    selected = selected if selected is not None else SELECTED if selection == "workspace-commit-native" else SELECTED[1:] if selection == "workspace-commit-native-tail" else COUNTS if selection == "workspace-commit-native-counts" else RECONCILIATION if selection == "workspace-commit-native-reconciliation" else (selection,)
+    summary = {"schema": schema, "profile": profile, "identity": identity, "selected": list(selected), "rows": [],
                "earlier_family_policy": "unaffected production and earlier evidence reused; no earlier resampling"}
-    if all(CASES[name].owner_deferred for name in selected):
+    if all(cases[name].owner_deferred for name in selected):
         summary["rows"] = [{"case": name, "status": "SKIPPED / OWNER-DEFERRED", "sample_count": 0,
             "reason": "owner explicitly deferred further10240 attempts and bounded-memory architecture work to issue276",
             "cleanup_status": "N/A: no resources acquired"} for name in selected]
@@ -217,15 +223,15 @@ def run(selection, output, common):
             summary["backing"] = checked(["docker", "exec", container, "stat", "-f", "-c", "%t %S", "/work"], out / "backing-profile").decode().strip()
             if summary["backing"] != "ef53 4096":
                 raise ValueError("required Linux backing filesystem profile missing")
-            prepared = masters(out, container, common, identity, build_record["binary"], {CASES[name].master for name in selected if not CASES[name].owner_deferred})
+            prepared = prepare(out, container, common, identity, build_record["binary"], {cases[name].master for name in selected if not cases[name].owner_deferred})
             for name in selected:
-                if CASES[name].owner_deferred:
+                if cases[name].owner_deferred:
                     summary["rows"].append({"case": name, "status": "SKIPPED / OWNER-DEFERRED", "sample_count": 0,
                         "reason": "owner explicitly deferred further10240 attempts and bounded-memory architecture work to issue276",
                         "cleanup_status": "N/A: no resources acquired"})
                     continue
                 try:
-                    row = attempt(out, CASES[name], prepared[CASES[name].master], container)
+                    row = attempt(out, cases[name], prepared[cases[name].master], container)
                 except Exception as error:
                     row = {"case": name, "status": "FAIL", "reason": repr(error)}
                     shared.save(out / f"{name}-failure.json", row)
@@ -243,7 +249,7 @@ def run(selection, output, common):
     for name in selected[len(summary["rows"]):]:
         summary["rows"].append({"case": name, "status": "NOT_RUN", "reason": summary.get("error", "prior case failed")})
     qualified = all(row["status"] in ("PASS", "SKIPPED / OWNER-DEFERRED") for row in summary["rows"])
-    summary["status"] = ("SCOPED_PASS_WITH_OWNER_DEFERRED" if any(CASES[name].owner_deferred for name in selected) else "PASS") if qualified and all(row["exit_code"] == 0 for row in cleanup) else "INCOMPLETE"
+    summary["status"] = ("SCOPED_PASS_WITH_OWNER_DEFERRED" if any(cases[name].owner_deferred for name in selected) else "PASS") if qualified and all(row["exit_code"] == 0 for row in cleanup) else "INCOMPLETE"
     shared.save(out / "run.json", summary)
     common.manifest_run(out)
     return out

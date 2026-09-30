@@ -104,10 +104,14 @@ fn pinned_digest(
     api: &WorkspaceApi<'_>,
     lease: &WorkspaceViewLease,
     request_bytes: usize,
+    path: &[u8],
 ) -> Result<(u64, String), String> {
-    let file = api
-        .view_lookup(lease, lease.root(), b"data.bin")
-        .map_err(|e| format!("pin lookup: {e:?}"))?;
+    let mut file = lease.root().clone();
+    for name in path.split(|byte| *byte == b'/') {
+        file = api
+            .view_lookup(lease, &file, name)
+            .map_err(|e| format!("pin lookup: {e:?}"))?;
+    }
     let mut offset = 0;
     let mut hash = Sha256::new();
     while offset < file.size {
@@ -184,7 +188,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.len() != 6 {
         return Err("mode case store history image required".into());
     }
-    let seed = args[1] == "seed";
+    let seed = args[1] == "seed" || args[1] == "seed-existing";
     if !seed && args[1] != "run" {
         return Err("unknown mode".into());
     }
@@ -231,7 +235,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server = Server::open(ServerConfig {
         store_path: args[3].clone().into(),
         history_path: args[4].clone().into(),
-        binding_key: b"layerfs-bench-pro".to_vec(),
+        binding_key: if case.0.contains_key("binding_key_hex") {
+            case.bytes("binding_key_hex")?
+        } else {
+            b"layerfs-bench-pro".to_vec()
+        },
         incarnation: 1,
         cursor_key: key(&std::env::var("LAYERFS_HISTORY_CURSOR_KEY")?)?,
         history: HistoryMode::OpenWritable,
@@ -258,7 +266,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|_| "root id width")?,
         root_serial: case.get("genesis_root_serial")?.parse()?,
     };
-    let branch = if seed {
+    let branch = if args[1] == "seed" {
         ProjectApi::new(&server)
             .fork(
                 &project,
@@ -456,7 +464,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             detail = format!("{detail}; held pin identity/status changed");
         }
         if pin_read_bytes > 0 {
-            match pinned_digest(&workspaces, held, pin_read_bytes) {
+            let pin_path = if case.0.contains_key("pin_path_hex") {
+                case.bytes("pin_path_hex")?
+            } else {
+                b"data.bin".to_vec()
+            };
+            match pinned_digest(&workspaces, held, pin_read_bytes, &pin_path) {
                 Ok((bytes, digest)) => {
                     pinned_bytes = bytes;
                     pinned_sha256 = digest;

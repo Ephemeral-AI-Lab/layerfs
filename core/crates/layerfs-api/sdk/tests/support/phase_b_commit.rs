@@ -17,8 +17,6 @@ fn hex(bytes: &[u8]) -> String {
 }
 pub(super) fn open_prepared(extra: usize, deep: bool) -> Option<(Arc<Server>, Project, [u8; 17])> {
     let directory = std::env::var_os("LAYERFS_PHASE_B_CLONES")?;
-    assert_eq!(extra, 0);
-    assert!(!deep);
     static CLONE: AtomicU64 = AtomicU64::new(0);
     let path =
         PathBuf::from(directory).join(format!("clone-{}", CLONE.fetch_add(1, Ordering::Relaxed)));
@@ -27,6 +25,16 @@ pub(super) fn open_prepared(extra: usize, deep: bool) -> Option<(Arc<Server>, Pr
         .lines()
         .map(|line| line.split_once('=').unwrap())
         .collect();
+    assert_eq!(
+        fields
+            .get("extra")
+            .copied()
+            .unwrap_or("0")
+            .parse::<usize>()
+            .unwrap(),
+        extra
+    );
+    assert_eq!(fields.get("deep").copied().unwrap_or("0") == "1", deep);
     let project = Project {
         id: unhex(fields["project_id"]),
         genesis_layer: unhex(fields["genesis_layer"]),
@@ -64,18 +72,28 @@ fn prepare_master() {
         .unwrap()
         .parse()
         .unwrap();
-    let (server, project, branch) = fresh_project(&path, 0, false, large);
+    let extra = std::env::var("LAYERFS_PHASE_B_EXTRA")
+        .unwrap_or_else(|_| "0".into())
+        .parse()
+        .unwrap();
+    let deep = std::env::var("LAYERFS_PHASE_B_DEEP").is_ok_and(|value| value == "1");
+    let unrelated = std::env::var("LAYERFS_PHASE_B_UNRELATED")
+        .unwrap_or_else(|_| "0".into())
+        .parse()
+        .unwrap();
+    let (server, project, branch) = fresh_layout(&path, extra, deep, large, unrelated);
     drop(server);
     fs::write(
         path.join("fixture.before"),
         format!(
-            "project_id={}\ngenesis_layer={}\nroot={}\nroot_serial={}\nbranch_id={}\nsize={}\n",
+            "project_id={}\ngenesis_layer={}\nroot={}\nroot_serial={}\nbranch_id={}\nsize={}\nextra={extra}\ndeep={}\nunrelated={unrelated}\n",
             hex(&project.id),
             hex(&project.genesis_layer),
             hex(&project.root),
             project.root_serial,
             hex(&branch),
-            large
+            large,
+            u8::from(deep)
         ),
     )
     .unwrap();
@@ -90,6 +108,16 @@ pub(super) fn fresh_project(
     extra: usize,
     deep: bool,
     large: usize,
+) -> (Arc<Server>, Project, [u8; 17]) {
+    fresh_layout(path, extra, deep, large, 0)
+}
+
+fn fresh_layout(
+    path: &std::path::Path,
+    extra: usize,
+    deep: bool,
+    large: usize,
+    unrelated: usize,
 ) -> (Arc<Server>, Project, [u8; 17]) {
     let source = path.join("source");
     fs::create_dir_all(source.join("packages/old/subtree/child")).unwrap();
@@ -118,6 +146,12 @@ pub(super) fn fresh_project(
         }
         fs::create_dir_all(&path).unwrap();
         fs::write(path.join("leaf"), b"deep-base").unwrap();
+    }
+    if unrelated != 0 {
+        fs::create_dir(source.join("unrelated")).unwrap();
+        for index in 0..unrelated {
+            fs::write(source.join(format!("unrelated/f{index:03}")), b"u").unwrap();
+        }
     }
     if large != 0 {
         use std::io::Write;

@@ -3,6 +3,8 @@
 
 #[path = "support/phase_b_commit.rs"]
 mod phase_b_commit;
+#[path = "support/phase_b_namespace.rs"]
+mod phase_b_namespace;
 
 use layerfs_bridge::contract::{
     Code, CommitOutcomeWire, Failure, HistoryCommand, Inspect, Operation, Request, Response, Root,
@@ -813,10 +815,20 @@ fn growing_rename_refuses_private_budget_before_publication() {
     let baseline = Fixture::new();
     let root = baseline.workspace.root().serial;
     let packages = baseline.lookup(root, b"packages");
-    baseline.lookup(packages.serial, b"old");
-    baseline.lookup(packages.serial, b"new");
+    let old = baseline.lookup(packages.serial, b"old");
+    let new = baseline.lookup(packages.serial, b"new");
     let baseline_bytes = baseline.workspace.backing_status().unwrap().allocated_bytes;
     let quota = baseline_bytes + 8192;
+    for serial in [packages.serial, old.serial, new.serial] {
+        baseline
+            .workspace
+            .forget(serial, u64::MAX, ReferenceScope::Local);
+    }
+    baseline.workspace.close_clean().unwrap();
+    assert_eq!(
+        baseline.workspace.backing_status().unwrap().allocated_bytes,
+        0
+    );
     drop(baseline);
     let f = Fixture::with_layout_quota(0, false, quota);
     let root = f.workspace.root().serial;
