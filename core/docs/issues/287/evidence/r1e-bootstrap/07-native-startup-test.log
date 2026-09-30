@@ -1,0 +1,82 @@
+   Compiling version_check v0.9.5
+   Compiling typenum v1.20.1
+   Compiling subtle v2.6.1
+   Compiling glob v0.3.4
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.24
+   Compiling minimal-lexical v0.2.1
+   Compiling autocfg v1.5.1
+   Compiling memchr v2.8.3
+   Compiling regex-syntax v0.8.11
+   Compiling zeroize v1.9.0
+   Compiling getrandom v0.2.17
+   Compiling cfg-if v1.0.4
+   Compiling libloading v0.8.9
+   Compiling bindgen v0.72.1
+   Compiling rand_core v0.6.4
+   Compiling either v1.18.0
+   Compiling semver v1.0.28
+   Compiling nix v0.31.3
+   Compiling cpufeatures v0.2.17
+   Compiling generic-array v0.14.7
+   Compiling clang-sys v1.9.1
+   Compiling shlex v1.3.0
+   Compiling itertools v0.13.0
+   Compiling bitflags v2.13.1
+   Compiling memoffset v0.9.1
+   Compiling nom v7.1.3
+   Compiling rustc_version v0.4.1
+   Compiling opaque-debug v0.3.1
+   Compiling rustc-hash v2.1.3
+   Compiling errno v0.3.14
+   Compiling curve25519-dalek v4.1.3
+   Compiling snow v0.9.6
+   Compiling regex-automata v0.4.18
+   Compiling cexpr v0.6.0
+   Compiling regex v1.13.1
+   Compiling syn v2.0.119
+   Compiling crypto-common v0.1.7
+   Compiling inout v0.1.4
+   Compiling block-buffer v0.10.4
+   Compiling universal-hash v0.5.1
+   Compiling aead v0.5.2
+   Compiling cipher v0.4.4
+   Compiling digest v0.10.7
+   Compiling polyval v0.6.2
+   Compiling poly1305 v0.8.0
+   Compiling sha2 v0.10.9
+   Compiling blake2 v0.10.6
+   Compiling ctr v0.9.2
+   Compiling chacha20 v0.9.1
+   Compiling aes v0.8.4
+   Compiling ghash v0.5.1
+   Compiling chacha20poly1305 v0.10.1
+   Compiling aes-gcm v0.10.3
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-bridge)
+   Compiling layerfs-api-core v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-api/core)
+   Compiling libproc v0.14.11
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-telemetry)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-content)
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-sandbox)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-storage)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 19.13s
+     Running tests/engine_startup.rs (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/engine_startup-4d0f2cdf640fc3c6)
+
+running 1 test
+
+thread 'selected_darwin_native_binary_refuses_before_host_or_store_effects' panicked at crates/layerfs-server/tests/engine_startup.rs:70:13:
+native stderr ended before diagnostic: []
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test selected_darwin_native_binary_refuses_before_host_or_store_effects ... FAILED
+
+failures:
+
+failures:
+    selected_darwin_native_binary_refuses_before_host_or_store_effects
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
+
+error: test failed, to rerun pass `-p layerfs-server --test engine_startup`

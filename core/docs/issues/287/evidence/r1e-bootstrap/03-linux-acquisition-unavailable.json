@@ -1,0 +1,6 @@
+{
+  "owned_pid": 31607,
+  "command": "docker pull rust:1.85.1-bookworm",
+  "disposition": "cancelled owned silent image acquisition after over4min; no Cargo/Linux proof reached",
+  "scope": "tool/provider acquisition only; no benchmark timeout/profile change or foreign interruption"
+}

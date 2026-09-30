@@ -1,5 +1,17 @@
 # Service, bridge, daemon and hosted telemetry
 
+> **#287 R1e native startup:** Against parent
+> `d1e478ffb97905eb77acdeef288fa091c40cae2d`, the actual native Server binary
+> borrows its unforgeable required32MiB SQLite guard before host configuration,
+> Store/history or worker effects. The selected Apple3.51.0 provider cannot
+> establish that limit; this binary reports bounded explicit refusal and exits
+> before those effects. No older unguarded native fallback is selected. Direct
+> legacy logical library composition remains separately scoped. Linux successful
+> startup/body, protected progress and physical containment remain unrun; the
+> [bootstrap contract](../issues/287/R1E-BOOTSTRAP-FREEZE.md) and
+> [owning log](../issues/287/IMPLEMENTATION-LOG.md) preserve all failures and
+> exact provider/custody observations. Strict/concurrent enablement stays gated.
+
 > **#287 R1c prepared namespace composition:** The source in this commit, against
 > parent `06fe8363d5c317c49876d5189d374c1a34cc6010`, admits native DirectoryRoots
 > scratch after captured catalog/head/base/scope validation and before Save/body

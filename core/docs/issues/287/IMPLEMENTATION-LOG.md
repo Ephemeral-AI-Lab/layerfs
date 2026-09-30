@@ -821,3 +821,51 @@ Docker-scoped. Neither possibility replaces unavailable native physical Server
 proof. Current single next checkpoint: exact R1e provider support/refusal and
 known custody, while independent binding-input design can continue. R1 remains
 open and strict/concurrent/benchmark/release admission stays disabled.
+
+
+## R1d published; R1e capability-limited checkpoint source
+
+R1d actuald1e478ffb97905eb77acdeef288fa091c40cae2d first-parent/committed
+archive recount139180/reference65417/Core73763 matches; normal push/remote and
+#287 comment5917668281/body append confirmed. Full R1 stays open.
+
+R1e selected real provider /usr/lib/libsqlite3.dylib Apple3.51.0/source ending
+f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl cannot
+establish required33554432: config/init0,setterprior0,readback0. Original02 gate
+exits101/two primary refusal PASS/four eligible FAIL; helper excluded.04 bounded
+actual8192 cause proves bytes0→8192→0/count0→1→0/free once only. No guessed
+stub/macro/physical bound/dependency patch/provider/limit/fallback/reset/retry.
+Corrected custody records attempt separately from exact installed; Unsupported
+preserves actual value/stage. Distinct06 refusal1 PASS verifies original cached
+failure, no Guard/probe/Store/scratch. Four prior eligible failures stay FAIL.
+
+Native main refused but its first07 proof FAIL exposed Display>512 discarded by
+existing bounded diagnostic.08 direct cause retained. Compact stage/cause/essential
+custody retains512 bound;10 new actual binary1 primary/two children PASS covers
+missing/configured host, unchanged marker/no file effects/finite reaping.
+Linux ready/EOF/eligible bodies are unrun. Owned image acquisition silent over4min
+was cancelled/reaped137; no Linux build/provider/physical proof reached.
+
+Failed11/13/15 Clippy logs remain; equivalent closed range/external enumerate/
+hex writer corrections cover failed lint scope; final17 PASS.18 locked examples
+compile only.19 exact staged-source whole-Core fmt/boundary385/guard9 pass;
+unaffected2 SDK telemetry tests/root counter checks reused. Both guarded main
+and exact Storage FFI are normative audited exceptions, siblings remain denied.
+Build/check source is private exact staged archive inside own core/target,
+CARGO_TARGET_DIR same own target; independent developing binding source excluded.
+Final checked/count Core subtreef320eacf9bb5b991fcca104a8c83047ef3584368.
+Full final Core/Linux/physical/eligible/protected/healthy/factory-drain remains open.
+
+Same revised counter/version/scope on actual first-parent/staged Git archives:
+Production LOC:139180 ->139582 (delta+402).
+Reference:65417 ->65417 (delta+0).
+Core:73763 ->74165 (delta+402).
+Per-file/exclusion/method retained in evidence/r1e-bootstrap/PRODUCTION-LOC.json.
+Commit/recount/normal push/remote/#287 confirmation follows actual source; no
+future commitSHA guessed. Disposition CAPABILITY-LIMITED, not complete32MiB.
+Native executable explicitly unsupported on selected Apple provider; direct
+logical legacy library composition remains separate. No strict/concurrent/
+benchmark/release admission. Current next action R1d-binding-input complete
+Server caller and independent names/root/resource/EOF/knowncleanup proofs;
+remaining graph/paged/engine/provider gates stay open. #288 delegated/unrun,
+no campaign/runner/family/issue edit or historical receipt rewrite.

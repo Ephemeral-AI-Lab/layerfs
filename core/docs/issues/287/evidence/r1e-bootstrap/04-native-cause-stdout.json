@@ -1,0 +1,56 @@
+{
+  "purpose": "labelled native cause diagnostic, not an eligible-arm rerun",
+  "library": "/usr/lib/libsqlite3.dylib",
+  "machine": "arm64",
+  "requested_limit": 33554432,
+  "probe_request": 8192,
+  "free_attempts": 1,
+  "reset": false,
+  "retry": false,
+  "config_memstatus": 0,
+  "initialize": 0,
+  "previous_limit": 0,
+  "setter_previous_limit": 0,
+  "readback_limit": 0,
+  "provider_version": "3.51.0",
+  "provider_source_id": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl",
+  "hard_limit_code_first64_hex": "7f2303d5ffc301d1f44f05a9fd7b06a9fd830191f30300aa3cf6fd97c000003400008092fd7b46a9f44f45a9ffc30191ff0f5fd69305f8b7e8c30091ff2303a9",
+  "before": {
+    "bytes": {
+      "return": 0,
+      "current": 0,
+      "lifetime_highwater": 48
+    },
+    "allocations": {
+      "return": 0,
+      "current": 0,
+      "lifetime_highwater": 3
+    }
+  },
+  "issued": true,
+  "actual_msize": 8192,
+  "during": {
+    "bytes": {
+      "return": 0,
+      "current": 8192,
+      "lifetime_highwater": 8192
+    },
+    "allocations": {
+      "return": 0,
+      "current": 1,
+      "lifetime_highwater": 3
+    }
+  },
+  "after": {
+    "bytes": {
+      "return": 0,
+      "current": 0,
+      "lifetime_highwater": 8192
+    },
+    "allocations": {
+      "return": 0,
+      "current": 0,
+      "lifetime_highwater": 3
+    }
+  }
+}

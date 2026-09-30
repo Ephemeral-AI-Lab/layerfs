@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "clippy",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "-p",
+    "layerfs-server",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot",
+  "cargo_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target",
+  "source_tree": "d02d87f31fb37d147d3c6fd6b93191721d88184b",
+  "exit": 0,
+  "wall_seconds": 0.4503461659915047,
+  "scope": "corrected failed all-target lint; no performance"
+}

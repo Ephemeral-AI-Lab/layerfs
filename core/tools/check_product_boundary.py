@@ -13,18 +13,21 @@ IMPL = re.compile(r"\b(?:struct|enum|trait|impl|union|static|const|let|if|else|m
 DOC_CODE = re.compile(r"^\s*(?:///|//!)\s*```", re.MULTILINE)
 UNSAFE = re.compile(r"\bunsafe\b")
 
-# Crates whose `unsafe` surface is bounded. layerfs-storage keeps one audited
-# FFI module (encoding/codec.rs); its siblings must stay unsafe-free. The
+# Crates whose `unsafe` surface is bounded. Storage isolates codec FFI and
+# exclusive SQLite bootstrap FFI; Server permits only its early native main.
+# Their remaining source stays unsafe-free. The
 # comment in a lint name (`unsafe_code`) is not the bare word, so attr lines
 # never trip the scan once comments are stripped.
 UNSAFE_AUDITED_MODULE = {
-    "layerfs-storage": "src/encoding/codec.rs",
+    "layerfs-storage": ("src/encoding/codec.rs", "src/engine/ffi.rs"),
+    "layerfs-server": ("src/bin/layerfs-server.rs",),
 }
 UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry")
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
     "layerfs-content": "#![forbid(unsafe_code)]",
     "layerfs-telemetry": "#![forbid(unsafe_code)]",
+    "layerfs-server": "#![forbid(unsafe_code)]",
 }
 
 
@@ -46,7 +49,7 @@ def unsafe_violations(path, source):
     relative = Path(*path.parts[path.parts.index(crate) + 1:])
     code = "\n".join(line.split("//", 1)[0] for line in source.splitlines())
     if UNSAFE.search(code):
-        if crate in UNSAFE_FREE_CRATES or str(relative) != UNSAFE_AUDITED_MODULE[crate]:
+        if crate in UNSAFE_FREE_CRATES or str(relative) not in UNSAFE_AUDITED_MODULE.get(crate, ()):
             found.append((1, "unsafe outside the audited module boundary; see core/AGENTS.md"))
     if relative == Path("src/lib.rs") and UNSAFE_ROOT_ATTR[crate] not in source:
         found.append((1, f"crate root must declare {UNSAFE_ROOT_ATTR[crate]}"))

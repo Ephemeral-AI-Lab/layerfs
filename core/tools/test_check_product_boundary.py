@@ -89,6 +89,25 @@ class ProductBoundaryTests(unittest.TestCase):
                               for p in production_files(core)],
                              ["sql/schema.sql", "src/lib.rs", "src/sql/query.sql"])
 
+    def test_exclusive_sqlite_bootstrap_exact_boundary(self):
+        storage = Path("core/crates/layerfs-storage/src")
+        source = "pub unsafe fn bootstrap_exclusive() { unsafe { call(); } }"
+        self.assertFalse(unsafe_violations(storage / "engine/ffi.rs", source))
+        for name in ("engine/mod.rs", "engine/profile.rs", "engine/status.rs", "sqlite/connection.rs"):
+            with self.subTest(name=name):
+                self.assertTrue(unsafe_violations(storage / name, source))
+        self.assertTrue(unsafe_violations(storage / "engine/ffi.rs.bak.rs", source))
+
+    def test_server_startup_binary_and_library_separation(self):
+        server = Path("core/crates/layerfs-server/src")
+        source = "fn main() { let _guard = unsafe { bootstrap_exclusive() }; }"
+        self.assertFalse(unsafe_violations(server / "bin/layerfs-server.rs", source))
+        for name in ("host/runtime.rs", "service/handler.rs", "bin/another-server.rs", "bin/layerfs-server/ffi.rs"):
+            with self.subTest(name=name):
+                self.assertTrue(unsafe_violations(server / name, source))
+        self.assertTrue(unsafe_violations(server / "lib.rs", "pub mod host;"))
+        self.assertFalse(unsafe_violations(server / "lib.rs", "#![forbid(unsafe_code)]\npub mod host;"))
+
     def test_nested_api_product_scope(self):
         with TemporaryDirectory() as directory:
             core = Path(directory)

@@ -1,5 +1,19 @@
 # Storage (C2, `layerfs-storage`)
 
+> **#287 R1e-bootstrap capability boundary:** Against parent
+> `d1e478ffb97905eb77acdeef288fa091c40cae2d`, the native process bootstrap
+> configures tracked memory before initialization, requests exactly32MiB,
+> requires exact readback, and owns one fixed8192-byte native tracking/free probe.
+> The actual Apple3.51.0 provider reads back0, so this provider issues no guard
+> and supported native/SQL/Store/scratch bodies remain unproved. A separate
+> cause probe confirms tracking only; original eligible failures remain intact.
+> Custody distinguishes setter attempt from verified installation, and caches
+> the original refusal without reset/retry/fallback. The exact supported/refused
+> boundary and owning outcomes are in
+> [R1e bootstrap freeze](../issues/287/R1E-BOOTSTRAP-FREEZE.md) and the
+> [append-only log](../issues/287/IMPLEMENTATION-LOG.md). This establishes no
+> healthy engine shapes, physical Server bound or StrictServerMemory capability.
+
 > **#287 R1c construction metadata:** The source in this commit, against parent
 > `06fe8363d5c317c49876d5189d374c1a34cc6010`, adds a fresh metadata-only LFCS
 > SQLite owner for the real C1 DirectoryRoots producer. It admits at most65536

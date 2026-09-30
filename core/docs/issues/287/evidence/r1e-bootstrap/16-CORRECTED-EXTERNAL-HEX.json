@@ -1,0 +1,8 @@
+{
+  "staged_source_tree": "d02d87f31fb37d147d3c6fd6b93191721d88184b",
+  "core_tree": "f320eacf9bb5b991fcca104a8c83047ef3584368",
+  "changed_path": "core/crates/layerfs-server/tests/engine_startup.rs",
+  "sha256": "513714a276bf44f3bb2c612a7d8e26b6e8fa50a9f3e64c95ec12d160accd56db",
+  "reason": "external fixed public-key hex encoder writes into one String, same64-byte output; fixes15 format_collect",
+  "functional_checks": "06/10 unchanged and reused, raw failed lint attempts retained"
+}

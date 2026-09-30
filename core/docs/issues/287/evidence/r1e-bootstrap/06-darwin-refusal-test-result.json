@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "engine_bootstrap",
+    "darwin_selected_system_provider_refuses_unavailable_hard_limit",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot",
+  "cargo_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target",
+  "source_tree": "07cae230a9e39dc08900f3e6095a609ca51abd83",
+  "exit": 0,
+  "wall_seconds": 18.80670191599347,
+  "proof_scope": "distinct selected-provider pre-effect refusal; unchanged four eligible FAILs retained, no32MiB PASS"
+}

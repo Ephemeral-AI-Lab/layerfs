@@ -1,0 +1,8 @@
+{
+  "staged_source_tree": "ba160a1906e64e54db95fe5740b9fd88fb1bc820",
+  "core_tree": "1ef31d2d4c343c7e5dd33c557f86ed64f751e019",
+  "changed_path": "core/crates/layerfs-storage/src/engine/ffi.rs",
+  "sha256": "181e58d276cec86a6259b7fe4ac822c434f2af945e37982d11e381d4e14c3801",
+  "reason": "manual_range_contains equivalent closed interval per failed11 Clippy output; no semantic/provider/bound change",
+  "functional_checks": "passed06/10 unchanged and reused, initial02/07 failures retained"
+}

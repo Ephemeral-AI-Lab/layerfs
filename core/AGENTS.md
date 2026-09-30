@@ -174,6 +174,30 @@ File size is a ceiling, not an instruction to fill entry files to 200 lines.
   dependency rule and locked builds; an incompatible provider/dependency is a
   reported limitation, not permission to patch it or silently select another path.
 
+### Audited native FFI and exclusive process startup
+
+`layerfs-content`, `layerfs-telemetry` and the Server library retain
+`#![forbid(unsafe_code)]`. Storage retains `#![deny(unsafe_code)]` and
+`#![deny(unsafe_op_in_unsafe_fn)]`; its only audited exceptions are
+`src/encoding/codec.rs` (pinned codec calls) and `src/engine/ffi.rs` (SQLite
+exclusive bootstrap/global heap observations and bounded native probe). Every
+raw function/signature/pointer operation and safety inventory stays in those
+exact files. Safe guard/profile/status code and all sibling files contain no
+unsafe code. The guard and external self-tests enforce that exact allowlist.
+
+The native Server binary `src/bin/layerfs-server.rs` has one separately audited
+early call to Storage's unsafe exclusive bootstrap, before host::run can open
+Store/history or start session/telemetry workers. Its safety obligation is
+exclusive SQLite/global configuration authority with no concurrent initialization,
+configuration or shutdown. Prior initialized state is a defined eligibility
+refusal; native main establishes the earliest startup so it can qualify. A library constructor,
+late OnceLock or initialized-provider reset cannot establish that obligation.
+Other Server files/binaries remain unsafe-free, and its library lint stays
+forbid. Failed bootstrap is explicit and gets no shutdown/reset/retry. Engine
+guard support/readback is separate from healthy SQL shape/protected progress,
+physical containment and StrictServerMemory; those capabilities stay disabled
+until their actual proofs pass.
+
 ## Production LOC for every commit
 
 Follow the repository's

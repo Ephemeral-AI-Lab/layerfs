@@ -1,16 +1,17 @@
 # Issue287 current implementation checklist
 
 > **Status: Current planning checklist; no release candidate exists.**
-> Current published checkpoint: `43c977c00e342d207757cd8bf5f6e2cd15041650`
-> (R1c scoped exits pass; full R1 remains PARTIAL/open).
+> Current published checkpoint: `d1e478ffb97905eb77acdeef288fa091c40cae2d`
+> (R1d-run-seek scoped exits pass; full R1 remains PARTIAL/open).
 
 Assignment: #287 implementation only. Benchmark qualification is delegated/unrun
 under #288. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
 packet; [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) is append-only.
 
 Current milestone: **R1e-bootstrap exact native provider decision**
-([freeze](R1E-BOOTSTRAP-FREEZE.md)). R1d-run-seek scoped exits passed; its
-commit/publication checkpoint is being finalized from the counted staged tree.
+([freeze](R1E-BOOTSTRAP-FREEZE.md)). R1d-run-seek commit/recount/normal push and
+#287 comment5917668281 are confirmed. [Binding-input freeze](R1D-BINDING-INPUT-FREEZE.md)
+defines the independent next C1/Bridge/Server integration; exits remain unrun.
 R0 is published and linked in #287 comment5911332695. Native/engine/physical
 protection and concurrent enablement remain gated on their owning proofs.
 
@@ -64,13 +65,14 @@ R1d-run-seek current gates:
 - [x] Finalized spill/merge row/key/order/count/length checks and exact tier precedence.
 - [x] Real-file observer, independent complete-row/effect oracle and alternating/descending/gap/error proof.
 - [x] Scoped owning checks, actual counts/custody gaps and current architecture/log.
-- [ ] Exact staged/committed LOC, commit/push/publication and #287 checkpoint.
+- [x] Exact staged/committed LOC, commit/push/publication and #287 checkpoint (d1e478ffb/comment5917668281).
 
 R1e-bootstrap current gates:
 
 - [x] Exact exclusive startup/API/unsafe boundary and original failure custody frozen.
 - [x] Native main calls guard before host/Store/history/worker effects (source integration; successful provider body unrun).
 - [ ] Actual32MiB hardlimit/tracking/native allocation/SQL-NOMEM and known cleanup supported proof (Darwin readback0:4 FAIL;2 refusal primary PASS; helper excluded).
+- [x] Actual Darwin native pre-effect refusal/cached original custody, including missing/configured host and unchanged Store marker; guard-capability success is not claimed.
 - [ ] Actual native Server ready/EOF/reaped proof on an eligible provider; Darwin startup is unsupported.
 - [ ] Scoped owning checks, exact supported/refused platform authority and provider gaps.
 - [ ] Exact LOC commit/push/publication and #287 checkpoint.

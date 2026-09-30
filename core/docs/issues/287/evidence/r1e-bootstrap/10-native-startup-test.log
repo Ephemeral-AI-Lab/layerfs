@@ -1,0 +1,9 @@
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.27s
+     Running tests/engine_startup.rs (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/engine_startup-4d0f2cdf640fc3c6)
+
+running 1 test
+test selected_darwin_native_binary_refuses_before_host_or_store_effects ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.57s
+

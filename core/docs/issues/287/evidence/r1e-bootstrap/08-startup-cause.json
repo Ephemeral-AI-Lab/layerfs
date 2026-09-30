@@ -1,0 +1,8 @@
+{
+  "purpose": "labelled one direct native startup cause diagnostic, not a repeated test selection",
+  "binary": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/layerfs-server",
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "",
+  "bytes": 5403264
+}

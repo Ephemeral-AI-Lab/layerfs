@@ -1,0 +1,14 @@
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-storage)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-server)
+error: the variable `count` is used as a loop counter
+   --> crates/layerfs-storage/tests/engine_bootstrap.rs:304:5
+    |
+304 |     for option in options {
+    |     ^^^^^^^^^^^^^^^^^^^^^ help: consider using: `for (count, option) in options.enumerate()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#explicit_counter_loop
+    = note: `-D clippy::explicit-counter-loop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::explicit_counter_loop)]`
+
+error: could not compile `layerfs-storage` (test "engine_bootstrap") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

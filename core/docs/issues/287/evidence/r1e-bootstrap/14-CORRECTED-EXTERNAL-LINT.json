@@ -1,0 +1,8 @@
+{
+  "staged_source_tree": "d699a3aff30256a54eb38fc4a440901555c041b3",
+  "core_tree": "1eb43b542a3c4c45aabb5eb6a92920bab895a3af",
+  "changed_path": "core/crates/layerfs-storage/tests/engine_bootstrap.rs",
+  "sha256": "c1d599566010dd7bfde57009cddd3f1b9eaebd2f413530f943bb37483451a597",
+  "reason": "external option diagnostic uses equivalent enumerate instead of manual counter; actual128/1024 bounds unchanged",
+  "functional_checks": "06/10 unchanged and reused;02/07/11/13 failures retained"
+}

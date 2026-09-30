@@ -1,0 +1,43 @@
+{
+  "source_tree": "d02d87f31fb37d147d3c6fd6b93191721d88184b",
+  "core_tree": "f320eacf9bb5b991fcca104a8c83047ef3584368",
+  "scope": "exact staged snapshot excludes developing binding-input source",
+  "checks": [
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "fmt",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "wall_seconds": 2.3252934999909485
+    },
+    {
+      "command": [
+        "python3",
+        "core/tools/check_product_boundary.py"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.14425774999835994
+    },
+    {
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "core/tools",
+        "-p",
+        "test_check_product_boundary.py"
+      ],
+      "exit": 0,
+      "wall_seconds": 0.08151099999668077
+    }
+  ]
+}

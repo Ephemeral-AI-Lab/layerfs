@@ -1,0 +1,12 @@
+{
+  "command": [
+    "python3",
+    "-S",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage/tests/support/sqlite_engine_diagnostic.py"
+  ],
+  "exit": 0,
+  "script_sha256": "dd47256c9e540ebae65fe109ebca352d4d01fa617c8428068f0bfb2cb15370fe",
+  "stdout_sha256": "5c0d2ea00f1939c929b57bc0a9107d4314a0a4d79178f9ab11fa4eadb7307980",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "proof_scope": "one8192 actual native cause diagnostic; no reset/retry/pressure or speed admission"
+}

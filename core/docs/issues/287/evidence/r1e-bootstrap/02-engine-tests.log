@@ -1,0 +1,102 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.53s
+     Running tests/engine_bootstrap.rs (core/target/debug/deps/engine_bootstrap-35955c67df9920db)
+
+running 7 tests
+test engine_bootstrap_child ... ok
+
+thread 'fresh_owned_bootstrap_tracks_real_store_and_scratch' panicked at real negative-query auto-init trap: prior_limit=0; SQLite engine bootstrap stage=MemStatus: engine: Error code 21: bad parameter or other API misuse; custody=EngineBootstrapCustody { memstatus_acknowledged: false, initialize_attempted: false, initialized_by_bootstrap: false, previous_hard_heap_limit: None, setter_previous_hard_heap_limit: None, hard_limit_installed: false, observed_hard_heap_limit: None, probe_issued: false, probe_free_attempted: false, probe_allocated_bytes: None }; no shutdown/reset/retry
+
+crates/layerfs-storage/tests/engine_bootstrap.rs:132:5:
+case=owned: stdout=
+running 1 test
+test engine_bootstrap_child ... FAILED
+
+failures:
+
+failures:
+    engine_bootstrap_child
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+ stderr=
+thread 'engine_bootstrap_child' panicked at crates/layerfs-storage/tests/engine_bootstrap.rs:127:38:
+called `Result::unwrap()` on an `Err` value: EngineBootstrapFailure { stage: Readback, cause: Integrity("SQLite hard limit readback mismatch"), custody: EngineBootstrapCustody { memstatus_acknowledged: true, initialize_attempted: true, initialized_by_bootstrap: true, previous_hard_heap_limit: Some(0), setter_previous_hard_heap_limit: Some(0), hard_limit_installed: true, observed_hard_heap_limit: Some(0), probe_issued: false, probe_free_attempted: false, probe_allocated_bytes: None } }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+test negative_limit_query_first_refuses_without_reconfiguration ... ok
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'foreign_limit_change_terminally_quarantines_without_repair' panicked at crates/layerfs-storage/tests/engine_bootstrap.rs:132:5:
+test fresh_owned_bootstrap_tracks_real_store_and_scratch ... FAILED
+case=foreign-limit: stdout=
+running 1 test
+test engine_bootstrap_child ... FAILED
+
+failures:
+
+failures:
+    engine_bootstrap_child
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+ stderr=
+thread 'engine_bootstrap_child' panicked at crates/layerfs-storage/tests/engine_bootstrap.rs:127:38:
+called `Result::unwrap()` on an `Err` value: EngineBootstrapFailure { stage: Readback, cause: Integrity("SQLite hard limit readback mismatch"), custody: EngineBootstrapCustody { memstatus_acknowledged: true, initialize_attempted: true, initialized_by_bootstrap: true, previous_hard_heap_limit: Some(0), setter_previous_hard_heap_limit: Some(0), hard_limit_installed: true, observed_hard_heap_limit: Some(0), probe_issued: false, probe_free_attempted: false, probe_allocated_bytes: None } }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+thread 'native_hard_cap_refuses_and_known_owners_free_once' panicked at crates/layerfs-storage/tests/engine_bootstrap.rs:132:5:
+case=native-cap: stdout=
+running 1 test
+test engine_bootstrap_child ... FAILED
+
+failures:
+
+failures:
+    engine_bootstrap_child
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+ stderr=
+thread 'engine_bootstrap_child' panicked at crates/layerfs-storage/tests/engine_bootstrap.rs:127:38:
+called `Result::unwrap()` on an `Err` value: EngineBootstrapFailure { stage: Readback, cause: Integrity("SQLite hard limit readback mismatch"), custody: EngineBootstrapCustody { memstatus_acknowledged: true, initialize_attempted: true, initialized_by_bootstrap: true, previous_hard_heap_limit: Some(0), setter_previous_hard_heap_limit: Some(0), hard_limit_installed: true, observed_hard_heap_limit: Some(0), probe_issued: false, probe_free_attempted: false, probe_allocated_bytes: None } }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+test foreign_limit_change_terminally_quarantines_without_repair ... FAILED
+
+thread 'real_sql_nomem_reports_transaction_and_cleanup_custody' panicked at crates/layerfs-storage/tests/engine_bootstrap.rs:132:5:
+case=sql-nomem: stdout=
+running 1 test
+test engine_bootstrap_child ... FAILED
+
+failures:
+
+failures:
+    engine_bootstrap_child
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+ stderr=
+thread 'engine_bootstrap_child' panicked at crates/layerfs-storage/tests/engine_bootstrap.rs:127:38:
+called `Result::unwrap()` on an `Err` value: EngineBootstrapFailure { stage: Readback, cause: Integrity("SQLite hard limit readback mismatch"), custody: EngineBootstrapCustody { memstatus_acknowledged: true, initialize_attempted: true, initialized_by_bootstrap: true, previous_hard_heap_limit: Some(0), setter_previous_hard_heap_limit: Some(0), hard_limit_installed: true, observed_hard_heap_limit: Some(0), probe_issued: false, probe_free_attempted: false, probe_allocated_bytes: None } }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+test native_hard_cap_refuses_and_known_owners_free_once ... FAILED
+test real_sql_nomem_reports_transaction_and_cleanup_custody ... FAILED
+real initialized foreign provider preserved: SQLite engine bootstrap stage=MemStatus: engine: Error code 21: bad parameter or other API misuse; custody=EngineBootstrapCustody { memstatus_acknowledged: false, initialize_attempted: false, initialized_by_bootstrap: false, previous_hard_heap_limit: None, setter_previous_hard_heap_limit: None, hard_limit_installed: false, observed_hard_heap_limit: None, probe_issued: false, probe_free_attempted: false, probe_allocated_bytes: None }; no shutdown/reset/retry; no owned Store/catalog/scratch created
+
+test initialized_foreign_sqlite_is_preserved_and_failed_bootstrap_is_cached ... ok
+
+failures:
+
+failures:
+    foreign_limit_change_terminally_quarantines_without_repair
+    fresh_owned_bootstrap_tracks_real_store_and_scratch
+    native_hard_cap_refuses_and_known_owners_free_once
+    real_sql_nomem_reports_transaction_and_cleanup_custody
+
+test result: FAILED. 3 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-storage --test engine_bootstrap`

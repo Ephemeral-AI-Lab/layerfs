@@ -18,18 +18,19 @@
 #![deny(missing_docs)]
 #![deny(unsafe_op_in_unsafe_fn)]
 // `layerfs-content` and `layerfs-telemetry` are `forbid(unsafe_code)`. This
-// crate cannot be: the pinned zstd codec needs the C FFI, and a lint that is
-// `forbid`ed cannot be allowed back on for one module (E0453). `unsafe` is
-// therefore denied crate-wide and allowed on exactly one audited module,
-// `encoding::codec` (see its documentation for the FFI inventory), and the
-// product boundary guard rejects `unsafe` anywhere else in this crate. The
-// deviation from the siblings' literal `forbid` is recorded as a design note
-// in `physical-encoding-and-packing.md`.
+// crate cannot be: the pinned zstd codec and exclusive SQLite startup need C
+// FFI, and a `forbid` lint cannot be allowed back on for a module (E0453).
+// Unsafe is denied crate-wide and allowed only in the exact audited files
+// `encoding/codec.rs` and `engine/ffi.rs`; each owns its safety inventory.
+// The product boundary guard rejects unsafe code in every sibling file.
+// The codec deviation is recorded in `physical-encoding-and-packing.md`;
+// Core AGENTS and the engine contract own the exclusive startup exception.
 #![deny(unsafe_code)]
 
 pub mod cas;
 pub mod construction_state;
 pub mod encoding;
+pub mod engine;
 pub mod error;
 pub mod pack;
 pub mod policy;

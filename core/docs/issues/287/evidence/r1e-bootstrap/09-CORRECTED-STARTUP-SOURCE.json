@@ -1,0 +1,8 @@
+{
+  "staged_source_tree": "c6f31800b13fcca063a4e6971076667336ae7283",
+  "core_tree": "08c69716033f8aa534fc9db3c96043053bb9e8b2",
+  "changed_path": "core/crates/layerfs-server/src/bin/layerfs-server.rs",
+  "sha256": "1e106b97dddb05d2f24de1a45349d5cb30d8148e5646de4aa7d5d52b2d0fb0b1",
+  "reason": "original full error exceeded512-byte diagnostic cap; compact stage/cause/essential-custody message without bound increase",
+  "unchanged_refusal_proof": "06 PASS reused; no provider/guard route change"
+}

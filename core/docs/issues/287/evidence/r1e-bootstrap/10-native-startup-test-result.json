@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "engine_startup",
+    "--",
+    "--nocapture"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot",
+  "cargo_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target",
+  "source_tree": "c6f31800b13fcca063a4e6971076667336ae7283",
+  "exit": 0,
+  "wall_seconds": 3.8789037499955157,
+  "scope": "corrected native Darwin pre-effect refusal; original07 FAIL/08 cause retained; Linux success unrun"
+}

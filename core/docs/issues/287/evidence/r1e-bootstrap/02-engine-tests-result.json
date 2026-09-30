@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "engine_bootstrap",
+    "--",
+    "--nocapture"
+  ],
+  "exit": 101,
+  "complete_command_wall_seconds": 8.815580833004788,
+  "purpose": "correctness proof wall; not performance measurement"
+}

@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "engine_startup",
+    "--",
+    "--nocapture"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot",
+  "cargo_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target",
+  "source_tree": "07cae230a9e39dc08900f3e6095a609ca51abd83",
+  "exit": 101,
+  "wall_seconds": 20.622377207997488,
+  "proof_scope": "actual Darwin executable pre-effect refusal; Linux startup success bodies not run, no hardcap PASS"
+}

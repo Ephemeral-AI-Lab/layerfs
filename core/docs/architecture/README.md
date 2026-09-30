@@ -308,6 +308,7 @@ Source files cited above, by package:
 `src/filesystem/references/{backing,runs,merge,seek,reduce,release,record}.rs`
 
 **C2 `layerfs-storage`**
+`src/engine/{ffi,guard,profile,status}.rs` ·
 `src/policy.rs` · `src/cas/{store,owner,pool_lane,placement,lifecycle,selection,batch,save,finish,read,membership,dependencies,provider}.rs` ·
 `src/encoding/{full,decode,codec}.rs` · `src/encoding/delta/{select,read,record,candidates}.rs` ·
 `src/encoding/pool/{index,leaf,read,delta,value_group}.rs` ·

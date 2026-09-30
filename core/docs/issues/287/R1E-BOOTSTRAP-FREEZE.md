@@ -71,3 +71,26 @@ tests; root normative guard/self-tests, Core AGENTS, actual binary caller,
 architecture/docs/acceptance/LOC/commit/publication. Other workers preserve those
 edits; C1 reference-run files remain r1_catalog-owned. Root integrates actual
 ready slices as separate source-pinned checkpoints without unstaged work in LOC.
+
+
+## Observed Darwin capability boundary and custody refinement
+
+The original frozen six-primary gate kept2 refusal PASS and4 eligible FAIL at
+actual observed hardlimit0. Raw evidence02 remains unchanged. One labelled
+fixed8192 native cause probe04 establishes tracked bytes0→8192→0/count0→1→0,
+msize8192/free once on the same Apple3.51.0 source; it does not establish the
+required33554432 limit. First64 function bytes do not prove a stub or macro.
+The exact required readback is unavailable on this selected provider. No new
+EngineGuard can be issued, no Store/scratch/native probe body is reached, and
+native main refuses before host configuration or Store/history effects. Direct
+legacy logical library composition remains its old separately scoped profile.
+
+The custody refinement records hard_limit_set_attempted before the one setter;
+hard_limit_installed becomes true only after exact readback. Nonexact required
+readback is explicit UnsupportedPolicy with original stage/actual value cached.
+This changes no limit/route/provider, and cannot relabel old FAILs. A distinct
+fresh-process Darwin unavailable-provider proof and actual native early refusal
+are selected; supported native/SQL/Store/scratch/Linux bodies remain separate
+unrun gates. Silent Linux image acquisition was cancelled as unavailable;
+no Linux/physical/benchmark proof ran. This checkpoint is capability-limited,
+with strict/concurrent enablement disabled and independent C1 work continuing.

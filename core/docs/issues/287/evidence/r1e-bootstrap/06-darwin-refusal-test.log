@@ -1,0 +1,37 @@
+   Compiling libc v0.2.189
+   Compiling find-msvc-tools v0.1.12
+   Compiling shlex v2.0.1
+   Compiling pkg-config v0.3.34
+   Compiling vcpkg v0.2.15
+   Compiling cfg_aliases v0.2.2
+   Compiling foldhash v0.2.0
+   Compiling cfg-if v1.0.4
+   Compiling arrayvec v0.7.8
+   Compiling arrayref v0.3.9
+   Compiling constant_time_eq v0.4.2
+   Compiling bitflags v2.13.1
+   Compiling fallible-iterator v0.3.0
+   Compiling nix v0.31.3
+   Compiling smallvec v1.16.0
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-telemetry)
+   Compiling hashbrown v0.17.1
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling libsqlite3-sys v0.38.2
+   Compiling hashlink v0.12.2
+   Compiling jobserver v0.1.35
+   Compiling cc v1.4.5
+   Compiling blake3 v1.8.5
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 18.01s
+     Running tests/engine_bootstrap.rs (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/engine_bootstrap-f77c809589622c97)
+
+running 1 test
+actual selected Darwin provider version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; SQLite engine bootstrap stage=Readback: unsupported storage policy: SQLite required hard heap limit; custody=EngineBootstrapCustody { memstatus_acknowledged: true, initialize_attempted: true, initialized_by_bootstrap: true, previous_hard_heap_limit: Some(0), hard_limit_set_attempted: true, setter_previous_hard_heap_limit: Some(0), hard_limit_installed: false, observed_hard_heap_limit: Some(0), probe_issued: false, probe_free_attempted: false, probe_allocated_bytes: None }; no shutdown/reset/retry; setter attempted, required limit unavailable, no EngineGuard/owned probe/Store/scratch; exact original refusal cached
+
+test darwin_selected_system_provider_refuses_unavailable_hard_limit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.01s
+

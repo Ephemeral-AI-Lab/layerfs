@@ -1,0 +1,84 @@
+{
+  "actual_parent": "d1e478ffb97905eb77acdeef288fa091c40cae2d",
+  "staged_source_tree": "07cae230a9e39dc08900f3e6095a609ca51abd83",
+  "core_tree": "c4ea08d469fe7117c84b33b236191a32bb99a6fc",
+  "source_test_policy_sha256": "31289be11ec324c86b332bfde8619cb08b8273df3c0b15e5ca9b0f07a51a82c5",
+  "seal_method": "sorted relative path + NUL + exact staged bytes + NUL",
+  "files": [
+    {
+      "path": "core/AGENTS.md",
+      "sha256": "e458d2d4be799eb2b023649cc1db5d7a15df71212b743bfe4041d698f64c1ebc",
+      "bytes": 16217
+    },
+    {
+      "path": "core/crates/layerfs-server/src/bin/layerfs-server.rs",
+      "sha256": "c1b3c84f695d34f7af28cf50d203f8481accc2c3031155b35b7fafd59db1b4ee",
+      "bytes": 984
+    },
+    {
+      "path": "core/crates/layerfs-server/tests/engine_startup.rs",
+      "sha256": "338648c95c08f1404a16b7c2dde732bb7eda2aee73368a4eb52ce0b2a6e92ecf",
+      "bytes": 7283
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/engine/ffi.rs",
+      "sha256": "0313ae4338797ce2ad632e65c3b5b39911b3c822a7649dd09a1daceb8e576072",
+      "bytes": 12574
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/engine/guard.rs",
+      "sha256": "3abfc09c0078bd15e007def135e1e306405d64acf9ae878f71a1b7926dd9dbe0",
+      "bytes": 2418
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/engine/mod.rs",
+      "sha256": "ca8937f3d0eda60ce29f4a29002bee6645398c61a9a8f16a0d5f2f99e467d1c9",
+      "bytes": 595
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/engine/profile.rs",
+      "sha256": "cb321a7c6d94a96b369f98b01f6e0a9d7221984f924af432a2d0977ea6d2f062",
+      "bytes": 899
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/engine/status.rs",
+      "sha256": "198e1420e735047fa01fd016c68a818ea81484df126be8f45860909002db5d84",
+      "bytes": 6104
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/lib.rs",
+      "sha256": "14c57f1dbee8e0dda6684eb4c66e0ee79840a7c1d36669bf080d4f85134e24fe",
+      "bytes": 2005
+    },
+    {
+      "path": "core/crates/layerfs-storage/tests/engine_bootstrap.rs",
+      "sha256": "99c8cd1e8f5bc9eb7bc772f15948958bb5aebff006745e35a34019264e71050c",
+      "bytes": 17788
+    },
+    {
+      "path": "core/crates/layerfs-storage/tests/support/native_pressure.rs",
+      "sha256": "dc5424362aad366c4464a07c525c91bbfb0e0b48e37fb74e0ada350e02a9b160",
+      "bytes": 1425
+    },
+    {
+      "path": "core/crates/layerfs-storage/tests/support/sqlite_engine_diagnostic.py",
+      "sha256": "dd47256c9e540ebae65fe109ebca352d4d01fa617c8428068f0bfb2cb15370fe",
+      "bytes": 2784
+    },
+    {
+      "path": "core/tools/check_product_boundary.py",
+      "sha256": "89e5729eba739cec53cb40a8f58cdf64dbaf35fb4dc1dc567a4c1c4e5e5cacfb",
+      "bytes": 5148
+    },
+    {
+      "path": "core/tools/test_check_product_boundary.py",
+      "sha256": "fb0937eaa5a5c7c8ca98594a9fdf47ee73ab38d67dc1e4e53424664cbaddc23a",
+      "bytes": 7009
+    }
+  ],
+  "build_source": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/issue287-r1e-source-snapshot",
+  "cargo_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target",
+  "scope": "exact staged R1e source excludes independent unstaged R1d binding-input work",
+  "started_utc": "2026-09-30T19:08:39.823141+00:00",
+  "retained_failure": "02 original four eligible FAIL, two refusal primary PASS; no historical receipt relabel"
+}
