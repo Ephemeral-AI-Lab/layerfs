@@ -1,0 +1,137 @@
+{
+  "artifacts_sha256": {
+    "benchmark_shell": "9e68d6f53ac07980ae3afad480f7e8d1c558b5c49cbf4880bf180e0739502e15",
+    "layerfs-daemon": "5d82fadd7e0c5a4c7c053fb577a32f57d141a438c22012cc91b23098f52ab51b",
+    "verify_checkpoint5": "abfbe9f75efa3c0d397a81c4e6eeaf5a9f317737acd068e405eee4b543a60985"
+  },
+  "image_id": "sha256:97d1df653e2efa73723c07ca7315bc1649d95715defc15e7c58e4865105f94e8",
+  "image_reuse": {
+    "command": null,
+    "daemon_sha256": "5d82fadd7e0c5a4c7c053fb577a32f57d141a438c22012cc91b23098f52ab51b",
+    "image_id": "sha256:97d1df653e2efa73723c07ca7315bc1649d95715defc15e7c58e4865105f94e8",
+    "mode": "exact-image-reuse",
+    "wall_ns": 0
+  },
+  "proof_manifest_sha256": "6cd7ce3ae53cff563edfdf867ab7a47f8fddb2e4938990a60dad462fe81fd0bd",
+  "proof_output": "benchmark-results/fs-bench-pro/issue286-workspace-commit-one-edit-proof-r050",
+  "raw_manifest_sha256": "0cc0611590647d6f917b58f34638e80e66500da905b2d58751fc5925c2e4d19c",
+  "raw_output": "benchmark-results/fs-bench-pro/issue286-workspace-commit-one-edit-r050",
+  "rows": [
+    {
+      "case": "workspace-commit-one-edit-retained-writes-4097-v3",
+      "cleanup": "PASS",
+      "command_bound_ns": 15000000000,
+      "control": {
+        "pin_generation": 1,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 0,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 521168083,
+        "prelude_exec_ns": 8114831709,
+        "prelude_head_commit": "12afc47c1432bce137a519ddcdd8b7b565adba7f553336992e9c8b383cec2b7858",
+        "up_to_date": false
+      },
+      "driver": {
+        "branch_id": "11094cc9de4f7dd10dabd617bb074906e8",
+        "cleanup_ns": 525739542,
+        "commit_called": true,
+        "commit_ns": 17603083,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 24523,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_ns": 4712000,
+        "head_commit": "12194f1040019d2d78e6d8458d05fad4b2c19ae0058579c8257d166e268b238c5f",
+        "host_disk_read_bytes": 0,
+        "mode": "run",
+        "operation_ns": 8659537167,
+        "projection_counts": "lookup=2,getattr=6,read=0,write=4098,readdir=0,open=2,setattr=0,rename=0,other=0",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-commit-one-edit-retained-writes-4097-v3",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "independent_proof": {
+        "case": "workspace-commit-one-edit-retained-writes-4097-v3",
+        "child": {
+          "advanced": true,
+          "head_commit": "12194f1040019d2d78e6d8458d05fad4b2c19ae0058579c8257d166e268b238c5f",
+          "new_bytes": 10485760,
+          "new_files": 1,
+          "new_paths": 2,
+          "old_bytes": 10485760,
+          "old_commit": "12afc47c1432bce137a519ddcdd8b7b565adba7f553336992e9c8b383cec2b7858",
+          "old_files": 1,
+          "old_paths": 2,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "numeric_latency_status": "INELIGIBLE",
+        "performance_receipt_sha256": "e794bc1199087dc4cff2e689222469a938e8f2a08cfea9c02a04702405b36ad5",
+        "reason": "performance/route/pin/cleanup did not complete",
+        "sample_count": 0,
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/abfbe9f75efa3c0d397a81c4e6eeaf5a9f317737acd068e405eee4b543a60985/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-commit-one-edit-proof-r050/workspace-commit-one-edit-retained-writes-4097-v3/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-commit-one-edit-r050/workspace-commit-one-edit-retained-writes-4097-v3/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-commit-one-edit-r050/workspace-commit-one-edit-retained-writes-4097-v3/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-commit-one-edit-r050/retained.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-commit-one-edit-r050/workspace-commit-one-edit-retained-writes-4097-v3.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 4178662276333,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "865bbfa867c9bde0e0aa1730675518689c3b939cc84af3cbb581a55d381153e0",
+          "timeout": false,
+          "wall_ns": 99190083
+        },
+        "verifier_sha256": "abfbe9f75efa3c0d397a81c4e6eeaf5a9f317737acd068e405eee4b543a60985"
+      },
+      "numeric_latency": "INELIGIBLE",
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/9e68d6f53ac07980ae3afad480f7e8d1c558b5c49cbf4880bf180e0739502e15/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-commit-one-edit-r050/workspace-commit-one-edit-retained-writes-4097-v3/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-commit-one-edit-r050/workspace-commit-one-edit-retained-writes-4097-v3/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-commit-one-edit-r050/workspace-commit-one-edit-retained-writes-4097-v3/history.sqlite",
+          "sha256:97d1df653e2efa73723c07ca7315bc1649d95715defc15e7c58e4865105f94e8"
+        ],
+        "exit_code": 0,
+        "started_ns": 4160287927833,
+        "stderr_sha256": "35d47dc57b47c14853a9704f36fea6a33266045482c421cdded52074aa358f2d",
+        "stdout_sha256": "48fdd16cc2e153e27e259d9db9c142d04b477bf3f71cd031ca28d972db9bb1c5",
+        "timeout": false,
+        "wall_ns": 11825536125
+      },
+      "pin_bytes": "SKIPPED",
+      "pin_custody": "PASS",
+      "proof_sha256": "bc916b5f593dc487b5342f6262485cf1743b20c17b044d47e32efdada44b5745",
+      "receipt_sha256": "e794bc1199087dc4cff2e689222469a938e8f2a08cfea9c02a04702405b36ad5",
+      "role": "performance-diagnostic",
+      "route": "PASS",
+      "sample_count": 1,
+      "status": "COMPLETE_DIAGNOSTIC"
+    }
+  ],
+  "schema": "issue286-workspace-commit-r050-index-v1",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "b98abb207201b13d7c16fd8ff2c15de00d8b71a549cc570f5cbbdfbfe51d5c34",
+    "product_seal": "6faef099d307495607bb60a9ed5be40628880bcd770cc307228b3d89d37c7043",
+    "source_commit": "9d55fa41f7abe071f6284bbaadde5beed43f5824",
+    "source_dirty": false,
+    "source_tree": "0ac37d4b5280545066c304cc9dd3932ab891626a"
+  }
+}
