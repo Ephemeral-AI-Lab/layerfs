@@ -505,3 +505,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family5 SDK namespace and separate proof r066
 
 [5/5 SDK commands and5/5 independent full verifiers PASS](experiments/20260930-workspace-namespace-sdk-r066.md), commands865,639,833–2,805,615,834ns under15s/declared25s bounds; proofs26,150,500–215,061,833ns<9s.4097-byte and270-component access, moves/replacements/listing and retained lease all clean. Native10 companion proofs reused fromr065. Post-collection import-first cycle fixed without replay; product/codec/LOC unchanged, all earlier-family groups reused, numeric INELIGIBLE. Family6 next; no all-seven/admission/merge claim.
+
+## Family6 native partial r067
+
+[Roundr067](experiments/20260930-workspace-mutations-native-r067.md): mixed live G1/G2 PASS412,191,375ns; fault-profile FAIL112,667,500ns at observer HistoryQuery with wrong content profile1; local-C5 NOT_RUN. Correct observer to required HISTORY_PROFILE2, collect only the final two native controls asr068, then first SDK group/proofr069. Reuse passing live/earlier proofs; no product change, all numeric INELIGIBLE.270-chain limitation recorded/deferred#276 comment5903016828.

@@ -109,3 +109,5 @@ Product LOC uses exact first-parent/final staged source snapshots; expected
 Family6 production delta0 (tests/examples/harness/docs excluded). No package-
 scale or10240 scalability qualification; those architecture issues and the
 270-level optimization remain deferred under#276. Family7 shell/package follows.
+
+Follow-up afterr067: the first mixed live profile passed; the observer in the failure case used a wrong request profile and was refused before dispatch. Correct it to HISTORY_PROFILE2. Explicit workspace-mutations-native-tail collects the same final two profiles asr068 (passing first profile reused, no resampling); SDK first collection/separate proof become r069. Case membership/order/oracles and all15s/<9s limits remain unchanged; r067 receipt retains its original failure and source.

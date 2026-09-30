@@ -1,6 +1,6 @@
 //! Family6 mixed mutation/custody proofs using the existing production fixture.
 use super::*;
-use layerfs_bridge::contract::{CommitWire, HistoryQuery, HistoryResult};
+use layerfs_bridge::contract::{CommitWire, HistoryQuery, HistoryResult, HISTORY_PROFILE};
 use layerfs_workspace::PortableAttributes;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -440,7 +440,7 @@ fn branch(f: &Fixture) -> layerfs_bridge::contract::BranchSnapshotWire {
                 id: 96,
                 generation: 1,
                 store: f.server.store(),
-                profile: 1,
+                profile: HISTORY_PROFILE,
                 deadline_ms: 10000,
                 response_bytes: 16384,
                 operation: Operation::HistoryQuery(HistoryQuery::GetBranch { branch: id }),

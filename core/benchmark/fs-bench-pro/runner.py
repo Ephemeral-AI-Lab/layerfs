@@ -380,7 +380,7 @@ def main():
     run_parser = commands.add_parser("run")
     selector = run_parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--case")
-    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit", "workspace-commit-native", "workspace-commit-native-tail", "workspace-commit-native-counts", "workspace-commit-native-reconciliation", "workspace_namespace", "workspace-namespace-native", "workspace-namespace-sdk", "workspace_mutations", "workspace-mutations-native", "workspace-mutations-sdk"])
+    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit", "workspace-commit-native", "workspace-commit-native-tail", "workspace-commit-native-counts", "workspace-commit-native-reconciliation", "workspace_namespace", "workspace-namespace-native", "workspace-namespace-sdk", "workspace_mutations", "workspace-mutations-native", "workspace-mutations-native-tail", "workspace-mutations-sdk"])
     run_parser.add_argument("--out", required=True)
     proof_parser = commands.add_parser("prove")
     proof_parser.add_argument("--run", required=True)
@@ -417,7 +417,7 @@ def main():
             print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":
         selection = args.case or args.family
-        if selection in (*mutations.NATIVE, *mutations.SDK, "workspace_mutations", "workspace-mutations-native", "workspace-mutations-sdk"):
+        if selection in (*mutations.NATIVE, *mutations.SDK, "workspace_mutations", "workspace-mutations-native", "workspace-mutations-native-tail", "workspace-mutations-sdk"):
             print(mutations.run(selection, args.out, sys.modules[__name__]))
             return
         if selection in (*namespace.NATIVE, *namespace.SDK, "workspace_namespace", "workspace-namespace-native", "workspace-namespace-sdk"):

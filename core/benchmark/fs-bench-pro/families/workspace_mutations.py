@@ -132,8 +132,9 @@ def attempt(out, case, master, prepared):
 
 
 def run(selection, output, common):
-    if selection in NATIVE or selection == "workspace-mutations-native":
-        return native.run(selection, output, common, cases=NATIVE, selected=tuple(NATIVE) if selection not in NATIVE else (selection,),
+    if selection in NATIVE or selection in ("workspace-mutations-native", "workspace-mutations-native-tail"):
+        selected = tuple(NATIVE)[1:] if selection == "workspace-mutations-native-tail" else tuple(NATIVE) if selection not in NATIVE else (selection,)
+        return native.run(selection, output, common, cases=NATIVE, selected=selected,
                           profile=PROFILE, schema=NATIVE_SCHEMA, reused_proofs=REUSED)
     return namespace.run(selection, output, common, sdk_cases=SDK, profile=PROFILE, schema=SCHEMA, attempt=attempt, reused_proofs=REUSED)
 
