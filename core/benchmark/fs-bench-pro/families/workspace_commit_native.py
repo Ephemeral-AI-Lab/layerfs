@@ -39,6 +39,13 @@ CASES = {case.id: case for case in (
 )}
 SELECTED = tuple(CASES)[:8]
 COUNTS = tuple(CASES)[8:]
+RECONCILIATION = tuple(name for name in SELECTED if name in {
+    "workspace-commit-full-lowering-size-64mib-native-v2",
+    "workspace-commit-headroom-quota-4mib-native-v2",
+    "workspace-commit-live-g1-g2-native-v2",
+    "workspace-commit-local-c5-native-v2",
+    "workspace-commit-reordered-base-copy-native-v2",
+})
 
 
 def invoke(command, destination, timeout=60):
@@ -177,7 +184,7 @@ def run(selection, output, common):
     if identity["source_dirty"]:
         raise ValueError("commit the native control before collection")
     out.mkdir(parents=True)
-    selected = SELECTED if selection == "workspace-commit-native" else SELECTED[1:] if selection == "workspace-commit-native-tail" else COUNTS if selection == "workspace-commit-native-counts" else (selection,)
+    selected = SELECTED if selection == "workspace-commit-native" else SELECTED[1:] if selection == "workspace-commit-native-tail" else COUNTS if selection == "workspace-commit-native-counts" else RECONCILIATION if selection == "workspace-commit-native-reconciliation" else (selection,)
     summary = {"schema": SCHEMA, "profile": PROFILE, "identity": identity, "selected": list(selected), "rows": [],
                "earlier_family_policy": "unaffected production and earlier evidence reused; no earlier resampling"}
     container = "issue286-native-" + uuid.uuid4().hex[:16]
