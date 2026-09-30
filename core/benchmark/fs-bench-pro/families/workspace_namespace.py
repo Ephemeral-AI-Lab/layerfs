@@ -216,8 +216,11 @@ def sdk_attempt(out, case, master, prepared, *, profile=PROFILE, oracle_builder=
     else:
         values.update(identity_old_prefix="packages/new/subtree" if case.prelude else "packages/old/subtree",
                       identity_new_prefix="packages/new/subtree", identity_replaced="packages/new/subtree/child/grand.txt")
-    if case.prelude:
-        values.update(prelude_command_hex=case.prelude.encode().hex(), pin_path_hex=pin_path.hex(), pin_read_bytes="16384")
+    recovery = values.get("recovery_commit") == "1"
+    if case.prelude or recovery:
+        values.update(pin_path_hex=pin_path.hex(), pin_read_bytes="16384")
+        if case.prelude:
+            values["prelude_command_hex"] = case.prelude.encode().hex()
     case_spec(folder / "case.before", values)
     old, new = oracle_builder(case)
     (folder / "old.tsv").write_text(old)
@@ -227,17 +230,19 @@ def sdk_attempt(out, case, master, prepared, *, profile=PROFILE, oracle_builder=
     driver, control = shared.receipt_line(stdout), commit.control_line(stdout)
     cleanup = commit.cleanup_complete(driver, control, stderr)
     counts = dict(item.split("=", 1) for item in (driver or {}).get("projection_counts", "").split(",") if "=" in item)
-    expected_failure = values["expected_failure"] == "1"
-    route = route_validator(driver, counts) if route_validator else bool(driver and driver.get("commit_called") and int(counts.get("rename", 0)) >= (1 if case.command != COMPONENTS else 0))
-    pin = not case.prelude or bool(control and control.get("pin_observation_ok") and control.get("pinned_bytes") == len(pin_expected)
+    expected_exec_failure = values["expected_failure"] == "1"
+    expected_failure = expected_exec_failure and not recovery
+    route = route_validator(driver, counts, control) if route_validator else bool(driver and driver.get("commit_called") and int(counts.get("rename", 0)) >= (1 if case.command != COMPONENTS else 0))
+    pin = not (case.prelude or recovery) or bool(control and control.get("pin_observation_ok") and control.get("pinned_bytes") == len(pin_expected)
         and control.get("pinned_sha256") == hashlib.sha256(pin_expected).hexdigest() and control.get("pin_release_ok"))
     complete = bool(record["exit_code"] == 0 and not record["timeout"] and record["wall_ns"] <= case.budget_ns and driver and driver.get("status") == "COMPLETE" and route and cleanup and pin)
     if driver and (driver.get("head_commit") or expected_failure and driver.get("status") == "COMPLETE"):
         if case.prelude:
             values.update(old_commit=control["prelude_head_commit"], expected_old_parent=master["old_commit"])
-        case_spec(folder / "case.verify", {**values, "expected_head_commit": driver["head_commit"] or master["old_commit"]})
+        case_spec(folder / "case.verify", {**values, "expected_failure": str(int(expected_failure)), "expected_head_commit": driver["head_commit"] or master["old_commit"]})
     row = {"case": case.id, "source": prepared["identity"], "profile": profile, "sample_count": 1,
            "expected_failure": expected_failure,
+           "expected_exec_failure": expected_exec_failure, "explicit_recovery": recovery,
            "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
            "master": master, "artifacts": prepared["artifacts"], "image_id": prepared["image_id"],
            "performance": record, "command_budget_ns": case.budget_ns,

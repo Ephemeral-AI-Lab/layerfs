@@ -73,6 +73,14 @@ class MutationOracle(unittest.TestCase):
         self.assertNotIn("uncommitted", new)
         self.assertEqual(mutations.properties(case), {"expected_failure": "1", "expected_exit_status": "7"})
 
+    def test_explicit_recovery_is_a_distinct_profile_with_accepted_private_bytes(self):
+        case = mutations.SDK["workspace-mutations-shell-exit7-retained-explicit-commit-sdk-v2"]
+        old, new = map(rows, mutations.oracle(case))
+        self.assertNotIn("uncommitted/file", old)
+        self.assertEqual(new["uncommitted/file"][-1], hashlib.sha256(b"private").hexdigest())
+        self.assertEqual(mutations.properties(case)["recovery_commit"], "1")
+        self.assertNotIn("workspace-mutations-shell-exit7-no-commit-sdk-v1", mutations.SELECTED)
+
     def test_refused_namespace_operations_add_no_forbidden_bindings(self):
         _, new = map(rows, mutations.oracle(mutations.SDK["workspace-mutations-known-posix-refusals-sdk-v1"]))
         self.assertIn("checks/child/file", new)
@@ -81,7 +89,8 @@ class MutationOracle(unittest.TestCase):
         self.assertNotIn("checks/child/nested", new)
 
     def test_fixed_membership_limits_and_reused_proof_identities(self):
-        self.assertEqual(len(mutations.SDK), 4)
+        self.assertEqual(len(mutations.SDK), 5)
+        self.assertEqual(len(mutations.SELECTED), 4)
         self.assertEqual(len(mutations.NATIVE), 3)
         self.assertTrue(all(case.budget_ns == 15_000_000_000 for case in (*mutations.SDK.values(), *mutations.NATIVE.values())))
         self.assertEqual(sum(case.clones for case in mutations.NATIVE.values()), 4)

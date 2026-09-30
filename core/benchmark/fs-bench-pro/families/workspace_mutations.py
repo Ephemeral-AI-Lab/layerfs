@@ -38,14 +38,17 @@ FAILURE = "set -e; umask 022; mkdir uncommitted; printf private > uncommitted/fi
 @dataclass(frozen=True)
 class Case(namespace.SdkCase):
     role: str = "mixed"
+    retired: bool = False
 
 
 SDK = {case.id: case for case in (
     Case("workspace-mutations-mixed-ordinary-sdk-v1", "small", MIX),
     Case("workspace-mutations-retained-g1-live-g2-sdk-v1", "small", LATER, prelude=MIX, role="retained"),
     Case("workspace-mutations-known-posix-refusals-sdk-v1", "small", REFUSALS, role="refusals"),
-    Case("workspace-mutations-shell-exit7-no-commit-sdk-v1", "small", FAILURE, role="failure"),
+    Case("workspace-mutations-shell-exit7-no-commit-sdk-v1", "small", FAILURE, role="failure", retired=True),
+    Case("workspace-mutations-shell-exit7-retained-explicit-commit-sdk-v2", "small", FAILURE, role="recovery"),
 )}
+SELECTED = tuple(name for name, case in SDK.items() if not case.retired)
 NATIVE = {case.id: case for case in (
     native.Case("workspace-mutations-mixed-live-g1-g2-native-v1", "phase_b_mutations::mixed_live", budget_ns=15_000_000_000, ignored=True),
     native.Case("workspace-mutations-mixed-known-unknown-custody-native-v1", "phase_b_mutations::mixed_failures", clones=2,
@@ -99,6 +102,8 @@ def oracle(case):
     elif case.role == "refusals":
         new.update({"checks": ("d", 493, None), "checks/child": ("d", 493, None),
                     "checks/child/file": ("f", 420, b"keep"), "checks/result": ("f", 420, b"success")})
+    elif case.role == "recovery":
+        new.update({"uncommitted": ("d", 493, None), "uncommitted/file": ("f", 420, b"private")})
     return manifest(old), manifest(new)
 
 
@@ -106,6 +111,8 @@ def properties(case):
     if case.role == "failure":
         return {"expected_failure": "1", "expected_exit_status": "7"}
     result = {"identity_old_prefix": "packages/old/subtree", "identity_new_prefix": "packages/old/subtree"}
+    if case.role == "recovery":
+        result.update(expected_failure="1", expected_exit_status="7", recovery_commit="1")
     aliases = "work/file\twork/moved\t2"
     first = f"work/file\t{FIRST_TIME}\t0\nwork/moved\t{FIRST_TIME}\t0"
     if case.role == "mixed":
@@ -118,25 +125,37 @@ def properties(case):
 
 
 def attempt(out, case, master, prepared):
-    def route(driver, counts):
+    def route(driver, counts, control):
         if not driver:
             return False
         if case.role == "failure":
             return driver.get("commit_called") is False and driver.get("exec_exit_status") == 7
+        if case.role == "recovery":
+            return bool(driver.get("commit_called") and driver.get("exec_exit_status") == 7
+                        and control and control.get("recovery_complete") and control.get("unmounted_before_recovery"))
         minimum = 3 if case.role == "retained" else 2 if case.role == "mixed" else 0
         return bool(driver.get("commit_called") and driver.get("exec_exit_status") == 0
                     and int(counts.get("rename", 0)) >= minimum)
     return namespace.sdk_attempt(out, case, master, prepared, profile=PROFILE, oracle_builder=oracle,
                                  properties=properties(case), route_validator=route,
-                                 pin_path=b"work/file", pin_expected=G1_BYTES)
+                                 pin_path=b"uncommitted/file" if case.role == "recovery" else b"work/file",
+                                 pin_expected=b"private" if case.role == "recovery" else G1_BYTES)
 
 
 def run(selection, output, common):
+    if selection in SDK and SDK[selection].retired:
+        out = common.owned(output)
+        out.mkdir(parents=True)
+        namespace.shared.save(out / "run.json", {"schema": SCHEMA, "profile": PROFILE, "identity": common.identities(),
+            "rows": [{"case": selection, "status": "NOT_RUN", "sample_count": 0,
+                      "reason": "historical r069 cleanup FAIL; no dirty-discard API; distinct v2 observes retained owner and explicit recovery"}]})
+        common.manifest_run(out)
+        return out
     if selection in NATIVE or selection in ("workspace-mutations-native", "workspace-mutations-native-tail"):
         selected = tuple(NATIVE)[1:] if selection == "workspace-mutations-native-tail" else tuple(NATIVE) if selection not in NATIVE else (selection,)
         return native.run(selection, output, common, cases=NATIVE, selected=selected,
                           profile=PROFILE, schema=NATIVE_SCHEMA, reused_proofs=REUSED)
-    return namespace.run(selection, output, common, sdk_cases=SDK, profile=PROFILE, schema=SCHEMA, attempt=attempt, reused_proofs=REUSED)
+    return namespace.run(selection, output, common, sdk_cases={name: SDK[name] for name in SELECTED}, profile=PROFILE, schema=SCHEMA, attempt=attempt, reused_proofs=REUSED)
 
 
 def prove(run, output, common):

@@ -351,6 +351,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut prelude_commit_ns = 0;
     let mut prelude_head = String::new();
     let mut lease = None;
+    let mut early_unmount_ok = false;
+    let mut recovery_complete = false;
     let start = Instant::now();
     let (outcome, diagnostic) = runtime
         .recorder()
@@ -425,7 +427,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(Some)
                 .map_err(|error| format!("commit: {error:?}"))
         });
-    let operation_ns = start.elapsed().as_nanos();
+    let mut operation_ns = start.elapsed().as_nanos();
     runtime.publish(diagnostic);
     let (mut status, mut detail, mut head_commit) = ("COMPLETE", String::new(), String::new());
     let mut up_to_date = false;
@@ -452,6 +454,99 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             status = "FAIL";
             detail = error;
         }
+    }
+    if status == "COMPLETE"
+        && case
+            .0
+            .get("recovery_commit")
+            .is_some_and(|value| value == "1")
+    {
+        let recovery = (|| -> Result<(), String> {
+            use layerfs_bridge::contract::{
+                HistoryQuery, HistoryResult, Operation, Request, Response, HISTORY_PROFILE,
+            };
+            if !expected_failure || commit_called || exec_exit_status != Some(7) {
+                return Err("recovery requires known exit7 before any Commit".into());
+            }
+            let response = server
+                .service()
+                .handle(
+                    &server.peer().map_err(|e| format!("peer: {e:?}"))?,
+                    &Request {
+                        id: 244_001,
+                        generation: 1,
+                        store: server.store(),
+                        profile: HISTORY_PROFILE,
+                        deadline_ms: 10000,
+                        response_bytes: 16384,
+                        operation: Operation::HistoryQuery(HistoryQuery::GetBranch { branch }),
+                    },
+                    &mut std::io::empty(),
+                    &mut std::io::sink(),
+                )
+                .0
+                .map_err(|e| format!("head: {e:?}"))?;
+            let Response::History(record) = response else {
+                return Err("history reply".into());
+            };
+            let HistoryResult::BranchSnapshot(snapshot) = *record else {
+                return Err("branch snapshot".into());
+            };
+            if snapshot.branch.head_commit.map(|id| hex(&id)).as_deref()
+                != Some(case.get("old_commit").map_err(|e| e.to_string())?)
+            {
+                return Err("failed Exec implicitly changed canonical head".into());
+            }
+            lease = Some(
+                workspaces
+                    .pin_view(&mount.id)
+                    .map_err(|e| format!("dirty pin: {e:?}"))?,
+            );
+            let path = case.bytes("pin_path_hex").map_err(|e| e.to_string())?;
+            let (bytes, digest) = pinned_digest(
+                &workspaces,
+                lease.as_ref().ok_or("dirty lease")?,
+                16384,
+                &path,
+            )?;
+            if bytes != 7 || digest != hex(&Sha256::digest(b"private")) {
+                return Err("accepted private bytes unavailable before recovery".into());
+            }
+            workspaces
+                .unmount(&mount.id)
+                .map_err(|e| format!("early unmount: {e:?}"))?;
+            early_unmount_ok = true;
+            let observed = workspaces
+                .status(&mount.id)
+                .map_err(|e| format!("retained status: {e:?}"))?;
+            if observed.mounted || observed.closed || observed.stopping {
+                return Err(format!("unmounted dirty owner not retained: {observed:?}"));
+            }
+            // Explicit benchmark-owner recovery after observing the known error.
+            // The product never automatically commits a failed shell command.
+            commit_called = true;
+            let began = Instant::now();
+            let result = workspaces
+                .commit(&mount.id)
+                .map_err(|e| format!("explicit recovery Commit: {e:?}"))?;
+            commit_ns = began.elapsed().as_nanos();
+            let CommitOutcomeWire::Committed(record) = result.outcome else {
+                return Err("known new recovery Commit".into());
+            };
+            if record.parent.map(|id| hex(&id)).as_deref()
+                != Some(case.get("old_commit").map_err(|e| e.to_string())?)
+            {
+                return Err("recovery parent mismatch".into());
+            }
+            head_commit = hex(&record.commit);
+            Ok(())
+        })();
+        recovery_complete = recovery.is_ok();
+        if let Err(error) = recovery {
+            status = "FAIL";
+            detail = error;
+        }
+        operation_ns = start.elapsed().as_nanos();
     }
     let mut pinned_bytes = 0;
     let mut pinned_sha256 = String::new();
@@ -501,7 +596,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let cleanup_start = Instant::now();
     let post_status = workspaces.status(&mount.id);
-    let unmount = workspaces.unmount(&mount.id);
+    let unmount = if early_unmount_ok {
+        Ok(())
+    } else {
+        workspaces.unmount(&mount.id)
+    };
     let (delete, capture) = sandboxes.delete_with_logs(sandbox, &mut std::io::stderr());
     let cleanup_ns = cleanup_start.elapsed().as_nanos();
     if unmount.is_err() || delete.is_err() || post_status.is_err() {
@@ -521,7 +620,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_default();
     let disk_read_delta =
         disk_read_before.and_then(|before| disk_read_bytes()?.checked_sub(before));
-    println!("CONTROL\t{{\"prelude_exec_ns\":{prelude_exec_ns},\"prelude_commit_ns\":{prelude_commit_ns},\"prelude_head_commit\":{prelude_head:?},\"up_to_date\":{up_to_date},\"pin_generation\":{pin_generation},\"pin_observation_ok\":{pin_observation_ok},\"pin_read_bytes\":{pin_read_bytes},\"pinned_bytes\":{pinned_bytes},\"pinned_sha256\":{pinned_sha256:?},\"pin_release_ok\":{pin_release_ok}}}");
+    println!("CONTROL\t{{\"prelude_exec_ns\":{prelude_exec_ns},\"prelude_commit_ns\":{prelude_commit_ns},\"prelude_head_commit\":{prelude_head:?},\"up_to_date\":{up_to_date},\"pin_generation\":{pin_generation},\"pin_observation_ok\":{pin_observation_ok},\"pin_read_bytes\":{pin_read_bytes},\"pinned_bytes\":{pinned_bytes},\"pinned_sha256\":{pinned_sha256:?},\"pin_release_ok\":{pin_release_ok},\"recovery_complete\":{recovery_complete},\"unmounted_before_recovery\":{early_unmount_ok}}}");
     println!("RECEIPT\t{{\"schema\":\"issue243-shell-driver-v1\",\"status\":\"{status}\",\"detail\":{:?},\"mode\":{:?},\"scenario_id\":{:?},\"branch_id\":{:?},\"head_commit\":{:?},\"commit_called\":{commit_called},\"exec_exit_status\":{},\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"operation_ns\":{operation_ns},\"cleanup_ns\":{cleanup_ns},\"projection_counts\":{:?},\"unmount_ok\":{},\"sandbox_delete_ok\":{},\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":{:?},\"host_disk_read_bytes\":{}}}",
         detail, args[1], case.get("scenario_id")?, hex(&branch), head_commit, exec_exit_status.map_or("null".into(), |code| code.to_string()), counts,
         unmount.is_ok(), delete.is_ok(), capture.attempted, capture.bytes, capture.truncated,

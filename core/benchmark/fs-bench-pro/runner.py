@@ -412,7 +412,8 @@ def main():
         for case in mutations.NATIVE.values():
             print(f"{case.id}\tnative mixed mutation/custody; command <= 15 s; no SDK time")
         for case in mutations.SDK.values():
-            print(f"{case.id}\tpublic SDK/FUSE; command <= 15 s; separate full proof < 9 s")
+            print(f"{case.id}\tpublic SDK/FUSE; command <= 15 s; separate full proof < 9 s\t"
+                  f"{'historical cleanup FAIL r069; superseded v2 explicit recovery' if case.retired else 'current selected'}")
         for name, reason in commit.REMAINING.items():
             print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":

@@ -513,3 +513,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family6 native tail r068
 
 [2/2 tail controls PASS](experiments/20260930-workspace-mutations-native-tail-r068.md),339,306,250/368,167,584ns under15s; known/unknown expected-retained complete physical/pin custody and no replay, local-C5 same-selector resume with canonical calls1→1 and later G2/checked0/0 close. Passing mixed live r067 explicitly reused. All3 native profiles covered, numeric INELIGIBLE, no product change/earlier run. Next first SDK/proofr069.
+
+## Family6 SDK mixed r069
+
+[3 SDK profiles PASS; dirty-discard v1 FAIL](experiments/20260930-workspace-mutations-sdk-r069.md): full proofs/cleanup pass for mixed, retained and refusals. Exit7/no Commit is correct and under15s but daemon shutdown reports Busy; unmount is not dirty-discard and forced Docker deletion is not graceful close. Preserve v1 FAIL, prospectively register v2 explicit recovery after observing unchanged head/retained private state; collect onlyv2 r070, reuse all passing SDK/native/earlier proofs. No product/codecs or limits changed; numeric INELIGIBLE.
