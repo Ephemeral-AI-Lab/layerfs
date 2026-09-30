@@ -124,7 +124,7 @@ fn pinned_digest(
     Ok((offset, hex(&hash.finalize())))
 }
 fn stopping_control(api: &WorkspaceApi<'_>, id: &layerfs_sdk::WorkspaceId) -> Result<(), String> {
-    let setup = api.exec(id, "mkfifo /tmp/f4-ready /tmp/f4-release /tmp/f4-closed; (exec 3<data.bin && printf r > /tmp/f4-ready && read token < /tmp/f4-release && exec 3<&- && printf c > /tmp/f4-closed) > /tmp/f4-holder.log 2>&1 & read ready < /tmp/f4-ready")
+    let setup = api.exec(id, "mkfifo /tmp/f4-ready /tmp/f4-release /tmp/f4-closed; (exec 3<data.bin && printf 'ready\\n' > /tmp/f4-ready && read token < /tmp/f4-release && exec 3<&- && printf 'closed\\n' > /tmp/f4-closed) > /tmp/f4-holder.log 2>&1 & read ready < /tmp/f4-ready")
         .map_err(|error| format!("holder setup: {error:?}"))?;
     if setup.exit_status != Some(0) {
         return Err(format!("holder setup: {setup:?}"));

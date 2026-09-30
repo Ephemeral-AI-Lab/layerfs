@@ -228,6 +228,7 @@ def prove(performance_out, output, common):
             proof = {"case": name, "sample_count": 0, "performance_receipt_sha256": write.sha256(source / "receipt.json"),
                      "status": "NOT_RUN", "reason": "performance/route/pin/cleanup did not complete"}
             if receipt["status"] == "COMPLETE_DIAGNOSTIC":
+                proof.pop("reason")
                 fields = dict(line.split("=", 1) for line in (source / "case.before").read_text().splitlines())
                 fields.update(old_commit=receipt["master"]["old_commit"] if CASES[name].stopping else receipt["control"]["prelude_head_commit"],
                               expected_old_parent=receipt["master"]["old_commit"],
