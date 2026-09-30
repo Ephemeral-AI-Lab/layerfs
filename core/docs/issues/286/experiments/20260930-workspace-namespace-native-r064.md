@@ -1,0 +1,9 @@
+# Family5 initial native build r064 — INCOMPLETE
+
+Measured source `8feba2d452cfdf0f915af91c67387a8c05469cb0`, clean tree `fdc28fe22ff87c12d221bbc2e24467de4b7e12c1`. The prospectively frozen ten native controls were all NOT_RUN (sample_count0) because the new external test helper failed compilation with E0599 at `phase_b_namespace.rs:64`: `path` is already `&[u8]`, so `.as_slice()` is invalid. No product failure, speed or memory claim follows.
+
+The build command and exact wall, source/harness/dependency seals, all ten unrun lines and failed external volume-removal command are retained in [compact receipts](20260930-workspace-namespace-native-r064-receipts.json). The raw append-only path is `benchmark-results/fs-bench-pro/issue286-workspace-namespace-native-r064`. No volume or container was acquired: the old generic native cleanup code nevertheless tried removing an absent volume and returned1. This is a harness bookkeeping error, not retained product custody.
+
+Fix the slice call and record acquisition requests before issuing external cleanup. Rerun the changed helper identity once as r065 native; then collect the five SDK cases as r066 and prove their immutable results separately. Case order, workload, Budget, workers and command/verifier bounds remain those in [the frozen spec](../FAMILY5-SPEC-20260930.md). Numeric latency stays INELIGIBLE. Earlier F1–4 product proofs, particularly F2 storage, remain reused and are not rerun.
+
+Source and repair/report commits both have Production LOC135638→135638(delta+0), reference65417/Core70221. The same production-only `tools/production_loc.py --json` counter compares first-parent and final staged archive snapshots; tests/examples/harness/docs are excluded. Initial focused Python namespace4/native3 checks passed; native compilation failed before any measured case.

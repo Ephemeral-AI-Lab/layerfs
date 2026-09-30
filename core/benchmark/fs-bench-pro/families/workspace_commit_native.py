@@ -207,18 +207,20 @@ def run(selection, output, common, *, cases=None, selected=None, profile=PROFILE
         return out
     container = "issue286-native-" + uuid.uuid4().hex[:16]
     volume = container + "-backing"
-    admitted = False
+    volume_requested = False
+    container_requested = False
     try:
         with (common.RESULTS / ".run.lock").open("a+b") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             build_record = build(out, common, identity)
             summary["build"] = build_record
+            volume_requested = True
             checked(["docker", "volume", "create", volume], out / "volume-create")
+            container_requested = True
             checked(["docker", "run", "-d", "--name", container,
                      "--mount", f"type=volume,source={volume},target=/work",
                      "--mount", f"type=bind,source={build_record['binary']['path']},target=/test,readonly",
                      "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", shared.BASE, "sleep", "86400"], out / "container-create")
-            admitted = True
             summary["image"] = json.loads(checked(["docker", "inspect", container], out / "container-inspect"))[0]["Image"]
             summary["backing"] = checked(["docker", "exec", container, "stat", "-f", "-c", "%t %S", "/work"], out / "backing-profile").decode().strip()
             if summary["backing"] != "ef53 4096":
@@ -242,10 +244,12 @@ def run(selection, output, common, *, cases=None, selected=None, profile=PROFILE
         summary["error"] = repr(error)
     finally:
         cleanup = []
-        if admitted:
+        if container_requested:
             cleanup.append(invoke(["docker", "rm", "-f", container], out / "external-container-cleanup")[0])
-        cleanup.append(invoke(["docker", "volume", "rm", volume], out / "external-volume-cleanup")[0])
+        if volume_requested:
+            cleanup.append(invoke(["docker", "volume", "rm", volume], out / "external-volume-cleanup")[0])
         summary["external_cleanup"] = cleanup
+        summary["external_ownership"] = {"volume_requested": volume_requested, "container_requested": container_requested}
     for name in selected[len(summary["rows"]):]:
         summary["rows"].append({"case": name, "status": "NOT_RUN", "reason": summary.get("error", "prior case failed")})
     qualified = all(row["status"] in ("PASS", "SKIPPED / OWNER-DEFERRED") for row in summary["rows"])

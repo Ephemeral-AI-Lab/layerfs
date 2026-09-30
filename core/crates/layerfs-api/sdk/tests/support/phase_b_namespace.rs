@@ -61,7 +61,7 @@ fn children(tree: &Tree, path: &[u8]) -> BTreeSet<Vec<u8>> {
             let suffix = if path.is_empty() {
                 name.as_slice()
             } else {
-                name.strip_prefix(path.as_slice())?.strip_prefix(b"/")?
+                name.strip_prefix(path)?.strip_prefix(b"/")?
             };
             (!suffix.is_empty() && !suffix.contains(&b'/')).then(|| suffix.to_vec())
         })

@@ -1,0 +1,127 @@
+{
+  "build_attempt": {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "zigbuild",
+      "--release",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "--offline",
+      "--target",
+      "aarch64-unknown-linux-musl",
+      "-p",
+      "layerfs-sdk",
+      "-p",
+      "layerfs-storage",
+      "--features",
+      "rusqlite/bundled",
+      "--test",
+      "inherited_workspace"
+    ],
+    "exit_code": 101,
+    "started_ns": 9647803681958,
+    "stderr_sha256": "56691d0cd876ffdef49c45a24f662fe17141c0ac2e53895a49893b70be522030",
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "timeout": false,
+    "wall_ns": 9067305500
+  },
+  "earlier_family_policy": "unaffected production and earlier evidence reused; no earlier resampling",
+  "error": "RuntimeError('native release test build failed')",
+  "external_cleanup": [
+    {
+      "command": [
+        "docker",
+        "volume",
+        "rm",
+        "issue286-native-e93c19cfdd9841e3-backing"
+      ],
+      "exit_code": 1,
+      "started_ns": 9656871781041,
+      "stderr_sha256": "fe8b9d500c1616ada5bb256e450521ab5ddb23301728e73966eec22779175454",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "timeout": false,
+      "wall_ns": 2722749709
+    }
+  ],
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "3dffa892f6ceb6b0daeb50b0b2d6148b30e657784da7a4cc0db298e05cb61f86",
+    "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+    "source_commit": "8feba2d452cfdf0f915af91c67387a8c05469cb0",
+    "source_dirty": false,
+    "source_tree": "fdc28fe22ff87c12d221bbc2e24467de4b7e12c1"
+  },
+  "profile": "namespace-component-and-sdk-clone-functional-v1",
+  "raw_manifest_sha256": "aadc16eb49f8ae9e3b21ecee90d665ddd7759778862317d713c5480158a8e7b5",
+  "rows": [
+    {
+      "case": "workspace-namespace-uncached-descendants-3-native-v1",
+      "reason": "RuntimeError('native release test build failed')",
+      "status": "NOT_RUN"
+    },
+    {
+      "case": "workspace-namespace-uncached-descendants-67-native-v1",
+      "reason": "RuntimeError('native release test build failed')",
+      "status": "NOT_RUN"
+    },
+    {
+      "case": "workspace-namespace-resident-descendants-3-native-v1",
+      "reason": "RuntimeError('native release test build failed')",
+      "status": "NOT_RUN"
+    },
+    {
+      "case": "workspace-namespace-resident-descendants-67-native-v1",
+      "reason": "RuntimeError('native release test build failed')",
+      "status": "NOT_RUN"
+    },
+    {
+      "case": "workspace-namespace-unrelated-resident-256-native-v1",
+      "reason": "RuntimeError('native release test build failed')",
+      "status": "NOT_RUN"
+    },
+    {
+      "case": "workspace-namespace-deep-4097-uncached-native-v1",
+      "reason": "RuntimeError('native release test build failed')",
+      "status": "NOT_RUN"
+    },
+    {
+      "case": "workspace-namespace-deep-4097-resident-native-v1",
+      "reason": "RuntimeError('native release test build failed')",
+      "status": "NOT_RUN"
+    },
+    {
+      "case": "workspace-namespace-retained-live-g1-g2-native-v1",
+      "reason": "RuntimeError('native release test build failed')",
+      "status": "NOT_RUN"
+    },
+    {
+      "case": "workspace-namespace-rename-refund-native-v1",
+      "reason": "RuntimeError('native release test build failed')",
+      "status": "NOT_RUN"
+    },
+    {
+      "case": "workspace-namespace-rename-refusal-native-v1",
+      "reason": "RuntimeError('native release test build failed')",
+      "status": "NOT_RUN"
+    }
+  ],
+  "schema": "core-workspace-namespace-native-run-v1",
+  "selected": [
+    "workspace-namespace-uncached-descendants-3-native-v1",
+    "workspace-namespace-uncached-descendants-67-native-v1",
+    "workspace-namespace-resident-descendants-3-native-v1",
+    "workspace-namespace-resident-descendants-67-native-v1",
+    "workspace-namespace-unrelated-resident-256-native-v1",
+    "workspace-namespace-deep-4097-uncached-native-v1",
+    "workspace-namespace-deep-4097-resident-native-v1",
+    "workspace-namespace-retained-live-g1-g2-native-v1",
+    "workspace-namespace-rename-refund-native-v1",
+    "workspace-namespace-rename-refusal-native-v1"
+  ],
+  "status": "INCOMPLETE"
+}
