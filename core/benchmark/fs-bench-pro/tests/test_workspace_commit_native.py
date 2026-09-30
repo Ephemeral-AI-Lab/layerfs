@@ -12,7 +12,7 @@ class NativeSelection(unittest.TestCase):
         self.assertEqual(first.master, 'large')
         self.assertEqual(first.test, 'phase_b_commit::full_lowering_64mib')
         self.assertTrue(all(case.budget_ns == 60_000_000_000 for case in native.CASES.values()))
-        self.assertEqual(sum(case.clones for case in native.CASES.values()), 9)
+        self.assertEqual(sum(native.CASES[name].clones for name in native.SELECTED), 9)
 
     def test_retained_custody_is_explicit(self):
         retained = [case for case in native.CASES.values() if case.retained]

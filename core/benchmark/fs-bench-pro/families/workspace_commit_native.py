@@ -34,8 +34,11 @@ CASES = {case.id: case for case in (
     Case("workspace-commit-known-unknown-native-v2", "phase_a_known_save_and_unknown_commit_keep_custody_without_replay", clones=2, retained=True),
     Case("workspace-commit-local-c5-native-v2", "phase_a_known_canonical_local_failure_resumes_same_selector_once"),
     Case("workspace-commit-reordered-base-copy-native-v2", "phase_a_large_payload_append_resize_and_backward_base_copy"),
+    Case("workspace-commit-native-count-writes-8192-v2", "phase_b_commit::native_count_8192", "count"),
+    Case("workspace-commit-native-count-writes-10240-v2", "phase_b_commit::native_count_10240", "count"),
 )}
-SELECTED = tuple(CASES)
+SELECTED = tuple(CASES)[:8]
+COUNTS = tuple(CASES)[8:]
 
 
 def invoke(command, destination, timeout=60):
@@ -88,10 +91,12 @@ def build(out, common, identity):
     return result
 
 
-def masters(out, container, common, identity, binary):
+def masters(out, container, common, identity, binary, needed):
     root = common.RESULTS / "workspace-commit-native-master-v1"
     result = {}
-    for name, size in (("small", 0), ("large", 64 << 20)):
+    for name, size in (("small", 0), ("large", 64 << 20), ("count", 327_680)):
+        if name not in needed:
+            continue
         path = root / name
         seal = path / "prepared.json"
         reused = seal.exists()
@@ -150,14 +155,15 @@ def attempt(out, case, prepared, container):
                container, "/test", "--exact", case.test, "--test-threads=1", "--nocapture"]
     record, stdout, stderr = invoke(command, folder / "functional", case.budget_ns / 1e9)
     ok = record["exit_code"] == 0 and not record["timeout"] and b"1 passed" in stdout and b"initialized=false" in stdout
-    if case.retained or not ok:
+    expected_retained = case.retained or any(line.startswith(b"PHASE_B_COUNT") and b"retained=true" in line for line in stdout.splitlines())
+    if expected_retained or not ok:
         checked(["docker", "cp", f"{container}:/work/{case.id}", str(folder / "retained-linux-state")], folder / "custody-copy")
     row = {"case": case.id, "test": case.test, "route": "Linux native Workspace + in-process production Server",
            "functional": record, "functional_budget_ns": case.budget_ns,
            "functional_status": "PASS" if ok else "FAIL", "status": "PASS" if ok else "FAIL",
            "sample_count": 1, "performance_claim": False, "numeric_latency_status": "INELIGIBLE",
            "verification_scope": "in-child full relevant old/new/G1/G2/pin bytes, quota/custody assertions; no separate speed arm",
-           "cleanup_status": "EXPECTED_RETAINED" if ok and case.retained else "PASS" if ok else "UNKNOWN",
+           "cleanup_status": "EXPECTED_RETAINED" if ok and expected_retained else "PASS" if ok else "UNKNOWN",
            "clone_method": "independent byte copy; Linux setup ownership 0:0; host and Linux byte hashes matched; closed prepared master",
            "prepared": prepared, "observations": [line for line in stdout.decode(errors="replace").splitlines() if line.startswith("PHASE_")],
            "sdk_time": "N/A: native component route", "cache_contract": "uncontrolled, functional only"}
@@ -171,7 +177,7 @@ def run(selection, output, common):
     if identity["source_dirty"]:
         raise ValueError("commit the native control before collection")
     out.mkdir(parents=True)
-    selected = SELECTED if selection == "workspace-commit-native" else SELECTED[1:] if selection == "workspace-commit-native-tail" else (selection,)
+    selected = SELECTED if selection == "workspace-commit-native" else SELECTED[1:] if selection == "workspace-commit-native-tail" else COUNTS if selection == "workspace-commit-native-counts" else (selection,)
     summary = {"schema": SCHEMA, "profile": PROFILE, "identity": identity, "selected": list(selected), "rows": [],
                "earlier_family_policy": "unaffected production and earlier evidence reused; no earlier resampling"}
     container = "issue286-native-" + uuid.uuid4().hex[:16]
@@ -192,7 +198,7 @@ def run(selection, output, common):
             summary["backing"] = checked(["docker", "exec", container, "stat", "-f", "-c", "%t %S", "/work"], out / "backing-profile").decode().strip()
             if summary["backing"] != "ef53 4096":
                 raise ValueError("required Linux backing filesystem profile missing")
-            prepared = masters(out, container, common, identity, build_record["binary"])
+            prepared = masters(out, container, common, identity, build_record["binary"], {CASES[name].master for name in selected})
             for name in selected:
                 try:
                     row = attempt(out, CASES[name], prepared[CASES[name].master], container)

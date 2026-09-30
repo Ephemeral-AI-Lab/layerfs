@@ -416,3 +416,88 @@ fn commit_headroom_4mib() {
     assert_eq!(f.workspace.backing_status().unwrap().allocated_bytes, 0);
     println!("PHASE_B_HEADROOM commit_ns={commit_ns} full={full:?} after={after:?} cleanup=true");
 }
+
+fn separated_count(count: usize) {
+    let f = Fixture::new();
+    let file = f.lookup(f.workspace.root().serial, b"data.bin");
+    assert_eq!(file.size, 327_680);
+    let handle = f.open(file.serial);
+    let old: Vec<u8> = (0..file.size).map(|index| (index % 251) as u8).collect();
+    assert_eq!(f.content_bytes(f.genesis, b"data.bin"), old);
+    let mut expected = old.clone();
+    let token = [83; 33];
+    let view = f.workspace.pin_view(token, deadline()).unwrap();
+    let selected = f
+        .workspace
+        .view_lookup(&token, view.root.serial, b"data.bin", deadline())
+        .unwrap();
+    for index in 0..count {
+        write(&f, handle, (index * 2) as u64, b"X");
+        expected[index * 2] = b'X';
+    }
+    let start = Instant::now();
+    let result = f.workspace.commit(deadline());
+    let commit_ns = start.elapsed().as_nanos();
+    match result {
+        Ok(report) => {
+            let CommitOutcomeWire::Committed(commit) = report.outcome else {
+                panic!("known count Commit")
+            };
+            assert_eq!(f.canonical_calls.load(Ordering::Acquire), 1);
+            assert_eq!(f.content_bytes(commit.root, b"data.bin"), expected);
+            pinned(&f, &token, selected.serial, &old);
+            assert!(matches!(
+                f.workspace.release_view(&token).unwrap(),
+                layerfs_workspace::ViewRelease::Completed
+            ));
+            f.workspace.release(handle).unwrap();
+            f.workspace
+                .forget(file.serial, u64::MAX, ReferenceScope::Local);
+            f.workspace.close_clean().unwrap();
+            let backing = f.workspace.backing_status().unwrap();
+            assert_eq!((backing.allocated_bytes, backing.reserved_bytes), (0, 0));
+            println!("PHASE_B_COUNT writes={count} memory_budget={} commit_ns={commit_ns} known=true full_old_new_pin=true retained=false cleanup=true", DEFAULT_MEMORY_BUDGET_BYTES);
+        }
+        Err(WorkspaceError::Commit(failure)) if count == 10240 => {
+            assert_eq!(
+                failure.disposition,
+                layerfs_workspace::CommitFailureDisposition::KnownCommitLocalFailure
+            );
+            let Some(CommitOutcomeWire::Committed(ref commit)) = failure.known_outcome else {
+                panic!("known canonical root")
+            };
+            assert!(failure.installed_revision.is_none());
+            assert_eq!(f.content_bytes(commit.root, b"data.bin"), expected);
+            pinned(&f, &token, selected.serial, &old);
+            assert_eq!(f.canonical_calls.load(Ordering::Acquire), 1);
+            assert!(f.workspace.status().unwrap().submission.is_some());
+            assert!(matches!(
+                f.workspace.commit(deadline()),
+                Err(WorkspaceError::Busy)
+            ));
+            assert!(matches!(
+                f.workspace.close_clean(),
+                Err(WorkspaceError::Busy)
+            ));
+            let backing = f.workspace.backing_status().unwrap();
+            assert!(
+                backing.accounting_complete
+                    && backing.allocated_bytes > 0
+                    && backing.reserved_bytes > 0
+            );
+            println!("PHASE_B_COUNT writes={count} memory_budget={} commit_ns={commit_ns} known_canonical_local_failure=true full_old_new_pin=true retained=true backing={backing:?}", DEFAULT_MEMORY_BUDGET_BYTES);
+            std::mem::forget(f);
+        }
+        other => panic!("unexpected count outcome: {other:?}"),
+    }
+}
+
+#[test]
+fn native_count_8192() {
+    separated_count(8192);
+}
+
+#[test]
+fn native_count_10240() {
+    separated_count(10240);
+}
