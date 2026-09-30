@@ -24,6 +24,7 @@ from families import workspace_write as write  # noqa: E402
 from families import workspace_commit as commit  # noqa: E402
 from families import workspace_commit_native as native  # noqa: E402
 from families import workspace_namespace as namespace  # noqa: E402
+from families import workspace_mutations as mutations  # noqa: E402
 
 CONTRACT_COMMIT = "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2"
 BUILD_PROFILE = "release"
@@ -379,7 +380,7 @@ def main():
     run_parser = commands.add_parser("run")
     selector = run_parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--case")
-    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit", "workspace-commit-native", "workspace-commit-native-tail", "workspace-commit-native-counts", "workspace-commit-native-reconciliation", "workspace_namespace", "workspace-namespace-native", "workspace-namespace-sdk"])
+    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit", "workspace-commit-native", "workspace-commit-native-tail", "workspace-commit-native-counts", "workspace-commit-native-reconciliation", "workspace_namespace", "workspace-namespace-native", "workspace-namespace-sdk", "workspace_mutations", "workspace-mutations-native", "workspace-mutations-sdk"])
     run_parser.add_argument("--out", required=True)
     proof_parser = commands.add_parser("prove")
     proof_parser.add_argument("--run", required=True)
@@ -408,10 +409,17 @@ def main():
             print(f"{case.id}\tnative namespace control; command <= {case.budget_ns / 1e9:g} s; no SDK time")
         for case in namespace.SDK.values():
             print(f"{case.id}\tpublic SDK/FUSE; command <= {case.budget_ns / 1e9:g} s; separate full proof < 9 s")
+        for case in mutations.NATIVE.values():
+            print(f"{case.id}\tnative mixed mutation/custody; command <= 15 s; no SDK time")
+        for case in mutations.SDK.values():
+            print(f"{case.id}\tpublic SDK/FUSE; command <= 15 s; separate full proof < 9 s")
         for name, reason in commit.REMAINING.items():
             print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":
         selection = args.case or args.family
+        if selection in (*mutations.NATIVE, *mutations.SDK, "workspace_mutations", "workspace-mutations-native", "workspace-mutations-sdk"):
+            print(mutations.run(selection, args.out, sys.modules[__name__]))
+            return
         if selection in (*namespace.NATIVE, *namespace.SDK, "workspace_namespace", "workspace-namespace-native", "workspace-namespace-sdk"):
             print(namespace.run(selection, args.out, sys.modules[__name__]))
             return
@@ -432,6 +440,9 @@ def main():
         print(run(selection, args.out))
     elif args.command == "prove":
         path = owned(args.run, existing=True)
+        if json.loads((path / "run.json").read_text()).get("schema") == mutations.SCHEMA:
+            print(mutations.prove(path, args.out, sys.modules[__name__]))
+            return
         if json.loads((path / "run.json").read_text()).get("schema") == namespace.SCHEMA:
             print(namespace.prove(path, args.out, sys.modules[__name__]))
             return
@@ -447,7 +458,7 @@ def main():
         elif json.loads((path / "run.json").read_text()).get("schema") in ("core-workspace-commit-fast-run-v2", "core-workspace-commit-proof-v2"):
             verify_run_manifest(path)
             print("PASS: retained evidence custody only")
-        elif json.loads((path / "run.json").read_text()).get("schema") in (namespace.SCHEMA, namespace.PROOF_SCHEMA, namespace.NATIVE_SCHEMA):
+        elif json.loads((path / "run.json").read_text()).get("schema") in (namespace.SCHEMA, namespace.PROOF_SCHEMA, namespace.NATIVE_SCHEMA, mutations.SCHEMA, mutations.PROOF_SCHEMA, mutations.NATIVE_SCHEMA):
             verify_run_manifest(path)
             print("PASS: retained namespace evidence custody only")
         elif json.loads((path / "run.json").read_text()).get("schema") == native.SCHEMA:
@@ -463,7 +474,7 @@ def main():
             print(write.report(path), end="")
         elif json.loads((path / "run.json").read_text()).get("schema") in ("core-workspace-commit-fast-run-v2", "core-workspace-commit-proof-v2"):
             print(commit.report(path), end="")
-        elif json.loads((path / "run.json").read_text()).get("schema") in (namespace.SCHEMA, namespace.PROOF_SCHEMA, namespace.NATIVE_SCHEMA):
+        elif json.loads((path / "run.json").read_text()).get("schema") in (namespace.SCHEMA, namespace.PROOF_SCHEMA, namespace.NATIVE_SCHEMA, mutations.SCHEMA, mutations.PROOF_SCHEMA, mutations.NATIVE_SCHEMA):
             print(namespace.report(path), end="")
         elif json.loads((path / "run.json").read_text()).get("schema") == native.SCHEMA:
             print(native.report(path), end="")

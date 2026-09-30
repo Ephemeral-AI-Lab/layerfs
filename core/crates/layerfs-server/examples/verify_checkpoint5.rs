@@ -127,7 +127,7 @@ fn verify_tree(
         let kind = match value.kind {
             InodeKind::Directory => 'd',
             InodeKind::RegularFile => 'f',
-            InodeKind::Symlink => return Err("unexpected symlink".into()),
+            InodeKind::Symlink => 'l',
         };
         let portable = match &logical {
             Some(path) => tree.read_portable(path)?,
@@ -150,6 +150,13 @@ fn verify_tree(
             }
             files += 1;
             bytes += sink.bytes;
+        } else if kind == 'l' {
+            let target = tree.readlink_inode(serial)?;
+            if target.as_bytes().len() as u64 != wanted.size
+                || hex(&Sha256::digest(target.as_bytes())) != wanted.sha256
+            {
+                return Err(format!("symlink target mismatch {path}").into());
+            }
         } else {
             let mut after = None;
             loop {
@@ -241,6 +248,70 @@ fn verify_namespace_identities(
         return Err("empty namespace identity scope".into());
     }
     Ok(count)
+}
+
+fn resolve_component(
+    tree: &mut FilesystemRead<'_>,
+    path: &str,
+) -> Result<u64, Box<dyn std::error::Error>> {
+    let mut serial = tree.resolve(&LogicalPath::new("")?)?.serial;
+    for name in path.split('/').filter(|name| !name.is_empty()) {
+        serial = tree.resolve_child(serial, &PathName::new(name)?)?.serial;
+    }
+    Ok(serial)
+}
+
+fn verify_properties(
+    provider: &StoreProvider<'_>,
+    root: layerfs_content::ObjectId,
+    case: &BTreeMap<String, String>,
+    prefix: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let mut tree = FilesystemRead::new(provider, FilesystemRootId(root))?;
+    let mut assertions = 0;
+    if let Some(encoded) = case.get(&format!("{prefix}alias_pairs_hex")) {
+        let text = String::from_utf8(unhex(encoded)?)?;
+        for row in text.lines() {
+            let parts: Vec<_> = row.split('\t').collect();
+            if parts.len() != 3 {
+                return Err("alias oracle width".into());
+            }
+            let left = resolve_component(&mut tree, parts[0])?;
+            let right = resolve_component(&mut tree, parts[1])?;
+            let value = tree.resolve_inode(left)?.value;
+            if left != right
+                || value.kind != InodeKind::RegularFile
+                || value.namespace_ref_count != parts[2].parse()?
+            {
+                return Err("hardlink identity/reference count mismatch".into());
+            }
+            assertions += 1;
+        }
+        if text.is_empty() {
+            return Err("empty alias oracle".into());
+        }
+    }
+    if let Some(encoded) = case.get(&format!("{prefix}mtime_oracle_hex")) {
+        let text = String::from_utf8(unhex(encoded)?)?;
+        for row in text.lines() {
+            let parts: Vec<_> = row.split('\t').collect();
+            if parts.len() != 3 {
+                return Err("mtime oracle width".into());
+            }
+            let serial = resolve_component(&mut tree, parts[0])?;
+            let metadata = tree.read_portable_inode(serial)?;
+            if (metadata.mtime_seconds, metadata.mtime_nanoseconds)
+                != (parts[1].parse()?, parts[2].parse()?)
+            {
+                return Err(format!("mtime mismatch {}", parts[0]).into());
+            }
+            assertions += 1;
+        }
+        if text.is_empty() {
+            return Err("empty mtime oracle".into());
+        }
+    }
+    Ok(assertions)
 }
 /// Re-derive the declared matrix schedule for `count` bytes and check the
 /// unchanged old head, every new byte, the final length and changed-run count.
@@ -447,8 +518,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         None
     };
+    let property_assertions = verify_properties(&provider, old_record.root, &case, "old_")?
+        + match &committed {
+            Some(record) => verify_properties(&provider, record.root, &case, "")?,
+            None => 0,
+        };
     println!(
-        "{{\"status\":\"PASS\",\"oracle\":\"issue273-checkpoint5-v1\",\"old_commit\":{:?},\"head_commit\":{:?},\"advanced\":{},\"old_paths\":{},\"old_files\":{},\"old_bytes\":{},\"new_paths\":{},\"new_files\":{},\"new_bytes\":{},\"separated_runs\":{},\"pattern_runs\":{},\"namespace_identities\":{}}}",
+        "{{\"status\":\"PASS\",\"oracle\":\"issue273-checkpoint5-v1\",\"old_commit\":{:?},\"head_commit\":{:?},\"advanced\":{},\"old_paths\":{},\"old_files\":{},\"old_bytes\":{},\"new_paths\":{},\"new_files\":{},\"new_bytes\":{},\"separated_runs\":{},\"pattern_runs\":{},\"namespace_identities\":{},\"property_assertions\":{property_assertions}}}",
         hex(&old.to_bytes()),
         hex(&head.to_bytes()),
         advanced,

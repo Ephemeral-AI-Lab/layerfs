@@ -2,12 +2,12 @@
 use super::*;
 use std::collections::{BTreeMap, BTreeSet};
 
-type Tree = BTreeMap<Vec<u8>, Option<Vec<u8>>>;
+pub(super) type Tree = BTreeMap<Vec<u8>, Option<Vec<u8>>>;
 
 fn dimension(name: &str) -> usize {
     std::env::var(name).unwrap().parse().unwrap()
 }
-fn oracle(extra: usize, deep: bool, unrelated: usize) -> Tree {
+pub(super) fn oracle(extra: usize, deep: bool, unrelated: usize) -> Tree {
     let mut tree = Tree::new();
     for path in [
         "",

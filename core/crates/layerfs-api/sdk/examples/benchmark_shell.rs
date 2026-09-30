@@ -344,6 +344,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
     }
     let mut exec_ns = 0;
+    let mut exec_exit_status = None;
     let mut commit_ns = 0;
     let mut commit_called = false;
     let mut prelude_exec_ns = 0;
@@ -390,9 +391,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if exec.stdout_truncated || exec.stderr_truncated {
                 return Err("truncated Exec output".to_string());
             }
+            exec_exit_status = exec.exit_status;
             if expected_failure {
+                let wanted = case
+                    .0
+                    .get("expected_exit_status")
+                    .map(|value| value.parse::<i32>())
+                    .transpose()
+                    .map_err(|error| format!("expected exit: {error}"))?;
                 return match exec.exit_status {
-                    Some(code) if code != 0 => Ok(None),
+                    Some(code) if code != 0 && wanted.is_none_or(|wanted| code == wanted) => {
+                        Ok(None)
+                    }
                     other => Err(format!("failure case returned {other:?}")),
                 };
             }
@@ -512,8 +522,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let disk_read_delta =
         disk_read_before.and_then(|before| disk_read_bytes()?.checked_sub(before));
     println!("CONTROL\t{{\"prelude_exec_ns\":{prelude_exec_ns},\"prelude_commit_ns\":{prelude_commit_ns},\"prelude_head_commit\":{prelude_head:?},\"up_to_date\":{up_to_date},\"pin_generation\":{pin_generation},\"pin_observation_ok\":{pin_observation_ok},\"pin_read_bytes\":{pin_read_bytes},\"pinned_bytes\":{pinned_bytes},\"pinned_sha256\":{pinned_sha256:?},\"pin_release_ok\":{pin_release_ok}}}");
-    println!("RECEIPT\t{{\"schema\":\"issue243-shell-driver-v1\",\"status\":\"{status}\",\"detail\":{:?},\"mode\":{:?},\"scenario_id\":{:?},\"branch_id\":{:?},\"head_commit\":{:?},\"commit_called\":{commit_called},\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"operation_ns\":{operation_ns},\"cleanup_ns\":{cleanup_ns},\"projection_counts\":{:?},\"unmount_ok\":{},\"sandbox_delete_ok\":{},\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":{:?},\"host_disk_read_bytes\":{}}}",
-        detail, args[1], case.get("scenario_id")?, hex(&branch), head_commit, counts,
+    println!("RECEIPT\t{{\"schema\":\"issue243-shell-driver-v1\",\"status\":\"{status}\",\"detail\":{:?},\"mode\":{:?},\"scenario_id\":{:?},\"branch_id\":{:?},\"head_commit\":{:?},\"commit_called\":{commit_called},\"exec_exit_status\":{},\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"operation_ns\":{operation_ns},\"cleanup_ns\":{cleanup_ns},\"projection_counts\":{:?},\"unmount_ok\":{},\"sandbox_delete_ok\":{},\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":{:?},\"host_disk_read_bytes\":{}}}",
+        detail, args[1], case.get("scenario_id")?, hex(&branch), head_commit, exec_exit_status.map_or("null".into(), |code| code.to_string()), counts,
         unmount.is_ok(), delete.is_ok(), capture.attempted, capture.bytes, capture.truncated,
         format!("{:?}", capture.error), disk_read_delta.map_or("null".to_owned(), |bytes| bytes.to_string()));
     drop(owner);

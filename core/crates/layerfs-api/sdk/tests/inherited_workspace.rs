@@ -3,6 +3,8 @@
 
 #[path = "support/phase_b_commit.rs"]
 mod phase_b_commit;
+#[path = "support/phase_b_mutations.rs"]
+mod phase_b_mutations;
 #[path = "support/phase_b_namespace.rs"]
 mod phase_b_namespace;
 

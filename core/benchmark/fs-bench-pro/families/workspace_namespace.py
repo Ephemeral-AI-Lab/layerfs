@@ -196,7 +196,9 @@ def sdk_master(out, layout, common, artifacts):
     return {**result, "reuse": False}
 
 
-def sdk_attempt(out, case, master, prepared):
+def sdk_attempt(out, case, master, prepared, *, profile=PROFILE, oracle_builder=oracle,
+                properties=None, route_validator=None, pin_path=b"packages/new/subtree/child/grand.txt",
+                pin_expected=b"grand-base"):
     from shell_package import case_spec
 
     folder = out / case.id
@@ -204,7 +206,9 @@ def sdk_attempt(out, case, master, prepared):
     copy_master(master, folder)
     values = fields(master, case.id, case.command)
     values["old_commit"] = master["old_commit"]
-    if case.command == COMPONENTS:
+    if properties is not None:
+        values.update(properties)
+    elif case.command == COMPONENTS:
         values.update(identity_old_prefix="", identity_new_prefix="")
     elif case.command == DEEP:
         values.update(identity_old_prefix="src", identity_new_prefix="a" * 255 + "/" + "b" * 63 + "/mmmmmmm",
@@ -213,9 +217,9 @@ def sdk_attempt(out, case, master, prepared):
         values.update(identity_old_prefix="packages/new/subtree" if case.prelude else "packages/old/subtree",
                       identity_new_prefix="packages/new/subtree", identity_replaced="packages/new/subtree/child/grand.txt")
     if case.prelude:
-        values.update(prelude_command_hex=case.prelude.encode().hex(), pin_path_hex=b"packages/new/subtree/child/grand.txt".hex(), pin_read_bytes="16384")
+        values.update(prelude_command_hex=case.prelude.encode().hex(), pin_path_hex=pin_path.hex(), pin_read_bytes="16384")
     case_spec(folder / "case.before", values)
-    old, new = oracle(case)
+    old, new = oracle_builder(case)
     (folder / "old.tsv").write_text(old)
     (folder / "new.tsv").write_text(new)
     record, stdout, stderr = shared.execute([prepared["artifacts"]["benchmark_shell"]["path"], "run", str(folder / "case.before"),
@@ -223,15 +227,17 @@ def sdk_attempt(out, case, master, prepared):
     driver, control = shared.receipt_line(stdout), commit.control_line(stdout)
     cleanup = commit.cleanup_complete(driver, control, stderr)
     counts = dict(item.split("=", 1) for item in (driver or {}).get("projection_counts", "").split(",") if "=" in item)
-    route = bool(driver and driver.get("commit_called") and int(counts.get("rename", 0)) >= (1 if case.command != COMPONENTS else 0))
-    pin = not case.prelude or bool(control and control.get("pin_observation_ok") and control.get("pinned_bytes") == 10
-        and control.get("pinned_sha256") == hashlib.sha256(b"grand-base").hexdigest() and control.get("pin_release_ok"))
+    expected_failure = values["expected_failure"] == "1"
+    route = route_validator(driver, counts) if route_validator else bool(driver and driver.get("commit_called") and int(counts.get("rename", 0)) >= (1 if case.command != COMPONENTS else 0))
+    pin = not case.prelude or bool(control and control.get("pin_observation_ok") and control.get("pinned_bytes") == len(pin_expected)
+        and control.get("pinned_sha256") == hashlib.sha256(pin_expected).hexdigest() and control.get("pin_release_ok"))
     complete = bool(record["exit_code"] == 0 and not record["timeout"] and record["wall_ns"] <= case.budget_ns and driver and driver.get("status") == "COMPLETE" and route and cleanup and pin)
-    if driver and driver.get("head_commit"):
+    if driver and (driver.get("head_commit") or expected_failure and driver.get("status") == "COMPLETE"):
         if case.prelude:
             values.update(old_commit=control["prelude_head_commit"], expected_old_parent=master["old_commit"])
-        case_spec(folder / "case.verify", {**values, "expected_head_commit": driver["head_commit"]})
-    row = {"case": case.id, "source": prepared["identity"], "profile": PROFILE, "sample_count": 1,
+        case_spec(folder / "case.verify", {**values, "expected_head_commit": driver["head_commit"] or master["old_commit"]})
+    row = {"case": case.id, "source": prepared["identity"], "profile": profile, "sample_count": 1,
+           "expected_failure": expected_failure,
            "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
            "master": master, "artifacts": prepared["artifacts"], "image_id": prepared["image_id"],
            "performance": record, "command_budget_ns": case.budget_ns,
@@ -247,7 +253,7 @@ def sdk_attempt(out, case, master, prepared):
     return row
 
 
-def run(selection, output, common):
+def run(selection, output, common, *, sdk_cases=None, profile=PROFILE, schema=SCHEMA, attempt=sdk_attempt, reused_proofs=None):
     if selection in NATIVE or selection == "workspace-namespace-native":
         return native.run(selection, output, common, cases=NATIVE, selected=tuple(NATIVE) if selection not in NATIVE else (selection,), profile=PROFILE, schema=NATIVE_SCHEMA, prepare=prepare)
     out = common.owned(output)
@@ -255,17 +261,19 @@ def run(selection, output, common):
     if identity["source_dirty"]:
         raise ValueError("commit Family5 before collection")
     out.mkdir(parents=True)
-    selected = tuple(SDK) if selection in ("workspace_namespace", "workspace-namespace-sdk") else (selection,)
-    summary = {"schema": SCHEMA, "profile": PROFILE, "identity": identity, "selected": list(selected), "rows": [], "status": "INCOMPLETE"}
+    sdk_cases = SDK if sdk_cases is None else sdk_cases
+    selected = (selection,) if selection in sdk_cases else tuple(sdk_cases)
+    summary = {"schema": schema, "profile": profile, "identity": identity, "selected": list(selected), "rows": [], "status": "INCOMPLETE"}
+    summary["reused_proof_identities"] = reused_proofs or {}
     try:
         with (common.RESULTS / ".run.lock").open("a+b") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             prior = json.loads((common.RESULTS / "issue286-workspace-commit-fast-checkpoint-r062/prepared.json").read_text())
             prepared = shared.build(out, common, identity, reuse_image=prior, artifacts_only=True)
             summary["prepared"] = prepared
-            masters = {layout: sdk_master(out, layout, common, {**prepared["artifacts"], "image_id": prepared["image_id"], "identity": identity}) for layout in dict.fromkeys(SDK[name].layout for name in selected)}
+            masters = {layout: sdk_master(out, layout, common, {**prepared["artifacts"], "image_id": prepared["image_id"], "identity": identity}) for layout in dict.fromkeys(sdk_cases[name].layout for name in selected)}
             for name in selected:
-                row = sdk_attempt(out, SDK[name], masters[SDK[name].layout], prepared)
+                row = attempt(out, sdk_cases[name], masters[sdk_cases[name].layout], prepared)
                 summary["rows"].append({"case": name, "status": row["status"]})
                 if row["cleanup_status"] != "PASS":
                     break
@@ -279,12 +287,12 @@ def run(selection, output, common):
     return out
 
 
-def prove(run, output, common):
+def prove(run, output, common, *, schema=PROOF_SCHEMA):
     common.verify_run_manifest(run)
     source = json.loads((run / "run.json").read_text())
     out = common.owned(output)
     out.mkdir(parents=True)
-    summary = {"schema": PROOF_SCHEMA, "run": str(run), "identity": source["identity"], "rows": []}
+    summary = {"schema": schema, "run": str(run), "identity": source["identity"], "rows": []}
     with (common.RESULTS / ".run.lock").open("a+b") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         for item in source["rows"]:
@@ -300,7 +308,7 @@ def prove(run, output, common):
                 str(folder / "history.sqlite"), str(folder / "old.tsv"), str(folder / "new.tsv")], out / item["case"], timeout=9, env=env())
             child = json.loads(stdout) if record["exit_code"] == 0 else None
             row = {"case": item["case"], "verification": record, "verifier_budget_ns": 9_000_000_000,
-                   "child": child, "status": "PASS" if child and child.get("status") == "PASS" and child.get("advanced") and record["wall_ns"] < 9_000_000_000 else "FAIL",
+                   "child": child, "status": "PASS" if child and child.get("status") == "PASS" and child.get("advanced") == (not receipt.get("expected_failure", False)) and record["wall_ns"] < 9_000_000_000 else "FAIL",
                    "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
                    "performance_receipt_sha256": shared.sha256(folder / "receipt.json")}
             summary["rows"].append(row)

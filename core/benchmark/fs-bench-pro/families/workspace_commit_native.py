@@ -187,7 +187,7 @@ def attempt(out, case, prepared, container):
     return row
 
 
-def run(selection, output, common, *, cases=None, selected=None, profile=PROFILE, schema=SCHEMA, prepare=masters):
+def run(selection, output, common, *, cases=None, selected=None, profile=PROFILE, schema=SCHEMA, prepare=masters, reused_proofs=None):
     out = common.owned(output)
     identity = common.identities()
     if identity["source_dirty"]:
@@ -196,6 +196,7 @@ def run(selection, output, common, *, cases=None, selected=None, profile=PROFILE
     cases = CASES if cases is None else cases
     selected = selected if selected is not None else SELECTED if selection == "workspace-commit-native" else SELECTED[1:] if selection == "workspace-commit-native-tail" else COUNTS if selection == "workspace-commit-native-counts" else RECONCILIATION if selection == "workspace-commit-native-reconciliation" else (selection,)
     summary = {"schema": schema, "profile": profile, "identity": identity, "selected": list(selected), "rows": [],
+               "reused_proof_identities": reused_proofs or {},
                "earlier_family_policy": "unaffected production and earlier evidence reused; no earlier resampling"}
     if all(cases[name].owner_deferred for name in selected):
         summary["rows"] = [{"case": name, "status": "SKIPPED / OWNER-DEFERRED", "sample_count": 0,
