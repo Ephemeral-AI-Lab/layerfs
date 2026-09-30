@@ -13,6 +13,20 @@ The physical-mechanism donor is P0
 `f9f9abb37332e23d1968a5ed204ff70e3e66d783`; #284's implementation-only owner
 instruction holds all of its benchmark evaluation steps as Phase B.
 
+## Commit preparation observation
+
+The #286 source in this commit after `ab3212381` adds
+`Workspace::commit_with_progress`. Existing `commit` delegates with observation
+disabled; explicit Stage uses the same disabled observer. Both active and legacy
+preparation call the observer on the existing construction thread after each
+non-directory inode has known saved content/metadata and persisted local
+bookkeeping. An observer error fails that one attempt through the existing typed
+submission/Commit failure path, retaining known saved roots without reissuing any
+construction or canonical command. Captured selection, generations, memory
+charges, physical fund, C1/C5 calls and deadline remain the same. The daemon uses
+this production observer for authenticated control-session progress; it changes
+no content/metadata/history format or construction algorithm.
+
 ## Namespace and selection
 
 Ordinary SDK Exec runs the supplied command under `/bin/sh` in the real FUSE

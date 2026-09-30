@@ -487,6 +487,7 @@ enum Scenario {
     Malformed,
     Lost,
     ResultData,
+    Progress,
 }
 #[test]
 fn authenticated_commit_and_writable_status_correlate_and_never_replay() {
@@ -505,6 +506,7 @@ fn authenticated_commit_and_writable_status_correlate_and_never_replay() {
             Scenario::Malformed,
             Scenario::Lost,
             Scenario::ResultData,
+            Scenario::Progress,
         ] {
             terminal(status_request, scenario);
         }
@@ -552,6 +554,21 @@ fn terminal(status_request: bool, scenario: Scenario) {
             assert!(input.ended());
             calls.fetch_add(1, Ordering::SeqCst);
             if matches!(scenario, Scenario::Lost) {
+                return;
+            }
+            if matches!(scenario, Scenario::Progress) {
+                for _ in 0..2 {
+                    connection
+                        .send
+                        .write(&Frame {
+                            kind: Kind::ResultData,
+                            id: r.id,
+                            bytes: vec![0],
+                        })
+                        .unwrap();
+                }
+            }
+            if matches!(scenario, Scenario::Progress) && status_request {
                 return;
             }
             let mut bytes = encode_response(&reply).unwrap();
@@ -608,6 +625,7 @@ fn terminal(status_request: bool, scenario: Scenario) {
         let result = client.call(&r, &mut &[][..], &mut output);
         match scenario {
             Scenario::Completed | Scenario::Failed => assert_eq!(result.unwrap(), reply),
+            Scenario::Progress if !status_request => assert_eq!(result.unwrap(), reply),
             Scenario::Refused => assert_eq!(result.unwrap_err(), Failure::from(Code::Denied)),
             _ => {
                 assert_eq!(

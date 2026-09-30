@@ -1,5 +1,18 @@
 # Service, bridge, daemon and hosted telemetry
 
+> **#286 Commit progress (source in this commit, after `ab3212381`):**
+> Workspace Commit control accepts authenticated ResultData `[0]` progress,
+> matching the existing Exec/Init progress encoding with zero logical result
+> bytes. Native `commit_with_progress` observes each completed inode preparation
+> on the calling thread, after saved content/metadata facts enter local submission
+> custody. The daemon sends a progress frame only after a completed step and
+> at least3s since the previous frame; no timer thread or construction worker is
+> added. The5s silence bound,600s absolute Commit bound,257-frame zero-byte
+> response bound and single terminal/correlation/no-replay rules are unchanged.
+> A progress delivery error fails the same attempt with its saved facts retained.
+> An individual step that produces no wire activity for5s can still time out;
+> this is preparation progress, not a promise to keep stalled work alive.
+
 > **#286 typed storage I/O mapping (source in this commit):** A failed C2
 > physical reservation returns `StorageError::Io`; the shared service mapper
 > sends it as the existing wire `Code::Io`. The failure stays typed and known,

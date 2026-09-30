@@ -473,6 +473,7 @@ pub(super) fn prepare<'a>(
     submission: &'a Submission,
     deadline: Instant,
     first_remote: &mut Option<OperationGuard>,
+    progress: &mut dyn FnMut() -> Result<(), WorkspaceError>,
 ) -> Result<(PreparedChanges, super::stream::PreparedBody<'a>), WorkspaceError> {
     let captured = submission.capture()?;
     let view = captured.active_view()?;
@@ -656,6 +657,7 @@ pub(super) fn prepare<'a>(
         // completion belongs to local bookkeeping, not MetadataSave.
         submission.phase(StagePhase::LocalBookkeeping, Some(*serial))?;
         workspace.persist_saved(submission, deadline)?;
+        progress()?;
     }
     let mut bytes = Vec::new();
     let mut charge = workspace.host.budget.reserve(0)?;

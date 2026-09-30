@@ -8,9 +8,14 @@ from pathlib import Path
 import subprocess
 
 from families import workspace_namespace as namespace
+from families import workspace_commit_native as native
 
 SCHEMA = "core-workspace-shell-package-run-v2"
 PROOF_SCHEMA = "core-workspace-shell-package-proof-v2"
+NATIVE_SCHEMA = "core-workspace-shell-package-native-run-v2"
+NATIVE = {"workspace-shell-package-progress-custody-native-v2": native.Case(
+    "workspace-shell-package-progress-custody-native-v2", "phase_b_mutations::progress_custody",
+    clones=2, retained=True, budget_ns=15_000_000_000, ignored=True)}
 PROFILE = "package-many-file-functional-clone-v2"
 DEFERRED = "failed-command-no-commit-v1"
 DEFER_REASON = "OWNER-DEFERRED #276: unmount does not discard dirty changes; original method remains historical, no repeated dirty-close attempt"
@@ -178,6 +183,9 @@ def master(out, layout, common, prepared):
 
 
 def run(selection, output, common):
+    if selection in NATIVE:
+        return native.run(selection, output, common, cases=NATIVE, selected=(selection,),
+                          profile=PROFILE, schema=NATIVE_SCHEMA)
     shared = namespace.shared
     out = common.owned(output)
     identity = common.identities()
@@ -185,7 +193,7 @@ def run(selection, output, common):
         raise ValueError("commit Family7 before collection")
     out.mkdir(parents=True)
     registered = cases()
-    selected = (selection,) if selection in registered or selection == DEFERRED else tuple(registered)
+    selected = (selection,) if selection in registered or selection == DEFERRED else tuple(registered)[-2:] if selection == "workspace-shell-package-tail" else tuple(registered)
     summary = {"schema": SCHEMA, "profile": PROFILE, "identity": identity, "selected": list(selected), "rows": [],
                "deferred_cases": [{"case": DEFERRED, "status": "OWNER-DEFERRED", "reason": DEFER_REASON}],
                "reused_proof_identities": {"earlier_families": "FAMILY1/2/4/5/6-CHECKPOINT; F3 r063+unchanged eight rows; product unchanged", "dirty_cleanup": "r069 FAIL, #276 comment5903530127"}}

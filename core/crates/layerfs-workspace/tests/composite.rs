@@ -68,6 +68,45 @@ mod linux {
         completed(f, &report);
         report
     }
+    #[test]
+    #[ignore = "requires the authenticated native stage route fixture; active counterpart is registered in Family7"]
+    fn composite_progress_custody() {
+        for refuse in [false, true] {
+            let f = Fixture::new(Gate::None);
+            let (data, handle) = open(&f, b"data.bin");
+            f.edit(b"data.bin", 10, 14, b"EDIT");
+            let before = snapshot(&f);
+            let mut observations = 0;
+            let result = f.workspace.commit_with_progress(deadline(), &mut || {
+                observations += 1;
+                if refuse {
+                    Err(WorkspaceError::Io)
+                } else {
+                    Ok(())
+                }
+            });
+            assert_eq!(observations, 1);
+            assert_eq!(f.native.observations.lock().unwrap().saved_files.len(), 1);
+            if refuse {
+                assert!(matches!(result, Err(WorkspaceError::Commit(_))));
+                assert_eq!(snapshot(&f).branch.head_commit, before.branch.head_commit);
+                assert!(prepared(&f).is_empty());
+                let status = f.workspace.status().unwrap().submission.unwrap();
+                assert_eq!(status.saved_files, 1);
+                assert_eq!(status.saved_metadata, 1);
+                retained(&f);
+            } else {
+                completed(&f, &result.unwrap());
+                assert_eq!(prepared(&f).len(), 1);
+                assert_eq!(f.read(handle, 10, 4), b"EDIT");
+                f.workspace.release(handle).unwrap();
+                f.workspace
+                    .forget(data.serial, u64::MAX, ReferenceScope::Local);
+                f.workspace.close_clean().unwrap();
+            }
+        }
+        check("same-thread-progress-known-saved-facts-no-publication-on-observer-refusal");
+    }
     fn prepared(f: &Fixture) -> Vec<PreparedChanges> {
         let observed = f.native.observations.lock().unwrap();
         assert!(observed.operations.iter().all(|op| !matches!(

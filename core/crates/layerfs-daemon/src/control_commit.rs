@@ -8,10 +8,11 @@ pub(crate) fn commit(
     selected: &Selected,
     workspace: &native::Workspace,
     deadline: Instant,
+    progress: &mut dyn FnMut() -> Result<(), native::WorkspaceError>,
 ) -> Result<wire::Response, wire::Failure> {
     let identity = selected.id.as_bytes().to_vec();
     let before = workspace.status().map_err(|error| cause(&error))?;
-    let outcome = match workspace.commit(deadline) {
+    let outcome = match workspace.commit_with_progress(deadline, progress) {
         Ok(report) => wire::WorkspaceCommitOutcome::Completed(wire::WorkspaceCommitReportWire {
             generation: report.generation,
             stage_token: report.stage_token,

@@ -381,7 +381,7 @@ def main():
     run_parser = commands.add_parser("run")
     selector = run_parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--case")
-    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit", "workspace-commit-native", "workspace-commit-native-tail", "workspace-commit-native-counts", "workspace-commit-native-reconciliation", "workspace_namespace", "workspace-namespace-native", "workspace-namespace-sdk", "workspace_mutations", "workspace-mutations-native", "workspace-mutations-native-tail", "workspace-mutations-sdk", "workspace_shell_package"])
+    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit", "workspace-commit-native", "workspace-commit-native-tail", "workspace-commit-native-counts", "workspace-commit-native-reconciliation", "workspace_namespace", "workspace-namespace-native", "workspace-namespace-sdk", "workspace_mutations", "workspace-mutations-native", "workspace-mutations-native-tail", "workspace-mutations-sdk", "workspace_shell_package", "workspace-shell-package-tail"])
     run_parser.add_argument("--out", required=True)
     proof_parser = commands.add_parser("prove")
     proof_parser.add_argument("--run", required=True)
@@ -417,12 +417,14 @@ def main():
                   f"{'historical cleanup FAIL r069; superseded v2 explicit recovery' if case.retired else 'current selected'}")
         for case in package.cases().values():
             print(f"{case.id}\tpublic SDK/POSIX package; command <= {case.budget_ns / 1e9:g} s; separate full proof < 9 s")
+        for case in package.NATIVE.values():
+            print(f"{case.id}\tnative same-thread progress/refusal custody; command <=15s; SDK time N/A")
         print(f"{package.DEFERRED}\t{package.DEFER_REASON}")
         for name, reason in commit.REMAINING.items():
             print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":
         selection = args.case or args.family
-        if selection in (*package.cases(), package.DEFERRED, "workspace_shell_package"):
+        if selection in (*package.cases(), *package.NATIVE, package.DEFERRED, "workspace_shell_package", "workspace-shell-package-tail"):
             print(package.run(selection, args.out, sys.modules[__name__]))
             return
         if selection in (*mutations.NATIVE, *mutations.SDK, "workspace_mutations", "workspace-mutations-native", "workspace-mutations-native-tail", "workspace-mutations-sdk"):
@@ -469,7 +471,7 @@ def main():
         elif json.loads((path / "run.json").read_text()).get("schema") in ("core-workspace-commit-fast-run-v2", "core-workspace-commit-proof-v2"):
             verify_run_manifest(path)
             print("PASS: retained evidence custody only")
-        elif json.loads((path / "run.json").read_text()).get("schema") in (namespace.SCHEMA, namespace.PROOF_SCHEMA, namespace.NATIVE_SCHEMA, mutations.SCHEMA, mutations.PROOF_SCHEMA, mutations.NATIVE_SCHEMA, package.SCHEMA, package.PROOF_SCHEMA):
+        elif json.loads((path / "run.json").read_text()).get("schema") in (namespace.SCHEMA, namespace.PROOF_SCHEMA, namespace.NATIVE_SCHEMA, mutations.SCHEMA, mutations.PROOF_SCHEMA, mutations.NATIVE_SCHEMA, package.SCHEMA, package.PROOF_SCHEMA, package.NATIVE_SCHEMA):
             verify_run_manifest(path)
             print("PASS: retained namespace evidence custody only")
         elif json.loads((path / "run.json").read_text()).get("schema") == native.SCHEMA:
@@ -485,7 +487,7 @@ def main():
             print(write.report(path), end="")
         elif json.loads((path / "run.json").read_text()).get("schema") in ("core-workspace-commit-fast-run-v2", "core-workspace-commit-proof-v2"):
             print(commit.report(path), end="")
-        elif json.loads((path / "run.json").read_text()).get("schema") in (namespace.SCHEMA, namespace.PROOF_SCHEMA, namespace.NATIVE_SCHEMA, mutations.SCHEMA, mutations.PROOF_SCHEMA, mutations.NATIVE_SCHEMA, package.SCHEMA, package.PROOF_SCHEMA):
+        elif json.loads((path / "run.json").read_text()).get("schema") in (namespace.SCHEMA, namespace.PROOF_SCHEMA, namespace.NATIVE_SCHEMA, mutations.SCHEMA, mutations.PROOF_SCHEMA, mutations.NATIVE_SCHEMA, package.SCHEMA, package.PROOF_SCHEMA, package.NATIVE_SCHEMA):
             print(namespace.report(path), end="")
         elif json.loads((path / "run.json").read_text()).get("schema") == native.SCHEMA:
             print(native.report(path), end="")

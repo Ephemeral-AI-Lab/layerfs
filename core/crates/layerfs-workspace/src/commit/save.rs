@@ -38,9 +38,18 @@ impl Workspace {
         deadline: Instant,
         first_remote: &mut Option<crate::runtime::state::OperationGuard>,
     ) -> Result<(PreparedChanges, PreparedBody<'a>), WorkspaceError> {
+        self.prepare_changes_with_progress(submission, deadline, first_remote, &mut || Ok(()))
+    }
+    pub(crate) fn prepare_changes_with_progress<'a>(
+        &self,
+        submission: &'a Submission,
+        deadline: Instant,
+        first_remote: &mut Option<crate::runtime::state::OperationGuard>,
+        progress: &mut dyn FnMut() -> Result<(), WorkspaceError>,
+    ) -> Result<(PreparedChanges, PreparedBody<'a>), WorkspaceError> {
         let captured = submission.capture()?;
         if captured.active.is_some() {
-            return super::active::prepare(self, submission, deadline, first_remote);
+            return super::active::prepare(self, submission, deadline, first_remote, progress);
         }
         let mut count = 0;
         submission.phase(StagePhase::LocalBookkeeping, None)?;
@@ -234,6 +243,7 @@ impl Workspace {
             }
             submission.phase(StagePhase::LocalBookkeeping, Some(serial))?;
             self.persist_saved(submission, deadline)?;
+            progress()?;
             submission.phase(StagePhase::LocalBookkeeping, None)?;
             count += 1;
         }

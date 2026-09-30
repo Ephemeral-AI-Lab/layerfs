@@ -570,3 +570,73 @@ fn mixed_local_resume() {
     println!("PHASE_B_MUTATIONS_RESUME same_selector=true canonical_calls_before_after=1,1 later_g2_known=true");
     finish(&f, mixed, &[token]);
 }
+
+#[test]
+#[ignore = "Family7 prepared same-thread progress and observer-refusal custody"]
+fn progress_custody() {
+    for refuse in [true, false] {
+        let f = Fixture::new();
+        let old = [105; 33];
+        f.workspace.pin_view(old, deadline()).unwrap();
+        let mixed = prepare(&f);
+        let private = [106; 33];
+        f.workspace.pin_view(private, deadline()).unwrap();
+        let calling_thread = std::thread::current().id();
+        let mut observations = 0;
+        let result = f.workspace.commit_with_progress(deadline(), &mut || {
+            assert_eq!(std::thread::current().id(), calling_thread);
+            observations += 1;
+            let status = f.workspace.status().unwrap().submission.unwrap();
+            assert!(status.saved_files >= observations);
+            assert!(status.saved_metadata >= observations);
+            if refuse {
+                Err(WorkspaceError::Io)
+            } else {
+                Ok(())
+            }
+        });
+        assert!(observations > 0);
+        pinned(&f, &old, &base());
+        pinned(&f, &private, &mixed.tree);
+        if refuse {
+            let WorkspaceError::Commit(failure) = result.unwrap_err() else {
+                panic!("typed Commit failure")
+            };
+            assert_eq!(
+                failure.disposition,
+                layerfs_workspace::CommitFailureDisposition::KnownBeforeCommit
+            );
+            assert!(failure.known_outcome.is_none() && failure.installed_revision.is_none());
+            assert_eq!(observations, 1);
+            assert_eq!(f.canonical_calls.load(Ordering::Acquire), 0);
+            assert!(branch(&f).branch.head_commit.is_none());
+            assert_eq!(branch(&f).effective_root, f.genesis);
+            assert!(matches!(
+                f.workspace.commit(deadline()),
+                Err(WorkspaceError::Busy)
+            ));
+            assert!(matches!(
+                f.workspace.close_clean(),
+                Err(WorkspaceError::Busy)
+            ));
+            let status = f.workspace.backing_status().unwrap();
+            assert!(
+                status.accounting_complete
+                    && status.allocated_bytes > 0
+                    && status.reserved_bytes > 0
+            );
+            println!("PHASE_B_PROGRESS refused=true callbacks={observations} same_thread=true full_old_private_pins=true canonical_calls=0 known_saved_custody=true allocated={} reserved={} retained=true", status.allocated_bytes, status.reserved_bytes);
+            std::mem::forget(f);
+        } else {
+            let layerfs_bridge::contract::CommitOutcomeWire::Committed(commit) =
+                result.unwrap().outcome
+            else {
+                panic!("known Commit")
+            };
+            canonical(&f, commit.root, &mixed.tree);
+            assert_eq!(f.canonical_calls.load(Ordering::Acquire), 1);
+            finish(&f, mixed, &[old, private]);
+            println!("PHASE_B_PROGRESS refused=false callbacks={observations} same_thread=true full_canonical_pins=true canonical_calls=1 cleanup=true");
+        }
+    }
+}

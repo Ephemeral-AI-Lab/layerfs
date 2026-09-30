@@ -5,6 +5,17 @@ use layerfs_bridge::contract::{HistoryCommand, Operation, HISTORY_RESULT_BYTES, 
 use std::{sync::atomic::Ordering, time::Instant};
 impl Workspace {
     pub fn commit(&self, deadline: Instant) -> Result<CommitReport, WorkspaceError> {
+        self.commit_with_progress(deadline, &mut || Ok(()))
+    }
+
+    /// Commit once, observing completed inode preparation on the calling thread.
+    /// A refused observation retains the submission's saved facts and fails the
+    /// same attempt; it cannot retry construction or extend the deadline.
+    pub fn commit_with_progress(
+        &self,
+        deadline: Instant,
+        progress: &mut dyn FnMut() -> Result<(), WorkspaceError>,
+    ) -> Result<CommitReport, WorkspaceError> {
         if self.inner.access != WorkspaceAccess::LocalEdit {
             return Err(WorkspaceError::ReadOnly);
         }
@@ -28,11 +39,15 @@ impl Workspace {
         if let Err(error) = attempt.phase(&submission, CommitPhase::Preparing) {
             return Err(attempt.fail(&submission, error));
         }
-        let (changes, mut stream) =
-            match self.prepare_changes(&submission, deadline, &mut first_remote) {
-                Ok(prepared) => prepared,
-                Err(error) => return Err(attempt.fail(&submission, submission.fail(error))),
-            };
+        let (changes, mut stream) = match self.prepare_changes_with_progress(
+            &submission,
+            deadline,
+            &mut first_remote,
+            progress,
+        ) {
+            Ok(prepared) => prepared,
+            Err(error) => return Err(attempt.fail(&submission, submission.fail(error))),
+        };
         let response = (|| {
             attempt.phase(&submission, CommitPhase::CompositeCommit)?;
             let remote = first_remote

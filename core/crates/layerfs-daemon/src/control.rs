@@ -435,9 +435,20 @@ fn dispatch(
     if operation == 32 {
         let selected = slot.selected.as_ref().ok_or(Code::Denied)?;
         let workspace = selected.workspace.as_ref().ok_or(Code::Busy)?;
-        return scope
-            .child("daemon.commit")
-            .run(|_| crate::control_commit::commit(selected, workspace, native_deadline));
+        let mut last_progress = Instant::now();
+        return scope.child("daemon.commit").run(|_| {
+            crate::control_commit::commit(selected, workspace, native_deadline, &mut || {
+                // At most 200 progress frames in the existing 600s operation
+                // bound; the unchanged zero-byte response budget allows 257.
+                if last_progress.elapsed() >= Duration::from_secs(3) {
+                    output
+                        .progress()
+                        .map_err(|_| layerfs_workspace::WorkspaceError::Io)?;
+                    last_progress = Instant::now();
+                }
+                Ok(())
+            })
+        });
     }
     if operation == crate::control_view::VIEW_AUTHORITY {
         let selected = slot.selected.as_ref().ok_or(Code::Denied)?;
