@@ -407,3 +407,11 @@ The owner resumed Phase B and explicitly requested the nine-cell Family 3 select
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-workspace-write-r043 | full Workspace write matrix: append/dispersed/repeated × 100/512/4097, one sample each | `b7460cb7c` | **9/9 functional PASS**, exact old/new bytes, known parented Commit, route counts and cleanup; full commands 0.985–10.130 s under unchanged 15/25 s limits; separate verifiers 0.094–0.120 s under 9 s. **9/9 numeric INELIGIBLE** from uncontrolled source/Exec-to-Commit cache; Family 3 speed admission remains open. | [Round report](experiments/20260930-workspace-write-r043.md) | Publish after report commit; next implement enforceable symmetric cache contract before a new selection |
+
+## Family 3 cold-source round 20260930-workspace-write-cold-r044
+
+R043 issue publication: [#286 comment5901345893](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5901345893), functional report commit `56c84c41c` (production delta+0). Method commit `6844f072a` prospectively froze [the Darwin cold-source/Linux direct-backing profile](WORKSPACE-WRITE-COLD-CONTRACT-V1-20260930.md) and a new SDK driver device-read counter before the next selection. The nine case IDs, write schedule, oracle and 15/25/9 s bounds remained unchanged. Prior r043 statuses are unchanged.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-workspace-write-cold-r044 | full Workspace write matrix: append/dispersed/repeated × 100/512/4097, one new-method sample each | `6844f072a` | **9/9 PASS**: zero Store/history residency at launch, 712704 device-read B ≥641433-B frozen floor, direct-I/O source seal, exact old/new bytes, known parented Commit, callback counts and cleanup; full commands 0.974–10.213 s under unchanged 15/25 s; verifiers 0.093–0.117 s under 9 s. No numeric-ineligible or unrun cell. | [Round report](experiments/20260930-workspace-write-cold-r044.md), [compact receipts](experiments/20260930-workspace-write-cold-r044-receipts.json) | Publish after report commit; earlier-family regression checkpoint next |
