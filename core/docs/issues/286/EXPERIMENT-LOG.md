@@ -557,3 +557,13 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family7 current native/final checkpoint r079
 
 [Current native custody/refund PASS](experiments/20260930-workspace-shell-package-native-checkpoint-r079.md),383237667ns<15s. Typed refusal retains old/private full pins/880640B and0canonical/no replay; acceptance3callbacks/1canonical/fulltree/clean0/0. [Family7 eight SDK+native checkpoint](FAMILY7-CHECKPOINT-20260930.md), [all-seven scope/reuse map](SEVEN-FAMILY-CHECKPOINT-20260930.md), [owning checks](experiments/20260930-family7-checks.json). All earlier groups reused, current numeric qualification remainsINELIGIBLE; historical dirty failures/10240/deep270 deferred#276, general#256open. Family7+58LOC, PhaseB+257, combined135696; report-only delta0. No release/admission/merge claim.
+
+## Owner acceptance and main integration publication
+
+The owner subsequently authorizes main integration and completed-ticket closure.
+[Dated acceptance/disposition record](MERGE-ACCEPTANCE-20260930.md) replaces the
+earlier draft/unmerged hold for #285 and scopes closure to #284/#286/#258/#264.
+All historical verdicts remain unchanged, numeric/cache qualification stays
+open, and #276/#256/#283 deferrals remain open. Documentation-only publication;
+no new measurement or earlier-family rerun. Product LOC remains 135696, Phase B
++257; full main integration is 121585→135696 (+14111), reference unchanged.
