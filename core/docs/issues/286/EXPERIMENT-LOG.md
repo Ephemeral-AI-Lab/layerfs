@@ -525,3 +525,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family7 package partial r071
 
 [Six SDK/full proofs PASS;1025 lost-response FAIL;retained129 NOT_RUN](experiments/20260930-workspace-shell-package-sdk-r071.md). Sourceab3212381, complete0.896–5.144s for passing rows;1025 complete19.790s<25s but SDK Commit Unknown after5.028s silence while daemon continued9.814s. Clean shutdown refused; original row stays FAIL. Next add actual Commit preparation progress through existing authenticated protocol, unchanged silence/operation/command budgets; collect only failed1025 and unattempted retained129, reuse six passing arms and all earlier families. No product change in r071; deferred dirty-discard disposition posted#276.
+
+## Family7 native progress/refusal r072
+
+[Current native control PASS](experiments/20260930-workspace-shell-package-native-progress-r072.md),359827417ns<15s. Same-thread callbacks, refusal after known saved/local facts preserves full old/private pins and36864+843776B custody with0 canonical calls/no replay; acceptance3callbacks/1canonical/full tree/clean0/0. Source9f12f8be9 adds34 productionLOC (combined135672, PhaseB+233); no new worker, timeout, quota or codec. Next only original failed1025 and unattempted retained129 SDK tail/proof; six r071 passing/earlier proofs reused.
