@@ -37,3 +37,15 @@ no SDK time/speed or clean Commit gate claim. If canonical head exists, fully
 compare all1025 bytes through public APIs; if failed, require Busy no-replay
 retention and archive Linux state before external teardown. This measures the
 mechanism's cause, not another sample of the unchanged failed SDK arm.
+
+## SDK cause observation after native diagnostic bound miss
+
+Explicit-only `workspace-shell-package-many-1025-sdk-cause-diagnostic-v1` uses
+the unchanged original1025 shell command/corpus/25s complete bound and one
+construction worker. The diagnostic image adds only
+`ENV LFS_CAPACITY_DIAGNOSTIC=1` to the same sealed daemon and v2 fixtures; existing
+index/C5 counters report the mechanism. Existing SDK example retains typed
+phase outcome and public post-status before cleanup, even if the complete bound
+is missed. The diagnostic cannot supply a speed sample or admission PASS and
+is excluded from the default eight-case selection. No quota/timeout increase,
+changed original oracle or worker; prior r07515s MISS remains immutable.

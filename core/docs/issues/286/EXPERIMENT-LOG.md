@@ -537,3 +537,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family7 cause setup r074
 
 [INCOMPLETE before acquisition; sample NOT_RUN](experiments/20260930-workspace-shell-package-cause-r074.md). Registry passes environment to native Case but its dataclass does not declare the existing optional invocation field. Add default empty field/guard imports, then first diagnostic child at changed harness r075. No product measurement/resource/new limits, original SDK failures preserved; production delta0.
+
+## Family7 native count diagnostic r075
+
+[FAIL/TIMEOUT](experiments/20260930-workspace-shell-package-cause-r075.md),15008345833ns>15s. Reaches1025files/18dirs/1044dirty,1269760allocated+851968reservedB under64MiBquota, then killed before typed outcome; no gate/Commit proof. Custody retained. Keep bound and MISS. Next distinct count-driven SDK cause diagnostic at original1025 workload/25s bound with existing counters/interim typed outcome logging; not a speed repeat, no product change.

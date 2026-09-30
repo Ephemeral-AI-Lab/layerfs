@@ -419,12 +419,13 @@ def main():
             print(f"{case.id}\tpublic SDK/POSIX package; command <= {case.budget_ns / 1e9:g} s; separate full proof < 9 s")
         for case in package.NATIVE.values():
             print(f"{case.id}\tnative same-thread progress/refusal custody; command <=15s; SDK time N/A")
+        print(f"{package.SDK_CAUSE}\tcount/custody SDK diagnostic; original1025 workload/25s bound; not a speed/gate arm")
         print(f"{package.DEFERRED}\t{package.DEFER_REASON}")
         for name, reason in commit.REMAINING.items():
             print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":
         selection = args.case or args.family
-        if selection in (*package.cases(), *package.NATIVE, package.DEFERRED, "workspace_shell_package", "workspace-shell-package-tail"):
+        if selection in (*package.cases(), *package.NATIVE, package.SDK_CAUSE, package.DEFERRED, "workspace_shell_package", "workspace-shell-package-tail"):
             print(package.run(selection, args.out, sys.modules[__name__]))
             return
         if selection in (*mutations.NATIVE, *mutations.SDK, "workspace_mutations", "workspace-mutations-native", "workspace-mutations-native-tail", "workspace-mutations-sdk"):

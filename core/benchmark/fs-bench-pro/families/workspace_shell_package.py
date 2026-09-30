@@ -31,6 +31,7 @@ class Case(namespace.SdkCase):
     count: int = 0
     spread: int = 1
     retained: bool = False
+    diagnostic: bool = False
 
 
 def many_command(count, spread=1, value="new"):
@@ -39,6 +40,13 @@ def many_command(count, spread=1, value="new"):
     return (f"set -eu; umask 022; {mkdir}; i=0; while test $i -lt {count}; do "
             f"printf '{value}-%s' \"$i\" > {name}; i=$((i+1)); done; "
             f"test $(find many -type f | wc -l) -eq {count}")
+
+
+SDK_CAUSE = "workspace-shell-package-many-1025-sdk-cause-diagnostic-v1"
+
+
+def sdk_cause():
+    return Case(SDK_CAUSE, "package", many_command(1025, 17), 25_000_000_000, count=1025, spread=17, diagnostic=True)
 
 
 def cases():
@@ -96,12 +104,12 @@ def attempt(out, case, master, prepared):
                     "identity_new_prefix": "node_modules/@fixture/core/index.js"},
         route_validator=route, pin_path=b"many/f0", pin_expected=b"old-0")
     row.update(family_id="workspace_shell_package", original_case_id=case.original or None,
-               changed_file_count=case.count or None, workload_source_sha256=hashlib.sha256(case.command.encode()).hexdigest())
+               changed_file_count=case.count or None, diagnostic_cause=case.diagnostic, workload_source_sha256=hashlib.sha256(case.command.encode()).hexdigest())
     namespace.shared.save(out / case.id / "receipt.json", row)
     return row
 
 
-def package_image(out, common, prepared):
+def package_image(out, common, prepared, *, diagnostic=False):
     from shell_package import recipe, write_tree, BASE
     shared = namespace.shared
     context = out / "package-image-context"
@@ -111,7 +119,8 @@ def package_image(out, common, prepared):
     import shutil
     shutil.copyfile(prepared["artifacts"]["layerfs-daemon"]["path"], context / "layerfs-daemon")
     (context / "layerfs-daemon").chmod(0o555)
-    (context / "Dockerfile").write_text(f"FROM {BASE}\nCOPY layerfs-daemon /layerfs-daemon\nCOPY v2 /fixtures/v2\nENTRYPOINT [\"/layerfs-daemon\"]\n")
+    (context / "Dockerfile").write_text(f"FROM {BASE}\nCOPY layerfs-daemon /layerfs-daemon\nCOPY v2 /fixtures/v2\n"
+        + ("ENV LFS_CAPACITY_DIAGNOSTIC=1\n" if diagnostic else "") + 'ENTRYPOINT ["/layerfs-daemon"]\n')
     seal = hashlib.sha256(json.dumps({str(path.relative_to(context)): shared.sha256(path)
         for path in context.rglob("*") if path.is_file()}, sort_keys=True).encode()).hexdigest()
     cache = common.RESULTS / "workspace-shell-package-image-v2.json"
@@ -196,6 +205,8 @@ def run(selection, output, common):
         raise ValueError("commit Family7 before collection")
     out.mkdir(parents=True)
     registered = cases()
+    if selection == SDK_CAUSE:
+        registered[SDK_CAUSE] = sdk_cause()
     selected = (selection,) if selection in registered or selection == DEFERRED else tuple(registered)[-2:] if selection == "workspace-shell-package-tail" else tuple(registered)
     summary = {"schema": SCHEMA, "profile": PROFILE, "identity": identity, "selected": list(selected), "rows": [],
                "deferred_cases": [{"case": DEFERRED, "status": "OWNER-DEFERRED", "reason": DEFER_REASON}],
@@ -213,7 +224,7 @@ def run(selection, output, common):
                 if init_build["status"] != "PASS":
                     raise RuntimeError("sole existing SDK Init build failed or exceeded build budget")
                 prepared["artifacts"]["benchmark_init"] = init_build["binaries"]["benchmark_init"]
-                image = package_image(out, common, prepared)
+                image = package_image(out, common, prepared, diagnostic=selection == SDK_CAUSE)
                 prepared.update(image_id=image["image_id"], package_image=image)
                 summary["prepared"] = prepared
                 shared.save(out / "prepared.json", prepared)
