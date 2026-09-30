@@ -431,3 +431,11 @@ R045 issue publication: [#286 comment5901496249](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-regression-r046 | compound retained history v4 stride10/17 then stride3/53 | `a12ab932e` | **PASS/PASS**: C2+C5 allocated52,473,856<54,278,964 and65,142,784<70,427,034 B (+6.342%/+1.747% vs original strict target); independent roots, O3, full trees/selected bytes, cleanup PASS; driver32.153/52.446 s<60/170 s, separate verifier3.034/8.407 s<10/20 s. Numeric time INELIGIBLE under unchanged component cache profile. | [Round report](experiments/20260930-history-regression-r046.md), [compact receipts](experiments/20260930-history-regression-r046-receipts.json) | Publish after report commit; explicit stride1 v4 next |
+
+## Family 2 explicit regression round 20260930-history-stride1-regression-r047
+
+R046 issue publication: [#286 comment5901547214](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5901547214), selected Family 2 report commit `b2ea44f0f` (production delta+0). The explicit stride1/157 case used the exact same backend compilation, binary and Family 2 harness seals as r046, with one new invocation and fresh output. The prior selected rows were not resampled.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-stride1-regression-r047 | compound v4 stride1/157 explicit | `b2ea44f0f` | **PASS**: C2+C5 allocated86,179,840<92,342,273 B (+2.659% over original strict target), 157 independent roots, 904,143 complete path-states, 76,726 selected content path-states, O3/C5/cleanup PASS; driver136.703 s<170 s, separate verifier21.003 s<30 s. Internal operation timer clipped; numeric time INELIGIBLE. | [Round report](experiments/20260930-history-stride1-regression-r047.md), [compact receipts](experiments/20260930-history-stride1-regression-r047-receipts.json) | Publish after report commit; Families 1–3 scoped checkpoint complete, Family 4 next |
