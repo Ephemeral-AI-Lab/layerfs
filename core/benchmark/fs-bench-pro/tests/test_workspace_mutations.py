@@ -19,6 +19,35 @@ def rows(text):
 
 
 class MutationOracle(unittest.TestCase):
+    def test_retired_dirty_discard_method_does_not_acquire_resources(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            out = Path(temporary) / "out"
+            common = SimpleNamespace(owned=lambda path: out, identities=lambda: {}, manifest_run=lambda path: None)
+            with patch.object(namespace, "run", side_effect=AssertionError("retired method cannot run")):
+                mutations.run("workspace-mutations-shell-exit7-no-commit-sdk-v1", str(out), common)
+            row = json.loads((out / "run.json").read_text())["rows"][0]
+            self.assertEqual((row["status"], row["sample_count"]), ("NOT_RUN", 0))
+
+    def test_explicit_recovery_keeps_exec_failure_and_requires_new_head_in_proof(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            out = Path(temporary)
+            case = mutations.SDK["workspace-mutations-shell-exit7-retained-explicit-commit-sdk-v2"]
+            driver = {"status": "COMPLETE", "head_commit": "new", "commit_called": True, "exec_exit_status": 7,
+                      "unmount_ok": True, "sandbox_delete_ok": True, "projection_counts": "rename=0"}
+            control = {"recovery_complete": True, "unmounted_before_recovery": True, "pin_observation_ok": True,
+                       "pinned_bytes": 7, "pinned_sha256": hashlib.sha256(b"private").hexdigest(), "pin_release_ok": True}
+            stdout = ("RECEIPT\t" + json.dumps(driver) + "\nCONTROL\t" + json.dumps(control) + "\n").encode()
+            answer = ({"exit_code": 0, "wall_ns": 1, "timeout": False}, stdout, b"")
+            prepared = {"identity": {}, "image_id": "sealed", "artifacts": {"benchmark_shell": {"path": "never executed"}}}
+            with patch.object(namespace, "copy_master"), patch.object(namespace, "fields", return_value={"expected_failure": "0"}), patch.object(namespace.shared, "execute", return_value=answer):
+                receipt = mutations.attempt(out, case, {"old_commit": "old"}, prepared)
+            self.assertEqual(receipt["status"], "COMPLETE_DIAGNOSTIC")
+            self.assertTrue(receipt["expected_exec_failure"])
+            self.assertFalse(receipt["expected_failure"])
+            values = dict(line.split("=", 1) for line in (out / case.id / "case.verify").read_text().splitlines())
+            before = dict(line.split("=", 1) for line in (out / case.id / "case.before").read_text().splitlines())
+            self.assertEqual((before["expected_failure"], values["expected_failure"]), ("1", "0"))
+
     def test_nonadvancing_proof_only_passes_the_explicit_no_commit_case(self):
         for expected_failure, advanced, wanted in ((False, False, "FAIL"), (True, False, "PASS"), (True, True, "FAIL")):
             with tempfile.TemporaryDirectory() as temporary:

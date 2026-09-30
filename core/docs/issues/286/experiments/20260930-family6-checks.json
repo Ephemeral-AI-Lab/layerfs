@@ -1,0 +1,111 @@
+{
+  "checked_rust_source": "2f49da750 (unchanged since r070)",
+  "checks": [
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "clippy",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-sdk",
+        "-p",
+        "layerfs-server",
+        "--example",
+        "benchmark_shell",
+        "--example",
+        "verify_checkpoint5",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "name": "host-clippy",
+      "stderr_sha256": "0a3e1c8a591a04319a5eb8c92a545777590ce3fbf2cd4ecf8f307a758018b8ba",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "wall_ns": 945289583
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "clippy",
+        "--release",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--target",
+        "aarch64-unknown-linux-musl",
+        "-p",
+        "layerfs-sdk",
+        "-p",
+        "layerfs-storage",
+        "--features",
+        "rusqlite/bundled",
+        "--test",
+        "inherited_workspace",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "name": "native-clippy",
+      "stderr_sha256": "5444f8015d4b8a1278757479ddb079648e7dc5de1d092d7486cb6e508150a2b9",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "wall_ns": 7470819291
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "fmt",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "name": "fmt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "wall_ns": 2236957916
+    },
+    {
+      "command": [
+        "python3",
+        "core/tools/check_product_boundary.py"
+      ],
+      "exit_code": 0,
+      "name": "boundary",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "997a38ad916f06fe8e6ccf0d99c8a8029983725750bebd320d4dc1ca6c2bc1aa",
+      "wall_ns": 138230458
+    },
+    {
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "core/tools",
+        "-p",
+        "test_*.py"
+      ],
+      "exit_code": 0,
+      "name": "boundary-tests",
+      "stderr_sha256": "c9f2c1b54e73f254402bb1a5b42d7d0ba1341d1dcb01aa3cc77c43238566aaf5",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "wall_ns": 85375542
+    }
+  ],
+  "focused_python": "initial mutations7/namespace5/native3 PASS; changed recovery/membership2 PASS; final retired/acquisition, expected-exit-vs-head, nonadvancing proof3 guards PASS",
+  "native_cc": "published cargo-zigbuild wrapper682f/zigcc-aarch64-unknown-linux-musl-5d3b.sh; no dependency patch",
+  "postcollection_change": "only Python guard tests; measured work/compiled binaries unchanged, no replay",
+  "production_wide_checks": "unchanged product-wide host tests/Clippy reused from Family4; no CI/preflight or passing unit/benchmark sweep",
+  "raw": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-family6-checks-v1"
+}

@@ -517,3 +517,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family6 SDK mixed r069
 
 [3 SDK profiles PASS; dirty-discard v1 FAIL](experiments/20260930-workspace-mutations-sdk-r069.md): full proofs/cleanup pass for mixed, retained and refusals. Exit7/no Commit is correct and under15s but daemon shutdown reports Busy; unmount is not dirty-discard and forced Docker deletion is not graceful close. Preserve v1 FAIL, prospectively register v2 explicit recovery after observing unchanged head/retained private state; collect onlyv2 r070, reuse all passing SDK/native/earlier proofs. No product/codecs or limits changed; numeric INELIGIBLE.
+
+## Family6 explicit SDK recovery r070
+
+[New v2 recovery PASS](experiments/20260930-workspace-mutations-sdk-recovery-r070.md): complete5,244,737,792ns /15s, exact initial exit7/no implicit head advance, held private7B before/after explicit Commit16,663,500ns, declared operation44,577,000ns, separate full proof31,544,833ns<9s, cleanup494,813,834ns PASS. Original v1 remains FAIL. Three r069 SDK and all3 native profiles reused: current7-profile functional/custody scope covered, numeric INELIGIBLE, production LOC unchanged. Next Family7; deferred work stays#276.
