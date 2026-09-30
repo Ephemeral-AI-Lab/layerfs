@@ -103,6 +103,7 @@ fn key(text: &str) -> Result<[u8; 32], Box<dyn std::error::Error>> {
 fn pinned_digest(
     api: &WorkspaceApi<'_>,
     lease: &WorkspaceViewLease,
+    request_bytes: usize,
 ) -> Result<(u64, String), String> {
     let file = api
         .view_lookup(lease, lease.root(), b"data.bin")
@@ -110,7 +111,7 @@ fn pinned_digest(
     let mut offset = 0;
     let mut hash = Sha256::new();
     while offset < file.size {
-        let length = (file.size - offset).min(16_384) as usize;
+        let length = (file.size - offset).min(request_bytes as u64) as usize;
         let read = api
             .view_read(lease, &file, offset, length)
             .map_err(|e| format!("pin read: {e:?}"))?;
@@ -143,6 +144,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .and_then(|bytes| String::from_utf8(bytes).map_err(Into::into))
         })
         .transpose()?;
+    let pin_read_bytes = case
+        .0
+        .get("pin_read_bytes")
+        .map(|value| value.parse::<usize>())
+        .transpose()?
+        .unwrap_or(16_384);
+    if prelude.is_some() && pin_read_bytes > 31_744 {
+        return Err("this benchmark profile permits 0 through 31 KiB pinned reads".into());
+    }
     let command = String::from_utf8(case.bytes("command_hex")?)?;
     let run: u128 = case.get("telemetry_run")?.parse()?;
     let runtime = Runtime::start(Configuration {
@@ -344,17 +354,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let mut pinned_bytes = 0;
     let mut pinned_sha256 = String::new();
+    let mut pin_observation_ok = lease.is_none();
     let mut pin_release_ok = lease.is_none();
     let pin_generation = lease.as_ref().map_or(0, WorkspaceViewLease::generation);
     if let Some(held) = &lease {
-        match pinned_digest(&workspaces, held) {
-            Ok((bytes, digest)) => {
-                pinned_bytes = bytes;
-                pinned_sha256 = digest;
+        match workspaces.view_status(held) {
+            Ok(observed) => {
+                pin_observation_ok =
+                    observed.held_leases == 1 && observed.generation == held.generation()
             }
             Err(error) => {
                 status = "FAIL";
-                detail = format!("{detail}; {error}");
+                detail = format!("{detail}; pin status: {error:?}");
+            }
+        }
+        if !pin_observation_ok {
+            status = "FAIL";
+            detail = format!("{detail}; held pin identity/status changed");
+        }
+        if pin_read_bytes > 0 {
+            match pinned_digest(&workspaces, held, pin_read_bytes) {
+                Ok((bytes, digest)) => {
+                    pinned_bytes = bytes;
+                    pinned_sha256 = digest;
+                }
+                Err(error) => {
+                    status = "FAIL";
+                    detail = format!("{detail}; {error}");
+                }
             }
         }
         pin_release_ok = matches!(
@@ -388,7 +415,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_default();
     let disk_read_delta =
         disk_read_before.and_then(|before| disk_read_bytes()?.checked_sub(before));
-    println!("CONTROL\t{{\"prelude_exec_ns\":{prelude_exec_ns},\"prelude_commit_ns\":{prelude_commit_ns},\"prelude_head_commit\":{prelude_head:?},\"up_to_date\":{up_to_date},\"pin_generation\":{pin_generation},\"pinned_bytes\":{pinned_bytes},\"pinned_sha256\":{pinned_sha256:?},\"pin_release_ok\":{pin_release_ok}}}");
+    println!("CONTROL\t{{\"prelude_exec_ns\":{prelude_exec_ns},\"prelude_commit_ns\":{prelude_commit_ns},\"prelude_head_commit\":{prelude_head:?},\"up_to_date\":{up_to_date},\"pin_generation\":{pin_generation},\"pin_observation_ok\":{pin_observation_ok},\"pin_read_bytes\":{pin_read_bytes},\"pinned_bytes\":{pinned_bytes},\"pinned_sha256\":{pinned_sha256:?},\"pin_release_ok\":{pin_release_ok}}}");
     println!("RECEIPT\t{{\"schema\":\"issue243-shell-driver-v1\",\"status\":\"{status}\",\"detail\":{:?},\"mode\":{:?},\"scenario_id\":{:?},\"branch_id\":{:?},\"head_commit\":{:?},\"commit_called\":{commit_called},\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"operation_ns\":{operation_ns},\"cleanup_ns\":{cleanup_ns},\"projection_counts\":{:?},\"unmount_ok\":{},\"sandbox_delete_ok\":{},\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":{:?},\"host_disk_read_bytes\":{}}}",
         detail, args[1], case.get("scenario_id")?, hex(&branch), head_commit, counts,
         unmount.is_ok(), delete.is_ok(), capture.attempted, capture.bytes, capture.truncated,

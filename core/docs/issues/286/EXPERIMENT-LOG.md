@@ -443,3 +443,11 @@ R046 issue publication: [#286 comment5901547214](https://github.com/Ephemeral-AI
 ## Post-publication cache audit of r044 (no new sample)
 
 The frozen #273 checkpoint-5 spec says cold host source plus private Linux direct I/O does not prove the full Exec-to-Commit cache domain. The r044 evaluator wrongly promoted that partial proof to numeric `PASS`. The [append-only correction](experiments/20260930-workspace-write-r044-cache-audit.md) supersedes that **numeric admission claim**: r044 remains 9/9 functional/command/verifier/cleanup PASS, but all nine complete-command numeric results are `INELIGIBLE`. The original receipts and r044 report remain unmodified, and no arm was rerun. The r047 earlier-family results still stand; its conclusion that all three families met the full checkpoint does not. Family 4 can proceed with independent functional/fast-path work, while Family 3's numeric speed gate remains open. The owner directed that benchmark/example-only changes should not trigger repeated earlier-family groups, especially Family 2.
+
+## Family 4 first fast attempt r048
+
+The r044 cache correction was published in [#286 comment5901691380](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5901691380), source/evaluator commit `4c20cdfab`. Family 4 code/profile commit `13a9273d8` adds the same-Workspace live lease controls and separate retained-Store proof command, with exact image reuse and no automatic earlier-family runs. The owner explicitly authorized continuing Family 4 on this fast path.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Next action |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-workspace-commit-fast-r048 | SDK clean then one-edit retained 4097-write controls v2 | `13a9273d8` | **FAIL / NOT_RUN**: clean outer command15.006 s timeout at unchanged15 s, no final SDK receipt, full pin digest incomplete53/640 reads, product cleanup UNKNOWN; separate external cleanup PASS. One-edit stopped before invocation. Verifier SKIPPED, numeric INELIGIBLE. | [Report](experiments/20260930-workspace-commit-fast-r048.md), [compact evidence](experiments/20260930-workspace-commit-fast-r048-receipts.json) | Separate full pin oracle from fast performance in a prospectively versioned profile, preserve all15/60/9 s bounds and earlier-family proof reuse |

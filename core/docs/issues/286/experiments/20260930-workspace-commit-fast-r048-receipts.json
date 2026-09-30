@@ -1,0 +1,109 @@
+{
+  "artifacts_sha256": {
+    "benchmark_shell": "07a2cd87eb9262e458f09891bd12087a83bcc50119da1bdf32cf70f5441dd565",
+    "layerfs-daemon": "5d82fadd7e0c5a4c7c053fb577a32f57d141a438c22012cc91b23098f52ab51b",
+    "verify_checkpoint5": "abfbe9f75efa3c0d397a81c4e6eeaf5a9f317737acd068e405eee4b543a60985"
+  },
+  "diagnostic_counts": {
+    "daemon_completed_view_read_requests": 53,
+    "daemon_pin_successes": 1,
+    "daemon_workspace_commit_successes": 2,
+    "daemon_workspace_exec_successes": 2,
+    "full_view_requests_required": 640
+  },
+  "external_cleanup": {
+    "container": "layerfs-d0c80f612d250e45fb282666821c1c3e",
+    "external_cleanup_status": "PASS",
+    "performance_run": "issue286-workspace-commit-fast-r048",
+    "product_cleanup_status": "UNKNOWN",
+    "records": [
+      {
+        "command": [
+          "docker",
+          "stop",
+          "--time",
+          "2",
+          "layerfs-d0c80f612d250e45fb282666821c1c3e"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "Flag --time has been deprecated, use --timeout instead\nlayerfs-d0c80f612d250e45fb282666821c1c3e\n",
+        "wall_ns": 2229753708
+      },
+      {
+        "command": [
+          "docker",
+          "rm",
+          "layerfs-d0c80f612d250e45fb282666821c1c3e"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "layerfs-d0c80f612d250e45fb282666821c1c3e\n",
+        "wall_ns": 68970792
+      },
+      {
+        "command": [
+          "docker",
+          "volume",
+          "rm",
+          "layerfs-d0c80f612d250e45fb282666821c1c3e-root"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "layerfs-d0c80f612d250e45fb282666821c1c3e-root\n",
+        "wall_ns": 35280125
+      }
+    ],
+    "schema": "issue286-external-timeout-cleanup-v1",
+    "volumes": [
+      "layerfs-d0c80f612d250e45fb282666821c1c3e-root"
+    ]
+  },
+  "external_cleanup_receipt_sha256": "8b37b7c7f39748e76c03484b8acdeeec20ccc26bb8547602a04edd4ff416ab25",
+  "image_id": "sha256:97d1df653e2efa73723c07ca7315bc1649d95715defc15e7c58e4865105f94e8",
+  "image_reuse": {
+    "command": null,
+    "daemon_sha256": "5d82fadd7e0c5a4c7c053fb577a32f57d141a438c22012cc91b23098f52ab51b",
+    "image_id": "sha256:97d1df653e2efa73723c07ca7315bc1649d95715defc15e7c58e4865105f94e8",
+    "mode": "exact-image-reuse",
+    "wall_ns": 0
+  },
+  "raw_manifest_sha256": "d57d19d9c45658a98a47b1631d1c35faf4f02522d54f74fb209df5624e202357",
+  "raw_output": "benchmark-results/fs-bench-pro/issue286-workspace-commit-fast-r048",
+  "rows": [
+    {
+      "case": "workspace-commit-clean-retained-writes-4097-v2",
+      "cleanup_status": "UNKNOWN",
+      "command_bound_ns": 15000000000,
+      "command_ns": 15006045667,
+      "raw_receipt_sha256": "55936a72fad6c55caaede7c93560410cd4a32401fbe9bfc8a3683663d2d24db0",
+      "reason": null,
+      "sample_count": 1,
+      "status": "FAIL",
+      "verifier_status": "SKIPPED"
+    },
+    {
+      "case": "workspace-commit-one-edit-retained-writes-4097-v2",
+      "cleanup_status": null,
+      "command_bound_ns": null,
+      "command_ns": null,
+      "raw_receipt_sha256": "d5c37ab21e672ffe3f61c4e13dc74fdbcd8075272f2789bf499ac86a81ac2d54",
+      "reason": "prior cleanup failed or unknown",
+      "sample_count": 0,
+      "status": "NOT_RUN",
+      "verifier_status": null
+    }
+  ],
+  "schema": "issue286-workspace-commit-fast-r048-index-v1",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "839e8f57a05e82f57828ba4c75489c30c3b2c51a06a0e07d7a1919a340d0be08",
+    "product_seal": "1425ed7ec6b953092f9d126bb702ee4566db6b9b6cc7a053bd3095073af51399",
+    "source_commit": "13a9273d8a6f708f3638e247b83eef49692afef5",
+    "source_dirty": false,
+    "source_tree": "2a62287e3f1582fe0ccfbc390d09da1b0addd881"
+  }
+}

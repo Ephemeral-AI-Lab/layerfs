@@ -9,7 +9,7 @@ import shutil
 
 from families import workspace_write as write
 
-PROFILE = "sdk-live-retained-commit-v2"
+PROFILE = "sdk-live-retained-commit-fast-v3"
 PRELUDE = "/fixtures/bin/write-separated dispersed data.bin 4097"
 PRIOR_IMAGE = write.ROOT / "benchmark-results/fs-bench-pro/issue286-family3-cold-r044/prepared.json"
 
@@ -22,14 +22,22 @@ class Case:
     clean: bool
     command_budget_ns: int = 15_000_000_000
     verifier_budget_ns: int = 9_000_000_000
+    pin_read_bytes: int = 0
+    role: str = "performance-diagnostic"
 
 
 CASES = {case.id: case for case in (
-    Case("workspace-commit-clean-retained-writes-4097-v2", "true", 0, True),
+    Case("workspace-commit-clean-retained-writes-4097-v2", "true", 0, True, pin_read_bytes=16_384),
     Case("workspace-commit-one-edit-retained-writes-4097-v2",
+         "/fixtures/bin/write-separated data.bin 1", 1, False, pin_read_bytes=16_384),
+    Case("workspace-commit-clean-retained-writes-4097-v3", "true", 0, True),
+    Case("workspace-commit-one-edit-retained-writes-4097-v3",
          "/fixtures/bin/write-separated data.bin 1", 1, False),
+    Case("workspace-commit-full-pin-retained-writes-4097-read-31kib-v1",
+         "/fixtures/bin/write-separated data.bin 1", 1, False,
+         command_budget_ns=60_000_000_000, pin_read_bytes=31_744, role="functional-oracle"),
 )}
-SELECTED = tuple(CASES)
+SELECTED = tuple(name for name in CASES if name.endswith("-v3"))
 REMAINING = {
     "issue273-clean-commit-v1": "historical committed/reattached control cannot hold its live private journal; use distinct v2 scenario",
     "issue273-one-edit-commit-v1": "historical committed/reattached control cannot hold its live private journal; use distinct v2 scenario",
@@ -47,8 +55,8 @@ def oracle():
     retained = write.expected("dispersed", 4097)
     one_edit = bytearray(retained)
     one_edit[0] = ord("X")
-    return {"retained": write.manifest(retained), SELECTED[0]: write.manifest(retained),
-            SELECTED[1]: write.manifest(one_edit)}, hashlib.sha256(retained).hexdigest()
+    return {"retained": write.manifest(retained),
+            **{case.id: write.manifest(retained if case.clean else one_edit) for case in CASES.values()}}, hashlib.sha256(retained).hexdigest()
 
 
 def control_line(stdout):
@@ -75,6 +83,7 @@ def attempt(out, case, prepared, pin_sha):
                                            "genesis_root_serial", "branch_id", "old_commit")}
     fields.update(scenario_id=case.id, command_hex=case.command.encode().hex(), expected_failure="0",
                   prelude_command_hex=PRELUDE.encode().hex(), clean_commit=str(int(case.clean)),
+                  pin_read_bytes=str(case.pin_read_bytes),
                   telemetry_run=str(int.from_bytes(os.urandom(16), "big") or 1))
     case_spec(folder / "case.before", fields)
     command = [prepared["artifacts"]["benchmark_shell"]["path"], "run", str(folder / "case.before"),
@@ -93,19 +102,23 @@ def attempt(out, case, prepared, pin_sha):
                  and bool(control.get("up_to_date")) == case.clean
                  and control.get("prelude_head_commit")
                  and (driver.get("head_commit") == control["prelude_head_commit"]) == case.clean)
-    pin = bool(control and control.get("pin_generation", 0) > 0
-               and control.get("pinned_bytes") == write.SIZE and control.get("pinned_sha256") == pin_sha)
+    pin = bool(control and control.get("pin_generation", 0) > 0 and control.get("pin_observation_ok"))
+    full_pin = bool(control and control.get("pinned_bytes") == write.SIZE and control.get("pinned_sha256") == pin_sha)
+    if case.pin_read_bytes:
+        pin = pin and full_pin
     budget = perf["wall_ns"] <= case.command_budget_ns and not perf["timeout"]
     complete = bool(perf["exit_code"] == 0 and driver and driver.get("status") == "COMPLETE"
                     and route and pin and cleanup and budget)
     row = {"schema": "core-workspace-commit-fast-attempt-v2", "family_id": "workspace_commit",
            "profile": PROFILE, "case": case.id, "sample_count": 1, "source": prepared["identity"],
+           "role": case.role,
            "artifacts": prepared["artifacts"], "image_id": prepared["image_id"], "image_reuse": prepared["image_build"],
            "master": master, "clone_method": prepared["clone_method"], "setup": "clone",
            "prelude_command": PRELUDE, "shell_command": case.command, "performance": perf,
            "command_budget_ns": case.command_budget_ns, "command_status": "PASS" if budget else "FAIL",
            "driver": driver, "control": control, "write_callbacks": counts.get("write"),
            "route_status": "PASS" if route else "FAIL", "pin_status": "PASS" if pin else "FAIL",
+           "pin_verification_status": "PASS" if case.pin_read_bytes and full_pin else "FAIL" if case.pin_read_bytes else "SKIPPED",
            "pin_oracle_sha256": pin_sha, "cleanup_status": "PASS" if cleanup else "UNKNOWN" if perf["timeout"] else "FAIL",
            "verification": {"status": "SKIPPED", "reason": "fast lane; prove retained Stores separately without performance replay"},
            "functional_status": "INCOMPLETE", "performance_claim": False,

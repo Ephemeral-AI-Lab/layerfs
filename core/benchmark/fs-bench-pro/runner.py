@@ -397,7 +397,8 @@ def main():
                   f"command <= {case.command_budget_ns / 1e9:g} s; verifier <= 9 s\t"
                   "selected")
         for case in commit.CASES.values():
-            print(f"{case.id}\tSDK same-Workspace retained pin\tcommand <= 15 s; separate proof <= 9 s\tfast lane selected")
+            print(f"{case.id}\tSDK same-Workspace retained pin\tcommand <= {case.command_budget_ns / 1e9:g} s; separate proof <= 9 s\t"
+                  f"{'fast lane selected' if case.id in commit.SELECTED else 'explicit-only ' + case.role}")
         for name, reason in commit.REMAINING.items():
             print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":
