@@ -1,0 +1,5 @@
+COMMAND: cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked -p layerfs-content -p layerfs-storage -p layerfs-server --all-targets -- -D warnings
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.49s
+
+EXIT: 0

@@ -1,5 +1,16 @@
 # Storage (C2, `layerfs-storage`)
 
+> **#287 R1c construction metadata:** The source in this commit, against parent
+> `06fe8363d5c317c49876d5189d374c1a34cc6010`, adds a fresh metadata-only LFCS
+> SQLite owner for the real C1 DirectoryRoots producer. It admits at most65536
+> fixed63-byte facts in one16MiB native class before dependent effects, uses
+> indexed point/page queries, and retains failed/Unknown owners and credits.
+> Explicit checked native release is separate from C1 logical completion.
+> Store schema, CAS, writer count and publication remain unchanged. The shared
+> safe native reservation primitive preserves existing Store headroom behavior.
+> [R1c construction state](proposal/bounded-workspace-implementation-20260930/R1C-INDEXED-CONSTRUCTION.md)
+> records the private grammar/profile and the unqualified global/physical bounds.
+
 > **Status:** Research; informative and not a product contract.
 
 The pending issue #192 schema 7 changes are described in

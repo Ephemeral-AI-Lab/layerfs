@@ -1,0 +1,52 @@
+COMMAND: cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test construction_state --test physical_reservation --test filesystem_pipeline --test storage_limits --test write_admission --test policy_capacity -- --nocapture
+   Compiling nix v0.31.3
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 8.25s
+     Running tests/construction_state.rs (core/target/debug/deps/construction_state-c6776b32353acc5f)
+
+running 10 tests
+test unix::release_identity_child ... ok
+test unix::unknown_commit_child ... ok
+LFCS indexed-query diagnostic: ["SEARCH directory_roots USING PRIMARY KEY (key=?)"]
+LFCS indexed-query diagnostic: ["SEARCH directory_roots USING PRIMARY KEY (key<?)"]
+LFCS indexed-query diagnostic: ["SEARCH directory_roots USING PRIMARY KEY (key>? AND key<?)"]
+test unix::indexed_queries_and_real_sql_ownership_preserve_original_error ... ok
+
+thread 'unix::real_failed_commit_keeps_unknown_owner_credit_after_error_handoff' panicked at crates/layerfs-storage/tests/construction_state.rs:716:9:
+child failure: stdout=
+running 1 test
+test unix::unknown_commit_child ... FAILED
+
+failures:
+
+failures:
+    unix::unknown_commit_child
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+ stderr=
+thread 'unix::unknown_commit_child' panicked at crates/layerfs-storage/tests/construction_state.rs:764:13:
+expected COMMIT Unknown, got Engine(SqliteFailure(Error { code: SystemIoFailure, extended_code: 3850 }, Some("disk I/O error")))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test unix::real_failed_commit_keeps_unknown_owner_credit_after_error_handoff ... FAILED
+test unix::explicit_identity_failure_and_restoration_never_authorize_retry ... ok
+test unix::append_count_and_order_refuse_before_batch_rows_and_keep_typed_failure ... ok
+test unix::owner_admission_and_native_path_authority_refuse_before_effects ... ok
+test unix::byte_limit_empty_and_small_pages_have_exact_eof_and_selected_seal ... ok
+test unix::changed_phase_and_borrowed_malformed_rows_fail_closed ... ok
+LFCS correctness/resource diagnostic: rows=65536, record_bytes=4128768, SQLite_pages=1835, apparent_bytes=7516160, allocated_bytes=16777216, class=16777216; no speed/heap/RSS claim
+test unix::directory_roots_65536_stream_seal_pages_and_native_release ... ok
+
+failures:
+
+failures:
+    unix::real_failed_commit_keeps_unknown_owner_credit_after_error_handoff
+
+test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+error: test failed, to rerun pass `-p layerfs-storage --test construction_state`
+
+EXIT: 101

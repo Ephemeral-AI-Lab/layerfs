@@ -46,6 +46,14 @@ The selective #284 Workspace integration is described in
 with its own source pins and implementation/evaluation boundary. It does not
 advance the older chapters' pins or promote historical measurements.
 
+The #287 implementation amendments describe
+[typed Server admission](proposal/bounded-workspace-implementation-20260930/R1A-SERVER-ADMISSION.md),
+[current cache owners](proposal/bounded-workspace-implementation-20260930/R1B-CACHE-OWNERSHIP.md)
+and [indexed construction metadata](proposal/bounded-workspace-implementation-20260930/R1C-INDEXED-CONSTRUCTION.md)
+at their own source/checkpoint scope. The affected C1/C2/Server chapters carry
+selective additions; unchanged historical descriptions and measured verdicts
+retain their original identities.
+
 ## Why these papers exist
 
 The only architecture study in this release,

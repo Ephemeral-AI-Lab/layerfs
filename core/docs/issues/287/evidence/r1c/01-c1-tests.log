@@ -1,0 +1,126 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+warning: unused import: `ObjectId`
+  --> crates/layerfs-content/src/filesystem/update.rs:34:60
+   |
+34 | use crate::object::{AuthenticatedObjects, FinalizedObject, ObjectId, ObjectRole};
+   |                                                            ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `layerfs-content` (lib) generated 1 warning (run `cargo fix --lib -p layerfs-content` to apply 1 suggestion)
+    Finished `test` profile [optimized + debuginfo] target(s) in 7.31s
+     Running tests/filesystem_bounds.rs (core/target/debug/deps/filesystem_bounds-6a5d10a6b1d3fc43)
+
+running 17 tests
+test one_batched_demand_is_exactly_one_read_wave ... ok
+test one_grouped_demand_is_one_charged_wave ... ok
+test a_backing_too_small_for_the_declared_ceiling_is_refused_up_front ... ok
+test an_empty_tree_and_a_deep_tree_both_stay_inside_their_declared_ceilings ... ok
+test validation_reads_are_charged_to_the_operation ... ok
+test the_release_frontier_reads_one_wave_per_batch_not_one_record_per_demand ... ok
+test released_subtrees_are_traversed_in_bounded_pages_and_aliases_survive ... ok
+test a_grouped_demand_is_one_wave_and_every_page_it_decoded ... ok
+test a_wide_branch_page_reads_its_children_in_one_wave ... ok
+test binding_lookups_are_batched_per_phase ... ok
+test a_small_change_reads_its_own_path_and_never_an_unrelated_subtree ... ok
+test merge_inputs_and_output_are_covered_by_the_declared_ceiling ... ok
+test a_build_has_no_independent_cycle_walk_limit ... ok
+test every_reported_owner_is_nonzero_where_work_happened_and_zero_where_it_did_not ... ok
+test narrowing_keeps_a_small_scratch_working ... ok
+test a_directory_larger_than_the_former_walk_ceiling_can_be_rebound ... ok
+test a_branch_materialization_reads_children_in_one_wave ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+     Running tests/filesystem_failure.rs (core/target/debug/deps/filesystem_failure-3ab14e7b7e14d8c2)
+
+running 8 tests
+test a_binding_serial_outside_the_stored_range_is_refused ... ok
+test the_attribute_value_bound_is_the_chunk_maximum_at_its_boundary ... ok
+test a_malformed_or_unauthenticated_demanded_page_is_rejected_without_a_root ... ok
+test invalid_input_is_refused_before_anything_is_emitted ... ok
+test a_read_failure_at_each_boundary_publishes_no_root_and_keeps_the_old_one ... ok
+test cancellation_leaves_no_owned_ordering_resources_and_repeatable_state ... ok
+test a_refusing_consumer_ends_the_operation_once_without_a_root ... ok
+test a_branch_that_misstates_its_summary_is_refused_by_the_tree_engine ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/filesystem_reference.rs (core/target/debug/deps/filesystem_reference-a68f0cc5be2a48a2)
+
+running 2 tests
+test construction_matches_the_sealed_reference_roots_and_pages ... ok
+test updates_match_the_sealed_reference_operation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests/filesystem_rows.rs (core/target/debug/deps/filesystem_rows-693f80d7588e60d3)
+
+running 6 tests
+test a_spool_refuses_a_key_that_does_not_rise_inside_its_run ... ok
+test a_spool_that_does_not_hold_its_declared_rows_is_refused ... ok
+test a_spool_refuses_a_row_beyond_its_declared_totals_or_capacity ... ok
+test the_spool_file_is_removed_when_the_update_is_done ... ok
+test a_spooled_update_publishes_the_same_root_as_resident_rows ... ok
+test a_wide_spooled_generation_applies_every_row_from_the_file ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/filesystem_timing.rs (core/target/debug/deps/filesystem_timing-e4b5d48dde6f0c17)
+
+running 2 tests
+test a_recorded_construction_reports_its_phases ... ok
+test a_recorded_update_reports_coarse_phases_and_changes_nothing ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_topology.rs (core/target/debug/deps/filesystem_topology-52112ab7d09244ae)
+
+running 19 tests
+test a_directory_or_symlink_cannot_have_two_parents ... ok
+test a_foreign_scope_or_profile_is_refused ... ok
+test a_dropped_directory_emits_no_page_of_its_own ... ok
+test a_base_resident_directory_cannot_gain_a_second_parent ... ok
+test a_base_resident_symlink_cannot_gain_a_second_parent ... ok
+test a_build_whose_root_is_not_declared_new_is_refused_up_front ... ok
+test a_build_cycle_that_the_root_holds_is_refused ... ok
+test a_base_resident_directory_can_be_renamed_by_unbinding_first ... ok
+test a_caller_asserted_count_is_never_trusted ... ok
+test a_cycle_formed_by_moving_a_directory_below_itself_is_refused ... ok
+test a_permutation_of_65_directory_bindings_is_one_linear_walk ... ok
+test a_disconnected_new_record_is_refused ... ok
+test a_build_with_a_disconnected_directory_cycle_is_refused ... ok
+test a_cycle_formed_inside_a_build_is_refused ... ok
+test a_reused_identity_is_refused ... ok
+test a_self_binding_is_refused ... ok
+test an_update_cycling_two_declared_new_directories_is_refused ... ok
+test the_root_stays_a_zero_count_directory ... ok
+test an_update_with_a_disconnected_fresh_directory_cycle_is_refused ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/filesystem_updates.rs (core/target/debug/deps/filesystem_updates-86b9911038e50d5d)
+
+running 6 tests
+test a_tiny_tree_is_created_and_read_back_exactly ... ok
+test a_same_name_no_op_keeps_the_root_identity ... ok
+test a_type_replacement_replaces_the_binding_and_the_record ... ok
+test removing_the_last_binding_removes_the_inode_and_keeps_the_root_readable ... ok
+test an_unsorted_or_duplicate_change_list_is_refused_before_any_write ... ok
+test a_content_only_change_leaves_every_directory_page_untouched ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/indexed_state.rs (core/target/debug/deps/indexed_state-1ba3f8e441fb87eb)
+
+running 7 tests
+test issued_identity_full_selector_and_one_time_binding_are_exact ... ok
+test empty_selected_table_has_one_exact_terminal_page_and_independent_byte_admission ... ok
+test logical_completion_runs_once_before_root_and_preserves_an_earlier_failure ... ok
+test fixed_records_headers_and_seal_digest_match_independent_input_transcription ... ok
+test cursor_rejects_early_eof_and_changed_sealed_bytes_and_keeps_failure_terminal ... ok
+test larger_resident_compatibility_is_admitted_explicitly_and_canonical_refusal_precedes_output ... ok
+test ordered_batches_refuse_before_mutation_and_sealed_pages_obey_count_and_byte_limits ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

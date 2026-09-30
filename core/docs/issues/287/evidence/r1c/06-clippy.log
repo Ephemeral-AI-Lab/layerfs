@@ -1,0 +1,32 @@
+COMMAND: cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked -p layerfs-content -p layerfs-storage -p layerfs-server --all-targets -- -D warnings
+   Compiling nix v0.31.3
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-telemetry)
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Checking layerfs-api-core v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-api/core)
+    Checking layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-sandbox)
+error: the following explicit lifetimes could be elided: 'b
+   --> crates/layerfs-content/src/filesystem/update.rs:188:8
+    |
+188 | fn run<'b>(
+    |        ^^
+...
+191 |     backing: Option<&'b mut dyn OrderingBacking>,
+    |                      ^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_lifetimes
+    = note: `-D clippy::needless-lifetimes` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_lifetimes)]`
+help: elide the lifetimes
+    |
+188 ~ fn run(
+189 |     objects: &mut FilesystemObjects<'_>,
+190 |     input: &impl PreparedRows,
+191 ~     backing: Option<&mut dyn OrderingBacking>,
+    |
+
+error: could not compile `layerfs-content` (lib test) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-content` (lib) due to 1 previous error
+
+EXIT: 101

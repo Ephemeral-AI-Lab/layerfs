@@ -5,7 +5,8 @@
 //! completed content is retained through later catalog failure. Releasing that
 //! allowance between phases requires the versioned complete result owner.
 use crate::service::{
-    error::{catalog as failure, storage},
+    construction::Construction,
+    error::{catalog as failure, content, storage},
     read::content::id,
     records::*,
     save::{
@@ -15,7 +16,10 @@ use crate::service::{
 };
 use layerfs_bridge::contract::HistoryResult;
 use layerfs_bridge::contract::*;
-use layerfs_content::filesystem::scope_for_seed;
+use layerfs_content::filesystem::{
+    scope_for_seed,
+    state::{StateScope, StateTable},
+};
 use layerfs_history::*;
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, TimingScope};
@@ -37,12 +41,13 @@ pub(crate) struct Streams<'a> {
 pub(crate) fn command(
     catalog: &dyn HistoryCatalog,
     store: &Store,
-    import_root: Option<&Path>,
+    bindings: (Option<&Path>, &Construction),
     command: &HistoryCommand,
     streams: Streams<'_>,
     deadline: Instant,
     timer: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
+    let (import_root, construction) = bindings;
     let Streams { input, output } = streams;
     let result = match command {
         HistoryCommand::ImportNativeDirectory {
@@ -111,11 +116,27 @@ pub(crate) fn command(
             HistoryResult::BranchSnapshot(snapshot_wire(&snapshot))
         }
         HistoryCommand::StageChanges(changes) => {
-            let stage = stage(catalog, store, changes, input, deadline, timer)?;
+            let stage = stage(
+                catalog,
+                store,
+                construction,
+                changes,
+                input,
+                deadline,
+                timer,
+            )?;
             HistoryResult::Stage(stage_wire(&stage))
         }
         HistoryCommand::Commit(changes) => {
-            let stage = stage(catalog, store, changes, input, deadline, timer)?;
+            let stage = stage(
+                catalog,
+                store,
+                construction,
+                changes,
+                input,
+                deadline,
+                timer,
+            )?;
             let outcome = catalog
                 .commit_staged(&CommitStagedRequest {
                     workspace: stage.workspace,
@@ -199,6 +220,7 @@ pub(crate) fn command(
 fn stage(
     catalog: &dyn HistoryCatalog,
     store: &Store,
+    construction: &Construction,
     changes: &PreparedChanges,
     input: &mut dyn Read,
     deadline: Instant,
@@ -238,9 +260,38 @@ fn stage(
     if Instant::now() >= deadline {
         return Err(Code::Deadline.into());
     }
-    let mut save = store
-        .begin_save(timer.child("history.begin_save"))
-        .map_err(storage)?;
+    let mut state = construction.begin(changes)?;
+    let state_scope =
+        match StateScope::new(state.selection().clone(), 1, StateTable::DirectoryRoots) {
+            Ok(scope) => scope,
+            Err(error) => {
+                let mut error = content(error);
+                if let Err(cleanup) = state.release().map_err(storage) {
+                    error.cleanup = Some(cleanup.code);
+                    error.unknown |= cleanup.unknown;
+                }
+                return Err(error);
+            }
+        };
+    if Instant::now() >= deadline {
+        let mut error = Failure::from(Code::Deadline);
+        if let Err(cleanup) = state.release().map_err(storage) {
+            error.cleanup = Some(cleanup.code);
+            error.unknown |= cleanup.unknown;
+        }
+        return Err(error);
+    }
+    let mut save = match store.begin_save(timer.child("history.begin_save")) {
+        Ok(save) => save,
+        Err(error) => {
+            let mut error = storage(error);
+            if let Err(cleanup) = state.release().map_err(storage) {
+                error.cleanup = Some(cleanup.code);
+                error.unknown |= cleanup.unknown;
+            }
+            return Err(error);
+        }
+    };
     let mut prepared = PreparedUpdate {
         base: changes.base,
         scope: changes.scope,
@@ -250,14 +301,46 @@ fn stage(
     };
     let built = {
         let mut handoff = SaveHandoff::new(&mut save);
-        let result = filesystem::update(&provider, &mut prepared, &mut handoff, deadline, timer);
+        let result = {
+            let mut adapter = state.adapter();
+            filesystem::update(
+                &provider,
+                &mut prepared,
+                &mut handoff,
+                &mut adapter,
+                &state_scope,
+                deadline,
+                timer,
+            )
+        };
         let retained = handoff.take_failure();
         drop(handoff);
-        match retained {
+        match retained.or_else(|| state.take_failure()) {
             Some(error) => Err(storage(error)),
             None => result,
         }
     };
+    // Logical table completion does not refund native disk/FD/engine ownership.
+    // The exact session closes/unlinks once before a known Save is finished.
+    let built = if state.is_quarantined() {
+        // Retention is this exact owner's required disposition, not a failed
+        // cleanup attempt. Its capsule/credit survives without destructive I/O.
+        let mut error = built.err().unwrap_or_else(|| Code::Unknown.into());
+        error.unknown = true;
+        Err(error)
+    } else {
+        match (built, state.release().map_err(storage)) {
+            (Ok(value), Ok(())) => Ok(value),
+            (Ok(_), Err(cleanup)) => Err(cleanup),
+            (Err(error), Ok(())) => Err(error),
+            (Err(mut error), Err(cleanup)) => {
+                error.cleanup = Some(cleanup.code);
+                error.unknown |= cleanup.unknown;
+                Err(error)
+            }
+        }
+    };
+    drop(state);
     let built = built.and_then(|value| {
         if Instant::now() >= deadline {
             Err(Code::Deadline.into())
@@ -272,12 +355,13 @@ fn stage(
             value
         }
         Err(mut error) => {
-            if !error.unknown {
-                if let Err(cleanup) = save.abort(timer.child("history.abort")) {
-                    let cleanup = storage(cleanup);
-                    error.cleanup = Some(cleanup.code);
-                    error.unknown |= cleanup.unknown;
-                }
+            // Each owner decides its own custody. A metadata-only scratch
+            // Unknown must not hide cleanup of a known unfinished content Save.
+            // C2 abort already denies effects for its own quarantine/attempt.
+            if let Err(cleanup) = save.abort(timer.child("history.abort")) {
+                let cleanup = storage(cleanup);
+                error.cleanup.get_or_insert(cleanup.code);
+                error.unknown |= cleanup.unknown;
             }
             return Err(error);
         }

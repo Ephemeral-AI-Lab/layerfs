@@ -1,0 +1,36 @@
+COMMAND: cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked -p layerfs-content -p layerfs-storage -p layerfs-server --all-targets -- -D warnings
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-history)
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/indexed_state.rs:378:5
+    |
+378 |     drop(objects);
+    |     ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/indexed_state.rs:378:10
+    |
+378 |     drop(objects);
+    |          ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+    = note: `-D clippy::drop-non-drop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::drop_non_drop)]`
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/indexed_state.rs:466:9
+    |
+466 |         drop(objects);
+    |         ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/indexed_state.rs:466:14
+    |
+466 |         drop(objects);
+    |              ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: could not compile `layerfs-content` (test "indexed_state") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+
+EXIT: 101

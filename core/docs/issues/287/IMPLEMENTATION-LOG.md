@@ -390,3 +390,313 @@ upfront/global byte, native-engine or physical PASS is reported.
 Actual committed archive equality, push and #287 partial checkpoint will be
 confirmed against the resulting commit; no future self-referential SHA is guessed.
 Continue R1c after publication. #288 campaign/issue remain delegated/unrun.
+
+## R1b-cache published; R1c ownership and concrete freeze
+
+Actual commit `06fe8363d5c317c49876d5189d374c1a34cc6010` recounts its exact
+parent/committed product archives to135765 ->135957 (+192), reference65417
+unchanged/Core70348 ->70540. The first push failed with LibreSSL
+SSL_ERROR_SYSCALL before publication. Read-only GitHub API confirmed remote
+still765202c; TLS reachability recovered. A deliberate normal fast-forward
+publication then succeeded with exact remote-ref equality. #287 body/comment
+5913195371 confirm the PARTIAL source/checks/gaps, with R1 still unchecked.
+No force push, unrelated issue edit or benchmark occurred.
+
+R1c parent is that actual published commit; SC-03/05/06/07/08 affected. Root
+froze R1C-FROZEN-STATE before producer implementation. Compact issued token8
+binds full selector32/issuer/native session rather than truncating names or
+enlarging288-byte keys. DirectoryRoots key25/value32/framing6=63; maximum future
+NameBinding key282/record304. BLAKE3 private state seals reuse C1's existing
+dependency; FileSet wire SHA-256 remains unchanged. The dated87-byte/SHA-256
+scratch proposal is transparently superseded, not rewritten as past evidence.
+
+Smallest complete delivery: actual Server prepared filesystem construction
+supplies C2 metadata-only DirectoryRoots state to the common C1 algorithm;
+ordered128/64KiB pages replace its growing resident result map on that route.
+C1 independent compatibility APIs preserve exact v1 behavior. Broader graph/
+draft/reference/Binding authority and global/engine/physical envelopes remain
+later gates.16MiB DirectoryRoots is not a larger binding/draft admission class.
+
+Ownership: r1_catalog C1 state/common algorithm/tests; r0_oracles C2
+construction_state/native SQL/provider/resource tests; root Server composition,
+Bridge/shared contract, SQL counter repair/tests and documentation/count/
+publication. Concrete C1 signatures are coordinated before C2 starts. All
+workers preserve others' edits and leave Cargo checking to root's source freeze.
+Next action: implement this complete Root-index→scratch→cleanup path, independently
+verify unchanged roots/bytes and exact bounded refusal/custody, then checkpoint.
+
+## R1c shared owner-binding refinement and SQL counter repair
+
+Before producer/adapter code, coordinated C1/C2 scope now uses an issued private
+Arc identity and consuming unique/unbound `bind_owner(binding32)`. Native C2
+binding includes actual fresh nonce/native identities/owner/modes/selector/token;
+resident compatibility explicitly has logical ownership only. Scope transcript81,
+seal130, append88/page163 imply128 Root rows use8152 append/8227 page bytes.
+Capacity(scope) preflights actual declared state before canonical output. Token
+is never reconstructed or bound after a Scope/clone; Unknown is not query-adopted.
+
+The exact counter now handles SQL block/inline comments while preserving quoted
+content/newlines, counts shipped SQL under src as well as package sql, and scans
+only Rust files for Rust test-module declarations.24 external counter tests PASS;
+the strengthened lib.sql fake-Rust-string classification case separately PASS.
+Revised counter blob `a1cb6c064dd150dbc3aa19648a3748b5aeb741b5`, SHA-256
+`0d798f53263c0f18636d96ccdfdc3728f501f53b066e90577d251859f1f117b2`.
+On the exact published parent archive, old and revised methods both yield
+reference65417/Core70540/combined135957; evidence/r1c/COUNTER-REVISION.json
+retains this comparison. The new method will count BOTH parent/final staged
+snapshots before the owning commit; no source-size estimate or scope deletion.
+
+## R1c C1 coherent source check and Server native composition
+
+The frozen C1 subset is recorded in evidence/r1c/C1-FROZEN-SOURCE.json;
+the first covering command is retained verbatim in01-c1-tests.log:
+`cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-content
+--test indexed_state --test filesystem_reference --test filesystem_rows
+--test filesystem_updates --test filesystem_timing --test filesystem_failure
+--test filesystem_bounds --test filesystem_topology` exited0.67 tests PASS
+(7/2/6/6/2/8/17/19 respectively). The exact independent v1 reference roots,
+reachable partitions/page shapes/readback facts remain unchanged. Public
+compatibility and supplied-state entries share the same canonical algorithm.
+
+The compiler reported one unused ObjectId import; its removal changes no
+behavior and is covered by the later warning-denying Clippy check. These
+passing functional targets are reused, not repeated for a preferred result.
+No Linux/global-engine/whole-operation physical claim follows from them.
+
+Root's Server composition creates the actual selected DirectoryRoots phase1
+before begin_save. Scratch admission/ownership failure precedes Save/body
+effects; exact original C2 errors survive the C1 port. Logical table completion
+does not refund physical ownership. One explicit native cleanup precedes known
+Save finish and short catalog stage publication. Pure catalog/read calls leave
+the lazy authority unopened. Legacy v1 completed-result/capacity custody stays
+unchanged until its R3 versioned result owner exists.
+
+The owning Server proof observes native0700/0600 owners, allocated blocks and
+independent scratch application/version/header/table facts while two real Save
+slots and source gates are occupied. Its expected stage roots/bytes remain
+external independent v1 pins. A separate real parent-permission refusal checks
+pre-Save/pre-body refusal and retained constructor failure without hidden retry.
+C2/Server covering commands are pending the coherent native source freeze.
+
+## R1c native/Server first checks, 2026-10-01 local
+
+The complete working candidate was frozen at SHA-256
+`6e1b3a33e8015a28d20dcb02639be4966672f76055d6bb9ed89c72bbc31f7cdd`;
+02-COHERENT-SOURCE.json records exact files/build inputs and parent06fe8363d.
+The first C2 command03-c2-tests.log exited101: construction_state had9 PASS
+(including two subprocess-entry bodies that return without their configured
+environment) and1 FAIL. The failed parent invoked its real Unknown child, which
+returned Engine(SystemIoFailure/extended3850) before its expected COMMIT Unknown.
+The raw failure remains; it is neither relabeled nor a passed Unknown proof.
+The later selected Storage targets were not reached by that command.
+
+The passing full65536-row metadata proof reports record_bytes4128768,
+SQLite_pages1835/apparent_bytes7516160/allocated_bytes16777216/class16777216.
+Its512 bounded pages agree with independent input-transcribed framing/seal
+expectations. The real query-plan diagnostics are PRIMARY KEY searches for
+point, preceding ordinal and advancing range, without temporary sort/full scan.
+These are correctness/resource/cause observations, not timed speed, heap or RSS
+admission. Other passed native cases retain count/order/phase/BLOB/EOF/refusal,
+two slots, checked release and no restart after pathname restoration.
+
+Server's04-server-tests.log command
+`cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-server
+--test catalog_admission --test history --test admission --test direct`
+exited0: catalog6/history28/admission5/direct10 PASS. One existing direct4097-run
+test remains owner-ignored; it is not executed or counted as PASS. The occupied
+proof independently observes two16MiB native scratch files/headers/empty tables
+and two persisted active Save slots while source gates hold. C5's exact4096 refill
+finishes before either source releases; third Save refusal creates no additional
+Save/scratch owner. Native scratch count falls2→1→0 before the successful Stage
+responses. Independent expected v1 roots and exact old/new bytes pass. Real
+parent-mode refusal and declared65537-directory refusal precede Save/body/scratch
+effects; the former retains constructor failure, the latter permits a valid
+smaller request without an error-driven spill/retry.
+
+The unreached owning Storage targets were then selected once in
+05-c2-remaining-tests.log:
+`cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage
+--test physical_reservation --test filesystem_pipeline --test storage_limits
+--test write_admission --test policy_capacity` exited0 with1/6/5/11/9 PASS
+(32 total). Existing Store physical reservation preserves logical pages and
+configured writer/pack/capacity behavior. Passed construction/C1/Server targets
+are reused. The failed Unknown coordination is diagnosed separately before its
+corrected isolated covering command. No Linux/global-engine/physical Server
+proof, benchmark row, #288 edit or concurrent enablement is claimed.
+
+## R1c demonstrated Unknown cause and covering corrections
+
+The single bounded statement/error/errno diagnostic07-lock-cause.json uses the
+actual Darwin system library `/usr/lib/libsqlite3.dylib`, runtime3.51.0/source
+`2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl`.
+Same-process READ_ONLY reaches BEGIN IMMEDIATE3850/errno9(EBADF), with no
+transaction/INSERT/COMMIT. Same-process READ_WRITE and separate-process READ_ONLY
+both reach BEGIN/INSERT0 and COMMIT5(BUSY). Native RW FD stays held throughout.
+This diagnoses topology-specific advisory locking; exact internal Apple VFS
+descriptor selection remains inference, not an observed source fact. Source
+and raw results are retained without a performance/resource/Unknown PASS claim.
+
+Only the external proof's coordination changes: same-executable independent
+READ_ONLY|NOFOLLOW reader with actual selected link/version/source logging;
+acknowledged BEGIN+SELECT establishes SHARED before append, explicit RELEASE
+precedes acknowledged ROLLBACK/close and owned exit/reap.08-unknown-correction.log
+retains a second failure: Darwin inherited the listener's nonblocking flag on
+the accepted stream, so the first ACK read returned WouldBlock35. The correction
+clears that stream flag before the same5s timeout and adds immediate RAII child
+ownership through coordination failure. It raises no policy or wait bound.
+
+11-unknown-socket-correction.log's isolated actual failed parent command exited0:
+`cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage
+--test construction_state
+unix::real_failed_commit_keeps_unknown_owner_credit_after_error_handoff
+-- --exact --nocapture`. The two configured child bodies execute transitively.
+It proves real failed-COMMIT Unknown, original typed handoff, retained quarantine/
+credit and denied cleanup after reader exit/authority destruction. Original
+unaffected native tests are reused; empty-environment entry helpers are not
+independent provider proofs. The8 primary native tests now have passing evidence.
+Mixed same-process READ_ONLY3850, actual-VFS-FD malicious restoration, induced
+native close/EINTR/unlink ambiguity and aggregate destroyed-factory custody remain
+explicit limitations/unrun scopes. Product native/SQL code did not change for
+these proof corrections.
+
+Clippy's06 log preserves the unnecessary C1 run lifetime failure; its09 covering
+log then exposed two external drop_non_drop calls. Root replaced those with
+lexical borrow scopes.10 preserves the new child helper's zombie-process lint;
+explicit cached wait after its observed/reaped exit resolves the moved binding
+without another blocking wait or retry.12-clippy-final.log exited0 for locked
+content/storage/server all targets with `-D warnings`. These static/lifetime
+corrections change no runtime algorithm or expected result; unchanged67 C1,
+49 Server and32 prior Storage passing functional tests are reused.
+
+Whole-Core fmt exited0. Product boundary PASS379 Rust/SQL production files and
+external guard self-tests PASS9. The revised root LOC-counter tests were already
+PASS24 before the same frozen method. Locked content/storage/server examples
+build is captured separately in13-examples.log; no example benchmark workload
+is executed. Final Server known/Unknown domain review and staged/committed LOC/
+publication remain pending. Full Core final-handoff owning checks and Linux/
+global-engine/physical qualification remain separate unrun gates.
+
+## R1c final cross-owner cleanup audit and regression gate
+
+The independent source audit found a real composition defect before publication:
+aggregate wire Unknown skipped explicit C2 Save abort when only metadata scratch
+was quarantined. SaveOperation::Drop still attempted known-Save abandon but
+discarded its error. Calling native release on already-quarantined scratch also
+created a synthetic Integrity cleanup denial, masking a real C2 cleanup error in
+the legacy single summary field.
+
+Root added an allocation/I/O-free `ScratchSession::is_quarantined()` with the
+same authoritative predicate as status/Drop. Stage retains that exact owner and
+credit without a destructive release attempt; it preserves the original Unknown
+and rejects any purported success from a quarantined owner. Known scratch still
+gets one explicit close/unlink check. Every pre-finish built failure now calls
+C2 Save abort explicitly. C2's own quarantine/cleanup_attempted flags decide its
+effects; scratch Unknown does not reclassify another owner. Known unfinished
+private objects may be cleaned; previously finished input roots are preserved.
+
+This changes Server and adds one real C2 custody observation after the preceding
+Clippy/examples checks. Their unchanged C1/Storage scopes are reused; the owning
+Server covering checks will follow the new coherent source/test freeze. The
+meaningful regression holds an acknowledged scratch SHARED reader through actual
+COMMIT. One case observes successful known-Save cleanup; a second also holds real
+Store BEGIN IMMEDIATE, requiring the actual abort Ownership error and retained
+Save slot after lock release without hidden Drop retry. A successful cleanup
+alone would not distinguish destructor behavior. Both proofs retain scratch
+Unknown and forbid C5 publication/adoption or deletion of finished input roots.
+The broader two-actual-cleanup summary remains R3; no new v1 wire tag is invented.
+
+## R1c final Server composition proof and source freeze
+
+15-server-unknown-composition.log retains a failed external helper before its
+acknowledgement. The original guard lost stderr, leaving only socket EOF. Root
+authorized one labelled direct callback/header diagnostic on an independent
+minimal LFCS fixture; helper-cause retains its exact driver/original helper/result.
+It passed callback/BEGIN/SELECT/ACK/ROLLBACK/close and therefore did not establish
+the Server cause. The guard was corrected to forward bounded16KiB actual failed
+child output after owned exit/reap; the helper reports exact open errors.
+
+16-server-helper-evidence.log then demonstrated the actual cause before effects:
+sqlite3_open result14/extended1550(CANTOPEN_SYMLINK)/errno45 on the test's
+`/var/folders/...` alias. Native authority had canonical `/private/var/...`.
+Root canonicalized the existing owned fixture pathname before NOFOLLOW open,
+matching that native identity. Provider, flags, protocol, limits and product
+source remain unchanged by this external correction; no error-driven retry or
+alternative provider is selected.
+
+17-server-path-correction.log's isolated actual primary exited0:
+`cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-server
+--test catalog_admission
+scratch_unknown_preserves_publication_and_reports_owned_save_cleanup
+-- --exact --nocapture`. Its two owned children use actual linked Apple SQLite
+3.51.0/sourcef0ca...dcaapl and acknowledged SHARED/optional RESERVED transactions.
+Before body release: persistedSave1 and allocated nativeScratch16MiB1. The
+independent v1 grammar has3 candidate objects/486 canonical bytes and one68-byte
+directory leaf before scratch append; actual Store thresholds512/4194303 stay
+unchanged, so output does not prematurely flush before the controlled phase.
+
+Unlocked result is Provider/unknowntrue/cleanupNone/activeSave0. Locked result
+is Provider/unknowntrue/cleanupOwnership/activeSave1; the Save remains charged
+after lock release without Drop retry. Both cases retain exact native scratch
+identity/allocation after reader exit, preserve both independent finished file
+roots/bytes, return no Stage and leave full Branch snapshot unchanged. No SQL
+query/adoption targets Unknown scratch. All external lock actors exit/reap;
+the product Unknown capsule survives until the owned proof process exits. Parent
+fixture removal after that exit is not product cleanup. Helper empty-environment
+bodies do not count as independent proofs.
+
+Selected primary functional evidence totals157 passing tests (C167, native8,
+otherStorage32, originalServer49, newServer1 with2 cases), plus the one existing
+owner-ignored4097 direct case.18-final-composition-clippy.log exits0 for locked
+Storage/Server all targets with -Dwarnings; unaffected Content Clippy PASS is
+reused. Final whole-Core fmt exits0; boundary again PASS379 after the getter/
+caller change; unaffected guard self-tests PASS9/counter tests PASS24 reused.
+13-examples.log built locked content/storage/server examples before the final
+caller adjustment;19-final-server-examples.log covers that new source separately.
+No examples run as benchmark workloads, and no passing functional suite is
+repeated. Exact final source/staged LOC and publication follow this freeze.
+
+## R1c exact staged checkpoint
+
+Production LOC:135957 ->138994 (delta+3037).
+Reference:65417 ->65417 (delta+0). Core:70540 ->73577 (delta+3037).
+Parent `06fe8363d5c317c49876d5189d374c1a34cc6010`; the SAME revised counter
+blob `a1cb6c064dd150dbc3aa19648a3748b5aeb741b5`, SHA-256
+`0d798f53263c0f18636d96ccdfdc3728f501f53b066e90577d251859f1f117b2`, counts
+both exact parent/final staged Git product archives. Rust inline/test-only code,
+tests/examples/fixtures/tools/docs/manifests/generated/third-party are excluded;
+required shipped package/src SQL is included. The old/new methods agree on the
+exact parent, as COUNTER-REVISION records;24 revised external counter tests pass.
+Reference subtree is unchanged498dd1917812ae90efb8841f57e22bfc284e96fb;
+final staged Core subtree604e4511b3ce7f9126b23fb23048e6c9d5fabc1f. The changed
+Core source/manifest/external-test seal is
+`6b5440e68e6db4b68f9df5933c9651cbc4f8ea9bd0d7901d49b3eb34a68b76e4`.
+Full method/per-file classifications/counts are evidence/r1c/PRODUCTION-LOC.json.
+
+The larger added source implements the typed codecs/checked cursors, real native
+SQL ownership/retention and genuine Server caller; growth is not a size reduction
+claim. Native preallocation is relocated into one shared safe primitive, and the
+Server DirectoryRoots map authority is replaced. Public C1 resident compatibility
+uses the same algorithm and makes no physical-memory claim; other resident
+graph/draft/reference authority and the legacy reference product remain.
+
+R1c's selected DirectoryRoots→native scratch→known/Unknown cleanup composition
+passes its scoped exits; the larger R1 milestone remains PARTIAL/unchecked.
+Global read/byte admission, other paged state, engine/protected native/physical
+envelopes, actual VFS-FD/malicious restoration/induced close ambiguity and
+aggregate factory-lifetime drain remain unrun or incomplete. The legacy single
+cleanup-summary and phase-scoped completed-result owner are R3 gates. No strict
+memory/concurrent capability, speed, benchmark or release admission is advertised.
+
+Raw failed/passing command bytes are preserved. The evidence-only attributes
+exempt captured logs/the original issue JSON from whitespace normalization;
+the initial staged whitespace findings remain explained instead of rewriting
+receipts. Product/docs/tool/source whitespace remains checked. Locked examples,
+final fmt/Clippy and boundary379 pass; guard9/counter24 and unaffected functional
+proofs are reused as recorded. Linux/full final Core/physical-provider proofs
+remain later gates. No #288 campaign or issue update occurs.
+
+The actual committed archive equality, normal push/remote equality and #287
+checkpoint will be confirmed after the commit; this log guesses no future SHA.
+Next: R1d-run-seek, the selected exact point lookup/high-water work law in
+R1D-RUN-SEEK-FREEZE. Record the actual published parent and owned files before
+that product work, then continue autonomously. Other R1d/R1e gates stay open.

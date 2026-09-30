@@ -1,5 +1,16 @@
 # Filesystem trees
 
+> **#287 R1c indexed DirectoryRoots:** The source in this commit, against parent
+> `06fe8363d5c317c49876d5189d374c1a34cc6010`, supplies one append-only indexed
+> directory-root authority to the common build/update algorithm. A maximum128
+> pending-record window replaces its growing directory-root result map on the
+> prepared Server route; sealed point reads and advancing pages check exact
+> selection/count/bytes/digest/EOF. Independent public entry points delegate
+> through prospectively admitted resident compatibility of their declared shape.
+> Other graph/reference/draft populations remain; canonical v1 is unchanged.
+> The complete boundary and native cleanup distinction are described in
+> [R1c construction state](proposal/bounded-workspace-implementation-20260930/R1C-INDEXED-CONSTRUCTION.md).
+
 > **#258 stable identity reads:** The source in the same commit as this note
 > extends `FilesystemRead` with parent-serial child resolution, inode-serial
 > resolution/listing, and portable metadata and symlink reads by inode serial.

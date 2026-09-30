@@ -55,6 +55,14 @@ Read the [scenario catalog](../../../../../scenarios.md) and the earlier
 The implementation packets make more concrete choices; they do not retroactively
 change older evidence or establish a released contract.
 
+Implementation amendments describe their own source and delivered scope:
+[R1a typed Server admission](R1A-SERVER-ADMISSION.md),
+[R1b cache ownership](R1B-CACHE-OWNERSHIP.md) and
+[R1c indexed construction metadata](R1C-INDEXED-CONSTRUCTION.md). Exact passing,
+partial and unsupported outcomes belong to the append-only
+[implementation log](../../../issues/287/IMPLEMENTATION-LOG.md); these selective
+deliveries do not turn the R0 research packet into a completed R1–R7 product.
+
 ## 2. Non-negotiable product route
 
 WorkspaceApi::exec accepts opaque ordinary commands. A compiler, shell, Python,

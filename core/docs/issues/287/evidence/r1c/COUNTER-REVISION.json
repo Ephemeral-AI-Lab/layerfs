@@ -1,0 +1,19 @@
+{
+  "parent": "06fe8363d5c317c49876d5189d374c1a34cc6010",
+  "revised_counter_blob": "a1cb6c064dd150dbc3aa19648a3748b5aeb741b5",
+  "revised_counter_sha256": "0d798f53263c0f18636d96ccdfdc3728f501f53b066e90577d251859f1f117b2",
+  "parent_method_comparison": {
+    "prior": {
+      "reference": 65417,
+      "core": 70540,
+      "combined": 135957
+    },
+    "revised": {
+      "reference": 65417,
+      "core": 70540,
+      "combined": 135957
+    }
+  },
+  "scope": "same archived published parent; SQL block/inline comments and quoted content, src SQL classification, Rust-only test-module traversal",
+  "external_checks": "24 unittest PASS; strengthened lib.sql classifier case PASS separately; no product source tested by this method audit"
+}

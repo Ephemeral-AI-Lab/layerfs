@@ -15,6 +15,7 @@ pub mod references;
 pub mod root;
 pub mod rows;
 pub mod sorted;
+pub mod state;
 pub mod symlink;
 pub mod update;
 pub mod validate;
@@ -29,7 +30,9 @@ pub use rows::{check_input, DirectoryRowSource, InodeRowSource, PreparedRows, Se
 pub use sorted::{DirectoryRoot, SortedWork, MAXIMUM_SCRATCH_BYTES};
 pub use symlink::SymlinkTarget;
 pub use update::{
-    build_filesystem, build_filesystem_timed, update_filesystem, update_filesystem_timed,
-    FilesystemResult, FilesystemUpdateCounters,
+    build_filesystem, build_filesystem_timed, build_filesystem_with_state,
+    build_filesystem_with_state_timed, update_filesystem, update_filesystem_timed,
+    update_filesystem_with_state, update_filesystem_with_state_timed, FilesystemResult,
+    FilesystemUpdateCounters,
 };
 pub use validate::{check, CheckedInput, FilesystemTopology};

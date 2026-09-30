@@ -38,7 +38,7 @@ pub(crate) fn before_pack_insert(
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 fn reserve_unix(connection: &Connection, pack_capacity: u64) -> StorageResult<()> {
     use std::fs::OpenOptions;
-    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    use std::os::unix::fs::OpenOptionsExt;
     use std::path::Path;
 
     let filename = connection
@@ -53,70 +53,17 @@ fn reserve_unix(connection: &Connection, pack_capacity: u64) -> StorageResult<()
         .map_err(StorageError::Io)?;
     let metadata = file.metadata().map_err(StorageError::Io)?;
     let apparent = metadata.len();
-    let allocated = metadata
-        .blocks()
-        .checked_mul(512)
-        .ok_or(StorageError::Integrity("Store allocated-byte overflow"))?;
     let wanted = apparent
         .checked_add(pack_capacity)
         .and_then(|value| value.checked_add(HEADROOM))
         .and_then(|value| value.checked_add(MIB - 1))
         .map(|value| value / MIB * MIB)
         .ok_or(StorageError::Integrity("Store reservation overflow"))?;
-    let amount = wanted.saturating_sub(allocated);
-    if amount == 0 {
-        return Ok(());
-    }
-    if amount > MAX_REQUEST {
-        return Err(StorageError::CapacityExceeded {
-            what: "one Store physical reservation",
-            limit: MAX_REQUEST,
-            actual: amount,
-        });
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        let mut request = nix::libc::fstore_t {
-            fst_flags: 0,
-            fst_posmode: nix::libc::F_PEOFPOSMODE,
-            fst_offset: 0,
-            fst_length: amount
-                .try_into()
-                .map_err(|_| StorageError::Integrity("Store reservation length"))?,
-            fst_bytesalloc: 0,
-        };
-        nix::fcntl::fcntl(&file, nix::fcntl::FcntlArg::F_PREALLOCATE(&mut request))
-            .map_err(|error| StorageError::Io(std::io::Error::from_raw_os_error(error as i32)))?;
-        if request.fst_bytesalloc != request.fst_length {
-            return Err(StorageError::Integrity(
-                "partial Store physical reservation",
-            ));
-        }
-    }
-    #[cfg(target_os = "linux")]
-    {
-        // KEEP_SIZE is required: POSIX posix_fallocate would extend SQLite's
-        // logical file to the reservation end before our later size check.
-        let offset = apparent
-            .try_into()
-            .map_err(|_| StorageError::Integrity("Store reservation offset"))?;
-        let length = wanted
-            .saturating_sub(apparent)
-            .try_into()
-            .map_err(|_| StorageError::Integrity("Store reservation length"))?;
-        nix::fcntl::fallocate(
-            &file,
-            nix::fcntl::FallocateFlags::FALLOC_FL_KEEP_SIZE,
-            offset,
-            length,
-        )
-        .map_err(|error| StorageError::Io(std::io::Error::from_raw_os_error(error as i32)))?;
-    }
-    if file.metadata().map_err(StorageError::Io)?.len() != apparent {
-        return Err(StorageError::Integrity(
-            "Store reservation changed file length",
-        ));
-    }
-    Ok(())
+    super::native_reservation::reserve_to(
+        &file,
+        &metadata,
+        wanted,
+        MAX_REQUEST,
+        "one Store physical reservation",
+    )
 }

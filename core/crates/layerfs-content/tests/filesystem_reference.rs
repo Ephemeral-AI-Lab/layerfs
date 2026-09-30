@@ -16,8 +16,10 @@ use std::collections::BTreeMap;
 use layerfs_content::filesystem::directory::codec::decode_directory_page;
 use layerfs_content::filesystem::inode::codec::decode_inode_page;
 use layerfs_content::filesystem::{
-    build_filesystem, update_filesystem, DirectoryUpdate, FilesystemInput, FilesystemRead,
-    FilesystemResources, FilesystemRootId, InodeUpdate, LogicalPath, PathName,
+    build_filesystem, build_filesystem_with_state,
+    state::{ResidentState, StateScope, StateSelection, StateTable},
+    update_filesystem, update_filesystem_with_state, DirectoryUpdate, FilesystemInput,
+    FilesystemRead, FilesystemResources, FilesystemRootId, InodeUpdate, LogicalPath, PathName,
 };
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{ObjectId, ObjectRole};
@@ -233,8 +235,26 @@ fn root_serial(case: &manifest::FixtureCase) -> u64 {
         .unwrap_or(1)
 }
 
-/// Builds one sealed construction case and checks its identity and page shapes.
-fn build_case(case: &manifest::FixtureCase) -> TreeStore {
+#[derive(Clone, Copy)]
+enum StateRoute {
+    Compatibility,
+    Supplied,
+}
+
+fn state_for_rows(count: usize) -> (ResidentState, StateScope) {
+    let mut selection = StateSelection::issue([0x28; 32]).unwrap();
+    let mut binding = blake3::Hasher::new();
+    binding.update(b"layerfs/tests/resident-state-owner/v1\0");
+    binding.update(&selection.token().to_be_bytes());
+    selection
+        .bind_owner(*binding.finalize().as_bytes())
+        .unwrap();
+    let scope = StateScope::new(selection, 1, StateTable::DirectoryRoots).unwrap();
+    (ResidentState::new(scope.clone(), count).unwrap(), scope)
+}
+
+/// Builds one sealed construction case under either state authority route.
+fn build_case_with_route(case: &manifest::FixtureCase, route: StateRoute) -> TreeStore {
     let mut store = TreeStore::new();
     let case_view = Case { manifest: case };
     let updates = case_view.updates();
@@ -249,8 +269,12 @@ fn build_case(case: &manifest::FixtureCase) -> TreeStore {
         new_inodes: &new_inodes,
         resources: FilesystemResources::default(),
     };
-    let result = support::filesystem::with_objects(&mut store, |objects| {
-        build_filesystem(objects, &input, None)
+    let result = support::filesystem::with_objects(&mut store, |objects| match route {
+        StateRoute::Compatibility => build_filesystem(objects, &input, None),
+        StateRoute::Supplied => {
+            let (mut state, scope) = state_for_rows(updates.len());
+            build_filesystem_with_state(objects, &input, None, &mut state, &scope)
+        }
     })
     .unwrap_or_else(|error| panic!("case {}: {error}", case.name));
     let expected = ObjectId::from_str_checked(case.root);
@@ -272,8 +296,8 @@ impl FromStrChecked for ObjectId {
     }
 }
 
-fn check_case(case: &manifest::FixtureCase, base_store: Option<&TreeStore>) {
-    let built = build_case(case);
+fn check_case(case: &manifest::FixtureCase, route: StateRoute) {
+    let built = build_case_with_route(case, route);
     let expected = ObjectId::from_str_checked(case.root);
     let sealed = case
         .objects
@@ -294,25 +318,32 @@ fn check_case(case: &manifest::FixtureCase, base_store: Option<&TreeStore>) {
         "case {}: reachable object set or page shapes differ",
         case.name
     );
-    let _ = base_store;
     let _ = resources();
 }
 
 #[test]
 fn construction_matches_the_sealed_reference_roots_and_pages() {
-    for case in manifest::CASES.iter().filter(|case| case.base.is_empty()) {
-        check_case(case, None);
+    for route in [StateRoute::Compatibility, StateRoute::Supplied] {
+        for case in manifest::CASES.iter().filter(|case| case.base.is_empty()) {
+            check_case(case, route);
+        }
     }
 }
 
 #[test]
 fn updates_match_the_sealed_reference_operation() {
+    for route in [StateRoute::Compatibility, StateRoute::Supplied] {
+        check_updates(route);
+    }
+}
+
+fn check_updates(route: StateRoute) {
     for case in manifest::CASES.iter().filter(|case| !case.base.is_empty()) {
         let base = manifest::CASES
             .iter()
             .find(|candidate| candidate.name == case.base)
             .expect("base case");
-        let base_store = build_case(base);
+        let base_store = build_case_with_route(base, route);
         let case_view = Case { manifest: case };
         let updates = case_view.updates();
         let inodes = case_view.inodes();
@@ -328,8 +359,12 @@ fn updates_match_the_sealed_reference_operation() {
             new_inodes: &new_inodes,
             resources: FilesystemResources::default(),
         };
-        let result = support::filesystem::with_objects(&mut store, |objects| {
-            update_filesystem(objects, &input, None)
+        let result = support::filesystem::with_objects(&mut store, |objects| match route {
+            StateRoute::Compatibility => update_filesystem(objects, &input, None),
+            StateRoute::Supplied => {
+                let (mut state, scope) = state_for_rows(updates.len());
+                update_filesystem_with_state(objects, &input, None, &mut state, &scope)
+            }
         })
         .unwrap_or_else(|error| panic!("case {}: {error}", case.name));
         let expected = ObjectId::from_str_checked(case.root);

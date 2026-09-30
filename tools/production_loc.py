@@ -233,6 +233,7 @@ def test_only_files(files: list) -> set:
     module that happens to live under `src/`; counting it as product code inflates
     the reference subtotal by thousands of lines.
     """
+    files = [path for path in files if path.suffix == ".rs"]
     known = {path.resolve() for path in files}
     excluded = set()
     changed = True
@@ -282,12 +283,44 @@ def item_end(code: str, start: int) -> int:
 
 
 def blank_sql(source: str) -> str:
-    """Blank -- line comments and block comments, keeping line numbering."""
-    lines = []
-    for line in source.splitlines():
-        stripped = line.lstrip()
-        lines.append("" if stripped.startswith("--") else line)
-    return "\n".join(lines)
+    """Blank SQLite comments, preserving quoted text and every newline.
+
+    SQLite accepts single-quoted values and double/backtick/bracket identifiers.
+    Quote doubling keeps a delimiter inside quoted text. Block comments end at
+    their first closing marker, as SQLite's non-nesting grammar requires.
+    """
+    out = list(source)
+    index = 0
+    quote = None
+    while index < len(source):
+        char = source[index]
+        if quote is not None:
+            if char == quote:
+                if quote != "]" and index + 1 < len(source) and source[index + 1] == quote:
+                    index += 2
+                    continue
+                quote = None
+            index += 1
+            continue
+        if char in "'\"`[":
+            quote = "]" if char == "[" else char
+            index += 1
+            continue
+        if source.startswith("--", index):
+            while index < len(source) and source[index] != "\n":
+                out[index] = " "
+                index += 1
+            continue
+        if source.startswith("/*", index):
+            end = source.find("*/", index + 2)
+            stop = len(source) if end < 0 else end + 2
+            while index < stop:
+                if source[index] != "\n":
+                    out[index] = " "
+                index += 1
+            continue
+        index += 1
+    return "".join(out)
 
 
 def counted_lines(path: Path) -> int:
@@ -324,7 +357,7 @@ def scope_files(root: Path, scope: str) -> list:
             len(parts) > 3 and parts[0] == "layerfs-api"
             and parts[1] in ("core", "sdk") and parts[2] == "sql"
         )
-        if source and path.suffix in CODE_SUFFIXES:
+        if source and (path.suffix in CODE_SUFFIXES or path.suffix == ".sql"):
             files.append(path)
         elif sql and path.suffix == ".sql":
             # Runtime SQL is shipped implementation for either product scope.

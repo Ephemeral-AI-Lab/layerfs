@@ -161,6 +161,60 @@ class CounterTests(unittest.TestCase):
         self.assertIn(sql, files)
         self.assertEqual(production_loc.counted_lines(sql), 1)
 
+    def test_sql_block_comments_preserve_line_numbers_and_do_not_count(self):
+        body = "/* contract\n * closed metadata\n */\nCREATE TABLE t (\n id INTEGER /* key */\n); -- trailing\n"
+        path = write(self.root, "core/crates/example/sql/state.sql", body)
+        self.assertEqual(production_loc.counted_lines(path), 3)
+        blanked = production_loc.blank_sql(body)
+        self.assertEqual(blanked.count("\n"), body.count("\n"))
+        self.assertIn("CREATE TABLE", blanked)
+        self.assertNotIn("closed metadata", blanked)
+
+    def test_sql_quoted_comment_markers_and_escaped_quotes_remain_code(self):
+        body = (
+            "SELECT '--literal', '/*literal*/', 'it''s -- literal';\n"
+            'SELECT "--identifier", "a""/*identifier", `--name`, [/*name*/];\n'
+            "SELECT 'multiline\n--still quoted\n/*still quoted*/';\n"
+            "-- removed\n/* removed\n removed */\n"
+        )
+        path = write(self.root, "core/crates/example/sql/queries.sql", body)
+        self.assertEqual(production_loc.counted_lines(path), 5)
+        blanked = production_loc.blank_sql(body)
+        self.assertIn("it''s -- literal", blanked)
+        self.assertIn("--still quoted", blanked)
+        self.assertNotIn("removed", blanked)
+
+    def test_sql_comments_between_code_and_unterminated_final_comment(self):
+        body = "SELECT /* explanation */ 1;\n/* comment */ SELECT 2; -- reason\n/* final\n comment"
+        path = write(self.root, "crates/example/sql/query.sql", body)
+        self.assertEqual(production_loc.counted_lines(path), 2)
+        self.assertEqual(production_loc.blank_sql(body).count("\n"), body.count("\n"))
+
+    def test_runtime_sql_under_src_is_counted_in_both_scopes(self):
+        for scope, prefix in [("core", "core/crates"), ("reference", "crates")]:
+            path = write(self.root, f"{prefix}/example/src/schema.sql", "/* doc */\nSELECT 1;\n")
+            self.assertIn(path, production_loc.scope_files(self.root, scope))
+            self.assertEqual(production_loc.counted_lines(path), 1)
+
+    def test_nested_api_runtime_src_sql_is_counted(self):
+        for member in ("core", "sdk"):
+            path = write(self.root, f"core/crates/layerfs-api/{member}/src/query.sql", "SELECT 1;\n")
+            self.assertIn(path, production_loc.scope_files(self.root, "core"))
+        excluded = write(self.root, "core/crates/layerfs-api/cli/src/query.sql", "SELECT 2;\n")
+        self.assertNotIn(excluded, production_loc.scope_files(self.root, "core"))
+
+    def test_sql_text_cannot_declare_a_rust_test_module(self):
+        sql = write(
+            self.root,
+            "crates/example/src/lib.sql",
+            "SELECT '#[cfg(test)] mod product;';\n",
+        )
+        rust = write(self.root, "crates/example/src/product.rs", "pub const N: u8 = 1;\n")
+        files = production_loc.scope_files(self.root, "reference")
+        self.assertIn(sql, files)
+        self.assertIn(rust, files)
+        self.assertEqual(production_loc.scan(self.root)["scopes"]["reference"]["lines"], 2)
+
     def test_reference_runtime_sql_is_still_counted(self):
         sql = write(self.root, "crates/example/sql/schema.sql", "SELECT 1;\n")
         self.assertIn(sql, production_loc.scope_files(self.root, "reference"))

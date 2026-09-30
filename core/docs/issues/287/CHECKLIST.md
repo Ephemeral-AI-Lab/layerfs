@@ -1,14 +1,15 @@
 # Issue287 current implementation checklist
 
 > **Status: Current planning checklist; no release candidate exists.**
-> Current published checkpoint: `765202c45e11b3c96b2b16c40b35e810a7270d34`
-> (R1a PARTIAL; R1 remains open).
+> Current published checkpoint: `06fe8363d5c317c49876d5189d374c1a34cc6010`
+> (R1b-cache PARTIAL; R1 remains open).
 
 Assignment: #287 implementation only. Benchmark qualification is delegated/unrun
 under #288. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
 packet; [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) is append-only.
 
-Current milestone: **R1b-cache current navigation ownership and bounded retention**.
+Current milestone: **R1c checkpoint publication**; next is
+**R1d-run-seek exact point/high-water lookup** ([freeze](R1D-RUN-SEEK-FREEZE.md)).
 R0 is published and linked in #287 comment5911332695. Native/engine/physical
 protection and concurrent enablement remain gated on their owning proofs.
 
@@ -41,7 +42,19 @@ R1b-cache current gates:
 - [x] Local edit route uses the same checked retention; independent wide old/new bytes and separate sealed v1 roots/partitions pass.
 - [x] Real StoreProvider and requested-allocation/table/release evidence; global/native admission gaps explicit.
 - [x] Freeze/review and run scoped owning locked tests/examples/fmt/Clippy/boundary (exact failure/correction/reuse retained).
-- [ ] Exact LOC comparison, committed recount, push/confirmation and #287 checkpoint.
+- [x] Exact LOC comparison, committed recount, push/confirmation and #287 checkpoint (comment5913195371).
+
+R1c current gates ([concrete freeze](R1C-FROZEN-STATE.md)):
+
+- [x] Issued compact selection/full owner association; actual typed63-byte records (C1 exits pass).
+- [x] Genuine common C1 DirectoryRoots indexed integration; independent v1 roots unchanged (Server composition check pending).
+- [x] C2 metadata-only indexed scratch, dual128/64KiB bounds/seals/EOF/refusal.
+- [x] Actual native allocation/identity, single cleanup and bounded retained failures/Unknown (Darwin scope; stronger/global gaps explicit).
+- [x] Server pre-Save admission, exact typed failure and cleanup-before-publication composition (actual successful/failed known-Save cleanup under scratch Unknown).
+- [x] SQL LOC classification repair/tests and unchanged parent classification.
+- [x] Same revised counter on exact first-parent/final staged snapshots; committed recount follows publication work.
+- [x] Independent roots/bytes/provider/resource checks and scoped owning locked checks; platform/global gaps recorded.
+- [ ] Checkpoint exact LOC, commit/recount/push/publication and #287 update.
 
 Named submilestones and dependencies:
 

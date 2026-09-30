@@ -1,0 +1,104 @@
+{
+  "kind": "bounded cause diagnostic; no speed/resource/Unknown admission",
+  "library": "/usr/lib/libsqlite3.dylib",
+  "version": "3.51.0",
+  "source_id": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl",
+  "cases": [
+    {
+      "topology": "same_process_readonly",
+      "native_fd_held_during_sql": true,
+      "writer_phases": [
+        {
+          "statement": "SELECT header FROM session_owner WHERE id=1",
+          "result": 0,
+          "system_errno": 0,
+          "message": "not an error"
+        },
+        {
+          "statement": "BEGIN IMMEDIATE",
+          "result": 3850,
+          "system_errno": 9,
+          "message": "disk I/O error"
+        }
+      ],
+      "fixture_rollback": {
+        "statement": "ROLLBACK",
+        "result": 1,
+        "system_errno": 9,
+        "message": "cannot rollback - no transaction is active"
+      }
+    },
+    {
+      "topology": "same_process_readwrite",
+      "native_fd_held_during_sql": true,
+      "writer_phases": [
+        {
+          "statement": "SELECT header FROM session_owner WHERE id=1",
+          "result": 0,
+          "system_errno": 0,
+          "message": "not an error"
+        },
+        {
+          "statement": "BEGIN IMMEDIATE",
+          "result": 0,
+          "system_errno": 0,
+          "message": "not an error"
+        },
+        {
+          "statement": "INSERT INTO directory_roots VALUES(zeroblob(25),1,zeroblob(32))",
+          "result": 0,
+          "system_errno": 0,
+          "message": "not an error"
+        },
+        {
+          "statement": "COMMIT",
+          "result": 5,
+          "system_errno": 0,
+          "message": "database is locked"
+        }
+      ],
+      "fixture_rollback": {
+        "statement": "ROLLBACK",
+        "result": 0,
+        "system_errno": 0,
+        "message": "not an error"
+      }
+    },
+    {
+      "topology": "separate_process_readonly",
+      "native_fd_held_during_sql": true,
+      "writer_phases": [
+        {
+          "statement": "SELECT header FROM session_owner WHERE id=1",
+          "result": 0,
+          "system_errno": 0,
+          "message": "not an error"
+        },
+        {
+          "statement": "BEGIN IMMEDIATE",
+          "result": 0,
+          "system_errno": 0,
+          "message": "not an error"
+        },
+        {
+          "statement": "INSERT INTO directory_roots VALUES(zeroblob(25),1,zeroblob(32))",
+          "result": 0,
+          "system_errno": 0,
+          "message": "not an error"
+        },
+        {
+          "statement": "COMMIT",
+          "result": 5,
+          "system_errno": 0,
+          "message": "database is locked"
+        }
+      ],
+      "fixture_rollback": {
+        "statement": "ROLLBACK",
+        "result": 0,
+        "system_errno": 0,
+        "message": "not an error"
+      }
+    }
+  ]
+}

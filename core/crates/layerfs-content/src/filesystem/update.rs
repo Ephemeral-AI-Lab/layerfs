@@ -25,9 +25,13 @@ use crate::filesystem::root::{profile_id, FilesystemRoot, FilesystemRootId};
 use crate::filesystem::rows::PreparedRows;
 use crate::filesystem::sorted::finish::DirectoryRoot;
 use crate::filesystem::sorted::SortedWork;
+use crate::filesystem::state::{
+    DirectoryRoots, IndexedState, PageLimit, ResidentState, StateScope, StateSelection, StateTable,
+    STATE_MAX_PAGE_BYTES, STATE_MAX_PAGE_RECORDS,
+};
 use crate::filesystem::validate::{self, ValidationWork};
 use crate::object::inode_leaf::{InodeKind, InodeValue};
-use crate::object::{AuthenticatedObjects, FinalizedObject, ObjectId, ObjectRole};
+use crate::object::{AuthenticatedObjects, FinalizedObject, ObjectRole};
 
 /// Work one complete filesystem operation performed.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -115,12 +119,133 @@ pub fn update_filesystem_timed(
     run(objects, input, backing, phases)
 }
 
-fn run<'b>(
+/// Builds with the caller's admitted exact DirectoryRoots authority.
+pub fn build_filesystem_with_state(
+    objects: &mut FilesystemObjects<'_>,
+    input: &impl PreparedRows,
+    backing: Option<&mut dyn OrderingBacking>,
+    state: &mut dyn IndexedState,
+    scope: &StateScope,
+) -> ContentResult<FilesystemResult> {
+    build_filesystem_with_state_timed(
+        objects,
+        input,
+        backing,
+        state,
+        scope,
+        &FilesystemPhases::disabled(),
+    )
+}
+
+/// Builds with supplied exact state while recording the caller's coarse phases.
+pub fn build_filesystem_with_state_timed(
+    objects: &mut FilesystemObjects<'_>,
+    input: &impl PreparedRows,
+    backing: Option<&mut dyn OrderingBacking>,
+    state: &mut dyn IndexedState,
+    scope: &StateScope,
+    phases: &FilesystemPhases<'_>,
+) -> ContentResult<FilesystemResult> {
+    if input.base().is_some() {
+        return Err(ContentError::InvalidRecord("initial build base"));
+    }
+    run_with_state(objects, input, backing, state, scope, phases)
+}
+
+/// Updates through the same canonical algorithm with supplied exact metadata state.
+pub fn update_filesystem_with_state(
+    objects: &mut FilesystemObjects<'_>,
+    input: &impl PreparedRows,
+    backing: Option<&mut dyn OrderingBacking>,
+    state: &mut dyn IndexedState,
+    scope: &StateScope,
+) -> ContentResult<FilesystemResult> {
+    update_filesystem_with_state_timed(
+        objects,
+        input,
+        backing,
+        state,
+        scope,
+        &FilesystemPhases::disabled(),
+    )
+}
+
+/// Updates with supplied exact state while recording the caller's coarse phases.
+pub fn update_filesystem_with_state_timed(
+    objects: &mut FilesystemObjects<'_>,
+    input: &impl PreparedRows,
+    backing: Option<&mut dyn OrderingBacking>,
+    state: &mut dyn IndexedState,
+    scope: &StateScope,
+    phases: &FilesystemPhases<'_>,
+) -> ContentResult<FilesystemResult> {
+    if input.base().is_none() {
+        return Err(ContentError::InvalidRecord("update base root"));
+    }
+    run_with_state(objects, input, backing, state, scope, phases)
+}
+
+fn run(
+    objects: &mut FilesystemObjects<'_>,
+    input: &impl PreparedRows,
+    backing: Option<&mut dyn OrderingBacking>,
+    phases: &FilesystemPhases<'_>,
+) -> ContentResult<FilesystemResult> {
+    let resources = input.resources();
+    resources.check()?;
+    let declared = input
+        .directory_rows()
+        .max(input.inode_rows())
+        .max(input.new_rows());
+    let limit = resources.maximum_touched_serials();
+    if declared > limit {
+        return Err(ContentError::ObjectLimitExceeded {
+            limit,
+            actual: declared,
+        });
+    }
+    // This independently admitted compatibility owner uses the caller's exact
+    // known shape. It introduces no 64 KiB clamp or allocation-error spill path.
+    let mut selector = blake3::Hasher::new();
+    selector.update(b"layerfs/indexed-state/filesystem-operation/v1\0");
+    selector.update(input.scope().object().as_bytes());
+    match input.base() {
+        Some(base) => {
+            selector.update(&[1]);
+            selector.update(base.0.as_bytes());
+        }
+        None => {
+            selector.update(&[0]);
+            selector.update(&[0; 32]);
+        }
+    }
+    selector.update(&input.root_serial().to_be_bytes());
+    selector.update(
+        &u64::try_from(input.directory_rows())
+            .map_err(|_| ContentError::LengthOverflow)?
+            .to_be_bytes(),
+    );
+    let mut selection = StateSelection::issue(*selector.finalize().as_bytes())?;
+    let mut binding = blake3::Hasher::new();
+    binding.update(b"layerfs/indexed-state/resident/v1\0");
+    binding.update(selection.selector());
+    binding.update(&selection.token().to_be_bytes());
+    selection.bind_owner(*binding.finalize().as_bytes())?;
+    let scope = StateScope::new(selection, 1, StateTable::DirectoryRoots)?;
+    let mut state = ResidentState::new(scope.clone(), input.directory_rows())?;
+    run_with_state(objects, input, backing, &mut state, &scope, phases)
+}
+
+fn run_with_state<'b>(
     objects: &mut FilesystemObjects<'_>,
     input: &impl PreparedRows,
     backing: Option<&'b mut dyn OrderingBacking>,
+    state: &mut dyn IndexedState,
+    scope: &StateScope,
     phases: &FilesystemPhases<'_>,
 ) -> ContentResult<FilesystemResult> {
+    input.resources().check()?;
+    let mut contents = DirectoryRoots::new(state, scope.clone(), input.directory_rows())?;
     let input: &dyn PreparedRows = input;
     let mut backing = backing;
     // The flag is set by the body the moment the checked completion runs, so the
@@ -129,7 +254,14 @@ fn run<'b>(
     let mut cleanup_attempted = false;
     let outcome = {
         let borrowed: Option<&mut (dyn OrderingBacking + 'b)> = backing.as_deref_mut();
-        run_body(objects, input, borrowed, phases, &mut cleanup_attempted)
+        run_body(
+            objects,
+            input,
+            borrowed,
+            phases,
+            &mut cleanup_attempted,
+            &mut contents,
+        )
     };
     match outcome {
         Ok(result) => Ok(result),
@@ -143,6 +275,7 @@ fn run<'b>(
                     let _ = backing.release();
                 }
             }
+            let _ = contents.release();
             Err(error)
         }
     }
@@ -154,6 +287,7 @@ fn run_body<'b>(
     backing: Option<&mut (dyn OrderingBacking + 'b)>,
     phases: &FilesystemPhases<'_>,
     cleanup_attempted: &mut bool,
+    contents: &mut DirectoryRoots<'_>,
 ) -> ContentResult<FilesystemResult> {
     // A directory this batch leaves with no binding is dead on arrival: its
     // parent already accounted the binding it lost, so there is no final count to
@@ -195,7 +329,6 @@ fn run_body<'b>(
         register_values(&mut reducer, input, &unreachable)?;
     }
     let batch = resources.base_read_batch.min(MAXIMUM_READ_DEMANDS);
-    let mut contents: BTreeMap<u64, ObjectId> = BTreeMap::new();
     let mut retained_parents = Vec::new();
     let mut retained_bases = Vec::new();
     phases.phase("directories", || -> ContentResult<()> {
@@ -332,7 +465,7 @@ fn run_body<'b>(
                     counters.directory_updates = counters.directory_updates.saturating_add(1);
                     root.0
                 };
-                contents.insert(update.parent, content_root);
+                contents.append(update.parent, content_root)?;
             }
             if !parents.is_empty() {
                 retained_parents = parents;
@@ -341,45 +474,59 @@ fn run_body<'b>(
         }
         Ok(())
     })?;
+    contents.seal()?;
+    if initial_counts.is_some() {
+        // Fresh construction consumes roots by exact serial. First establish the
+        // complete selected page/EOF transcript without retaining its population.
+        phases.phase("state.verify", || {
+            let mut cursor = contents.cursor()?;
+            let limit = PageLimit::new(batch.min(STATE_MAX_PAGE_RECORDS), STATE_MAX_PAGE_BYTES)?;
+            while cursor.next_page(limit)?.is_some() {}
+            Ok(())
+        })?;
+    }
     // Keep the reducer's original all-effects-before-values insertion order:
     // interleaving values with later effects can increase spill quota demands.
     // Reuse the final parent batch; earlier omitted values are read in bounded
     // groups rather than retaining a record for every directory in the input.
     if initial_counts.is_none() {
-        let mut contents_iter = contents.iter();
-        loop {
-            let wave = contents_iter.by_ref().take(batch).collect::<Vec<_>>();
+        let mut cursor = contents.cursor()?;
+        let limit = PageLimit::new(batch.min(STATE_MAX_PAGE_RECORDS), STATE_MAX_PAGE_BYTES)?;
+        while let Some(page) = cursor.next_page(limit)? {
+            let wave = page.into_records();
             if wave.is_empty() {
                 break;
             }
             let mut missing = Vec::with_capacity(wave.len());
-            for (serial, _) in &wave {
-                if input.value_for(**serial)?.is_none()
-                    && retained_parents.binary_search(serial).is_err()
+            for record in &wave {
+                let serial = record.key().serial();
+                if input.value_for(serial)?.is_none()
+                    && retained_parents.binary_search(&serial).is_err()
                 {
-                    missing.push(**serial);
+                    missing.push(serial);
                 }
             }
             let bases = lookup_many(reader, table, &missing, &mut InodeReadWork::default())?;
-            for (serial, content_root) in wave {
-                let value = match input.value_for(*serial)? {
+            for record in wave {
+                let serial = record.key().serial();
+                let value = match input.value_for(serial)? {
                     Some(value) => Some(value),
                     None => retained_parents
-                        .binary_search(serial)
+                        .binary_search(&serial)
                         .ok()
                         .and_then(|index| retained_bases[index])
                         .or_else(|| {
                             missing
-                                .binary_search(serial)
+                                .binary_search(&serial)
                                 .ok()
                                 .and_then(|index| bases[index])
                         }),
                 };
                 let value = value.ok_or(ContentError::InvalidRecord("directory value missing"))?;
                 reducer.note_value(
-                    *serial,
+                    serial,
                     InodeValue {
-                        content_root: *content_root,
+                        content_root: record.root(),
                         ..value
                     },
                 )?;
@@ -391,7 +538,7 @@ fn run_body<'b>(
     if initial_counts.is_none() {
         let mut values = input.inodes()?;
         while let Some(update) = values.next_row()? {
-            if contents.contains_key(&update.serial) || unreachable.contains_key(&update.serial) {
+            if contents.get(update.serial)?.is_some() || unreachable.contains_key(&update.serial) {
                 // A directory this batch drops is not part of the result at all: its
                 // value is never a final row, so it must not enter the reduction.
                 continue;
@@ -455,7 +602,7 @@ fn run_body<'b>(
                 serial,
                 Some(InodeValue {
                     namespace_ref_count: count,
-                    content_root: contents.get(&serial).copied().unwrap_or(value.content_root),
+                    content_root: contents.get(serial)?.unwrap_or(value.content_root),
                     ..value
                 }),
             ));
@@ -503,6 +650,7 @@ fn run_body<'b>(
     // successful result always means the ordering resources were released.
     *cleanup_attempted = true;
     phases.phase("cleanup", || reducer.release())?;
+    phases.phase("state.complete", || contents.release())?;
     let root = match checked.topology.base {
         Some(root) => root.with_inode_table(inode_table),
         None => FilesystemRoot::new(

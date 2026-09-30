@@ -14,6 +14,7 @@ use super::prepared::{check_subjects, receive, Received};
 use crate::service::{error::content, read::content::id};
 use layerfs_bridge::contract::*;
 use layerfs_content::filesystem::rows::PreparedUpdate as StreamedUpdate;
+use layerfs_content::filesystem::state::{IndexedState, StateScope};
 use layerfs_content::filesystem::{root::FilesystemRootId, FilesystemRead, InodeScope};
 use layerfs_content::{
     AuthenticatedObjects, FilesystemObjects, FilesystemResources, FinalizedConsumer,
@@ -40,6 +41,8 @@ pub(crate) fn update(
     provider: &dyn AuthenticatedObjects,
     update: &mut PreparedUpdate<'_>,
     consumer: &mut dyn FinalizedConsumer,
+    state: &mut dyn IndexedState,
+    state_scope: &StateScope,
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<(Root, u64), Failure> {
@@ -80,10 +83,12 @@ pub(crate) fn update(
         resources,
         rows: &rows,
     };
-    let result = layerfs_content::filesystem::update::update_filesystem_timed(
+    let result = layerfs_content::filesystem::update::update_filesystem_with_state_timed(
         &mut objects,
         &input,
         None,
+        state,
+        state_scope,
         &layerfs_content::filesystem::FilesystemPhases::new(scope),
     );
     let cleaned = rows.cleanup();

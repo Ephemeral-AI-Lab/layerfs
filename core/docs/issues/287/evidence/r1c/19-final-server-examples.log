@@ -1,0 +1,6 @@
+COMMAND: cargo +1.85.1 build --manifest-path core/Cargo.toml --locked -p layerfs-server --examples
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-server)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.70s
+
+EXIT: 0

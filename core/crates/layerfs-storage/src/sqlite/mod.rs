@@ -5,6 +5,7 @@
 pub mod cleanup;
 pub mod connection;
 pub mod lookup;
+pub(crate) mod native_reservation;
 pub mod ownership;
 pub mod pool;
 mod reservation;

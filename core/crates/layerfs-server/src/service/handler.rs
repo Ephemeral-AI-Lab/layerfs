@@ -4,7 +4,7 @@
 //! metadata mutations use the exact catalog authority's separate allowance.
 //! Legacy composite operations retain their existing whole-request content
 //! owner until a versioned result owner can represent every completed Save.
-use crate::service::{admission::Admission, read, save};
+use crate::service::{admission::Admission, construction::Construction, read, save};
 use layerfs_bridge::contract::*;
 use layerfs_history::HistoryCatalog;
 use layerfs_storage::Store;
@@ -37,6 +37,7 @@ pub struct Service {
     stores: Vec<StoreAccess>,
     import_root: Option<PathBuf>,
     admission: Admission,
+    construction: Vec<Construction>,
     recorder: OperationRecorder,
 }
 impl Service {
@@ -56,10 +57,16 @@ impl Service {
             }
         }
         let admission = Admission::new(&stores)?;
+        let construction = stores
+            .iter()
+            .enumerate()
+            .map(|(index, store)| Construction::new(&store.store, admission.content_limit(index)))
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             stores,
             import_root: None,
             admission,
+            construction,
             recorder,
         })
     }
@@ -161,7 +168,11 @@ impl Service {
             let _permit = self.admission.enter(index, &r.operation)?;
             dispatch(
                 &store.store,
-                (store.history.as_deref(), import_root),
+                (
+                    store.history.as_deref(),
+                    import_root,
+                    &self.construction[index],
+                ),
                 r,
                 input,
                 output,
@@ -174,14 +185,14 @@ impl Service {
 
 pub(crate) fn dispatch(
     store: &Store,
-    history: (Option<&dyn HistoryCatalog>, Option<&Path>),
+    history: (Option<&dyn HistoryCatalog>, Option<&Path>, &Construction),
     r: &Request,
     input: &mut dyn Read,
     output: &mut dyn Write,
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
-    let (catalog, import_root) = history;
+    let (catalog, import_root, construction) = history;
     match &r.operation {
         Operation::WorkspaceStatus { .. }
         | Operation::WorkspaceUnmount { .. }
@@ -215,7 +226,7 @@ pub(crate) fn dispatch(
             save::catalog::command(
                 catalog.ok_or(Code::Unsupported)?,
                 store,
-                import_root,
+                (import_root, construction),
                 command,
                 save::catalog::Streams { input, output },
                 deadline,

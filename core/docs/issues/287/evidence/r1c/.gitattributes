@@ -1,0 +1,3 @@
+# Immutable command output and remote capture retain their original bytes.
+*.log -whitespace
+14-issue287-before.json -whitespace

@@ -28,6 +28,7 @@
 #![deny(unsafe_code)]
 
 pub mod cas;
+pub mod construction_state;
 pub mod encoding;
 pub mod error;
 pub mod pack;

@@ -1,5 +1,16 @@
 # Service, bridge, daemon and hosted telemetry
 
+> **#287 R1c prepared namespace composition:** The source in this commit, against
+> parent `06fe8363d5c317c49876d5189d374c1a34cc6010`, admits native DirectoryRoots
+> scratch after captured catalog/head/base/scope validation and before Save/body
+> effects. Actual C1 construction uses that selected owner, preserves typed C2
+> failures, and checks its one native cleanup before known Save finish/catalog
+> stage publication. Pure catalog/read calls leave the lazy owner unopened.
+> [R1c construction state](proposal/bounded-workspace-implementation-20260930/R1C-INDEXED-CONSTRUCTION.md)
+> describes the owned-parent profile and retained failures. Legacy v1 composite
+> result custody and whole-request C2 allowance are preserved; protected native
+> control, global engine memory and concurrent Workspace enablement remain open.
+
 > **#286 Commit progress (source in this commit, after `ab3212381`):**
 > Workspace Commit control accepts authenticated ResultData `[0]` progress,
 > matching the existing Exec/Init progress encoding with zero logical result

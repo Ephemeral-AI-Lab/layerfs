@@ -12,7 +12,7 @@ use std::sync::{
 /// One Store's persisted writer setting and process-local live request count.
 struct SaveBudget {
     live: AtomicUsize,
-    limit: usize,
+    limit: u8,
 }
 
 /// One continuing catalog handle's live metadata mutation count.
@@ -71,7 +71,7 @@ impl Admission {
         for (index, access) in stores.iter().enumerate() {
             saves.push(SaveBudget {
                 live: AtomicUsize::new(0),
-                limit: usize::from(access.store.max_concurrent_writes().map_err(storage)?),
+                limit: access.store.max_concurrent_writes().map_err(storage)?,
             });
             let budget = access.history.as_ref().map(|catalog| {
                 // StoreAccess aliases of the same live trait object share one
@@ -97,6 +97,11 @@ impl Admission {
         })
     }
 
+    /// The same assembly-time persisted class configures dependent scratch.
+    pub(crate) fn content_limit(&self, index: usize) -> u8 {
+        self.saves[index].limit
+    }
+
     /// Refuses before body consumption or dependent effects, without waiting.
     pub(crate) fn enter(
         &self,
@@ -107,7 +112,7 @@ impl Admission {
             let budget = &self.saves[index];
             Ok(OperationPermit::Content {
                 _permit: C2SavePermit {
-                    _permit: admit(&budget.live, budget.limit)?,
+                    _permit: admit(&budget.live, usize::from(budget.limit))?,
                 },
             })
         } else if operation.metadata_mutation() {

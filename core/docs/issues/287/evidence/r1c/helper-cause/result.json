@@ -1,0 +1,35 @@
+{
+  "kind": "LABELLED bounded helper cause diagnostic; no product/performance admission",
+  "helper": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-server/tests/support/scratch_reader.py",
+  "helper_sha256": "4fbce427100da8d29f4c2e255a05b31b88997a62960d965dc1326b82ebd7d047",
+  "library": "/usr/lib/libsqlite3.dylib",
+  "stages": [
+    {
+      "stage": "independent minimal LFCS expected records0/sealed0",
+      "result": 0,
+      "errno": 0,
+      "message": "not an error"
+    },
+    {
+      "stage": "helper control connected"
+    },
+    {
+      "stage": "helper first acknowledgement",
+      "bytes_hex": "01"
+    },
+    {
+      "stage": "helper provider frame",
+      "data": "{\"access\": \"READ_ONLY|NOFOLLOW\", \"barrier\": \"BEGIN+SELECT records=0/sealed=0, SHARED held\", \"busy_ms\": 0, \"library\": \"/usr/lib/libsqlite3.dylib\", \"mode\": \"read\", \"source\": \"2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl\", \"version\": \"3.51.0\"}"
+    },
+    {
+      "stage": "helper released",
+      "bytes_hex": "03"
+    }
+  ],
+  "version": "3.51.0",
+  "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl",
+  "exit": 0,
+  "stdout": "{\"access\": \"READ_ONLY|NOFOLLOW\", \"barrier\": \"BEGIN+SELECT records=0/sealed=0, SHARED held\", \"busy_ms\": 0, \"completion\": \"ROLLBACK acknowledged, exact selected connection closed\", \"library\": \"/usr/lib/libsqlite3.dylib\", \"mode\": \"read\", \"source\": \"2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl\", \"version\": \"3.51.0\"}\n",
+  "stderr": "",
+  "helper_errno": "unavailable unless exception supplies it"
+}

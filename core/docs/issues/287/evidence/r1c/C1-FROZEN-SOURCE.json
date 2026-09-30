@@ -1,0 +1,21 @@
+{
+  "parent": "06fe8363d5c317c49876d5189d374c1a34cc6010",
+  "files": [
+    "core/crates/layerfs-content/src/filesystem/mod.rs",
+    "core/crates/layerfs-content/src/filesystem/state/cursor.rs",
+    "core/crates/layerfs-content/src/filesystem/state/directory_roots.rs",
+    "core/crates/layerfs-content/src/filesystem/state/mod.rs",
+    "core/crates/layerfs-content/src/filesystem/state/page.rs",
+    "core/crates/layerfs-content/src/filesystem/state/port.rs",
+    "core/crates/layerfs-content/src/filesystem/state/records.rs",
+    "core/crates/layerfs-content/src/filesystem/state/resident.rs",
+    "core/crates/layerfs-content/src/filesystem/state/seal.rs",
+    "core/crates/layerfs-content/src/filesystem/state/selection.rs",
+    "core/crates/layerfs-content/src/filesystem/update.rs",
+    "core/crates/layerfs-content/tests/filesystem_reference.rs",
+    "core/crates/layerfs-content/tests/indexed_state.rs"
+  ],
+  "sha256": "1112fe1fba78db8bbcb35c02ff1fb2c27cdccd55bc3c67e5cb780f3120d7b8db",
+  "method": "SHA256 sorted UTF8 path +NUL+frozen bytes+NUL",
+  "scope": "C1 coherent DirectoryRoots state caller/compatibility; C2/Server owning gate pending"
+}

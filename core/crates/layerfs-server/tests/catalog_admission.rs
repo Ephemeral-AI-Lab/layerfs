@@ -3,6 +3,8 @@
 //! Every requested operation enters the public authorized handler with real
 //! Store/catalog providers. Held prepared sources plus persisted active-slot
 //! rows establish overlap; a SaveFile spooling barrier would not establish it.
+//! R1c additionally observes two admitted native scratch owners before their
+//! first body reads, and checked removal before known stage responses.
 use layerfs_bridge::{adapters::native::connection::VerifiedPeer, contract::*};
 use layerfs_history::{sqlite, HistoryCatalog, HistoryCatalogConfig};
 use layerfs_server::{Grant, Service, StoreAccess};
@@ -205,6 +207,58 @@ fn highwater(path: &Path, scope: Root) -> u64 {
     )
 }
 
+/// Observe genuine scratch owners through native metadata and independent SQL.
+/// The observer runs only while prepared-body gates keep both producers idle.
+fn scratch_files(parent: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(parent).unwrap() {
+        let entry = entry.unwrap();
+        if !entry.file_name().to_string_lossy().starts_with(".lfcs-") {
+            continue;
+        }
+        let metadata = std::fs::symlink_metadata(entry.path()).unwrap();
+        assert!(metadata.is_dir());
+        assert!(!metadata.file_type().is_symlink());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            assert_eq!(metadata.mode() & 0o777, 0o700);
+            assert_eq!(metadata.uid(), std::fs::metadata(parent).unwrap().uid());
+        }
+        for file in std::fs::read_dir(entry.path()).unwrap() {
+            let path = file.unwrap().path();
+            assert_eq!(path.extension().unwrap(), "sqlite");
+            let metadata = std::fs::symlink_metadata(&path).unwrap();
+            assert!(metadata.is_file());
+            assert!(!metadata.file_type().is_symlink());
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::MetadataExt;
+                assert_eq!(metadata.mode() & 0o777, 0o600);
+                assert_eq!(metadata.uid(), std::fs::metadata(parent).unwrap().uid());
+                assert_eq!(metadata.nlink(), 1);
+                assert_eq!(metadata.blocks() * 512, 16 * 1024 * 1024);
+            }
+            assert_eq!(
+                sql_number(&path, "PRAGMA application_id", None),
+                0x4c46_4353
+            );
+            assert_eq!(sql_number(&path, "PRAGMA user_version", None), 1);
+            assert_eq!(
+                sql_number(&path, "SELECT length(header) FROM session_owner", None),
+                192
+            );
+            assert_eq!(
+                sql_number(&path, "SELECT count(*) FROM directory_roots", None),
+                0
+            );
+            files.push(path);
+        }
+    }
+    files.sort();
+    files
+}
+
 struct Fixture {
     temp: Temp,
     service: Arc<Service>,
@@ -218,6 +272,10 @@ struct Fixture {
 }
 
 fn fixture(name: &str) -> Fixture {
+    fixture_at(directory(name))
+}
+
+fn fixture_at(temp: Temp) -> Fixture {
     // Existing independently sealed v1 whole-file identity, also preserved by
     // the published R0 oracle. Candidate output does not define this pin.
     let fixed = hex(&oracle::file(b"layerfs-stage02-fixture"));
@@ -225,7 +283,6 @@ fn fixture(name: &str) -> Fixture {
         fixed,
         "81bb74372b166542e1547b1a03c6637b72dc8dacb08f63489de0fe0fab1dcfa3"
     );
-    let temp = directory(name);
     let store_path = temp.0.join("store.sqlite");
     let catalog_path = temp.0.join("history.sqlite");
     let catalog = catalog(&catalog_path);
@@ -427,9 +484,13 @@ struct Held {
     worker: Option<std::thread::JoinHandle<Result<Response, Failure>>>,
 }
 impl Held {
-    fn finish(mut self) -> Response {
+    fn finish_result(mut self) -> Result<Response, Failure> {
         self.release.send(()).unwrap();
-        self.worker.take().unwrap().join().unwrap().unwrap()
+        self.worker.take().unwrap().join().unwrap()
+    }
+
+    fn finish(self) -> Response {
+        self.finish_result().unwrap()
     }
 }
 impl Drop for Held {
@@ -523,6 +584,7 @@ fn allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refu
     let initial = reserve(&f.service, 5, 1, f.snapshot.scope, 4096);
     assert_eq!(initial, (3, 4096));
     assert_eq!(highwater(&f.catalog_path, f.snapshot.scope), 4098);
+    assert!(scratch_files(&f.temp.0).is_empty());
     let expected_first = oracle::namespace(
         f.snapshot.scope,
         f.root_metadata,
@@ -571,6 +633,8 @@ fn allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refu
         2,
         "both actual Save owners are persisted"
     );
+    let occupied_scratch = scratch_files(&f.temp.0);
+    assert_eq!(occupied_scratch.len(), 2);
     let saves = sql_number(&f.store_path, "SELECT count(*) FROM saves", None);
     // The successful response and committed high-water are observed before
     // either source is released, not inferred from a launched request.
@@ -580,6 +644,7 @@ fn allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refu
     );
     assert_eq!(highwater(&f.catalog_path, f.snapshot.scope), 8194);
     assert_eq!(active(&f.store_path), 2);
+    assert_eq!(scratch_files(&f.temp.0), occupied_scratch);
     assert_eq!(
         sql_number(&f.store_path, "SELECT count(*) FROM saves", None),
         saves
@@ -596,6 +661,7 @@ fn allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refu
         .unwrap_err();
     assert_eq!(refusal, Failure::from(Code::Capacity));
     assert_eq!(active(&f.store_path), 2);
+    assert_eq!(scratch_files(&f.temp.0), occupied_scratch);
     assert_eq!(
         sql_number(&f.store_path, "SELECT count(*) FROM saves", None),
         saves
@@ -614,7 +680,11 @@ fn allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refu
     };
     assert_eq!(observed.effective_root, f.snapshot.effective_root);
     let first = stage(first.finish());
+    let remaining_scratch = scratch_files(&f.temp.0);
+    assert_eq!(remaining_scratch.len(), 1);
+    assert!(occupied_scratch.contains(&remaining_scratch[0]));
     let second = stage(second.finish());
+    assert!(scratch_files(&f.temp.0).is_empty());
     for (stage, expected, workspace) in [
         (&first, expected_first, [81; 32]),
         (&second, expected_second, [82; 32]),
@@ -892,4 +962,606 @@ fn catalog_grants_read_only_authority_and_wrong_prepared_scope_refuse_before_sav
     )
     .unwrap_err();
     assert_eq!(absent.code, Code::NotFound);
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn scratch_parent_refusal_precedes_save_and_body_without_a_hidden_retry() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = fixture("scratch-parent-refusal");
+    let saves = sql_number(&f.store_path, "SELECT count(*) FROM saves", None);
+    let permissions = std::fs::metadata(&f.temp.0).unwrap().permissions();
+    // Real kernel permissions make the prospective private parent ineligible.
+    std::fs::set_permissions(&f.temp.0, std::fs::Permissions::from_mode(0o770)).unwrap();
+    assert_eq!(
+        reserve(&f.service, 30, 1, f.snapshot.scope, 4096),
+        (3, 4096)
+    );
+    let (request, _) = prepared(&f, [84; 32], &[(2, f.file_content, false)], &[]);
+    let first = f
+        .service
+        .handle(&peer(), &request, &mut Unread, &mut io::sink())
+        .0
+        .unwrap_err();
+    assert_eq!(first, Failure::from(Code::Integrity));
+    assert_eq!(active(&f.store_path), 0);
+    assert_eq!(
+        sql_number(&f.store_path, "SELECT count(*) FROM saves", None),
+        saves
+    );
+    assert!(scratch_files(&f.temp.0).is_empty());
+    std::fs::set_permissions(&f.temp.0, permissions).unwrap();
+    // Restoring an external condition does not reattempt a refused constructor.
+    let second = f
+        .service
+        .handle(&peer(), &request, &mut Unread, &mut io::sink())
+        .0
+        .unwrap_err();
+    assert_eq!(second, first);
+    assert_eq!(active(&f.store_path), 0);
+    assert_eq!(
+        sql_number(&f.store_path, "SELECT count(*) FROM saves", None),
+        saves
+    );
+    assert!(scratch_files(&f.temp.0).is_empty());
+    assert_eq!(
+        reserve(&f.service, 31, 1, f.snapshot.scope, 4096),
+        (4099, 4096)
+    );
+    let absent = call(
+        &f.service,
+        32,
+        1,
+        Operation::HistoryQuery(HistoryQuery::GetStage {
+            workspace: [84; 32],
+        }),
+    )
+    .unwrap_err();
+    assert_eq!(absent.code, Code::NotFound);
+}
+
+#[test]
+fn declared_directory_state_over_capacity_refuses_before_scratch_save_or_body() {
+    let f = fixture("directory-state-capacity");
+    let saves = sql_number(&f.store_path, "SELECT count(*) FROM saves", None);
+    let (mut request, _) = prepared(&f, [85; 32], &[(2, f.file_content, false)], &[]);
+    let Operation::HistoryCommand(HistoryCommand::StageChanges(changes)) = &mut request.operation
+    else {
+        panic!("prepared")
+    };
+    changes.totals.directories = 65_537;
+    // This is a syntactically admitted declared stream, with no body consumption.
+    changes.stream_bytes().unwrap();
+    let refused = f
+        .service
+        .handle(&peer(), &request, &mut Unread, &mut io::sink())
+        .0
+        .unwrap_err();
+    assert_eq!(refused, Failure::from(Code::Capacity));
+    assert_eq!(active(&f.store_path), 0);
+    assert_eq!(
+        sql_number(&f.store_path, "SELECT count(*) FROM saves", None),
+        saves
+    );
+    assert!(scratch_files(&f.temp.0).is_empty());
+    // The refusal is for the requested shape, not permanent authority failure.
+    let (small, body) = prepared(&f, [86; 32], &[(2, f.file_content, false)], &[]);
+    let accepted = f
+        .service
+        .handle(&peer(), &small, &mut Cursor::new(body), &mut io::sink())
+        .0
+        .unwrap();
+    assert_eq!(stage(accepted).candidate_root, f.snapshot.effective_root);
+    assert!(scratch_files(&f.temp.0).is_empty());
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn selected_sqlite_library() -> PathBuf {
+    let binary = std::env::current_exe().unwrap();
+    #[cfg(target_os = "macos")]
+    let paths = {
+        let output = Command::new("/usr/bin/otool")
+            .arg("-L")
+            .arg(&binary)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let links = String::from_utf8(output.stdout).unwrap();
+        links
+            .lines()
+            .filter(|line| line.contains("libsqlite3."))
+            .map(|line| PathBuf::from(line.split_whitespace().next().unwrap()))
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    #[cfg(target_os = "linux")]
+    let paths = {
+        let mut maps = String::new();
+        std::fs::File::open("/proc/self/maps")
+            .unwrap()
+            .take(1_048_577)
+            .read_to_string(&mut maps)
+            .unwrap();
+        assert!(maps.len() <= 1_048_576, "bounded native library inventory");
+        maps.lines()
+            .filter_map(|line| line.split_whitespace().last())
+            .filter(|path| path.starts_with('/') && path.contains("libsqlite3.so"))
+            .map(PathBuf::from)
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    assert_eq!(
+        paths.len(),
+        1,
+        "exact dynamically selected SQLite required; no provider substitute: {paths:?}"
+    );
+    let library = paths.into_iter().next().unwrap();
+    eprintln!(
+        "Server scratch proof selected SQLite: binary={} library={}",
+        binary.display(),
+        library.display()
+    );
+    library
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn short_control_directory() -> Temp {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let path = std::env::temp_dir().join(format!(
+        "lfcs-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir(&path).unwrap();
+    Temp(path)
+}
+
+/// External selected-library lock owner; never opens scratch after Unknown.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+struct SqlProviderLock {
+    child: Option<Child>,
+    control: Option<std::os::unix::net::UnixStream>,
+    _directory: Temp,
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+impl SqlProviderLock {
+    fn acquire(database: &Path, library: &Path, mode: &str) -> Self {
+        use nix::poll::{poll, PollFd, PollFlags};
+        use std::os::fd::AsFd;
+        use std::os::unix::net::UnixListener;
+
+        // Match the native authority's existing owned pathname before opening
+        // with NOFOLLOW; Darwin's /var temporary ancestor is a symlink alias.
+        let database = std::fs::canonicalize(database).unwrap();
+
+        let directory = short_control_directory();
+        let socket = directory.0.join("r");
+        let listener = UnixListener::bind(&socket).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let child = Command::new("python3")
+            .arg("-u")
+            .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/support/scratch_reader.py"))
+            .arg(library)
+            .arg(mode)
+            .arg(database)
+            .arg(&socket)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut owner = Self {
+            child: Some(child),
+            control: None,
+            _directory: directory,
+        };
+        let mut events = [PollFd::new(listener.as_fd(), PollFlags::POLLIN)];
+        assert_eq!(
+            poll(&mut events, 5000u16).unwrap(),
+            1,
+            "finite acknowledged provider connection"
+        );
+        assert!(events[0].revents().unwrap().contains(PollFlags::POLLIN));
+        owner.control = Some(listener.accept().unwrap().0);
+        let control = owner.control.as_mut().unwrap();
+        control.set_nonblocking(false).unwrap(); // Darwin accepted descriptors inherit listener mode.
+        control
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        control
+            .set_write_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut ready = [0];
+        control.read_exact(&mut ready).unwrap();
+        assert_eq!(ready, [1]);
+        let mut length = [0; 4];
+        control.read_exact(&mut length).unwrap();
+        let length = u32::from_be_bytes(length) as usize;
+        assert!(
+            length > 0 && length <= 8192,
+            "bounded provider identity frame"
+        );
+        let mut info = vec![0; length];
+        control.read_exact(&mut info).unwrap();
+        let info = String::from_utf8(info).unwrap();
+        assert!(
+            info.contains(&format!("\"mode\": \"{mode}\""))
+                && info.contains("\"source\":")
+                && info.contains("\"version\":")
+        );
+        eprintln!("Server provider lock acknowledged: {info}");
+        owner
+    }
+
+    fn release_and_reap(&mut self) {
+        let control = self.control.as_mut().unwrap();
+        control.write_all(&[2]).unwrap();
+        let mut released = [0];
+        control.read_exact(&mut released).unwrap();
+        assert_eq!(
+            released,
+            [3],
+            "acknowledged ROLLBACK and selected connection close"
+        );
+        let status = self.child.as_mut().unwrap().wait().unwrap();
+        let mut child = self.child.take().unwrap();
+        assert_eq!(child.wait().unwrap(), status); // Cached known exit on the moved binding, no retry.
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        child
+            .stdout
+            .take()
+            .unwrap()
+            .take(16_385)
+            .read_to_end(&mut stdout)
+            .unwrap();
+        child
+            .stderr
+            .take()
+            .unwrap()
+            .take(16_385)
+            .read_to_end(&mut stderr)
+            .unwrap();
+        assert!(
+            stdout.len() <= 16_384 && stderr.len() <= 16_384,
+            "bounded provider output"
+        );
+        assert!(
+            status.success(),
+            "provider stdout={} stderr={}",
+            String::from_utf8_lossy(&stdout),
+            String::from_utf8_lossy(&stderr)
+        );
+        eprintln!(
+            "Server provider lock completion: {}",
+            String::from_utf8(stdout).unwrap().trim()
+        );
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+impl Drop for SqlProviderLock {
+    fn drop(&mut self) {
+        if self.child.is_none() {
+            return;
+        }
+        if let Some(control) = self.control.take() {
+            if let Err(error) = control.shutdown(std::net::Shutdown::Both) {
+                eprintln!("provider control shutdown: {error}");
+            }
+        }
+        let Some(mut child) = self.child.take() else {
+            return;
+        };
+        let exited = match child.try_wait() {
+            Ok(Some(status)) => Some(status),
+            Ok(None) => None,
+            Err(error) => {
+                eprintln!("provider exit inspection: {error}");
+                None
+            }
+        };
+        let status = if let Some(status) = exited {
+            // Known cached exit on this exact moved binding; no new wait/retry.
+            match child.wait() {
+                Ok(cached) => {
+                    debug_assert_eq!(cached, status);
+                    Some(cached)
+                }
+                Err(error) => {
+                    eprintln!("provider cached exit unavailable: {error}");
+                    None
+                }
+            }
+        } else {
+            if let Err(error) = child.kill() {
+                eprintln!("provider owned kill: {error}");
+            }
+            match child.wait() {
+                Ok(status) => Some(status),
+                Err(error) => {
+                    eprintln!("provider owned reap: {error}");
+                    None
+                }
+            }
+        };
+        if let Some(status) = status {
+            // Every failed ACK/accept path preserves bounded actual helper output
+            // after a known exit. Never replace an exception with a guessed EOF.
+            for (name, pipe) in [
+                (
+                    "stdout",
+                    child
+                        .stdout
+                        .take()
+                        .map(|pipe| Box::new(pipe) as Box<dyn Read>),
+                ),
+                (
+                    "stderr",
+                    child
+                        .stderr
+                        .take()
+                        .map(|pipe| Box::new(pipe) as Box<dyn Read>),
+                ),
+            ] {
+                if let Some(pipe) = pipe {
+                    let mut output = Vec::new();
+                    match pipe.take(16_385).read_to_end(&mut output) {
+                        Ok(_) => eprintln!(
+                            "provider failed-coordination exit={status} {name} bytes={}{}: {}",
+                            output.len(),
+                            if output.len() > 16_384 {
+                                " OUTPUT_BOUND_EXCEEDED"
+                            } else {
+                                ""
+                            },
+                            String::from_utf8_lossy(&output)
+                        ),
+                        Err(error) => {
+                            eprintln!("provider failed-coordination {name} unavailable: {error}")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn native_scratch_paths(parent: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    for entry in std::fs::read_dir(parent).unwrap() {
+        let entry = entry.unwrap();
+        if entry.file_name().to_string_lossy().starts_with(".lfcs-") {
+            for file in std::fs::read_dir(entry.path()).unwrap() {
+                paths.push(file.unwrap().path());
+            }
+        }
+    }
+    paths.sort();
+    paths
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn native_scratch_identity(path: &Path) -> (u64, u64, u32, u32, u64, u64) {
+    use std::os::unix::fs::MetadataExt;
+    let metadata = std::fs::symlink_metadata(path).unwrap();
+    assert!(metadata.is_file() && !metadata.file_type().is_symlink());
+    assert_eq!(metadata.nlink(), 1);
+    assert_eq!(metadata.mode() & 0o777, 0o600);
+    assert_eq!(metadata.blocks() * 512, 16 * 1024 * 1024);
+    (
+        metadata.dev(),
+        metadata.ino(),
+        metadata.uid(),
+        metadata.mode(),
+        metadata.nlink(),
+        metadata.blocks() * 512,
+    )
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn scratch_unknown_preserves_publication_and_reports_owned_save_cleanup() {
+    let directory = directory("scratch-unknown-proof");
+    for locked in [false, true] {
+        let base = directory.0.join(if locked {
+            "store-locked"
+        } else {
+            "store-unlocked"
+        });
+        std::fs::create_dir(&base).unwrap();
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "server_scratch_unknown_child", "--nocapture"])
+            .env("LAYERFS_SERVER_SCRATCH_UNKNOWN_BASE", &base)
+            .env(
+                "LAYERFS_SERVER_SCRATCH_STORE_LOCKED",
+                if locked { "1" } else { "0" },
+            )
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "child locked={locked}: stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stdout)
+            .contains("Server scratch Unknown proof complete"));
+        eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+        let retained = native_scratch_paths(&base);
+        assert_eq!(
+            retained.len(),
+            1,
+            "retained scratch exists after owned child exit; no product cleanup claim"
+        );
+        native_scratch_identity(&retained[0]);
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn server_scratch_unknown_child() {
+    let Some(base) = std::env::var_os("LAYERFS_SERVER_SCRATCH_UNKNOWN_BASE") else {
+        return;
+    };
+    let locked = std::env::var("LAYERFS_SERVER_SCRATCH_STORE_LOCKED").unwrap() == "1";
+    // Parent owns final fixture removal after this child exits. Preserve the
+    // Service and its exact retained SQL/native capsule until process teardown,
+    // including assertion failure; no Temp Drop or authority-loss close intervenes.
+    let f = std::mem::ManuallyDrop::new(fixture_at(Temp(PathBuf::from(base))));
+    let new_bytes = b"known-finished-scratch-unknown-bytes";
+    let changed = saved_file(&f.service, 40, new_bytes);
+    assert_eq!(reserve(&f.service, 41, 1, f.snapshot.scope, 1), (3, 1));
+    let branch_before = match history(
+        call(
+            &f.service,
+            39,
+            1,
+            Operation::HistoryQuery(HistoryQuery::GetBranch {
+                branch: f.snapshot.branch.branch,
+            }),
+        )
+        .unwrap(),
+    ) {
+        HistoryResult::BranchSnapshot(snapshot) => snapshot,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(branch_before.effective_root, f.snapshot.effective_root);
+    let workspace = if locked { [0xa2; 32] } else { [0xa1; 32] };
+    let expected_candidate = oracle::namespace(
+        f.snapshot.scope,
+        f.root_metadata,
+        &[
+            oracle::File {
+                name: b"a",
+                serial: 2,
+                content: f.file_content,
+                metadata: f.file_metadata,
+            },
+            oracle::File {
+                name: b"b",
+                serial: 3,
+                content: changed,
+                metadata: f.file_metadata,
+            },
+        ],
+    );
+    assert_ne!(expected_candidate, f.snapshot.effective_root);
+    // Independent v1 grammar for this exact two-file/root-directory shape:
+    // canonical envelope13, page header33, name rows22, inode rows3*81,
+    // filesystem-root value116. Only the68-byte directory leaf precedes state
+    // append; even the complete three-object candidate is486 canonical bytes.
+    let candidate_objects: usize = 3;
+    let candidate_bytes: u64 = (13 + 33 + 22) + (13 + 33 + 3 * 81) + (13 + 116);
+    let batch_objects = layerfs_storage::policy::BATCH_OBJECT_LIMIT;
+    let batch_bytes = layerfs_storage::policy::WAVE_CANONICAL_BYTES_LIMIT;
+    assert!(candidate_objects < batch_objects && candidate_bytes < batch_bytes);
+    let saves = sql_number(&f.store_path, "SELECT count(*) FROM saves", None);
+    assert_eq!(active(&f.store_path), 0);
+    assert!(scratch_files(&f.temp.0).is_empty());
+    let (request, body) = prepared(
+        &f,
+        workspace,
+        &[(3, changed, true)],
+        &[(b"b".to_vec(), Some(3))],
+    );
+    assert!(
+        body.len() < 512,
+        "one directory/identity body, no Store flush before scratch append"
+    );
+    let held = hold(&f.service, request, body);
+    assert_eq!(
+        active(&f.store_path),
+        1,
+        "source gate is reached only after persisted Save admission"
+    );
+    assert_eq!(
+        sql_number(&f.store_path, "SELECT count(*) FROM saves", None),
+        saves + 1
+    );
+    let scratch = scratch_files(&f.temp.0); // SQL inspection only before body/Unknown.
+    assert_eq!(scratch.len(), 1);
+    let identity = native_scratch_identity(&scratch[0]);
+    assert_eq!(sql_number(&f.store_path, "SELECT count(*) FROM objects WHERE save_id IN (SELECT save_id FROM saves WHERE active_slot IS NOT NULL)", None), 0);
+    let library = selected_sqlite_library();
+    let mut reader = SqlProviderLock::acquire(&scratch[0], &library, "read");
+    let mut store_lock = locked.then(|| SqlProviderLock::acquire(&f.store_path, &library, "write"));
+    assert_eq!(active(&f.store_path), 1);
+    eprintln!("Server source gate proof: persistedSave=1, nativeScratch16MiB=1, BEGIN+SELECT scratchSHARED acknowledged, storeLocked={locked}; body not yet released");
+    eprintln!("Server independent fixture grammar: candidate_objects={candidate_objects}, candidate_canonical_bytes={candidate_bytes}, one68-byte directory leaf before scratchappend; actual Store thresholds objects={batch_objects}, canonical_bytes={batch_bytes}");
+    // One small canonical directory leaf (<512 objects/<4MiB) precedes the
+    // DirectoryRoots append. No private Store pack is flushed before that append;
+    // only metadata scratch COMMIT tries EXCLUSIVE while the reader holds SHARED.
+    let failure = held.finish_result().unwrap_err();
+    assert_eq!(failure.code, Code::Provider);
+    assert!(
+        failure.unknown,
+        "original scratch COMMIT uncertainty must survive Server mapping"
+    );
+    assert_eq!(
+        failure.cleanup,
+        if locked { Some(Code::Ownership) } else { None }
+    );
+    assert_eq!(active(&f.store_path), u64::from(locked));
+    assert_eq!(
+        sql_number(&f.store_path, "SELECT count(*) FROM saves", None),
+        saves + u64::from(locked)
+    );
+    eprintln!(
+        "Server scratch failure proof: {failure}; activeSave={} before external lock release",
+        u64::from(locked)
+    );
+    if let Some(lock) = &mut store_lock {
+        lock.release_and_reap();
+    }
+    reader.release_and_reap();
+    assert_eq!(
+        active(&f.store_path),
+        u64::from(locked),
+        "failed owned cleanup is not silently retried after restored Store condition"
+    );
+    assert_eq!(
+        native_scratch_paths(&f.temp.0),
+        scratch,
+        "identity-only observation; unknown scratch never queried/adopted/cleaned"
+    );
+    assert_eq!(native_scratch_identity(&scratch[0]), identity);
+    let absent = call(
+        &f.service,
+        42,
+        1,
+        Operation::HistoryQuery(HistoryQuery::GetStage { workspace }),
+    )
+    .unwrap_err();
+    assert_eq!(absent.code, Code::NotFound);
+    assert!(!absent.unknown);
+    assert_eq!(
+        sql_number(
+            &f.catalog_path,
+            "SELECT count(*) FROM workspace_stages WHERE workspace_id=?",
+            Some(workspace)
+        ),
+        0
+    );
+    let snapshot = match history(
+        call(
+            &f.service,
+            43,
+            1,
+            Operation::HistoryQuery(HistoryQuery::GetBranch {
+                branch: f.snapshot.branch.branch,
+            }),
+        )
+        .unwrap(),
+    ) {
+        HistoryResult::BranchSnapshot(snapshot) => snapshot,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(snapshot, branch_before);
+    assert_ne!(snapshot.effective_root, expected_candidate);
+    read_bytes(&f.service, f.file_content, b"original-admission-bytes");
+    read_bytes(&f.service, changed, new_bytes);
+    assert_eq!(highwater(&f.catalog_path, f.snapshot.scope), 3);
+    eprintln!("Server publication proof: C5Stage absent, Branch unchanged, two independent finished-file roots/bytes intact, retained scratch identity={identity:?}; no query-based Unknown adoption or speed/resource admission");
+    println!("Server scratch Unknown proof complete; storeLocked={locked}");
 }
