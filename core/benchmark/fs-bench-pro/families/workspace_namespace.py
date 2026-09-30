@@ -10,7 +10,6 @@ import shutil
 from families import workspace_commit as commit
 from families import workspace_commit_native as native
 from families import workspace_write as shared
-from shell_package import case_spec
 
 SCHEMA = "core-workspace-namespace-run-v1"
 PROOF_SCHEMA = "core-workspace-namespace-proof-v1"
@@ -166,6 +165,8 @@ def env():
 
 
 def sdk_master(out, layout, common, artifacts):
+    from shell_package import case_spec
+
     source = common.RESULTS / "workspace-commit-native-master-v1" / layout
     sealed = json.loads((source / "prepared.json").read_text())
     key = common.seal([source / "fixture.before", source / "store.sqlite", source / "history.sqlite"])
@@ -196,6 +197,8 @@ def sdk_master(out, layout, common, artifacts):
 
 
 def sdk_attempt(out, case, master, prepared):
+    from shell_package import case_spec
+
     folder = out / case.id
     folder.mkdir()
     copy_master(master, folder)

@@ -1,0 +1,1756 @@
+{
+  "performance_manifest_sha256": "fb15fd25ac7243c13fbc5472310a26432547c28b91e3ad1b7f202c7312c887c9",
+  "performance_raw": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066",
+  "performance_run": {
+    "identity": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+      "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+      "source_commit": "d4a4252caa54a0dbb7454971d4ae8f169bd11c6d",
+      "source_dirty": false,
+      "source_tree": "9510e1314712d488a7edc8d387f01559a67a35ad"
+    },
+    "prepared": {
+      "artifacts": {
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "sha256": "7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+          "sha256": "24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288"
+        }
+      },
+      "build_mode": "worktree-local locked release; exact daemon/image reuse when sealed",
+      "identity": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+        "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+        "source_commit": "d4a4252caa54a0dbb7454971d4ae8f169bd11c6d",
+        "source_dirty": false,
+        "source_tree": "9510e1314712d488a7edc8d387f01559a67a35ad"
+      },
+      "image_build": {
+        "command": null,
+        "daemon_sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75",
+        "image_id": "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e",
+        "mode": "exact-image-reuse",
+        "wall_ns": 0
+      },
+      "image_dockerfile_sha256": "d351105281e5e33ecf4b861cdb4f7a42e199830723a73b7226b933223d7cf3e3",
+      "image_id": "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e",
+      "writer_binary_sha256": "f293d71f2a16aaeecb4de6c1c2cf5b74dfcb0e616204e591f83c3ef802a686d3"
+    },
+    "profile": "namespace-component-and-sdk-clone-functional-v1",
+    "rows": [
+      {
+        "case": "workspace-namespace-move-replace-descendants-3-sdk-v1",
+        "status": "COMPLETE_DIAGNOSTIC"
+      },
+      {
+        "case": "workspace-namespace-move-replace-descendants-67-sdk-v1",
+        "status": "COMPLETE_DIAGNOSTIC"
+      },
+      {
+        "case": "workspace-namespace-deep-4097-sdk-v1",
+        "status": "COMPLETE_DIAGNOSTIC"
+      },
+      {
+        "case": "workspace-namespace-components-270-sdk-v1",
+        "status": "COMPLETE_DIAGNOSTIC"
+      },
+      {
+        "case": "workspace-namespace-retained-g1-replace-sdk-v1",
+        "status": "COMPLETE_DIAGNOSTIC"
+      }
+    ],
+    "schema": "core-workspace-namespace-run-v1",
+    "selected": [
+      "workspace-namespace-move-replace-descendants-3-sdk-v1",
+      "workspace-namespace-move-replace-descendants-67-sdk-v1",
+      "workspace-namespace-deep-4097-sdk-v1",
+      "workspace-namespace-components-270-sdk-v1",
+      "workspace-namespace-retained-g1-replace-sdk-v1"
+    ],
+    "status": "COMPLETE_DIAGNOSTIC"
+  },
+  "proof_manifest_sha256": "1d4649e898ab5d2189f3590980fc363c4796f7c3fd0dc0ed9ec8b099eeb866f6",
+  "proof_raw": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-proof-r066",
+  "rows": [
+    {
+      "artifacts": {
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "sha256": "7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+          "sha256": "24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-namespace-move-replace-descendants-3-sdk-v1",
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_budget_ns": 15000000000,
+      "command_status": "PASS",
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "up_to_date": false
+      },
+      "driver": {
+        "branch_id": "1136363636363636363636363636363636",
+        "cleanup_ns": 471277125,
+        "commit_called": true,
+        "commit_ns": 22348958,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 25240,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_ns": 76019084,
+        "head_commit": "12e76135c4397ea22543beb3602a847fbcbb845381d6ec64fcf70f2cb5aecbfe31",
+        "host_disk_read_bytes": 0,
+        "mode": "run",
+        "operation_ns": 98372417,
+        "projection_counts": "lookup=89,getattr=115,read=1,write=2,readdir=2,open=1,setattr=0,rename=6,other=1",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-namespace-move-replace-descendants-3-sdk-v1",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "host_service_event_counts": {
+        "HistoryCommand": 2,
+        "HistoryQuery": 1,
+        "Inspect": 19,
+        "ReadFile": 1,
+        "SaveFileV2": 1
+      },
+      "image_id": "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e",
+      "independent_proof": {
+        "case": "workspace-namespace-move-replace-descendants-3-sdk-v1",
+        "child": {
+          "advanced": true,
+          "head_commit": "12e76135c4397ea22543beb3602a847fbcbb845381d6ec64fcf70f2cb5aecbfe31",
+          "namespace_identities": 4,
+          "new_bytes": 29,
+          "new_files": 3,
+          "new_paths": 9,
+          "old_bytes": 30,
+          "old_commit": "12a09732fba28ee75f3891f56de1fb3f1ebc0ea1b8de74b53dd5d753f94a88c026",
+          "old_files": 3,
+          "old_paths": 9,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "3a26570bdbb770457607d232ece838c2207ead6778459dbeb923f89fa5824ead",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-3-sdk-v1/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-3-sdk-v1/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-3-sdk-v1/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-3-sdk-v1/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-3-sdk-v1/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 9920790463916,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "532a7f7634c802fe8842e31001c6d3a5ded2d122f90cab167ef2108dee2c2629",
+          "timeout": false,
+          "wall_ns": 201762875
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      "master": {
+        "files": {
+          "fixture.before": "b8b5fd39b6ec90facaf5c034361d0ddc7059dc4017186a59faaa5cc71a2f4925",
+          "history.sqlite": "ad353e284b4b752b5e36614149e7f18659382e11ac3c78a79d10ba81d0619719",
+          "store.sqlite": "39164f0f88c9e5a3e4a759113b477991bd9791c7b253141cb9939b3b84dbdfe3"
+        },
+        "layout": "small",
+        "old_commit": "12a09732fba28ee75f3891f56de1fb3f1ebc0ea1b8de74b53dd5d753f94a88c026",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/2242645c108f101504acd44cfc543152a9106d5cbb9e80559bf6ae79d464828a",
+        "preparation": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+            "seed-existing",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/2242645c108f101504acd44cfc543152a9106d5cbb9e80559bf6ae79d464828a/seed.case",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/2242645c108f101504acd44cfc543152a9106d5cbb9e80559bf6ae79d464828a/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/2242645c108f101504acd44cfc543152a9106d5cbb9e80559bf6ae79d464828a/history.sqlite",
+            "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e"
+          ],
+          "exit_code": 0,
+          "started_ns": 9894484688125,
+          "stderr_sha256": "7471d71b3b6f4fc369fd0fd5c34f164bae0f56fb19d9eb647571f46698cd7605",
+          "stdout_sha256": "254e45263aa1a61eddc45ffa2acdf8c62ac41dd55dc8e3eb2ee42587ccfc2758",
+          "timeout": false,
+          "wall_ns": 4162751708
+        },
+        "producer_binary": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "sha256": "7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1"
+        },
+        "producer_identity": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+          "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+          "source_commit": "d4a4252caa54a0dbb7454971d4ae8f169bd11c6d",
+          "source_dirty": false,
+          "source_tree": "9510e1314712d488a7edc8d387f01559a67a35ad"
+        },
+        "reuse": false,
+        "source_master": {
+          "files": {
+            "fixture.before": "b8b5fd39b6ec90facaf5c034361d0ddc7059dc4017186a59faaa5cc71a2f4925",
+            "history.sqlite": "e4c224209219a9bd3167684cf81640aa0e17c47c0b399b7e4cfa93ac2aeca0f4",
+            "store.sqlite": "93c00ef53373e34ecf061526ca19ed01db7940c9d4afc27636ffac799abbe7b0"
+          },
+          "oracle": "grand-base/sibling-base; large data[i]=i%251; full relevant bytes checked in native child",
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-commit-native-master-v1/small",
+          "preparation": {
+            "command": [
+              "docker",
+              "exec",
+              "-e",
+              "LAYERFS_PHASE_B_PREPARE=/work/master-small",
+              "-e",
+              "LAYERFS_PHASE_B_SIZE=0",
+              "issue286-native-b262e96aa7cf4fc1",
+              "/test",
+              "--exact",
+              "phase_b_commit::prepare_master",
+              "--ignored",
+              "--nocapture"
+            ],
+            "exit_code": 0,
+            "started_ns": 5117125951875,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "dacea8c5b3eb599f0171401df28f231538ba2b42c6fecdd5b70f46276e62cafe",
+            "timeout": false,
+            "wall_ns": 99599000
+          },
+          "producer_binary": {
+            "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542/inherited_workspace",
+            "sha256": "6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542"
+          },
+          "producer_source": {
+            "build_profile": "release",
+            "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+            "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+            "dirty_paths": [],
+            "harness_seal": "3146775f13e464adff41b48d758c1876e50f30eeaabf99448f4676e8cd6c7112",
+            "product_seal": "6faef099d307495607bb60a9ed5be40628880bcd770cc307228b3d89d37c7043",
+            "source_commit": "ca9253e0b873aaa3847ac32fd76787b086785799",
+            "source_dirty": false,
+            "source_tree": "2479035e9fcc27aabcd3b0dfd2004ba3cfb45a77"
+          },
+          "size": 0
+        }
+      },
+      "numeric_latency_status": "INELIGIBLE",
+      "oracle_hashes": {
+        "case.before": "c5cb028b1906b2c7b2a7624d4789f518d95d8e9ba58d1493ef17da0a1c1dca0d",
+        "case.verify": "04f73c41400a3010c1cfdc440386928c03179dc40fa7458a63db38c42fca7f75",
+        "new.tsv": "2c17f692862582c83ecda4da00ad46a6119e581dfd2c936b8999d1ac76835f8a",
+        "old.tsv": "5cd3bd08b66f0de5bd21fd5eae23ee56d92290fb85783e0e4b43102e85db6a3a"
+      },
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-3-sdk-v1/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-3-sdk-v1/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-3-sdk-v1/history.sqlite",
+          "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e"
+        ],
+        "exit_code": 0,
+        "started_ns": 9900320030083,
+        "stderr_sha256": "8c17b9174841d83e8afd9f796abc1b89309b427e18c3f0066c75da59087e33d0",
+        "stdout_sha256": "48a1880e667c5157763dbc39c1bc76688e49f3db35ecc5ec028187626a92141f",
+        "timeout": false,
+        "wall_ns": 865639833
+      },
+      "performance_claim": false,
+      "pin_status": "PASS",
+      "profile": "namespace-component-and-sdk-clone-functional-v1",
+      "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+      "route_status": "PASS",
+      "sample_count": 1,
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+        "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+        "source_commit": "d4a4252caa54a0dbb7454971d4ae8f169bd11c6d",
+        "source_dirty": false,
+        "source_tree": "9510e1314712d488a7edc8d387f01559a67a35ad"
+      },
+      "status": "COMPLETE_DIAGNOSTIC",
+      "telemetry": {
+        "event_count": 78,
+        "operation": {
+          "clock": "local-monitor",
+          "closed_ns": 353766584,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            16426000,
+            14357000
+          ],
+          "first_ns": 251491209,
+          "gaps": 0,
+          "incarnation": 237607685129,
+          "key": 243000,
+          "kind": "operation",
+          "largest_gap_ns": 11022541,
+          "last_ns": 350187250,
+          "last_probe_ns": 7166,
+          "namespace": 7,
+          "opened_ns": 255394917,
+          "pid": 36000,
+          "resource_status": "sampled",
+          "role": 1,
+          "run": "4d86574be95a29a7bf88beaf65e3f3fc",
+          "sampled_max_rss": 32505856,
+          "samples": 11,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "getrusage+libproc",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 76019458,
+                "name": "exec"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 22349084,
+                "name": "commit"
+              }
+            ],
+            "elapsed_ns": 98370584,
+            "name": "sdk.shell_package"
+          },
+          "v": 1
+        },
+        "operation_event_count": 1
+      },
+      "verification": {
+        "reason": "separate prove, without performance replay",
+        "status": "SKIPPED"
+      }
+    },
+    {
+      "artifacts": {
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "sha256": "7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+          "sha256": "24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-namespace-move-replace-descendants-67-sdk-v1",
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_budget_ns": 15000000000,
+      "command_status": "PASS",
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "up_to_date": false
+      },
+      "driver": {
+        "branch_id": "1136363636363636363636363636363636",
+        "cleanup_ns": 434842917,
+        "commit_called": true,
+        "commit_ns": 27216208,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 25245,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_ns": 70527500,
+        "head_commit": "12aa7a4c5e88d35bcbe47ae7a7bd9fea82291a57f5afba80b0b310a090b4c99faf",
+        "host_disk_read_bytes": 0,
+        "mode": "run",
+        "operation_ns": 97747875,
+        "projection_counts": "lookup=89,getattr=115,read=1,write=2,readdir=2,open=1,setattr=0,rename=6,other=1",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-namespace-move-replace-descendants-67-sdk-v1",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "host_service_event_counts": {
+        "HistoryCommand": 2,
+        "HistoryQuery": 1,
+        "Inspect": 19,
+        "ReadFile": 1,
+        "SaveFileV2": 1
+      },
+      "image_id": "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e",
+      "independent_proof": {
+        "case": "workspace-namespace-move-replace-descendants-67-sdk-v1",
+        "child": {
+          "advanced": true,
+          "head_commit": "12aa7a4c5e88d35bcbe47ae7a7bd9fea82291a57f5afba80b0b310a090b4c99faf",
+          "namespace_identities": 68,
+          "new_bytes": 93,
+          "new_files": 67,
+          "new_paths": 73,
+          "old_bytes": 94,
+          "old_commit": "1230d188a96ebf34215590db606f09ef8a28a5a9ef326b08b38c7dc35bdbebbb46",
+          "old_files": 67,
+          "old_paths": 73,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "9bf1afa50f1f03be01ec1fd2074cb943b47e98dc068e4d0a85e7e82be30df41d",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-67-sdk-v1/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-67-sdk-v1/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-67-sdk-v1/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-67-sdk-v1/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-67-sdk-v1/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 9920994259458,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "8b689cd17c2e79d05b188d13e118028cba5e2a097e5497d88c2f571902f62531",
+          "timeout": false,
+          "wall_ns": 215061833
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      "master": {
+        "files": {
+          "fixture.before": "66aa72a5dd004514632315b6873d9741ee1b21fa92a8b9022afd6b2c94308fe5",
+          "history.sqlite": "65062469a54737e64209b32453ba5540b07a9048cb6754022cedac336a3b46ed",
+          "store.sqlite": "30c5e9952d8b4c9872c67e67ac2305a168f3b2f9479ae66f4352037386b14da5"
+        },
+        "layout": "wide",
+        "old_commit": "1230d188a96ebf34215590db606f09ef8a28a5a9ef326b08b38c7dc35bdbebbb46",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/c698b9cc5a65616e9cd6fa1554d05b81f7d0b50f3e379b8e1db99f66aaeccf9a",
+        "preparation": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+            "seed-existing",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/c698b9cc5a65616e9cd6fa1554d05b81f7d0b50f3e379b8e1db99f66aaeccf9a/seed.case",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/c698b9cc5a65616e9cd6fa1554d05b81f7d0b50f3e379b8e1db99f66aaeccf9a/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/c698b9cc5a65616e9cd6fa1554d05b81f7d0b50f3e379b8e1db99f66aaeccf9a/history.sqlite",
+            "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e"
+          ],
+          "exit_code": 0,
+          "started_ns": 9898651434791,
+          "stderr_sha256": "0922a316445da97dbc3b669ef18ef43223fa6f23e28e8172df96cd9be47542ba",
+          "stdout_sha256": "e82e3f944b35fe63fa839d11a5fa77339d3e71628265aa8e83dbca7f58ebafab",
+          "timeout": false,
+          "wall_ns": 870953500
+        },
+        "producer_binary": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "sha256": "7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1"
+        },
+        "producer_identity": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+          "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+          "source_commit": "d4a4252caa54a0dbb7454971d4ae8f169bd11c6d",
+          "source_dirty": false,
+          "source_tree": "9510e1314712d488a7edc8d387f01559a67a35ad"
+        },
+        "reuse": false,
+        "source_master": {
+          "deep": false,
+          "extra": 64,
+          "files": {
+            "fixture.before": "66aa72a5dd004514632315b6873d9741ee1b21fa92a8b9022afd6b2c94308fe5",
+            "history.sqlite": "be9b763fa828bec28e2f3f10e24023b95893c2cb7c47607559743dd3173ec297",
+            "store.sqlite": "984a40a32422ca816452725cc7afc49878082608e0ab9c3a1bd513eca21477a8"
+          },
+          "oracle": "grand-base/sibling-base; large data[i]=i%251; full relevant bytes checked in native child",
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-commit-native-master-v1/wide",
+          "preparation": {
+            "command": [
+              "docker",
+              "exec",
+              "-e",
+              "LAYERFS_PHASE_B_PREPARE=/work/master-wide",
+              "-e",
+              "LAYERFS_PHASE_B_SIZE=0",
+              "-e",
+              "LAYERFS_PHASE_B_EXTRA=64",
+              "-e",
+              "LAYERFS_PHASE_B_DEEP=0",
+              "-e",
+              "LAYERFS_PHASE_B_UNRELATED=0",
+              "issue286-native-b054fa8d15ad48bf",
+              "/test",
+              "--exact",
+              "phase_b_commit::prepare_master",
+              "--ignored",
+              "--nocapture"
+            ],
+            "exit_code": 0,
+            "started_ns": 9761420411958,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "099dadefaaf54159ca17a60fea50b5a431f1cf9536665901ad6c2e65accea2d7",
+            "timeout": false,
+            "wall_ns": 94330750
+          },
+          "producer_binary": {
+            "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/1344d5206e20d99fd727a86bda4d3be426a18a501bc93b2f08f7bdcffcf6eb4f/inherited_workspace",
+            "sha256": "1344d5206e20d99fd727a86bda4d3be426a18a501bc93b2f08f7bdcffcf6eb4f"
+          },
+          "producer_source": {
+            "build_profile": "release",
+            "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+            "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+            "dirty_paths": [],
+            "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+            "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+            "source_commit": "ecca96af962428d1b0f389c828b2448e971cdc30",
+            "source_dirty": false,
+            "source_tree": "d4039ffa8d8ee193fb4bfa673d965e7f9e8e950e"
+          },
+          "size": 0,
+          "unrelated": 0
+        }
+      },
+      "numeric_latency_status": "INELIGIBLE",
+      "oracle_hashes": {
+        "case.before": "7b8506de5d657ea1dac06e8a533cf8512a2f022b471e4b0c9fbf5495bf35446d",
+        "case.verify": "256e3df877c080e48f610d3d3ad6ca547a3c212c4393af0f1a85b77bbc905d32",
+        "new.tsv": "8775077ffd613372784857a5227c77c06ffeac7ebda831ff28411e0f1e159eab",
+        "old.tsv": "478aa879f6663fae094492a1a5568809d87a7b6577556e478ed3f0690436be68"
+      },
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-67-sdk-v1/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-67-sdk-v1/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-67-sdk-v1/history.sqlite",
+          "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e"
+        ],
+        "exit_code": 0,
+        "started_ns": 9901188616166,
+        "stderr_sha256": "caa3f54280c59ca42b2e4e16439c5407887a15b678ad15f0e98dd8fd9d898a93",
+        "stdout_sha256": "83e78b48be24ef4c74c525d996a047deeb36b5b495b5d26f9abd6f6969d1bd89",
+        "timeout": false,
+        "wall_ns": 871133417
+      },
+      "performance_claim": false,
+      "pin_status": "PASS",
+      "profile": "namespace-component-and-sdk-clone-functional-v1",
+      "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+      "route_status": "PASS",
+      "sample_count": 1,
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+        "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+        "source_commit": "d4a4252caa54a0dbb7454971d4ae8f169bd11c6d",
+        "source_dirty": false,
+        "source_tree": "9510e1314712d488a7edc8d387f01559a67a35ad"
+      },
+      "status": "COMPLETE_DIAGNOSTIC",
+      "telemetry": {
+        "event_count": 78,
+        "operation": {
+          "clock": "local-monitor",
+          "closed_ns": 359499834,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            17309000,
+            14478000
+          ],
+          "first_ns": 260219459,
+          "gaps": 0,
+          "incarnation": 237628531461,
+          "key": 243000,
+          "kind": "operation",
+          "largest_gap_ns": 12248333,
+          "last_ns": 352075417,
+          "last_probe_ns": 6500,
+          "namespace": 7,
+          "opened_ns": 261752792,
+          "pid": 36043,
+          "resource_status": "sampled",
+          "role": 1,
+          "run": "9515f37d0296e27b08ec87d311bd051d",
+          "sampled_max_rss": 32456704,
+          "samples": 10,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "getrusage+libproc",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 70527708,
+                "name": "exec"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 27216333,
+                "name": "commit"
+              }
+            ],
+            "elapsed_ns": 97745916,
+            "name": "sdk.shell_package"
+          },
+          "v": 1
+        },
+        "operation_event_count": 1
+      },
+      "verification": {
+        "reason": "separate prove, without performance replay",
+        "status": "SKIPPED"
+      }
+    },
+    {
+      "artifacts": {
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "sha256": "7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+          "sha256": "24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-namespace-deep-4097-sdk-v1",
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_budget_ns": 25000000000,
+      "command_status": "PASS",
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "up_to_date": false
+      },
+      "driver": {
+        "branch_id": "1136363636363636363636363636363636",
+        "cleanup_ns": 460795500,
+        "commit_called": true,
+        "commit_ns": 30505833,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 28978,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_ns": 63039000,
+        "head_commit": "122064bb1ef7595a3c9f2022dd6b6ae9627ef56bb68108bedd7223dd163869eb22",
+        "host_disk_read_bytes": 0,
+        "mode": "run",
+        "operation_ns": 93549958,
+        "projection_counts": "lookup=31,getattr=95,read=1,write=4,readdir=0,open=1,setattr=0,rename=2,other=16",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-namespace-deep-4097-sdk-v1",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "host_service_event_counts": {
+        "HistoryCommand": 4,
+        "HistoryQuery": 1,
+        "Inspect": 23,
+        "ReadFile": 1,
+        "SaveFileV2": 1
+      },
+      "image_id": "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e",
+      "independent_proof": {
+        "case": "workspace-namespace-deep-4097-sdk-v1",
+        "child": {
+          "advanced": true,
+          "head_commit": "122064bb1ef7595a3c9f2022dd6b6ae9627ef56bb68108bedd7223dd163869eb22",
+          "namespace_identities": 17,
+          "new_bytes": 38,
+          "new_files": 4,
+          "new_paths": 28,
+          "old_bytes": 39,
+          "old_commit": "12759d24ba2b0b72f7793700fac713a1711d74e5a39f589853478f645b801dfba0",
+          "old_files": 4,
+          "old_paths": 26,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "c1e55586821b86b2f3b87c232a26c56d7df48333f23e267fb9cbf32c25cf8173",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-deep-4097-sdk-v1/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-deep-4097-sdk-v1/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-deep-4097-sdk-v1/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-deep-4097-sdk-v1/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-deep-4097-sdk-v1/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 9921210940750,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "14cb0a05517f63cd7a5272f3b77d90e94157cb9af9664a9cd06bc2f1846af1a7",
+          "timeout": false,
+          "wall_ns": 97284666
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      "master": {
+        "files": {
+          "fixture.before": "791623770bc8f783882ff7d7f7ea439fb86b65916cb7aceea20d422b3d995d6c",
+          "history.sqlite": "84acafd19ff6001333f83505858605524c9ddc63d2681b7f31152c325f90331a",
+          "store.sqlite": "99158e85785975c83e59385bac6d2c944cfccfbe24382620a167018e0cca64ea"
+        },
+        "layout": "deep",
+        "old_commit": "12759d24ba2b0b72f7793700fac713a1711d74e5a39f589853478f645b801dfba0",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/843c14e65327734ea719c59bd1a45b462d4bbce944189a2dcd61cf252edc10bf",
+        "preparation": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+            "seed-existing",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/843c14e65327734ea719c59bd1a45b462d4bbce944189a2dcd61cf252edc10bf/seed.case",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/843c14e65327734ea719c59bd1a45b462d4bbce944189a2dcd61cf252edc10bf/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/843c14e65327734ea719c59bd1a45b462d4bbce944189a2dcd61cf252edc10bf/history.sqlite",
+            "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e"
+          ],
+          "exit_code": 0,
+          "started_ns": 9899526963833,
+          "stderr_sha256": "667f486803535b81d3137d3f935dfc7a190287781952d90cab1cac660c55806f",
+          "stdout_sha256": "db910836d92b2a0d3ea13e5a23bdead287b61caddc734806f84a4fc14d9d0b0d",
+          "timeout": false,
+          "wall_ns": 790058583
+        },
+        "producer_binary": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "sha256": "7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1"
+        },
+        "producer_identity": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+          "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+          "source_commit": "d4a4252caa54a0dbb7454971d4ae8f169bd11c6d",
+          "source_dirty": false,
+          "source_tree": "9510e1314712d488a7edc8d387f01559a67a35ad"
+        },
+        "reuse": false,
+        "source_master": {
+          "deep": true,
+          "extra": 0,
+          "files": {
+            "fixture.before": "791623770bc8f783882ff7d7f7ea439fb86b65916cb7aceea20d422b3d995d6c",
+            "history.sqlite": "2c3243e85523d2fedf914054f92e151d50f8dcef6f5700ad2e19629ef80ea526",
+            "store.sqlite": "9592bcef48ca2b90767486b64195573062f9bd05bb06ce1dfef5d00c74bca256"
+          },
+          "oracle": "grand-base/sibling-base; large data[i]=i%251; full relevant bytes checked in native child",
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-commit-native-master-v1/deep",
+          "preparation": {
+            "command": [
+              "docker",
+              "exec",
+              "-e",
+              "LAYERFS_PHASE_B_PREPARE=/work/master-deep",
+              "-e",
+              "LAYERFS_PHASE_B_SIZE=0",
+              "-e",
+              "LAYERFS_PHASE_B_EXTRA=0",
+              "-e",
+              "LAYERFS_PHASE_B_DEEP=1",
+              "-e",
+              "LAYERFS_PHASE_B_UNRELATED=0",
+              "issue286-native-b054fa8d15ad48bf",
+              "/test",
+              "--exact",
+              "phase_b_commit::prepare_master",
+              "--ignored",
+              "--nocapture"
+            ],
+            "exit_code": 0,
+            "started_ns": 9761595743166,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "e4d647250427a567a89fb64403f8e4dcd7b49dd42515a0e63a9ac8cc3431abc2",
+            "timeout": false,
+            "wall_ns": 100653875
+          },
+          "producer_binary": {
+            "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/1344d5206e20d99fd727a86bda4d3be426a18a501bc93b2f08f7bdcffcf6eb4f/inherited_workspace",
+            "sha256": "1344d5206e20d99fd727a86bda4d3be426a18a501bc93b2f08f7bdcffcf6eb4f"
+          },
+          "producer_source": {
+            "build_profile": "release",
+            "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+            "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+            "dirty_paths": [],
+            "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+            "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+            "source_commit": "ecca96af962428d1b0f389c828b2448e971cdc30",
+            "source_dirty": false,
+            "source_tree": "d4039ffa8d8ee193fb4bfa673d965e7f9e8e950e"
+          },
+          "size": 0,
+          "unrelated": 0
+        }
+      },
+      "numeric_latency_status": "INELIGIBLE",
+      "oracle_hashes": {
+        "case.before": "ec2cff9fee7c476812f58b1de7fb3bc814bf4f28524d858e77c8e4a07d66837e",
+        "case.verify": "f84197103ef094eec8129634ff5dfcee0923573be91ee78e05539b2437e1b669",
+        "new.tsv": "8277ce54f1f870cf8b957e5d47d943cc56550522614fc7f9774bb25095a9016a",
+        "old.tsv": "eaa9f7fe67653dca085398623834673ace484e9861cce27e441189cda80a532b"
+      },
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-deep-4097-sdk-v1/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-deep-4097-sdk-v1/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-deep-4097-sdk-v1/history.sqlite",
+          "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e"
+        ],
+        "exit_code": 0,
+        "started_ns": 9902062814791,
+        "stderr_sha256": "2f9d0451ba305f841945214a86af570e412b65a566a214f7a549875f6b58983f",
+        "stdout_sha256": "20edb3847286a219abd9405d891bfa28549c81b6769b290876835422a3d0b56f",
+        "timeout": false,
+        "wall_ns": 874109709
+      },
+      "performance_claim": false,
+      "pin_status": "PASS",
+      "profile": "namespace-component-and-sdk-clone-functional-v1",
+      "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+      "route_status": "PASS",
+      "sample_count": 1,
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+        "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+        "source_commit": "d4a4252caa54a0dbb7454971d4ae8f169bd11c6d",
+        "source_dirty": false,
+        "source_tree": "9510e1314712d488a7edc8d387f01559a67a35ad"
+      },
+      "status": "COMPLETE_DIAGNOSTIC",
+      "telemetry": {
+        "event_count": 90,
+        "operation": {
+          "clock": "local-monitor",
+          "closed_ns": 357468250,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            21121000,
+            18167000
+          ],
+          "first_ns": 260119208,
+          "gaps": 0,
+          "incarnation": 237649512313,
+          "key": 243000,
+          "kind": "operation",
+          "largest_gap_ns": 12376500,
+          "last_ns": 352405333,
+          "last_probe_ns": 8917,
+          "namespace": 7,
+          "opened_ns": 263919583,
+          "pid": 36086,
+          "resource_status": "sampled",
+          "role": 1,
+          "run": "d760833a0e74a8e1a355e48c9f43a797",
+          "sampled_max_rss": 32702464,
+          "samples": 10,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "getrusage+libproc",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 63039292,
+                "name": "exec"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 30506042,
+                "name": "commit"
+              }
+            ],
+            "elapsed_ns": 93547500,
+            "name": "sdk.shell_package"
+          },
+          "v": 1
+        },
+        "operation_event_count": 1
+      },
+      "verification": {
+        "reason": "separate prove, without performance replay",
+        "status": "SKIPPED"
+      }
+    },
+    {
+      "artifacts": {
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "sha256": "7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+          "sha256": "24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-namespace-components-270-sdk-v1",
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_budget_ns": 25000000000,
+      "command_status": "PASS",
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "up_to_date": false
+      },
+      "driver": {
+        "branch_id": "1136363636363636363636363636363636",
+        "cleanup_ns": 491220500,
+        "commit_called": true,
+        "commit_ns": 767457958,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 189511,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_ns": 1157090208,
+        "head_commit": "12e44117583b3e424295cd1c557ec718ee32ac4b46d410f81628f8b344a9f905f4",
+        "host_disk_read_bytes": 8192,
+        "mode": "run",
+        "operation_ns": 1924553875,
+        "projection_counts": "lookup=542,getattr=1628,read=1,write=272,readdir=0,open=1,setattr=0,rename=0,other=270",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-namespace-components-270-sdk-v1",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "host_service_event_counts": {
+        "HistoryCommand": 272,
+        "HistoryQuery": 1,
+        "Inspect": 3,
+        "SaveFileV2": 1
+      },
+      "image_id": "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e",
+      "independent_proof": {
+        "case": "workspace-namespace-components-270-sdk-v1",
+        "child": {
+          "advanced": true,
+          "head_commit": "12e44117583b3e424295cd1c557ec718ee32ac4b46d410f81628f8b344a9f905f4",
+          "namespace_identities": 9,
+          "new_bytes": 34,
+          "new_files": 4,
+          "new_paths": 280,
+          "old_bytes": 30,
+          "old_commit": "12a09732fba28ee75f3891f56de1fb3f1ebc0ea1b8de74b53dd5d753f94a88c026",
+          "old_files": 3,
+          "old_paths": 9,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "cb3bd233ed694b946e2c303ab760f69956e6425ad664bc1180652b16762f917b",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-components-270-sdk-v1/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-components-270-sdk-v1/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-components-270-sdk-v1/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-components-270-sdk-v1/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-components-270-sdk-v1/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 9921310151916,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "ca51a6a6bd1fea100ca1211eae933b537e8ab8c69a2a0564c3f0b4e072be4299",
+          "timeout": false,
+          "wall_ns": 201375042
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      "master": {
+        "files": {
+          "fixture.before": "b8b5fd39b6ec90facaf5c034361d0ddc7059dc4017186a59faaa5cc71a2f4925",
+          "history.sqlite": "ad353e284b4b752b5e36614149e7f18659382e11ac3c78a79d10ba81d0619719",
+          "store.sqlite": "39164f0f88c9e5a3e4a759113b477991bd9791c7b253141cb9939b3b84dbdfe3"
+        },
+        "layout": "small",
+        "old_commit": "12a09732fba28ee75f3891f56de1fb3f1ebc0ea1b8de74b53dd5d753f94a88c026",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/2242645c108f101504acd44cfc543152a9106d5cbb9e80559bf6ae79d464828a",
+        "preparation": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+            "seed-existing",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/2242645c108f101504acd44cfc543152a9106d5cbb9e80559bf6ae79d464828a/seed.case",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/2242645c108f101504acd44cfc543152a9106d5cbb9e80559bf6ae79d464828a/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/2242645c108f101504acd44cfc543152a9106d5cbb9e80559bf6ae79d464828a/history.sqlite",
+            "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e"
+          ],
+          "exit_code": 0,
+          "started_ns": 9894484688125,
+          "stderr_sha256": "7471d71b3b6f4fc369fd0fd5c34f164bae0f56fb19d9eb647571f46698cd7605",
+          "stdout_sha256": "254e45263aa1a61eddc45ffa2acdf8c62ac41dd55dc8e3eb2ee42587ccfc2758",
+          "timeout": false,
+          "wall_ns": 4162751708
+        },
+        "producer_binary": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "sha256": "7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1"
+        },
+        "producer_identity": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+          "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+          "source_commit": "d4a4252caa54a0dbb7454971d4ae8f169bd11c6d",
+          "source_dirty": false,
+          "source_tree": "9510e1314712d488a7edc8d387f01559a67a35ad"
+        },
+        "reuse": false,
+        "source_master": {
+          "files": {
+            "fixture.before": "b8b5fd39b6ec90facaf5c034361d0ddc7059dc4017186a59faaa5cc71a2f4925",
+            "history.sqlite": "e4c224209219a9bd3167684cf81640aa0e17c47c0b399b7e4cfa93ac2aeca0f4",
+            "store.sqlite": "93c00ef53373e34ecf061526ca19ed01db7940c9d4afc27636ffac799abbe7b0"
+          },
+          "oracle": "grand-base/sibling-base; large data[i]=i%251; full relevant bytes checked in native child",
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-commit-native-master-v1/small",
+          "preparation": {
+            "command": [
+              "docker",
+              "exec",
+              "-e",
+              "LAYERFS_PHASE_B_PREPARE=/work/master-small",
+              "-e",
+              "LAYERFS_PHASE_B_SIZE=0",
+              "issue286-native-b262e96aa7cf4fc1",
+              "/test",
+              "--exact",
+              "phase_b_commit::prepare_master",
+              "--ignored",
+              "--nocapture"
+            ],
+            "exit_code": 0,
+            "started_ns": 5117125951875,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "dacea8c5b3eb599f0171401df28f231538ba2b42c6fecdd5b70f46276e62cafe",
+            "timeout": false,
+            "wall_ns": 99599000
+          },
+          "producer_binary": {
+            "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542/inherited_workspace",
+            "sha256": "6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542"
+          },
+          "producer_source": {
+            "build_profile": "release",
+            "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+            "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+            "dirty_paths": [],
+            "harness_seal": "3146775f13e464adff41b48d758c1876e50f30eeaabf99448f4676e8cd6c7112",
+            "product_seal": "6faef099d307495607bb60a9ed5be40628880bcd770cc307228b3d89d37c7043",
+            "source_commit": "ca9253e0b873aaa3847ac32fd76787b086785799",
+            "source_dirty": false,
+            "source_tree": "2479035e9fcc27aabcd3b0dfd2004ba3cfb45a77"
+          },
+          "size": 0
+        }
+      },
+      "numeric_latency_status": "INELIGIBLE",
+      "oracle_hashes": {
+        "case.before": "2dbdd66bc146347f4b5fb4573ffcfcc40d68c38b661b99e432ae7bbe20ee326e",
+        "case.verify": "f8369f37595e4b18ed553e0c067766fcbdc8232946dc9e4ef84f58bf078aed87",
+        "new.tsv": "16feb6bc8704a64b90c9b97082407c614793d1425578fbf2d63e6f48d84bcafa",
+        "old.tsv": "5cd3bd08b66f0de5bd21fd5eae23ee56d92290fb85783e0e4b43102e85db6a3a"
+      },
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-components-270-sdk-v1/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-components-270-sdk-v1/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-components-270-sdk-v1/history.sqlite",
+          "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e"
+        ],
+        "exit_code": 0,
+        "started_ns": 9902940033041,
+        "stderr_sha256": "ce17743a6342aaf07e610e1eb81ba3d431479032a32c95e473976a9d4493f744",
+        "stdout_sha256": "3036cc1d63034eb3a87fde69cd7732d178895a08d70370483732f68cb4ecb258",
+        "timeout": false,
+        "wall_ns": 2805615834
+      },
+      "performance_claim": false,
+      "pin_status": "PASS",
+      "profile": "namespace-component-and-sdk-clone-functional-v1",
+      "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+      "route_status": "PASS",
+      "sample_count": 1,
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+        "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+        "source_commit": "d4a4252caa54a0dbb7454971d4ae8f169bd11c6d",
+        "source_dirty": false,
+        "source_tree": "9510e1314712d488a7edc8d387f01559a67a35ad"
+      },
+      "status": "COMPLETE_DIAGNOSTIC",
+      "telemetry": {
+        "event_count": 586,
+        "operation": {
+          "clock": "local-monitor",
+          "closed_ns": 2200843375,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            162925000,
+            459381000
+          ],
+          "first_ns": 271752958,
+          "gaps": 0,
+          "incarnation": 237670565277,
+          "key": 243000,
+          "kind": "operation",
+          "largest_gap_ns": 12262583,
+          "last_ns": 2191437667,
+          "last_probe_ns": 2417,
+          "namespace": 7,
+          "opened_ns": 276290375,
+          "pid": 36130,
+          "resource_status": "sampled",
+          "role": 1,
+          "run": "ba9e6ab09df7e0ffbe6ec9c9976bc383",
+          "sampled_max_rss": 30654464,
+          "samples": 193,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "getrusage+libproc",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 1157090792,
+                "name": "exec"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 767458166,
+                "name": "commit"
+              }
+            ],
+            "elapsed_ns": 1924551250,
+            "name": "sdk.shell_package"
+          },
+          "v": 1
+        },
+        "operation_event_count": 1
+      },
+      "verification": {
+        "reason": "separate prove, without performance replay",
+        "status": "SKIPPED"
+      }
+    },
+    {
+      "artifacts": {
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "sha256": "7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+          "sha256": "24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-namespace-retained-g1-replace-sdk-v1",
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_budget_ns": 15000000000,
+      "command_status": "PASS",
+      "control": {
+        "pin_generation": 1,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 10,
+        "pinned_sha256": "40e80dbfeafb7de6dcf05054056236a924da3616e0f8b600524a92b9e7c7552e",
+        "prelude_commit_ns": 10734083,
+        "prelude_exec_ns": 20052833,
+        "prelude_head_commit": "12f885113e1a6bb8b85e14648e7253281be8422bdb14f3acaa5bfd123b367e3f05",
+        "up_to_date": false
+      },
+      "driver": {
+        "branch_id": "1136363636363636363636363636363636",
+        "cleanup_ns": 449871917,
+        "commit_called": true,
+        "commit_ns": 17011291,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 38473,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_ns": 18484375,
+        "head_commit": "128a25c7a32cd38568261c8631bc7204afd4a85434f72f643b155b4036f5079a05",
+        "host_disk_read_bytes": 0,
+        "mode": "run",
+        "operation_ns": 67587083,
+        "projection_counts": "lookup=29,getattr=39,read=0,write=2,readdir=0,open=0,setattr=0,rename=2,other=0",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-namespace-retained-g1-replace-sdk-v1",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "host_service_event_counts": {
+        "HistoryCommand": 3,
+        "HistoryQuery": 1,
+        "Inspect": 18,
+        "ReadFile": 1,
+        "SaveFileV2": 1
+      },
+      "image_id": "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e",
+      "independent_proof": {
+        "case": "workspace-namespace-retained-g1-replace-sdk-v1",
+        "child": {
+          "advanced": true,
+          "head_commit": "128a25c7a32cd38568261c8631bc7204afd4a85434f72f643b155b4036f5079a05",
+          "namespace_identities": 4,
+          "new_bytes": 29,
+          "new_files": 3,
+          "new_paths": 9,
+          "old_bytes": 30,
+          "old_commit": "12f885113e1a6bb8b85e14648e7253281be8422bdb14f3acaa5bfd123b367e3f05",
+          "old_files": 3,
+          "old_paths": 9,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "585ecae76bb786e1a045ddb9d4f3b1a19c85ac9e0be16733c80ca89d8ca06005",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-retained-g1-replace-sdk-v1/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-retained-g1-replace-sdk-v1/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-retained-g1-replace-sdk-v1/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-retained-g1-replace-sdk-v1/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-retained-g1-replace-sdk-v1/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 9921513175791,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "2e88e4d473c162d417045c65ec385e7795df04787e37d081058eddc16f1c6275",
+          "timeout": false,
+          "wall_ns": 26150500
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      "master": {
+        "files": {
+          "fixture.before": "b8b5fd39b6ec90facaf5c034361d0ddc7059dc4017186a59faaa5cc71a2f4925",
+          "history.sqlite": "ad353e284b4b752b5e36614149e7f18659382e11ac3c78a79d10ba81d0619719",
+          "store.sqlite": "39164f0f88c9e5a3e4a759113b477991bd9791c7b253141cb9939b3b84dbdfe3"
+        },
+        "layout": "small",
+        "old_commit": "12a09732fba28ee75f3891f56de1fb3f1ebc0ea1b8de74b53dd5d753f94a88c026",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/2242645c108f101504acd44cfc543152a9106d5cbb9e80559bf6ae79d464828a",
+        "preparation": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+            "seed-existing",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/2242645c108f101504acd44cfc543152a9106d5cbb9e80559bf6ae79d464828a/seed.case",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/2242645c108f101504acd44cfc543152a9106d5cbb9e80559bf6ae79d464828a/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-sdk-master-v1/2242645c108f101504acd44cfc543152a9106d5cbb9e80559bf6ae79d464828a/history.sqlite",
+            "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e"
+          ],
+          "exit_code": 0,
+          "started_ns": 9894484688125,
+          "stderr_sha256": "7471d71b3b6f4fc369fd0fd5c34f164bae0f56fb19d9eb647571f46698cd7605",
+          "stdout_sha256": "254e45263aa1a61eddc45ffa2acdf8c62ac41dd55dc8e3eb2ee42587ccfc2758",
+          "timeout": false,
+          "wall_ns": 4162751708
+        },
+        "producer_binary": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "sha256": "7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1"
+        },
+        "producer_identity": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+          "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+          "source_commit": "d4a4252caa54a0dbb7454971d4ae8f169bd11c6d",
+          "source_dirty": false,
+          "source_tree": "9510e1314712d488a7edc8d387f01559a67a35ad"
+        },
+        "reuse": false,
+        "source_master": {
+          "files": {
+            "fixture.before": "b8b5fd39b6ec90facaf5c034361d0ddc7059dc4017186a59faaa5cc71a2f4925",
+            "history.sqlite": "e4c224209219a9bd3167684cf81640aa0e17c47c0b399b7e4cfa93ac2aeca0f4",
+            "store.sqlite": "93c00ef53373e34ecf061526ca19ed01db7940c9d4afc27636ffac799abbe7b0"
+          },
+          "oracle": "grand-base/sibling-base; large data[i]=i%251; full relevant bytes checked in native child",
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-commit-native-master-v1/small",
+          "preparation": {
+            "command": [
+              "docker",
+              "exec",
+              "-e",
+              "LAYERFS_PHASE_B_PREPARE=/work/master-small",
+              "-e",
+              "LAYERFS_PHASE_B_SIZE=0",
+              "issue286-native-b262e96aa7cf4fc1",
+              "/test",
+              "--exact",
+              "phase_b_commit::prepare_master",
+              "--ignored",
+              "--nocapture"
+            ],
+            "exit_code": 0,
+            "started_ns": 5117125951875,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "dacea8c5b3eb599f0171401df28f231538ba2b42c6fecdd5b70f46276e62cafe",
+            "timeout": false,
+            "wall_ns": 99599000
+          },
+          "producer_binary": {
+            "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542/inherited_workspace",
+            "sha256": "6971b001c59d01ee5929fa2349b6206bd0e8e95362fefbeedcfeb32eba533542"
+          },
+          "producer_source": {
+            "build_profile": "release",
+            "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+            "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+            "dirty_paths": [],
+            "harness_seal": "3146775f13e464adff41b48d758c1876e50f30eeaabf99448f4676e8cd6c7112",
+            "product_seal": "6faef099d307495607bb60a9ed5be40628880bcd770cc307228b3d89d37c7043",
+            "source_commit": "ca9253e0b873aaa3847ac32fd76787b086785799",
+            "source_dirty": false,
+            "source_tree": "2479035e9fcc27aabcd3b0dfd2004ba3cfb45a77"
+          },
+          "size": 0
+        }
+      },
+      "numeric_latency_status": "INELIGIBLE",
+      "oracle_hashes": {
+        "case.before": "d60feb3452340487c9ed886ff9b9e5d0d92e370eed4ce1f1fbe01c22699f1058",
+        "case.verify": "b3fe6fd5a0e31d8b40e68d6090e90ebc5f057de8d08cab168b9700f179d5cc7f",
+        "new.tsv": "2c17f692862582c83ecda4da00ad46a6119e581dfd2c936b8999d1ac76835f8a",
+        "old.tsv": "ab9183230fc3801f05fc82dca3004555e9e7f964f26752f844b1d17983acc8a8"
+      },
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7418e09e06e11937f8da432e6aeca3b18f0617628316a711766f04d02a1843b1/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-retained-g1-replace-sdk-v1/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-retained-g1-replace-sdk-v1/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-retained-g1-replace-sdk-v1/history.sqlite",
+          "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e"
+        ],
+        "exit_code": 0,
+        "started_ns": 9905750015291,
+        "stderr_sha256": "ffeffc3ed0aaa4b7c05114a409f4834920d70996dde5878338c3f354569d64eb",
+        "stdout_sha256": "ca9f856a19ade0632b58a440acc3200c2500d9f5a0807c59899780bae6e71b68",
+        "timeout": false,
+        "wall_ns": 897687500
+      },
+      "performance_claim": false,
+      "pin_status": "PASS",
+      "profile": "namespace-component-and-sdk-clone-functional-v1",
+      "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+      "route_status": "PASS",
+      "sample_count": 1,
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+        "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+        "source_commit": "d4a4252caa54a0dbb7454971d4ae8f169bd11c6d",
+        "source_dirty": false,
+        "source_tree": "9510e1314712d488a7edc8d387f01559a67a35ad"
+      },
+      "status": "COMPLETE_DIAGNOSTIC",
+      "telemetry": {
+        "event_count": 100,
+        "operation": {
+          "clock": "local-monitor",
+          "closed_ns": 349026625,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            14054000,
+            12296000
+          ],
+          "first_ns": 281383709,
+          "gaps": 0,
+          "incarnation": 237738006343,
+          "key": 243000,
+          "kind": "operation",
+          "largest_gap_ns": 11227042,
+          "last_ns": 340611625,
+          "last_probe_ns": 7333,
+          "namespace": 7,
+          "opened_ns": 281440709,
+          "pid": 36187,
+          "resource_status": "sampled",
+          "role": 1,
+          "run": "82d6ab66b442590c2d4aca6acccf8f5c",
+          "sampled_max_rss": 31031296,
+          "samples": 7,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "getrusage+libproc",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 18484667,
+                "name": "exec"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 17011375,
+                "name": "commit"
+              }
+            ],
+            "elapsed_ns": 67584917,
+            "name": "sdk.shell_package"
+          },
+          "v": 1
+        },
+        "operation_event_count": 1
+      },
+      "verification": {
+        "reason": "separate prove, without performance replay",
+        "status": "SKIPPED"
+      }
+    }
+  ],
+  "separate_proof": {
+    "identity": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "2bbbd4f11ee2d2d1318fef3f9461d3eab5924f44971b1d81d56843261d488ec5",
+      "product_seal": "291512c5c033bc93703750c8e16e7437ae7bb8de93c606cec679af6b534ed714",
+      "source_commit": "d4a4252caa54a0dbb7454971d4ae8f169bd11c6d",
+      "source_dirty": false,
+      "source_tree": "9510e1314712d488a7edc8d387f01559a67a35ad"
+    },
+    "rows": [
+      {
+        "case": "workspace-namespace-move-replace-descendants-3-sdk-v1",
+        "child": {
+          "advanced": true,
+          "head_commit": "12e76135c4397ea22543beb3602a847fbcbb845381d6ec64fcf70f2cb5aecbfe31",
+          "namespace_identities": 4,
+          "new_bytes": 29,
+          "new_files": 3,
+          "new_paths": 9,
+          "old_bytes": 30,
+          "old_commit": "12a09732fba28ee75f3891f56de1fb3f1ebc0ea1b8de74b53dd5d753f94a88c026",
+          "old_files": 3,
+          "old_paths": 9,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "3a26570bdbb770457607d232ece838c2207ead6778459dbeb923f89fa5824ead",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-3-sdk-v1/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-3-sdk-v1/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-3-sdk-v1/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-3-sdk-v1/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-3-sdk-v1/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 9920790463916,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "532a7f7634c802fe8842e31001c6d3a5ded2d122f90cab167ef2108dee2c2629",
+          "timeout": false,
+          "wall_ns": 201762875
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      {
+        "case": "workspace-namespace-move-replace-descendants-67-sdk-v1",
+        "child": {
+          "advanced": true,
+          "head_commit": "12aa7a4c5e88d35bcbe47ae7a7bd9fea82291a57f5afba80b0b310a090b4c99faf",
+          "namespace_identities": 68,
+          "new_bytes": 93,
+          "new_files": 67,
+          "new_paths": 73,
+          "old_bytes": 94,
+          "old_commit": "1230d188a96ebf34215590db606f09ef8a28a5a9ef326b08b38c7dc35bdbebbb46",
+          "old_files": 67,
+          "old_paths": 73,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "9bf1afa50f1f03be01ec1fd2074cb943b47e98dc068e4d0a85e7e82be30df41d",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-67-sdk-v1/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-67-sdk-v1/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-67-sdk-v1/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-67-sdk-v1/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-move-replace-descendants-67-sdk-v1/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 9920994259458,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "8b689cd17c2e79d05b188d13e118028cba5e2a097e5497d88c2f571902f62531",
+          "timeout": false,
+          "wall_ns": 215061833
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      {
+        "case": "workspace-namespace-deep-4097-sdk-v1",
+        "child": {
+          "advanced": true,
+          "head_commit": "122064bb1ef7595a3c9f2022dd6b6ae9627ef56bb68108bedd7223dd163869eb22",
+          "namespace_identities": 17,
+          "new_bytes": 38,
+          "new_files": 4,
+          "new_paths": 28,
+          "old_bytes": 39,
+          "old_commit": "12759d24ba2b0b72f7793700fac713a1711d74e5a39f589853478f645b801dfba0",
+          "old_files": 4,
+          "old_paths": 26,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "c1e55586821b86b2f3b87c232a26c56d7df48333f23e267fb9cbf32c25cf8173",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-deep-4097-sdk-v1/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-deep-4097-sdk-v1/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-deep-4097-sdk-v1/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-deep-4097-sdk-v1/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-deep-4097-sdk-v1/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 9921210940750,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "14cb0a05517f63cd7a5272f3b77d90e94157cb9af9664a9cd06bc2f1846af1a7",
+          "timeout": false,
+          "wall_ns": 97284666
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      {
+        "case": "workspace-namespace-components-270-sdk-v1",
+        "child": {
+          "advanced": true,
+          "head_commit": "12e44117583b3e424295cd1c557ec718ee32ac4b46d410f81628f8b344a9f905f4",
+          "namespace_identities": 9,
+          "new_bytes": 34,
+          "new_files": 4,
+          "new_paths": 280,
+          "old_bytes": 30,
+          "old_commit": "12a09732fba28ee75f3891f56de1fb3f1ebc0ea1b8de74b53dd5d753f94a88c026",
+          "old_files": 3,
+          "old_paths": 9,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "cb3bd233ed694b946e2c303ab760f69956e6425ad664bc1180652b16762f917b",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-components-270-sdk-v1/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-components-270-sdk-v1/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-components-270-sdk-v1/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-components-270-sdk-v1/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-components-270-sdk-v1/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 9921310151916,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "ca51a6a6bd1fea100ca1211eae933b537e8ab8c69a2a0564c3f0b4e072be4299",
+          "timeout": false,
+          "wall_ns": 201375042
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      {
+        "case": "workspace-namespace-retained-g1-replace-sdk-v1",
+        "child": {
+          "advanced": true,
+          "head_commit": "128a25c7a32cd38568261c8631bc7204afd4a85434f72f643b155b4036f5079a05",
+          "namespace_identities": 4,
+          "new_bytes": 29,
+          "new_files": 3,
+          "new_paths": 9,
+          "old_bytes": 30,
+          "old_commit": "12f885113e1a6bb8b85e14648e7253281be8422bdb14f3acaa5bfd123b367e3f05",
+          "old_files": 3,
+          "old_paths": 9,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "585ecae76bb786e1a045ddb9d4f3b1a19c85ac9e0be16733c80ca89d8ca06005",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/24bddab5d42e5e6191055b7d5ad0393032f93e27bf447e3adaa4a45801fac288/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-retained-g1-replace-sdk-v1/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-retained-g1-replace-sdk-v1/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-retained-g1-replace-sdk-v1/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-retained-g1-replace-sdk-v1/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066/workspace-namespace-retained-g1-replace-sdk-v1/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 9921513175791,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "2e88e4d473c162d417045c65ec385e7795df04787e37d081058eddc16f1c6275",
+          "timeout": false,
+          "wall_ns": 26150500
+        },
+        "verifier_budget_ns": 9000000000
+      }
+    ],
+    "run": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-namespace-sdk-r066",
+    "schema": "core-workspace-namespace-proof-v1",
+    "status": "PASS"
+  }
+}

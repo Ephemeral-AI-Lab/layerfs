@@ -501,3 +501,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family5 native namespace r065
 
 [10/10 native controls PASS](experiments/20260930-workspace-namespace-native-r065.md), all15s child command bounds and checked cleanup; complete old/new/pinned trees,4097-byte component access, G1/G2, refund and atomic refusal. Observed private/upstream counts match across3/67 and256 unrelated resident files, while internal scan/visit counts remain unavailable. SDK time N/A; numeric INELIGIBLE. No production change or earlier-family run. Next r066 public SDK + separate proof.
+
+## Family5 SDK namespace and separate proof r066
+
+[5/5 SDK commands and5/5 independent full verifiers PASS](experiments/20260930-workspace-namespace-sdk-r066.md), commands865,639,833–2,805,615,834ns under15s/declared25s bounds; proofs26,150,500–215,061,833ns<9s.4097-byte and270-component access, moves/replacements/listing and retained lease all clean. Native10 companion proofs reused fromr065. Post-collection import-first cycle fixed without replay; product/codec/LOC unchanged, all earlier-family groups reused, numeric INELIGIBLE. Family6 next; no all-seven/admission/merge claim.

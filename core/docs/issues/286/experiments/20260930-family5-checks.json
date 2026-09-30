@@ -1,0 +1,45 @@
+{
+  "checks": [
+    {
+      "command": "cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked -p layerfs-sdk -p layerfs-server --example benchmark_shell --example verify_checkpoint5 -- -D warnings",
+      "status": "PASS"
+    },
+    {
+      "command": "CC_aarch64_unknown_linux_musl=/Users/yifanxu/Library/Caches/cargo-zigbuild/0.23.0/wrappers/682f/zigcc-aarch64-unknown-linux-musl-5d3b.sh cargo +1.85.1 clippy --release --manifest-path core/Cargo.toml --locked --offline --target aarch64-unknown-linux-musl -p layerfs-sdk -p layerfs-storage --features rusqlite/bundled --test inherited_workspace -- -D warnings",
+      "status": "PASS"
+    },
+    {
+      "command": "cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check",
+      "status": "PASS"
+    },
+    {
+      "command": "python3 core/tools/check_product_boundary.py",
+      "status": "PASS:357 production files"
+    },
+    {
+      "command": "python3 -m unittest discover -s core/tools -p 'test_*.py'",
+      "status": "PASS:9 tests"
+    },
+    {
+      "command": "python3 -m unittest discover -s core/benchmark/fs-bench-pro/tests -p 'test_workspace_namespace.py'",
+      "status": "PASS:5 tests, final import fix"
+    },
+    {
+      "command": "python3 -m unittest discover -s core/benchmark/fs-bench-pro/tests -p 'test_workspace_commit_native.py'",
+      "status": "PASS:3 tests, initial staged source"
+    },
+    {
+      "command": "python3 core/benchmark/fs-bench-pro/shell_package.py self-check",
+      "status": "PASS:4 registered historical cases, no sample"
+    },
+    {
+      "command": "python3 core/benchmark/fs-bench-pro/runner.py list",
+      "status": "PASS:entrypoint/registry only"
+    }
+  ],
+  "earlier_proof_reuse": "unchanged product checks/benchmarks from FAMILY4-CHECKPOINT-20260930.md; no CI/preflight or earlier benchmark replay",
+  "measurement_profile": "release; host Clippy dev check is never a measured executable",
+  "output_custody": "observed terminal tool results; no separate stdout receipt captured, no invented stdout hashes/walls",
+  "postcollection_fix": "move shell_package case_spec imports into consuming functions; solves import-first cycle without changing measured work/compiled artifacts; no performance replay",
+  "rust_source": "ecca96af9/d4a4252ca identical changed Rust helper/examples"
+}

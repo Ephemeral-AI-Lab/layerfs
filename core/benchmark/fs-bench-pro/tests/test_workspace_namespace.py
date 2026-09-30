@@ -2,6 +2,7 @@
 import hashlib
 from pathlib import Path
 import sys
+import subprocess
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -13,6 +14,12 @@ def rows(text):
 
 
 class NamespaceOracle(unittest.TestCase):
+    def test_shared_shell_helper_imports_before_runner(self):
+        module_root = Path(__file__).resolve().parents[1]
+        result = subprocess.run([sys.executable, "-c", "import shell_package; assert callable(shell_package.case_spec)"],
+                                cwd=module_root, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_move_preserves_complete_extra_corpus_and_replaces_one_file(self):
         old, new = map(rows, namespace.oracle(namespace.SDK["workspace-namespace-move-replace-descendants-67-sdk-v1"]))
         self.assertEqual(len(old), 73)
