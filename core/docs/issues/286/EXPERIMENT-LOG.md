@@ -521,3 +521,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family6 explicit SDK recovery r070
 
 [New v2 recovery PASS](experiments/20260930-workspace-mutations-sdk-recovery-r070.md): complete5,244,737,792ns /15s, exact initial exit7/no implicit head advance, held private7B before/after explicit Commit16,663,500ns, declared operation44,577,000ns, separate full proof31,544,833ns<9s, cleanup494,813,834ns PASS. Original v1 remains FAIL. Three r069 SDK and all3 native profiles reused: current7-profile functional/custody scope covered, numeric INELIGIBLE, production LOC unchanged. Next Family7; deferred work stays#276.
+
+## Family7 package partial r071
+
+[Six SDK/full proofs PASS;1025 lost-response FAIL;retained129 NOT_RUN](experiments/20260930-workspace-shell-package-sdk-r071.md). Sourceab3212381, complete0.896–5.144s for passing rows;1025 complete19.790s<25s but SDK Commit Unknown after5.028s silence while daemon continued9.814s. Clean shutdown refused; original row stays FAIL. Next add actual Commit preparation progress through existing authenticated protocol, unchanged silence/operation/command budgets; collect only failed1025 and unattempted retained129, reuse six passing arms and all earlier families. No product change in r071; deferred dirty-discard disposition posted#276.

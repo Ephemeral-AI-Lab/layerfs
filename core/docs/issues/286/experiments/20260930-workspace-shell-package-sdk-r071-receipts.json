@@ -1,0 +1,3040 @@
+{
+  "attempts": [
+    {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+          "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "sha256": "8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-shell-package-mixed-refresh-sdk-v2",
+      "changed_file_count": null,
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_budget_ns": 25000000000,
+      "command_status": "PASS",
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "recovery_complete": false,
+        "unmounted_before_recovery": false,
+        "up_to_date": false
+      },
+      "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+      "driver": {
+        "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+        "cleanup_ns": 474853917,
+        "commit_called": true,
+        "commit_ns": 155932833,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 51902,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_exit_status": 0,
+        "exec_ns": 174716083,
+        "head_commit": "12a6ed9be26a35afad75d10bf57094155a5a390c486422987352b1756bd9727784",
+        "host_disk_read_bytes": 0,
+        "mode": "run",
+        "operation_ns": 330655542,
+        "projection_counts": "lookup=159,getattr=198,read=0,write=36,readdir=0,open=1,setattr=0,rename=2,other=0",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-shell-package-mixed-refresh-sdk-v2",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "expected_exec_failure": false,
+      "expected_failure": false,
+      "explicit_recovery": false,
+      "family_id": "workspace_shell_package",
+      "image_id": "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1",
+      "master": {
+        "binding_key_hex": "6c6179657266732d62656e63682d70726f",
+        "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+        "files": {
+          "fixture.before": "c67e15b5ca6c5de79bed58c54510b8194d07c38fdd6da3e0142b4df92c4e598d",
+          "history.sqlite": "de34cfcb14b9d8b481e3f077668f81108e82e9a782f5288fed8eb60d70bb592c",
+          "store.sqlite": "a0628c5cee06c8bed44caedf4d30f84aa2d4853d0d4f931bc33e92d8dcb3bc2e"
+        },
+        "layout": "package",
+        "old_commit": "12b8fc793f6b3268259d1cc637a48feaf592b94b051dc370c333d689fac15c9154",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+        "preparation": {
+          "full_proof": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/verify.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv"
+            ],
+            "exit_code": 0,
+            "started_ns": 14133594807708,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "3fabae0bab27c84740434d765d3e98d27f60faa28e8ad52cc5b9367fbed49fab",
+            "timeout": false,
+            "wall_ns": 21958958
+          },
+          "init": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/source",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "family7-package"
+            ],
+            "exit_code": 0,
+            "started_ns": 14132682211541,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "f9c82fc1738dfa09916d2a14b9019a3e7757e782a2f2c36e599b0dd58b7a39a2",
+            "timeout": false,
+            "wall_ns": 34063667
+          },
+          "seed": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+              "seed",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/seed.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+            ],
+            "exit_code": 0,
+            "started_ns": 14132717096375,
+            "stderr_sha256": "93b69e37eae762c773c1030074b4dfda55d2192e73b3b850ffdfe208a8387674",
+            "stdout_sha256": "bb80a9fd88a34e4731cafc01135052cec4ed200db319624b14b980432b73cf02",
+            "timeout": false,
+            "wall_ns": 876472458
+          }
+        },
+        "producer_identity": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+          "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+          "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+          "source_dirty": false,
+          "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+        },
+        "reuse": false
+      },
+      "numeric_latency_status": "INELIGIBLE",
+      "original_case_id": "mixed-refresh-v1",
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-mixed-refresh-sdk-v2/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-mixed-refresh-sdk-v2/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-mixed-refresh-sdk-v2/history.sqlite",
+          "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+        ],
+        "exit_code": 0,
+        "started_ns": 14135540903666,
+        "stderr_sha256": "f4f038e88874d00bccc4c98cc0e5d646d6c2f8d01e5d4e3a816710eeb4d7fb55",
+        "stdout_sha256": "380795ac2c907d5f58fbb0c502b43cdcf7376dc2532d216bb88831e88075d260",
+        "timeout": false,
+        "wall_ns": 1188465084
+      },
+      "performance_claim": false,
+      "pin_status": "PASS",
+      "profile": "package-many-file-functional-clone-v2",
+      "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+      "route_status": "PASS",
+      "sample_count": 1,
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+        "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+        "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+        "source_dirty": false,
+        "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+      },
+      "status": "COMPLETE_DIAGNOSTIC",
+      "verification": {
+        "reason": "separate prove, without performance replay",
+        "status": "SKIPPED"
+      },
+      "workload_source_sha256": "24956cfd2111630310a03928f15d4334476bfeb4c87cbb9e20477390315a6461"
+    },
+    {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+          "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "sha256": "8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-shell-package-overwrite-4k-sdk-v2",
+      "changed_file_count": null,
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_budget_ns": 15000000000,
+      "command_status": "PASS",
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "recovery_complete": false,
+        "unmounted_before_recovery": false,
+        "up_to_date": false
+      },
+      "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+      "driver": {
+        "branch_id": "11d35c416a85b807e9b5384915d6ebb4a9",
+        "cleanup_ns": 486091125,
+        "commit_called": true,
+        "commit_ns": 18134292,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 12666,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_exit_status": 0,
+        "exec_ns": 18492959,
+        "head_commit": "122893969a5467a06bb16e5a6fa65b9f87e1c31f186290bb4129d6f0f55b00783f",
+        "host_disk_read_bytes": 0,
+        "mode": "run",
+        "operation_ns": 36631375,
+        "projection_counts": "lookup=1,getattr=4,read=0,write=1,readdir=0,open=1,setattr=0,rename=0,other=0",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-shell-package-overwrite-4k-sdk-v2",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "expected_exec_failure": false,
+      "expected_failure": false,
+      "explicit_recovery": false,
+      "family_id": "workspace_shell_package",
+      "image_id": "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1",
+      "master": {
+        "binding_key_hex": "6c6179657266732d62656e63682d70726f",
+        "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+        "files": {
+          "fixture.before": "80cf064c7b6ea9ffa51de65e9295f0b379923a1562552f9b56833b4b8166a512",
+          "history.sqlite": "3669a3a8fcf2df527fb8a724727d456ee0a4955e63c590074de447bd9542f3d9",
+          "store.sqlite": "5d918b2b1df950cfa7480f2daea8c49e7d9ae300da6d6de3ee77da65b0da2fbb"
+        },
+        "layout": "large",
+        "old_commit": "12c51c4a99e1370dd4966ee518de1b7839a0b97a662360071d0f1fbddddda4ba04",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183",
+        "preparation": {
+          "full_proof": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/verify.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/history.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/old.tsv",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/old.tsv"
+            ],
+            "exit_code": 0,
+            "started_ns": 14134538925333,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "7172f3655c20bb7c940c5acb51a9bf9dc06e7eda23febd65476ef143f83cf0d6",
+            "timeout": false,
+            "wall_ns": 56105458
+          },
+          "init": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/source",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/history.sqlite",
+              "family7-large"
+            ],
+            "exit_code": 0,
+            "started_ns": 14133632422541,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "7de8467edf92937abcff79191eb3eac803cfdb63786d961028e1f1978cc6c212",
+            "timeout": false,
+            "wall_ns": 34839834
+          },
+          "seed": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+              "seed",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/seed.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/history.sqlite",
+              "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+            ],
+            "exit_code": 0,
+            "started_ns": 14133668074875,
+            "stderr_sha256": "4ed16ecbfc76fc446f916be1ed3659bd8dc1a75283e29afa4fe14c572f0b4a76",
+            "stdout_sha256": "5de03f55a7383aeea16e71ffaaf0fdf8da084f2527da389d131f45dff222c676",
+            "timeout": false,
+            "wall_ns": 869278250
+          }
+        },
+        "producer_identity": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+          "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+          "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+          "source_dirty": false,
+          "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+        },
+        "reuse": false
+      },
+      "numeric_latency_status": "INELIGIBLE",
+      "original_case_id": "overwrite-4k-v1",
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-overwrite-4k-sdk-v2/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-overwrite-4k-sdk-v2/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-overwrite-4k-sdk-v2/history.sqlite",
+          "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+        ],
+        "exit_code": 0,
+        "started_ns": 14136749475291,
+        "stderr_sha256": "58c1c91bfdcd8adcf2355103e1e856a64ed24045c5e9b618ebe8ef9cad81b837",
+        "stdout_sha256": "b46b6c175107f0c95c99a1e304ea970c5c4ffab0b4f80fbffe95b46f19a45174",
+        "timeout": false,
+        "wall_ns": 896207834
+      },
+      "performance_claim": false,
+      "pin_status": "PASS",
+      "profile": "package-many-file-functional-clone-v2",
+      "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+      "route_status": "PASS",
+      "sample_count": 1,
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+        "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+        "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+        "source_dirty": false,
+        "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+      },
+      "status": "COMPLETE_DIAGNOSTIC",
+      "verification": {
+        "reason": "separate prove, without performance replay",
+        "status": "SKIPPED"
+      },
+      "workload_source_sha256": "0d1f03b3be5e80602baedda30aae3df9a922184bb9a65170546346308fbc5ffd"
+    },
+    {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+          "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "sha256": "8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-shell-package-repeated-one-byte-sdk-v2",
+      "changed_file_count": null,
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_budget_ns": 15000000000,
+      "command_status": "PASS",
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "recovery_complete": false,
+        "unmounted_before_recovery": false,
+        "up_to_date": false
+      },
+      "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+      "driver": {
+        "branch_id": "11dd13795d0e0b52c84e793c55a3754654",
+        "cleanup_ns": 487293833,
+        "commit_called": true,
+        "commit_ns": 18024125,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 12638,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_exit_status": 0,
+        "exec_ns": 36592125,
+        "head_commit": "12aa6e627729d5224f5bec5f41b788f31fc4d666d973c1f373b8c124defee49dca",
+        "host_disk_read_bytes": 0,
+        "mode": "run",
+        "operation_ns": 54623125,
+        "projection_counts": "lookup=16,getattr=34,read=0,write=16,readdir=0,open=16,setattr=0,rename=0,other=0",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-shell-package-repeated-one-byte-sdk-v2",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "expected_exec_failure": false,
+      "expected_failure": false,
+      "explicit_recovery": false,
+      "family_id": "workspace_shell_package",
+      "image_id": "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1",
+      "master": {
+        "binding_key_hex": "6c6179657266732d62656e63682d70726f",
+        "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+        "files": {
+          "fixture.before": "9ed744bfadf53bd73c0e4263666ec4d0bf3d53e2e86963c335bb956bf318458c",
+          "history.sqlite": "84d7023fa23d0522f9b6d29b0d709a1acfa0419d7a0b0336419f9d6b06fea595",
+          "store.sqlite": "f0dc2fb187cbb15a3b1f873d645559081656f7ae99e89665744060542c3a6252"
+        },
+        "layout": "repeated",
+        "old_commit": "12c5b543c4ea9777b8517848d2b34344f80ebe04b85e7eee1eb7f783970dbe3a7c",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540",
+        "preparation": {
+          "full_proof": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540/verify.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540/history.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540/old.tsv",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540/old.tsv"
+            ],
+            "exit_code": 0,
+            "started_ns": 14135511748625,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "036d58e8328ac5c58c245e4f003360eb3b1960195fc3708de8b7f778e838bbeb",
+            "timeout": false,
+            "wall_ns": 23257833
+          },
+          "init": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540/source",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540/history.sqlite",
+              "family7-repeated"
+            ],
+            "exit_code": 0,
+            "started_ns": 14134601270416,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "24db41fad1a34f8b006521432a7440d4fdb91f3a8fa1f59e4fd82e2a73dc90d3",
+            "timeout": false,
+            "wall_ns": 22731500
+          },
+          "seed": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+              "seed",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540/seed.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540/history.sqlite",
+              "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+            ],
+            "exit_code": 0,
+            "started_ns": 14134624904250,
+            "stderr_sha256": "8956e978f91e727f150a35e6c9f4e076a98c765070eb69d39d051b963a310e13",
+            "stdout_sha256": "5daae59f1e0afd6c02d05e831b420f64d1d9ce3b5d3acc8008bc932cca46c85f",
+            "timeout": false,
+            "wall_ns": 885380250
+          }
+        },
+        "producer_identity": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+          "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+          "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+          "source_dirty": false,
+          "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+        },
+        "reuse": false
+      },
+      "numeric_latency_status": "INELIGIBLE",
+      "original_case_id": "repeated-one-byte-v1",
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-repeated-one-byte-sdk-v2/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-repeated-one-byte-sdk-v2/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-repeated-one-byte-sdk-v2/history.sqlite",
+          "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+        ],
+        "exit_code": 0,
+        "started_ns": 14137652972708,
+        "stderr_sha256": "4c69b03510bc4252645b07e3493fd3f487261418a8371e55c11d9eb9cfad91f4",
+        "stdout_sha256": "209c15c8d21f576629b232b0c6b79c6cda9131cbdd098b08659ff182bf8c5f4a",
+        "timeout": false,
+        "wall_ns": 906347708
+      },
+      "performance_claim": false,
+      "pin_status": "PASS",
+      "profile": "package-many-file-functional-clone-v2",
+      "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+      "route_status": "PASS",
+      "sample_count": 1,
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+        "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+        "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+        "source_dirty": false,
+        "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+      },
+      "status": "COMPLETE_DIAGNOSTIC",
+      "verification": {
+        "reason": "separate prove, without performance replay",
+        "status": "SKIPPED"
+      },
+      "workload_source_sha256": "e47c41918744cf2c853eb8e1057abe1ef30bfbffde2b1673c41696df8d909302"
+    },
+    {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+          "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "sha256": "8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-shell-package-many-128-sdk-v2",
+      "changed_file_count": 128,
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_budget_ns": 15000000000,
+      "command_status": "PASS",
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "recovery_complete": false,
+        "unmounted_before_recovery": false,
+        "up_to_date": false
+      },
+      "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+      "driver": {
+        "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+        "cleanup_ns": 511630917,
+        "commit_called": true,
+        "commit_ns": 1012325792,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 263755,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_exit_status": 0,
+        "exec_ns": 724438541,
+        "head_commit": "121894ea9a7695dd58d070bb04e407f2b0e2113931382e7c380f6f963b40872916",
+        "host_disk_read_bytes": 0,
+        "mode": "run",
+        "operation_ns": 1736771291,
+        "projection_counts": "lookup=515,getattr=903,read=0,write=257,readdir=3,open=0,setattr=0,rename=0,other=1",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-shell-package-many-128-sdk-v2",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "expected_exec_failure": false,
+      "expected_failure": false,
+      "explicit_recovery": false,
+      "family_id": "workspace_shell_package",
+      "image_id": "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1",
+      "master": {
+        "binding_key_hex": "6c6179657266732d62656e63682d70726f",
+        "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+        "files": {
+          "fixture.before": "c67e15b5ca6c5de79bed58c54510b8194d07c38fdd6da3e0142b4df92c4e598d",
+          "history.sqlite": "de34cfcb14b9d8b481e3f077668f81108e82e9a782f5288fed8eb60d70bb592c",
+          "store.sqlite": "a0628c5cee06c8bed44caedf4d30f84aa2d4853d0d4f931bc33e92d8dcb3bc2e"
+        },
+        "layout": "package",
+        "old_commit": "12b8fc793f6b3268259d1cc637a48feaf592b94b051dc370c333d689fac15c9154",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+        "preparation": {
+          "full_proof": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/verify.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv"
+            ],
+            "exit_code": 0,
+            "started_ns": 14133594807708,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "3fabae0bab27c84740434d765d3e98d27f60faa28e8ad52cc5b9367fbed49fab",
+            "timeout": false,
+            "wall_ns": 21958958
+          },
+          "init": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/source",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "family7-package"
+            ],
+            "exit_code": 0,
+            "started_ns": 14132682211541,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "f9c82fc1738dfa09916d2a14b9019a3e7757e782a2f2c36e599b0dd58b7a39a2",
+            "timeout": false,
+            "wall_ns": 34063667
+          },
+          "seed": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+              "seed",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/seed.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+            ],
+            "exit_code": 0,
+            "started_ns": 14132717096375,
+            "stderr_sha256": "93b69e37eae762c773c1030074b4dfda55d2192e73b3b850ffdfe208a8387674",
+            "stdout_sha256": "bb80a9fd88a34e4731cafc01135052cec4ed200db319624b14b980432b73cf02",
+            "timeout": false,
+            "wall_ns": 876472458
+          }
+        },
+        "producer_identity": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+          "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+          "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+          "source_dirty": false,
+          "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+        },
+        "reuse": false
+      },
+      "numeric_latency_status": "INELIGIBLE",
+      "original_case_id": null,
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-128-sdk-v2/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-128-sdk-v2/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-128-sdk-v2/history.sqlite",
+          "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+        ],
+        "exit_code": 0,
+        "started_ns": 14138566612791,
+        "stderr_sha256": "0b017638c99dbb6ffbcb38a90a21ff7419c00d673258c5ca2a419b4a25cd6191",
+        "stdout_sha256": "93c5f9c616585f3d8a4801595dfd1cb562d912cb43d228a336db69ec941b728c",
+        "timeout": false,
+        "wall_ns": 2632776334
+      },
+      "performance_claim": false,
+      "pin_status": "PASS",
+      "profile": "package-many-file-functional-clone-v2",
+      "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+      "route_status": "PASS",
+      "sample_count": 1,
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+        "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+        "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+        "source_dirty": false,
+        "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+      },
+      "status": "COMPLETE_DIAGNOSTIC",
+      "verification": {
+        "reason": "separate prove, without performance replay",
+        "status": "SKIPPED"
+      },
+      "workload_source_sha256": "bf3ba753404474ac7e6189d640df5623d0cabfac2b830572051bc26f5bdb3f41"
+    },
+    {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+          "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "sha256": "8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-shell-package-many-129-sdk-v2",
+      "changed_file_count": 129,
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_budget_ns": 15000000000,
+      "command_status": "PASS",
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "recovery_complete": false,
+        "unmounted_before_recovery": false,
+        "up_to_date": false
+      },
+      "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+      "driver": {
+        "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+        "cleanup_ns": 488673000,
+        "commit_called": true,
+        "commit_ns": 980102542,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 265695,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_exit_status": 0,
+        "exec_ns": 728778958,
+        "head_commit": "12f9b62bb3247469ae7de50d9eeb50e88518cd109a352ceffa6e48afe0e373d93d",
+        "host_disk_read_bytes": 4096,
+        "mode": "run",
+        "operation_ns": 1708890750,
+        "projection_counts": "lookup=519,getattr=910,read=0,write=259,readdir=3,open=0,setattr=0,rename=0,other=1",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-shell-package-many-129-sdk-v2",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "expected_exec_failure": false,
+      "expected_failure": false,
+      "explicit_recovery": false,
+      "family_id": "workspace_shell_package",
+      "image_id": "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1",
+      "master": {
+        "binding_key_hex": "6c6179657266732d62656e63682d70726f",
+        "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+        "files": {
+          "fixture.before": "c67e15b5ca6c5de79bed58c54510b8194d07c38fdd6da3e0142b4df92c4e598d",
+          "history.sqlite": "de34cfcb14b9d8b481e3f077668f81108e82e9a782f5288fed8eb60d70bb592c",
+          "store.sqlite": "a0628c5cee06c8bed44caedf4d30f84aa2d4853d0d4f931bc33e92d8dcb3bc2e"
+        },
+        "layout": "package",
+        "old_commit": "12b8fc793f6b3268259d1cc637a48feaf592b94b051dc370c333d689fac15c9154",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+        "preparation": {
+          "full_proof": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/verify.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv"
+            ],
+            "exit_code": 0,
+            "started_ns": 14133594807708,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "3fabae0bab27c84740434d765d3e98d27f60faa28e8ad52cc5b9367fbed49fab",
+            "timeout": false,
+            "wall_ns": 21958958
+          },
+          "init": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/source",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "family7-package"
+            ],
+            "exit_code": 0,
+            "started_ns": 14132682211541,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "f9c82fc1738dfa09916d2a14b9019a3e7757e782a2f2c36e599b0dd58b7a39a2",
+            "timeout": false,
+            "wall_ns": 34063667
+          },
+          "seed": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+              "seed",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/seed.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+            ],
+            "exit_code": 0,
+            "started_ns": 14132717096375,
+            "stderr_sha256": "93b69e37eae762c773c1030074b4dfda55d2192e73b3b850ffdfe208a8387674",
+            "stdout_sha256": "bb80a9fd88a34e4731cafc01135052cec4ed200db319624b14b980432b73cf02",
+            "timeout": false,
+            "wall_ns": 876472458
+          }
+        },
+        "producer_identity": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+          "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+          "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+          "source_dirty": false,
+          "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+        },
+        "reuse": false
+      },
+      "numeric_latency_status": "INELIGIBLE",
+      "original_case_id": null,
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-129-sdk-v2/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-129-sdk-v2/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-129-sdk-v2/history.sqlite",
+          "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+        ],
+        "exit_code": 0,
+        "started_ns": 14141207872625,
+        "stderr_sha256": "8920d0285c46263b5ac616873644e54c029710f7f696ccdc73d2239db6dd332b",
+        "stdout_sha256": "727f4d63eb577c5fa35694983a25b639088ba02b251798522c89bfaffd8b6b85",
+        "timeout": false,
+        "wall_ns": 2526101625
+      },
+      "performance_claim": false,
+      "pin_status": "PASS",
+      "profile": "package-many-file-functional-clone-v2",
+      "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+      "route_status": "PASS",
+      "sample_count": 1,
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+        "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+        "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+        "source_dirty": false,
+        "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+      },
+      "status": "COMPLETE_DIAGNOSTIC",
+      "verification": {
+        "reason": "separate prove, without performance replay",
+        "status": "SKIPPED"
+      },
+      "workload_source_sha256": "f94cc4fc3161d22cdef23b46dc4b53a97b6ce09eb0feef32f536d5d88d5ab591"
+    },
+    {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+          "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "sha256": "8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-shell-package-many-257-sdk-v2",
+      "changed_file_count": 257,
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_budget_ns": 15000000000,
+      "command_status": "PASS",
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "recovery_complete": false,
+        "unmounted_before_recovery": false,
+        "up_to_date": false
+      },
+      "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+      "driver": {
+        "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+        "cleanup_ns": 517390209,
+        "commit_called": true,
+        "commit_ns": 2145004208,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 523068,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_exit_status": 0,
+        "exec_ns": 2108573209,
+        "head_commit": "124a37dc93c5b0002dc4a37c0f329fc43a3220fe1edca27a795cf80d01846ee031",
+        "host_disk_read_bytes": 12288,
+        "mode": "run",
+        "operation_ns": 4253587667,
+        "projection_counts": "lookup=1647,getattr=2473,read=0,write=532,readdir=36,open=0,setattr=0,rename=0,other=18",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-shell-package-many-257-sdk-v2",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "expected_exec_failure": false,
+      "expected_failure": false,
+      "explicit_recovery": false,
+      "family_id": "workspace_shell_package",
+      "image_id": "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1",
+      "master": {
+        "binding_key_hex": "6c6179657266732d62656e63682d70726f",
+        "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+        "files": {
+          "fixture.before": "c67e15b5ca6c5de79bed58c54510b8194d07c38fdd6da3e0142b4df92c4e598d",
+          "history.sqlite": "de34cfcb14b9d8b481e3f077668f81108e82e9a782f5288fed8eb60d70bb592c",
+          "store.sqlite": "a0628c5cee06c8bed44caedf4d30f84aa2d4853d0d4f931bc33e92d8dcb3bc2e"
+        },
+        "layout": "package",
+        "old_commit": "12b8fc793f6b3268259d1cc637a48feaf592b94b051dc370c333d689fac15c9154",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+        "preparation": {
+          "full_proof": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/verify.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv"
+            ],
+            "exit_code": 0,
+            "started_ns": 14133594807708,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "3fabae0bab27c84740434d765d3e98d27f60faa28e8ad52cc5b9367fbed49fab",
+            "timeout": false,
+            "wall_ns": 21958958
+          },
+          "init": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/source",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "family7-package"
+            ],
+            "exit_code": 0,
+            "started_ns": 14132682211541,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "f9c82fc1738dfa09916d2a14b9019a3e7757e782a2f2c36e599b0dd58b7a39a2",
+            "timeout": false,
+            "wall_ns": 34063667
+          },
+          "seed": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+              "seed",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/seed.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+            ],
+            "exit_code": 0,
+            "started_ns": 14132717096375,
+            "stderr_sha256": "93b69e37eae762c773c1030074b4dfda55d2192e73b3b850ffdfe208a8387674",
+            "stdout_sha256": "bb80a9fd88a34e4731cafc01135052cec4ed200db319624b14b980432b73cf02",
+            "timeout": false,
+            "wall_ns": 876472458
+          }
+        },
+        "producer_identity": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+          "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+          "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+          "source_dirty": false,
+          "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+        },
+        "reuse": false
+      },
+      "numeric_latency_status": "INELIGIBLE",
+      "original_case_id": null,
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-257-sdk-v2/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-257-sdk-v2/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-257-sdk-v2/history.sqlite",
+          "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+        ],
+        "exit_code": 0,
+        "started_ns": 14143742658416,
+        "stderr_sha256": "7689eadebea02e579846d8cd6567f2a7c3aad04935bb677b8753fc55f197e5cc",
+        "stdout_sha256": "af43eac1fa05d9cbb2934e94faf9f5df420c8c3118a5ec88580c546ffe927c55",
+        "timeout": false,
+        "wall_ns": 5144135334
+      },
+      "performance_claim": false,
+      "pin_status": "PASS",
+      "profile": "package-many-file-functional-clone-v2",
+      "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+      "route_status": "PASS",
+      "sample_count": 1,
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+        "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+        "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+        "source_dirty": false,
+        "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+      },
+      "status": "COMPLETE_DIAGNOSTIC",
+      "verification": {
+        "reason": "separate prove, without performance replay",
+        "status": "SKIPPED"
+      },
+      "workload_source_sha256": "86c62c02da4094feeeab0aa9855bd52c86a904adbc9bf505fc1b42aa3620278e"
+    },
+    {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+          "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "sha256": "8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-shell-package-many-1025-sdk-v2",
+      "changed_file_count": 1025,
+      "cleanup_status": "FAIL",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_budget_ns": 25000000000,
+      "command_status": "PASS",
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "recovery_complete": false,
+        "unmounted_before_recovery": false,
+        "up_to_date": false
+      },
+      "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+      "driver": {
+        "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+        "cleanup_ns": 5586193333,
+        "commit_called": true,
+        "commit_ns": 5028155750,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 1379689,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "commit: Failure(Failure { code: Unknown, unknown: true, cleanup: None, history: None }); status=Err(Failure(Failure { code: Io, unknown: false, cleanup: None, history: None })) unmount=Err(Failure(Failure { code: Io, unknown: false, cleanup: None, history: None })) delete=Ok(())",
+        "exec_exit_status": 0,
+        "exec_ns": 8806900666,
+        "head_commit": "",
+        "host_disk_read_bytes": 0,
+        "mode": "run",
+        "operation_ns": 13835067666,
+        "projection_counts": "",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-shell-package-many-1025-sdk-v2",
+        "schema": "issue243-shell-driver-v1",
+        "status": "FAIL",
+        "unmount_ok": false
+      },
+      "expected_exec_failure": false,
+      "expected_failure": false,
+      "explicit_recovery": false,
+      "family_id": "workspace_shell_package",
+      "image_id": "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1",
+      "master": {
+        "binding_key_hex": "6c6179657266732d62656e63682d70726f",
+        "cursor_key": "3535353535353535353535353535353535353535353535353535353535353535",
+        "files": {
+          "fixture.before": "c67e15b5ca6c5de79bed58c54510b8194d07c38fdd6da3e0142b4df92c4e598d",
+          "history.sqlite": "de34cfcb14b9d8b481e3f077668f81108e82e9a782f5288fed8eb60d70bb592c",
+          "store.sqlite": "a0628c5cee06c8bed44caedf4d30f84aa2d4853d0d4f931bc33e92d8dcb3bc2e"
+        },
+        "layout": "package",
+        "old_commit": "12b8fc793f6b3268259d1cc637a48feaf592b94b051dc370c333d689fac15c9154",
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+        "preparation": {
+          "full_proof": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/verify.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/old.tsv"
+            ],
+            "exit_code": 0,
+            "started_ns": 14133594807708,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "3fabae0bab27c84740434d765d3e98d27f60faa28e8ad52cc5b9367fbed49fab",
+            "timeout": false,
+            "wall_ns": 21958958
+          },
+          "init": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/source",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "family7-package"
+            ],
+            "exit_code": 0,
+            "started_ns": 14132682211541,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "f9c82fc1738dfa09916d2a14b9019a3e7757e782a2f2c36e599b0dd58b7a39a2",
+            "timeout": false,
+            "wall_ns": 34063667
+          },
+          "seed": {
+            "command": [
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+              "seed",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/seed.case",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/store.sqlite",
+              "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e/history.sqlite",
+              "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+            ],
+            "exit_code": 0,
+            "started_ns": 14132717096375,
+            "stderr_sha256": "93b69e37eae762c773c1030074b4dfda55d2192e73b3b850ffdfe208a8387674",
+            "stdout_sha256": "bb80a9fd88a34e4731cafc01135052cec4ed200db319624b14b980432b73cf02",
+            "timeout": false,
+            "wall_ns": 876472458
+          }
+        },
+        "producer_identity": {
+          "build_profile": "release",
+          "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+          "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+          "dirty_paths": [],
+          "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+          "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+          "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+          "source_dirty": false,
+          "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+        },
+        "reuse": false
+      },
+      "numeric_latency_status": "INELIGIBLE",
+      "original_case_id": null,
+      "performance": {
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "run",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-1025-sdk-v2/case.before",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-1025-sdk-v2/store.sqlite",
+          "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-1025-sdk-v2/history.sqlite",
+          "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1"
+        ],
+        "exit_code": 1,
+        "started_ns": 14148903614250,
+        "stderr_sha256": "21b454ac951a2bcb77d38ded0af84eb08581c2bc1bcf688452fdfe87abf13297",
+        "stdout_sha256": "c20ecad30c0ef7723a82b42f59b8648e2d07a0ef82a62859b6a80d9cebaebdc1",
+        "timeout": false,
+        "wall_ns": 19789623791
+      },
+      "performance_claim": false,
+      "pin_status": "PASS",
+      "profile": "package-many-file-functional-clone-v2",
+      "route": "public WorkspaceApi Mount/Exec/Commit/Status/unmount/delete; POSIX-FUSE",
+      "route_status": "FAIL",
+      "sample_count": 1,
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+        "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+        "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+        "source_dirty": false,
+        "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+      },
+      "status": "FAIL",
+      "verification": {
+        "reason": "separate prove, without performance replay",
+        "status": "SKIPPED"
+      },
+      "workload_source_sha256": "1a29dfb7d9734dfb13b660f544c7d0ff70f22ba44656a59d0e1cabd4735413f4"
+    },
+    {
+      "case": "workspace-shell-package-many-129-live-g2-sdk-v2",
+      "reason": "prior cleanup failed",
+      "status": "NOT_RUN"
+    }
+  ],
+  "commands": [
+    "python3 core/benchmark/fs-bench-pro/runner.py run --family workspace_shell_package --out benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071",
+    "python3 core/benchmark/fs-bench-pro/runner.py prove --run benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071 --out benchmark-results/fs-bench-pro/issue286-workspace-shell-package-proof-r071"
+  ],
+  "host": {
+    "machine": "arm64",
+    "release": "25.4.0",
+    "system": "Darwin"
+  },
+  "performance": {
+    "deferred_cases": [
+      {
+        "case": "failed-command-no-commit-v1",
+        "reason": "OWNER-DEFERRED #276: unmount does not discard dirty changes; original method remains historical, no repeated dirty-close attempt",
+        "status": "OWNER-DEFERRED"
+      }
+    ],
+    "identity": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+      "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+      "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+      "source_dirty": false,
+      "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+    },
+    "prepared": {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+          "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497/benchmark_shell",
+          "sha256": "8410ea2fbc1f6e60c8e5d63a292ea763dc6c59c74f818820ac7c3e4458f91497"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75/layerfs-daemon",
+          "sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "build_mode": "worktree-local locked release; exact daemon/image reuse when sealed",
+      "identity": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+        "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+        "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+        "source_dirty": false,
+        "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+      },
+      "image_build": {
+        "command": null,
+        "daemon_sha256": "15d1d5068e93a44a863e72eafcfbbb502225ac212f9d5dd941ded3be7bafff75",
+        "image_id": "sha256:801bd9d133ab381215179ceff4868709d2cde60f82d40ff5198965300ce0040e",
+        "mode": "exact-image-reuse",
+        "wall_ns": 0
+      },
+      "image_dockerfile_sha256": "d351105281e5e33ecf4b861cdb4f7a42e199830723a73b7226b933223d7cf3e3",
+      "image_id": "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1",
+      "package_image": {
+        "image_id": "sha256:f39d7b9f9adbbbb85469b7f216330f949a2ece039f1cbf42c23d808cd12a5cd1",
+        "mode": "build",
+        "seal": "c04f0ae87bda2352ed8001dc6cf78547fb204e3e466bbd9eda93eb1b2620fdb1",
+        "wall_ns": 5348182167
+      },
+      "writer_binary_sha256": "f293d71f2a16aaeecb4de6c1c2cf5b74dfcb0e616204e591f83c3ef802a686d3"
+    },
+    "profile": "package-many-file-functional-clone-v2",
+    "reused_proof_identities": {
+      "dirty_cleanup": "r069 FAIL, #276 comment5903530127",
+      "earlier_families": "FAMILY1/2/4/5/6-CHECKPOINT; F3 r063+unchanged eight rows; product unchanged"
+    },
+    "rows": [
+      {
+        "case": "workspace-shell-package-mixed-refresh-sdk-v2",
+        "status": "COMPLETE_DIAGNOSTIC"
+      },
+      {
+        "case": "workspace-shell-package-overwrite-4k-sdk-v2",
+        "status": "COMPLETE_DIAGNOSTIC"
+      },
+      {
+        "case": "workspace-shell-package-repeated-one-byte-sdk-v2",
+        "status": "COMPLETE_DIAGNOSTIC"
+      },
+      {
+        "case": "workspace-shell-package-many-128-sdk-v2",
+        "status": "COMPLETE_DIAGNOSTIC"
+      },
+      {
+        "case": "workspace-shell-package-many-129-sdk-v2",
+        "status": "COMPLETE_DIAGNOSTIC"
+      },
+      {
+        "case": "workspace-shell-package-many-257-sdk-v2",
+        "status": "COMPLETE_DIAGNOSTIC"
+      },
+      {
+        "case": "workspace-shell-package-many-1025-sdk-v2",
+        "status": "FAIL"
+      },
+      {
+        "case": "workspace-shell-package-many-129-live-g2-sdk-v2",
+        "reason": "prior cleanup failed",
+        "status": "NOT_RUN"
+      }
+    ],
+    "schema": "core-workspace-shell-package-run-v2",
+    "selected": [
+      "workspace-shell-package-mixed-refresh-sdk-v2",
+      "workspace-shell-package-overwrite-4k-sdk-v2",
+      "workspace-shell-package-repeated-one-byte-sdk-v2",
+      "workspace-shell-package-many-128-sdk-v2",
+      "workspace-shell-package-many-129-sdk-v2",
+      "workspace-shell-package-many-257-sdk-v2",
+      "workspace-shell-package-many-1025-sdk-v2",
+      "workspace-shell-package-many-129-live-g2-sdk-v2"
+    ],
+    "status": "INCOMPLETE"
+  },
+  "proof": {
+    "identity": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "6f0e4d76362ba98576a948a107d5a1ad434f01f25a0d1f07fecac32eb16674d3",
+      "product_seal": "94f834f8f818e529376c62f1edf81dc8d005ce106624c82404589d843d1a79de",
+      "source_commit": "ab32123817dda4bb18be7323d94874e79b71c980",
+      "source_dirty": false,
+      "source_tree": "05462b9daf643d830ba737d691b49aa3935d8cb5"
+    },
+    "rows": [
+      {
+        "case": "workspace-shell-package-mixed-refresh-sdk-v2",
+        "child": {
+          "advanced": true,
+          "head_commit": "12a6ed9be26a35afad75d10bf57094155a5a390c486422987352b1756bd9727784",
+          "namespace_identities": 1,
+          "new_bytes": 1114516,
+          "new_files": 9,
+          "new_paths": 18,
+          "old_bytes": 1114501,
+          "old_commit": "12b8fc793f6b3268259d1cc637a48feaf592b94b051dc370c333d689fac15c9154",
+          "old_files": 9,
+          "old_paths": 17,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "property_assertions": 0,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "ac9bd6c7e58a17d39f236d92d8eb43d2d831cc06ad2e96000f578766b2328ab8",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-mixed-refresh-sdk-v2/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-mixed-refresh-sdk-v2/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-mixed-refresh-sdk-v2/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-mixed-refresh-sdk-v2/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-mixed-refresh-sdk-v2/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 14189294571041,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "748787fbffe2bef35723b6ca64af8d8c40d11964e2eeacab1379e4c333ba6b95",
+          "timeout": false,
+          "wall_ns": 37586542
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      {
+        "case": "workspace-shell-package-overwrite-4k-sdk-v2",
+        "child": {
+          "advanced": true,
+          "head_commit": "122893969a5467a06bb16e5a6fa65b9f87e1c31f186290bb4129d6f0f55b00783f",
+          "namespace_identities": 1,
+          "new_bytes": 11600261,
+          "new_files": 10,
+          "new_paths": 18,
+          "old_bytes": 11600261,
+          "old_commit": "12c51c4a99e1370dd4966ee518de1b7839a0b97a662360071d0f1fbddddda4ba04",
+          "old_files": 10,
+          "old_paths": 18,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "property_assertions": 0,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "19faebb9c2375da7ed08236c97de04e6ddf614fc7a2ddf13360c94584e6e113d",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-overwrite-4k-sdk-v2/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-overwrite-4k-sdk-v2/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-overwrite-4k-sdk-v2/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-overwrite-4k-sdk-v2/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-overwrite-4k-sdk-v2/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 14189333888083,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "6ac166b9da4b6c1a0d834c079e8731a9a09ed32d349acb997e0b56e33ff4e7d9",
+          "timeout": false,
+          "wall_ns": 100846375
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      {
+        "case": "workspace-shell-package-repeated-one-byte-sdk-v2",
+        "child": {
+          "advanced": true,
+          "head_commit": "12aa6e627729d5224f5bec5f41b788f31fc4d666d973c1f373b8c124defee49dca",
+          "namespace_identities": 1,
+          "new_bytes": 1180037,
+          "new_files": 10,
+          "new_paths": 18,
+          "old_bytes": 1180037,
+          "old_commit": "12c5b543c4ea9777b8517848d2b34344f80ebe04b85e7eee1eb7f783970dbe3a7c",
+          "old_files": 10,
+          "old_paths": 18,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "property_assertions": 0,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "40da0db8c6e27a15f57fe63bc058b205802258022f105ee6cc4e96917ed350c9",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-repeated-one-byte-sdk-v2/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-repeated-one-byte-sdk-v2/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-repeated-one-byte-sdk-v2/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-repeated-one-byte-sdk-v2/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-repeated-one-byte-sdk-v2/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 14189436663541,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "fd65e75587a1c82cbc2dbb7fb7b839b25ebbfb42a873350c37eaf319d3e4ee72",
+          "timeout": false,
+          "wall_ns": 38729500
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      {
+        "case": "workspace-shell-package-many-128-sdk-v2",
+        "child": {
+          "advanced": true,
+          "head_commit": "121894ea9a7695dd58d070bb04e407f2b0e2113931382e7c380f6f963b40872916",
+          "namespace_identities": 1,
+          "new_bytes": 1115287,
+          "new_files": 137,
+          "new_paths": 146,
+          "old_bytes": 1114501,
+          "old_commit": "12b8fc793f6b3268259d1cc637a48feaf592b94b051dc370c333d689fac15c9154",
+          "old_files": 9,
+          "old_paths": 17,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "property_assertions": 0,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "4504f23233a724b19e135a0f8fdaaa7d98f7ab98af759196a50d0cf2a23373b1",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-128-sdk-v2/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-128-sdk-v2/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-128-sdk-v2/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-128-sdk-v2/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-128-sdk-v2/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 14189477154583,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "bc9f0fba91185b5b83d1f52c9cac2d360510342cbfd0b483c246946a026bc33a",
+          "timeout": false,
+          "wall_ns": 108020333
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      {
+        "case": "workspace-shell-package-many-129-sdk-v2",
+        "child": {
+          "advanced": true,
+          "head_commit": "12f9b62bb3247469ae7de50d9eeb50e88518cd109a352ceffa6e48afe0e373d93d",
+          "namespace_identities": 1,
+          "new_bytes": 1115294,
+          "new_files": 138,
+          "new_paths": 147,
+          "old_bytes": 1114501,
+          "old_commit": "12b8fc793f6b3268259d1cc637a48feaf592b94b051dc370c333d689fac15c9154",
+          "old_files": 9,
+          "old_paths": 17,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "property_assertions": 0,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "84c5434bee5a0870eebf03b0e82c4fe34dde772b9d3620383e4d23fd7060f7bc",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-129-sdk-v2/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-129-sdk-v2/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-129-sdk-v2/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-129-sdk-v2/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-129-sdk-v2/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 14189587272708,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "f96307c6e030c04397a7dfa5b726ba38ab0e68f9379f845ff3d7e5b2ec33cd42",
+          "timeout": false,
+          "wall_ns": 108645417
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      {
+        "case": "workspace-shell-package-many-257-sdk-v2",
+        "child": {
+          "advanced": true,
+          "head_commit": "124a37dc93c5b0002dc4a37c0f329fc43a3220fe1edca27a795cf80d01846ee031",
+          "namespace_identities": 1,
+          "new_bytes": 1116190,
+          "new_files": 266,
+          "new_paths": 292,
+          "old_bytes": 1114501,
+          "old_commit": "12b8fc793f6b3268259d1cc637a48feaf592b94b051dc370c333d689fac15c9154",
+          "old_files": 9,
+          "old_paths": 17,
+          "oracle": "issue273-checkpoint5-v1",
+          "pattern_runs": null,
+          "property_assertions": 0,
+          "separated_runs": null,
+          "status": "PASS"
+        },
+        "performance_receipt_sha256": "1f6be1338e0b02db2a3ed0e289bafe468e8b15ad2890e83fc50b1c62406435c6",
+        "scope": "independent read-only full old/new tree modes and bytes, known Commit/parent; serial traversal",
+        "status": "PASS",
+        "verification": {
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-257-sdk-v2/case.verify",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-257-sdk-v2/store.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-257-sdk-v2/history.sqlite",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-257-sdk-v2/old.tsv",
+            "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071/workspace-shell-package-many-257-sdk-v2/new.tsv"
+          ],
+          "exit_code": 0,
+          "started_ns": 14189697711083,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "33df0bf2846b495713d84aa7d4ad0e58a92b27e07a3545e6b19d4bcb2bd3d329",
+          "timeout": false,
+          "wall_ns": 188224917
+        },
+        "verifier_budget_ns": 9000000000
+      },
+      {
+        "case": "workspace-shell-package-many-1025-sdk-v2",
+        "reason": "no complete performance receipt",
+        "status": "NOT_RUN"
+      },
+      {
+        "case": "workspace-shell-package-many-129-live-g2-sdk-v2",
+        "reason": "no complete performance receipt",
+        "status": "NOT_RUN"
+      }
+    ],
+    "run": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-workspace-shell-package-sdk-r071",
+    "schema": "core-workspace-shell-package-proof-v2",
+    "status": "INCOMPLETE"
+  },
+  "proof_manifest_sha256": "5adc2224812a1becc12933343c11eac3bae5f49d4b5ba72f60a69426f7a28b49",
+  "raw_manifest_sha256": "9079ef857c9f0668885badc0a39822fda44efaa7d6f8de6c6629865beb87c4f7",
+  "schema": "issue286-family7-round-compact-v1",
+  "telemetry": {
+    "workspace-shell-package-many-1025-sdk-v2": {
+      "delivery_summaries": [
+        {
+          "delivery": "best-effort",
+          "dropped": 1650,
+          "failed": 0,
+          "kind": "run-summary",
+          "namespace": 7,
+          "overflow": false,
+          "pid": 45188,
+          "role": 1,
+          "run": "407c02386fa75f8535140b47ebe97069",
+          "v": 1
+        }
+      ],
+      "observed_event_counts": {
+        "role1:ConstructPortableMetadata": 303,
+        "role1:FileSaveCapabilities": 1,
+        "role1:HistoryCommand": 1044,
+        "role1:HistoryQuery": 1,
+        "role1:Inspect": 3,
+        "role1:SaveFileV2": 99,
+        "role1:owner.daemon_ready": 1,
+        "role1:owner.docker_launch": 1,
+        "role1:owner.docker_port": 1,
+        "role1:owner.docker_remove": 1,
+        "role1:owner.docker_stop": 1,
+        "role1:owner.hello": 1,
+        "role1:owner.shell_ready": 1,
+        "role1:owner.volume_remove": 1,
+        "role1:sdk.shell_package": 1,
+        "role2:ConstructPortableMetadata": 333,
+        "role2:FileSaveCapabilities": 1,
+        "role2:HistoryCommand": 1044,
+        "role2:HistoryQuery": 1,
+        "role2:Inspect": 3,
+        "role2:SandboxHello": 4,
+        "role2:SaveFileV2": 708,
+        "role2:WorkspaceCommit": 1,
+        "role2:WorkspaceExec": 1,
+        "role2:WorkspaceOpen": 1
+      },
+      "scope": "retained diagnostic events; dropped/incomplete events prevent full call/timer attribution",
+      "selected_spans": {
+        "role1:sdk.shell_package": {
+          "clock": "local-monitor",
+          "closed_ns": 14103485542,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            1101187000,
+            1367218000
+          ],
+          "first_ns": 260113917,
+          "gaps": 0,
+          "incarnation": 339573691207,
+          "key": 243000,
+          "kind": "operation",
+          "largest_gap_ns": 15232708,
+          "last_ns": 14100684667,
+          "last_probe_ns": 15833,
+          "namespace": 7,
+          "opened_ns": 268418709,
+          "pid": 45188,
+          "resource_status": "sampled",
+          "role": 1,
+          "run": "407c02386fa75f8535140b47ebe97069",
+          "sampled_max_rss": 34390016,
+          "samples": 1385,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "getrusage+libproc",
+          "success": false,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 8806901083,
+                "name": "exec"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 5028155792,
+                "name": "commit",
+                "outcome": "error"
+              }
+            ],
+            "elapsed_ns": 13835065167,
+            "name": "sdk.shell_package",
+            "outcome": "error"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceCommit": {
+          "clock": "local-monitor",
+          "closed_ns": 18733434466,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            2000000000,
+            1080000000
+          ],
+          "first_ns": 8912764379,
+          "gaps": 0,
+          "incarnation": 2111,
+          "key": 6,
+          "kind": "operation",
+          "largest_gap_ns": 15250916,
+          "last_ns": 18721201008,
+          "last_probe_ns": 8208,
+          "namespace": 4323965988669910957,
+          "opened_ns": 8919013796,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "407c02386fa75f8535140b47ebe97069",
+          "sampled_max_rss": 68235264,
+          "samples": 982,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 9814245962,
+                "name": "daemon.commit"
+              }
+            ],
+            "elapsed_ns": 9814418170,
+            "name": "WorkspaceCommit"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceExec": {
+          "clock": "local-monitor",
+          "closed_ns": 8917450879,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            2970000000,
+            1410000000
+          ],
+          "first_ns": 110892500,
+          "gaps": 0,
+          "incarnation": 2111,
+          "key": 4,
+          "kind": "operation",
+          "largest_gap_ns": 14503625,
+          "last_ns": 8912764379,
+          "last_probe_ns": 8167,
+          "namespace": 4323965988669910957,
+          "opened_ns": 111956333,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "407c02386fa75f8535140b47ebe97069",
+          "sampled_max_rss": 48885760,
+          "samples": 881,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 6939792,
+                "name": "daemon.exec_spawn"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 8798532421,
+                "name": "daemon.exec_output"
+              }
+            ],
+            "elapsed_ns": 8805492379,
+            "name": "WorkspaceExec"
+          },
+          "v": 1
+        }
+      }
+    },
+    "workspace-shell-package-many-128-sdk-v2": {
+      "delivery_summaries": [
+        {
+          "delivery": "best-effort",
+          "dropped": 0,
+          "failed": 0,
+          "kind": "run-summary",
+          "namespace": 10362867040843412445,
+          "overflow": false,
+          "pid": 1,
+          "role": 2,
+          "run": "2ed72366b3a721b82057f1d5e4351e47",
+          "v": 1
+        },
+        {
+          "delivery": "best-effort",
+          "dropped": 112,
+          "failed": 0,
+          "kind": "run-summary",
+          "namespace": 7,
+          "overflow": false,
+          "pid": 45057,
+          "role": 1,
+          "run": "2ed72366b3a721b82057f1d5e4351e47",
+          "v": 1
+        }
+      ],
+      "observed_event_counts": {
+        "role1:ConstructPortableMetadata": 80,
+        "role1:FileSaveCapabilities": 1,
+        "role1:HistoryCommand": 130,
+        "role1:HistoryQuery": 1,
+        "role1:Inspect": 3,
+        "role1:SaveFileV2": 64,
+        "role1:owner.daemon_ready": 1,
+        "role1:owner.docker_launch": 1,
+        "role1:owner.docker_port": 1,
+        "role1:owner.docker_remove": 1,
+        "role1:owner.docker_stop": 1,
+        "role1:owner.hello": 1,
+        "role1:owner.shell_ready": 1,
+        "role1:owner.volume_remove": 1,
+        "role1:sdk.shell_package": 1,
+        "role2:ConstructPortableMetadata": 128,
+        "role2:FileSaveCapabilities": 1,
+        "role2:HistoryCommand": 130,
+        "role2:HistoryQuery": 1,
+        "role2:Inspect": 3,
+        "role2:SandboxHello": 6,
+        "role2:SaveFileV2": 128,
+        "role2:WorkspaceCommit": 1,
+        "role2:WorkspaceExec": 1,
+        "role2:WorkspaceOpen": 1,
+        "role2:WorkspaceStatus": 1,
+        "role2:WorkspaceUnmount": 1
+      },
+      "scope": "retained diagnostic events; dropped/incomplete events prevent full call/timer attribution",
+      "selected_spans": {
+        "role1:sdk.shell_package": {
+          "clock": "local-monitor",
+          "closed_ns": 2026444417,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            237300000,
+            253401000
+          ],
+          "first_ns": 280905458,
+          "gaps": 0,
+          "incarnation": 339325604086,
+          "key": 243000,
+          "kind": "operation",
+          "largest_gap_ns": 14953333,
+          "last_ns": 2023310292,
+          "last_probe_ns": 3917,
+          "namespace": 7,
+          "opened_ns": 289675417,
+          "pid": 45057,
+          "resource_status": "sampled",
+          "role": 1,
+          "run": "2ed72366b3a721b82057f1d5e4351e47",
+          "sampled_max_rss": 34095104,
+          "samples": 175,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "getrusage+libproc",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 724438917,
+                "name": "exec"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 1012326250,
+                "name": "commit"
+              }
+            ],
+            "elapsed_ns": 1736767583,
+            "name": "sdk.shell_package"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceCommit": {
+          "clock": "local-monitor",
+          "closed_ns": 1857495376,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            170000000,
+            150000000
+          ],
+          "first_ns": 840496167,
+          "gaps": 0,
+          "incarnation": 1079,
+          "key": 6,
+          "kind": "operation",
+          "largest_gap_ns": 13465667,
+          "last_ns": 1851958584,
+          "last_probe_ns": 9250,
+          "namespace": 10362867040843412445,
+          "opened_ns": 846417709,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "2ed72366b3a721b82057f1d5e4351e47",
+          "sampled_max_rss": 40488960,
+          "samples": 102,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 1011046917,
+                "name": "daemon.commit"
+              }
+            ],
+            "elapsed_ns": 1011075959,
+            "name": "WorkspaceCommit"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceExec": {
+          "clock": "local-monitor",
+          "closed_ns": 845039834,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            240000000,
+            130000000
+          ],
+          "first_ns": 121006125,
+          "gaps": 0,
+          "incarnation": 1079,
+          "key": 4,
+          "kind": "operation",
+          "largest_gap_ns": 14043250,
+          "last_ns": 840496167,
+          "last_probe_ns": 10333,
+          "namespace": 10362867040843412445,
+          "opened_ns": 121953792,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "2ed72366b3a721b82057f1d5e4351e47",
+          "sampled_max_rss": 38879232,
+          "samples": 73,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 6338250,
+                "name": "daemon.exec_spawn"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 716731042,
+                "name": "daemon.exec_output"
+              }
+            ],
+            "elapsed_ns": 723084209,
+            "name": "WorkspaceExec"
+          },
+          "v": 1
+        }
+      }
+    },
+    "workspace-shell-package-many-129-sdk-v2": {
+      "delivery_summaries": [
+        {
+          "delivery": "best-effort",
+          "dropped": 0,
+          "failed": 0,
+          "kind": "run-summary",
+          "namespace": 10725157869385710530,
+          "overflow": false,
+          "pid": 1,
+          "role": 2,
+          "run": "02f6889b08261ae66f0ba4b74c97a80c",
+          "v": 1
+        },
+        {
+          "delivery": "best-effort",
+          "dropped": 115,
+          "failed": 0,
+          "kind": "run-summary",
+          "namespace": 7,
+          "overflow": false,
+          "pid": 45101,
+          "role": 1,
+          "run": "02f6889b08261ae66f0ba4b74c97a80c",
+          "v": 1
+        }
+      ],
+      "observed_event_counts": {
+        "role1:ConstructPortableMetadata": 79,
+        "role1:FileSaveCapabilities": 1,
+        "role1:HistoryCommand": 131,
+        "role1:HistoryQuery": 1,
+        "role1:Inspect": 3,
+        "role1:SaveFileV2": 64,
+        "role1:owner.daemon_ready": 1,
+        "role1:owner.docker_launch": 1,
+        "role1:owner.docker_port": 1,
+        "role1:owner.docker_remove": 1,
+        "role1:owner.docker_stop": 1,
+        "role1:owner.hello": 1,
+        "role1:owner.shell_ready": 1,
+        "role1:owner.volume_remove": 1,
+        "role1:sdk.shell_package": 1,
+        "role2:ConstructPortableMetadata": 129,
+        "role2:FileSaveCapabilities": 1,
+        "role2:HistoryCommand": 131,
+        "role2:HistoryQuery": 1,
+        "role2:Inspect": 3,
+        "role2:SandboxHello": 6,
+        "role2:SaveFileV2": 129,
+        "role2:WorkspaceCommit": 1,
+        "role2:WorkspaceExec": 1,
+        "role2:WorkspaceOpen": 1,
+        "role2:WorkspaceStatus": 1,
+        "role2:WorkspaceUnmount": 1
+      },
+      "scope": "retained diagnostic events; dropped/incomplete events prevent full call/timer attribution",
+      "selected_spans": {
+        "role1:sdk.shell_package": {
+          "clock": "local-monitor",
+          "closed_ns": 1985998208,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            225027000,
+            240309000
+          ],
+          "first_ns": 273687958,
+          "gaps": 0,
+          "incarnation": 339388995336,
+          "key": 243000,
+          "kind": "operation",
+          "largest_gap_ns": 14975209,
+          "last_ns": 1984998292,
+          "last_probe_ns": 3667,
+          "namespace": 7,
+          "opened_ns": 277108958,
+          "pid": 45101,
+          "resource_status": "sampled",
+          "role": 1,
+          "run": "02f6889b08261ae66f0ba4b74c97a80c",
+          "sampled_max_rss": 33079296,
+          "samples": 172,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "getrusage+libproc",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 728779375,
+                "name": "exec"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 980103167,
+                "name": "commit"
+              }
+            ],
+            "elapsed_ns": 1708886250,
+            "name": "sdk.shell_package"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceCommit": {
+          "clock": "local-monitor",
+          "closed_ns": 1816436959,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            170000000,
+            130000000
+          ],
+          "first_ns": 834703958,
+          "gaps": 0,
+          "incarnation": 1343,
+          "key": 6,
+          "kind": "operation",
+          "largest_gap_ns": 13443083,
+          "last_ns": 1810658709,
+          "last_probe_ns": 10167,
+          "namespace": 10725157869385710530,
+          "opened_ns": 839123417,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "02f6889b08261ae66f0ba4b74c97a80c",
+          "sampled_max_rss": 41566208,
+          "samples": 99,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 977295043,
+                "name": "daemon.commit"
+              }
+            ],
+            "elapsed_ns": 977311834,
+            "name": "WorkspaceCommit"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceExec": {
+          "clock": "local-monitor",
+          "closed_ns": 836238875,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            260000000,
+            130000000
+          ],
+          "first_ns": 101039375,
+          "gaps": 0,
+          "incarnation": 1343,
+          "key": 4,
+          "kind": "operation",
+          "largest_gap_ns": 13844542,
+          "last_ns": 834703958,
+          "last_probe_ns": 22042,
+          "namespace": 10725157869385710530,
+          "opened_ns": 109969000,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "02f6889b08261ae66f0ba4b74c97a80c",
+          "sampled_max_rss": 39174144,
+          "samples": 74,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 5564875,
+                "name": "daemon.exec_spawn"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 720673500,
+                "name": "daemon.exec_output"
+              }
+            ],
+            "elapsed_ns": 726267084,
+            "name": "WorkspaceExec"
+          },
+          "v": 1
+        }
+      }
+    },
+    "workspace-shell-package-many-257-sdk-v2": {
+      "delivery_summaries": [
+        {
+          "delivery": "best-effort",
+          "dropped": 8,
+          "failed": 0,
+          "kind": "run-summary",
+          "namespace": 369994595629185084,
+          "overflow": false,
+          "pid": 1,
+          "role": 2,
+          "run": "f559de671d1c8a0fd732b9c5e7385b7c",
+          "v": 1
+        },
+        {
+          "delivery": "best-effort",
+          "dropped": 333,
+          "failed": 0,
+          "kind": "run-summary",
+          "namespace": 7,
+          "overflow": false,
+          "pid": 45144,
+          "role": 1,
+          "run": "f559de671d1c8a0fd732b9c5e7385b7c",
+          "v": 1
+        }
+      ],
+      "observed_event_counts": {
+        "role1:ConstructPortableMetadata": 112,
+        "role1:FileSaveCapabilities": 1,
+        "role1:HistoryCommand": 276,
+        "role1:HistoryQuery": 1,
+        "role1:Inspect": 3,
+        "role1:SaveFileV2": 69,
+        "role1:owner.daemon_ready": 1,
+        "role1:owner.docker_launch": 1,
+        "role1:owner.docker_port": 1,
+        "role1:owner.docker_remove": 1,
+        "role1:owner.docker_stop": 1,
+        "role1:owner.hello": 1,
+        "role1:owner.shell_ready": 1,
+        "role1:owner.volume_remove": 1,
+        "role1:sdk.shell_package": 1,
+        "role2:ConstructPortableMetadata": 250,
+        "role2:FileSaveCapabilities": 1,
+        "role2:HistoryCommand": 276,
+        "role2:HistoryQuery": 1,
+        "role2:Inspect": 3,
+        "role2:SandboxHello": 6,
+        "role2:SaveFileV2": 256,
+        "role2:WorkspaceCommit": 1,
+        "role2:WorkspaceExec": 1,
+        "role2:WorkspaceOpen": 1,
+        "role2:WorkspaceStatus": 1,
+        "role2:WorkspaceUnmount": 1
+      },
+      "scope": "retained diagnostic events; dropped/incomplete events prevent full call/timer attribution",
+      "selected_spans": {
+        "role1:sdk.shell_package": {
+          "clock": "local-monitor",
+          "closed_ns": 4524450583,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            478801000,
+            533407000
+          ],
+          "first_ns": 261866667,
+          "gaps": 0,
+          "incarnation": 339449828018,
+          "key": 243000,
+          "kind": "operation",
+          "largest_gap_ns": 16370708,
+          "last_ns": 4520295708,
+          "last_probe_ns": 18084,
+          "namespace": 7,
+          "opened_ns": 270865208,
+          "pid": 45144,
+          "resource_status": "sampled",
+          "role": 1,
+          "run": "f559de671d1c8a0fd732b9c5e7385b7c",
+          "sampled_max_rss": 33243136,
+          "samples": 427,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "getrusage+libproc",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 2108573666,
+                "name": "exec"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 2145004875,
+                "name": "commit"
+              }
+            ],
+            "elapsed_ns": 4253582000,
+            "name": "sdk.shell_package"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceCommit": {
+          "clock": "local-monitor",
+          "closed_ns": 4365948335,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            400000000,
+            270000000
+          ],
+          "first_ns": 2220816001,
+          "gaps": 0,
+          "incarnation": 1595,
+          "key": 6,
+          "kind": "operation",
+          "largest_gap_ns": 14366791,
+          "last_ns": 4361709918,
+          "last_probe_ns": 9291,
+          "namespace": 369994595629185084,
+          "opened_ns": 2222631709,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "f559de671d1c8a0fd732b9c5e7385b7c",
+          "sampled_max_rss": 47562752,
+          "samples": 215,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 2143022834,
+                "name": "daemon.commit"
+              }
+            ],
+            "elapsed_ns": 2143315168,
+            "name": "WorkspaceCommit"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceExec": {
+          "clock": "local-monitor",
+          "closed_ns": 2220763626,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            630000000,
+            320000000
+          ],
+          "first_ns": 111180833,
+          "gaps": 0,
+          "incarnation": 1595,
+          "key": 4,
+          "kind": "operation",
+          "largest_gap_ns": 14471125,
+          "last_ns": 2211850667,
+          "last_probe_ns": 10625,
+          "namespace": 369994595629185084,
+          "opened_ns": 113768000,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "f559de671d1c8a0fd732b9c5e7385b7c",
+          "sampled_max_rss": 42356736,
+          "samples": 211,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 6450542,
+                "name": "daemon.exec_spawn"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 2100526334,
+                "name": "daemon.exec_output"
+              }
+            ],
+            "elapsed_ns": 2106993542,
+            "name": "WorkspaceExec"
+          },
+          "v": 1
+        }
+      }
+    },
+    "workspace-shell-package-mixed-refresh-sdk-v2": {
+      "delivery_summaries": [
+        {
+          "delivery": "best-effort",
+          "dropped": 0,
+          "failed": 0,
+          "kind": "run-summary",
+          "namespace": 13331931671881585855,
+          "overflow": false,
+          "pid": 1,
+          "role": 2,
+          "run": "36a6ec767c09984fad1a4478630284ed",
+          "v": 1
+        },
+        {
+          "delivery": "best-effort",
+          "dropped": 0,
+          "failed": 0,
+          "kind": "run-summary",
+          "namespace": 7,
+          "overflow": false,
+          "pid": 44927,
+          "role": 1,
+          "run": "36a6ec767c09984fad1a4478630284ed",
+          "v": 1
+        }
+      ],
+      "observed_event_counts": {
+        "role1:ConstructPortableMetadata": 7,
+        "role1:FileSaveCapabilities": 1,
+        "role1:HistoryCommand": 9,
+        "role1:HistoryQuery": 1,
+        "role1:Inspect": 34,
+        "role1:SaveFileV2": 8,
+        "role1:UpdatePortableMetadata": 8,
+        "role1:owner.daemon_ready": 1,
+        "role1:owner.docker_launch": 1,
+        "role1:owner.docker_port": 1,
+        "role1:owner.docker_remove": 1,
+        "role1:owner.docker_stop": 1,
+        "role1:owner.hello": 1,
+        "role1:owner.shell_ready": 1,
+        "role1:owner.volume_remove": 1,
+        "role1:sdk.shell_package": 1,
+        "role2:ConstructPortableMetadata": 7,
+        "role2:FileSaveCapabilities": 1,
+        "role2:HistoryCommand": 9,
+        "role2:HistoryQuery": 1,
+        "role2:Inspect": 34,
+        "role2:SandboxHello": 6,
+        "role2:SaveFileV2": 8,
+        "role2:UpdatePortableMetadata": 8,
+        "role2:WorkspaceCommit": 1,
+        "role2:WorkspaceExec": 1,
+        "role2:WorkspaceOpen": 1,
+        "role2:WorkspaceStatus": 1,
+        "role2:WorkspaceUnmount": 1
+      },
+      "scope": "retained diagnostic events; dropped/incomplete events prevent full call/timer attribution",
+      "selected_spans": {
+        "role1:sdk.shell_package": {
+          "clock": "local-monitor",
+          "closed_ns": 596272167,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            60065000,
+            52405000
+          ],
+          "first_ns": 263065000,
+          "gaps": 0,
+          "incarnation": 339252987063,
+          "key": 243000,
+          "kind": "operation",
+          "largest_gap_ns": 14962416,
+          "last_ns": 590720584,
+          "last_probe_ns": 9417,
+          "namespace": 7,
+          "opened_ns": 265617709,
+          "pid": 44927,
+          "resource_status": "sampled",
+          "role": 1,
+          "run": "36a6ec767c09984fad1a4478630284ed",
+          "sampled_max_rss": 40222720,
+          "samples": 34,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "getrusage+libproc",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 174716292,
+                "name": "exec"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 155932917,
+                "name": "commit"
+              }
+            ],
+            "elapsed_ns": 330653041,
+            "name": "sdk.shell_package"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceCommit": {
+          "clock": "local-monitor",
+          "closed_ns": 436389042,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            30000000,
+            20000000
+          ],
+          "first_ns": 280443751,
+          "gaps": 0,
+          "incarnation": 775,
+          "key": 6,
+          "kind": "operation",
+          "largest_gap_ns": 12042667,
+          "last_ns": 431260001,
+          "last_probe_ns": 18000,
+          "namespace": 13331931671881585855,
+          "opened_ns": 281627209,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "36a6ec767c09984fad1a4478630284ed",
+          "sampled_max_rss": 37859328,
+          "samples": 16,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 154750875,
+                "name": "daemon.commit"
+              }
+            ],
+            "elapsed_ns": 154760708,
+            "name": "WorkspaceCommit"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceExec": {
+          "clock": "local-monitor",
+          "closed_ns": 280489792,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            60000000,
+            30000000
+          ],
+          "first_ns": 100504709,
+          "gaps": 0,
+          "incarnation": 775,
+          "key": 4,
+          "kind": "operation",
+          "largest_gap_ns": 10971833,
+          "last_ns": 280443751,
+          "last_probe_ns": 18333,
+          "namespace": 13331931671881585855,
+          "opened_ns": 107470709,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "36a6ec767c09984fad1a4478630284ed",
+          "sampled_max_rss": 36986880,
+          "samples": 19,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 7896209,
+                "name": "daemon.exec_spawn"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 165111042,
+                "name": "daemon.exec_output"
+              }
+            ],
+            "elapsed_ns": 173017792,
+            "name": "WorkspaceExec"
+          },
+          "v": 1
+        }
+      }
+    },
+    "workspace-shell-package-overwrite-4k-sdk-v2": {
+      "delivery_summaries": [
+        {
+          "delivery": "best-effort",
+          "dropped": 0,
+          "failed": 0,
+          "kind": "run-summary",
+          "namespace": 16744431799033228993,
+          "overflow": false,
+          "pid": 1,
+          "role": 2,
+          "run": "6c654afb816b4c31dad1faf36216c022",
+          "v": 1
+        },
+        {
+          "delivery": "best-effort",
+          "dropped": 0,
+          "failed": 0,
+          "kind": "run-summary",
+          "namespace": 7,
+          "overflow": false,
+          "pid": 44970,
+          "role": 1,
+          "run": "6c654afb816b4c31dad1faf36216c022",
+          "v": 1
+        }
+      ],
+      "observed_event_counts": {
+        "role1:FileSaveCapabilities": 1,
+        "role1:HistoryCommand": 1,
+        "role1:HistoryQuery": 1,
+        "role1:Inspect": 3,
+        "role1:SaveFileV2": 1,
+        "role1:UpdatePortableMetadata": 1,
+        "role1:owner.daemon_ready": 1,
+        "role1:owner.docker_launch": 1,
+        "role1:owner.docker_port": 1,
+        "role1:owner.docker_remove": 1,
+        "role1:owner.docker_stop": 1,
+        "role1:owner.hello": 1,
+        "role1:owner.shell_ready": 1,
+        "role1:owner.volume_remove": 1,
+        "role1:sdk.shell_package": 1,
+        "role2:FileSaveCapabilities": 1,
+        "role2:HistoryCommand": 1,
+        "role2:HistoryQuery": 1,
+        "role2:Inspect": 3,
+        "role2:SandboxHello": 6,
+        "role2:SaveFileV2": 1,
+        "role2:UpdatePortableMetadata": 1,
+        "role2:WorkspaceCommit": 1,
+        "role2:WorkspaceExec": 1,
+        "role2:WorkspaceOpen": 1,
+        "role2:WorkspaceStatus": 1,
+        "role2:WorkspaceUnmount": 1
+      },
+      "scope": "retained diagnostic events; dropped/incomplete events prevent full call/timer attribution",
+      "selected_spans": {
+        "role1:sdk.shell_package": {
+          "clock": "local-monitor",
+          "closed_ns": 314638833,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            5763000,
+            6134000
+          ],
+          "first_ns": 272876875,
+          "gaps": 0,
+          "incarnation": 339281992783,
+          "key": 243000,
+          "kind": "operation",
+          "largest_gap_ns": 13753250,
+          "last_ns": 310397375,
+          "last_probe_ns": 9083,
+          "namespace": 7,
+          "opened_ns": 278008083,
+          "pid": 44970,
+          "resource_status": "sampled",
+          "role": 1,
+          "run": "6c654afb816b4c31dad1faf36216c022",
+          "sampled_max_rss": 31916032,
+          "samples": 5,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "getrusage+libproc",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 18493166,
+                "name": "exec"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 18134416,
+                "name": "commit"
+              }
+            ],
+            "elapsed_ns": 36629416,
+            "name": "sdk.shell_package"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceCommit": {
+          "clock": "local-monitor",
+          "closed_ns": 155097250,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            0,
+            10000000
+          ],
+          "first_ns": 131300250,
+          "gaps": 0,
+          "incarnation": 896,
+          "key": 6,
+          "kind": "operation",
+          "largest_gap_ns": 10294833,
+          "last_ns": 151275458,
+          "last_probe_ns": 22000,
+          "namespace": 16744431799033228993,
+          "opened_ns": 138209958,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "6c654afb816b4c31dad1faf36216c022",
+          "sampled_max_rss": 36917248,
+          "samples": 3,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 16880666,
+                "name": "daemon.commit"
+              }
+            ],
+            "elapsed_ns": 16886042,
+            "name": "WorkspaceCommit"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceExec": {
+          "clock": "local-monitor",
+          "closed_ns": 137061500,
+          "concurrency": 1,
+          "cpu_shared_ns": [
+            30000000,
+            0
+          ],
+          "first_ns": 110886333,
+          "gaps": 0,
+          "incarnation": 896,
+          "key": 4,
+          "kind": "operation",
+          "largest_gap_ns": 10384000,
+          "last_ns": 131300250,
+          "last_probe_ns": 19834,
+          "namespace": 16744431799033228993,
+          "opened_ns": 119608083,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "6c654afb816b4c31dad1faf36216c022",
+          "sampled_max_rss": 36786176,
+          "samples": 3,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 6556583,
+                "name": "daemon.exec_spawn"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 10879417,
+                "name": "daemon.exec_output"
+              }
+            ],
+            "elapsed_ns": 17451958,
+            "name": "WorkspaceExec"
+          },
+          "v": 1
+        }
+      }
+    },
+    "workspace-shell-package-repeated-one-byte-sdk-v2": {
+      "delivery_summaries": [
+        {
+          "delivery": "best-effort",
+          "dropped": 0,
+          "failed": 0,
+          "kind": "run-summary",
+          "namespace": 8706815628361292905,
+          "overflow": false,
+          "pid": 1,
+          "role": 2,
+          "run": "f3b2c819c634717fbba11789f98d18db",
+          "v": 1
+        },
+        {
+          "delivery": "best-effort",
+          "dropped": 0,
+          "failed": 0,
+          "kind": "run-summary",
+          "namespace": 7,
+          "overflow": false,
+          "pid": 45013,
+          "role": 1,
+          "run": "f3b2c819c634717fbba11789f98d18db",
+          "v": 1
+        }
+      ],
+      "observed_event_counts": {
+        "role1:FileSaveCapabilities": 1,
+        "role1:HistoryCommand": 1,
+        "role1:HistoryQuery": 1,
+        "role1:Inspect": 3,
+        "role1:SaveFileV2": 1,
+        "role1:UpdatePortableMetadata": 1,
+        "role1:owner.daemon_ready": 1,
+        "role1:owner.docker_launch": 1,
+        "role1:owner.docker_port": 1,
+        "role1:owner.docker_remove": 1,
+        "role1:owner.docker_stop": 1,
+        "role1:owner.hello": 1,
+        "role1:owner.shell_ready": 1,
+        "role1:owner.volume_remove": 1,
+        "role1:sdk.shell_package": 1,
+        "role2:FileSaveCapabilities": 1,
+        "role2:HistoryCommand": 1,
+        "role2:HistoryQuery": 1,
+        "role2:Inspect": 3,
+        "role2:SandboxHello": 6,
+        "role2:SaveFileV2": 1,
+        "role2:UpdatePortableMetadata": 1,
+        "role2:WorkspaceCommit": 1,
+        "role2:WorkspaceExec": 1,
+        "role2:WorkspaceOpen": 1,
+        "role2:WorkspaceStatus": 1,
+        "role2:WorkspaceUnmount": 1
+      },
+      "scope": "retained diagnostic events; dropped/incomplete events prevent full call/timer attribution",
+      "selected_spans": {
+        "role1:sdk.shell_package": {
+          "clock": "local-monitor",
+          "closed_ns": 339546916,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            5477000,
+            5735000
+          ],
+          "first_ns": 284319666,
+          "gaps": 0,
+          "incarnation": 339303677530,
+          "key": 243000,
+          "kind": "operation",
+          "largest_gap_ns": 14496417,
+          "last_ns": 333993416,
+          "last_probe_ns": 8625,
+          "namespace": 7,
+          "opened_ns": 284924583,
+          "pid": 45013,
+          "resource_status": "sampled",
+          "role": 1,
+          "run": "f3b2c819c634717fbba11789f98d18db",
+          "sampled_max_rss": 30703616,
+          "samples": 6,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "getrusage+libproc",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 36592334,
+                "name": "exec"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 18024166,
+                "name": "commit"
+              }
+            ],
+            "elapsed_ns": 54621083,
+            "name": "sdk.shell_package"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceCommit": {
+          "clock": "local-monitor",
+          "closed_ns": 170466375,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            0,
+            0
+          ],
+          "first_ns": 150271333,
+          "gaps": 0,
+          "incarnation": 987,
+          "key": 6,
+          "kind": "operation",
+          "largest_gap_ns": 10823417,
+          "last_ns": 161094750,
+          "last_probe_ns": 25042,
+          "namespace": 8706815628361292905,
+          "opened_ns": 153462500,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "f3b2c819c634717fbba11789f98d18db",
+          "sampled_max_rss": 36810752,
+          "samples": 2,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 16998292,
+                "name": "daemon.commit"
+              }
+            ],
+            "elapsed_ns": 17003208,
+            "name": "WorkspaceCommit"
+          },
+          "v": 1
+        },
+        "role2:WorkspaceExec": {
+          "clock": "local-monitor",
+          "closed_ns": 152359041,
+          "concurrency": 1,
+          "cpu_shared_ns": [
+            20000000,
+            10000000
+          ],
+          "first_ns": 110377583,
+          "gaps": 0,
+          "incarnation": 987,
+          "key": 4,
+          "kind": "operation",
+          "largest_gap_ns": 11516542,
+          "last_ns": 150271333,
+          "last_probe_ns": 21541,
+          "namespace": 8706815628361292905,
+          "opened_ns": 116841333,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "f3b2c819c634717fbba11789f98d18db",
+          "sampled_max_rss": 36810752,
+          "samples": 5,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 6515084,
+                "name": "daemon.exec_spawn"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 28988958,
+                "name": "daemon.exec_output"
+              }
+            ],
+            "elapsed_ns": 35516458,
+            "name": "WorkspaceExec"
+          },
+          "v": 1
+        }
+      }
+    }
+  }
+}
