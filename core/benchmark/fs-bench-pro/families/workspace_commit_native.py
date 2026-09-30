@@ -23,10 +23,12 @@ class Case:
     clones: int = 1
     retained: bool = False
     budget_ns: int = 60_000_000_000
+    ignored: bool = False
+    owner_deferred: bool = False
 
 
 CASES = {case.id: case for case in (
-    Case("workspace-commit-full-lowering-size-64mib-native-v2", "phase_b_commit::full_lowering_64mib", "large"),
+    Case("workspace-commit-full-lowering-size-64mib-native-v2", "phase_b_commit::full_lowering_64mib", "large", ignored=True),
     Case("workspace-commit-stage-headroom-quota-2mib-native-v2", "phase_b_commit::stage_headroom_2mib", retained=True),
     Case("workspace-commit-headroom-quota-4mib-native-v2", "phase_b_commit::commit_headroom_4mib"),
     Case("workspace-commit-live-g1-g2-native-v2", "phase_a_selected_origins_overlap_zero_hardlinks_and_completion_credit"),
@@ -34,8 +36,8 @@ CASES = {case.id: case for case in (
     Case("workspace-commit-known-unknown-native-v2", "phase_a_known_save_and_unknown_commit_keep_custody_without_replay", clones=2, retained=True),
     Case("workspace-commit-local-c5-native-v2", "phase_a_known_canonical_local_failure_resumes_same_selector_once"),
     Case("workspace-commit-reordered-base-copy-native-v2", "phase_a_large_payload_append_resize_and_backward_base_copy"),
-    Case("workspace-commit-native-count-writes-8192-v2", "phase_b_commit::native_count_8192", "count"),
-    Case("workspace-commit-native-count-writes-10240-v2", "phase_b_commit::native_count_10240", "count"),
+    Case("workspace-commit-native-count-writes-8192-v2", "phase_b_commit::native_count_8192", "count", ignored=True),
+    Case("workspace-commit-native-count-writes-10240-v2", "phase_b_commit::native_count_10240", "count", ignored=True, owner_deferred=True),
 )}
 SELECTED = tuple(CASES)[:8]
 COUNTS = tuple(CASES)[8:]
@@ -160,6 +162,8 @@ def attempt(out, case, prepared, container):
     command = ["docker", "exec", "-e", f"LAYERFS_PHASE_B_CLONES=/work/{case.id}",
                "-e", f"LAYERFS_TEST_BACKING_ROOT=/work/{case.id}", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1",
                container, "/test", "--exact", case.test, "--test-threads=1", "--nocapture"]
+    if case.ignored:
+        command.append("--include-ignored")
     record, stdout, stderr = invoke(command, folder / "functional", case.budget_ns / 1e9)
     ok = record["exit_code"] == 0 and not record["timeout"] and b"1 passed" in stdout and b"initialized=false" in stdout
     expected_retained = case.retained or any(line.startswith(b"PHASE_B_COUNT") and b"retained=true" in line for line in stdout.splitlines())
@@ -187,6 +191,14 @@ def run(selection, output, common):
     selected = SELECTED if selection == "workspace-commit-native" else SELECTED[1:] if selection == "workspace-commit-native-tail" else COUNTS if selection == "workspace-commit-native-counts" else RECONCILIATION if selection == "workspace-commit-native-reconciliation" else (selection,)
     summary = {"schema": SCHEMA, "profile": PROFILE, "identity": identity, "selected": list(selected), "rows": [],
                "earlier_family_policy": "unaffected production and earlier evidence reused; no earlier resampling"}
+    if all(CASES[name].owner_deferred for name in selected):
+        summary["rows"] = [{"case": name, "status": "SKIPPED / OWNER-DEFERRED", "sample_count": 0,
+            "reason": "owner explicitly deferred further10240 attempts and bounded-memory architecture work to issue276",
+            "cleanup_status": "N/A: no resources acquired"} for name in selected]
+        summary.update(status="OWNER-DEFERRED", external_cleanup=[])
+        shared.save(out / "run.json", summary)
+        common.manifest_run(out)
+        return out
     container = "issue286-native-" + uuid.uuid4().hex[:16]
     volume = container + "-backing"
     admitted = False
@@ -205,8 +217,13 @@ def run(selection, output, common):
             summary["backing"] = checked(["docker", "exec", container, "stat", "-f", "-c", "%t %S", "/work"], out / "backing-profile").decode().strip()
             if summary["backing"] != "ef53 4096":
                 raise ValueError("required Linux backing filesystem profile missing")
-            prepared = masters(out, container, common, identity, build_record["binary"], {CASES[name].master for name in selected})
+            prepared = masters(out, container, common, identity, build_record["binary"], {CASES[name].master for name in selected if not CASES[name].owner_deferred})
             for name in selected:
+                if CASES[name].owner_deferred:
+                    summary["rows"].append({"case": name, "status": "SKIPPED / OWNER-DEFERRED", "sample_count": 0,
+                        "reason": "owner explicitly deferred further10240 attempts and bounded-memory architecture work to issue276",
+                        "cleanup_status": "N/A: no resources acquired"})
+                    continue
                 try:
                     row = attempt(out, CASES[name], prepared[CASES[name].master], container)
                 except Exception as error:
@@ -225,7 +242,8 @@ def run(selection, output, common):
         summary["external_cleanup"] = cleanup
     for name in selected[len(summary["rows"]):]:
         summary["rows"].append({"case": name, "status": "NOT_RUN", "reason": summary.get("error", "prior case failed")})
-    summary["status"] = "PASS" if all(row["status"] == "PASS" for row in summary["rows"]) and all(row["exit_code"] == 0 for row in cleanup) else "INCOMPLETE"
+    qualified = all(row["status"] in ("PASS", "SKIPPED / OWNER-DEFERRED") for row in summary["rows"])
+    summary["status"] = ("SCOPED_PASS_WITH_OWNER_DEFERRED" if any(CASES[name].owner_deferred for name in selected) else "PASS") if qualified and all(row["exit_code"] == 0 for row in cleanup) else "INCOMPLETE"
     shared.save(out / "run.json", summary)
     common.manifest_run(out)
     return out

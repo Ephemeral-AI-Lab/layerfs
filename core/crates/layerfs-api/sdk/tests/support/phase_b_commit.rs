@@ -225,6 +225,7 @@ fn pinned(f: &Fixture, token: &[u8; 33], serial: u64, expected: &[u8]) {
 }
 
 #[test]
+#[ignore = "requires Family4 sealed64 MiB prepared master and explicit runner"]
 fn full_lowering_64mib() {
     let f = Fixture::new();
     let file = f.lookup(f.workspace.root().serial, b"data.bin");
@@ -498,11 +499,13 @@ fn separated_count(count: usize) {
 }
 
 #[test]
+#[ignore = "requires Family4 sealed count master and explicit runner"]
 fn native_count_8192() {
     separated_count(8192);
 }
 
 #[test]
+#[ignore = "owner deferred further10240 attempts and architecture work to issue276"]
 fn native_count_10240() {
     separated_count(10240);
 }

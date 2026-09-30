@@ -401,7 +401,8 @@ def main():
             print(f"{case.id}\tSDK same-Workspace retained pin\tcommand <= {case.command_budget_ns / 1e9:g} s; separate proof <= 9 s\t"
                   f"{'historical method retired' if case.retired else 'fast lane selected' if case.id in commit.SELECTED else 'explicit-only ' + case.role}")
         for case in native.CASES.values():
-            print(f"{case.id}\tnative functional component; command <= 60 s; no SDK time\tselected")
+            print(f"{case.id}\tnative functional component; command <= 60 s; no SDK time\t"
+                  f"{'SKIPPED / OWNER-DEFERRED (#276)' if case.owner_deferred else 'selected'}")
         for name, reason in commit.REMAINING.items():
             print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":

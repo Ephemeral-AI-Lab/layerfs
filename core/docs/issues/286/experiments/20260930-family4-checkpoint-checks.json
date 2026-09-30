@@ -64,22 +64,45 @@
       "status": "PASS"
     },
     "linux_clippy_fixed": {
-      "command": "same Linux Clippy after external formatter uses String/write!",
+      "command": "CC_aarch64_unknown_linux_musl=/Users/yifanxu/Library/Caches/cargo-zigbuild/0.23.0/wrappers/682f/zigcc-aarch64-unknown-linux-musl-5d3b.sh cargo +1.85.1 clippy --release --manifest-path core/Cargo.toml --locked --offline --target aarch64-unknown-linux-musl -p layerfs-sdk -p layerfs-storage --features rusqlite/bundled --test inherited_workspace -- -D warnings",
+      "compiler_wrapper_sha256": "20cd1a29767ae88836bb7d547a4d2535b709e9c35eabe1679b20c00df75bdae0",
       "log": "issue286-final-linux-clippy-fixed-r063.log",
       "sha256": "4d1a09ddd34109eb262e2d1da304407bbad6db78f7356cec7941200eda83e4f7",
       "status": "PASS"
     },
     "linux_clippy_initial": {
-      "command": "CC_aarch64_unknown_linux_musl=<existing cargo-zigbuild wrapper> cargo +1.85.1 clippy --release --manifest-path core/Cargo.toml --locked --offline --target aarch64-unknown-linux-musl -p layerfs-sdk -p layerfs-storage --features rusqlite/bundled --test inherited_workspace -- -D warnings",
+      "command": "CC_aarch64_unknown_linux_musl=/Users/yifanxu/Library/Caches/cargo-zigbuild/0.23.0/wrappers/682f/zigcc-aarch64-unknown-linux-musl-5d3b.sh cargo +1.85.1 clippy --release --manifest-path core/Cargo.toml --locked --offline --target aarch64-unknown-linux-musl -p layerfs-sdk -p layerfs-storage --features rusqlite/bundled --test inherited_workspace -- -D warnings",
+      "compiler_wrapper_sha256": "20cd1a29767ae88836bb7d547a4d2535b709e9c35eabe1679b20c00df75bdae0",
       "expected": "FAIL: external-test hex format_collect",
       "log": "issue286-final-linux-clippy-r063.log",
       "sha256": "c95fb0e4e49a1ff3cb4267fb42713eeb3cf933c7a477a67b4be9aa96134c5760",
       "status": "FAIL"
     },
+    "linux_clippy_owner_scoped": {
+      "command": "CC_aarch64_unknown_linux_musl=/Users/yifanxu/Library/Caches/cargo-zigbuild/0.23.0/wrappers/682f/zigcc-aarch64-unknown-linux-musl-5d3b.sh cargo +1.85.1 clippy --release --manifest-path core/Cargo.toml --locked --offline --target aarch64-unknown-linux-musl -p layerfs-sdk -p layerfs-storage --features rusqlite/bundled --test inherited_workspace -- -D warnings",
+      "log": "benchmark-results/fs-bench-pro/issue286-owner-scoped-linux-clippy-r063.log",
+      "scope": "final preparation-only ignore metadata and owner-deferred test; operation bodies unchanged, no benchmark replay",
+      "sha256": "d0636c7b3f4c4ddaac5a1fbb57a614f8335c355ccdc8a225e2290c2a6c427cc1",
+      "status": "PASS"
+    },
     "no_aggregate_gate": {
       "ci": "disabled",
       "preflight": "not run; permanently retired"
+    },
+    "owner_deferred_guard": {
+      "command": "python3 core/benchmark/fs-bench-pro/tests/test_workspace_commit_native.py",
+      "scope": "deferred selection returns before build/container/clone acquisition",
+      "status": "PASS",
+      "tests": 3
     }
+  },
+  "current_scope": {
+    "authority": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/276#issuecomment-5902583820",
+    "further_attempts": false,
+    "historical_receipts": "r059/r060 and already collected diagnostics preserved; not new qualified local success",
+    "owner_deferred_case": "workspace-commit-native-count-writes-10240-v2",
+    "qualified_profiles": 14,
+    "status": "SKIPPED / OWNER-DEFERRED"
   },
   "native_execution": "r060 +r061; other unaffected native proof reusedr054",
   "sdk_execution": "r062; unaffected full pin/reordered/stopping proof reusedr051/r056/r058"
