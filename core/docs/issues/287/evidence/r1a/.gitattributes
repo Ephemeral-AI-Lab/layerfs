@@ -1,0 +1,2 @@
+# Preserve raw command output, including its final blank separator.
+*.log whitespace=-blank-at-eof

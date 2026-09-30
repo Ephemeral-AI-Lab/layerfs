@@ -2,6 +2,7 @@
 //!
 //! Declarations and reexports only; the handler, its Project Init adapter and
 //! the read/save operation modules own the behavior.
+pub(crate) mod admission;
 pub(crate) mod error;
 pub(crate) mod handler;
 pub(crate) mod init_project;

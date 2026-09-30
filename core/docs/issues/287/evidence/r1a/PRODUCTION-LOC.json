@@ -1,0 +1,40 @@
+{
+  "method": {
+    "counter_blob": "c7dd2b9c6aa9db63393a4ff3ebca9327529d146e",
+    "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+    "snapshots": "git archive <HEAD|git write-tree> crates core/crates; same counter over both exact extracted trees",
+    "scope": "reference/core first-party src Rust and runtime package SQL; legacy inline/test-only source excluded; tests/examples/fixtures/tools/docs/manifests/generated/third-party excluded"
+  },
+  "parent": "1d2fc8c2987a46acb906a1b9e720bb4cac116c7e",
+  "before": {
+    "reference": 65417,
+    "core": 70279,
+    "combined": 135696,
+    "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+    "core_tree": "b527e9c56d12a69cdb4cb5b802e21fa45b8fb403"
+  },
+  "after": {
+    "reference": 65417,
+    "core": 70348,
+    "combined": 135765,
+    "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+    "core_tree": "91b8738d4a5017da7187ba14aa0f7ce537880fc3"
+  },
+  "delta": {
+    "reference": 0,
+    "core": 69,
+    "combined": 69
+  },
+  "covering_source": {
+    "files": [
+      "core/crates/layerfs-server/src/service/admission.rs",
+      "core/crates/layerfs-server/src/service/handler.rs",
+      "core/crates/layerfs-server/src/service/mod.rs",
+      "core/crates/layerfs-server/src/service/save/catalog.rs",
+      "core/crates/layerfs-server/tests/catalog_admission.rs",
+      "core/crates/layerfs-server/tests/support/catalog_oracle.rs"
+    ],
+    "sha256": "6f6c1026148eb89dda1f9612d5c40a5c2e9b38216d1365179c1191b286d14f87",
+    "algorithm": "SHA256 of sorted UTF-8 path + NUL + final staged bytes + NUL"
+  }
+}

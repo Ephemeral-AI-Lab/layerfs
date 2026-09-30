@@ -1,0 +1,46 @@
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.25s
+     Running tests/catalog_admission.rs (core/target/debug/deps/catalog_admission-c665a6f43524258d)
+
+running 4 tests
+test catalog_grants_read_only_authority_and_wrong_prepared_scope_refuse_before_save ... ok
+test aliases_share_one_catalog_allowance_and_distinct_provider_cells_keep_their_own ... ok
+test real_catalog_contention_and_range_exhaustion_preserve_allocator_and_content ... ok
+test allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+
+     Running tests/history.rs (core/target/debug/deps/history-639acffcc1658c64)
+
+running 28 tests
+test encoded_record_widths_match_the_catalog_bounds ... ok
+test history_profile_and_opcode_must_agree ... ok
+test inode_reservations_are_scope_wide_and_never_recycled ... ok
+test legacy_mask_grants_no_history ... ok
+test empty_namespace_initializes_and_reads_back ... ok
+test daemon_control_is_refused_by_service_even_with_every_store_grant ... ok
+test history_pages_are_bounded_and_cursors_are_bound_to_their_range ... ok
+test branch_root_descriptor_validates_content_scope_profile_and_actual_serial ... ok
+test already_published_source_is_up_to_date_before_stale_head_refusal ... ok
+test metadata_only_commands_never_touch_the_content_store ... ok
+test delayed_discard_token_cannot_consume_a_replacement_stage ... ok
+test metadata_refusals_preserve_admission_and_never_use_legacy_grants ... ok
+test multiple_no_change_stages_are_up_to_date ... ok
+test complete_read_attributes_match_over_authenticated_transport ... ok
+test native_import_initialization_builds_a_real_namespace ... ok
+test native_import_gives_each_file_its_own_content_root ... ok
+test rebasing_by_editing_a_token_is_refused ... ok
+test read_only_reopen_supports_reads_and_refuses_every_mutation ... ok
+test disjoint_file_edits_still_refuse_stale_publication_without_merging ... ok
+test empty_and_interleaved_directories_have_real_canonical_pages ... ok
+test portable_metadata_update_saves_one_tree_and_preserves_all_generic_roots ... ok
+test stage_commit_add_layer_and_read_back ... ok
+test wrong_role_root_is_refused ... ok
+test refreshed_stack_head_reports_typed_stale_base_on_direct_and_native_routes ... ok
+test stale_loser_retains_its_exact_stage ... ok
+test composite_failure_keeps_acknowledged_stage_distinct_from_absence ... ok
+test native_directory_import_exceeds_bootstrap_and_reads_bytes ... ok
+test native_directory_import_spills_ordering_without_an_entry_cap ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.06s
+

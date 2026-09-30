@@ -1,0 +1,146 @@
+   Compiling libc v0.2.189
+   Compiling cfg-if v1.0.4
+   Compiling version_check v0.9.5
+   Compiling typenum v1.20.1
+   Compiling subtle v2.6.1
+   Compiling glob v0.3.4
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.24
+   Compiling memchr v2.8.3
+   Compiling zeroize v1.9.0
+   Compiling regex-syntax v0.8.11
+   Compiling minimal-lexical v0.2.1
+   Compiling autocfg v1.5.1
+   Compiling libloading v0.8.9
+   Compiling bindgen v0.72.1
+   Compiling find-msvc-tools v0.1.12
+   Compiling either v1.18.0
+   Compiling generic-array v0.14.7
+   Compiling shlex v2.0.1
+   Compiling clang-sys v1.9.1
+   Compiling nom v7.1.3
+   Compiling cfg_aliases v0.2.2
+   Compiling semver v1.0.28
+   Compiling itertools v0.13.0
+   Compiling nix v0.31.3
+   Compiling memoffset v0.9.1
+   Compiling shlex v1.3.0
+   Compiling rustc-hash v2.1.3
+   Compiling rustc_version v0.4.1
+   Compiling pkg-config v0.3.34
+   Compiling bitflags v2.13.1
+   Compiling opaque-debug v0.3.1
+   Compiling curve25519-dalek v4.1.3
+   Compiling regex-automata v0.4.18
+   Compiling vcpkg v0.2.15
+   Compiling snow v0.9.6
+   Compiling foldhash v0.2.0
+   Compiling cexpr v0.6.0
+   Compiling libsqlite3-sys v0.38.2
+   Compiling hashbrown v0.17.1
+   Compiling regex v1.13.1
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayvec v0.7.8
+   Compiling arrayref v0.3.9
+   Compiling hashlink v0.12.2
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling fallible-iterator v0.3.0
+   Compiling smallvec v1.16.0
+   Compiling syn v2.0.119
+   Compiling jobserver v0.1.35
+   Compiling cc v1.4.5
+   Compiling inout v0.1.4
+   Compiling block-buffer v0.10.4
+   Compiling getrandom v0.2.17
+   Compiling cpufeatures v0.2.17
+   Compiling errno v0.3.14
+   Compiling rand_core v0.6.4
+   Compiling crypto-common v0.1.7
+   Compiling universal-hash v0.5.1
+   Compiling cipher v0.4.4
+   Compiling aead v0.5.2
+   Compiling digest v0.10.7
+   Compiling polyval v0.6.2
+   Compiling poly1305 v0.8.0
+   Compiling chacha20 v0.9.1
+   Compiling aes v0.8.4
+   Compiling ctr v0.9.2
+   Compiling blake2 v0.10.6
+   Compiling ghash v0.5.1
+   Compiling chacha20poly1305 v0.10.1
+   Compiling sha2 v0.10.9
+   Compiling aes-gcm v0.10.3
+   Compiling blake3 v1.8.5
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-api-core v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-api/core)
+   Compiling libproc v0.14.11
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-telemetry)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-sandbox)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 22.02s
+     Running tests/admission.rs (core/target/debug/deps/admission-62aa0aae29e8829f)
+
+running 5 tests
+test a_busy_reader_bound_neither_blocks_writers_nor_exceeds_itself ... ok
+test another_store_keeps_its_own_budget ... ok
+test two_sandboxes_over_one_store_share_its_budget ... ok
+test four_writers_are_admitted_then_refused_and_reads_never_queue_behind_them ... ok
+test every_supported_budget_admits_its_writers_and_refuses_the_next ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/catalog_admission.rs (core/target/debug/deps/catalog_admission-c665a6f43524258d)
+
+running 4 tests
+test allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused ... FAILED
+test catalog_grants_read_only_authority_and_wrong_prepared_scope_refuse_before_save ... FAILED
+test real_catalog_contention_and_range_exhaustion_preserve_allocator_and_content ... FAILED
+test aliases_share_one_catalog_allowance_and_distinct_provider_cells_keep_their_own ... FAILED
+
+failures:
+
+---- allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused stdout ----
+
+thread 'allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused' panicked at crates/layerfs-server/tests/catalog_admission.rs:286:5:
+assertion `left == right` failed
+  left: [15, 75, 114, 20, 134, 211, 56, 66, 148, 33, 28, 250, 214, 129, 35, 158, 249, 25, 221, 113, 63, 123, 37, 83, 92, 94, 131, 223, 235, 80, 8, 224]
+ right: [226, 184, 121, 194, 229, 105, 147, 17, 169, 237, 42, 241, 44, 3, 252, 46, 196, 136, 222, 90, 65, 49, 173, 218, 9, 239, 216, 255, 9, 15, 255, 89]
+
+---- catalog_grants_read_only_authority_and_wrong_prepared_scope_refuse_before_save stdout ----
+
+thread 'catalog_grants_read_only_authority_and_wrong_prepared_scope_refuse_before_save' panicked at crates/layerfs-server/tests/catalog_admission.rs:286:5:
+assertion `left == right` failed
+  left: [15, 75, 114, 20, 134, 211, 56, 66, 148, 33, 28, 250, 214, 129, 35, 158, 249, 25, 221, 113, 63, 123, 37, 83, 92, 94, 131, 223, 235, 80, 8, 224]
+ right: [226, 184, 121, 194, 229, 105, 147, 17, 169, 237, 42, 241, 44, 3, 252, 46, 196, 136, 222, 90, 65, 49, 173, 218, 9, 239, 216, 255, 9, 15, 255, 89]
+
+---- real_catalog_contention_and_range_exhaustion_preserve_allocator_and_content stdout ----
+
+thread 'real_catalog_contention_and_range_exhaustion_preserve_allocator_and_content' panicked at crates/layerfs-server/tests/catalog_admission.rs:286:5:
+assertion `left == right` failed
+  left: [15, 75, 114, 20, 134, 211, 56, 66, 148, 33, 28, 250, 214, 129, 35, 158, 249, 25, 221, 113, 63, 123, 37, 83, 92, 94, 131, 223, 235, 80, 8, 224]
+ right: [226, 184, 121, 194, 229, 105, 147, 17, 169, 237, 42, 241, 44, 3, 252, 46, 196, 136, 222, 90, 65, 49, 173, 218, 9, 239, 216, 255, 9, 15, 255, 89]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- aliases_share_one_catalog_allowance_and_distinct_provider_cells_keep_their_own stdout ----
+
+thread 'aliases_share_one_catalog_allowance_and_distinct_provider_cells_keep_their_own' panicked at crates/layerfs-server/tests/catalog_admission.rs:336:5:
+assertion `left == right` failed
+  left: [48, 238, 35, 197, 242, 245, 63, 142, 76, 72, 7, 117, 95, 12, 10, 8, 237, 65, 222, 127, 105, 57, 97, 51, 111, 172, 52, 11, 249, 178, 200, 28]
+ right: [77, 5, 131, 228, 92, 108, 99, 110, 3, 76, 232, 206, 101, 17, 34, 74, 48, 210, 236, 113, 185, 185, 161, 24, 223, 220, 187, 179, 43, 128, 85, 7]
+
+
+failures:
+    aliases_share_one_catalog_allowance_and_distinct_provider_cells_keep_their_own
+    allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused
+    catalog_grants_read_only_authority_and_wrong_prepared_scope_refuse_before_save
+    real_catalog_contention_and_range_exhaustion_preserve_allocator_and_content
+
+test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+error: test failed, to rerun pass `-p layerfs-server --test catalog_admission`

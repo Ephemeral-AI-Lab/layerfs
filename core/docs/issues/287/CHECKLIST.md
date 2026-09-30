@@ -1,14 +1,15 @@
 # Issue287 current implementation checklist
 
 > **Status: Current planning checklist; no release candidate exists.**
-> Source parent for R0: `7edddbdb8e8512627aed0ed42533ef099d802384`.
+> Current checkpoint: `1d2fc8c2987a46acb906a1b9e720bb4cac116c7e` (R0).
 
 Assignment: #287 implementation only. Benchmark qualification is delegated/unrun
 under #288. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
 packet; [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) is append-only.
 
-Current milestone: **R0 publication/freeze**. Product implementation remains
-disabled until the exact R0 commit is published and linked in #287.
+Current milestone: **R1a typed catalog admission and real Save-slot progress**.
+R0 is published and linked in #287 comment5911332695. Native/engine/physical
+protection and concurrent enablement remain gated on their owning proofs.
 
 - [x] Inspect actual primary/published/research source, ancestry, origin and artifacts.
 - [x] Create clean owned managed worktree and `codex/issue287-implementation` branch.
@@ -19,8 +20,17 @@ disabled until the exact R0 commit is published and linked in #287.
 - [x] Review independent canonical v1/v2 vectors and reproducible method.
 - [x] Review resource/runtime audits and simultaneous window arithmetic.
 - [x] Check owned links/whitespace and exact staged/parent production LOC.
-- [ ] Commit, confirm counted committed tree, push and confirm publication.
-- [ ] Link exact source packet/contracts/scenarios in #287; mark R0 on passing exits.
+- [x] Commit, confirm counted committed tree, push and confirm publication.
+- [x] Link exact source packet/contracts/scenarios in #287; mark R0 on passing exits.
+
+R1a current gates:
+
+- [x] Typed per-Store C2Save and per-actual-catalog C5Catalog ownership.
+- [ ] Release completed content admission before short composite publication (requires versioned result custody; legacy v1 remains unchanged until R3).
+- [x] Real two-active-Save StageChanges barrier and ordinary authorized range refill (direct Service; Workspace lease exhaustion remains later).
+- [x] Third C2/no-effect refusal, exact catalog conflict/grant/identity/custody checks (real-provider Unknown induction remains unrun).
+- [x] Freeze/review source; run covering locked tests/examples/fmt/Clippy and boundary checks.
+- [ ] Exact LOC comparison, checkpoint commit/push/#287 update.
 
 Named submilestones and dependencies:
 

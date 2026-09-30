@@ -93,9 +93,29 @@ source-token32, source-offset8, source-limit8 =64. Kinds are canonical1,
 captured-parent2, payload3, zero4. Captured token is generation8/serial8/version8/
 context-id8; payload token is owner8/epoch8/selector8/declared-length8. Zero has
 zero token/offset/limit. Require start<end, exact coverage, source bounds and
-immutable context/owner authorization. Each branch child contains upper8,
-lower8, interval-count8, provenance-summary8 and Ref16 =48. Summaries are checked
-against children at construction and independently, not trusted cache facts.
+immutable context/owner authorization.
+
+Prospective interval node layout revision2 corrects the R0 draft before any v3
+product exists. The old proposed48-byte branch layout1 is not admitted by the
+target codec. An authenticated node's56-byte body header is layout:u16=2,
+level:u8, flags:u8=0, local-count:u16, reserved:u16=0, lower8, upper8,
+interval-count8, replacement-bytes8 (including Zero), zero-bytes8 and
+captured-span-count8. Leaf level is0; branch level is1..7. One root read
+establishes checked structural height without an owner-flag convention.
+
+Each branch child contains lower8, upper8, interval-count8, replacement-bytes8,
+zero-bytes8, captured-span-count8, source-kind-bitmask8 and Ref16 =72. Leaf
+key8/value64 is also72 bytes. The3,968-byte body minus56 header holds54 cells,
+with24 unused zero bytes at maximum occupancy. Child aggregates compose by
+checked sums on modified paths. Zero<=replacement<=covered bytes; captured
+spans<=intervals. Provenance uses four source-kind bits; reserved bits refuse.
+Summaries/level/bounds are checked against children at construction and by the
+independent verifier. No mutable side table or tag13 aggregate population exists.
+
+The monotone Commit pass derives exact emitted Base/Local/Zero descriptors and
+construction-run/EOF totals once from the selected current delta and terminal
+source contexts. Hot writes do not rescan the delta to recompute coverage;
+neither this pass nor opaque parent spans enumerate historical predecessor leaves.
 
 Two boundary paths and two builder pages per level are admitted. Split/join
 carries untouched/removed subtree roots; it does not emit one update per removed

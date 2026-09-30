@@ -1,4 +1,9 @@
-//! Catalog changes after service admission.
+//! Catalog changes after typed service admission.
+//!
+//! Pure catalog commands hold their separate metadata allowance. The legacy
+//! import/prepared/composite surfaces keep their whole-request C2 allowance;
+//! completed content is retained through later catalog failure. Releasing that
+//! allowance between phases requires the versioned complete result owner.
 use crate::service::{
     error::{catalog as failure, storage},
     read::content::id,

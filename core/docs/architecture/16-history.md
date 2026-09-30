@@ -237,6 +237,16 @@ with the existing `HeadMoved` conflict rather than replacing newer history.
 
 ## 16.5 Admission, multi-writer and continuity
 
+The #287 R1a Service admission change is described against parent
+`1d2fc8c2987a46acb906a1b9e720bb4cac116c7e` in the
+[current typed-admission note](proposal/bounded-workspace-implementation-20260930/R1A-SERVER-ADMISSION.md).
+Pure metadata commands hold one C5 request allowance shared by StoreAccess aliases
+of the exact same catalog Arc, independently of C2 content requests and reads.
+Legacy import/Stage/composite Commit retain their complete-request C2 allowance
+pending versioned completed-result custody. C5's provider transaction, schema,
+identity, persistence and Unknown behavior below are unchanged. The logical
+admission split does not qualify native protected channels or physical memory.
+
 One short transaction at a time per catalog authority. The provider cell is taken
 with a non-blocking attempt, so contention is an immediate `Busy` refusal rather
 than a wait, and no transaction ever spans a caller's upload, C1 construction, C2

@@ -1,0 +1,104 @@
+   Compiling libc v0.2.189
+    Checking cfg-if v1.0.4
+    Checking typenum v1.20.1
+    Checking subtle v2.6.1
+    Checking zeroize v1.9.0
+   Compiling generic-array v0.14.7
+   Compiling memoffset v0.9.1
+    Checking opaque-debug v0.3.1
+    Checking bitflags v2.13.1
+   Compiling nix v0.31.3
+   Compiling curve25519-dalek v4.1.3
+   Compiling libproc v0.14.11
+    Checking foldhash v0.2.0
+   Compiling libsqlite3-sys v0.38.2
+   Compiling snow v0.9.6
+   Compiling blake3 v1.8.5
+    Checking constant_time_eq v0.4.2
+    Checking arrayvec v0.7.8
+    Checking hashbrown v0.17.1
+    Checking arrayref v0.3.9
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+    Checking fallible-iterator v0.3.0
+    Checking fallible-streaming-iterator v0.1.9
+    Checking smallvec v1.16.0
+    Checking hashlink v0.12.2
+    Checking inout v0.1.4
+    Checking block-buffer v0.10.4
+    Checking getrandom v0.2.17
+    Checking cpufeatures v0.2.17
+    Checking errno v0.3.14
+    Checking rand_core v0.6.4
+    Checking crypto-common v0.1.7
+    Checking universal-hash v0.5.1
+    Checking cipher v0.4.4
+    Checking digest v0.10.7
+    Checking aead v0.5.2
+    Checking polyval v0.6.2
+    Checking poly1305 v0.8.0
+    Checking blake2 v0.10.6
+    Checking sha2 v0.10.9
+    Checking chacha20 v0.9.1
+    Checking ctr v0.9.2
+    Checking aes v0.8.4
+    Checking ghash v0.5.1
+    Checking chacha20poly1305 v0.10.1
+    Checking rusqlite v0.40.2
+    Checking aes-gcm v0.10.3
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-telemetry)
+    Checking layerfs-api-core v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-api/core)
+    Checking layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-sandbox)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-history)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-server)
+error: use of `format!` to build up a string from an iterator
+   --> crates/layerfs-server/tests/catalog_admission.rs:167:13
+    |
+167 | /             parameter
+168 | |                 .iter()
+169 | |                 .map(|byte| format!("{byte:02x}"))
+170 | |                 .collect::<String>(),
+    | |____________________________________^
+    |
+help: call `fold` instead
+   --> crates/layerfs-server/tests/catalog_admission.rs:169:18
+    |
+169 |                 .map(|byte| format!("{byte:02x}"))
+    |                  ^^^
+help: ... and use the `write!` macro here
+   --> crates/layerfs-server/tests/catalog_admission.rs:169:29
+    |
+169 |                 .map(|byte| format!("{byte:02x}"))
+    |                             ^^^^^^^^^^^^^^^^^^^^^
+    = note: this can be written more efficiently by appending to a `String` directly
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#format_collect
+    = note: `-D clippy::format-collect` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::format_collect)]`
+
+error: use of `format!` to build up a string from an iterator
+   --> crates/layerfs-server/tests/catalog_admission.rs:217:17
+    |
+217 |       let fixed = oracle::file(b"layerfs-stage02-fixture")
+    |  _________________^
+218 | |         .iter()
+219 | |         .map(|byte| format!("{byte:02x}"))
+220 | |         .collect::<String>();
+    | |____________________________^
+    |
+help: call `fold` instead
+   --> crates/layerfs-server/tests/catalog_admission.rs:219:10
+    |
+219 |         .map(|byte| format!("{byte:02x}"))
+    |          ^^^
+help: ... and use the `write!` macro here
+   --> crates/layerfs-server/tests/catalog_admission.rs:219:21
+    |
+219 |         .map(|byte| format!("{byte:02x}"))
+    |                     ^^^^^^^^^^^^^^^^^^^^^
+    = note: this can be written more efficiently by appending to a `String` directly
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#format_collect
+
+error: could not compile `layerfs-server` (test "catalog_admission") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
