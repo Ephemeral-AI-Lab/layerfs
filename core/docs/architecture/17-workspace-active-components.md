@@ -78,6 +78,12 @@ actual transmitted/constructed bytes and canonical C1/C2 work.
 
 `active_reconcile.rs` installs only the captured set after a checked canonical
 outcome is saved. A matching regular revision collapses to the saved Base.
+The pre-admitted reconciliation patch takes ownership of deletion key buffers;
+its immutable preparation rows release their emptied lists and charges before
+ordered/index scratch admission. Keys are moved rather than cloned, and all
+patch bytes remain charged before allocation/publication. This avoids retaining
+a second complete key list during local C5 completion without raising Budget or
+changing the atomic patch, selected snapshots, physical fund or failure custody.
 Intervening G2 with a nonzero Base retains its original coordinates; a fresh
 absent Base follows P0's adoption rule. Symlink target extents and directory
 bindings do not undergo regular-file collapse. One-identity resident updates use

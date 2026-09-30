@@ -1,0 +1,213 @@
+{
+  "child_output": {
+    "workspace-commit-native-count-writes-8192-v2": {
+      "stderr": "\nthread 'phase_b_commit::native_count_8192' panicked at crates/layerfs-api/sdk/tests/support/phase_b_commit.rs:491:18:\nunexpected count outcome: Err(Commit(CommitFailure { generation: 1, phase: Reconcile, disposition: KnownCommitLocalFailure, cause: Capacity, stage: None, observed_stage: None, known_outcome: Some(Committed(CommitWire { commit: [18, 98, 83, 191, 14, 108, 141, 207, 179, 187, 1, 146, 172, 21, 115, 12, 63, 202, 169, 108, 40, 206, 199, 12, 96, 157, 212, 41, 36, 147, 106, 89, 30], stack: [49, 16, 47, 57, 118, 129, 158, 121, 253, 26, 239, 156, 75, 253, 216, 71, 66], root: [225, 90, 220, 198, 54, 28, 183, 176, 20, 196, 205, 172, 203, 129, 61, 207, 80, 163, 154, 250, 254, 14, 186, 179, 101, 238, 252, 199, 10, 227, 113, 245], parent: None, base_layer: [50, 237, 60, 65, 33, 234, 113, 82, 127, 82, 233, 34, 73, 115, 95, 251, 163, 54, 166, 142, 126, 121, 92, 235, 109, 34, 21, 68, 113, 7, 205, 91, 255] })), observed_outcome: Some(Committed(CommitWire { commit: [18, 98, 83, 191, 14, 108, 141, 207, 179, 187, 1, 146, 172, 21, 115, 12, 63, 202, 169, 108, 40, 206, 199, 12, 96, 157, 212, 41, 36, 147, 106, 89, 30], stack: [49, 16, 47, 57, 118, 129, 158, 121, 253, 26, 239, 156, 75, 253, 216, 71, 66], root: [225, 90, 220, 198, 54, 28, 183, 176, 20, 196, 205, 172, 203, 129, 61, 207, 80, 163, 154, 250, 254, 14, 186, 179, 101, 238, 252, 199, 10, 227, 113, 245], parent: None, base_layer: [50, 237, 60, 65, 33, 234, 113, 82, 127, 82, 233, 34, 73, 115, 95, 251, 163, 54, 166, 142, 126, 121, 92, 235, 109, 34, 21, 68, 113, 7, 205, 91, 255] })), installed_revision: None }))\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "stdout": "\nrunning 1 test\ntest phase_b_commit::native_count_8192 ... PHASE_B_FIXTURE clone=/work/workspace-commit-native-count-writes-8192-v2/clone-0 root=3f05b8935d33f847481fec78819d74f507d90852bba880a88a413e9c0b1f4945 initialized=false\nFAILED\n\nfailures:\n\nfailures:\n    phase_b_commit::native_count_8192\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 24 filtered out; finished in 12.67s\n\n"
+    }
+  },
+  "diagnostic": {
+    "cause_lines": [
+      "LFS_C5_CHARGE v=1 phase=prepared dirty_rows=1 deletion_keys=24576 deletion_key_bytes=499712 rows_charge=448 deletion_charge=3145728 updates_charge=3646138 budget_before=1043154 budget_after_prepare=4189330 budget_after_updates=7835468",
+      "LFS_C5_COMPACTION v=1 status=aborted branch=unreached initial_updates=24681 final_updates=24681 estimate=0 remaining=NA touched_logicals=0 all_logicals=0 scan_calls=0 scanned_locators=0 pressure_pack_reads=0 source_pack_reads=0 partial=0 paired=0 physical_pack_attempts=0 physical_pack_created=0 sources_selected=0 budget_before=7861115 budget_after=7861115",
+      "LFS_C5_FAILURE_CONTEXT v=1 known=true installed_revision=NA class=capacity budget_used=1042758 allocated=3620864 reserved=843776 quota=67108864 active_revision=8193 pages=882 pins=0"
+    ],
+    "command": [
+      "docker",
+      "exec",
+      "-e",
+      "LFS_CAPACITY_DIAGNOSTIC=1",
+      "-e",
+      "LAYERFS_PHASE_B_CLONES=/work/workspace-commit-native-count-writes-8192-v2",
+      "-e",
+      "LAYERFS_TEST_BACKING_ROOT=/work/workspace-commit-native-count-writes-8192-v2",
+      "-e",
+      "LAYERFS_CONSTRUCTION_WORKERS=1",
+      "issue286-c5-count-diagnostic-r059",
+      "/test",
+      "--exact",
+      "phase_b_commit::native_count_8192",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "manifest_sha256": "4f5ef3fcbf2eb1b06575d7b9660f19888a5818993067d6069ac9b11d5e3dbf3a",
+    "purpose": "counts/cause only; no replacement gate or speed arm",
+    "source": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "403477f5ad40efa8cb26fb4276bd279532353e15463342deaddd6c8908ecfd2d",
+      "product_seal": "84b7b70e94b9df74e484d4c33fbd6c0df831e45442db64b1e7c7b8534e56678f",
+      "source_commit": "9effbb61484cdf57e3c5240d72ff86c05a194b96",
+      "source_dirty": false,
+      "source_tree": "d035db3b6879acabfa20ab7291af3602d63b1891"
+    }
+  },
+  "raw_manifest_sha256": "f3ffd70f7a50f57fd909f1bbb309a381da33b4f11fa982e74451d6bfd896cfbb",
+  "run": {
+    "backing": "ef53 4096",
+    "build": {
+      "binary": {
+        "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/f086fd48a085f7b95d67850ceca6a0c6c1c8b5adfe94236fd27163e031b229c3/inherited_workspace",
+        "sha256": "f086fd48a085f7b95d67850ceca6a0c6c1c8b5adfe94236fd27163e031b229c3"
+      },
+      "build_budget_ns": 30000000000,
+      "build_status": "PASS",
+      "inputs": {
+        "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+        "product_seal": "84b7b70e94b9df74e484d4c33fbd6c0df831e45442db64b1e7c7b8534e56678f",
+        "profile": "release",
+        "sqlite_provider": "locked published rusqlite/bundled; native functional binary only",
+        "test_source_seal": "d8b16b5157278321ef4565da7c782ee5fb24861b518f38bf4faca6d6b6aca0c5"
+      },
+      "mode": "locked-release-build",
+      "wall_ns": 2310492083
+    },
+    "earlier_family_policy": "unaffected production and earlier evidence reused; no earlier resampling",
+    "external_cleanup": [
+      {
+        "command": [
+          "docker",
+          "rm",
+          "-f",
+          "issue286-native-5c5d6551e8364cb4"
+        ],
+        "exit_code": 0,
+        "started_ns": 6155021013916,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "20d5b40b8147dbf15b5e9d3798b0256afed65cb83564e2d6737d0b6f46421c60",
+        "timeout": false,
+        "wall_ns": 156804917
+      },
+      {
+        "command": [
+          "docker",
+          "volume",
+          "rm",
+          "issue286-native-5c5d6551e8364cb4-backing"
+        ],
+        "exit_code": 0,
+        "started_ns": 6155178883333,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "474afb88494b9746dba9f7067acd2eff526256fccc7f95f037a5524db526bc02",
+        "timeout": false,
+        "wall_ns": 24768375
+      }
+    ],
+    "identity": {
+      "build_profile": "release",
+      "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+      "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+      "dirty_paths": [],
+      "harness_seal": "403477f5ad40efa8cb26fb4276bd279532353e15463342deaddd6c8908ecfd2d",
+      "product_seal": "84b7b70e94b9df74e484d4c33fbd6c0df831e45442db64b1e7c7b8534e56678f",
+      "source_commit": "9effbb61484cdf57e3c5240d72ff86c05a194b96",
+      "source_dirty": false,
+      "source_tree": "d035db3b6879acabfa20ab7291af3602d63b1891"
+    },
+    "image": "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+    "profile": "native-inprocess-commit-functional-clone-v1",
+    "rows": [
+      {
+        "cache_contract": "uncontrolled, functional only",
+        "case": "workspace-commit-native-count-writes-8192-v2",
+        "cleanup_status": "UNKNOWN",
+        "clone_method": "independent byte copy; Linux setup ownership 0:0; host and Linux byte hashes matched; closed prepared master",
+        "functional": {
+          "command": [
+            "docker",
+            "exec",
+            "-e",
+            "LAYERFS_PHASE_B_CLONES=/work/workspace-commit-native-count-writes-8192-v2",
+            "-e",
+            "LAYERFS_TEST_BACKING_ROOT=/work/workspace-commit-native-count-writes-8192-v2",
+            "-e",
+            "LAYERFS_CONSTRUCTION_WORKERS=1",
+            "issue286-native-5c5d6551e8364cb4",
+            "/test",
+            "--exact",
+            "phase_b_commit::native_count_8192",
+            "--test-threads=1",
+            "--nocapture"
+          ],
+          "exit_code": 101,
+          "started_ns": 6142240698708,
+          "stderr_sha256": "9a475acc628fbbcd4d01170cf31a255e4a40e637c3fd3f2e7a98591c03e778b2",
+          "stdout_sha256": "d45fdb1f364fc6d05bf9c3a0b8b4afe48d5282595a96e886f3624232cd40e861",
+          "timeout": false,
+          "wall_ns": 12746044625
+        },
+        "functional_budget_ns": 60000000000,
+        "functional_status": "FAIL",
+        "numeric_latency_status": "INELIGIBLE",
+        "observations": [],
+        "performance_claim": false,
+        "prepared": {
+          "files": {
+            "fixture.before": "60c3e8f627d8cd6fbb1c7775df62b9ddbb540f092c7fecb372a66fc9485e9045",
+            "history.sqlite": "d5c0765f0c7431099fa42979d3e00d07bdb82546c75dca583ccc3bcb9a1bfb46",
+            "store.sqlite": "5b4d84c45eed4e4a97f4a280f39d26470171d2bd858a3f69a03d9cd8853b4da1"
+          },
+          "oracle": "grand-base/sibling-base; large data[i]=i%251; full relevant bytes checked in native child",
+          "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/workspace-commit-native-master-v1/count",
+          "preparation": {
+            "command": [
+              "docker",
+              "exec",
+              "-e",
+              "LAYERFS_PHASE_B_PREPARE=/work/master-count",
+              "-e",
+              "LAYERFS_PHASE_B_SIZE=327680",
+              "issue286-native-5c5d6551e8364cb4",
+              "/test",
+              "--exact",
+              "phase_b_commit::prepare_master",
+              "--ignored",
+              "--nocapture"
+            ],
+            "exit_code": 0,
+            "started_ns": 6141780418083,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_sha256": "bb65e1c0fa6d173bc0652f52c116a04750024c503d5806a1098ef54481eacbcc",
+            "timeout": false,
+            "wall_ns": 112501417
+          },
+          "producer_binary": {
+            "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/f086fd48a085f7b95d67850ceca6a0c6c1c8b5adfe94236fd27163e031b229c3/inherited_workspace",
+            "sha256": "f086fd48a085f7b95d67850ceca6a0c6c1c8b5adfe94236fd27163e031b229c3"
+          },
+          "producer_source": {
+            "build_profile": "release",
+            "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+            "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+            "dirty_paths": [],
+            "harness_seal": "403477f5ad40efa8cb26fb4276bd279532353e15463342deaddd6c8908ecfd2d",
+            "product_seal": "84b7b70e94b9df74e484d4c33fbd6c0df831e45442db64b1e7c7b8534e56678f",
+            "source_commit": "9effbb61484cdf57e3c5240d72ff86c05a194b96",
+            "source_dirty": false,
+            "source_tree": "d035db3b6879acabfa20ab7291af3602d63b1891"
+          },
+          "reuse": false,
+          "size": 327680
+        },
+        "route": "Linux native Workspace + in-process production Server",
+        "sample_count": 1,
+        "sdk_time": "N/A: native component route",
+        "status": "FAIL",
+        "test": "phase_b_commit::native_count_8192",
+        "verification_scope": "in-child full relevant old/new/G1/G2/pin bytes, quota/custody assertions; no separate speed arm"
+      },
+      {
+        "case": "workspace-commit-native-count-writes-10240-v2",
+        "reason": "prior case failed",
+        "status": "NOT_RUN"
+      }
+    ],
+    "schema": "core-workspace-commit-native-run-v1",
+    "selected": [
+      "workspace-commit-native-count-writes-8192-v2",
+      "workspace-commit-native-count-writes-10240-v2"
+    ],
+    "status": "INCOMPLETE"
+  }
+}

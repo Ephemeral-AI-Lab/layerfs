@@ -115,7 +115,7 @@ pub(super) fn reconcile(
     crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
     let captured = submission.capture()?;
     let prep_budget_before = workspace.host.budget.used();
-    let (rows, rows_charge) = prepare(workspace, captured, submission, deadline)?;
+    let (mut rows, rows_charge) = prepare(workspace, captured, submission, deadline)?;
     let prep_budget_after = workspace.host.budget.used();
     let bytes = rows.iter().try_fold(0usize, |bytes, row| {
         row.deletions.iter().try_fold(
@@ -184,7 +184,7 @@ pub(super) fn reconcile(
         .checked_add(1)
         .ok_or(WorkspaceError::Capacity)?;
     let mut updates = BTreeMap::new();
-    for row in &rows {
+    for row in &mut rows {
         updates.insert(dirty_key(captured.generation, row.serial).to_vec(), None);
         let mut current = HotInode::parse(
             &active
@@ -195,8 +195,8 @@ pub(super) fn reconcile(
             return Err(WorkspaceError::Io);
         }
         if current.revision == row.original.revision && current.kind == NodeKind::File {
-            for key in &row.deletions {
-                updates.insert(key.clone(), None);
+            for key in std::mem::take(&mut row.deletions) {
+                updates.insert(key, None);
             }
             current.storage = u8::from(current.length > 0);
             current.inline = if current.length > 0 {
@@ -205,6 +205,10 @@ pub(super) fn reconcile(
                 [None; 4]
             };
         }
+        // The pre-admitted patch owns moved key buffers. Release the source
+        // list before index preparation needs its own charged ordered scratch.
+        row.deletions = Vec::new();
+        row._charge.resize(0)?;
         if current.kind != NodeKind::Directory {
             // Intervening G2 extents still address their own immutable Base.
             // Only the matching captured inode receives the saved Base origin.
