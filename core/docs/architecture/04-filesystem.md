@@ -437,3 +437,32 @@ The Workspace's keyed namespace pages now use the common level-7 physical page
 limit for all key kinds. This lifts the former level-3 tombstone and level-2
 inode/directory ceilings without changing an encoded page. The physical page
 slot format and other representation ceilings remain separate constraints.
+
+### Operation-scoped cycle proof — #276
+
+Source: code committed with this addendum, based on
+`eb3da4be63d2378df2fc47855e421a7a4c8407be` (published product baseline
+`7edddbdb8e8512627aed0ed42533ef099d802384`).
+
+Existing-tree cycle validation now seeds one iterative DFS from every rebound
+directory and retains active/completed state across those seeds for this one
+immutable prepared input. A newly introduced cycle in a valid base contains a
+changed directory edge; starting from its child reaches the cycle. Entering an
+active directory refuses the batch. A directory is completed only after every
+effective descendant edge has passed, so later seeds can reuse that proof.
+No directory row is expanded twice. Base entries still merge with the final
+changed bindings; fresh directories follow their typed supplied rows. The
+parent-alias scan remains a separate full-base proof before DFS, including
+same-batch removal/replacement and non-file unique ownership. Base-less build
+reachability, allocator absence, root and final-count checks are unchanged.
+
+The same cumulative `floor(ordering_bytes / 1024)` allowance still charges base
+entries read plus effective entries traversed; completed subtrees remove
+repeated work rather than increase that allowance. The proof map also refuses
+before retaining more than that many directory serials, including empty ones.
+Pending DFS steps are bounded by admitted effective edges and active ancestors;
+no recursive host stack or persistent owner index is introduced. All proof
+state dies with the validation call, including on refusal. Canonical root v1,
+profile, inode/directory bytes, old roots and public interfaces are unchanged.
+This improves shared descendant work; inherited rebinds still scan the base for
+aliases and no path-local move or elapsed speed claim follows.

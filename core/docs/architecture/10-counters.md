@@ -334,3 +334,20 @@ consumer that reads the outcome alone must not treat a node that never completed
 an operation that completed successfully."* And `Disabled` versus `Clipped` are
 different states with different consequences, so *"a caller that checks only
 `is_incomplete()` therefore never fails a disabled row."*
+
+### Shared cycle validation accounting — #276
+
+Source: code committed with this addendum, based on
+`eb3da4be63d2378df2fc47855e421a7a4c8407be`.
+
+`ValidationWork` and its six inode-page sites keep their existing public fields
+and semantics. `cycles` charges actual inode pages demanded by the one
+operation-scoped DFS; completed subtrees can remove subsequent demands as well
+as row decoding. Logical demands still count every lookup actually made.
+`entries_examined` continues to count stored entries read (and the separate
+build-reachability bindings); it is **not** a counter of all fresh effective
+edges. The private work allowance charges both stored entries read and effective
+entries traversed, once per expanded subtree. External RowSource lookup counts
+in the [checkpoint diagnostic](../issues/276/C1-CYCLE-CHECKPOINT-SPEC-20260930.md)
+measure actual validation row requests without a test hook or new public field.
+Counts describe algorithmic work, not disk I/O, latency or phase-local memory.

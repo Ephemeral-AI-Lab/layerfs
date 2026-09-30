@@ -386,3 +386,20 @@ appears in `MAXIMUM_ATTRIBUTE_VALUE_BYTES` (derived from the chunk maximum) and
 an attribute value is stored as one extent-only root over one canonical chunk
 object. The source states the reason a larger constant would be wrong: "a bound
 above it would be a limit no write path can reach and no read path can return."
+
+### Cycle proof state — #276
+
+Source: code committed with this addendum, based on
+`eb3da4be63d2378df2fc47855e421a7a4c8407be`.
+
+The update cycle allowance is cumulative **per operation**, as corrected by the
+Phase A note above; the historical per-walk wording in section 9 is superseded.
+An operation-scoped active/completed map removes repeated effective-subtree
+walks. Base entries read plus effective entries examined still debit the same
+`floor(ordering_bytes / 1024)` work allowance. Distinct proof-map directories
+also cannot exceed that allowance; even empty directories debit proof state.
+This new explicit state check can refuse an input containing too many empty
+rebound directories that formerly performed zero edge work. No allowance is
+raised. Build reachability and the separate alias/base-record bounds retain
+their existing rules. Pending steps fit within admitted edges and ancestors.
+See [filesystem algorithm](04-filesystem.md#operation-scoped-cycle-proof--276).
