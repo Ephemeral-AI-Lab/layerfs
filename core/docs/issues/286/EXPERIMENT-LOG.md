@@ -497,3 +497,7 @@ R049 was published in [#286 comment5901908056](https://github.com/Ephemeral-AI-L
 ## Family5 initial native build r064
 
 [Round r064](experiments/20260930-workspace-namespace-native-r064.md): INCOMPLETE, all10 native controls NOT_RUN, no sample. New external helper E0599 and phantom absent-volume cleanup recorded. Fix helper/acquisition bookkeeping at new source, then r065 native and r066 SDK/separate proof, retaining fixed workloads/bounds and reusing all earlier product proofs. Production LOC135638 unchanged.
+
+## Family5 native namespace r065
+
+[10/10 native controls PASS](experiments/20260930-workspace-namespace-native-r065.md), all15s child command bounds and checked cleanup; complete old/new/pinned trees,4097-byte component access, G1/G2, refund and atomic refusal. Observed private/upstream counts match across3/67 and256 unrelated resident files, while internal scan/visit counts remain unavailable. SDK time N/A; numeric INELIGIBLE. No production change or earlier-family run. Next r066 public SDK + separate proof.
