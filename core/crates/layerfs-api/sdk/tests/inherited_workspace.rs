@@ -1,6 +1,9 @@
 //! Public Workspace operations against the production in-process Service.
 #![cfg(target_os = "linux")]
 
+#[path = "support/phase_b_commit.rs"]
+mod phase_b_commit;
+
 use layerfs_bridge::contract::{
     Code, CommitOutcomeWire, Failure, HistoryCommand, Inspect, Operation, Request, Response, Root,
     Source,
@@ -86,6 +89,7 @@ struct Fixture {
     gate: Arc<CommitGate>,
     fault: Arc<AtomicU64>,
     canonical_calls: Arc<AtomicU64>,
+    saved_files: Arc<Mutex<Vec<(u64, u64)>>>,
     _temp: Temp,
 }
 impl Fixture {
@@ -113,55 +117,13 @@ impl Fixture {
         ));
         fs::create_dir(&path).unwrap();
         let temp = Temp(path.clone());
-        let source = path.join("source");
-        fs::create_dir_all(source.join("packages/old/subtree/child")).unwrap();
-        fs::create_dir(source.join("packages/new")).unwrap();
-        fs::write(
-            source.join("packages/old/subtree/child/grand.txt"),
-            b"grand-base",
-        )
-        .unwrap();
-        fs::write(
-            source.join("packages/old/subtree/sibling.txt"),
-            b"sibling-base",
-        )
-        .unwrap();
-        for index in 0..extra {
-            fs::write(
-                source.join(format!("packages/old/subtree/child/extra{index:03}.txt")),
-                b"x",
-            )
-            .unwrap();
-        }
-        if deep {
-            let mut path = source.join("src");
-            for _ in 0..15 {
-                path.push("d".repeat(250));
-            }
-            fs::create_dir_all(&path).unwrap();
-            fs::write(path.join("leaf"), b"deep-base").unwrap();
-        }
-        let server = Arc::new(
-            Server::create(ServerConfig {
-                store_path: path.join("store.sqlite"),
-                history_path: path.join("history.sqlite"),
-                binding_key: b"inherited-workspace".to_vec(),
-                incarnation: 1,
-                cursor_key: [53; 32],
-                history: HistoryMode::Create,
-                service_host: "127.0.0.1".into(),
-                runtime: Runtime::disabled(),
-                telemetry_run: None,
-            })
-            .unwrap(),
-        );
-        let project = ProjectApi::new(&server).init("inherited", &source).unwrap();
-        let branch = ProjectApi::new(&server)
-            .fork(&project, [54; 16], "main")
-            .unwrap();
+        let (server, project, branch_id) = phase_b_commit::open_prepared(extra, deep)
+            .unwrap_or_else(|| phase_b_commit::fresh_project(&path, extra, deep, 0));
         let gate = Arc::new(CommitGate::default());
         let fault = Arc::new(AtomicU64::new(0));
         let canonical_calls = Arc::new(AtomicU64::new(0));
+        let saved_files = Arc::new(Mutex::new(Vec::new()));
+        let delivery_files = saved_files.clone();
         let delivery_fault = fault.clone();
         let delivery_calls = canonical_calls.clone();
         let delivery_server = server.clone();
@@ -198,6 +160,17 @@ impl Fixture {
                     .service()
                     .handle_until(&delivery_server.peer()?, request, &mut reader, output, end)
                     .0?;
+                if let Operation::SaveFileV2 {
+                    extents,
+                    replacement,
+                    ..
+                } = &request.operation
+                {
+                    delivery_files
+                        .lock()
+                        .unwrap()
+                        .push((*extents, *replacement));
+                }
                 if canonical && delivery_fault.load(Ordering::Acquire) == 3 {
                     deny_fallocate_on_this_thread();
                 }
@@ -238,7 +211,7 @@ impl Fixture {
                     id: "inherited".into(),
                     incarnation: [55; 32],
                     store: server.store(),
-                    base: Base::Branch(branch.id),
+                    base: Base::Branch(branch_id),
                     access: WorkspaceAccess::LocalEdit,
                     owner_uid: owner.uid(),
                     owner_gid: owner.gid(),
@@ -254,6 +227,7 @@ impl Fixture {
             gate,
             fault,
             canonical_calls,
+            saved_files,
             _temp: temp,
         }
     }

@@ -22,6 +22,7 @@ from families import init_namespace as init  # noqa: E402
 from families import history_retention as history  # noqa: E402
 from families import workspace_write as write  # noqa: E402
 from families import workspace_commit as commit  # noqa: E402
+from families import workspace_commit_native as native  # noqa: E402
 
 CONTRACT_COMMIT = "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2"
 BUILD_PROFILE = "release"
@@ -377,7 +378,7 @@ def main():
     run_parser = commands.add_parser("run")
     selector = run_parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--case")
-    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit"])
+    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit", "workspace-commit-native"])
     run_parser.add_argument("--out", required=True)
     proof_parser = commands.add_parser("prove")
     proof_parser.add_argument("--run", required=True)
@@ -399,6 +400,8 @@ def main():
         for case in commit.CASES.values():
             print(f"{case.id}\tSDK same-Workspace retained pin\tcommand <= {case.command_budget_ns / 1e9:g} s; separate proof <= 9 s\t"
                   f"{'fast lane selected' if case.id in commit.SELECTED else 'explicit-only ' + case.role}")
+        for case in native.CASES.values():
+            print(f"{case.id}\tnative functional component; command <= 60 s; no SDK time\tselected")
         for name, reason in commit.REMAINING.items():
             print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":
@@ -408,6 +411,9 @@ def main():
             return
         if selection in (*write.CASES, "workspace_write"):
             print(write.run(selection, args.out, sys.modules[__name__]))
+            return
+        if selection in (*native.CASES, "workspace-commit-native"):
+            print(native.run(selection, args.out, sys.modules[__name__]))
             return
         if selection in (*commit.CASES, "workspace-commit"):
             print(commit.run(selection, args.out, sys.modules[__name__]))
@@ -429,6 +435,9 @@ def main():
         elif json.loads((path / "run.json").read_text()).get("schema") in ("core-workspace-commit-fast-run-v2", "core-workspace-commit-proof-v2"):
             verify_run_manifest(path)
             print("PASS: retained evidence custody only")
+        elif json.loads((path / "run.json").read_text()).get("schema") == native.SCHEMA:
+            verify_run_manifest(path)
+            print("PASS: retained native evidence custody only")
         else:
             print(verify_run(path))
     else:
@@ -439,6 +448,8 @@ def main():
             print(write.report(path), end="")
         elif json.loads((path / "run.json").read_text()).get("schema") in ("core-workspace-commit-fast-run-v2", "core-workspace-commit-proof-v2"):
             print(commit.report(path), end="")
+        elif json.loads((path / "run.json").read_text()).get("schema") == native.SCHEMA:
+            print(native.report(path), end="")
         else:
             print(report(path), end="")
 
