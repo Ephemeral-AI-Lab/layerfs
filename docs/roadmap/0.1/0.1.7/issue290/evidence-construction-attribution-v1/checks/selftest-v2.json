@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "coverage": [
+    "hit/miss partitions",
+    "nested partitions",
+    "unchanged exact counts"
+  ],
+  "performance_sample": false
+}

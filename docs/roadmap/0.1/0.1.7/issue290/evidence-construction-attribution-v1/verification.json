@@ -1,0 +1,14 @@
+{
+  "bytes": 1389188326,
+  "catalog_tables_equal": [
+    "entries",
+    "xattrs",
+    "objects",
+    "packs"
+  ],
+  "only_difference": "diagnostic ready=0 versus reference ready=1",
+  "oracle": "original independently reconstructed corpus/pack proof, pinned by SHA256",
+  "pack_bytes_equal": true,
+  "packs": 5836,
+  "status": "PASS"
+}

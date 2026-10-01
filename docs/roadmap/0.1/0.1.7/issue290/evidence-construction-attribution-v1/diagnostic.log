@@ -1,0 +1,26 @@
+diagnostic files=4096 logical_bytes=323684462
+diagnostic files=8192 logical_bytes=1078848402
+diagnostic files=12288 logical_bytes=1145737666
+diagnostic files=16384 logical_bytes=1392831201
+diagnostic files=20480 logical_bytes=1572595088
+diagnostic files=24576 logical_bytes=1730563314
+diagnostic files=28672 logical_bytes=2070339454
+diagnostic files=32768 logical_bytes=2188259992
+diagnostic files=36864 logical_bytes=2300430169
+diagnostic files=40960 logical_bytes=2351988598
+diagnostic files=45056 logical_bytes=2713025484
+diagnostic files=49152 logical_bytes=2750304301
+diagnostic files=53248 logical_bytes=2795567213
+diagnostic files=57344 logical_bytes=2808913076
+diagnostic files=61440 logical_bytes=2862763051
+diagnostic files=65536 logical_bytes=2993601507
+diagnostic files=69632 logical_bytes=3101336797
+diagnostic files=73728 logical_bytes=3165172363
+diagnostic files=77824 logical_bytes=3190729321
+diagnostic files=81920 logical_bytes=3247590953
+diagnostic files=86016 logical_bytes=3297394782
+diagnostic files=90112 logical_bytes=3364643454
+diagnostic files=94208 logical_bytes=3397970861
+diagnostic files=98304 logical_bytes=3434339281
+diagnostic files=102400 logical_bytes=3468803486
+attribution complete: 103108 files, 3475776149 bytes

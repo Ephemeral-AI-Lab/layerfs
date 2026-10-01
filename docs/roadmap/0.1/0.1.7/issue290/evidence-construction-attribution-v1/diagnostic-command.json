@@ -1,0 +1,16 @@
+{
+  "child_system_seconds": 9.066252,
+  "child_user_seconds": 18.379409,
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/core/target/release/examples/minio_repository_probe",
+    "diagnose",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/deepseek-full-master-v2",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/construction-attribution-v1/stage"
+  ],
+  "cpu_scope": "complete single Rust child, not per-region CPU or lifetime peak",
+  "exit": 0,
+  "limit_seconds": 180,
+  "performance_claim": false,
+  "status": "COMPLETE",
+  "wall_ns": 34372307000
+}

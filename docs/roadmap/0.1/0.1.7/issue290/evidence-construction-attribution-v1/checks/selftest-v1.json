@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "coverage": [
+    "partition arithmetic",
+    "cohort sums",
+    "exact counts",
+    "SQL catalog equality",
+    "pack byte equality"
+  ],
+  "performance_sample": false
+}

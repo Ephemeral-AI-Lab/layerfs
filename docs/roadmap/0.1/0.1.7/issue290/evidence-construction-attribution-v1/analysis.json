@@ -1,0 +1,68 @@
+{
+  "c2_encoding_other_ns": 8480536195,
+  "c2_encoding_probe_ns": 1438015722,
+  "child_cpu": {
+    "ratio_to_command_wall": 0.7984817836056218,
+    "system_s": 9.066252,
+    "total_s": 27.445661,
+    "user_s": 18.379409
+  },
+  "disjoint_regions": {
+    "SQL": {
+      "ns": 4878804143,
+      "percent": 14.212929317059517,
+      "seconds": 4.878804143
+    },
+    "c1_residual": {
+      "ns": 4668990439,
+      "percent": 13.601700159811825,
+      "seconds": 4.668990439
+    },
+    "c2_FULL": {
+      "ns": 9918551917,
+      "percent": 28.894719523875377,
+      "seconds": 9.918551917
+    },
+    "c2_control_residual": {
+      "ns": 102653562,
+      "percent": 0.2990502955409142,
+      "seconds": 0.102653562
+    },
+    "group_build": {
+      "ns": 96632344,
+      "percent": 0.28150928685758897,
+      "seconds": 0.096632344
+    },
+    "pack_assembly": {
+      "ns": 53799368,
+      "percent": 0.15672828674288386,
+      "seconds": 0.053799368
+    },
+    "pack_hash_write": {
+      "ns": 2121259248,
+      "percent": 6.179651175020089,
+      "seconds": 2.121259248
+    },
+    "setup_copy_resource_close_outer": {
+      "ns": 54693479,
+      "percent": 0.15933301037435788,
+      "seconds": 0.054693479
+    },
+    "source_open_read_close": {
+      "ns": 12324800351,
+      "percent": 35.9046010254307,
+      "seconds": 12.324800351
+    },
+    "source_sql_enumeration": {
+      "ns": 106335982,
+      "percent": 0.3097779192867495,
+      "seconds": 0.106335982
+    }
+  },
+  "invariant_proof": "PASS",
+  "physical_memory_io": "UNOBSERVED",
+  "scope": "one instrumented count diagnostic; not speed arm",
+  "speed_admission": "INELIGIBLE",
+  "timer_accounting": "PASS: disjoint total equals wall; role/lane/cohort/nested totals exact",
+  "wall_ns": 34326520833
+}
