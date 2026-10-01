@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "2e31c65af81b4c7f46f784dde32b0cbd1bd6980608bb92547e7ddae5527d50f1",
+  "raw_utf8": "   Compiling phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/benchmark/phase6-live)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.11s\n     Running tests/rename.rs (core/benchmark/phase6-live/target/debug/deps/rename-8520f9a2564ea613)\n\nrunning 1 test\ntest real_directory_listing_uses_names_parent_with_inode_parent_present ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s\n\n"
+}

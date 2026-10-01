@@ -60,6 +60,7 @@ pub struct ConstructionWork {
     pub new_inodes: usize,
     pub file_edits: usize,
     pub changed_names: usize,
+    pub prepared_queries: crate::prepared::QueryCounts,
 }
 pub fn build(
     engine: &Engine,
@@ -68,6 +69,7 @@ pub fn build(
     reader: &dyn AuthenticatedObjects,
     consumer: &mut dyn FinalizedConsumer,
 ) -> Result<(FilesystemResult, ConstructionWork), String> {
+    let query_start = engine.row_queries.get();
     engine
         .db
         .execute("DELETE FROM prepared", [])
@@ -169,6 +171,7 @@ pub fn build(
         None,
     )
     .map_err(|e| e.to_string())?;
+    work.prepared_queries = engine.row_queries.get().since(query_start);
     Ok((result, work))
 }
 pub fn genesis(

@@ -10,6 +10,23 @@ use layerfs_content::{
 };
 use rusqlite::{params, OptionalExtension};
 
+#[derive(Clone, Copy, Default, Debug)]
+pub struct QueryCounts {
+    pub directory_lookups: u64,
+    pub inode_lookups: u64,
+    pub fresh_lookups: u64,
+    pub name_rows: u64,
+}
+impl QueryCounts {
+    pub fn since(self, before: Self) -> Self {
+        Self {
+            directory_lookups: self.directory_lookups - before.directory_lookups,
+            inode_lookups: self.inode_lookups - before.inode_lookups,
+            fresh_lookups: self.fresh_lookups - before.fresh_lookups,
+            name_rows: self.name_rows - before.name_rows,
+        }
+    }
+}
 pub struct Prepared<'a> {
     pub engine: &'a Engine,
     pub root: FilesystemRootId,
@@ -99,6 +116,9 @@ impl RowSource for Prepared<'_> {
         }))
     }
     fn directory_for(&self, parent: u64) -> ContentResult<Option<DirectoryUpdate>> {
+        let mut count = self.engine.row_queries.get();
+        count.directory_lookups += 1;
+        self.engine.row_queries.set(count);
         let exists: Option<i64> = io(self
             .engine
             .db
@@ -131,10 +151,16 @@ impl RowSource for Prepared<'_> {
                     .map_err(|_| ContentError::InvalidRecord("non UTF8 C1 name unsupported"))?,
             )?;
             changes.push((name, ino.map(|id| id as u64)));
+            let mut count = self.engine.row_queries.get();
+            count.name_rows += 1;
+            self.engine.row_queries.set(count);
         }
         Ok(Some(DirectoryUpdate { parent, changes }))
     }
     fn value_for(&self, serial: u64) -> ContentResult<Option<InodeValue>> {
+        let mut count = self.engine.row_queries.get();
+        count.inode_lookups += 1;
+        self.engine.row_queries.set(count);
         let row: Option<(u8, Vec<u8>, Vec<u8>)> = io(self
             .engine
             .db
@@ -155,6 +181,9 @@ impl RowSource for Prepared<'_> {
         .transpose()
     }
     fn new_position(&self, serial: u64) -> ContentResult<Option<usize>> {
+        let mut count = self.engine.row_queries.get();
+        count.fresh_lookups += 1;
+        self.engine.row_queries.set(count);
         let pos: Option<i64> = io(self
             .engine
             .db

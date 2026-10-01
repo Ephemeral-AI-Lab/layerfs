@@ -326,7 +326,21 @@ impl Filesystem for SqlFs {
         offset: u64,
         mut reply: ReplyDirectory,
     ) {
-        let result=self.call(|e|{e.handle(fh.0 as i64,ino.0 as i64,false)?;if offset>514{return Err("EINVAL".into())}let mut q=e.db.prepare("SELECT names.ino,names.name,inodes.kind FROM names JOIN inodes ON inodes.id=names.ino WHERE parent=?1 ORDER BY name LIMIT 512").map_err(|e|e.to_string())?;let rows=q.query_map([ino.0 as i64],|r|Ok((r.get::<_,i64>(0)?,r.get::<_,Vec<u8>>(1)?,r.get::<_,u8>(2)?))).map_err(|e|e.to_string())?;let mut values=vec![(ino.0,b".".to_vec(),2),(e.node(ino.0 as i64)?.parent as u64,b"..".to_vec(),2)];for r in rows{let(i,n,k)=r.map_err(|e|e.to_string())?;values.push((i as u64,n,k))}Ok(values)});
+        let result = self.call(|e| {
+            e.handle(fh.0 as i64, ino.0 as i64, false)?;
+            if offset > 514 {
+                return Err("EINVAL".into());
+            }
+            let rows = e.directory_entries(ino.0 as i64)?;
+            let mut values = vec![
+                (ino.0, b".".to_vec(), 2),
+                (e.node(ino.0 as i64)?.parent as u64, b"..".to_vec(), 2),
+            ];
+            for (i, n, k) in rows {
+                values.push((i as u64, n, k))
+            }
+            Ok(values)
+        });
         match result {
             Ok(rows) => {
                 for (index, (id, name, kind)) in rows.into_iter().enumerate().skip(offset as usize)

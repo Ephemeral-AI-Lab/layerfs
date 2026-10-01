@@ -18,6 +18,7 @@ pub struct Engine {
     pub callbacks: i64,
     pub reader: Option<Arc<dyn AuthenticatedObjects + Send + Sync>>,
     pub reads: Cell<SourceReads>,
+    pub row_queries: Cell<crate::prepared::QueryCounts>,
 }
 /// Logical source bytes served by the engine; not physical cache or all C1 reads.
 #[derive(Clone, Copy, Default, Debug)]
@@ -76,6 +77,7 @@ impl Engine {
             callbacks: 0,
             reader: None,
             reads: Cell::new(SourceReads::default()),
+            row_queries: Cell::new(crate::prepared::QueryCounts::default()),
         })
     }
     pub fn node(&self, id: i64) -> Result<Node, String> {
@@ -113,6 +115,14 @@ impl Engine {
                 |r| r.get(0),
             )
             .optional()
+            .map_err(|e| e.to_string())
+    }
+    pub fn directory_entries(&self, id: i64) -> Result<Vec<(i64, Vec<u8>, u8)>, String> {
+        let mut q=self.db.prepare_cached("SELECT names.ino,names.name,inodes.kind FROM names JOIN inodes ON inodes.id=names.ino WHERE names.parent=?1 ORDER BY names.name LIMIT 512").map_err(|e|e.to_string())?;
+        let rows = q
+            .query_map([id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())
     }
     pub fn create_node(

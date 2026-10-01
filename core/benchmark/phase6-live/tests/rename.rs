@@ -92,3 +92,21 @@ fn replacement_preserves_open_victim_and_same_parent_refcounts() {
     drop(e);
     std::fs::remove_dir_all(p).unwrap();
 }
+
+#[test]
+fn real_directory_listing_uses_names_parent_with_inode_parent_present() {
+    let (p, mut e) = fresh();
+    let z = e.create_node(1, b"z", 2, 0o755).unwrap().id;
+    let a = e.create_node(1, b"a", 1, 0o644).unwrap().id;
+    let nested = e.create_node(z, b"nested", 1, 0o644).unwrap().id;
+    assert_eq!(
+        e.directory_entries(1).unwrap(),
+        vec![(a, b"a".to_vec(), 1), (z, b"z".to_vec(), 2)]
+    );
+    assert_eq!(
+        e.directory_entries(z).unwrap(),
+        vec![(nested, b"nested".to_vec(), 1)]
+    );
+    drop(e);
+    std::fs::remove_dir_all(p).unwrap();
+}

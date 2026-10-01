@@ -339,3 +339,35 @@ unchanged. All correctness/live named rows still pending; numerical cache remain
 INELIGIBLE. Next: publish runtime and run frozen namespace67/components270/many128
 once each; preserve failures and exact work counts before repairing namespace
 scaling. V4c2b/seven families/DeepSeek/full goal remain incomplete.
+
+## V4d1 first67live gate FAILED; demonstrated readdir correction checkpoint
+
+Parent `6ec0bec2b2daadf861fea6996fe3588aab76eb3e`. Frozen namespace67 child exit1
+wall1.271519208s after actual seed generation1 publish (73paths/94source bytes).
+Target moved/replaced live names but endedexit1; no target Commit, proof or cleanup
+PASS. Exact owned daemon error: unqualified parent in names JOIN inodes became
+ambiguous after inode.parent addition. New query helper qualifies names.parent/
+names.name; external real-SQL listing test with both parent columns PASS.
+
+Retain exact d2550144998b container / layerfs-76b116dc9d984679f5802e2ec9c0798d
+volume, image b545f4..., MinIOdata/C5/locator DB/accepted mutable writes. Owner
+SDK label/name/full image confirmed before inspection. Raw logs and read-only
+copied backing facts retained; no foreign cleanup, rollback or deadline/profile
+change. MinIOprocess drained,data retained. Read-only custody observation73live
+paths after actual target mutations, not proof of published head or timing.
+
+Add fixed prepared-row directory/inode/fresh/name query counters to expose C1
+repeated replay (existing entry counter misses some fresh-graph work); aggregate
+file certificate/audit inode/dir/file/binding counts into one log per publication,
+removing per-file log growth while preserving every check. Counter instrumentation
+is ordinary shared code, not a case hook, allocator or physical memory claim.
+
+Owning listing test1PASS, locked host all-target Clippy/fmt/native release and
+Linux musl release build PASS. Prior passing unchanged construction/rename/engine/
+scenario/session/packing/file-facts proofs retained by scope; full unchanged Core
+suites/examples/Linux Clippy unrun. Product source unchanged.
+
+Next: publish corrected/count-instrumented runtime; reuse exact closed fixture/
+commands and only replace compiled runtime image layer. One corrected67covering
+run, then first270/128runs under same15/9.5bounds. Failed attempt remains evidence.
+V4d1/V4c/seven families/DeepSeek/full goal remain incomplete.
