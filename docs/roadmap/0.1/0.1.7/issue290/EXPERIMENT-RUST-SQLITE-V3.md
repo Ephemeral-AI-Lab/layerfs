@@ -1,6 +1,11 @@
 # Rust SQLite standalone experiment v3
 
-Status: Research; informative and not a product contract.
+Status: Archived; retained for historical evidence only.
+
+Owner cancelled the Rust SQLite port on2026-10-01 and selected Python for this
+experiment. No Rust SQLite implementation or v3 measurements were produced.
+The completed Python V1/V2 results remain the active experiment evidence.
+The original prospective assignment below is retained as an unexecuted draft.
 Owner request2026-10-01: run SQLite experiments through Rust and report numbers.
 Parent dd6ce3bb653264296a3e4d7dabbb9d75f36c26a7. Tracking#291.
 
