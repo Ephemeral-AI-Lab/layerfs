@@ -232,3 +232,13 @@ and all larger groups remain. Next: V4c2 certified incremental authority design,
 starting with exact role/graph facts at admitted registration and a namespace
 transition proof against a certified base; publish the concrete interface before
 replacing any validation. Root content authentication alone cannot certify names.
+
+## V4c2a prospective file-graph authority freeze
+
+Parent `57e3f88d1fe0bae101280aeb23375b1f35d1dc89`. Freeze V4C2A-SPEC.md before
+implementation/collection: derive typed immutable file summaries and child
+constraints from authenticated canonical registration in the existing global SQL
+connection; indexed bounded-depth certificate checks replace only repeated full
+file reads. Namespace/portable validation stays enabled; no namespace/canonical/
+physical/profile qualification claimed. One affected provider4KiB gate next,
+existing15/9.5s bounds/cacheINELIGIBLE. Larger groups remain incomplete.
