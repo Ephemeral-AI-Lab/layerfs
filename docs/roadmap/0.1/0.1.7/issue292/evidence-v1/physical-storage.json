@@ -1,0 +1,6 @@
+{
+  "public_object_bytes_scope": "S3 LIST payload lengths; not physical disk allocation",
+  "data_directory_exists": true,
+  "owned_data_allocation_kib": 708192,
+  "scope": "post-stop allocated disk blocks for only full volume; includes provider metadata; not an admission peak"
+}

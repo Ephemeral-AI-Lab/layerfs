@@ -1,0 +1,7 @@
+{
+  "archive_sha256": "e77739762a94e6ad90d27a97027de214d63516828e90fac86221c88850b82b08",
+  "binary_sha256": "27b40fe76522ae0b35887a7e7642289de4324a5f974274efa527c1b12312a226",
+  "release": "v1.4.1",
+  "source": "0b90c7db5a929ae6adc5faad948d108efd2c99f9",
+  "version": "juicefs version 1.4.1+2026-07-30.0b90c7d"
+}

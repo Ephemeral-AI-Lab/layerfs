@@ -1,0 +1,11 @@
+{
+  "retained_import": true,
+  "shutdown": {
+    "master_cleanup": "PASS",
+    "owned_pid": 4114,
+    "process_exited": true,
+    "termination_requested": true
+  },
+  "status": "PASS",
+  "wall_ns": 238840875
+}

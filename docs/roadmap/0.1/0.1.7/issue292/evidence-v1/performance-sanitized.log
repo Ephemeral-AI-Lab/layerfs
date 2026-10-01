@@ -1,0 +1,5 @@
+2026/10/01 21:15:43.599414 juicefs[4409] <INFO>: Meta address: sqlite3://<private-path> [NewClient@interface.go:643]
+2026/10/01 21:15:43.614248 juicefs[4409] <INFO>: Prometheus metrics listening on "127.0.0.1:9567" [exposeMetrics@mount.go:137]
+2026/10/01 21:15:43.617946 juicefs[4409] <INFO>: Syncing from "file://<private-path>" to "jfs://juice292full/" [Sync@sync.go:2318]
+2026/10/01 21:15:43.627215 juicefs[4409] <WARNING>: Chown  to (yifanxu,staff): operation not permitted [copyPerms@sync.go:410]
+2026/10/01 21:15:43.627397 juicefs[4409] <WARNING>: Chmod  to 20000000755: operation not permitted [copyPerms@sync.go:413]

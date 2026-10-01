@@ -1,0 +1,21 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/juicefs-deepseek/layerfs/benchmark-results/juicefs-deepseek/provider/juicefs",
+    "sync",
+    "--threads",
+    "1",
+    "--list-threads",
+    "1",
+    "--dirs",
+    "--perms",
+    "--links",
+    "jfs://juicequal/",
+    "/Users/yifanxu/.codex/worktrees/juicefs-deepseek/layerfs/benchmark-results/juicefs-deepseek/full-upload-v1/qualification-readback/"
+  ],
+  "exit": 0,
+  "limit_seconds": 10,
+  "log_publication": "private: may contain corpus paths",
+  "private_log_sha256": "c14454e480c0093a37fb3d96e1e4be7a26fd80abbfe04db08da0e7969927ab39",
+  "status": "COMPLETE",
+  "wall_ns": 77105250
+}

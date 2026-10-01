@@ -1,0 +1,30 @@
+{
+  "cache_contract": "reused closed master; native/OS residency unobserved",
+  "cache_verdict": "INELIGIBLE",
+  "case": "J-deepseek-full-upload-v1",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/juicefs-deepseek/layerfs/benchmark-results/juicefs-deepseek/provider/juicefs",
+    "sync",
+    "--threads",
+    "1",
+    "--list-threads",
+    "1",
+    "--dirs",
+    "--perms",
+    "--links",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/deepseek-full-master-v2/tree/",
+    "jfs://juiceprobe/"
+  ],
+  "copy_threads": 1,
+  "exit": null,
+  "expected_regular_bytes": 3475776149,
+  "expected_regular_files": 103108,
+  "expected_symlinks": 10070,
+  "limit_seconds": 25,
+  "log_publication": "private: may contain corpus paths",
+  "performance_claim": false,
+  "private_log_sha256": "4b374a14716085a61cd0fb25612f7282b284cc53f38a76c8366f308a1b7fb9c4",
+  "profile": "whole public sync command; upstream jfs defaults; no mount",
+  "status": "TIMEOUT",
+  "wall_ns": 25013557916
+}

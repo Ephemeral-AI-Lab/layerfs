@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/juicefs-deepseek/layerfs/benchmark-results/juicefs-deepseek/provider/juicefs",
+    "format",
+    "--storage",
+    "minio",
+    "--bucket",
+    "http://127.0.0.1:56780/issue290-23d72a2cc56369f4",
+    "--compress",
+    "zstd",
+    "--block-size",
+    "4M",
+    "sqlite3:///Users/yifanxu/.codex/worktrees/juicefs-deepseek/layerfs/benchmark-results/juicefs-deepseek/full-upload-v1/qualification.sqlite",
+    "juice292qual"
+  ],
+  "exit": 0,
+  "limit_seconds": 15,
+  "log_publication": "private: may contain corpus paths",
+  "private_log_sha256": "6b37b7df622dae8173c1f08b63e225ad4112523634a6eeba25f0635359c891b1",
+  "status": "COMPLETE",
+  "wall_ns": 76626792
+}

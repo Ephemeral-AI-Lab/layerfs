@@ -1,0 +1,58 @@
+{
+  "list_pages": 12,
+  "metadata_counts_by_type": [
+    [
+      1,
+      11333,
+      1108298261
+    ],
+    [
+      2,
+      1303,
+      5337088
+    ],
+    [
+      3,
+      1702,
+      175676
+    ]
+  ],
+  "object_bytes": 691099951,
+  "objects": 11331,
+  "profile": {
+    "journal_mode": "wal",
+    "native_synchronous_cache_sqlite_version": "unavailable; external connection cannot establish native settings"
+  },
+  "scope": "read-only post-attempt inventory; metadata counts do not establish exact bytes or completed upload",
+  "sqlite_file_bytes": {
+    "metadata.sqlite": 3481600,
+    "metadata.sqlite-shm": 32768,
+    "metadata.sqlite-wal": 4161232
+  },
+  "status": "COMPLETE",
+  "tables": [
+    "jfs_setting",
+    "jfs_counter",
+    "jfs_edge",
+    "sqlite_sequence",
+    "jfs_node",
+    "jfs_symlink",
+    "jfs_xattr",
+    "jfs_chunk",
+    "jfs_chunk_ref",
+    "jfs_delslices",
+    "jfs_session2",
+    "jfs_sustained",
+    "jfs_delfile",
+    "jfs_flock",
+    "jfs_plock",
+    "jfs_dir_quota",
+    "jfs_user_group_quota",
+    "jfs_dir_stats",
+    "jfs_detached_node",
+    "jfs_acl",
+    "jfs_delegation_token",
+    "jfs_change_log"
+  ],
+  "wall_ns": 517858292
+}

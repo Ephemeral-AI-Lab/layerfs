@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "/Users/yifanxu/.codex/worktrees/juicefs-deepseek/layerfs/tools/juicefs_repository_probe.py",
+    "inspect",
+    "--output",
+    "/Users/yifanxu/.codex/worktrees/juicefs-deepseek/layerfs/benchmark-results/juicefs-deepseek/full-upload-v1"
+  ],
+  "exit": 0,
+  "limit_seconds": 10,
+  "log_publication": "private: may contain corpus paths",
+  "private_log_sha256": "1453f782e3ba8c073597a538c473bd9b66264ea35112239b5b43303d5cbddf2a",
+  "status": "COMPLETE",
+  "wall_ns": 662041792
+}

@@ -1,0 +1,11 @@
+{
+  "tag": "v1.4.1",
+  "published_at": "2026-07-30T08:03:19Z",
+  "target_commitish": "release-1.4",
+  "asset": {
+    "name": "juicefs-1.4.1-darwin-arm64.tar.gz",
+    "size": 37053688,
+    "browser_download_url": "https://github.com/juicedata/juicefs/releases/download/v1.4.1/juicefs-1.4.1-darwin-arm64.tar.gz",
+    "digest": "sha256:e77739762a94e6ad90d27a97027de214d63516828e90fac86221c88850b82b08"
+  }
+}

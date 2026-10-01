@@ -1,0 +1,19 @@
+{
+  "upstream_fork": "https://github.com/Ephemeral-AI-Lab/juicefs",
+  "local_clone": "/Users/yifanxu/Ephemeral-AI-Lab/juicefs",
+  "clone_head": "adcca1cc61bb4d668a945d64b2e176b44ac8e5b5",
+  "tested_release_source": "0b90c7db5a929ae6adc5faad948d108efd2c99f9",
+  "product_changes": false,
+  "source_master_reused": true,
+  "repeat_samples": 0,
+  "normal_profile_retry_behavior": "upstream jfs adapter defaults retained; MaxRetries10; actual retries not instrumented",
+  "native_sqlite_version": "unavailable",
+  "physical_memory_cache_io": "unavailable",
+  "host_interference": "no continuous host isolation proof; other owners not interrupted",
+  "warnings": [
+    "root Chown operation not permitted",
+    "root Chmod operation not permitted"
+  ],
+  "proof_status": "NOT_RUN: full upload timed out; metadata counts/object sizes are not exact byte proof",
+  "post_timeout_custody": "partial import retained; no resend or guessed completion adoption"
+}

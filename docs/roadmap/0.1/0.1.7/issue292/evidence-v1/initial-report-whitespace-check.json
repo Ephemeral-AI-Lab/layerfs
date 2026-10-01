@@ -1,0 +1,6 @@
+{
+  "exit": 2,
+  "stdout": "docs/roadmap/0.1/0.1.7/issue292/evidence-v1/dump-help.txt:11: trailing whitespace.\n+   \ndocs/roadmap/0.1/0.1.7/issue292/evidence-v1/format-help.txt:11: trailing whitespace.\n+   \ndocs/roadmap/0.1/0.1.7/issue292/evidence-v1/format-help.txt:70: new blank line at EOF.\ndocs/roadmap/0.1/0.1.7/issue292/evidence-v1/sync-help.txt:11: trailing whitespace.\n+   \ndocs/roadmap/0.1/0.1.7/issue292/evidence-v1/sync-help.txt:46: trailing whitespace.\n+   \ndocs/roadmap/0.1/0.1.7/issue292/evidence-v1/sync-help.txt:109: new blank line at EOF.\n",
+  "stderr": "",
+  "cause": "upstream CLI help has trailing whitespace and final blank lines; preserve exact output via gzip rather than rewriting raw evidence"
+}
