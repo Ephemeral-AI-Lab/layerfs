@@ -400,3 +400,13 @@ SQL-native streamed namespace construction using verified live SQL invariants,
 with frozen contract and independent covering oracle. Preserve service checks
 until incremental namespace certificate is implemented; then complete270and
 namespace/locality/population/import/retirement/family/DeepSeek obligations.
+
+## V4c2b1 prospective SQL-native constructor/boundary freeze
+
+Parent `291e2f85a826e2578fc6b96f07d2bb032bc69864`. Previous goal turn was progress:
+published full67/128live proofs,270timeout/custody and exact contradictory scaling
+counts. Freeze V4C2B1-SPEC.md: trusted transactional live SQL→existing streamed C1
+sorted primitives; published/removal/orphan bookkeeping; keep/enhance independent
+service validation; separate actual15s performance and9.5s readonly proof children.
+No weaker oracle, cap increase or retroactive PASS. Next implement/externally check,
+publish frozen source then changed-constructor covering cohort; full goal active.
