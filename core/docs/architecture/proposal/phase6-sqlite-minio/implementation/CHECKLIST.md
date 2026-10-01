@@ -43,6 +43,8 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 - [ ] V4d: generic syscall surface required by the actual namespace/package cases:
   rename/cycles, hardlinks, symlinks, orphan handles, metadata and explicit
   unsupported locking/durability behavior; source/generation/cancel custody.
+- [x] V4d1 live67and128three-head composition/complete semantic-history-cleanup
+  gates; [RESULTS-V4D1](RESULTS-V4D1.md). 270TIMEOUTand locality/scaling remain red.
 - [ ] Run/prove all three named live shape cases with exact independent manifests,
   root/byte facts and retained history, through actual public WorkspaceApi.exec.
 - [ ] Family1 history retention; Family2 public SDK namespace initialization;
@@ -60,7 +62,9 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 - [ ] Final owning locked checks, source/binary/image/provider seals, per-commit
   production LOC and checkpoint comments on #294; major results linked from #293.
 
-Current action: V4c2b exact incremental namespace architecture: certified exact
-base, streamed changes, actual sorted COW/refcounts/parent proof and READY/C5/
-installation composition. Freeze interfaces before replacing namespace validation.
-Full V4c and every larger group remain incomplete; retain one concrete next action.
+Current action: independent15s performance/9.5s proof processes and SQL-native
+streamed namespace construction that eliminates demonstrated fresh-chain replay.
+Freeze the trust/interface/oracle/resource contract before replacing generic C1
+validation/reduction; service checks remain until exact incremental namespace
+certification. Then complete270/locality/admission/import/retirement and every
+larger group. Full objective remains active; keep one concrete next action.

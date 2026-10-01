@@ -371,3 +371,32 @@ Next: publish corrected/count-instrumented runtime; reuse exact closed fixture/
 commands and only replace compiled runtime image layer. One corrected67covering
 run, then first270/128runs under same15/9.5bounds. Failed attempt remains evidence.
 V4d1/V4c/seven families/DeepSeek/full goal remain incomplete.
+
+## V4d1 actual live cohort PARTIAL:67and128PASS,270TIMEOUT
+
+Parent `897c77d8887b0e3dbe1a2880fa9565e38722c32a`. Corrected67three-head full
+semantic/history/cleanup PASS child9.557906292s/proof1.189704334s, targetExec29.8315/
+Commit655.646667ms, successorCommit422.373625ms. Full128package fixture retained,
+all137files/hash including1MiBchunkedUi across3heads/history/cleanup PASS,
+child10.256623209s/proof2.020380083s, targetExec138.733041/Commit1064.820833ms,
+successorCommit923.196583ms. Numerical cacheINELIGIBLE, canonical/physical NOT_RUN.
+
+270TIMEOUT15.00706575s after3known pubs/installs/unmount/delete and partial proof
+seed/target. Final successor proof/history check not complete; timing unavailable.
+Do not promote it. Existing wrapper incorrectly couples lifecycle+separate proof
+under15s; fix into independent15/9.5commands without raising budgets. No rerun of
+unchanged passing arms. Retain both original67FAILand270TIMEOUTexactly.
+
+Counters:271new chain names→39295directory/38755inode preparedSQLlookups, clear
+repeated C1fresh-subtree work; sourceC1entry counter0does not measure that path.
+Successors prepare1inode/0dirs but service audits73/280/146nodes and does674/3913/
+1638GET intervals. Thus full locality/no-quadratic gate is false, not merely
+unmeasured. Actual byte/class/mode/full content/history proofs establish live path,
+not speed/root-vector/physical admission. RESULTS-V4D1.md and rawv4d1-live-cohort
+committed; goal remains active/all larger groups incomplete.
+
+Next concrete milestone: independent performance/proof process boundary plus
+SQL-native streamed namespace construction using verified live SQL invariants,
+with frozen contract and independent covering oracle. Preserve service checks
+until incremental namespace certificate is implemented; then complete270and
+namespace/locality/population/import/retirement/family/DeepSeek obligations.

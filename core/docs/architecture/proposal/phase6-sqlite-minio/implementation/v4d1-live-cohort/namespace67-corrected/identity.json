@@ -1,0 +1,16 @@
+{
+  "source": "897c77d8887b0e3dbe1a2880fa9565e38722c32a",
+  "image": "sha256:c62b75d33a2063cafb9fee50515aaa0bcdc639907ed372b608eb08f5858e6ea6",
+  "driver_sha256": "f530567b5848f7282e5bde353b36fa7657f4405727c7d040f9b0264039d6015e",
+  "minio_sha256": "b107901fd1afe7b36165c6aa66bb027f96e2ec2b690eebe8c9376746d9a9b0df",
+  "harness_sha256": "358fd38c954e01d9a5443f4dadc1ef9baf830bd307e73ccf6c9090a266535461",
+  "dependency_lock_sha256": "94ab50d4fe1c8a7ef1206770f17717020003c76a546c42a2b7c90d4285c9cdac",
+  "armv8_build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "workload_source_sha256": "86893a76c39fc16f9a51dea5ccf029894293b04b7175f91b55931c358bf3c8fd",
+  "cache": "INELIGIBLE: OS/page cache unknown",
+  "purpose": "V4d1 corrected67descendant live covering run; one changed-source sample; cacheINELIGIBLE; all storage/publication retained",
+  "complete_child_limit_seconds": 15,
+  "separate_proof_limit_seconds": 9.5,
+  "case_file_sha256": "f77eb90a4b0f1bf39e57089a47372188a1b2bcd4842b6e9b51735a2cad368c75",
+  "scenario_module_sha256": "9f06317d56643152611bf89364ed4e2caf2c772f7adb61d74783e18e8f64b849"
+}
