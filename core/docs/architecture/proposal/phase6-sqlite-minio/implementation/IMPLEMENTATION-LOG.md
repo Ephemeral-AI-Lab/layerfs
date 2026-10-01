@@ -496,3 +496,25 @@ Initial fixture/lint errors retained, corrected from source/output. Details in
 V4C2B2-RUNTIME.md and v4c2b2-native-checks. Cursor4MiB owned arithmetic is not
 physical qualification. No new live row yet. Next original67/270/128changed-service
 cohort with actual bytes/history/cleanup/work counts. Full goal remains active.
+
+## V4c2b2 named live semantic/locality dependency COMPLETE; full goal open
+
+Runtime ac0497cbb4aba1ad493d6f36659ea9f3824b233e. Original complete67/270/128
+three-head real API/FUSE/daemonSQL/C1/C2/MinIO/C5and readonly full byte/metadata/
+history/cleanup PASS. External performance/proof s7.246391083/1.300921666,
+7.670523125/4.826268834,6.825145917/2.208980167 under original15/9.5bounds.
+Target Exec/Commit ms31.297458/73.054666,300.614541/1284.607125,145.214417/
+628.198625; successor Commit37.276875/43.980250/42.969000ms. CacheINELIGIBLE;
+no eligible speed comparison, physical/canonical NOT_RUN. Old failures unchanged.
+
+All successors exactly1affected/1portable/1filecert,0name/0parent,12hostGETs
+versus prior675/3919/1641. Bounded leaf comparisons73/80/50, skippedsubtrees0/4/1.
+270initial parent steps exactly270; producer271names servedonce as before.
+Paired owned cursor capacities28178/30880/19556B are not physical resource proof.
+RESULTS-V4C2B2.md and rawv4c2b2-native-cohort preserve exact identities/results.
+
+Current512/256single-Branch profile retained. Next V4c3 paged populations/reservation
+and explicit inherited import/mount/retirement, then remaining syscalls/sevenfamilies/
+complete DeepSeek generic/locality/Unknown/canonical/physical obligations. Full goal
+active. Corrected checklist family1SDK Init/family2component history labels to match
+current owning report; no historical receipts relabeled or family run claimed.

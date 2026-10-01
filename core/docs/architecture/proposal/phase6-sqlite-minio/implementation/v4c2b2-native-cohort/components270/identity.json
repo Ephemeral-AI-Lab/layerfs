@@ -1,0 +1,16 @@
+{
+  "source": "ac0497cbb4aba1ad493d6f36659ea9f3824b233e",
+  "image": "sha256:6ce9346c1918363dd12bd411d8c07d63c2a595637df0f90c1a51b0bfb802a6ea",
+  "driver_sha256": "bfb4fa0d994321ffc2aebd1f83327cf471dac5e145318952e47a7fc73125551b",
+  "minio_sha256": "b107901fd1afe7b36165c6aa66bb027f96e2ec2b690eebe8c9376746d9a9b0df",
+  "harness_sha256": "1356898d1e9910d23a095079ce7fd216ad420e722e13ef354fd7cb4de1e712d1",
+  "dependency_lock_sha256": "94ab50d4fe1c8a7ef1206770f17717020003c76a546c42a2b7c90d4285c9cdac",
+  "armv8_build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "workload_source_sha256": "afc66488f2702d84540e89dbc7b954075a1d0094ecc1fea3e0005fb57052d179",
+  "cache": "INELIGIBLE: OS/page cache unknown",
+  "purpose": "V4c2b2 changed-service exact namespace proof; original complete fixture; one source-pinned correctness/count diagnostic",
+  "complete_child_limit_seconds": 15,
+  "separate_proof_limit_seconds": 9.5,
+  "case_file_sha256": "6109472bc9b65651a21ecfcd249a0dcd0e8b81f5d59fbdc3506aa4094a83aa9c",
+  "scenario_module_sha256": "c3d0bbb10a87773b131ff7ca9682b68a01450daa86ca0d379a0824372a5999fd"
+}

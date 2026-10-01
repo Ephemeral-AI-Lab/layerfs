@@ -1,0 +1,167 @@
+[
+  {
+    "case": "namespace67",
+    "receipt": {
+      "schema": 2,
+      "case_id": "phase6-live-namespace67-v1",
+      "kind": "correctness diagnostic performance phase",
+      "cache_status": "INELIGIBLE: OS/page cache unknown",
+      "sqlite_version": "3.53.2",
+      "image": "sha256:6ce9346c1918363dd12bd411d8c07d63c2a595637df0f90c1a51b0bfb802a6ea",
+      "genesis_ms": 5.812,
+      "complete_command_ms": 6469.440084000001,
+      "rows": [
+        {
+          "case": "seed",
+          "exec_ms": 157.649417,
+          "commit_ms": 390.783833,
+          "generation": 1,
+          "root": "72276cea97617951796f6630b4b0b558443a9462be0385fdbe74b54f0b1a02a5"
+        },
+        {
+          "case": "target",
+          "exec_ms": 31.297458,
+          "commit_ms": 73.054666,
+          "generation": 2,
+          "root": "89c29c6e1a3932d5c3f11afd2f721f53471c0700d7f375e1c9c973559409f7a0"
+        },
+        {
+          "case": "localized-successor",
+          "exec_ms": 3.1974590000000003,
+          "commit_ms": 37.276875000000004,
+          "generation": 3,
+          "root": "b16e060619085c4d3c8f69337be098aa6c104492be225d1af06ce36e0317d635"
+        }
+      ],
+      "semantic_proof": "PASS",
+      "canonical_reference": "NOT_RUN",
+      "physical_resources": "NOT_RUN",
+      "cleanup": "PASS",
+      "proof_ms": 1276.24,
+      "performance_child_wall_seconds": 7.246391082997434,
+      "proof_child_wall_seconds": 1.30092166599934,
+      "proof_plan_sha256": "f3bbc2728fd77398aca46c1dbee2fd1d6396670f690523423ee2a9ad6fd6bdb7"
+    },
+    "incremental_audits": [
+      "P6_INCREMENTAL_AUDIT work=Work { intrinsic: Work { visited: 9, reused: 3, edges: 0 }, inode_diff: Work { expanded: 2, compared: 1, skipped: 0, changed: 73, peak_items: 74, peak_owned_bytes: 14282 }, directory_expanded: 7, directory_compared: 0, directory_skipped: 0, changed_names: 72, affected_inodes: 73, parent_steps: 5, peak_owned_bytes: 14282 } portable=73 attribute=AttributeReadWork { pages_read: 73, read_waves: 73, values_read: 146 } files=67 file_cert=Work { visited: 67, reused: 63, edges: 0, newly_certified: 4 }",
+      "P6_INCREMENTAL_AUDIT work=Work { intrinsic: Work { visited: 8, reused: 6, edges: 0 }, inode_diff: Work { expanded: 2, compared: 73, skipped: 0, changed: 6, peak_items: 146, peak_owned_bytes: 28178 }, directory_expanded: 6, directory_compared: 65, directory_skipped: 0, changed_names: 3, affected_inodes: 6, parent_steps: 5, peak_owned_bytes: 28178 } portable=5 attribute=AttributeReadWork { pages_read: 5, read_waves: 5, values_read: 10 } files=1 file_cert=Work { visited: 1, reused: 0, edges: 0, newly_certified: 1 }",
+      "P6_INCREMENTAL_AUDIT work=Work { intrinsic: Work { visited: 2, reused: 1, edges: 0 }, inode_diff: Work { expanded: 2, compared: 73, skipped: 0, changed: 1, peak_items: 146, peak_owned_bytes: 28178 }, directory_expanded: 0, directory_compared: 0, directory_skipped: 0, changed_names: 0, affected_inodes: 1, parent_steps: 0, peak_owned_bytes: 28178 } portable=1 attribute=AttributeReadWork { pages_read: 1, read_waves: 1, values_read: 2 } files=1 file_cert=Work { visited: 1, reused: 0, edges: 0, newly_certified: 1 }"
+    ],
+    "successor_authority_io_delta": {
+      "put_calls": 0,
+      "get_calls": 12,
+      "put_requested_bytes": 0,
+      "get_received_bytes": 47947
+    }
+  },
+  {
+    "case": "components270",
+    "receipt": {
+      "schema": 2,
+      "case_id": "phase6-live-components270-v1",
+      "kind": "correctness diagnostic performance phase",
+      "cache_status": "INELIGIBLE: OS/page cache unknown",
+      "sqlite_version": "3.53.2",
+      "image": "sha256:6ce9346c1918363dd12bd411d8c07d63c2a595637df0f90c1a51b0bfb802a6ea",
+      "genesis_ms": 4.51025,
+      "complete_command_ms": 7633.131625,
+      "rows": [
+        {
+          "case": "seed",
+          "exec_ms": 19.328374999999998,
+          "commit_ms": 80.516292,
+          "generation": 1,
+          "root": "565d2f6e3b67b08495c217acb4b566f5fc4ae9fc0cabeb13d113818572387792"
+        },
+        {
+          "case": "target",
+          "exec_ms": 300.61454100000003,
+          "commit_ms": 1284.607125,
+          "generation": 2,
+          "root": "b86e57467b86df55eba5148862bacb9458cc136b84db755f3bd4e8ff070231c8"
+        },
+        {
+          "case": "localized-successor",
+          "exec_ms": 132.129958,
+          "commit_ms": 43.98025,
+          "generation": 3,
+          "root": "60db8fbe92cff37abd00da7f6b624967795e04647c80a807db47713100f24834"
+        }
+      ],
+      "semantic_proof": "PASS",
+      "canonical_reference": "NOT_RUN",
+      "physical_resources": "NOT_RUN",
+      "cleanup": "PASS",
+      "proof_ms": 4809.384458,
+      "performance_child_wall_seconds": 7.670523125008913,
+      "proof_child_wall_seconds": 4.826268834003713,
+      "proof_plan_sha256": "27b0e9452cdd0fb455007d0b0d3eb16cbc13f0bac98260020b62b257993c4017"
+    },
+    "incremental_audits": [
+      "P6_INCREMENTAL_AUDIT work=Work { intrinsic: Work { visited: 9, reused: 3, edges: 0 }, inode_diff: Work { expanded: 2, compared: 1, skipped: 0, changed: 9, peak_items: 10, peak_owned_bytes: 1930 }, directory_expanded: 7, directory_compared: 0, directory_skipped: 0, changed_names: 8, affected_inodes: 9, parent_steps: 5, peak_owned_bytes: 1930 } portable=9 attribute=AttributeReadWork { pages_read: 9, read_waves: 9, values_read: 18 } files=3 file_cert=Work { visited: 3, reused: 0, edges: 0, newly_certified: 3 }",
+      "P6_INCREMENTAL_AUDIT work=Work { intrinsic: Work { visited: 279, reused: 2, edges: 5 }, inode_diff: Work { expanded: 7, compared: 9, skipped: 0, changed: 272, peak_items: 80, peak_owned_bytes: 16448 }, directory_expanded: 272, directory_compared: 3, directory_skipped: 0, changed_names: 271, affected_inodes: 272, parent_steps: 270, peak_owned_bytes: 16448 } portable=272 attribute=AttributeReadWork { pages_read: 272, read_waves: 272, values_read: 544 } files=1 file_cert=Work { visited: 1, reused: 0, edges: 0, newly_certified: 1 }",
+      "P6_INCREMENTAL_AUDIT work=Work { intrinsic: Work { visited: 7, reused: 5, edges: 5 }, inode_diff: Work { expanded: 4, compared: 80, skipped: 4, changed: 1, peak_items: 160, peak_owned_bytes: 30880 }, directory_expanded: 0, directory_compared: 0, directory_skipped: 0, changed_names: 0, affected_inodes: 1, parent_steps: 0, peak_owned_bytes: 30880 } portable=1 attribute=AttributeReadWork { pages_read: 1, read_waves: 1, values_read: 2 } files=1 file_cert=Work { visited: 1, reused: 0, edges: 0, newly_certified: 1 }"
+    ],
+    "successor_authority_io_delta": {
+      "put_calls": 0,
+      "get_calls": 12,
+      "put_requested_bytes": 0,
+      "get_received_bytes": 65545
+    }
+  },
+  {
+    "case": "many128",
+    "receipt": {
+      "schema": 2,
+      "case_id": "phase6-live-many128-v1",
+      "kind": "correctness diagnostic performance phase",
+      "cache_status": "INELIGIBLE: OS/page cache unknown",
+      "sqlite_version": "3.53.2",
+      "image": "sha256:6ce9346c1918363dd12bd411d8c07d63c2a595637df0f90c1a51b0bfb802a6ea",
+      "genesis_ms": 4.100417,
+      "complete_command_ms": 6779.681292,
+      "rows": [
+        {
+          "case": "seed",
+          "exec_ms": 48.12375,
+          "commit_ms": 131.450833,
+          "generation": 1,
+          "root": "2a0cc4b752376147eae0952be98c16c643eb9f08cd315332e57f6945c24aa438"
+        },
+        {
+          "case": "target",
+          "exec_ms": 145.21441700000003,
+          "commit_ms": 628.198625,
+          "generation": 2,
+          "root": "20e450ce35cacbaff4c74eb97373d64b74210bcb91dc20d09788ff2fbaf29329"
+        },
+        {
+          "case": "localized-successor",
+          "exec_ms": 6.529375,
+          "commit_ms": 42.969,
+          "generation": 3,
+          "root": "e9bb1a3b9527847e9541df204183119cfa07373cabd165717c5097825951e300"
+        }
+      ],
+      "semantic_proof": "PASS",
+      "canonical_reference": "NOT_RUN",
+      "physical_resources": "NOT_RUN",
+      "cleanup": "PASS",
+      "proof_ms": 2147.3566659999997,
+      "performance_child_wall_seconds": 6.825145916984184,
+      "proof_child_wall_seconds": 2.2089801669935696,
+      "proof_plan_sha256": "281cb345c1401a23839b25441a55fb4ae42ee1617c9df55ce6b806eecdcae1c3"
+    },
+    "incremental_audits": [
+      "P6_INCREMENTAL_AUDIT work=Work { intrinsic: Work { visited: 11, reused: 2, edges: 0 }, inode_diff: Work { expanded: 2, compared: 1, skipped: 0, changed: 17, peak_items: 18, peak_owned_bytes: 3474 }, directory_expanded: 9, directory_compared: 0, directory_skipped: 0, changed_names: 16, affected_inodes: 17, parent_steps: 7, peak_owned_bytes: 3474 } portable=17 attribute=AttributeReadWork { pages_read: 17, read_waves: 17, values_read: 34 } files=9 file_cert=Work { visited: 42, reused: 30, edges: 33, newly_certified: 12 }",
+      "P6_INCREMENTAL_AUDIT work=Work { intrinsic: Work { visited: 7, reused: 2, edges: 2 }, inode_diff: Work { expanded: 4, compared: 17, skipped: 0, changed: 130, peak_items: 96, peak_owned_bytes: 20432 }, directory_expanded: 3, directory_compared: 3, directory_skipped: 0, changed_names: 129, affected_inodes: 130, parent_steps: 1, peak_owned_bytes: 20432 } portable=130 attribute=AttributeReadWork { pages_read: 130, read_waves: 130, values_read: 260 } files=128 file_cert=Work { visited: 128, reused: 0, edges: 0, newly_certified: 128 }",
+      "P6_INCREMENTAL_AUDIT work=Work { intrinsic: Work { visited: 4, reused: 2, edges: 2 }, inode_diff: Work { expanded: 4, compared: 50, skipped: 1, changed: 1, peak_items: 102, peak_owned_bytes: 19556 }, directory_expanded: 0, directory_compared: 0, directory_skipped: 0, changed_names: 0, affected_inodes: 1, parent_steps: 0, peak_owned_bytes: 19556 } portable=1 attribute=AttributeReadWork { pages_read: 1, read_waves: 1, values_read: 2 } files=1 file_cert=Work { visited: 1, reused: 0, edges: 0, newly_certified: 1 }"
+    ],
+    "successor_authority_io_delta": {
+      "put_calls": 0,
+      "get_calls": 12,
+      "put_requested_bytes": 0,
+      "get_received_bytes": 45077
+    }
+  }
+]

@@ -50,7 +50,7 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
   Service locality/root vectors/physical qualification remain open.
 - [x] Run/prove all three named live shape cases with exact independent manifests,
   root/byte facts and retained history, through actual public WorkspaceApi.exec.
-- [ ] Family1 history retention; Family2 public SDK namespace initialization;
+- [ ] Family1 public SDK namespace initialization; Family2 history retention;
   Family3 writes; Family4 retained Commits; Family5 namespace; Family6 mutations;
   Family7 shell/package. Freeze membership from the current owning modules;
   native Family4 proofs are auxiliary coverage, not an eighth family. Use the
@@ -68,11 +68,13 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 - [x] V4c2b2 structural dependency: intrinsic facts, selected-root differences,
   indexed reference/parent proof, exact stamp and known C5installation;8external
   C1/SQLite tests pass. [Runtime checkpoint](V4C2B2-RUNTIME.md).
-- [ ] V4c2b2 real-provider changed-service cohort and locality counts.
+- [x] V4c2b2 real-provider original67/270/128three-head bytes/history/cleanup
+  and local one-file service counts. [RESULTS-V4C2B2](RESULTS-V4C2B2.md).
+  Physical/larger population/independent canonical qualification remains open.
 
-Current action: V4c2b2 frozen real-provider original67/270/128proof of incremental
-service namespace/root-diff proof
-against exact selected base, refs/cycles/aliases/reachability/file/portable closure,
-known/Unknown/C5publication. Record exact changed-source service counts, bytes/history/cleanup and retained
-failures before calling this dependency complete. Then admitted populations/import/retirement/syscalls and all seven
-owning families/complete DeepSeek generic/locality work. Full goal remains active.
+Current action: V4c3 admitted paged populations/inode reservation and explicit
+inherited import/mount, with bounded windows/source retirement and actual resource
+accounting before increasing the supported512/256profile. Freeze concrete source,
+interfaces and independent expected results, then implement/prove. Remaining generic
+syscalls and genuine seven-family/complete DeepSeek generic/locality work stay open.
+Full goal remains active.
