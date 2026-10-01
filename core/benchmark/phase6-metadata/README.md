@@ -42,3 +42,13 @@ The first v1 collection linked Darwin SQLite 3.51.0, compiled with
 observations. They remain in the original receipts. Operation receipt schema 2
 encodes unavailable counters as null with an explicit status. This correction
 does not authorize recollecting those v1 performance rows.
+
+The owner-selected six-case R1 workload adaptation is declared separately in
+[COHORT-V2](../../docs/architecture/proposal/phase6-sqlite-minio/experiments/COHORT-V2.md).
+Collect it with the same runner and `--cohort-v2`, fresh output and separate
+masters. Its phases are direct metadata mutation, selected metadata preparation,
+completion and retained-view result delivery. It has no Exec/full Commit.
+The large baseline is an immutable source reference to 10MiB of A, not a timed
+10MiB payload import or upload. Full logical bytes are reconstructed only by the
+independent verifier. Namespace replacement explicitly retains one orphan inode/
+source; owner cleanup is distinct from payload garbage collection.

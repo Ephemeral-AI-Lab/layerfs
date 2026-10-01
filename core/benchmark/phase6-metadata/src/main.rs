@@ -1,3 +1,6 @@
+mod cohort;
+mod cohort_catalog;
+mod cohort_fs;
 mod engine;
 mod extents;
 mod generation;
@@ -206,6 +209,13 @@ fn main() -> Result<()> {
     }
     match args[1].as_str() {
         "prepare" => prepare(&args[2], Path::new(&args[3])),
+        "prepare-cohort" => cohort::prepare(&args[2], Path::new(&args[3])),
+        "run-cohort" => {
+            if args.len() != 5 {
+                return Err("run-cohort requires OUTPUT".into());
+            }
+            cohort::run(&args[2], Path::new(&args[3]), Path::new(&args[4]))
+        }
         "inspect-memory" => {
             let db = Engine::open(Path::new(&args[3]))?;
             let (current, high) = engine::memory(false)?;

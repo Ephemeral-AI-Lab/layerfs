@@ -46,6 +46,7 @@ impl Metrics {
 pub struct Engine {
     pub db: Connection,
     pub m: Metrics,
+    pub track_changes: bool,
 }
 fn clear(s: &Statement<'_>) {
     for status in [
@@ -73,6 +74,7 @@ impl Engine {
         db.set_prepared_statement_cache_capacity(64);
         Ok(Self {
             db,
+            track_changes: false,
             m: Metrics {
                 opens: 1,
                 ..Metrics::default()
@@ -138,6 +140,12 @@ impl Engine {
     }
     pub fn inode(&mut self, w: i64, ino: i64, value: i64, size: i64) -> Result<()> {
         let g = self.scalar("SELECT active FROM workspace WHERE w=?1", &[&w])?;
+        if self.track_changes {
+            self.exec(
+                "INSERT OR IGNORE INTO changed VALUES(?1,?2,?3)",
+                &[&w, &g, &ino],
+            )?;
+        }
         let old = self.ints(
             "SELECT born FROM inodes WHERE w=?1 AND ino=?2 AND dead=9223372036854775807",
             &[&w, &ino],

@@ -24,6 +24,9 @@ def expected_extents(case):
     return owners
 
 def verify(case,folder):
+    if case.startswith('cohort-'):
+        from verify_cohort import verify as cohort_verify
+        return cohort_verify(case,folder)
     db=sqlite3.connect(f'file:{folder / "sample.sqlite"}?mode=ro',uri=True)
     assert db.execute('PRAGMA integrity_check').fetchall()==[('ok',)]
     assert not db.execute('PRAGMA foreign_key_check').fetchall()

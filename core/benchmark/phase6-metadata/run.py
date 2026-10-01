@@ -11,7 +11,9 @@ def sha(p):
         while b:=f.read(1024*1024):h.update(b)
     return h.hexdigest()
 def git(*a):return subprocess.check_output(['git',*a],cwd=ROOT,text=True).strip()
-def collect(output,masters):
+COHORT_CASES=["cohort-clean-retained-4097","cohort-one-edit-retained-4097","cohort-overwrite-4k","cohort-namespace67","cohort-components270","cohort-many128"]
+def collect(output,masters,cohort=False):
+    cases=COHORT_CASES if cohort else CASES
     binary=BASE/'target/release/phase6-metadata-probe'
     assert binary.is_file(),binary
     dirty=git('status','--porcelain','--untracked-files=normal')
@@ -28,17 +30,17 @@ def collect(output,masters):
     for p in probe['package']:
         if p.get('source'):
             assert (p['name'],p['version'],p.get('checksum')) in index,p['name']
-    ident={'source':git('rev-parse','HEAD'),'tree':git('rev-parse','HEAD^{tree}'),'spec_commit':'15b2ca92091188b4282a0d104ec50985933d6ea0','binary_sha256':sha(binary),'lock_sha256':sha(BASE/'Cargo.lock'),'oracle_sha256':sha(BASE/'verify.py'),'collector_sha256':sha(Path(__file__)),'schema_sha256':sha(BASE/'schema.sql'),'build_flags_sha256':sha(ROOT/'.cargo/config.toml'),'build_profile':'release --locked; repository-root aarch64 flags','host':platform.platform(),'cache_contract':'uncontrolled OS cache; INELIGIBLE','sample_count':1,'construction_producers':1,'clone_method':'independent shutil.copyfile byte copy; no cold claim','dependency_parity':'PASS'}
+    ident={'source':git('rev-parse','HEAD'),'tree':git('rev-parse','HEAD^{tree}'),'spec_commit':'b115fe2b34e27bd08ae1a216c8c0f3c64a23b090' if cohort else '15b2ca92091188b4282a0d104ec50985933d6ea0','binary_sha256':sha(binary),'lock_sha256':sha(BASE/'Cargo.lock'),'oracle_sha256':sha(BASE/'verify.py'),'cohort_oracle_sha256':sha(BASE/'verify_cohort.py') if cohort else None,'collector_sha256':sha(Path(__file__)),'schema_sha256':sha(BASE/'schema.sql'),'cohort_schema_sha256':sha(BASE/'cohort.sql') if cohort else None,'build_flags_sha256':sha(ROOT/'.cargo/config.toml'),'build_profile':'release --locked; repository-root aarch64 flags','host':platform.platform(),'cache_contract':'uncontrolled OS cache; INELIGIBLE','sample_count':1,'construction_producers':1,'clone_method':'independent shutil.copyfile byte copy; no cold claim','dependency_parity':'PASS'}
     (output/'identity.json').write_text(json.dumps(ident,indent=2)+'\n')
-    summary=[{'case':case,'status':'NOT_RUN'} for case in CASES]
+    summary=[{'case':case,'status':'NOT_RUN'} for case in cases]
     (output/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
-    for case_index,case in enumerate(CASES):
+    for case_index,case in enumerate(cases):
         dest=output/case;dest.mkdir()
         master=masters/(case+'.sqlite');seal=master.with_suffix('.seal.json')
         setup=time.monotonic_ns()
         prepared=False
         if not master.exists():
-            result=subprocess.run([str(binary),'prepare',case,str(master)],text=True,capture_output=True,timeout=15)
+            result=subprocess.run([str(binary),'prepare-cohort' if cohort else 'prepare',case,str(master)],text=True,capture_output=True,timeout=15)
             (dest/'prepare.stdout').write_text(result.stdout)
             (dest/'prepare.stderr').write_text(result.stderr)
             assert result.returncode==0,(case,result.stderr)
@@ -49,7 +51,7 @@ def collect(output,masters):
         setup_ns=time.monotonic_ns()-setup
         copying=time.monotonic_ns();shutil.copyfile(master,dest/'sample.sqlite');copy_ns=time.monotonic_ns()-copying
         started=time.monotonic_ns()
-        command=[str(binary),'run',case,str(dest/'sample.sqlite'),str(dest)]
+        command=[str(binary),'run-cohort' if cohort else 'run',case,str(dest/'sample.sqlite'),str(dest)]
         row={'case':case,'status':'NOT_RUN','command':command,'setup_ns':setup_ns,'setup_fresh':prepared,'master_sha256':sealed['database'],'copy_ns':copy_ns,'performance_claim':False,'cache_verdict':'INELIGIBLE','sample_count':1}
         try:
             run=subprocess.run(command,text=True,capture_output=True,timeout=15)
@@ -73,7 +75,7 @@ def collect(output,masters):
             sidecars={p.name:p.stat().st_size for p in dest.glob('sample.sqlite-*')}
             row['retained_sidecars']=sidecars
             row['resource_observation']={'physical_containment':'UNAVAILABLE','OS_file_cache':'UNAVAILABLE','sqlite_highwater_scope':'operation-reset engine allocations only; not total process memory'}
-            row['cleanup']='PASS' if not sidecars and operation['capture_rows']==0 else 'FAIL'
+            row['cleanup']='PASS' if not sidecars and (all(operation['owners'][k]==0 for k in ('changed','captures','pins')) and operation['obsolete_versions']==0 if cohort else operation['capture_rows']==0) else 'FAIL'
         (dest/'receipt.json').write_text(json.dumps(row,indent=2)+'\n')
         summary[case_index]=row
         (output/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
@@ -83,4 +85,5 @@ def collect(output,masters):
     fcntl.flock(lock,fcntl.LOCK_UN)
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);parser.add_argument('--masters',type=Path,required=True)
-    args=parser.parse_args();collect(args.output.resolve(),args.masters.resolve())
+    parser.add_argument('--cohort-v2',action='store_true')
+    args=parser.parse_args();collect(args.output.resolve(),args.masters.resolve(),args.cohort_v2)
