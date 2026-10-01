@@ -1,8 +1,9 @@
-# Issue290 standalone storage throughput experiment v1
+# Standalone storage throughput experiment v1
 
-Status: prospective exploratory backend experiment. No LayerFS product,
-release, strict memory, cold storage or durability admission is established.
-Owner request: 2026-10-01; issue https://github.com/Ephemeral-AI-Lab/layerfs/issues/290.
+Status: Research; informative and not a product contract.
+Prospective exploratory experiment; no speed, memory or durability admission.
+Owner request: 2026-10-01. Experiment [#291](https://github.com/Ephemeral-AI-Lab/layerfs/issues/291);
+redesign context [#290](https://github.com/Ephemeral-AI-Lab/layerfs/issues/290).
 Parent source: ffdfa022f21930f3e7325b95e6ae5c2b11b7d2a0.
 
 ## Scope and identities
@@ -30,10 +31,10 @@ Record Python/tool SHA and SQL/schema/query text in the source seal.
 | M-big-64m-v1 | One64MiB body, streamed from one seeded64KiB memory block | PUT then GET with64KiB receive window |
 | M-tiny-1024-v1 | 1024 independent keys, each1024 bytes | PUT all, GET all, LIST all |
 | M-grouped-1024-v1 | Same1024 logical1024-byte bodies concatenated into four256KiB objects | PUT all, GET all, LIST all |
-| S-directory-10000-v1 | 10000 entries in one parent with inode attributes | Batched insert,128 point lookups,128-row keyset listing, rename/delete |
-| S-tiny-1024-b1-v1 | 1024 file metadata pairs | Insert transaction batch1, point/list/delete |
-| S-tiny-1024-b128-v1 | Same metadata workload | Insert transaction batch128, point/list/delete |
-| S-big-index-4096-v1 | Metadata locators for4096x16KiB ranges, one64MiB logical file | Insert,256 indexed point lookups,128-row keyset scan,delete |
+| S-directory-10000-v1 | 10000 entries in one parent with inode attributes | Batched insert,128 point lookups,128-row keyset listing, rename; separate cleanup delete |
+| S-tiny-1024-b1-v1 | 1024 file metadata pairs | Insert transaction batch1, point/list; separate cleanup delete |
+| S-tiny-1024-b128-v1 | Same metadata workload | Insert transaction batch128, point/list; separate cleanup delete |
+| S-big-index-4096-v1 | Metadata locators for4096x16KiB ranges, one64MiB logical file | Insert,256 indexed point lookups,128-row keyset scan; separate cleanup delete |
 
 Grouped objects are synthetic backend aggregates, not valid LayerFS packs or
 CAS fixtures. SQLite stores metadata only; it does not store the64MiB file body.
@@ -83,7 +84,7 @@ name/range transcripts, point values and final emptiness are checked against
 Python reference generation independently of SQL output. No candidate-derived pin.
 
 Record all command exits/walls, phase durations, operations, requests, logical
-and physical bytes, MiB/s and ops/s. Record independent proof and cleanup status,
+and HTTP body bytes (not wire or disk I/O), MiB/s and ops/s. Record independent proof and cleanup status,
 source commit/tree/tool/provider hashes, topology, cache contract and omissions.
 No numerical speed target is frozen in this capability/observation experiment.
 
@@ -103,3 +104,10 @@ Deliver every selected observation and proof, including misses/unavailable
 fields, and explain the chunk-request/grouping and transaction costs. Daemon,
 mount, publication, capture/G1/G2, delta dependency and full architecture proofs
 remain the next stage. Do not infer them from these primitives.
+
+## Implementation and run instructions
+
+The [standalone runner guide](../../../../../tools/storage_probes/README.md)
+provides exact provider preparation and selection commands. No throughput samples
+have run at this checkpoint. Initial specification commit:
+475a8d3f67740c64a1d6d030bd0fe5cef48035fc (local at preparation time).
