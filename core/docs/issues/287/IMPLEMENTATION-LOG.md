@@ -1906,3 +1906,32 @@ Current next action: common preparation publication/acquisition followed by six
 untouched control observations/9s separate proofs and committed targets. Product
 infrastructure owners continue; reset/reuse/empty/graphspeed optimization waits
 control targets; noR2-R7 or #288edit.
+
+
+## Untouched focused control and prospective targets
+
+Published common control03e1004 retains exact7ed product; all6 ordered arms were
+observed once with release archived binaries, same host topology and immutable
+master copies. All complete command bounds and separate9s canonical proofs PASS,
+cleanupPASS. Exact operands/commands/receiptSHA inventories are in
+R1-FINISH-CONTROL-TARGETS.md and evidence/r1-finish-speed/CONTROL-TARGETS.json.
+Clean10.114500291s; one-edit10.420960250s; overwrite0.898764125s;
+namespace67 1.007676292s; components270 3.053663167s; many128 2.546068208s.
+Proofs0.100877084/0.128517083/0.104772875/0.222335875/0.222039709/0.113878792s.
+Control targets are literal observed Exec/Commit/complete values without tolerance.
+Every numeric latency remainsINELIGIBLE/performance_claim=false; fast performance
+receipts keep originalSKIPPED/INCOMPLETE status and separate proofs are linked.
+No resample/extra family/worker/cache relaxation or #288 edit.
+
+F4 provenance closes at7361312 hostMach-O publicInit+ordinaryseed receipts, same
+Store/history hashes through later copies. Fresh current full qualificationPASS
+0.046071541s on independent copied files. F5 host wide/small master acquisition
+PASS7.463457542/0.898951000s; F7 large/package0.918379500/0.870162625s.
+F4 producer binaries reused compilation only; master init/seed remain genuine
+producer setup. Fresh artifacts and all acquisition/qualification receipts stay
+under owned control results. No historical receipt is relabelled.
+
+Current active closure replaces stale pause text under assigned scope. All new
+product source remains developing/unverified and excluded from this docs commit.
+Current next action: publish targets then integrate/verify the coherent real-route
+R1 source; cache/pool/quanta changes require this publication first.

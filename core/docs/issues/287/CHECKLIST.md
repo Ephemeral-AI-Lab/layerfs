@@ -1,14 +1,15 @@
 # Issue287 current implementation checklist
 
-> **Status: Current planning checklist; no release candidate exists.**
+> **Status: Active assigned R1 finish implementation; no release candidate exists.**
 > Current published product checkpoint: `7a3a9b34c7c976ee8e63ba0db07833ffeda02a10`
 > (R1d-effective-graph scoped exits PASS; full R1 remains PARTIAL/open).
 
-Assignment: #287 implementation only. Benchmark qualification is delegated/unrun
-under #288. The owner-requested [R1 finish/speed handoff](HANDOFF_R1_FINISH_AND_SPEED_20261001.md)
-defines a focused six-existing-case measurement exception when assigned; no
-implementation or measurement starts merely by preparing that plan. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
-packet; [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) is append-only.
+Assignment: the owner assigned [R1 finish/speed](HANDOFF_R1_FINISH_AND_SPEED_20261001.md)
+on2026-10-01, authorizing remaining R1 implementation and the six existing cases.
+The earlier pause is superseded for this scope. Broader qualification remains
+under #288, unchanged. [Current closure matrix](R1-FINISH-CLOSURE.md) distinguishes
+source work from tested delivery. [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md)
+remains append-only; no release candidate or aggregate R1 completion is claimed.
 
 Current rollout stage: **R1, construction-state integration and resource foundations**.
 The R1d-effective-graph slice is committed, recounted, normally pushed and linked
@@ -18,14 +19,11 @@ R0 is complete. Full R1 still needs alias/memo/frontier/reference/final-row/rele
 authority and engine/protected/physical gates. R2–R7 implementation has not begun;
 existing Phase4.5 product behavior remains the base for their replacement.
 
-Current next action: **R1 finish/speed handoff prepared; implementation remains paused**,
-as directed by the owner. The [speed review](SCRATCH-SPEED-REVIEW-DRAFT.md) records
-fresh SQLite initialization, indexed solver transaction/allocation costs and
-prospective known-clean reuse/empty-topology work. None of those speed proposals
-is implemented or qualified. The graph count proof establishes once-per-node
-expansion; it does not establish unchanged SDK Commit/Exec wall latency.
-Native selected-provider refusal remains explicit; native/global/physical/Linux
-protection and concurrency enablement stay gated on actual owning proofs.
+Current next action: collect the published untouched six-case control and separate
+proofs, commit its targets, then finish coherent real-route R1 source and owning
+checks. Alias/draft/navigation/working/reset source is developing and unverified.
+The selected Apple provider still refuses32MiB readback; strict native/global/
+physical/protected enablement stays gated. R2–R7 remain unstarted.
 
 - [x] Inspect actual primary/published/research source, ancestry, origin and artifacts.
 - [x] Create clean owned managed worktree and `codex/issue287-implementation` branch.
@@ -156,7 +154,5 @@ Named submilestones and dependencies:
 Each delivery gets exact LOC commit and #287 checkpoint. Incomplete gates stay
 unchecked; dependent enablement stays disabled. No #288 campaign/issue edit.
 
-Latest owner stop instruction: complete current effective-graph checkpoint checks/
-exact LOC/publication/#287, then **pause further implementation**. Provide existing
-eight-module speed evidence/source setup-cost review; no new campaign or next
-checkpoint/reuse/small-path implementation before renewed user direction.
+Current owner stop boundary: finish this assigned R1/speed report, retaining every
+missing gate and the R3-dependent content-release row, then stop before R2–R7.

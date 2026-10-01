@@ -1,0 +1,628 @@
+{
+  "candidate": "NOT_RUN; finished published R1 source required",
+  "cohort": "issue287-end-r1-speed-v1",
+  "control_product": "7edddbdb8e8512627aed0ed42533ef099d802384",
+  "control_source": "03e1004effa94f963d9752bc4bf9f25ccb828745",
+  "control_tree": "a971a06321c42ffec314c1d33461d6801fce7b47",
+  "numeric_latency_status": "INELIGIBLE",
+  "performance_claim": false,
+  "rows": [
+    {
+      "artifacts": {
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea/benchmark_shell",
+          "sha256": "ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/8ff4db96d6b1b94c54f2ed535b52e7cf07393d06aee0afa260e072d029412a5a/layerfs-daemon",
+          "sha256": "8ff4db96d6b1b94c54f2ed535b52e7cf07393d06aee0afa260e072d029412a5a"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host/container cache uncontrolled; whole Commit cache domain unproved",
+      "case": "workspace-commit-clean-retained-writes-4097-v3",
+      "cleanup_status": "PASS",
+      "clone_method": "shutil.copyfile independent writable byte copy",
+      "command_status": "PASS",
+      "commit_target_ns": 5574875,
+      "complete_budget_ns": 15000000000,
+      "complete_target_ns": 10114500291,
+      "control": {
+        "pin_generation": 1,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 0,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 547644416,
+        "prelude_exec_ns": 8585462708,
+        "prelude_head_commit": "121bdcb54fdd74b0943e2ec8e613efb00e2f22da749ed40b1a0b06a7dcd01f1657",
+        "recovery_complete": false,
+        "unmounted_before_recovery": false,
+        "up_to_date": true
+      },
+      "driver": {
+        "branch_id": "11094cc9de4f7dd10dabd617bb074906e8",
+        "cleanup_ns": 571649000,
+        "commit_called": true,
+        "commit_ns": 5574875,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 22830,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_exit_status": 0,
+        "exec_ns": 1788000,
+        "head_commit": "121bdcb54fdd74b0943e2ec8e613efb00e2f22da749ed40b1a0b06a7dcd01f1657",
+        "host_disk_read_bytes": 12288,
+        "mode": "run",
+        "operation_ns": 9141837167,
+        "projection_counts": "lookup=1,getattr=4,read=0,write=4097,readdir=0,open=1,setattr=0,rename=0,other=0",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-commit-clean-retained-writes-4097-v3",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "exec_target_ns": 1788000,
+      "image_id": "sha256:f8c2e7a6082c1c62b1ce9e609f2310b9811fffb059cf4a9b295cc25c467bcfc3",
+      "label": "clean",
+      "numeric_latency_status": "INELIGIBLE",
+      "oracle_manifest_sha256": [
+        "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7",
+        "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7"
+      ],
+      "performance_claim": false,
+      "performance_command": [
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea/benchmark_shell",
+        "run",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-clean/workspace-commit-clean-retained-writes-4097-v3/case.before",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-clean/workspace-commit-clean-retained-writes-4097-v3/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-clean/workspace-commit-clean-retained-writes-4097-v3/history.sqlite",
+        "sha256:f8c2e7a6082c1c62b1ce9e609f2310b9811fffb059cf4a9b295cc25c467bcfc3"
+      ],
+      "performance_receipt": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-clean/workspace-commit-clean-retained-writes-4097-v3/receipt.json",
+      "performance_receipt_sha256": "5290bb68ae8086079aa41a2d4160c3b94e6a727a7cfeb0fa5f94879cfca47055",
+      "proof_budget_ns": 9000000000,
+      "proof_command": [
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-clean-proof/workspace-commit-clean-retained-writes-4097-v3/case.verify",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-clean/workspace-commit-clean-retained-writes-4097-v3/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-clean/workspace-commit-clean-retained-writes-4097-v3/history.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-clean/retained.tsv",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-clean/workspace-commit-clean-retained-writes-4097-v3.tsv"
+      ],
+      "proof_ns": 100877084,
+      "proof_receipt": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-clean-proof/run.json",
+      "proof_receipt_sha256": "a8daf048ec54d0641003678dc002043ddcc2a0abf4a1f9e55dca221e01c61463",
+      "proof_status": "PASS",
+      "remaining_case_registration": {
+        "issue273-clean-commit-v1": "original historical profile NOT_RUN; retained live v3 control PASS r062, no old-ID promotion",
+        "issue273-one-edit-commit-v1": "original historical profile NOT_RUN; retained live v3 control PASS r062, no old-ID promotion",
+        "workspace-commit-full-lowering-size-64mib-v1": "original profile NOT_RUN; integrated native-v2 full-byte proof PASS r061",
+        "workspace-commit-headroom-quota-4mib-v1": "original profile NOT_RUN; integrated native-v2 occupied/refund/cleanup proof PASS r061",
+        "workspace-commit-known-unknown-local-c5-v1": "original profile NOT_RUN; native known/unknown custody PASS r054, same-selector local-C5 resume PASS r061",
+        "workspace-commit-live-g1-g2-v1": "original profile NOT_RUN; integrated native-v2 deterministic live successor proof PASS r061",
+        "workspace-commit-reordered-base-copy-v1": "original profile NOT_RUN; separate native-v2 normalization PASS r061 and public SDK full copy/pin PASS r056",
+        "workspace-commit-sdk-stopping-refusal-v1": "immutable v1 FAIL r055/r057; distinct fixture-release-v2 stopping/refusal and cleanup PASS r058, unaffected reuse",
+        "workspace-commit-stage-headroom-quota-2mib-v1": "original profile NOT_RUN; integrated native-v2 occupied/same-fund custody proof PASS r054, unaffected reuse"
+      }
+    },
+    {
+      "artifacts": {
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea/benchmark_shell",
+          "sha256": "ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/8ff4db96d6b1b94c54f2ed535b52e7cf07393d06aee0afa260e072d029412a5a/layerfs-daemon",
+          "sha256": "8ff4db96d6b1b94c54f2ed535b52e7cf07393d06aee0afa260e072d029412a5a"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host/container cache uncontrolled; whole Commit cache domain unproved",
+      "case": "workspace-commit-one-edit-retained-writes-4097-v3",
+      "cleanup_status": "PASS",
+      "clone_method": "shutil.copyfile independent writable byte copy",
+      "command_status": "PASS",
+      "commit_target_ns": 17578166,
+      "complete_budget_ns": 15000000000,
+      "complete_target_ns": 10420960250,
+      "control": {
+        "pin_generation": 1,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 0,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 562708917,
+        "prelude_exec_ns": 8942028458,
+        "prelude_head_commit": "1245fba6fcfc459e91562d8fdea1d159bb507a6bebc4e33bb4b1d3e7b25cb43d6c",
+        "recovery_complete": false,
+        "unmounted_before_recovery": false,
+        "up_to_date": false
+      },
+      "driver": {
+        "branch_id": "11094cc9de4f7dd10dabd617bb074906e8",
+        "cleanup_ns": 521370792,
+        "commit_called": true,
+        "commit_ns": 17578166,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 24824,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_exit_status": 0,
+        "exec_ns": 4959459,
+        "head_commit": "125e3ab7e80f69e0b9efb348ad24a0393b93e6aa8d4971450b6ed63e92d23c82d7",
+        "host_disk_read_bytes": 8192,
+        "mode": "run",
+        "operation_ns": 9528344042,
+        "projection_counts": "lookup=2,getattr=6,read=0,write=4098,readdir=0,open=2,setattr=0,rename=0,other=0",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-commit-one-edit-retained-writes-4097-v3",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "exec_target_ns": 4959459,
+      "image_id": "sha256:f8c2e7a6082c1c62b1ce9e609f2310b9811fffb059cf4a9b295cc25c467bcfc3",
+      "label": "one-edit",
+      "numeric_latency_status": "INELIGIBLE",
+      "oracle_manifest_sha256": [
+        "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7",
+        "bf309d76319f11c72d62a17ef80933cd6645975afaca87a19431c8072ae3310c"
+      ],
+      "performance_claim": false,
+      "performance_command": [
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea/benchmark_shell",
+        "run",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-one-edit/workspace-commit-one-edit-retained-writes-4097-v3/case.before",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-one-edit/workspace-commit-one-edit-retained-writes-4097-v3/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-one-edit/workspace-commit-one-edit-retained-writes-4097-v3/history.sqlite",
+        "sha256:f8c2e7a6082c1c62b1ce9e609f2310b9811fffb059cf4a9b295cc25c467bcfc3"
+      ],
+      "performance_receipt": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-one-edit/workspace-commit-one-edit-retained-writes-4097-v3/receipt.json",
+      "performance_receipt_sha256": "abcf22a1f12eb0152857be558c949de73072162ca28cf11f19b5d756d8b550ed",
+      "proof_budget_ns": 9000000000,
+      "proof_command": [
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-one-edit-proof/workspace-commit-one-edit-retained-writes-4097-v3/case.verify",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-one-edit/workspace-commit-one-edit-retained-writes-4097-v3/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-one-edit/workspace-commit-one-edit-retained-writes-4097-v3/history.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-one-edit/retained.tsv",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-one-edit/workspace-commit-one-edit-retained-writes-4097-v3.tsv"
+      ],
+      "proof_ns": 128517083,
+      "proof_receipt": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-one-edit-proof/run.json",
+      "proof_receipt_sha256": "1562dc5cd3f7dda2055e553c3fed0f41c7de0c63be1fe5cbcfd66e80e78267a9",
+      "proof_status": "PASS",
+      "remaining_case_registration": {
+        "issue273-clean-commit-v1": "original historical profile NOT_RUN; retained live v3 control PASS r062, no old-ID promotion",
+        "issue273-one-edit-commit-v1": "original historical profile NOT_RUN; retained live v3 control PASS r062, no old-ID promotion",
+        "workspace-commit-full-lowering-size-64mib-v1": "original profile NOT_RUN; integrated native-v2 full-byte proof PASS r061",
+        "workspace-commit-headroom-quota-4mib-v1": "original profile NOT_RUN; integrated native-v2 occupied/refund/cleanup proof PASS r061",
+        "workspace-commit-known-unknown-local-c5-v1": "original profile NOT_RUN; native known/unknown custody PASS r054, same-selector local-C5 resume PASS r061",
+        "workspace-commit-live-g1-g2-v1": "original profile NOT_RUN; integrated native-v2 deterministic live successor proof PASS r061",
+        "workspace-commit-reordered-base-copy-v1": "original profile NOT_RUN; separate native-v2 normalization PASS r061 and public SDK full copy/pin PASS r056",
+        "workspace-commit-sdk-stopping-refusal-v1": "immutable v1 FAIL r055/r057; distinct fixture-release-v2 stopping/refusal and cleanup PASS r058, unaffected reuse",
+        "workspace-commit-stage-headroom-quota-2mib-v1": "original profile NOT_RUN; integrated native-v2 occupied/same-fund custody proof PASS r054, unaffected reuse"
+      }
+    },
+    {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/884ba0ef2b46ae6ac169d4f653c38de443885fc1eaf755c03e13af5d81db1fd8/benchmark_init",
+          "sha256": "884ba0ef2b46ae6ac169d4f653c38de443885fc1eaf755c03e13af5d81db1fd8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea/benchmark_shell",
+          "sha256": "ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/8ff4db96d6b1b94c54f2ed535b52e7cf07393d06aee0afa260e072d029412a5a/layerfs-daemon",
+          "sha256": "8ff4db96d6b1b94c54f2ed535b52e7cf07393d06aee0afa260e072d029412a5a"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-shell-package-overwrite-4k-sdk-v2",
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_status": "PASS",
+      "commit_target_ns": 22893459,
+      "complete_budget_ns": 15000000000,
+      "complete_target_ns": 898764125,
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "recovery_complete": false,
+        "unmounted_before_recovery": false,
+        "up_to_date": false
+      },
+      "driver": {
+        "branch_id": "11d35c416a85b807e9b5384915d6ebb4a9",
+        "cleanup_ns": 501273083,
+        "commit_called": true,
+        "commit_ns": 22893459,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 12729,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_exit_status": 0,
+        "exec_ns": 19023125,
+        "head_commit": "121c0c1ed1a39259033083d2bda281430d627d41fe2125a2b17d53d803efe65458",
+        "host_disk_read_bytes": 8192,
+        "mode": "run",
+        "operation_ns": 41922292,
+        "projection_counts": "lookup=1,getattr=4,read=0,write=1,readdir=0,open=1,setattr=0,rename=0,other=0",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-shell-package-overwrite-4k-sdk-v2",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "exec_target_ns": 19023125,
+      "image_id": "sha256:ecf0a76a5ac0dd9fab89e957a7d592d61cda5102678abc0a6394858066b506f6",
+      "label": "overwrite4k",
+      "numeric_latency_status": "INELIGIBLE",
+      "oracle_manifest_sha256": [
+        "fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183",
+        "5491c0e2ed73a4f368fdfaf30b2bf1fd368d36d1fdabb3e7fd362dc7a2b93156"
+      ],
+      "performance_claim": false,
+      "performance_command": [
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea/benchmark_shell",
+        "run",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-overwrite4k/workspace-shell-package-overwrite-4k-sdk-v2/case.before",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-overwrite4k/workspace-shell-package-overwrite-4k-sdk-v2/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-overwrite4k/workspace-shell-package-overwrite-4k-sdk-v2/history.sqlite",
+        "sha256:ecf0a76a5ac0dd9fab89e957a7d592d61cda5102678abc0a6394858066b506f6"
+      ],
+      "performance_receipt": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-overwrite4k/workspace-shell-package-overwrite-4k-sdk-v2/receipt.json",
+      "performance_receipt_sha256": "7cdebd2da5565514cf471d4e7efff04ffdf0c90b26ccc589959d254ae9e92540",
+      "proof_budget_ns": 9000000000,
+      "proof_command": [
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-overwrite4k/workspace-shell-package-overwrite-4k-sdk-v2/case.verify",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-overwrite4k/workspace-shell-package-overwrite-4k-sdk-v2/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-overwrite4k/workspace-shell-package-overwrite-4k-sdk-v2/history.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-overwrite4k/workspace-shell-package-overwrite-4k-sdk-v2/old.tsv",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-overwrite4k/workspace-shell-package-overwrite-4k-sdk-v2/new.tsv"
+      ],
+      "proof_ns": 104772875,
+      "proof_receipt": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-overwrite4k-proof/run.json",
+      "proof_receipt_sha256": "0b0be37a689a00bc58b8e86cc6b1aa04c03494ae7558685101a36d5dabec2bf6",
+      "proof_status": "PASS",
+      "remaining_case_registration": [
+        {
+          "case": "failed-command-no-commit-v1",
+          "reason": "OWNER-DEFERRED #276: unmount does not discard dirty changes; original method remains historical, no repeated dirty-close attempt",
+          "status": "OWNER-DEFERRED"
+        }
+      ]
+    },
+    {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/884ba0ef2b46ae6ac169d4f653c38de443885fc1eaf755c03e13af5d81db1fd8/benchmark_init",
+          "sha256": "884ba0ef2b46ae6ac169d4f653c38de443885fc1eaf755c03e13af5d81db1fd8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea/benchmark_shell",
+          "sha256": "ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/8ff4db96d6b1b94c54f2ed535b52e7cf07393d06aee0afa260e072d029412a5a/layerfs-daemon",
+          "sha256": "8ff4db96d6b1b94c54f2ed535b52e7cf07393d06aee0afa260e072d029412a5a"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-namespace-move-replace-descendants-67-sdk-v1",
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_status": "PASS",
+      "commit_target_ns": 28054792,
+      "complete_budget_ns": 15000000000,
+      "complete_target_ns": 1007676292,
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "recovery_complete": false,
+        "unmounted_before_recovery": false,
+        "up_to_date": false
+      },
+      "driver": {
+        "branch_id": "115cb9e6299e013e5529639bdd7c050665",
+        "cleanup_ns": 493489292,
+        "commit_called": true,
+        "commit_ns": 28054792,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 25246,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_exit_status": 0,
+        "exec_ns": 72427792,
+        "head_commit": "12ca6e3d64a019d3b8e4671db03e739dd44883ad44002e513547561b7476a4a48b",
+        "host_disk_read_bytes": 0,
+        "mode": "run",
+        "operation_ns": 100487709,
+        "projection_counts": "lookup=89,getattr=115,read=1,write=2,readdir=2,open=1,setattr=0,rename=6,other=1",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-namespace-move-replace-descendants-67-sdk-v1",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "exec_target_ns": 72427792,
+      "image_id": "sha256:f8c2e7a6082c1c62b1ce9e609f2310b9811fffb059cf4a9b295cc25c467bcfc3",
+      "label": "namespace67",
+      "numeric_latency_status": "INELIGIBLE",
+      "oracle_manifest_sha256": [
+        "478aa879f6663fae094492a1a5568809d87a7b6577556e478ed3f0690436be68",
+        "8775077ffd613372784857a5227c77c06ffeac7ebda831ff28411e0f1e159eab"
+      ],
+      "performance_claim": false,
+      "performance_command": [
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea/benchmark_shell",
+        "run",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-namespace67/workspace-namespace-move-replace-descendants-67-sdk-v1/case.before",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-namespace67/workspace-namespace-move-replace-descendants-67-sdk-v1/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-namespace67/workspace-namespace-move-replace-descendants-67-sdk-v1/history.sqlite",
+        "sha256:f8c2e7a6082c1c62b1ce9e609f2310b9811fffb059cf4a9b295cc25c467bcfc3"
+      ],
+      "performance_receipt": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-namespace67/workspace-namespace-move-replace-descendants-67-sdk-v1/receipt.json",
+      "performance_receipt_sha256": "1847ef11afb41d392662b1bdbb4cabcdec5c7c7cede8eaa07a0845dcb4768759",
+      "proof_budget_ns": 9000000000,
+      "proof_command": [
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-namespace67/workspace-namespace-move-replace-descendants-67-sdk-v1/case.verify",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-namespace67/workspace-namespace-move-replace-descendants-67-sdk-v1/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-namespace67/workspace-namespace-move-replace-descendants-67-sdk-v1/history.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-namespace67/workspace-namespace-move-replace-descendants-67-sdk-v1/old.tsv",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-namespace67/workspace-namespace-move-replace-descendants-67-sdk-v1/new.tsv"
+      ],
+      "proof_ns": 222335875,
+      "proof_receipt": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-namespace67-proof/run.json",
+      "proof_receipt_sha256": "36ce08969c691aa7f61b962463f6097e9bceb06d502be51f363769cfed05b8f4",
+      "proof_status": "PASS",
+      "remaining_case_registration": null
+    },
+    {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/884ba0ef2b46ae6ac169d4f653c38de443885fc1eaf755c03e13af5d81db1fd8/benchmark_init",
+          "sha256": "884ba0ef2b46ae6ac169d4f653c38de443885fc1eaf755c03e13af5d81db1fd8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea/benchmark_shell",
+          "sha256": "ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/8ff4db96d6b1b94c54f2ed535b52e7cf07393d06aee0afa260e072d029412a5a/layerfs-daemon",
+          "sha256": "8ff4db96d6b1b94c54f2ed535b52e7cf07393d06aee0afa260e072d029412a5a"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-namespace-components-270-sdk-v1",
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_status": "PASS",
+      "commit_target_ns": 835039042,
+      "complete_budget_ns": 25000000000,
+      "complete_target_ns": 3053663167,
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "recovery_complete": false,
+        "unmounted_before_recovery": false,
+        "up_to_date": false
+      },
+      "driver": {
+        "branch_id": "112b7b588d832bfb6ae9b27e29495c71fa",
+        "cleanup_ns": 530696958,
+        "commit_called": true,
+        "commit_ns": 835039042,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 189283,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_exit_status": 0,
+        "exec_ns": 1335330750,
+        "head_commit": "12d443fd98d7788181a0ae9c67fcc56dda2eb33905587236905978740a392d406b",
+        "host_disk_read_bytes": 16384,
+        "mode": "run",
+        "operation_ns": 2170380417,
+        "projection_counts": "lookup=542,getattr=1628,read=1,write=272,readdir=0,open=1,setattr=0,rename=0,other=270",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-namespace-components-270-sdk-v1",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "exec_target_ns": 1335330750,
+      "image_id": "sha256:f8c2e7a6082c1c62b1ce9e609f2310b9811fffb059cf4a9b295cc25c467bcfc3",
+      "label": "components270",
+      "numeric_latency_status": "INELIGIBLE",
+      "oracle_manifest_sha256": [
+        "5cd3bd08b66f0de5bd21fd5eae23ee56d92290fb85783e0e4b43102e85db6a3a",
+        "16feb6bc8704a64b90c9b97082407c614793d1425578fbf2d63e6f48d84bcafa"
+      ],
+      "performance_claim": false,
+      "performance_command": [
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea/benchmark_shell",
+        "run",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-components270/workspace-namespace-components-270-sdk-v1/case.before",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-components270/workspace-namespace-components-270-sdk-v1/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-components270/workspace-namespace-components-270-sdk-v1/history.sqlite",
+        "sha256:f8c2e7a6082c1c62b1ce9e609f2310b9811fffb059cf4a9b295cc25c467bcfc3"
+      ],
+      "performance_receipt": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-components270/workspace-namespace-components-270-sdk-v1/receipt.json",
+      "performance_receipt_sha256": "9b888c03a5f9435a2d68a1e0bdcb15e65fcc388f8f451438c9111fa73649be90",
+      "proof_budget_ns": 9000000000,
+      "proof_command": [
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-components270/workspace-namespace-components-270-sdk-v1/case.verify",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-components270/workspace-namespace-components-270-sdk-v1/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-components270/workspace-namespace-components-270-sdk-v1/history.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-components270/workspace-namespace-components-270-sdk-v1/old.tsv",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-components270/workspace-namespace-components-270-sdk-v1/new.tsv"
+      ],
+      "proof_ns": 222039709,
+      "proof_receipt": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-components270-proof/run.json",
+      "proof_receipt_sha256": "e4e1bd826e26df9c3acff5938aa5b9ea265037708ef72205e630e5a125e1b988",
+      "proof_status": "PASS",
+      "remaining_case_registration": null
+    },
+    {
+      "artifacts": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/884ba0ef2b46ae6ac169d4f653c38de443885fc1eaf755c03e13af5d81db1fd8/benchmark_init",
+          "sha256": "884ba0ef2b46ae6ac169d4f653c38de443885fc1eaf755c03e13af5d81db1fd8"
+        },
+        "benchmark_shell": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea/benchmark_shell",
+          "sha256": "ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea"
+        },
+        "layerfs-daemon": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/8ff4db96d6b1b94c54f2ed535b52e7cf07393d06aee0afa260e072d029412a5a/layerfs-daemon",
+          "sha256": "8ff4db96d6b1b94c54f2ed535b52e7cf07393d06aee0afa260e072d029412a5a"
+        },
+        "verify_checkpoint5": {
+          "path": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+          "sha256": "ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e"
+        }
+      },
+      "cache_contract": "host and daemon cache uncontrolled; clone does not establish cold state",
+      "case": "workspace-shell-package-many-128-sdk-v2",
+      "cleanup_status": "PASS",
+      "clone_method": "closed independent writable byte copy; SHA256 identity checks outside timer",
+      "command_status": "PASS",
+      "commit_target_ns": 955297375,
+      "complete_budget_ns": 15000000000,
+      "complete_target_ns": 2546068208,
+      "control": {
+        "pin_generation": 0,
+        "pin_observation_ok": true,
+        "pin_read_bytes": 16384,
+        "pin_release_ok": true,
+        "pinned_bytes": 0,
+        "pinned_sha256": "",
+        "prelude_commit_ns": 0,
+        "prelude_exec_ns": 0,
+        "prelude_head_commit": "",
+        "recovery_complete": false,
+        "unmounted_before_recovery": false,
+        "up_to_date": false
+      },
+      "driver": {
+        "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+        "cleanup_ns": 497567875,
+        "commit_called": true,
+        "commit_ns": 955297375,
+        "daemon_log_attempted": true,
+        "daemon_log_bytes": 264154,
+        "daemon_log_error": "None",
+        "daemon_log_truncated": false,
+        "detail": "",
+        "exec_exit_status": 0,
+        "exec_ns": 749316958,
+        "head_commit": "12efd173696063ae14ef7fbd6c4c4adccbe1a29c4852b6f1da4568e4a11b736da1",
+        "host_disk_read_bytes": 0,
+        "mode": "run",
+        "operation_ns": 1704623292,
+        "projection_counts": "lookup=515,getattr=903,read=0,write=257,readdir=3,open=0,setattr=0,rename=0,other=1",
+        "sandbox_delete_ok": true,
+        "scenario_id": "workspace-shell-package-many-128-sdk-v2",
+        "schema": "issue243-shell-driver-v1",
+        "status": "COMPLETE",
+        "unmount_ok": true
+      },
+      "exec_target_ns": 749316958,
+      "image_id": "sha256:ecf0a76a5ac0dd9fab89e957a7d592d61cda5102678abc0a6394858066b506f6",
+      "label": "many128",
+      "numeric_latency_status": "INELIGIBLE",
+      "oracle_manifest_sha256": [
+        "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+        "8124069ea2c5a9c48a86073b4b941c8cd85582df6dae2d2413990d61d46cc713"
+      ],
+      "performance_claim": false,
+      "performance_command": [
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ed5f7b26d639c7ec3b47d3913f6caba77d5bd3a566b36d23dc52fc1d3ef90dea/benchmark_shell",
+        "run",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-many128/workspace-shell-package-many-128-sdk-v2/case.before",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-many128/workspace-shell-package-many-128-sdk-v2/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-many128/workspace-shell-package-many-128-sdk-v2/history.sqlite",
+        "sha256:ecf0a76a5ac0dd9fab89e957a7d592d61cda5102678abc0a6394858066b506f6"
+      ],
+      "performance_receipt": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-many128/workspace-shell-package-many-128-sdk-v2/receipt.json",
+      "performance_receipt_sha256": "b978cf956af3c10aaa5cdf844f7e3576ae35b3a9bd6ed15e6770da7c4f9ae226",
+      "proof_budget_ns": 9000000000,
+      "proof_command": [
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec5f84c769aced28c136031e9c151715ad0a30736ce5bf424d38c91cecfd250e/verify_checkpoint5",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-many128/workspace-shell-package-many-128-sdk-v2/case.verify",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-many128/workspace-shell-package-many-128-sdk-v2/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-many128/workspace-shell-package-many-128-sdk-v2/history.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-many128/workspace-shell-package-many-128-sdk-v2/old.tsv",
+        "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-many128/workspace-shell-package-many-128-sdk-v2/new.tsv"
+      ],
+      "proof_ns": 113878792,
+      "proof_receipt": "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-control-03e1004-many128-proof/run.json",
+      "proof_receipt_sha256": "9a75954b6cb2c7b9a64e81c9c98c92899221e8a705ebd3adad5c96d53c7aa0a3",
+      "proof_status": "PASS",
+      "remaining_case_registration": [
+        {
+          "case": "failed-command-no-commit-v1",
+          "reason": "OWNER-DEFERRED #276: unmount does not discard dirty changes; original method remains historical, no repeated dirty-close attempt",
+          "status": "OWNER-DEFERRED"
+        }
+      ]
+    }
+  ],
+  "schema": "issue287-end-r1-control-targets-v1",
+  "source_identity": "CONTROL-IDENTITY.json",
+  "source_identity_sha256": "976ce994b6ef4173e2aa7c227915314d8edb038adafb5d2d4066a7165070fc96",
+  "spec_sha256": "a2628e85e7d2f433ad90afcd3615a7b89d10be0f7afb21b96d857a0efffd2e6b",
+  "target_rule": "candidate observed SDK Exec/Commit/complete each <= same control operand; no tolerance, no statistical regression claim"
+}
