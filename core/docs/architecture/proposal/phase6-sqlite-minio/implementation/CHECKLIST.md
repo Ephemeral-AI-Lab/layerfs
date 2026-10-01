@@ -80,7 +80,10 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
   full128+sparse six-root live semantic/history/cleanup proof.
   [RESULTS-V4C3B](RESULTS-V4C3B.md). Initial failed oracle retained; physical gates open.
 
-Current action: V4c3c paged reservations/admission/inherited import/mount before raising
+- [ ] V4c3c1 owner-bound64serial C5 pages: runtime/checks delivered; live
+  page-crossing proof next. [Runtime](V4C3C1-RUNTIME.md).
+
+Current action: V4c3c1 live reservation-page proof, then admitted population and inherited import/mount before raising
 current512/256profile. Freeze exact source/count proofs, preserve accepted/Unknown
 custody. Remaining generic syscalls, genuine seven-family/complete DeepSeek
 commands/locality/resource proofs remain required. Full goal active.

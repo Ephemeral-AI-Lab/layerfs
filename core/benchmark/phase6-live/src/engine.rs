@@ -14,6 +14,9 @@ pub struct Engine {
     pub next: i64,
     pub nodes: i64,
     pub end: i64,
+    pub pages: Option<Arc<dyn crate::reservations::Pages>>,
+    reservation: Option<crate::reservations::Grant>,
+    reservation_failed: bool,
     pub revision: i64,
     pub callbacks: i64,
     pub reader: Option<Arc<dyn AuthenticatedObjects + Send + Sync>>,
@@ -66,6 +69,18 @@ pub fn now() -> (i64, u32) {
 }
 impl Engine {
     pub fn create(path: &Path, start: i64) -> Result<Self, String> {
+        let end = start.checked_add(512).ok_or("inode range overflow")?;
+        Self::create_range(path, start, end, None)
+    }
+    fn create_range(
+        path: &Path,
+        start: i64,
+        end: i64,
+        pages: Option<Arc<dyn crate::reservations::Pages>>,
+    ) -> Result<Self, String> {
+        if start <= 1 || end <= start {
+            return Err("inode range profile".into());
+        }
         std::fs::create_dir_all(path.join("sources")).map_err(|e| e.to_string())?;
         let db = Connection::open(path.join("metadata.sqlite")).map_err(|e| e.to_string())?;
         db.busy_timeout(Duration::ZERO).map_err(|e| e.to_string())?;
@@ -82,7 +97,10 @@ impl Engine {
             sources: path.join("sources"),
             next: start,
             nodes: 1,
-            end: start + 512,
+            end,
+            pages,
+            reservation: None,
+            reservation_failed: false,
             revision: 1,
             callbacks: 0,
             reader: None,
@@ -96,6 +114,21 @@ impl Engine {
             install_work: Cell::new(Default::default()),
             mutation_work: Cell::new(Default::default()),
         })
+    }
+    pub fn create_reserved(
+        path: &Path,
+        first: &crate::reservations::Grant,
+        pages: Arc<dyn crate::reservations::Pages>,
+    ) -> Result<Self, String> {
+        first.check()?;
+        let mut engine = Self::create_range(
+            path,
+            i64::try_from(first.start).map_err(|_| "reservation serial")?,
+            i64::try_from(first.end).map_err(|_| "reservation serial")?,
+            Some(pages),
+        )?;
+        engine.reservation = Some(first.clone());
+        Ok(engine)
     }
     pub fn node(&self, id: i64) -> Result<Node, String> {
         self.db
@@ -160,7 +193,17 @@ impl Engine {
         if self.lookup(parent, name)?.is_some() {
             return Err("EEXIST".into());
         }
-        if self.nodes >= 512 || self.node(parent)?.children >= 512 || self.next >= self.end {
+        self.source_ready()?;
+        if self.nodes >= 512 || self.node(parent)?.children >= 512 {
+            return Err("ENOSPC".into());
+        }
+        if self.reservation_failed {
+            return Err("reservation pending; no resend".into());
+        }
+        if self.next == self.end {
+            self.refill_reservation()?;
+        }
+        if self.next >= self.end {
             return Err("ENOSPC".into());
         }
         let id = self.next;
@@ -188,6 +231,29 @@ impl Engine {
         self.nodes += 1;
         self.revision += 1;
         self.node(id)
+    }
+    fn refill_reservation(&mut self) -> Result<(), String> {
+        let provider = self.pages.as_ref().ok_or("ENOSPC")?;
+        let previous = self
+            .reservation
+            .as_ref()
+            .ok_or("reservation context absent")?;
+        self.reservation_failed = true;
+        let grant = provider.next(self.end as u64)?;
+        grant.check()?;
+        if grant.start < self.end as u64
+            || grant.owner != previous.owner
+            || grant.scope != previous.scope
+            || grant.profile != previous.profile
+            || previous.sequence.checked_add(1) != Some(grant.sequence)
+        {
+            return Err("reservation reply identity/overlap".into());
+        }
+        self.next = i64::try_from(grant.start).map_err(|_| "reservation serial")?;
+        self.end = i64::try_from(grant.end).map_err(|_| "reservation serial")?;
+        self.reservation = Some(grant);
+        self.reservation_failed = false;
+        Ok(())
     }
     pub fn open(&mut self, id: i64, flags: i32) -> Result<i64, String> {
         self.node(id)?;

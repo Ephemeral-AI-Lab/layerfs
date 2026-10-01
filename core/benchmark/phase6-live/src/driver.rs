@@ -128,7 +128,7 @@ pub fn run(
         history,
         branch,
         daemon_s3,
-        bootstrap_taken: AtomicBool::new(false),
+        reservations: std::sync::Mutex::new(Default::default()),
     });
     crate::namespace_validation::initialize(&authority)?;
     let stop = Arc::new(AtomicBool::new(false));

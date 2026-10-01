@@ -43,7 +43,7 @@ impl Remote {
             .map_err(|_| "metadata session owner".into())
     }
     pub fn call(&self, action: u8, payload: &[u8]) -> Result<Vec<u8>, String> {
-        if payload.len().checked_add(8).is_none_or(|n| n > 16384) || action > 6 {
+        if payload.len().checked_add(8).is_none_or(|n| n > 16384) || action > 7 {
             return Err("metadata request capacity/action".into());
         }
         let address = self
@@ -64,8 +64,14 @@ impl Remote {
                 payload,
             )
     }
-    pub fn bootstrap(&self) -> Result<(Minio, Snapshot, u64), String> {
-        let reply = self.call(0, &[])?;
+    pub fn bootstrap(
+        &self,
+        owner: &crate::reservations::Owner,
+    ) -> Result<(Minio, Snapshot, crate::reservations::Grant), String> {
+        owner.check()?;
+        let mut request = Vec::new();
+        owner.encode(&mut request);
+        let reply = self.call(0, &request)?;
         let mut b = Bytes::new(&reply);
         let s3 = Minio {
             authority: b.string()?,
@@ -75,9 +81,13 @@ impl Remote {
             stats: Arc::new(Mutex::new(Default::default())),
         };
         let snapshot = Snapshot::read(&mut b)?;
-        let start = b.u64()?;
+        let grant = crate::reservations::Grant::read(&mut b)?;
         b.done()?;
-        Ok((s3, snapshot, start))
+        grant.matches(owner, &snapshot)?;
+        if grant.sequence != 1 {
+            return Err("bootstrap reservation sequence".into());
+        }
+        Ok((s3, snapshot, grant))
     }
     pub fn publish(
         &self,
@@ -173,7 +183,7 @@ pub struct Authority {
     pub history: SqliteCatalog,
     pub branch: BranchId,
     pub daemon_s3: Minio,
-    pub bootstrap_taken: AtomicBool,
+    pub reservations: Mutex<crate::reservations::Book>,
 }
 impl Authority {
     pub fn snapshot(&self) -> Result<Snapshot, String> {
@@ -197,18 +207,17 @@ impl Authority {
         let mut out = Vec::new();
         match action {
             0 => {
+                let owner = crate::reservations::Owner::read(&mut b)?;
                 b.done()?;
-                if self.bootstrap_taken.swap(true, Ordering::SeqCst) {
-                    return Err("bootstrap already owned".into());
-                }
                 let s = self.snapshot()?;
+                if s.head.is_some() {
+                    return Err("inherited mount not yet supported".into());
+                }
                 let reservation = self
-                    .history
-                    .reserve_inodes(&ReserveRequest {
-                        scope: ObjectId::from_bytes(&s.scope).map_err(|e| e.to_string())?,
-                        count: 512,
-                    })
-                    .map_err(|e| e.to_string())?;
+                    .reservations
+                    .lock()
+                    .map_err(|_| "reservation owner")?
+                    .bootstrap(&self.history, owner, &s)?;
                 for field in [
                     &self.daemon_s3.authority,
                     &self.daemon_s3.bucket,
@@ -218,7 +227,20 @@ impl Authority {
                     wire::blob(&mut out, field.as_bytes())
                 }
                 s.encode(&mut out);
-                out.extend_from_slice(&reservation.start.to_be_bytes());
+                reservation.encode(&mut out);
+            }
+            7 => {
+                let owner = crate::reservations::Owner::read(&mut b)?;
+                let scope = b.take()?;
+                let profile = b.take()?;
+                let sequence = b.u64()?;
+                let previous = b.u64()?;
+                b.done()?;
+                self.reservations
+                    .lock()
+                    .map_err(|_| "reservation owner")?
+                    .next(&self.history, &owner, scope, profile, sequence, previous)?
+                    .encode(&mut out);
             }
             1 => {
                 let id = ObjectId::from_bytes(&b.take::<32>()?).map_err(|e| e.to_string())?;
@@ -282,6 +304,19 @@ impl Authority {
                 if s.branch != self.branch.to_bytes() {
                     return Err("Branch selector".into());
                 }
+                self.reservations
+                    .lock()
+                    .map_err(|_| "reservation owner")?
+                    .authorize(
+                        &crate::reservations::Owner {
+                            workspace: workspace.clone(),
+                            incarnation,
+                            project: s.stack,
+                            branch: s.branch,
+                        },
+                        s.scope,
+                        s.profile,
+                    )?;
                 let candidate = ObjectId::from_bytes(&root).map_err(|e| e.to_string())?;
                 crate::namespace_validation::prepare(self, &s, candidate)?;
                 let id = WorkspaceId::from_authority(incarnation).map_err(|e| e.to_string())?;

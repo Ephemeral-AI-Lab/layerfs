@@ -11,10 +11,16 @@ and the host's actual C5 SQLite catalog conditionally advances the Branch.
 The prospective scope and remaining gates are in
 [INTEGRATION-V3](../../docs/architecture/proposal/phase6-sqlite-minio/experiments/INTEGRATION-V3.md).
 No shipping product file is changed. The explicitly experimental inode-leaf FULL
-representation is not the shipping pooling/delta profile. The initial 512-inode
-construction path rebuilds metadata and reconstructs changed files in full.
-Retired source collection, overlapping commands/Commit, mount failure recovery,
-canonical reference vectors and physical memory/cache qualification remain open.
+representation is not the shipping pooling/delta profile. The current experimental profile retains512inodes and256live handles. Indexed
+changed-only construction and service certification preserve immediate-base
+immutable subtrees; local sources retire through bounded reference windows. Live
+inode allocation uses owner-bound64serial C5pages through private P6META6/action7,
+with uncertainty quarantined and no serial recycling. See the current
+[implementation checklist](../../docs/architecture/proposal/phase6-sqlite-minio/implementation/CHECKLIST.md)
+for exact source-pinned proofs and remaining gates. Larger admitted populations,
+inherited mount/import, remaining generic syscalls, overlapping commands/Commit,
+mount failure recovery, canonical vectors and physical resource qualification
+remain open.
 
 Build from the repository root (the root ARMv8 flags must be active):
 

@@ -618,3 +618,16 @@ install peak64rows. RESULTS-V4C3B.md and rawcorrected cohort preserve identities
 failed predecessor remains FAIL. Current512/256profile unchanged. Next V4c3c paged
 reservations/admission/inherited import/mount, then remaining generic syscalls,
 seven owning families and completeDeepSeek/locality/resource gates. Goal active.
+
+## V4c3c1 paged reservation runtime PARTIAL
+
+Parent50af45b896f4cdbf52c1519fa7dee722204174c5. FrozenP6META6/action7/64serial
+owner-bound C5ranges; exact context/sequence/endpoint and EOF, no overlap/replay/
+refund. Singleton book/current grant; native cursor and Engine independently guard
+refill identity and quarantine after failure; previous accepted bytes retained.
+27unique actualC5/SQLite/native and covering engine/session/construction/directory/
+rename checks PASS, hostClippy/fmt/native/Linuxrelease PASS; initial external
+open_read_only signature compile failure retained/corrected. Current512/256other
+limits unchanged. V4C3C1-SPEC/RUNTIME and rawchecks record scope. Next frozen
+full128+sparse live boundary proof, then admitted populations/inherited mount; all
+sevenfamilies/fullDeepSeek/physical/generic remaining gates open. Full goal active.
