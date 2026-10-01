@@ -277,3 +277,19 @@ No canonical expected root or physical/provider speed claim from the fixture.
 
 Next: freeze/publish runtime, one affected real-provider two-head4KiB gate under
 existing15s child/9.5s proof, cacheINELIGIBLE; all larger groups remain incomplete.
+
+## V4c2a declared real-provider dependency COMPLETE; full V4c/goal incomplete
+
+Parent `d11dda4a97241ac1adb2f94d3e4bb3f72d58e050`. One frozen two-head treatment
+exit0, child6.377585208s/proof19.570875ms; create Exec17.004833/Commit74.294375ms,
+overwrite Exec17.547584/Commit58.109042ms. Bytes/mode/head/parent/cleanup PASS,
+canonical/physical NOT_RUN, cacheINELIGIBLE. Each WholeFile root certificate visits1/
+newlycertifies1 with0edges. AuthorityGET27->52(interval25) versus previous28->54
+(interval26), removes1full-fileGET per Commit. No meaningful small-case speed gain;
+11locator lookups remain; no resample. Larger chunked-provider gate remains open.
+
+RESULTS-V4C2A.md and v4c2a-certificate-treatment retain exact receipts/observations.
+Full namespace/portable walk and C5 condition remain. All larger groups, population
+admission/parent/cycle/import/inherited/retirement/Unknown/resource proofs open.
+Next: V4c2b exact incremental namespace architecture with certified base and
+streaming changes/refcounts/parent proof, before removing namespace validation.

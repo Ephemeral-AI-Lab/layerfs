@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "038585d1defd757652aa57ed3f854187172c6c3f261686731f276efe803d06b6",
+  "raw_utf8": "P6_FILE_CERTIFY Work { visited: 1, reused: 0, edges: 0, newly_certified: 1 }\nP6_AUTHORITY_IO {\"put_calls\":3,\"get_calls\":27,\"put_requested_bytes\":1254,\"get_received_bytes\":24864}\nP6_FILE_CERTIFY Work { visited: 1, reused: 0, edges: 0, newly_certified: 1 }\nP6_AUTHORITY_IO {\"put_calls\":3,\"get_calls\":52,\"put_requested_bytes\":1254,\"get_received_bytes\":45253}\nmetadata session closed: Deadline unknown=false cleanup=None history=None\n"
+}

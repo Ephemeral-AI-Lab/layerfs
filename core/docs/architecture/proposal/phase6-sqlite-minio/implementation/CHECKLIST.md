@@ -33,6 +33,9 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 - [x] V4c1 dependency: indexed dirty/name SQL rows, immediate-base file/namespace
   construction and captured-row install; real two-head gate passed. See
   [RESULTS-V4C1](RESULTS-V4C1.md). Speed/resource/canonical qualification unrun.
+- [x] V4c2a dependency: typed file graph certification in existing global SQL;
+  small-file provider gate passed. [RESULTS-V4C2A](RESULTS-V4C2A.md).
+  Larger chunked-provider/resource/canonical qualification remains open.
 - [ ] V4c: indexed changed catalogs, paged prepared rows, immediate-base C1 edits
   and filesystem COW; incremental certified publication validation, bounded source
   retirement, import/mount with inherited immutable data. No whole-workspace scan
@@ -57,7 +60,7 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 - [ ] Final owning locked checks, source/binary/image/provider seals, per-commit
   production LOC and checkpoint comments on #294; major results linked from #293.
 
-Current action: V4c2 certified incremental authority design, beginning with exact
-role/graph facts at admitted registration and a namespace transition proof against
-a certified base. Freeze concrete interfaces before replacing validation. Full
-V4c and every larger group remain incomplete; preserve one concrete next action.
+Current action: V4c2b exact incremental namespace architecture: certified exact
+base, streamed changes, actual sorted COW/refcounts/parent proof and READY/C5/
+installation composition. Freeze interfaces before replacing namespace validation.
+Full V4c and every larger group remain incomplete; retain one concrete next action.
