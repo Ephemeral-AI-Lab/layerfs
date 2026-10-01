@@ -1,0 +1,9 @@
+{
+  "case": "P-16-text-pack-v2",
+  "cleanup": "PASS",
+  "cleanup_ns": 1895541,
+  "oracle": "original Python fixture bytes; independent physical parser and stdlib zstd",
+  "proof": "PASS",
+  "proof_ns": 13947875,
+  "records_checked": 768
+}

@@ -1,0 +1,39 @@
+{
+  "cache_contract": "OS/provider/native residency UNKNOWN; no cold claim",
+  "cache_verdict": "INELIGIBLE",
+  "case": "C-sqlite-busy-2-v2",
+  "clients": 2,
+  "concurrency_scope": "real held SQLite write transaction; direct competing BEGIN",
+  "events": [
+    {
+      "event": "actual_insert_lock_held",
+      "ns": 128500396085166
+    },
+    {
+      "attempt_ns": 128500396096875,
+      "code": 5,
+      "event": "SQLITE_BUSY",
+      "ns": 128500396125666
+    }
+  ],
+  "native_busy_timeout": 0,
+  "outcomes": [
+    "COMMITTED",
+    "BUSY_NO_RETRY"
+  ],
+  "overlap_proof": "PASS",
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 0,
+      "client_rss_after": 31080448,
+      "client_rss_before": 31031296,
+      "elapsed_ns": 14362708,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "native_contention_proof",
+      "operations": 2,
+      "ops_per_second": 139.24950643012446
+    }
+  ]
+}

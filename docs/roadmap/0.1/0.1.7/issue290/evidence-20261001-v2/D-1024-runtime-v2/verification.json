@@ -1,0 +1,8 @@
+{
+  "case": "D-1024-runtime-v2",
+  "cleanup": "PASS",
+  "cleanup_ns": 245958,
+  "proof": "PASS",
+  "proof_ns": 12897541,
+  "scope": "exact rows, guarded publication or indexed query laws; no power-loss proof"
+}

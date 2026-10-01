@@ -1,0 +1,15 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-storage"
+  ],
+  "exit": 0,
+  "wall_ns": 45542097583,
+  "scope": "owning existing storage tests; no product source changes"
+}

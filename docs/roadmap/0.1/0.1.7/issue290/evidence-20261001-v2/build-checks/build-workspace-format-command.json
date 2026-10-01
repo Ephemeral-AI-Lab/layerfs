@@ -1,0 +1,21 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-storage",
+    "--example",
+    "minio_pack_probe"
+  ],
+  "exit": 0,
+  "wall_ns": 516028916,
+  "correction": "Rust2021 workspace import ordering only",
+  "example_sha256": "9ef08c8c3dc1df89a28da0d9ed76bf370212034e146f86f944a6051625134692",
+  "binary_sha256": "40450229aa1aa180c1c6566d4b85fc08fef5a35d31dcb9c3d40917dc996eb5ed",
+  "flags_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+}

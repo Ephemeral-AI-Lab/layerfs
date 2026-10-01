@@ -1,0 +1,8 @@
+{
+  "case": "C-upload-4-v2",
+  "cleanup": "PASS",
+  "cleanup_ns": 30100042,
+  "proof": "PASS",
+  "proof_ns": 34904875,
+  "scope": "exact objects/rows, overlap intervals, conflict rollback and native BUSY custody"
+}

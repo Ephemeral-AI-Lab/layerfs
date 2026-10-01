@@ -1,0 +1,82 @@
+{
+  "cache_contract": "OS/provider/native residency UNKNOWN; no cold claim",
+  "cache_verdict": "INELIGIBLE",
+  "case": "C-upload-1-v2",
+  "clients": 1,
+  "events": [
+    {
+      "acks": [
+        {
+          "ack_ns": 128496898157041,
+          "index": 0,
+          "start_ns": 128496891251041
+        },
+        {
+          "ack_ns": 128496900541541,
+          "index": 1,
+          "start_ns": 128496898159333
+        },
+        {
+          "ack_ns": 128496902609250,
+          "index": 2,
+          "start_ns": 128496900542166
+        },
+        {
+          "ack_ns": 128496904515625,
+          "index": 3,
+          "start_ns": 128496902609583
+        },
+        {
+          "ack_ns": 128496906507666,
+          "index": 4,
+          "start_ns": 128496904515958
+        },
+        {
+          "ack_ns": 128496909178416,
+          "index": 5,
+          "start_ns": 128496906508041
+        },
+        {
+          "ack_ns": 128496911432041,
+          "index": 6,
+          "start_ns": 128496909178791
+        },
+        {
+          "ack_ns": 128496913516000,
+          "index": 7,
+          "start_ns": 128496911432958
+        }
+      ],
+      "client": 0,
+      "end_ns": 128496913517000,
+      "requests": 8,
+      "sent_bytes": 2097152,
+      "sha256": "f93201093dec5045a9912f634abf1e2dd676091662f9e43d170b0ff08b0b06cc",
+      "start_ns": 128496891249000
+    }
+  ],
+  "overlap_method": "all first signed PUTs send64KiB and withhold192KiB before barrier release",
+  "overlap_proof": "PASS",
+  "partial_request_arrivals": [
+    {
+      "client": 0,
+      "first_64k_sent_ns": 128496894908250
+    }
+  ],
+  "performance_claim": false,
+  "phase_scope": "thread startup, signing, socket transfer and coordination included",
+  "phases": [
+    {
+      "bytes": 2097152,
+      "client_rss_after": 30523392,
+      "client_rss_before": 30162944,
+      "elapsed_ns": 22844959,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 87.54666620325298,
+      "name": "concurrent_put",
+      "operations": 8,
+      "ops_per_second": 350.18666481301193
+    }
+  ],
+  "requests": 8
+}

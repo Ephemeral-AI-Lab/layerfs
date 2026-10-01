@@ -1,0 +1,13 @@
+{
+  "recorded_at_ns": 1790853928543142000,
+  "source": "a590d083d85934da0a809f1cb1f4da4763bfb33e",
+  "interference": "owning builds/tests completed before collection; experiment starts no builds during phases; other owners not interrupted; continuous host isolation unproven",
+  "cache_verdict": "INELIGIBLE; native/OS/provider residency unknown",
+  "reuse": "verified MinIO binary; fresh provider-v2 server root; once-qualified real pack and closed SQL fixtures",
+  "physical_memory_cache_io": "unavailable; no bound or cold-storage admission",
+  "native_upload_overlap": "first64KiB of signed256KiB first PUT held until all clients arrive; later provider acknowledgements succeed",
+  "metadata_overlap": "failed nonblocking acquire at held application gate, then queued serialized SQL; native held-write BUSY separately proved",
+  "publication_scope": "simulated already-uploaded pack references; FULL/fullfsync cost without power-loss or cross-store crash proof",
+  "prepared_reuse": "same builder binary hash across formatting correction; closed SQL master byte copies; no APFS reflink/cold claim",
+  "cleanup": "all24 case cleanup PASS, native provider process exited; prepared fixtures retained"
+}

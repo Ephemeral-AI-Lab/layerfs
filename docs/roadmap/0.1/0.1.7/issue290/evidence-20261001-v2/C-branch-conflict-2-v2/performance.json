@@ -1,0 +1,80 @@
+{
+  "cache_contract": "OS/provider/native residency UNKNOWN; no cold claim",
+  "cache_verdict": "INELIGIBLE",
+  "case": "C-branch-conflict-2-v2",
+  "clients": 2,
+  "concurrency_scope": "application writer gate contention; SQLite writes serialized",
+  "events": [
+    {
+      "client": 0,
+      "events": [
+        {
+          "ack_ns": 727125,
+          "acknowledged_ns": 128500050941041,
+          "begin_ns": 65792,
+          "branch": 0,
+          "commit_or_rollback_ns": 201750,
+          "expected": 0,
+          "grant_ns": 128500050211541,
+          "mutation_ns": 456791,
+          "outcome": "CONFLICT",
+          "owner": 0,
+          "queue_wait_ns": 14373125,
+          "request_ns": 128500035838416
+        }
+      ]
+    },
+    {
+      "client": 1,
+      "events": [
+        {
+          "ack_ns": 14321500,
+          "acknowledged_ns": 128500050182083,
+          "begin_ns": 14125,
+          "branch": 0,
+          "commit_or_rollback_ns": 13923458,
+          "expected": 0,
+          "grant_ns": 128500035855375,
+          "mutation_ns": 379834,
+          "outcome": "COMMITTED",
+          "owner": 1,
+          "queue_wait_ns": 40167,
+          "request_ns": 128500035815208
+        }
+      ]
+    }
+  ],
+  "gate_release_ns": 128500035846125,
+  "native_busy_timeout": 0,
+  "outcomes": [
+    "CONFLICT",
+    "COMMITTED"
+  ],
+  "overlap_proof": "PASS",
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 0,
+      "client_rss_after": 30752768,
+      "client_rss_before": 30605312,
+      "elapsed_ns": 15903917,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "queued_publication_ack",
+      "operations": 2,
+      "ops_per_second": 125.75518345574866
+    }
+  ],
+  "pragmas": {
+    "busy_timeout": 0,
+    "cache_size": -512,
+    "foreign_keys": 1,
+    "fullfsync": 1,
+    "journal_mode": "delete",
+    "mmap_size": 0,
+    "page_size": 4096,
+    "synchronous": 2,
+    "temp_store": 1
+  },
+  "publications_per_client": 1
+}

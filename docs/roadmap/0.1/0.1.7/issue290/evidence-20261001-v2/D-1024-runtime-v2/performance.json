@@ -1,0 +1,119 @@
+{
+  "cache_contract": "native/OS residency UNKNOWN; no cold claim",
+  "cache_verdict": "INELIGIBLE",
+  "case": "D-1024-runtime-v2",
+  "durability_scope": "synchronization cost; no power-loss proof",
+  "events": [
+    {
+      "ack_ns": 2129375,
+      "begin_ns": 134291,
+      "branch": 0,
+      "commit_or_rollback_ns": 305625,
+      "expected": 0,
+      "mutation_ns": 1683375,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1644625,
+      "begin_ns": 33042,
+      "branch": 0,
+      "commit_or_rollback_ns": 103125,
+      "expected": 1,
+      "mutation_ns": 1505708,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1585083,
+      "begin_ns": 35083,
+      "branch": 0,
+      "commit_or_rollback_ns": 75125,
+      "expected": 2,
+      "mutation_ns": 1473916,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1474750,
+      "begin_ns": 8792,
+      "branch": 0,
+      "commit_or_rollback_ns": 72333,
+      "expected": 3,
+      "mutation_ns": 1392958,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1484125,
+      "begin_ns": 7667,
+      "branch": 0,
+      "commit_or_rollback_ns": 66250,
+      "expected": 4,
+      "mutation_ns": 1409542,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1458792,
+      "begin_ns": 7000,
+      "branch": 0,
+      "commit_or_rollback_ns": 67833,
+      "expected": 5,
+      "mutation_ns": 1383417,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1434875,
+      "begin_ns": 7750,
+      "branch": 0,
+      "commit_or_rollback_ns": 64667,
+      "expected": 6,
+      "mutation_ns": 1361917,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1978542,
+      "begin_ns": 6750,
+      "branch": 0,
+      "commit_or_rollback_ns": 272708,
+      "expected": 7,
+      "mutation_ns": 1696625,
+      "outcome": "COMMITTED",
+      "owner": 0
+    }
+  ],
+  "locators_per_publication": 1024,
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 0,
+      "client_rss_after": 32178176,
+      "client_rss_before": 31309824,
+      "elapsed_ns": 13238375,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "publication_ack",
+      "operations": 8,
+      "ops_per_second": 604.303775954375
+    }
+  ],
+  "pragmas": {
+    "busy_timeout": 0,
+    "cache_size": -512,
+    "foreign_keys": 1,
+    "fullfsync": 0,
+    "journal_mode": "memory",
+    "mmap_size": 0,
+    "page_size": 4096,
+    "synchronous": 0,
+    "temp_store": 1
+  },
+  "profile": "runtime",
+  "publications": 8,
+  "sql_commit_ns": 1027666,
+  "sql_mutation_ns": 11907458,
+  "upload_scope": "simulated already-uploaded pack keys; no cross-store transaction proof"
+}

@@ -139,3 +139,5 @@ registered capabilities. Body gates/events establish actual incomplete HTTP
 requests, blocked admission or held SQL work; no sleeps establish overlap.
 Actual source/build/provider seals, original fixture references and expected
 outcomes accompany the results. No cold, peak-memory or power-loss claim follows.
+
+Four-group results: [2026-10-01 v2 report](../../docs/roadmap/0.1/0.1.7/issue290/RESULTS-20261001-V2.md).

@@ -1,0 +1,53 @@
+{
+  "cache_contract": "fixture file/server/OS residency UNKNOWN; reads follow PUT",
+  "cache_verdict": "INELIGIBLE",
+  "case": "P-8-object-v2",
+  "chunk_bytes": 8192,
+  "construction_scope": "shared preparation diagnostic writes both record and pack forms",
+  "encoded_bytes": 8393728,
+  "logical_bytes": 8388608,
+  "mode": "object",
+  "objects": 1024,
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 8393728,
+      "client_rss_after": 32669696,
+      "client_rss_before": 31457280,
+      "elapsed_ns": 1000183792,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 8.00341184942937,
+      "name": "put",
+      "operations": 1024,
+      "ops_per_second": 1023.811831575851
+    },
+    {
+      "bytes": 8393728,
+      "client_rss_after": 43761664,
+      "client_rss_before": 32669696,
+      "elapsed_ns": 429700542,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 18.628980022324477,
+      "name": "sequential_get",
+      "operations": 1024,
+      "ops_per_second": 2383.0549415504343
+    },
+    {
+      "bytes": 1048576,
+      "client_rss_after": 45187072,
+      "client_rss_before": 43794432,
+      "elapsed_ns": 53121625,
+      "http_received_bytes": 1049216,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 18.8247253354919,
+      "name": "scattered_whole_get",
+      "operations": 128,
+      "ops_per_second": 2409.5648429429634,
+      "requests": 128
+    }
+  ],
+  "received_bytes": 9442944,
+  "records": 1024,
+  "requests": 2176,
+  "sent_bytes": 8393728
+}

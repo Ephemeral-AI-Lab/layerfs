@@ -1,0 +1,14 @@
+{
+  "command": [
+    "python3",
+    "tools/storage_probes/minio_probe.py",
+    "stop",
+    "--root",
+    "benchmark-results/storage-probes/provider-v2"
+  ],
+  "status": "COMPLETE",
+  "exit": 0,
+  "wall_ns": 239458917,
+  "limit_seconds": 10,
+  "scope": "final owned native provider shutdown; separate from all measurements"
+}

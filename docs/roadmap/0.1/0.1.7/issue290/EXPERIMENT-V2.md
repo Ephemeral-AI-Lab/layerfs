@@ -129,3 +129,6 @@ Python bindings/SQL fixtures are an explicitly experimental metadata algorithm.
 The runner is tools/storage_probes/run_v2.py; groups pack/publication/concurrency/
 scaling select8/4/8/4 cases. V1 tooling/receipts are not re-collected. New external
 code and all prospective clarifications are sealed before collection.
+
+Collection recorded in [RESULTS-20261001-V2.md](RESULTS-20261001-V2.md);
+all original selections and observations remain source-pinned.

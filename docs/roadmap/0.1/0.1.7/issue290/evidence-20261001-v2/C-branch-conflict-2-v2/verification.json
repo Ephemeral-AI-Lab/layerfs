@@ -1,0 +1,8 @@
+{
+  "case": "C-branch-conflict-2-v2",
+  "cleanup": "PASS",
+  "cleanup_ns": 232417,
+  "proof": "PASS",
+  "proof_ns": 1028375,
+  "scope": "exact objects/rows, overlap intervals, conflict rollback and native BUSY custody"
+}

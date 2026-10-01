@@ -1,0 +1,14 @@
+{
+  "command": [
+    "python3",
+    "tools/storage_probes/catalog_probe.py",
+    "setup",
+    "--fixtures",
+    "benchmark-results/storage-probes/v2-catalog-fixtures"
+  ],
+  "status": "COMPLETE",
+  "exit": 0,
+  "wall_ns": 721009583,
+  "limit_seconds": 60,
+  "scope": "setup acquired once; construction diagnostic separate; not throughput sample"
+}

@@ -1,0 +1,11 @@
+{
+  "python_syntax": "PASS python3 -m py_compile tools/storage_probes/*.py; focused post-correction syntax covering new modules",
+  "membership": "PASS8+4+8+4=24",
+  "reference": "PASS stored-record grammar and four real corpora via independent Python parser/zstd",
+  "format": "initial failures retained as observed: line wrap then Rust2024 import ordering disagreed with workspace2021; final cargo+1.85.1 fmt --manifest-path core/Cargo.toml --all --check PASS after edition2021 formatting",
+  "clippy": "cargo+1.85.1 clippy --release --locked --manifest-path core/Cargo.toml -p layerfs-storage --example minio_pack_probe -- -D warnings PASS; subsequent import reorder only, binary identity unchanged",
+  "boundary": "python3 core/tools/check_product_boundary.py PASS272files; python3 -m unittest discover -s core/tools -p test_*.py PASS7",
+  "storage_tests": "locked -p layerfs-storage tests PASS228 across35 result summaries; full Core workspace tests/Clippy not run because product source unchanged",
+  "build_failure": "first release build exit101 private module import; corrected to existing public encode_full export, no visibility/product change",
+  "classification": "all edits are external tooling/example/docs; productionLOC unchanged"
+}

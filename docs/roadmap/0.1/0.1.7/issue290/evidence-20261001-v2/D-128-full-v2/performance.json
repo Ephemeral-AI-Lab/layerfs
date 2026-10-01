@@ -1,0 +1,119 @@
+{
+  "cache_contract": "native/OS residency UNKNOWN; no cold claim",
+  "cache_verdict": "INELIGIBLE",
+  "case": "D-128-full-v2",
+  "durability_scope": "synchronization cost; no power-loss proof",
+  "events": [
+    {
+      "ack_ns": 13810250,
+      "begin_ns": 138250,
+      "branch": 0,
+      "commit_or_rollback_ns": 13103334,
+      "expected": 0,
+      "mutation_ns": 560875,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 12789375,
+      "begin_ns": 43042,
+      "branch": 0,
+      "commit_or_rollback_ns": 12269542,
+      "expected": 1,
+      "mutation_ns": 470500,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 15426417,
+      "begin_ns": 30458,
+      "branch": 0,
+      "commit_or_rollback_ns": 14894417,
+      "expected": 2,
+      "mutation_ns": 498458,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 14799000,
+      "begin_ns": 37708,
+      "branch": 0,
+      "commit_or_rollback_ns": 14202208,
+      "expected": 3,
+      "mutation_ns": 554417,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 13974375,
+      "begin_ns": 32250,
+      "branch": 0,
+      "commit_or_rollback_ns": 13490542,
+      "expected": 4,
+      "mutation_ns": 446459,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 14918750,
+      "begin_ns": 39708,
+      "branch": 0,
+      "commit_or_rollback_ns": 14320958,
+      "expected": 5,
+      "mutation_ns": 552792,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 13091375,
+      "begin_ns": 37750,
+      "branch": 0,
+      "commit_or_rollback_ns": 12531333,
+      "expected": 6,
+      "mutation_ns": 518375,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 14932750,
+      "begin_ns": 38250,
+      "branch": 0,
+      "commit_or_rollback_ns": 14285458,
+      "expected": 7,
+      "mutation_ns": 602875,
+      "outcome": "COMMITTED",
+      "owner": 0
+    }
+  ],
+  "locators_per_publication": 128,
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 0,
+      "client_rss_after": 31227904,
+      "client_rss_before": 31064064,
+      "elapsed_ns": 113836166,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "publication_ack",
+      "operations": 8,
+      "ops_per_second": 70.27643569794857
+    }
+  ],
+  "pragmas": {
+    "busy_timeout": 0,
+    "cache_size": -512,
+    "foreign_keys": 1,
+    "fullfsync": 1,
+    "journal_mode": "delete",
+    "mmap_size": 0,
+    "page_size": 4096,
+    "synchronous": 2,
+    "temp_store": 1
+  },
+  "profile": "full",
+  "publications": 8,
+  "sql_commit_ns": 109097792,
+  "sql_mutation_ns": 4204751,
+  "upload_scope": "simulated already-uploaded pack keys; no cross-store transaction proof"
+}

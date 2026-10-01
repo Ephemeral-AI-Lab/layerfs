@@ -1,0 +1,8 @@
+{
+  "case": "S-flat-10000-v2",
+  "cleanup": "PASS",
+  "cleanup_ns": 190875,
+  "proof": "PASS",
+  "proof_ns": 15488375,
+  "scope": "exact rows, guarded publication or indexed query laws; no power-loss proof"
+}

@@ -1,0 +1,136 @@
+{
+  "cache_contract": "OS/provider/native residency UNKNOWN; no cold claim",
+  "cache_verdict": "INELIGIBLE",
+  "case": "C-upload-2-v2",
+  "clients": 2,
+  "events": [
+    {
+      "acks": [
+        {
+          "ack_ns": 128497691500333,
+          "index": 0,
+          "start_ns": 128497683902250
+        },
+        {
+          "ack_ns": 128497693918208,
+          "index": 1,
+          "start_ns": 128497691501541
+        },
+        {
+          "ack_ns": 128497695787416,
+          "index": 2,
+          "start_ns": 128497693918583
+        },
+        {
+          "ack_ns": 128497697691375,
+          "index": 3,
+          "start_ns": 128497695787791
+        },
+        {
+          "ack_ns": 128497699717500,
+          "index": 4,
+          "start_ns": 128497697691833
+        },
+        {
+          "ack_ns": 128497702153166,
+          "index": 5,
+          "start_ns": 128497699718000
+        },
+        {
+          "ack_ns": 128497704242833,
+          "index": 6,
+          "start_ns": 128497702153458
+        },
+        {
+          "ack_ns": 128497708956833,
+          "index": 7,
+          "start_ns": 128497704243041
+        }
+      ],
+      "client": 0,
+      "end_ns": 128497708960000,
+      "requests": 8,
+      "sent_bytes": 2097152,
+      "sha256": "f93201093dec5045a9912f634abf1e2dd676091662f9e43d170b0ff08b0b06cc",
+      "start_ns": 128497683899000
+    },
+    {
+      "acks": [
+        {
+          "ack_ns": 128497691736291,
+          "index": 0,
+          "start_ns": 128497684499208
+        },
+        {
+          "ack_ns": 128497694076708,
+          "index": 1,
+          "start_ns": 128497691736916
+        },
+        {
+          "ack_ns": 128497696073541,
+          "index": 2,
+          "start_ns": 128497694077208
+        },
+        {
+          "ack_ns": 128497697878958,
+          "index": 3,
+          "start_ns": 128497696074083
+        },
+        {
+          "ack_ns": 128497700245125,
+          "index": 4,
+          "start_ns": 128497697879208
+        },
+        {
+          "ack_ns": 128497702556625,
+          "index": 5,
+          "start_ns": 128497700245625
+        },
+        {
+          "ack_ns": 128497704468291,
+          "index": 6,
+          "start_ns": 128497702556916
+        },
+        {
+          "ack_ns": 128497709777833,
+          "index": 7,
+          "start_ns": 128497704468541
+        }
+      ],
+      "client": 1,
+      "end_ns": 128497709779708,
+      "requests": 8,
+      "sent_bytes": 2097152,
+      "sha256": "506fb215f2f2f674bf29197822df26a5cca402f0d66f171bfa405409764dc037",
+      "start_ns": 128497684497541
+    }
+  ],
+  "overlap_method": "all first signed PUTs send64KiB and withhold192KiB before barrier release",
+  "overlap_proof": "PASS",
+  "partial_request_arrivals": [
+    {
+      "client": 0,
+      "first_64k_sent_ns": 128497687965958
+    },
+    {
+      "client": 1,
+      "first_64k_sent_ns": 128497687992500
+    }
+  ],
+  "performance_claim": false,
+  "phase_scope": "thread startup, signing, socket transfer and coordination included",
+  "phases": [
+    {
+      "bytes": 4194304,
+      "client_rss_after": 30244864,
+      "client_rss_before": 29917184,
+      "elapsed_ns": 26633667,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 150.18585311590778,
+      "name": "concurrent_put",
+      "operations": 16,
+      "ops_per_second": 600.7434124636311
+    }
+  ],
+  "requests": 16
+}

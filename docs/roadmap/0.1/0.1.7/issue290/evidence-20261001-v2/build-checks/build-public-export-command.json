@@ -1,0 +1,21 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-storage",
+    "--example",
+    "minio_pack_probe"
+  ],
+  "exit": 0,
+  "wall_ns": 475625375,
+  "correction": "public encode_full re-export; no product edits",
+  "example_sha256": "1e46d247f53a089b73f34dc3c7b496cee3128db0fb97b86aeb7217a8a3095d98",
+  "flags_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "binary_sha256": "40450229aa1aa180c1c6566d4b85fc08fef5a35d31dcb9c3d40917dc996eb5ed"
+}

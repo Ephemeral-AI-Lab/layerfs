@@ -1,0 +1,244 @@
+{
+  "cache_contract": "OS/provider/native residency UNKNOWN; no cold claim",
+  "cache_verdict": "INELIGIBLE",
+  "case": "C-upload-4-v2",
+  "clients": 4,
+  "events": [
+    {
+      "acks": [
+        {
+          "ack_ns": 128498703257791,
+          "index": 0,
+          "start_ns": 128498693528666
+        },
+        {
+          "ack_ns": 128498705880416,
+          "index": 1,
+          "start_ns": 128498703258166
+        },
+        {
+          "ack_ns": 128498708968625,
+          "index": 2,
+          "start_ns": 128498705880708
+        },
+        {
+          "ack_ns": 128498711658041,
+          "index": 3,
+          "start_ns": 128498708969166
+        },
+        {
+          "ack_ns": 128498714352708,
+          "index": 4,
+          "start_ns": 128498711658416
+        },
+        {
+          "ack_ns": 128498717283625,
+          "index": 5,
+          "start_ns": 128498714353208
+        },
+        {
+          "ack_ns": 128498719691000,
+          "index": 6,
+          "start_ns": 128498717283916
+        },
+        {
+          "ack_ns": 128498721645083,
+          "index": 7,
+          "start_ns": 128498719691375
+        }
+      ],
+      "client": 0,
+      "end_ns": 128498721645583,
+      "requests": 8,
+      "sent_bytes": 2097152,
+      "sha256": "f93201093dec5045a9912f634abf1e2dd676091662f9e43d170b0ff08b0b06cc",
+      "start_ns": 128498693524291
+    },
+    {
+      "acks": [
+        {
+          "ack_ns": 128498702711416,
+          "index": 0,
+          "start_ns": 128498694402625
+        },
+        {
+          "ack_ns": 128498706069625,
+          "index": 1,
+          "start_ns": 128498702712208
+        },
+        {
+          "ack_ns": 128498708812583,
+          "index": 2,
+          "start_ns": 128498706070208
+        },
+        {
+          "ack_ns": 128498711521291,
+          "index": 3,
+          "start_ns": 128498708813125
+        },
+        {
+          "ack_ns": 128498714542458,
+          "index": 4,
+          "start_ns": 128498711521791
+        },
+        {
+          "ack_ns": 128498716817125,
+          "index": 5,
+          "start_ns": 128498714543125
+        },
+        {
+          "ack_ns": 128498719462666,
+          "index": 6,
+          "start_ns": 128498716817791
+        },
+        {
+          "ack_ns": 128498721528333,
+          "index": 7,
+          "start_ns": 128498719463250
+        }
+      ],
+      "client": 1,
+      "end_ns": 128498721528791,
+      "requests": 8,
+      "sent_bytes": 2097152,
+      "sha256": "506fb215f2f2f674bf29197822df26a5cca402f0d66f171bfa405409764dc037",
+      "start_ns": 128498694400833
+    },
+    {
+      "acks": [
+        {
+          "ack_ns": 128498702966041,
+          "index": 0,
+          "start_ns": 128498694786208
+        },
+        {
+          "ack_ns": 128498705543125,
+          "index": 1,
+          "start_ns": 128498702966541
+        },
+        {
+          "ack_ns": 128498708066291,
+          "index": 2,
+          "start_ns": 128498705543541
+        },
+        {
+          "ack_ns": 128498710235166,
+          "index": 3,
+          "start_ns": 128498708066875
+        },
+        {
+          "ack_ns": 128498712572958,
+          "index": 4,
+          "start_ns": 128498710236083
+        },
+        {
+          "ack_ns": 128498714759333,
+          "index": 5,
+          "start_ns": 128498712573208
+        },
+        {
+          "ack_ns": 128498717090833,
+          "index": 6,
+          "start_ns": 128498714760000
+        },
+        {
+          "ack_ns": 128498719587416,
+          "index": 7,
+          "start_ns": 128498717091416
+        }
+      ],
+      "client": 2,
+      "end_ns": 128498719588416,
+      "requests": 8,
+      "sent_bytes": 2097152,
+      "sha256": "8186247ad48bad812611b1d23705b96128c5795e1aa4e88dbb5e40b7ca34fc26",
+      "start_ns": 128498694785541
+    },
+    {
+      "acks": [
+        {
+          "ack_ns": 128498703120250,
+          "index": 0,
+          "start_ns": 128498694712750
+        },
+        {
+          "ack_ns": 128498705726916,
+          "index": 1,
+          "start_ns": 128498703120625
+        },
+        {
+          "ack_ns": 128498708650416,
+          "index": 2,
+          "start_ns": 128498705727416
+        },
+        {
+          "ack_ns": 128498711334833,
+          "index": 3,
+          "start_ns": 128498708650958
+        },
+        {
+          "ack_ns": 128498714176541,
+          "index": 4,
+          "start_ns": 128498711335583
+        },
+        {
+          "ack_ns": 128498716610666,
+          "index": 5,
+          "start_ns": 128498714177708
+        },
+        {
+          "ack_ns": 128498718840750,
+          "index": 6,
+          "start_ns": 128498716611166
+        },
+        {
+          "ack_ns": 128498720931083,
+          "index": 7,
+          "start_ns": 128498718841333
+        }
+      ],
+      "client": 3,
+      "end_ns": 128498720932083,
+      "requests": 8,
+      "sent_bytes": 2097152,
+      "sha256": "8b1cb2696229ea456220ddc868e6e25342a72c08b066cb6439611f66a490ee2c",
+      "start_ns": 128498694711875
+    }
+  ],
+  "overlap_method": "all first signed PUTs send64KiB and withhold192KiB before barrier release",
+  "overlap_proof": "PASS",
+  "partial_request_arrivals": [
+    {
+      "client": 2,
+      "first_64k_sent_ns": 128498698573958
+    },
+    {
+      "client": 1,
+      "first_64k_sent_ns": 128498698618750
+    },
+    {
+      "client": 0,
+      "first_64k_sent_ns": 128498698698583
+    },
+    {
+      "client": 3,
+      "first_64k_sent_ns": 128498698780333
+    }
+  ],
+  "performance_claim": false,
+  "phase_scope": "thread startup, signing, socket transfer and coordination included",
+  "phases": [
+    {
+      "bytes": 8388608,
+      "client_rss_after": 30818304,
+      "client_rss_before": 30212096,
+      "elapsed_ns": 29189875,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 274.067634753489,
+      "name": "concurrent_put",
+      "operations": 32,
+      "ops_per_second": 1096.270539013956
+    }
+  ],
+  "requests": 32
+}

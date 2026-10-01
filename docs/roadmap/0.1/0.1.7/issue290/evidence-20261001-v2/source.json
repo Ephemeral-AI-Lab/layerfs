@@ -1,0 +1,24 @@
+{
+  "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "cargo_lock_sha256": "72919f072f26a55ed8e2d3284536fe11dd0e5149fd2f9058ed96a36df2ad1a06",
+  "commit": "a590d083d85934da0a809f1cb1f4da4763bfb33e",
+  "hardware": "machdep.cpu.brand_string: Apple M3 Max\nhw.memsize: 38654705664\nhw.ncpu: 14",
+  "pack_binary_sha256": "40450229aa1aa180c1c6566d4b85fc08fef5a35d31dcb9c3d40917dc996eb5ed",
+  "pack_example_sha256": "9ef08c8c3dc1df89a28da0d9ed76bf370212034e146f86f944a6051625134692",
+  "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "python": "3.14.3 (main, Feb  3 2026, 15:32:20) [Clang 17.0.0 (clang-1700.6.3.2)]",
+  "python_executable": "/opt/homebrew/opt/python@3.14/bin/python3.14",
+  "sqlite": "3.51.2",
+  "tool_sha256": {
+    "acquire.py": "18c9b601a9893a49482bc92770ee78df76206568fc74cec7795ca4c4c4958f36",
+    "catalog_probe.py": "ae1b1cad65a14ec23c0a4d6604b6829b5aa79d8e865bfe8ef1578a4ce11505d9",
+    "common.py": "35157df83a14b037dccf712ac109c30bcf334a7f633e27102a5344c2800458a1",
+    "concurrent_probe.py": "b5c6a7e40dbb98132eb4b4f6338d4cfd444e7a58c18b4957fcdb3bbcbbcf9749",
+    "minio_probe.py": "4de75883298098d1d220db44b5933e5c03a4d5827997b57691501b306ca1bbd9",
+    "pack_probe.py": "08fd1209cc826d4287a852402c4f42e49d76b9369a951a40b1b792414357c974",
+    "run.py": "5a074405c1f3585717876be87754cd033a7d910f33fe955044c6a4d110f8db9e",
+    "run_v2.py": "682b2945af971b3509d53896cf2209bbade06c9119db31799f108b7359e2403b",
+    "sqlite_probe.py": "28d7e7eb1d7dca91e0c0afcd4b8c0eca01d17c979fb97b9365e4bb4176031468"
+  },
+  "tracked_dirty": false
+}

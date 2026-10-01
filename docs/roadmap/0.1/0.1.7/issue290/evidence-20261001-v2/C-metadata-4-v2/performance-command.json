@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/tools/storage_probes/concurrent_probe.py",
+    "perf",
+    "--case",
+    "C-metadata-4-v2",
+    "--output",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/collection-v2/C-metadata-4-v2"
+  ],
+  "exit": 0,
+  "limit_seconds": 15,
+  "log": "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/collection-v2/C-metadata-4-v2-perf.log",
+  "status": "COMPLETE",
+  "wall_ns": 774325041
+}

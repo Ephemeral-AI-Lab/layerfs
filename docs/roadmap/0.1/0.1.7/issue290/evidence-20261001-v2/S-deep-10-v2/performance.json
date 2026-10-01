@@ -1,0 +1,107 @@
+{
+  "cache_contract": "native/OS residency UNKNOWN; fixture clone/setup may warm pages",
+  "cache_verdict": "INELIGIBLE",
+  "case": "S-deep-10-v2",
+  "clone_method": "closed validated byte copy; not cold",
+  "depth": 10,
+  "master_sha256": "c1fe0a6b1e0001daaab8a35864b5ee23f120eefcebfab36a3c258b8c54f0a27c",
+  "mutation_statements": 3,
+  "page_statements": 1,
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 0,
+      "client_rss_after": 36454400,
+      "client_rss_before": 36421632,
+      "elapsed_ns": 784875,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "path_resolution",
+      "operations": 8,
+      "ops_per_second": 10192.705844879758
+    },
+    {
+      "bytes": 0,
+      "client_rss_after": 36470784,
+      "client_rss_before": 36454400,
+      "elapsed_ns": 194167,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "one_keyset_page",
+      "operations": 128,
+      "ops_per_second": 659226.3360921269
+    },
+    {
+      "bytes": 0,
+      "client_rss_after": 36503552,
+      "client_rss_before": 36487168,
+      "elapsed_ns": 180083,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "rename_one",
+      "operations": 1,
+      "ops_per_second": 5552.9950078574875
+    },
+    {
+      "bytes": 0,
+      "client_rss_after": 36536320,
+      "client_rss_before": 36519936,
+      "elapsed_ns": 109000,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "delete_one",
+      "operations": 1,
+      "ops_per_second": 9174.311926605504
+    }
+  ],
+  "plans": {
+    "list": [
+      [
+        4,
+        0,
+        47,
+        "SEARCH nodes USING COVERING INDEX sqlite_autoindex_nodes_1 (parent=? AND name>?)"
+      ]
+    ],
+    "point": [
+      [
+        3,
+        0,
+        39,
+        "SEARCH nodes USING INDEX sqlite_autoindex_nodes_1 (parent=? AND name=?)"
+      ]
+    ],
+    "rename": [
+      [
+        4,
+        0,
+        33,
+        "SEARCH nodes USING INTEGER PRIMARY KEY (rowid=?)"
+      ]
+    ]
+  },
+  "point_results": [
+    100011,
+    100011,
+    100011,
+    100011,
+    100011,
+    100011,
+    100011,
+    100011
+  ],
+  "point_statements": 80,
+  "population": 100000,
+  "pragmas": {
+    "busy_timeout": 0,
+    "cache_size": -512,
+    "foreign_keys": 1,
+    "fullfsync": 0,
+    "journal_mode": "memory",
+    "mmap_size": 0,
+    "page_size": 4096,
+    "synchronous": 0,
+    "temp_store": 1
+  },
+  "rename_visibility": "renamed"
+}

@@ -1,0 +1,8 @@
+{
+  "case": "D-1024-full-v2",
+  "cleanup": "PASS",
+  "cleanup_ns": 394292,
+  "proof": "PASS",
+  "proof_ns": 13778625,
+  "scope": "exact rows, guarded publication or indexed query laws; no power-loss proof"
+}

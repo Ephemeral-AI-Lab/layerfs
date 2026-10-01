@@ -1,0 +1,8 @@
+{
+  "case": "C-metadata-4-v2",
+  "cleanup": "PASS",
+  "cleanup_ns": 353583,
+  "proof": "PASS",
+  "proof_ns": 7794667,
+  "scope": "exact objects/rows, overlap intervals, conflict rollback and native BUSY custody"
+}

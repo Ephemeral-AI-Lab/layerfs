@@ -1,0 +1,20 @@
+{
+  "command": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/tools/storage_probes/pack_probe.py",
+    "verify",
+    "--case",
+    "P-16-pack-v2",
+    "--output",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/collection-v2/P-16-pack-v2",
+    "--fixtures",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/v2-pack-fixtures",
+    "--provider",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/provider-v2"
+  ],
+  "exit": 0,
+  "limit_seconds": 10,
+  "log": "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/collection-v2/P-16-pack-v2-verify.log",
+  "status": "COMPLETE",
+  "wall_ns": 186921958
+}

@@ -1,0 +1,66 @@
+{
+  "cache_contract": "fixture file/server/OS residency UNKNOWN; reads follow PUT",
+  "cache_verdict": "INELIGIBLE",
+  "case": "P-16-text-pack-v2",
+  "chunk_bytes": 16384,
+  "construction_scope": "shared preparation diagnostic writes both record and pack forms",
+  "encoded_bytes": 34733,
+  "logical_bytes": 8388608,
+  "mode": "pack",
+  "objects": 1,
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 34733,
+      "client_rss_after": 30703616,
+      "client_rss_before": 30490624,
+      "elapsed_ns": 7063250,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 4.689621637594349,
+      "name": "put",
+      "operations": 1,
+      "ops_per_second": 141.57788553427955
+    },
+    {
+      "bytes": 34733,
+      "client_rss_after": 30818304,
+      "client_rss_before": 30703616,
+      "elapsed_ns": 1573875,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 21.04612503009342,
+      "name": "sequential_get",
+      "operations": 1,
+      "ops_per_second": 635.3744738305138
+    },
+    {
+      "bytes": 2097152,
+      "client_rss_after": 30851072,
+      "client_rss_before": 30818304,
+      "elapsed_ns": 58476625,
+      "http_received_bytes": 4445824,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 34.20170025202378,
+      "name": "scattered_whole_get",
+      "operations": 128,
+      "ops_per_second": 2188.9088161295217,
+      "requests": 128
+    },
+    {
+      "bytes": 2097152,
+      "client_rss_after": 30851072,
+      "client_rss_before": 30851072,
+      "elapsed_ns": 53936125,
+      "http_received_bytes": 7136,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 37.0808989336924,
+      "name": "scattered_range_get",
+      "operations": 128,
+      "ops_per_second": 2373.177531756314,
+      "requests": 128
+    }
+  ],
+  "received_bytes": 4487693,
+  "records": 512,
+  "requests": 258,
+  "sent_bytes": 34733
+}

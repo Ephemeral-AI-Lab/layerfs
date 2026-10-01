@@ -1,0 +1,20 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-storage",
+    "--example",
+    "minio_pack_probe"
+  ],
+  "exit": 101,
+  "wall_ns": 11578467625,
+  "target": "owned core/target",
+  "profile": "release",
+  "flags_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+}

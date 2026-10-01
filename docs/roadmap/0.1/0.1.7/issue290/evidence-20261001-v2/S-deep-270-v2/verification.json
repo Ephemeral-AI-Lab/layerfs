@@ -1,0 +1,8 @@
+{
+  "case": "S-deep-270-v2",
+  "cleanup": "PASS",
+  "cleanup_ns": 247875,
+  "proof": "PASS",
+  "proof_ns": 143613041,
+  "scope": "exact rows, guarded publication or indexed query laws; no power-loss proof"
+}

@@ -1,0 +1,8 @@
+{
+  "case": "C-sqlite-busy-2-v2",
+  "cleanup": "PASS",
+  "cleanup_ns": 188250,
+  "proof": "PASS",
+  "proof_ns": 805625,
+  "scope": "exact objects/rows, overlap intervals, conflict rollback and native BUSY custody"
+}

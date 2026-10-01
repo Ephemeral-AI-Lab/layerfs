@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/tools/storage_probes/catalog_probe.py",
+    "verify",
+    "--case",
+    "D-1024-runtime-v2",
+    "--output",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/collection-v2/D-1024-runtime-v2",
+    "--fixtures",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/v2-catalog-fixtures"
+  ],
+  "exit": 0,
+  "limit_seconds": 10,
+  "log": "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/collection-v2/D-1024-runtime-v2-verify.log",
+  "status": "COMPLETE",
+  "wall_ns": 133617709
+}

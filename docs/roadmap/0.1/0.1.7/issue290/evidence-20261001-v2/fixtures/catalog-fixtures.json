@@ -1,0 +1,26 @@
+{
+  "S-deep-10-v2": {
+    "bytes": 4587520,
+    "qualification": "PASS",
+    "sha256": "c1fe0a6b1e0001daaab8a35864b5ee23f120eefcebfab36a3c258b8c54f0a27c",
+    "wall_ns": 201628458
+  },
+  "S-deep-270-v2": {
+    "bytes": 4599808,
+    "qualification": "PASS",
+    "sha256": "5a1e2421b2c9e5d3671027b903a3f555366a9501f3e8ce45b521a0d75520b29d",
+    "wall_ns": 203221792
+  },
+  "S-flat-10000-v2": {
+    "bytes": 471040,
+    "qualification": "PASS",
+    "sha256": "76269ae993c4823d20a05cb399732a37c3223835690d314010ae9ca1bfd5d75e",
+    "wall_ns": 22419292
+  },
+  "S-flat-100000-v2": {
+    "bytes": 4587520,
+    "qualification": "PASS",
+    "sha256": "910bba921e99b73fd068f753881aed3340f6c78349ffbb5ca0e872d1f7104676",
+    "wall_ns": 198624916
+  }
+}

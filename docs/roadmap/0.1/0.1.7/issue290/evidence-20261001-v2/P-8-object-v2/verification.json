@@ -1,0 +1,9 @@
+{
+  "case": "P-8-object-v2",
+  "cleanup": "PASS",
+  "cleanup_ns": 783437833,
+  "oracle": "original Python fixture bytes; independent physical parser and stdlib zstd",
+  "proof": "PASS",
+  "proof_ns": 53381208,
+  "records_checked": 1152
+}

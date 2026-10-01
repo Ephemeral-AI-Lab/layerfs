@@ -1,0 +1,165 @@
+{
+  "cache_contract": "OS/provider/native residency UNKNOWN; no cold claim",
+  "cache_verdict": "INELIGIBLE",
+  "case": "C-metadata-1-v2",
+  "clients": 1,
+  "concurrency_scope": "application writer gate contention; SQLite writes serialized",
+  "events": [
+    {
+      "client": 0,
+      "events": [
+        {
+          "ack_ns": 13802250,
+          "acknowledged_ns": 128497302370541,
+          "begin_ns": 22833,
+          "branch": 0,
+          "commit_or_rollback_ns": 13306875,
+          "expected": 0,
+          "grant_ns": 128497288558916,
+          "mutation_ns": 468417,
+          "outcome": "COMMITTED",
+          "owner": 0,
+          "queue_wait_ns": 28875,
+          "request_ns": 128497288530041
+        },
+        {
+          "ack_ns": 14943834,
+          "acknowledged_ns": 128497317345541,
+          "begin_ns": 45459,
+          "branch": 0,
+          "commit_or_rollback_ns": 14388375,
+          "expected": 1,
+          "grant_ns": 128497302392791,
+          "mutation_ns": 502917,
+          "outcome": "COMMITTED",
+          "owner": 0,
+          "queue_wait_ns": 2041,
+          "request_ns": 128497302390750
+        },
+        {
+          "ack_ns": 14746125,
+          "acknowledged_ns": 128497332116541,
+          "begin_ns": 42000,
+          "branch": 0,
+          "commit_or_rollback_ns": 14199667,
+          "expected": 2,
+          "grant_ns": 128497317366958,
+          "mutation_ns": 500083,
+          "outcome": "COMMITTED",
+          "owner": 0,
+          "queue_wait_ns": 3250,
+          "request_ns": 128497317363708
+        },
+        {
+          "ack_ns": 14067208,
+          "acknowledged_ns": 128497346191750,
+          "begin_ns": 26958,
+          "branch": 0,
+          "commit_or_rollback_ns": 13516125,
+          "expected": 3,
+          "grant_ns": 128497332121416,
+          "mutation_ns": 522041,
+          "outcome": "COMMITTED",
+          "owner": 0,
+          "queue_wait_ns": 1125,
+          "request_ns": 128497332120291
+        },
+        {
+          "ack_ns": 12918167,
+          "acknowledged_ns": 128497359119333,
+          "begin_ns": 34292,
+          "branch": 0,
+          "commit_or_rollback_ns": 12370917,
+          "expected": 4,
+          "grant_ns": 128497346197958,
+          "mutation_ns": 510084,
+          "outcome": "COMMITTED",
+          "owner": 0,
+          "queue_wait_ns": 1167,
+          "request_ns": 128497346196791
+        },
+        {
+          "ack_ns": 14052875,
+          "acknowledged_ns": 128497373180333,
+          "begin_ns": 31875,
+          "branch": 0,
+          "commit_or_rollback_ns": 13499000,
+          "expected": 5,
+          "grant_ns": 128497359125083,
+          "mutation_ns": 519334,
+          "outcome": "COMMITTED",
+          "owner": 0,
+          "queue_wait_ns": 1208,
+          "request_ns": 128497359123875
+        },
+        {
+          "ack_ns": 13928625,
+          "acknowledged_ns": 128497387116750,
+          "begin_ns": 31750,
+          "branch": 0,
+          "commit_or_rollback_ns": 13343792,
+          "expected": 6,
+          "grant_ns": 128497373185333,
+          "mutation_ns": 550958,
+          "outcome": "COMMITTED",
+          "owner": 0,
+          "queue_wait_ns": 1583,
+          "request_ns": 128497373183750
+        },
+        {
+          "ack_ns": 14111875,
+          "acknowledged_ns": 128497401237708,
+          "begin_ns": 29250,
+          "branch": 0,
+          "commit_or_rollback_ns": 13550500,
+          "expected": 7,
+          "grant_ns": 128497387122750,
+          "mutation_ns": 530125,
+          "outcome": "COMMITTED",
+          "owner": 0,
+          "queue_wait_ns": 1459,
+          "request_ns": 128497387121291
+        }
+      ]
+    }
+  ],
+  "gate_release_ns": 128497288548833,
+  "native_busy_timeout": 0,
+  "outcomes": [
+    "COMMITTED",
+    "COMMITTED",
+    "COMMITTED",
+    "COMMITTED",
+    "COMMITTED",
+    "COMMITTED",
+    "COMMITTED",
+    "COMMITTED"
+  ],
+  "overlap_proof": "PASS",
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 0,
+      "client_rss_after": 31178752,
+      "client_rss_before": 31080448,
+      "elapsed_ns": 113507792,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "queued_publication_ack",
+      "operations": 8,
+      "ops_per_second": 70.4797429237281
+    }
+  ],
+  "pragmas": {
+    "busy_timeout": 0,
+    "cache_size": -512,
+    "foreign_keys": 1,
+    "fullfsync": 1,
+    "journal_mode": "delete",
+    "mmap_size": 0,
+    "page_size": 4096,
+    "synchronous": 2,
+    "temp_store": 1
+  },
+  "publications_per_client": 8
+}
