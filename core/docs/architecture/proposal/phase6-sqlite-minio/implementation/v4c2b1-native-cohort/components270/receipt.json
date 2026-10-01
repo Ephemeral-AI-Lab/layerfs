@@ -1,0 +1,41 @@
+{
+  "schema": 2,
+  "case_id": "phase6-live-components270-v1",
+  "kind": "correctness diagnostic performance phase",
+  "cache_status": "INELIGIBLE: OS/page cache unknown",
+  "sqlite_version": "3.53.2",
+  "image": "sha256:e6e716b3a5ad3c726741be739647cfe986726da1725062e5d7913f248517e00e",
+  "genesis_ms": 7.583292,
+  "complete_command_ms": 10869.952208,
+  "rows": [
+    {
+      "case": "seed",
+      "exec_ms": 25.453917,
+      "commit_ms": 98.76525,
+      "generation": 1,
+      "root": "ecda68f375f8b8c615e8953cd549adf0b35c0023a72d71cbf256c0b7734fab1c"
+    },
+    {
+      "case": "target",
+      "exec_ms": 266.190625,
+      "commit_ms": 2381.989,
+      "generation": 2,
+      "root": "f4f03ecb16db16db39be74c9080b3a8fc0d2ca3626d82d33e61e70c98dda1875"
+    },
+    {
+      "case": "localized-successor",
+      "exec_ms": 124.599,
+      "commit_ms": 2173.47625,
+      "generation": 3,
+      "root": "0e290b20d462d290f8504db9ed324c5068be3478ff8e4c4629d5debf721d5b18"
+    }
+  ],
+  "semantic_proof": "PASS",
+  "canonical_reference": "NOT_RUN",
+  "physical_resources": "NOT_RUN",
+  "cleanup": "PASS",
+  "proof_ms": 4397.147542,
+  "performance_child_wall_seconds": 11.656253207998816,
+  "proof_child_wall_seconds": 4.450607042002957,
+  "proof_plan_sha256": "2617185e050f7ca4237d6013cbe6093d018c35cc20d32665c416480e0806c753"
+}

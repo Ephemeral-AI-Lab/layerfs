@@ -45,7 +45,10 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
   unsupported locking/durability behavior; source/generation/cancel custody.
 - [x] V4d1 live67and128three-head composition/complete semantic-history-cleanup
   gates; [RESULTS-V4D1](RESULTS-V4D1.md). 270TIMEOUTand locality/scaling remain red.
-- [ ] Run/prove all three named live shape cases with exact independent manifests,
+- [x] V4c2b1 SQL-native constructor/process dependency: original67/270/128full
+  three-head semantic/history/cleanup; [RESULTS-V4C2B1](RESULTS-V4C2B1.md).
+  Service locality/root vectors/physical qualification remain open.
+- [x] Run/prove all three named live shape cases with exact independent manifests,
   root/byte facts and retained history, through actual public WorkspaceApi.exec.
 - [ ] Family1 history retention; Family2 public SDK namespace initialization;
   Family3 writes; Family4 retained Commits; Family5 namespace; Family6 mutations;
@@ -62,9 +65,8 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 - [ ] Final owning locked checks, source/binary/image/provider seals, per-commit
   production LOC and checkpoint comments on #294; major results linked from #293.
 
-Current action: independent15s performance/9.5s proof processes and SQL-native
-streamed namespace construction that eliminates demonstrated fresh-chain replay.
-Freeze the trust/interface/oracle/resource contract before replacing generic C1
-validation/reduction; service checks remain until exact incremental namespace
-certification. Then complete270/locality/admission/import/retirement and every
-larger group. Full objective remains active; keep one concrete next action.
+Current action: V4c2b2 certified incremental service namespace/root-diff proof
+against exact selected base, refs/cycles/aliases/reachability/file/portable closure,
+known/Unknown/C5publication. Freeze its contract before replacing the complete
+service walk. Then admitted populations/import/retirement/syscalls and all seven
+owning families/complete DeepSeek generic/locality work. Full goal remains active.

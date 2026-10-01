@@ -453,3 +453,23 @@ scope; full unchanged Core suites/examples/Linux Clippy unrun. Product unchanged
 Next publish/source seal, changed-constructor full67/270/128covering cohort with
 separate15/9.5limits; service whole-population cost, family/DeepSeek and all larger
 gates remain open. Goal active.
+
+## V4c2b1 declared constructor/process dependency COMPLETE; full goal open
+
+Parent `da0a728bae9c986603db43d7f979964b65eaf9ab`. Changed-source original full
+67/270/128three-head covering cohort semantic/history/cleanup PASS with independent
+performance15s and proof9.5s children. Actual walls7.34189475/1.258146709,
+11.656253208/4.450607042,8.220193875/2.167635292s. Target Exec/Commit ms31.022208/
+429.457958,266.190625/2381.989,156.477208/1028.01775; successors415.006792/
+2173.47625/979.006458ms. CacheINELIGIBLE/canonical-physical NOT_RUN, no speed PASS.
+
+270names271serve once,542directory/273typed inode cursor queries vs39295/38755;
+legacy whole-builder namespace compatibility checks pass. Complete270proof now
+passes under original separate gates; old15.007TIMEOUTunchanged. Independent service
+refs/membership/level/fill/count checks retained and strengthened, but still audits
+73/280/146nodes and successorGET675/3919/1641. Thus full locality still false.
+RESULTS-V4C2B1.md/rawv4c2b1-native-cohort preserve exact outcomes/proofplan seals.
+
+Next V4c2b2 certified incremental service namespace/root-diff proof before removing
+full walk; then paged population/import/retirement/generic syscall/family/DeepSeek
+obligations. Goal active. This completed dependency is not full V4c or qualification.

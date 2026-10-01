@@ -1,0 +1,10 @@
+{
+  "host": {
+    "sha256": "b39c9306d2624d9f9339e4204b94ce6db5690e5a011a5c4a68ced183f0469aa3",
+    "path": "/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/benchmark-results/phase6-integration/binary-archive/b39c9306d2624d9f9339e4204b94ce6db5690e5a011a5c4a68ced183f0469aa3/phase6-live-probe"
+  },
+  "linux": {
+    "sha256": "8eb5eba7318ff11a74b3abaa0c75cd0e563707dd0c3cb9e430d44fdf02f51f45",
+    "path": "/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/benchmark-results/phase6-integration/binary-archive/8eb5eba7318ff11a74b3abaa0c75cd0e563707dd0c3cb9e430d44fdf02f51f45/phase6-live-probe"
+  }
+}
