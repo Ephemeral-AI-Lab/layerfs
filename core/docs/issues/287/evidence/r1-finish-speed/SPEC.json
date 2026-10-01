@@ -1,0 +1,125 @@
+{
+  "schema": "issue287-end-r1-speed-v1",
+  "source_parent": "53b6bf741a5693f4d00ec98b914ce34645ee9ab3",
+  "control_product": "7edddbdb8e8512627aed0ed42533ef099d802384",
+  "candidate_product": null,
+  "seed": 1,
+  "samples_per_case_arm": 1,
+  "construction_workers": 1,
+  "rows": [
+    {
+      "label": "clean",
+      "case": "workspace-commit-clean-retained-writes-4097-v3",
+      "command": "true",
+      "command_sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "prelude": "/fixtures/bin/write-separated dispersed data.bin 4097",
+      "fixture": "fourhop-patterns-prepared-v1 host provenance chain, qualified clone only",
+      "oracle_manifest_sha256": [
+        "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7",
+        "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7"
+      ],
+      "complete_budget_ns": 15000000000,
+      "proof_budget_ns": 9000000000,
+      "exec_target_ns": null,
+      "commit_target_ns": null,
+      "complete_target_ns": null,
+      "target_status": "UNRUN_CONTROL"
+    },
+    {
+      "label": "one-edit",
+      "case": "workspace-commit-one-edit-retained-writes-4097-v3",
+      "command": "/fixtures/bin/write-separated data.bin 1",
+      "command_sha256": "3a739b131ab0986fa130fa94c539ef451a0d43b79fd5fdc961c8dbceb40ba8ef",
+      "prelude": "/fixtures/bin/write-separated dispersed data.bin 4097",
+      "fixture": "fourhop-patterns-prepared-v1 host provenance chain, qualified clone only",
+      "oracle_manifest_sha256": [
+        "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7",
+        "bf309d76319f11c72d62a17ef80933cd6645975afaca87a19431c8072ae3310c"
+      ],
+      "complete_budget_ns": 15000000000,
+      "proof_budget_ns": 9000000000,
+      "exec_target_ns": null,
+      "commit_target_ns": null,
+      "complete_target_ns": null,
+      "target_status": "UNRUN_CONTROL"
+    },
+    {
+      "label": "overwrite4k",
+      "case": "workspace-shell-package-overwrite-4k-sdk-v2",
+      "command": "dd if=/fixtures/v2/patch-4k.bin of=large.bin bs=4096 seek=1280 conv=notrunc 2>/dev/null",
+      "command_sha256": "0d1f03b3be5e80602baedda30aae3df9a922184bb9a65170546346308fbc5ffd",
+      "prelude": "",
+      "fixture": "workspace-shell-package-master-v2 host Init/seed",
+      "oracle_manifest_sha256": [
+        "fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183",
+        "5491c0e2ed73a4f368fdfaf30b2bf1fd368d36d1fdabb3e7fd362dc7a2b93156"
+      ],
+      "complete_budget_ns": 15000000000,
+      "proof_budget_ns": 9000000000,
+      "exec_target_ns": null,
+      "commit_target_ns": null,
+      "complete_target_ns": null,
+      "target_status": "UNRUN_CONTROL"
+    },
+    {
+      "label": "namespace67",
+      "case": "workspace-namespace-move-replace-descendants-67-sdk-v1",
+      "command": "umask 022 && mv packages/old/subtree packages/new/subtree && mv packages/new/subtree/child packages/new/subtree/renamed && mv packages/new/subtree/renamed packages/new/subtree/child && mv packages/new/subtree packages/old/subtree && mv packages/old/subtree packages/new/subtree && printf grand-new > packages/new/subtree/child/grand.txt.next && mv -f packages/new/subtree/child/grand.txt.next packages/new/subtree/child/grand.txt && test \"$(cat packages/new/subtree/sibling.txt)\" = sibling-base && test \"$(ls packages/new/subtree | wc -l)\" -eq 2",
+      "command_sha256": "cb35b7de444aef1d31d91d4f66be2aa308b5979c990f177e4dbf5e8ca840718f",
+      "prelude": "",
+      "fixture": "host-public-sdk-init-and-seed-v2",
+      "oracle_manifest_sha256": [
+        "478aa879f6663fae094492a1a5568809d87a7b6577556e478ed3f0690436be68",
+        "8775077ffd613372784857a5227c77c06ffeac7ebda831ff28411e0f1e159eab"
+      ],
+      "complete_budget_ns": 15000000000,
+      "proof_budget_ns": 9000000000,
+      "exec_target_ns": null,
+      "commit_target_ns": null,
+      "complete_target_ns": null,
+      "target_status": "UNRUN_CONTROL"
+    },
+    {
+      "label": "components270",
+      "case": "workspace-namespace-components-270-sdk-v1",
+      "command": "umask 022; i=0; while [ $i -lt 270 ]; do mkdir d || exit; exec 3<. || exit; cd /proc/self/fd/3/d || exit; i=$((i+1)); done; printf leaf > file && test \"$(cat file)\" = leaf",
+      "command_sha256": "d54cc7f047effcb4f4044b9693dd476cbf32e2b6d1a6b43851060f26b2b6b2e6",
+      "prelude": "",
+      "fixture": "host-public-sdk-init-and-seed-v2",
+      "oracle_manifest_sha256": [
+        "5cd3bd08b66f0de5bd21fd5eae23ee56d92290fb85783e0e4b43102e85db6a3a",
+        "16feb6bc8704a64b90c9b97082407c614793d1425578fbf2d63e6f48d84bcafa"
+      ],
+      "complete_budget_ns": 25000000000,
+      "proof_budget_ns": 9000000000,
+      "exec_target_ns": null,
+      "commit_target_ns": null,
+      "complete_target_ns": null,
+      "target_status": "UNRUN_CONTROL"
+    },
+    {
+      "label": "many128",
+      "case": "workspace-shell-package-many-128-sdk-v2",
+      "command": "set -eu; umask 022; mkdir many; i=0; while test $i -lt 128; do printf 'new-%s' \"$i\" > many/f$i; i=$((i+1)); done; test $(find many -type f | wc -l) -eq 128",
+      "command_sha256": "bf3ba753404474ac7e6189d640df5623d0cabfac2b830572051bc26f5bdb3f41",
+      "prelude": "",
+      "fixture": "workspace-shell-package-master-v2 host Init/seed",
+      "oracle_manifest_sha256": [
+        "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+        "8124069ea2c5a9c48a86073b4b941c8cd85582df6dae2d2413990d61d46cc713"
+      ],
+      "complete_budget_ns": 15000000000,
+      "proof_budget_ns": 9000000000,
+      "exec_target_ns": null,
+      "commit_target_ns": null,
+      "complete_target_ns": null,
+      "target_status": "UNRUN_CONTROL"
+    }
+  ],
+  "numeric_latency_status": "INELIGIBLE",
+  "performance_claim": false,
+  "cache_method": "existing F4/F5/F7 uncontrolled host/Store/daemon cache; no cold claim",
+  "route": "public host WorkspaceApi Exec/Commit with host Server/SQLite/C1/C2/C5; Linux Docker daemon/FUSE/workload only",
+  "proof_scope": "existing full manifest/canonical-byte verifier plus evidence custody; separate from timing",
+  "identity_method": "core-build-and-harness-inputs-v2"
+}

@@ -64,7 +64,7 @@ class Substrate(unittest.TestCase):
             with patch.object(runner, "RESULTS", results), patch.object(
                 runner.subprocess, "run", return_value=SimpleNamespace(returncode=0)
             ) as build:
-                result = runner.build(output, target, {"product_seal": "same"})
+                result = runner.build(output, target, {"product_seal": "same", "compilation_seal": "complete"})
             build.assert_called_once()
             self.assertEqual(result["build_profile"], "release")
             self.assertEqual(result["mode"], "changed-product")
