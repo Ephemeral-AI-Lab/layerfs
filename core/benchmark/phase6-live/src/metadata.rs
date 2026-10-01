@@ -96,74 +96,36 @@ pub struct Remote {
     pub selector: u32,
     pub private: [u8; 32],
     pub server: [u8; 32],
-    pub stats: Arc<Mutex<crate::transport_stats::Statistics>>,
+    pub session: Arc<Mutex<crate::metadata_session::Session>>,
 }
 impl Remote {
     pub fn statistics(&self) -> Result<crate::transport_stats::Statistics, String> {
-        self.stats
+        self.session
             .lock()
-            .map(|s| *s)
-            .map_err(|_| "metadata statistics owner".into())
+            .map(|s| s.statistics)
+            .map_err(|_| "metadata session owner".into())
     }
     pub fn call(&self, action: u8, payload: &[u8]) -> Result<Vec<u8>, String> {
+        if payload.len().checked_add(8).is_none_or(|n| n > 16384) || action > 4 {
+            return Err("metadata request capacity/action".into());
+        }
         let address = self
             .endpoint
             .to_socket_addrs()
             .map_err(|e| e.to_string())?
             .next()
             .ok_or("service address")?;
-        let deadline = Instant::now() + Duration::from_secs(5);
-        let connected = Instant::now();
-        let connection_result = connection::connect_until(
-            address,
-            self.selector,
-            &self.private,
-            &self.server,
-            deadline,
-        )
-        .map_err(|e| e.to_string());
-        {
-            let mut stats = self.stats.lock().map_err(|_| "metadata statistics owner")?;
-            stats.connect_attempts += 1;
-            stats.connect_ns = stats
-                .connect_ns
-                .saturating_add(connected.elapsed().as_nanos() as u64);
-        }
-        let mut c = connection_result?;
-        c.receive.deadline(deadline);
-        c.send.deadline(deadline);
-        let mut bytes = wire::PREFIX.to_vec();
-        bytes.push(action);
-        bytes.extend_from_slice(payload);
-        if bytes.len() > 16384 {
-            return Err("metadata request capacity".into());
-        }
-        let requested = Instant::now();
-        c.send
-            .write(&Frame {
-                kind: Kind::Begin,
-                id: 1,
-                bytes,
-            })
-            .map_err(|e| e.to_string())?;
-        let received = c.receive.read().map_err(|e| e.to_string());
-        {
-            let mut stats = self.stats.lock().map_err(|_| "metadata statistics owner")?;
-            if let Some(count) = stats.calls.get_mut(action as usize) {
-                *count += 1;
-            }
-            if let Some(time) = stats.request_ns.get_mut(action as usize) {
-                *time = time.saturating_add(requested.elapsed().as_nanos() as u64);
-            }
-        }
-        let frame = received?;
-        if frame.id != 1 || frame.kind != Kind::Success {
-            return Err("metadata failure/identity".into());
-        }
-        if !frame.bytes.starts_with(wire::PREFIX) {
-            return Err("metadata profile".into());
-        }
-        Ok(frame.bytes[wire::PREFIX.len()..].to_vec())
+        self.session
+            .lock()
+            .map_err(|_| "metadata session owner")?
+            .call(
+                address,
+                self.selector,
+                &self.private,
+                &self.server,
+                action,
+                payload,
+            )
     }
     pub fn bootstrap(&self) -> Result<(Minio, Snapshot, u64), String> {
         let reply = self.call(0, &[])?;
@@ -408,35 +370,49 @@ pub fn serve(
             Ok((stream, _)) => {
                 let mut c = connection::accept(stream, &private, std::slice::from_ref(&peer))
                     .map_err(|e| e.to_string())?;
-                let frame = c.receive.read().map_err(|e| e.to_string())?;
-                if frame.kind != Kind::Begin
-                    || frame.id != 1
-                    || frame.bytes.len() < 8
-                    || !frame.bytes.starts_with(wire::PREFIX)
-                {
-                    return Err("metadata request frame".into());
-                }
-                match authority.handle(frame.bytes[7], &frame.bytes[8..]) {
-                    Ok(reply) => {
-                        let mut bytes = wire::PREFIX.to_vec();
-                        bytes.extend(reply);
-                        c.send
-                            .write(&Frame {
-                                kind: Kind::Success,
-                                id: 1,
-                                bytes,
-                            })
-                            .map_err(|e| e.to_string())?;
+                let mut previous = 0u64;
+                while !stop.load(Ordering::SeqCst) {
+                    let deadline = Instant::now() + Duration::from_secs(5);
+                    c.receive.deadline(deadline);
+                    c.send.deadline(deadline);
+                    let frame = match c.receive.read() {
+                        Ok(f) => f,
+                        Err(e) => {
+                            eprintln!("metadata session closed: {e}");
+                            break;
+                        }
+                    };
+                    if frame.kind != Kind::Begin
+                        || frame.id <= previous
+                        || frame.bytes.len() < 8
+                        || !frame.bytes.starts_with(wire::PREFIX)
+                    {
+                        return Err("metadata request frame/identity".into());
                     }
-                    Err(e) => {
-                        eprintln!("metadata refused: {e}");
-                        c.send
-                            .write(&Frame {
-                                kind: Kind::Failure,
-                                id: 1,
-                                bytes: vec![1, 0, 0],
-                            })
-                            .map_err(|e| e.to_string())?;
+                    previous = frame.id;
+                    match authority.handle(frame.bytes[7], &frame.bytes[8..]) {
+                        Ok(reply) => {
+                            let mut bytes = wire::PREFIX.to_vec();
+                            bytes.extend(reply);
+                            c.send
+                                .write(&Frame {
+                                    kind: Kind::Success,
+                                    id: frame.id,
+                                    bytes,
+                                })
+                                .map_err(|e| e.to_string())?;
+                        }
+                        Err(e) => {
+                            eprintln!("metadata refused: {e}");
+                            c.send
+                                .write(&Frame {
+                                    kind: Kind::Failure,
+                                    id: frame.id,
+                                    bytes: vec![1, 0, 0],
+                                })
+                                .map_err(|e| e.to_string())?;
+                            break;
+                        }
                     }
                 }
             }

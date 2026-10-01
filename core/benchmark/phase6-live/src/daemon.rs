@@ -54,7 +54,7 @@ pub fn run() -> Result<(), Failure> {
             .map_err(|_| Code::InvalidInput)?,
         private,
         server: key("LAYERFS_SERVER_KEY")?,
-        stats: Arc::new(Mutex::new(Default::default())),
+        session: Arc::new(Mutex::new(Default::default())),
     };
     let mut peers = Vec::new();
     for entry in env("LAYERFS_CONTROL_PEERS")?.split(';') {

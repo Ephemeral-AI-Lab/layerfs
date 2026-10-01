@@ -54,3 +54,21 @@ Connection setup/accept polling is a demonstrated major cost. Next: one shared
 authenticated session, monotonic exact reply IDs, known idle rotation before new
 submission, quarantine on failure, bounded physical connection ownership. Keep
 all construction/storage/validation algorithms unchanged for this treatment.
+
+## 2026-10-02 — V4a persistent session source prepared
+
+Parent `22f7d5d05170a8f654c5862a09a879e45f3abe0a`. P6META4 shares one native
+connection/request counter per Remote owner; server consumes exact increasing
+request IDs on that authenticated connection. Capacity/action checks precede
+connection side effects. Known idle age >2 seconds rotates before a new
+submission; any uncertain/failed operation quarantines and closes the session,
+with no retry/resend. Native five-second bounds and all packing/construction/
+validation/MinIO algorithms remain unchanged. Stats remain fixed five-cell state.
+
+Four external real TCP/Noise tests PASS: two requests/one connection, wrong reply
+ID quarantine/no resend, over-capacity refusal before connection, and real-clock
+known idle rotation with increasing IDs. These peer fixtures prove transport
+contracts only. Host locked Clippy/fmt and locked Darwin/Linux ARMv8 release builds
+PASS. Existing engine tests unchanged/reused. Full-provider treatment NOT_RUN at
+this source checkpoint; next is the single sealed create/overwrite invocation.
+All full-goal workload/locality/resource gates remain required and incomplete.
