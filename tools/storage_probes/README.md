@@ -103,3 +103,39 @@ mdbench, fio, fsstress and fsx are deferred to the later mounted-filesystem stag
 First collection: [2026-10-01 report](../../docs/roadmap/0.1/0.1.7/issue290/RESULTS-20261001-V1.md).
 The report links exact receipts and limitations; harness preparation status
 above remains a historical checkpoint.
+
+## Four-group follow-up (v2)
+
+The [prospective v2 specification](../../docs/roadmap/0.1/0.1.7/issue290/EXPERIMENT-V2.md)
+registers24 selections. Build the existing public C1/C2 example once, outside all
+measurement windows, with the owned target and repository ARMv8 flags:
+
+```sh
+cargo +1.85.1 build --release --locked --manifest-path core/Cargo.toml -p layerfs-storage --example minio_pack_probe
+python3 tools/storage_probes/pack_probe.py setup --fixtures benchmark-results/storage-probes/v2-pack-fixtures --binary core/target/release/examples/minio_pack_probe
+python3 tools/storage_probes/catalog_probe.py setup --fixtures benchmark-results/storage-probes/v2-catalog-fixtures
+python3 tools/storage_probes/run_v2.py --list
+```
+
+Setup roots are acquired/qualified once and reject replacement. Reuse the sealed
+native MinIO binary in a fresh owned provider root; acquire/start is unchanged,
+but v2 needs no10,000-key master. Source must be committed before collection.
+For this collection the owned provider root is
+`benchmark-results/storage-probes/provider-v2`.
+
+```sh
+python3 tools/storage_probes/run_v2.py --group pack --provider benchmark-results/storage-probes/provider-v2 --output benchmark-results/storage-probes/collection-v2
+python3 tools/storage_probes/run_v2.py --group publication --provider benchmark-results/storage-probes/provider-v2 --output benchmark-results/storage-probes/collection-v2
+python3 tools/storage_probes/run_v2.py --group concurrency --provider benchmark-results/storage-probes/provider-v2 --output benchmark-results/storage-probes/collection-v2
+python3 tools/storage_probes/run_v2.py --group scaling --provider benchmark-results/storage-probes/provider-v2 --output benchmark-results/storage-probes/collection-v2
+python3 tools/storage_probes/minio_probe.py stop --root benchmark-results/storage-probes/provider-v2
+```
+
+`--case` restricts a group to one registered selection. Each attempted case gets
+performance15s and independent proof/cleanup10s limits, logs and explicit status.
+The FULL/fullfsync profile is confined to the standalone catalog tool; LayerFS's
+MEMORY/OFF profile stays unchanged. Queued metadata and native BUSY are different
+registered capabilities. Body gates/events establish actual incomplete HTTP
+requests, blocked admission or held SQL work; no sleeps establish overlap.
+Actual source/build/provider seals, original fixture references and expected
+outcomes accompany the results. No cold, peak-memory or power-loss claim follows.

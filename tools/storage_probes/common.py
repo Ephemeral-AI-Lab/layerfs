@@ -59,7 +59,7 @@ class S3:
         self.received = 0
 
     def call(self, method, key='', query=None, size=0, payload_hash=EMPTY_HASH,
-             consume=False, verify_hash=False, block=BLOCK):
+             consume=False, verify_hash=False, block=BLOCK, request_headers=None, body_gate=None):
         path = '/' + self.config['bucket'] + ('/' + key if key else '')
         path = urllib.parse.quote(path, safe='/~')
         pairs = sorted((str(k), str(v)) for k, v in (query or {}).items())
@@ -84,19 +84,25 @@ class S3:
                      ('x-amz-content-sha256', payload_hash), ('Authorization', auth),
                      ('Content-Length', str(size)), ('Connection', 'keep-alive')]:
             self.connection.putheader(k, v)
+        for name, value in (request_headers or {}).items():
+            self.connection.putheader(name, value)
         self.connection.endheaders()
         for offset in range(0, size, len(block)):
             self.connection.send(block[:min(len(block), size - offset)])
+            if offset == 0 and body_gate is not None:
+                body_gate()
         response = self.connection.getresponse()
         self.calls += 1
         self.sent += size
-        if response.status not in (200, 204):
+        if response.status not in (200, 204, 206):
             content = response.read(8192)
             try:
                 code = ET.fromstring(content).findtext('Code')
             except ET.ParseError:
                 code = 'unparsed error'
             raise RuntimeError(f'{method} status={response.status} code={code}')
+        if request_headers and 'Range' in request_headers and response.status != 206:
+            raise RuntimeError('range request did not return 206')
         if consume:
             count, digest = 0, hashlib.sha256() if verify_hash else None
             while True:

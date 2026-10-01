@@ -105,3 +105,27 @@ all expected uploads; query counts/plans and final metadata. Cleanup exact owned
 keys, databases/rows and owned server; keep receipts and failure custody.
 Commit sanitized receipts, command logs and hashes; exclude credentials/private
 startup logs. Append report and #291 checkpoint; retain historical V1 verdicts.
+
+## Pre-collection implementation clarifications
+
+Construction is one shared preparation diagnostic per shape: the release example
+writes both standalone records and pack forms in the same invocation. Its duration
+is not credited as either arm's construction cost. HTTP sequential pack timing
+includes physical directory validation/extraction; payload Zstandard decode and
+reference comparison remain separate proof. Upload includes SHA256 required for
+SigV4 plus file reads. Range reads require HTTP206 and exact decoded fixture bytes.
+Scattered whole-pack reads have no retained cache and report their actual body
+bytes. Fixture reuse is sealed by builder binary hash and artifact hashes.
+
+Queued metadata admission must first observe a failed nonblocking acquire while
+the coordinator holds the writer gate, then await release. Native contention
+connections both finish profile setup before the held-write proof begins.
+Scale rename has one separate untimed visibility SELECT before deletion;
+mutation statement count is3 (UPDATE, visibility SELECT, DELETE), with only
+UPDATE/DELETE inside their phase timers. Publication packs are simulated keys
+with nominal bytes, not physical LayerFS packs or canonical metadata construction.
+Python bindings/SQL fixtures are an explicitly experimental metadata algorithm.
+
+The runner is tools/storage_probes/run_v2.py; groups pack/publication/concurrency/
+scaling select8/4/8/4 cases. V1 tooling/receipts are not re-collected. New external
+code and all prospective clarifications are sealed before collection.
