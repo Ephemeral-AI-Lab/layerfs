@@ -255,17 +255,36 @@ fn legacy_complete(engine: &Engine, objects: &mut Objects) -> FilesystemRootId {
             });
             r.unwrap().root
         } else {
-            let changes = engine
-                .directory_entries(*id)
-                .unwrap()
-                .into_iter()
-                .map(|(i, name, _)| {
-                    (
-                        PathName::new(std::str::from_utf8(&name).unwrap()).unwrap(),
-                        Some(i as u64),
-                    )
-                })
-                .collect();
+            // External complete reference fixture only: runtime never collects population.
+            let handle = engine
+                .db
+                .query_row(
+                    "INSERT INTO handles(ino,flags) VALUES(?1,0) RETURNING id",
+                    [*id],
+                    |r| r.get::<_, i64>(0),
+                )
+                .unwrap();
+            let mut after = 0;
+            let mut bindings = Vec::new();
+            loop {
+                let page = engine.directory_page(handle, *id, after).unwrap();
+                if page.is_empty() {
+                    break;
+                }
+                for row in page {
+                    after = row.cookie;
+                    bindings.push((
+                        PathName::new(std::str::from_utf8(&row.name).unwrap()).unwrap(),
+                        Some(row.inode as u64),
+                    ));
+                }
+            }
+            engine
+                .db
+                .execute("DELETE FROM handles WHERE id=?1", [handle])
+                .unwrap();
+            bindings.sort_by(|a, b| a.0.cmp(&b.0));
+            let changes = bindings;
             dirs.push(DirectoryUpdate {
                 parent: *id as u64,
                 changes,
@@ -379,4 +398,40 @@ fn moved_directory_replacement_and_new_empty_match_legacy_namespace() {
     assert!(e.next_dirty(0).unwrap().is_none());
     drop(e);
     std::fs::remove_dir_all(p).unwrap();
+}
+
+#[test]
+fn quarantined_source_retirement_refuses_construction_before_canonical_effects() {
+    let (path, mut engine, mut objects, base) = fresh();
+    let id = engine.create_node(1, b"data", 1, 0o644).unwrap().id;
+    engine.write(id, 0, b"safe").unwrap();
+    for i in 0..130 {
+        engine.write(id, 100 + i, b"X").unwrap();
+    }
+    engine.truncate(id, 4).unwrap();
+    let missing: i64 = engine
+        .db
+        .query_row(
+            "SELECT source FROM source_retirement ORDER BY source LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    std::fs::remove_file(engine.sources.join(missing.to_string())).unwrap();
+    assert!(engine.retire_sources().is_err());
+    let before = objects.0.lock().unwrap().len();
+    let result = construction::build(
+        &engine,
+        scope_for_seed([6; 32]),
+        base,
+        &objects.clone(),
+        &mut objects,
+    );
+    assert!(result.err().unwrap().contains("quarantined"));
+    assert_eq!(objects.0.lock().unwrap().len(), before);
+    let mut bytes = [0; 4];
+    engine.read(id, 0, &mut bytes).unwrap();
+    assert_eq!(&bytes, b"safe");
+    drop(engine);
+    std::fs::remove_dir_all(path).unwrap();
 }

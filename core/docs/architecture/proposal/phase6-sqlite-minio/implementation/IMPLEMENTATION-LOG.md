@@ -528,3 +528,27 @@ reference retirement in64source windows. Known install only; Unknown source cust
 kept. Current512/256profile remains. Exit external real SQL/file checks plus generic
 5step full128case with enumeration/churn/clean UpToDate and readonly byte/history
 proof. Full larger-profile/family/DeepSeek/resource goal active. Next implement.
+
+## V4c3a runtime PARTIAL: bounded directory/source ownership
+
+Parent ca2ee13ab4bd45608b2695736073c1e23dc989a6. Indexed monotonic per-name
+cookies replace full vectors/ordinal replays;64rows/16KiB pages with actual handle/
+type/range checks,8page callback. Exact extent source refs/zero-ref queue retire
+64files per known mutation batch and drain after known C1installation; open victims
+and Unknown captured references retained. Current512/256profile unchanged.
+18external actualSQL/files/C1checks PASS; host Clippy/fmt/native+Linuxrelease PASS;
+newcaseprepare compile PASS. Initial external NodeDebug assertion compile error
+corrected without runtime Debug hook; raw failures retained. V4C3A-RUNTIME.md and
+v4c3a-native-checks record limits/failure custody/gaps. Next frozen5root original128
+fixture+genericenumeration/churn/cleanUpToDate liveproof. Larger admission/import/
+retirement/families/DeepSeek/resource goal active. SQLMEMORYjournal population
+transactions must become bounded before raising current caps in V4c3b.
+
+V4c3a freeze review: missing-provider failure must quarantine the source owner rather
+than permit another source operation to attempt retirement. Added actual guard
+before writes/truncate/construction/install, preserved live reads, and Unknown
+postpublication install error with pending retained. Changed-source source/construction
+10PASS (19unique owning checks total). Prior unaffected directory/engine/rename
+checks retained by scope; no unchanged suite replay. Initial staged count and unused
+binary archives retained; recompute exact final staged source after this correction.
+No live sample has run yet.

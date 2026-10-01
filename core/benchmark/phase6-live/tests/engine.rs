@@ -58,8 +58,8 @@ fn repeated_overwrites_do_not_retain_write_history() {
         .query_row("SELECT count(*) FROM sources", [], |r| r.get(0))
         .unwrap();
     assert_eq!(
-        sources, 65,
-        "source retirement remains an explicit unqualified gate"
+        sources, 2,
+        "only the original split source and latest overwrite remain referenced"
     );
     drop(engine);
     std::fs::remove_dir_all(path).unwrap();

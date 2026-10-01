@@ -327,39 +327,57 @@ impl Filesystem for SqlFs {
         mut reply: ReplyDirectory,
     ) {
         let result = self.call(|e| {
-            e.handle(fh.0 as i64, ino.0 as i64, false)?;
-            if offset > 514 {
-                return Err("EINVAL".into());
+            let handle = fh.0 as i64;
+            let id = ino.0 as i64;
+            e.handle(handle, id, false)?;
+            let node = e.node(id)?;
+            if node.kind != 2 {
+                return Err("ENOTDIR".into());
             }
-            let rows = e.directory_entries(ino.0 as i64)?;
-            let mut values = vec![
-                (ino.0, b".".to_vec(), 2),
-                (e.node(ino.0 as i64)?.parent as u64, b"..".to_vec(), 2),
-            ];
-            for (i, n, k) in rows {
-                values.push((i as u64, n, k))
+            let mut after = i64::try_from(offset).map_err(|_| "EINVAL")?;
+            if after == 0 {
+                if reply.add(ino, 1, FileType::Directory, OsStr::new(".")) {
+                    return Ok(());
+                }
+                after = 1;
             }
-            Ok(values)
-        });
-        match result {
-            Ok(rows) => {
-                for (index, (id, name, kind)) in rows.into_iter().enumerate().skip(offset as usize)
-                {
+            if after == 1 {
+                if reply.add(
+                    INodeNo(node.parent as u64),
+                    2,
+                    FileType::Directory,
+                    OsStr::new(".."),
+                ) {
+                    return Ok(());
+                }
+                after = 2;
+            }
+            // Finite callback work and resumable partial replies, no population vector.
+            for _ in 0..8 {
+                let page = e.directory_page(handle, id, after)?;
+                if page.is_empty() {
+                    break;
+                }
+                for row in page {
                     if reply.add(
-                        INodeNo(id),
-                        (index + 1) as u64,
-                        if kind == 2 {
+                        INodeNo(row.inode as u64),
+                        row.cookie as u64,
+                        if row.kind == 2 {
                             FileType::Directory
                         } else {
                             FileType::RegularFile
                         },
-                        OsStr::from_bytes(&name),
+                        OsStr::from_bytes(&row.name),
                     ) {
-                        break;
+                        return Ok(());
                     }
+                    after = row.cookie;
                 }
-                reply.ok()
             }
+            Ok(())
+        });
+        match result {
+            Ok(()) => reply.ok(),
             Err(e) => reply.error(e),
         }
     }

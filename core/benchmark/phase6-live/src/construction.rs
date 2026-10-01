@@ -70,6 +70,7 @@ pub fn build(
     reader: &dyn AuthenticatedObjects,
     consumer: &mut dyn FinalizedConsumer,
 ) -> Result<(FilesystemResult, ConstructionWork), String> {
+    engine.source_ready()?;
     let query_start = engine.row_queries.get();
     engine
         .db

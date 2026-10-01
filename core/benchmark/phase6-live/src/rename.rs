@@ -32,6 +32,14 @@ impl Engine {
         }
         let id = self.lookup(parent, name)?.ok_or("ENOENT")?;
         let node = self.node(id)?;
+        let cookie: i64 = self
+            .db
+            .query_row(
+                "SELECT cookie FROM names WHERE parent=?1 AND name=?2",
+                params![parent, name],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
         let target = self.lookup(new_parent, new_name)?;
         if noreplace && target.is_some() {
             return Err("EEXIST".into());
@@ -85,7 +93,7 @@ impl Engine {
             )
             .map_err(|e| e.to_string())?;
         }
-        tx.execute("INSERT INTO names VALUES(?1,?2,?3) ON CONFLICT(parent,name) DO UPDATE SET ino=excluded.ino",params![new_parent,new_name,id]).map_err(|e|e.to_string())?;
+        tx.execute("INSERT INTO names VALUES(?1,?2,?3,?4) ON CONFLICT(parent,name) DO UPDATE SET ino=excluded.ino,cookie=excluded.cookie",params![new_parent,new_name,id,cookie]).map_err(|e|e.to_string())?;
         tx.execute("INSERT INTO changed_names VALUES(?1,?2,?3) ON CONFLICT(parent,name) DO UPDATE SET ino=excluded.ino",params![new_parent,new_name,id]).map_err(|e|e.to_string())?;
         tx.execute("UPDATE inodes SET children=children-1,subdirs=subdirs-?4,dirty=1,seconds=?2,nanos=?3 WHERE id=?1",params![parent,sec,nano,i64::from(node.kind==2)]).map_err(|e|e.to_string())?;
         tx.execute("UPDATE inodes SET children=children+?4,subdirs=subdirs+?5,dirty=1,seconds=?2,nanos=?3 WHERE id=?1",params![new_parent,sec,nano,i64::from(replaced.is_none()),i64::from(node.kind==2)-i64::from(replaced.as_ref().is_some_and(|n|n.kind==2))]).map_err(|e|e.to_string())?;

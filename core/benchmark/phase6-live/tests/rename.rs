@@ -99,14 +99,24 @@ fn real_directory_listing_uses_names_parent_with_inode_parent_present() {
     let z = e.create_node(1, b"z", 2, 0o755).unwrap().id;
     let a = e.create_node(1, b"a", 1, 0o644).unwrap().id;
     let nested = e.create_node(z, b"nested", 1, 0o644).unwrap().id;
+    let root_handle = e.open(1, libc::O_RDONLY).unwrap();
+    let nested_handle = e.open(z, libc::O_RDONLY).unwrap();
+    let page = e.directory_page(root_handle, 1, 0).unwrap();
     assert_eq!(
-        e.directory_entries(1).unwrap(),
-        vec![(a, b"a".to_vec(), 1), (z, b"z".to_vec(), 2)]
+        page.iter()
+            .map(|r| (r.inode, r.name.clone(), r.kind))
+            .collect::<Vec<_>>(),
+        vec![(z, b"z".to_vec(), 2), (a, b"a".to_vec(), 1)]
     );
+    let page = e.directory_page(nested_handle, z, 0).unwrap();
     assert_eq!(
-        e.directory_entries(z).unwrap(),
+        page.iter()
+            .map(|r| (r.inode, r.name.clone(), r.kind))
+            .collect::<Vec<_>>(),
         vec![(nested, b"nested".to_vec(), 1)]
     );
+    e.close(root_handle, 1).unwrap();
+    e.close(nested_handle, z).unwrap();
     drop(e);
     std::fs::remove_dir_all(p).unwrap();
 }

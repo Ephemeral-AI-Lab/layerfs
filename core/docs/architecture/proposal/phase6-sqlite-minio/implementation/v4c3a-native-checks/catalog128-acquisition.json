@@ -1,0 +1,36 @@
+{
+  "source_case": "phase6-live-many128-v1",
+  "source_sha256": "89f03a2e94db8adfd58fe8559ceebbb046c6592354d53a160c11249a4e3fd28b",
+  "case_sha256": "65a6b47f683244fd18003cefd2f0109ba95ad4badb05dc7b0bfb5d6bc55b971b",
+  "original_steps_preserved": true,
+  "steps": [
+    [
+      "seed",
+      "umask 022; cp -R /fixtures/phase6/many128/. .",
+      "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e"
+    ],
+    [
+      "target",
+      "set -eu; umask 022; mkdir many; i=0; while test $i -lt 128; do printf 'new-%s' \"$i\" > many/f$i; i=$((i+1)); done; test $(find many -type f | wc -l) -eq 128",
+      "8124069ea2c5a9c48a86073b4b941c8cd85582df6dae2d2413990d61d46cc713"
+    ],
+    [
+      "localized-successor",
+      "printf edit-0 > many/f0",
+      "74e4b860a04459e654d0c4f8137d5d408688f6c1bed45fb629a968cfc8f0bccf"
+    ],
+    [
+      "enumeration-churn",
+      "i=0; while [ \"$i\" -lt 64 ]; do printf edit-0 > many/f0 || exit; i=$((i+1)); done; test \"$(cat many/f0)\" = edit-0 && test \"$(find many -maxdepth 1 -type f | wc -l)\" -eq 128",
+      "74e4b860a04459e654d0c4f8137d5d408688f6c1bed45fb629a968cfc8f0bccf"
+    ],
+    [
+      "clean-retirement",
+      "test -z \"$(find /layerfs/backing -path '*/sources/*' -type f -print -quit)\" || exit 1; test \"$(find many -maxdepth 1 -type f | wc -l)\" -eq 128 || exit 1; i=0; while [ \"$i\" -lt 128 ]; do test -f \"many/f$i\" || exit; i=$((i+1)); done",
+      "74e4b860a04459e654d0c4f8137d5d408688f6c1bed45fb629a968cfc8f0bccf"
+    ]
+  ],
+  "performance_limit_seconds": 15,
+  "proof_limit_seconds": 9.5,
+  "cache": "INELIGIBLE: OS/page cache unknown"
+}

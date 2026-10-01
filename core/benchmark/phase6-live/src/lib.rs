@@ -43,3 +43,6 @@ pub mod namespace_semantics;
 pub mod namespace_validation;
 pub mod tree_diff;
 pub mod tree_facts;
+
+pub mod directory;
+pub mod source_retirement;

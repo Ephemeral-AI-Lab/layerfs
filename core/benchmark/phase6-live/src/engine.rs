@@ -19,6 +19,9 @@ pub struct Engine {
     pub reader: Option<Arc<dyn AuthenticatedObjects + Send + Sync>>,
     pub reads: Cell<SourceReads>,
     pub row_queries: Cell<crate::prepared::QueryCounts>,
+    pub directory_work: Cell<crate::directory::Work>,
+    pub retirement_work: Cell<crate::source_retirement::Work>,
+    pub(crate) retirement_failed: bool,
 }
 /// Logical source bytes served by the engine; not physical cache or all C1 reads.
 #[derive(Clone, Copy, Default, Debug)]
@@ -62,7 +65,9 @@ impl Engine {
         std::fs::create_dir_all(path.join("sources")).map_err(|e| e.to_string())?;
         let db = Connection::open(path.join("metadata.sqlite")).map_err(|e| e.to_string())?;
         db.busy_timeout(Duration::ZERO).map_err(|e| e.to_string())?;
-        db.execute_batch("PRAGMA journal_mode=MEMORY;PRAGMA synchronous=OFF;PRAGMA temp_store=MEMORY;PRAGMA cache_size=-2048;PRAGMA mmap_size=0;CREATE TABLE inodes(id INTEGER PRIMARY KEY,kind INTEGER,mode INTEGER,size INTEGER,seconds INTEGER,nanos INTEGER,root BLOB,dirty INTEGER,is_new INTEGER,base_size INTEGER,base_visible INTEGER,children INTEGER,parent INTEGER,links INTEGER,subdirs INTEGER,published INTEGER);CREATE INDEX dirty_inodes ON inodes(id) WHERE dirty=1;CREATE TABLE names(parent INTEGER,name BLOB,ino INTEGER,PRIMARY KEY(parent,name)) WITHOUT ROWID;CREATE INDEX names_ino ON names(ino);CREATE TABLE changed_names(parent INTEGER,name BLOB,ino INTEGER,PRIMARY KEY(parent,name)) WITHOUT ROWID;CREATE TABLE prepared(id INTEGER PRIMARY KEY,kind INTEGER,content BLOB,metadata BLOB,new_pos INTEGER);CREATE TABLE edits(ordinal INTEGER PRIMARY KEY,start INTEGER,end INTEGER,len INTEGER,source INTEGER,offset INTEGER);CREATE TABLE sources(id INTEGER PRIMARY KEY AUTOINCREMENT);CREATE TABLE extents(ino INTEGER,start INTEGER,end INTEGER,source INTEGER,offset INTEGER,PRIMARY KEY(ino,start)) WITHOUT ROWID;CREATE TABLE handles(id INTEGER PRIMARY KEY AUTOINCREMENT,ino INTEGER,flags INTEGER);").map_err(|e|e.to_string())?;
+        db.execute_batch("PRAGMA journal_mode=MEMORY;PRAGMA synchronous=OFF;PRAGMA temp_store=MEMORY;PRAGMA cache_size=-2048;PRAGMA mmap_size=0;PRAGMA foreign_keys=ON;CREATE TABLE inodes(id INTEGER PRIMARY KEY,kind INTEGER,mode INTEGER,size INTEGER,seconds INTEGER,nanos INTEGER,root BLOB,dirty INTEGER,is_new INTEGER,base_size INTEGER,base_visible INTEGER,children INTEGER,parent INTEGER,links INTEGER,subdirs INTEGER,published INTEGER);CREATE INDEX dirty_inodes ON inodes(id) WHERE dirty=1;CREATE TABLE counters(name TEXT PRIMARY KEY,value INTEGER NOT NULL) WITHOUT ROWID;INSERT INTO counters VALUES('directory',2);CREATE TABLE names(parent INTEGER,name BLOB,ino INTEGER,cookie INTEGER NOT NULL CHECK(cookie>=3),PRIMARY KEY(parent,name)) WITHOUT ROWID;CREATE INDEX names_ino ON names(ino);CREATE UNIQUE INDEX names_cookie ON names(parent,cookie);CREATE TABLE changed_names(parent INTEGER,name BLOB,ino INTEGER,PRIMARY KEY(parent,name)) WITHOUT ROWID;CREATE TABLE prepared(id INTEGER PRIMARY KEY,kind INTEGER,content BLOB,metadata BLOB,new_pos INTEGER);CREATE TABLE edits(ordinal INTEGER PRIMARY KEY,start INTEGER,end INTEGER,len INTEGER,source INTEGER,offset INTEGER);CREATE TABLE sources(id INTEGER PRIMARY KEY AUTOINCREMENT,refs INTEGER NOT NULL DEFAULT 0 CHECK(refs>=0));CREATE TABLE extents(ino INTEGER,start INTEGER,end INTEGER,source INTEGER NOT NULL REFERENCES sources(id),offset INTEGER,PRIMARY KEY(ino,start)) WITHOUT ROWID;CREATE TABLE handles(id INTEGER PRIMARY KEY AUTOINCREMENT,ino INTEGER,flags INTEGER);").map_err(|e|e.to_string())?;
+        db.execute_batch(crate::source_retirement::SCHEMA)
+            .map_err(|e| e.to_string())?;
         db.execute(
             "INSERT INTO inodes VALUES(1,2,493,0,0,0,NULL,0,0,0,0,0,1,1,0,1)",
             [],
@@ -79,6 +84,9 @@ impl Engine {
             reader: None,
             reads: Cell::new(SourceReads::default()),
             row_queries: Cell::new(crate::prepared::QueryCounts::default()),
+            directory_work: Cell::new(Default::default()),
+            retirement_work: Cell::new(Default::default()),
+            retirement_failed: false,
         })
     }
     pub fn node(&self, id: i64) -> Result<Node, String> {
@@ -119,14 +127,6 @@ impl Engine {
             .optional()
             .map_err(|e| e.to_string())
     }
-    pub fn directory_entries(&self, id: i64) -> Result<Vec<(i64, Vec<u8>, u8)>, String> {
-        let mut q=self.db.prepare_cached("SELECT names.ino,names.name,inodes.kind FROM names JOIN inodes ON inodes.id=names.ino WHERE names.parent=?1 ORDER BY names.name LIMIT 512").map_err(|e|e.to_string())?;
-        let rows = q
-            .query_map([id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
-            .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())
-    }
     pub fn create_node(
         &mut self,
         parent: i64,
@@ -156,17 +156,17 @@ impl Engine {
             return Err("ENOSPC".into());
         }
         let id = self.next;
-        self.next += 1;
         let (sec, nano) = now();
         let tx = self.db.transaction().map_err(|e| e.to_string())?;
+        let cookie:i64=tx.query_row("UPDATE counters SET value=value+1 WHERE name='directory' AND value<9223372036854775807 RETURNING value",[],|r|r.get(0)).optional().map_err(|e|e.to_string())?.ok_or("ENOSPC")?;
         tx.execute(
             "INSERT INTO inodes VALUES(?1,?2,?3,0,?4,?5,NULL,1,1,0,0,0,?6,1,0,0)",
             params![id, kind, mode & 0o777, sec, nano, parent],
         )
         .map_err(|e| e.to_string())?;
         tx.execute(
-            "INSERT INTO names VALUES(?1,?2,?3)",
-            params![parent, name, id],
+            "INSERT INTO names VALUES(?1,?2,?3,?4)",
+            params![parent, name, id, cookie],
         )
         .map_err(|e| e.to_string())?;
         tx.execute("INSERT INTO changed_names VALUES(?1,?2,?3) ON CONFLICT(parent,name) DO UPDATE SET ino=excluded.ino", params![parent,name,id]).map_err(|e|e.to_string())?;
@@ -176,6 +176,7 @@ impl Engine {
         )
         .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
+        self.next += 1;
         self.nodes += 1;
         self.revision += 1;
         self.node(id)
@@ -225,6 +226,7 @@ impl Engine {
         Ok(())
     }
     pub fn write(&mut self, id: i64, start: i64, bytes: &[u8]) -> Result<(), String> {
+        self.source_ready()?;
         let n = self.node(id)?;
         if n.kind != 1 {
             return Err("EISDIR".into());
@@ -287,9 +289,11 @@ impl Engine {
         .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
         self.revision += 1;
+        self.retire_sources()?;
         Ok(())
     }
     pub fn truncate(&mut self, id: i64, size: i64) -> Result<(), String> {
+        self.source_ready()?;
         if size < 0 {
             return Err("EFBIG".into());
         }
@@ -312,6 +316,7 @@ impl Engine {
         .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
         self.revision += 1;
+        self.retire_sources()?;
         Ok(())
     }
     pub fn read(&self, id: i64, at: i64, out: &mut [u8]) -> Result<usize, String> {
@@ -410,6 +415,7 @@ impl Engine {
     }
     /// The caller holds the mutation lock through capture, publication and install.
     pub fn install_prepared(&mut self) -> Result<(), String> {
+        self.source_ready()?;
         let tx = self.db.transaction().map_err(|e| e.to_string())?;
         tx.execute("UPDATE inodes SET root=(SELECT content FROM prepared WHERE id=inodes.id),base_size=size,base_visible=size,dirty=0,is_new=0,published=1 WHERE id IN(SELECT id FROM prepared) AND kind=1",[]).map_err(|e|e.to_string())?;
         tx.execute(
@@ -438,6 +444,7 @@ impl Engine {
         tx.execute("DELETE FROM edits", [])
             .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
+        self.drain_sources()?;
         Ok(())
     }
 }
