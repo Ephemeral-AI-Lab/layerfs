@@ -26,3 +26,5 @@ pub mod minio_stats;
 
 pub mod edits;
 pub mod prepared;
+
+pub mod file_facts;

@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "8d36182072f77cd3ed4ae3ee48f8a292076a337161ed803498c928c4f98ac9e8",
+  "raw_utf8": "   Compiling phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/benchmark/phase6-live)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.83s\n     Running tests/file_facts.rs (core/benchmark/phase6-live/target/debug/deps/file_facts-ff6821722963e325)\n\nrunning 4 tests\ntest rejects_authenticated_but_short_slice_and_wrong_role_or_eof ... ok\ntest deferred_child_certification_and_immutable_reuse ... ok\ntest rejects_forged_child_summary_and_short_nonroot ... ok\ntest changed_graph_reuses_certified_payloads_and_validates_exact_state ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n"
+}

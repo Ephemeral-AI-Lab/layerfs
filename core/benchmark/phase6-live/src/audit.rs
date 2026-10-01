@@ -4,13 +4,13 @@ use layerfs_content::{
     inode_leaf::InodeKind,
     FilesystemRead, ObjectId,
 };
-use layerfs_telemetry::timer::Timing;
 use std::collections::BTreeSet;
 pub fn candidate(
     reader: &Reader,
     root: ObjectId,
     scope: InodeScope,
     profile: ObjectId,
+    locators: &crate::metadata_catalog::LocatorDb,
 ) -> Result<(), String> {
     let mut fs = FilesystemRead::new(reader, FilesystemRootId(root)).map_err(|e| e.to_string())?;
     if fs.root().scope() != scope || fs.root().profile() != profile {
@@ -44,17 +44,8 @@ pub fn candidate(
                 }
             }
             InodeKind::RegularFile => {
-                let (result, _) =
-                    Timing::disabled("candidate authenticated graph validation", |t| {
-                        layerfs_content::read_all_bounded(
-                            reader,
-                            resolved.value.content_root,
-                            i64::MAX as u64,
-                            &mut std::io::sink(),
-                            t.child("stream"),
-                        )
-                    });
-                result.map_err(|e| e.to_string())?;
+                let work = locators.certify_file(resolved.value.content_root)?;
+                eprintln!("P6_FILE_CERTIFY {work:?}");
             }
             InodeKind::Symlink => {
                 return Err("symlink capability unsupported in first profile".into())

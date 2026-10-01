@@ -242,3 +242,38 @@ connection; indexed bounded-depth certificate checks replace only repeated full
 file reads. Namespace/portable validation stays enabled; no namespace/canonical/
 physical/profile qualification claimed. One affected provider4KiB gate next,
 existing15/9.5s bounds/cacheINELIGIBLE. Larger groups remain incomplete.
+
+## V4c2a file certificate runtime PARTIAL; real provider next
+
+Parent `57f032fba8d14fb4d2c8f3d7dbdabbb3fe074511`. Owned experimental file_facts,
+locator registration and audit caller/lib, external file_facts tests. New global
+SQL facts/child ordinals are derived from authenticated canonical registration
+in the same locator transaction, using public C1 codecs. Existing exact CAS checks,
+physical locators and pack ACKs unchanged. Root/file/mapping/slice/role/level/
+extent/fill constraints must match every actual child. Missing/invalid facts fail;
+no full-read fallback. Graph certificate flag persists only after children pass,
+using checked decreasing mapping levels, at most34frames, one indexed child at a
+time. Statements are cached on the existing SQL connection; no per-Commit engine.
+
+Replace only audit's full payload pass with typed file-graph certification. The
+complete namespace/portable metadata walk and C5 condition remain enabled. Facts
+are not namespace certification, a payload SQL copy or a whole graph in memory.
+Existing provider immutability/retention assumption is explicit; no durability,
+GC/confinement or resource claim. Entire population/mount/import gate still open.
+
+Commands+1.85.1 --manifest-path core/benchmark/phase6-live/Cargo.toml --locked:
+external test --test file_facts4PASS; Clippy --all-targets -- -D warnings PASS;
+Darwin release build and Linux aarch64-musl release zigbuild PASS. Initial check
+used a private module name instead of the public reexport; corrected import,
+exact raw failure retained. Tests ran again only after actual statement-cache
+changes. Unchanged engine/construction/session/packing proofs reused by scope;
+full unchanged Core suites/examples and Linux Clippy not run. Product unchanged.
+
+Fixtures use actual C1 codecs and SQLite, with independent literal bad range/
+summary/fill/EOF/missing-child expectations. Deferred child registration succeeds
+only after the actual payload exists; immutable certified root then visits1/reuses1/
+edges0. New graph reuses64certified payload references while certifying2new nodes.
+No canonical expected root or physical/provider speed claim from the fixture.
+
+Next: freeze/publish runtime, one affected real-provider two-head4KiB gate under
+existing15s child/9.5s proof, cacheINELIGIBLE; all larger groups remain incomplete.

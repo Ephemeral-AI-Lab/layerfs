@@ -12,9 +12,15 @@ pub struct LocatorDb {
     pub s3: Minio,
 }
 impl LocatorDb {
+    pub fn certify_file(&self, root: ObjectId) -> Result<crate::file_facts::Work, String> {
+        let db = self.db.lock().map_err(|_| "locator owner")?;
+        crate::file_facts::certify_file(&db, root)
+    }
     pub fn create(path: &Path, s3: Minio) -> Result<Self, String> {
         let db = Connection::open(path).map_err(|e| e.to_string())?;
         db.execute_batch("PRAGMA journal_mode=MEMORY;PRAGMA synchronous=OFF;PRAGMA temp_store=MEMORY;PRAGMA cache_size=-2048;PRAGMA mmap_size=0;PRAGMA foreign_keys=ON;CREATE TABLE packs(id INTEGER PRIMARY KEY AUTOINCREMENT,digest BLOB NOT NULL UNIQUE);CREATE TABLE objects(id BLOB PRIMARY KEY,role INTEGER NOT NULL,length INTEGER NOT NULL,pack_id INTEGER NOT NULL REFERENCES packs(id),group_no INTEGER NOT NULL,record_no INTEGER NOT NULL) WITHOUT ROWID;").map_err(|e|e.to_string())?;
+        db.execute_batch(crate::file_facts::SCHEMA)
+            .map_err(|e| e.to_string())?;
         db.busy_timeout(Duration::ZERO).map_err(|e| e.to_string())?;
         Ok(Self {
             db: Mutex::new(db),
@@ -106,7 +112,7 @@ impl Locators for LocatorDb {
         let tx = db.transaction().map_err(|e| e.to_string())?;
         let mut normalized = Vec::with_capacity(rows.len());
         let mut inserted: BTreeMap<ObjectId, Locator> = BTreeMap::new();
-        for (row, old) in rows.iter().zip(old) {
+        for (index, (row, old)) in rows.iter().zip(old).enumerate() {
             if let Some(saved) = inserted.get(&row.id) {
                 normalized.push(saved.clone());
                 continue;
@@ -147,6 +153,7 @@ impl Locators for LocatorDb {
                 ],
             )
             .map_err(|e| e.to_string())?;
+            crate::file_facts::record(&tx, row.id, row.role, &canonical[index])?;
             let mut saved = row.clone();
             saved.pack_id = pack_id as u64;
             inserted.insert(saved.id, saved.clone());

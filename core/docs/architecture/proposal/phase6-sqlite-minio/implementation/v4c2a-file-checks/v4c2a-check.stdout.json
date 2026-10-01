@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "9fc8ffb87973ebfeb4ae01dddc94082e65b668839a3424682b51a97074989b6b",
+  "raw_utf8": "    Checking phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/benchmark/phase6-live)\nerror[E0603]: module `content` is private\n --> src/file_facts.rs:5:9\n  |\n5 |         content,\n  |         ^^^^^^^ private module\n  |\nnote: the module `content` is defined here\n --> /Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/crates/layerfs-content/src/file/mod.rs:9:1\n  |\n9 | mod content;\n  | ^^^^^^^^^^^\n\nFor more information about this error, try `rustc --explain E0603`.\nerror: could not compile `phase6-live-probe` (lib) due to 1 previous error\n"
+}

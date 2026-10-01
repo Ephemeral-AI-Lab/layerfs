@@ -300,6 +300,7 @@ impl Authority {
                     candidate,
                     fs.root().scope(),
                     fs.root().profile(),
+                    &self.locators,
                 )?;
                 let id = WorkspaceId::from_authority(incarnation).map_err(|e| e.to_string())?;
                 let base = LayerId::from_bytes(s.base).map_err(|e| e.to_string())?;
