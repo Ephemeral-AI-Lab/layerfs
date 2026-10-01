@@ -1,0 +1,14 @@
+{
+  "source": "198c25296c7e447348422f98a1a11bf0d3732ccc",
+  "image": "sha256:85277e6afac086ecd50780c642e47e56c3ef9ecace0986d4203eb8a07afc0d5b",
+  "driver_sha256": "f21dc04190727697c6b6470089fbe82e066609cb23c748413312a57282224189",
+  "minio_sha256": "b107901fd1afe7b36165c6aa66bb027f96e2ec2b690eebe8c9376746d9a9b0df",
+  "harness_sha256": "be75c9b47f2b3d0d74d9b7f52b915e2c9119a95fb5bc459e12c3330830cd5daa",
+  "dependency_lock_sha256": "94ab50d4fe1c8a7ef1206770f17717020003c76a546c42a2b7c90d4285c9cdac",
+  "armv8_build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "workload_source_sha256": "c7f14feed14b736ad5de89607975197f6a1d92bf752bb9926feaa572baf71727",
+  "cache": "INELIGIBLE: OS/page cache unknown",
+  "purpose": "v4a-native-connection-count-diagnostic",
+  "complete_child_limit_seconds": 15,
+  "separate_proof_limit_seconds": 9.5
+}

@@ -38,3 +38,19 @@ diagnostic remains NOT_RUN at this source checkpoint.
 
 Next: one fresh sealed count-driven diagnostic on V3's exact two-head workload,
 then inspect actual connection and request costs before the single session change.
+
+## 2026-10-02 — V4a cause diagnostic observed
+
+Source `198c25296c7e447348422f98a1a11bf0d3732ccc`; one declared count-driven
+real-provider diagnostic, fresh `v4a-connection-diagnostic`, child exit 0 in
+7.410180 s. Bytes/mode/parent/head and cleanup PASS. No plain-arm resample.
+Overwrite Commit 331.744250 ms: 37 actual metadata connections, 213.298414 ms
+connect/authentication (5.764822 ms per connection), calls 29 lookup + 7 register
++ 1 publish. First cumulative snapshot includes bootstrap; its 38 connections
+and 218.887334 ms are not relabeled as a pure Commit phase. All raw times remain
+cache INELIGIBLE; physical/canonical and larger workload gates remain open.
+
+Connection setup/accept polling is a demonstrated major cost. Next: one shared
+authenticated session, monotonic exact reply IDs, known idle rotation before new
+submission, quarantine on failure, bounded physical connection ownership. Keep
+all construction/storage/validation algorithms unchanged for this treatment.

@@ -1,0 +1,8 @@
+control session ended: Io unknown=false cleanup=None history=None
+SQL FUSE: ENOENT
+P6 commit generation=1 revision=9 callbacks=35 objects=11 pack_bytes=3959 duplicates=7 root=e90d2bb1dc2d98f1cea982b5f6fcd7815391e5ee40c4d59ee3f82658df4575a4
+P6_METADATA_STATS {"calls":[1, 25, 11, 0, 1],"connect_attempts":38,"connect_ns":218887334,"request_ns":[554500, 10402961, 18628874, 0, 20585250]}
+P6 commit generation=2 revision=15 callbacks=61 objects=7 pack_bytes=2556 duplicates=11 root=48ae12d86773b08cd28b039c15a5b1380e1213ab7b31cfab78dd2c3e4c6bd679
+P6_METADATA_STATS {"calls":[1, 54, 18, 0, 2],"connect_attempts":75,"connect_ns":432185748,"request_ns":[554500, 26381252, 28969790, 0, 38868666]}
+P6 explicit unmount callbacks=61 handles=0
+control session ended: Io unknown=false cleanup=None history=None

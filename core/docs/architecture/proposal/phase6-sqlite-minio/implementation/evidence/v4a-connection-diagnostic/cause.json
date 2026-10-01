@@ -1,0 +1,23 @@
+{
+  "source": "198c25296c7e447348422f98a1a11bf0d3732ccc",
+  "purpose": "count-driven cause diagnostic; not a repeated plain performance sample",
+  "overwrite_connections": 37,
+  "overwrite_connect_ns": 213298414,
+  "overwrite_action_calls": [
+    0,
+    29,
+    7,
+    0,
+    1
+  ],
+  "overwrite_request_ns": [
+    0,
+    15978291,
+    10340916,
+    0,
+    18283416
+  ],
+  "cache_status": "INELIGIBLE",
+  "semantic_proof": "PASS",
+  "cleanup": "PASS"
+}
