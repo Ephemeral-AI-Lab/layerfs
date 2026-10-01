@@ -1,0 +1,258 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/core/crates/layerfs-storage)
+error[E0277]: the trait bound `u64: ToSql` is not satisfied
+  --> crates/layerfs-storage/examples/repository_probe/packs.rs:55:79
+   |
+55 | ...?.execute(params![id, bytes.len(), blake3::hash(&bytes).to_hex().to_string()])?;
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `ToSql` is not implemented for `u64`
+   |
+   = help: the following other types implement trait `ToSql`:
+             f32
+             f64
+             i16
+             i32
+             i64
+             i8
+             isize
+             u16
+           and 2 others
+   = note: required for the cast from `&u64` to `&dyn ToSql`
+   = note: this error originates in the macro `params` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `usize: ToSql` is not satisfied
+  --> crates/layerfs-storage/examples/repository_probe/packs.rs:55:79
+   |
+55 | ....execute(params![id, bytes.len(), blake3::hash(&bytes).to_hex().to_string()])?;
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `ToSql` is not implemented for `usize`
+   |
+   = help: the following other types implement trait `ToSql`:
+             f32
+             f64
+             i16
+             i32
+             i64
+             i8
+             isize
+             u16
+           and 2 others
+   = note: required for the cast from `&usize` to `&dyn ToSql`
+   = note: this error originates in the macro `params` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `usize: FromSql` is not satisfied
+   --> crates/layerfs-storage/examples/repository_probe/packs.rs:86:185
+    |
+86  | ...tes().as_slice()], |r| Ok((r.get(0)?, r.get(1)?))).optional()?;
+    |                                            ^^^ the trait `FromSql` is not implemented for `usize`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `usize: ToSql` is not satisfied
+  --> crates/layerfs-storage/examples/repository_probe/packs.rs:98:107
+   |
+98 | ...te(params![id.as_bytes().as_slice(), object.role().code(), object.canonical_len()])?;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `ToSql` is not implemented for `usize`
+   |
+   = help: the following other types implement trait `ToSql`:
+             f32
+             f64
+             i16
+             i32
+             i64
+             i8
+             isize
+             u16
+           and 2 others
+   = note: required for the cast from `&usize` to `&dyn ToSql`
+   = note: this error originates in the macro `params` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/examples/repository_probe/packs.rs:111:110
+    |
+111 |         let pending: u64 = self.db.query_row("SELECT count(*) FROM objects WHERE pack_id IS NULL", [], |r| r.get(0))?;
+    |                                                                                                              ^^^ the trait `FromSql` is not implemented for `u64`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `usize: FromSql` is not satisfied
+   --> crates/layerfs-storage/examples/repository_probe/read.rs:41:124
+    |
+41  | ...om_code(r.get(1)?)?,canonical_length: r.get(2)?,pack_id: r.get(3)?,group_number: r.get(4)?,record_number: r.get(5)?});
+    |                                            ^^^ the trait `FromSql` is not implemented for `usize`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `usize: FromSql` is not satisfied
+   --> crates/layerfs-storage/examples/repository_probe/read.rs:41:167
+    |
+41  | ...(2)?,pack_id: r.get(3)?,group_number: r.get(4)?,record_number: r.get(5)?});
+    |                                            ^^^ the trait `FromSql` is not implemented for `usize`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `usize: FromSql` is not satisfied
+   --> crates/layerfs-storage/examples/repository_probe/read.rs:41:192
+    |
+41  | ...roup_number: r.get(4)?,record_number: r.get(5)?});
+    |                                            ^^^ the trait `FromSql` is not implemented for `usize`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/examples/repository_probe/read.rs:90:163
+    |
+90  | ...{columns} FROM {b}.{table})"), [], |r| r.get(0))?;
+    |                                             ^^^ the trait `FromSql` is not implemented for `u64`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/examples/repository_probe/read.rs:102:27
+    |
+102 |         let size: u64 = r.get(1)?;
+    |                           ^^^ the trait `FromSql` is not implemented for `u64`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/examples/minio_repository_probe.rs:33:29
+    |
+33  |         let size: u64 = row.get(1)?;
+    |                             ^^^ the trait `FromSql` is not implemented for `u64`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/examples/minio_repository_probe.rs:50:129
+    |
+50  |     let missing: u64 = packer.db.query_row("SELECT count(*) FROM entries WHERE kind='file' AND content_root IS NULL", [], |r| r.get(0))?;
+    |                                                                                                                                 ^^^ the trait `FromSql` is not implemented for `u64`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `layerfs-storage` (example "minio_repository_probe") due to 12 previous errors

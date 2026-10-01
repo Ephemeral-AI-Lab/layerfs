@@ -1,0 +1,5 @@
+{
+  "catalog_bytes": 93188096,
+  "catalog_sha256": "5ec0125dde3285b41bd0e1ff313494ae1dc1c34d18e84dec605d109f5fb44319",
+  "packs_seal": "per-pack BLAKE3 in private catalog"
+}

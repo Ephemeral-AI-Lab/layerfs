@@ -1,0 +1,5 @@
+{
+  "binary_sha256": "9ba44319e176360ad37391868b0c0030ca2e1e307aa985fafda4ba358d58ece5",
+  "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "profile": "release locked Cargo1.85.1; repo-root .cargo/config.toml"
+}

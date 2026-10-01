@@ -1,0 +1,9 @@
+{
+  "bytes": 1389188326,
+  "connections": 4,
+  "max_body_started_before_ack": 0,
+  "max_outstanding": 8,
+  "overlap_scope": "client request bodies sent before prior ACK; no provider CPU overlap claim",
+  "packs": 5836,
+  "transfer_ns": 3783822625
+}

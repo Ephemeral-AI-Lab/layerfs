@@ -1,0 +1,23 @@
+{
+  "command": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/tools/storage_probes/repository_probe.py",
+    "perf",
+    "--master",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/deepseek-full-master-v2",
+    "--stage",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/deepseek-full-import-v1/stage",
+    "--output",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/deepseek-full-import-v1",
+    "--minio",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/deepseek-full-import-v1/minio-provider",
+    "--binary",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/core/target/release/examples/minio_repository_probe",
+    "--sqlite-provider",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/sqlite-3.51.3-provider"
+  ],
+  "exit": 0,
+  "limit_seconds": 25,
+  "status": "COMPLETE",
+  "wall_ns": 4635967916
+}

@@ -1,0 +1,17 @@
+{
+  "capture_scope": "stable per-file bytes checked during read; no atomic multi-file live-repository snapshot claim; metadata/xattrs recorded in closed manifest",
+  "copy": "independent byte copies; internal hardlink aliases preserved; symlink targets copied",
+  "counts": {
+    "bytes": 3475776149,
+    "directories": 16868,
+    "files": 103108,
+    "hardlink_aliases": 0,
+    "symlinks": 10070,
+    "xattrs": 130046
+  },
+  "manifest_sha256": "541f55db9814837fd60386e42e56781e80fbdbd6d555d4bb0e3a099e215139af",
+  "scope": "all paths including .git and ignored/generated entries; no symlink following",
+  "source": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-harness",
+  "transcript_sha256": "c6da088ccba1875d34e5d2a512896d162a7812466c9a57f9396c5aa3798e961f",
+  "wall_ns": 51100993916
+}

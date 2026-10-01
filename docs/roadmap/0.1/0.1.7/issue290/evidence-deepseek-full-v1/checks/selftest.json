@@ -1,0 +1,15 @@
+{
+  "coverage": [
+    "empty",
+    "small",
+    "chunked",
+    "dedup",
+    "raw xattr",
+    "symlink target",
+    "actual MinIO body",
+    "catalog READY",
+    "download decode exact source EOF"
+  ],
+  "performance_sample": false,
+  "status": "PASS"
+}
