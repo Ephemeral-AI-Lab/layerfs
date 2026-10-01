@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "61eff0d80c4c7b7f308484638f139b3e6cbd857ac6ebbf61f920fc71433c3205",
+  "raw_utf8": "P6_MANIFEST step=seed files=9 bytes=1114501\nP6_MANIFEST step=target files=137 bytes=1115287\nP6_MANIFEST step=localized-successor files=137 bytes=1115288\nP6_MANIFEST step=enumeration-churn files=137 bytes=1115288\nP6_MANIFEST step=clean-retirement files=137 bytes=1115288\nproof failed: mode mismatch spans\n"
+}

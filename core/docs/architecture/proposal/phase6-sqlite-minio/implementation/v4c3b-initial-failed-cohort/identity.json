@@ -1,0 +1,16 @@
+{
+  "source": "fb16b6c907700361f680ee0f7ed4fb5b281ccddb",
+  "image": "sha256:05988e69b3c3e7575a529fd21e18d770a164f00ea84f07bac6517a423ed0006d",
+  "driver_sha256": "fac8dde1b802908614878faf26fa77cb2af766592faf5e03411b65c58f82882a",
+  "minio_sha256": "b107901fd1afe7b36165c6aa66bb027f96e2ec2b690eebe8c9376746d9a9b0df",
+  "harness_sha256": "1356898d1e9910d23a095079ce7fd216ad420e722e13ef354fd7cb4de1e712d1",
+  "dependency_lock_sha256": "94ab50d4fe1c8a7ef1206770f17717020003c76a546c42a2b7c90d4285c9cdac",
+  "armv8_build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "workload_source_sha256": "afc66488f2702d84540e89dbc7b954075a1d0094ecc1fea3e0005fb57052d179",
+  "cache": "INELIGIBLE: OS/page cache unknown",
+  "purpose": "V4c3b bounded span reads/SQL operation windows; original full128five steps plus sparse sixth root; one-source correctness/count diagnostic",
+  "complete_child_limit_seconds": 15,
+  "separate_proof_limit_seconds": 9.5,
+  "case_file_sha256": "d0d69e5ccf2852a223b2bbf184e287e3e3f82563f0bbd5aefd929b909c6f4c6a",
+  "scenario_module_sha256": "c3d0bbb10a87773b131ff7ca9682b68a01450daa86ca0d379a0824372a5999fd"
+}

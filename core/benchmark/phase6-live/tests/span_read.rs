@@ -55,6 +55,19 @@ fn late(count: i64) -> (u64, i32) {
         "P6_SPAN_SQL_DIAGNOSTIC spans={count} old_vm={old_steps} new_vm={} rows={} plan={plan}",
         work.vm_steps, work.rows
     );
+    let mut q=e.db.prepare("SELECT start,end,source,offset FROM extents WHERE ino=?1 AND start<?2 AND end>?2 ORDER BY start DESC LIMIT 1").unwrap();
+    q.reset_status(StatementStatus::VmStep);
+    let mut rows = q.query(params![id, at + 8]).unwrap();
+    assert!(rows.next().unwrap().is_none());
+    drop(rows);
+    let old_boundary = q.get_status(StatementStatus::VmStep);
+    drop(q);
+    let before = e.mutation_work.get();
+    e.write(id, at + 8, b"Y").unwrap();
+    let after = e.mutation_work.get();
+    let new_boundary = after.vm_steps - before.vm_steps;
+    assert!(new_boundary < 128, "new mutation VM={new_boundary}");
+    println!("P6_MUTATION_SQL_DIAGNOSTIC spans={count} old_boundary_vm={old_boundary} new_boundary_delete_vm={new_boundary}");
     drop(e);
     std::fs::remove_dir_all(p).unwrap();
     (work.vm_steps, old_steps)

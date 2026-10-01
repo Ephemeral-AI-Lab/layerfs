@@ -1,0 +1,13 @@
+{
+  "source_case": "phase6-live-catalog128-v1",
+  "source_sha256": "65a6b47f683244fd18003cefd2f0109ba95ad4badb05dc7b0bfb5d6bc55b971b",
+  "case_sha256": "8c702ca7d4af806e5725ceb3d60b8e168bde2ab8bb835d9e70d17022b690e136",
+  "original_steps_preserved": 5,
+  "new_command": "i=0; while [ \"$i\" -lt 64 ]; do printf X | dd of=spans bs=1 seek=$((i*4096)) conv=notrunc 2>/dev/null || exit; i=$((i+1)); done; test \"$(wc -c < spans)\" -eq 258049 && test \"$(dd if=spans bs=1 skip=258048 count=1 2>/dev/null)\" = X",
+  "literal_file_bytes": 258049,
+  "literal_file_sha256": "f4cd34cb0357f6aa871f69c67fde0424f046aa9a772ac8a6dba684a099af619d",
+  "manifest_sha256": "0d55f12a17b0635c6aa0c43964bb5184ce3b090fac577e63c1322011ada299e0",
+  "performance_limit_seconds": 15,
+  "proof_limit_seconds": 9.5,
+  "cache": "INELIGIBLE: OS/page cache unknown"
+}

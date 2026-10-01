@@ -594,3 +594,14 @@ corrected without passing-suite repeat; undefined orchestration variable rejecte
 before execution. Details V4C3B-RUNTIME.md/rawv4c3b-native-checks. Current512/256
 profile unchanged; physical journal/cache/rootvectors unrun. Next sealed6root full128
 +sparse liveproof; then paged reserve/admission/import and full families/DeepSeek.
+
+## V4c3b correction PARTIAL; initial proof failure retained
+
+Parentfb16b6c907700361f680ee0f7ed4fb5b281ccddb. Performance7.963867792s
+completed6publication operations/cleanup, separate4.187174042s proof failed mode mismatchspans after
+5passed roots. Oracle used0644decimal vs420; corrected independent mode, no old
+receipt relabel. Source review fixes analogous write boundary/delete prefix scans
+and whole-tail truncate transactions. New read38VM64/4097 vsold275/16407, new
+mutation50VM vsold270/16402.17covering checks/hostClippy/fmt/native+Linuxrelease
+PASS; unaffected index7reused by scope. V4C3B-CORRECTION.md/raw failed evidence
+preserved. Next corrected-source6root gate with original budgets; full goal active.

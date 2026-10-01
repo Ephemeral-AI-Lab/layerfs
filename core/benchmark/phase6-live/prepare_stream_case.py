@@ -12,7 +12,7 @@ def main():
     for i in range(64):expected[i*4096]=ord('X')
     lines=steps[-1][2].rstrip().splitlines()
     if any(s.split('\t')[0]=='spans' for s in lines):raise ValueError('fixture already owns spans')
-    lines.append('spans\tf\t0644\t'+str(len(expected))+'\t'+hashlib.sha256(expected).hexdigest())
+    lines.append('spans\tf\t420\t'+str(len(expected))+'\t'+hashlib.sha256(expected).hexdigest())
     manifest='\n'.join(sorted(lines))+'\n'
     command='i=0; while [ "$i" -lt 64 ]; do printf X | dd of=spans bs=1 seek=$((i*4096)) conv=notrunc 2>/dev/null || exit; i=$((i+1)); done; test "$(wc -c < spans)" -eq 258049 && test "$(dd if=spans bs=1 skip=258048 count=1 2>/dev/null)" = X'
     steps.append(('sparse-span-read',command,manifest));out=encode('phase6-live-stream128-v1',steps)

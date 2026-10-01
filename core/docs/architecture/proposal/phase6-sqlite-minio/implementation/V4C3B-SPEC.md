@@ -74,3 +74,15 @@ current fixed caps using these bounded mechanisms. Then remaining syscalls, genu
 seven-family and complete DeepSeek import/command/locality plus physical/Unknown/
 concurrency/canonical qualification. Full goal active; checkpoint/LOC/comments#294,
 major outcomes#293, no issue closure or #288campaign claim.
+
+## Source-evidenced mutation/oracle addendum
+
+Initial6root gate failed only after5passed roots because a new manifest encoded
+octal0644 in decimal field. Independent correction420 preserves commands/bytes.
+Actual write boundary queries share earlier-prefix defect: seek nearest, check
+overlap in typed caller, delete exact start range.64/4097span count proof fixes50
+VMsteps versus270/16402old. Truncate accepts size/visibility in short transaction,
+then crossing span point update/64row tail delete, preserving accepted logical
+intent and quarantine after cleanup failure. Current128KiBbody/512/256scope retained;
+physical journal/cache observation remains required. Corrected source gets one
+covering6root gate; old failure preserved. No unchanged passing arm rerun.

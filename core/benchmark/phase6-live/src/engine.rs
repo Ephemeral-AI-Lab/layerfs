@@ -25,6 +25,7 @@ pub struct Engine {
     pub(crate) installation_failed: bool,
     pub span_work: Cell<crate::span_read::Work>,
     pub install_work: Cell<crate::install::Work>,
+    pub mutation_work: Cell<crate::span_write::Work>,
 }
 /// Logical source bytes served by the engine; not physical cache or all C1 reads.
 #[derive(Clone, Copy, Default, Debug)]
@@ -93,6 +94,7 @@ impl Engine {
             installation_failed: false,
             span_work: Cell::new(Default::default()),
             install_work: Cell::new(Default::default()),
+            mutation_work: Cell::new(Default::default()),
         })
     }
     pub fn node(&self, id: i64) -> Result<Node, String> {
@@ -261,13 +263,11 @@ impl Engine {
             .map_err(|e| e.to_string())?;
         file.write_all(bytes).map_err(|e| e.to_string())?;
         drop(file);
-        let left:Option<(i64,i64,i64,i64)>=tx.query_row("SELECT start,end,source,offset FROM extents WHERE ino=?1 AND start<?2 AND end>?2 ORDER BY start DESC LIMIT 1",params![id,start],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))).optional().map_err(|e|e.to_string())?;
-        let right:Option<(i64,i64,i64,i64)>=tx.query_row("SELECT start,end,source,offset FROM extents WHERE ino=?1 AND start<?2 AND end>?2 ORDER BY start DESC LIMIT 1",params![id,end],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))).optional().map_err(|e|e.to_string())?;
-        tx.execute(
-            "DELETE FROM extents WHERE ino=?1 AND start<?2 AND end>?3",
-            params![id, end, start],
-        )
-        .map_err(|e| e.to_string())?;
+        let mut mutation = self.mutation_work.get();
+        let left = crate::span_write::boundary(&tx, id, start, &mut mutation)?;
+        let right = crate::span_write::boundary(&tx, id, end, &mut mutation)?;
+        let lower = left.map_or(start, |r| r.0);
+        crate::span_write::delete_range(&tx, id, lower, end, &mut mutation)?;
         if let Some((a, _, s, o)) = left {
             tx.execute(
                 "INSERT INTO extents VALUES(?1,?2,?3,?4,?5)",
@@ -295,33 +295,7 @@ impl Engine {
         .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
         self.revision += 1;
-        self.retire_sources()?;
-        Ok(())
-    }
-    pub fn truncate(&mut self, id: i64, size: i64) -> Result<(), String> {
-        self.source_ready()?;
-        if size < 0 {
-            return Err("EFBIG".into());
-        }
-        let tx = self.db.transaction().map_err(|e| e.to_string())?;
-        tx.execute(
-            "DELETE FROM extents WHERE ino=?1 AND start>=?2",
-            params![id, size],
-        )
-        .map_err(|e| e.to_string())?;
-        tx.execute(
-            "UPDATE extents SET end=?2 WHERE ino=?1 AND start<?2 AND end>?2",
-            params![id, size],
-        )
-        .map_err(|e| e.to_string())?;
-        let (sec, nano) = now();
-        tx.execute(
-            "UPDATE inodes SET size=?2,base_visible=min(base_visible,?2),seconds=?3,nanos=?4,dirty=CASE WHEN links>0 OR published=1 THEN 1 ELSE 0 END WHERE id=?1",
-            params![id, size, sec, nano],
-        )
-        .map_err(|e| e.to_string())?;
-        tx.commit().map_err(|e| e.to_string())?;
-        self.revision += 1;
+        self.mutation_work.set(mutation);
         self.retire_sources()?;
         Ok(())
     }

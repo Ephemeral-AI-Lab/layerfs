@@ -50,3 +50,5 @@ pub mod source_retirement;
 pub mod install;
 pub mod span_read;
 pub mod sql_windows;
+
+pub mod span_write;
