@@ -1,0 +1,44 @@
+{
+  "schema": 3,
+  "case_id": "phase6-smoke",
+  "kind": "correctness diagnostic performance phase",
+  "cache_status": "INELIGIBLE: OS/page cache unknown",
+  "sqlite_version": "3.53.2",
+  "image": "sha256:52f618a114e3a3bb9db0e447e4a09dcfe993857b5e5652c789649a742a40c261",
+  "genesis_ns": 3228250,
+  "genesis_ms": 3.22825,
+  "complete_command_ns": 5847499875,
+  "complete_command_ms": 5847.499875,
+  "rows": [
+    {
+      "case": "create",
+      "exec_ns": 13431041,
+      "commit_ns": 36377750,
+      "exec_ms": 13.431041,
+      "commit_ms": 36.37775,
+      "generation": 1,
+      "root": "e851ba56aa6b80131f19cb8b9f67254be66e8d9ec346de44f8ace2a112169819"
+    },
+    {
+      "case": "overwrite",
+      "exec_ns": 13787583,
+      "commit_ns": 31287792,
+      "exec_ms": 13.787583,
+      "commit_ms": 31.287792,
+      "generation": 2,
+      "root": "3c98b94eb0fac2ed977073d25bedb40099263e32eee9ce1adfbe2c4858961bb2"
+    }
+  ],
+  "semantic_proof": "PASS",
+  "canonical_reference": "NOT_RUN",
+  "physical_resources": "NOT_RUN",
+  "cleanup": "PASS",
+  "proof_ms": 21.47425,
+  "proof_ns": 21474250,
+  "normal_service_provider_io": "PASS",
+  "performance_child_wall_ns": 5907327333,
+  "proof_child_wall_ns": 38272042,
+  "performance_child_wall_seconds": 5.907327333,
+  "proof_child_wall_seconds": 0.038272042,
+  "proof_plan_sha256": "316ebc0dc52338cdd43fcf9ae63e56c77efed0b78d1852b514141277c0fc6496"
+}

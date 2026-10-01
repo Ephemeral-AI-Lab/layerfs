@@ -659,3 +659,19 @@ preserved;source-demonstratedcorrectedcoveringchecks. S1-RUNTIME/rawchecks recor
 exactscope/gaps. Next sealedoriginal128+trustthen270+trust; noauthorityproviderI/O,
 fullreadonlybytes/history/cleanup,15/9.5bounds,cacheINELIGIBLE. DeepExecoptimization
 deferred,current512/256andbroaderfullgoalopen.
+
+## S1 real-provider dependency COMPLETE; fullgoalopen
+
+Runtime38b2d88c7b6efc97a4cede2dcbbba3232996ec25. Originalfull128/270threecommands
+plusgenericroot/nonrootpublisherboundary and separate root4KiBoverwrite passall
+bytes/modes/history/cleanup. ActualglobalMinIOstats unchangedfromgenesis;zero
+authorityGET/PUTdelta atallknownpublications.128targetCommit109523167ns/publication
+636083ns,270target159626042ns/publication583417ns; cacheINELIGIBLE,historical
+628/1285ms notmatchedspeedPASS. ShallowExec3329917ns/Commit38156000ns;deepExec
+101474666ns deferredlatency. Child/proof1286254143375/3166991084ns,2706489480000/
+6757839000ns,root5907327333/38272042ns under15/9.5sbounds. Initialmissingfixture
+imageattemptFAIL1118706958ns retainedwithcontainer; correctedsealedfixtureimage,
+binaries/source/originalcommandsunchanged. RESULTS-S1/rawcohort recordidentity
+andgaps. Current512/256/serialized/FULLlimits remain. NextS2admittedpagedSQL
+populations/editstorage,theninheritedimport; no returntodeletedglobalproofengine.
+Allbroaderfamilies/fullDeepSeek/compatibility/physical/Unknownscopeopen. Goalactive.

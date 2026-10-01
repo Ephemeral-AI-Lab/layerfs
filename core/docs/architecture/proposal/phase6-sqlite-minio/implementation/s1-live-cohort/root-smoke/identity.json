@@ -1,0 +1,15 @@
+{
+  "source": "38b2d88c7b6efc97a4cede2dcbbba3232996ec25",
+  "image": "sha256:52f618a114e3a3bb9db0e447e4a09dcfe993857b5e5652c789649a742a40c261",
+  "driver_sha256": "9e2f88015dff8da686421bfbf7525533613dec428e5ffa61d81b8fc06e074635",
+  "minio_sha256": "b107901fd1afe7b36165c6aa66bb027f96e2ec2b690eebe8c9376746d9a9b0df",
+  "harness_sha256": "824367b84c0e7f1474b86b6e44c812ffd5e8c5a53eaad88033e2e7f62d84c6d2",
+  "dependency_lock_sha256": "94ab50d4fe1c8a7ef1206770f17717020003c76a546c42a2b7c90d4285c9cdac",
+  "armv8_build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "workload_source_sha256": "c6a91d9670c69581c7c5b8faf8d3f0e980d6d3544ae3635f9292e2f579ac0899",
+  "cache": "INELIGIBLE: OS/page cache unknown",
+  "purpose": "S1 source-covering root4KiB create/overwrite two-head publicSDK/FUSE/MinIO/C5 correctness proof; zero authority provider IO; idle failed d2433851ea59 declared interference; one diagnostic not new benchmark family",
+  "metadata_profile": "P6META7 trusted daemon / locator schema2",
+  "complete_child_limit_seconds": 15,
+  "separate_proof_limit_seconds": 9.5
+}

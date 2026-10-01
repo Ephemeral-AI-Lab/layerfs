@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "746420d5e6b50080e6da9c2b187a41cf0853d54dc379b5cc8f6ec8df8c65e332",
+  "raw_utf8": "P6_MANIFEST step=seed files=3 bytes=30\nP6_MANIFEST step=target files=4 bytes=34\nP6_MANIFEST step=localized-successor files=4 bytes=39\nP6_MANIFEST step=publisher-boundary files=4 bytes=39\n"
+}

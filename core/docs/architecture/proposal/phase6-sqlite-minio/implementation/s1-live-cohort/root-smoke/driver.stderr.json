@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "b7a6da67419b7fab9f42f5f1b59d990f9b423451e764cb18ac3cfdc38159d464",
+  "raw_utf8": "P6_GLOBAL_BASELINE {\"put_calls\":3,\"get_calls\":0,\"put_requested_bytes\":1254,\"get_received_bytes\":0}\nP6_PUBLICATION context_ns=71166 stage_ns=136625 commit_ns=120959 candidate_locators=1\nP6_AUTHORITY_IO {\"put_calls\":3,\"get_calls\":0,\"put_requested_bytes\":1254,\"get_received_bytes\":0}\nP6_PUBLICATION context_ns=59375 stage_ns=122167 commit_ns=110375 candidate_locators=1\nP6_AUTHORITY_IO {\"put_calls\":3,\"get_calls\":0,\"put_requested_bytes\":1254,\"get_received_bytes\":0}\nmetadata session closed: Deadline unknown=false cleanup=None history=None\n"
+}

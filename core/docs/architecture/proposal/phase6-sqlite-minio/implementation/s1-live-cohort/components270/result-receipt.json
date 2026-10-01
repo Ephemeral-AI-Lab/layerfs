@@ -1,0 +1,62 @@
+{
+  "schema": 3,
+  "case_id": "phase6-live-components270-trust-v1",
+  "kind": "correctness diagnostic performance phase",
+  "cache_status": "INELIGIBLE: OS/page cache unknown",
+  "sqlite_version": "3.53.2",
+  "image": "sha256:52f618a114e3a3bb9db0e447e4a09dcfe993857b5e5652c789649a742a40c261",
+  "genesis_ns": 3274250,
+  "genesis_ms": 3.27425,
+  "complete_command_ns": 6449820250,
+  "complete_command_ms": 6449.82025,
+  "rows": [
+    {
+      "case": "seed",
+      "exec_ns": 26388000,
+      "commit_ns": 37425209,
+      "exec_ms": 26.388,
+      "commit_ms": 37.425209,
+      "generation": 1,
+      "root": "baf38cd9ecd1b570964fb614ba643b2abdfb84f0867133db40ca1451b0ffcaf9"
+    },
+    {
+      "case": "target",
+      "exec_ns": 266234584,
+      "commit_ns": 159626042,
+      "exec_ms": 266.234584,
+      "commit_ms": 159.626042,
+      "generation": 2,
+      "root": "1979b0059fe8e6cae3872f117e2982d3e118213cfc0049a0af2aed8b14931665"
+    },
+    {
+      "case": "localized-successor",
+      "exec_ns": 101474666,
+      "commit_ns": 41733083,
+      "exec_ms": 101.474666,
+      "commit_ms": 41.733083,
+      "generation": 3,
+      "root": "8f48f99359f37304e08f5ad52c93988a32a07edddd257cfd63ffee292fa30a86"
+    },
+    {
+      "case": "publisher-boundary",
+      "exec_ns": 5041375,
+      "commit_ns": 15975291,
+      "exec_ms": 5.041375,
+      "commit_ms": 15.975291,
+      "generation": 4,
+      "root": "8f48f99359f37304e08f5ad52c93988a32a07edddd257cfd63ffee292fa30a86"
+    }
+  ],
+  "semantic_proof": "PASS",
+  "canonical_reference": "NOT_RUN",
+  "physical_resources": "NOT_RUN",
+  "cleanup": "PASS",
+  "proof_ms": 6703.756083,
+  "proof_ns": 6703756083,
+  "normal_service_provider_io": "PASS",
+  "performance_child_wall_ns": 6489480000,
+  "proof_child_wall_ns": 6757839000,
+  "performance_child_wall_seconds": 6.48948,
+  "proof_child_wall_seconds": 6.757839,
+  "proof_plan_sha256": "0023a20f566446ac8e2f2afc43d17701ec6d82452ba284b96c4d348bddcb832b"
+}

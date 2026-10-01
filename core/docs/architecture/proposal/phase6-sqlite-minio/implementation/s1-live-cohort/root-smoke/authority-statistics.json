@@ -1,0 +1,23 @@
+{
+  "baseline": {
+    "put_calls": 3,
+    "get_calls": 0,
+    "put_requested_bytes": 1254,
+    "get_received_bytes": 0
+  },
+  "known_publications": [
+    {
+      "put_calls": 3,
+      "get_calls": 0,
+      "put_requested_bytes": 1254,
+      "get_received_bytes": 0
+    },
+    {
+      "put_calls": 3,
+      "get_calls": 0,
+      "put_requested_bytes": 1254,
+      "get_received_bytes": 0
+    }
+  ],
+  "normal_service_provider_io": "PASS"
+}

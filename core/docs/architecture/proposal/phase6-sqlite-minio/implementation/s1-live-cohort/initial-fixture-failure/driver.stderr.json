@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "34e23ca6ff2da6ad2e71c0b932beda9f1dedc61dc9df19b03c7658794eda4da8",
+  "raw_utf8": "P6_GLOBAL_BASELINE {\"put_calls\":3,\"get_calls\":0,\"put_requested_bytes\":1254,\"get_received_bytes\":0}\nintegration diagnostic failed: command seed failed: Some(1) cp: can't stat '/fixtures/phase6/many128/.': No such file or directory\n\n"
+}
