@@ -518,3 +518,13 @@ and explicit inherited import/mount/retirement, then remaining syscalls/sevenfam
 complete DeepSeek generic/locality/Unknown/canonical/physical obligations. Full goal
 active. Corrected checklist family1SDK Init/family2component history labels to match
 current owning report; no historical receipts relabeled or family run claimed.
+
+## V4c3a prospective live catalog/source dependency
+
+Parent bc056168b1d8112b8030f410fd63f5d9a137e919. Source audit confirms whole
+directory vectors/ordinal replay and65source rows for64overwrites/3spans. Freeze
+V4C3A-SPEC.md: indexed64row/16KiB monotonic name-cookie windows and exact extent
+reference retirement in64source windows. Known install only; Unknown source custody
+kept. Current512/256profile remains. Exit external real SQL/file checks plus generic
+5step full128case with enumeration/churn/clean UpToDate and readonly byte/history
+proof. Full larger-profile/family/DeepSeek/resource goal active. Next implement.
