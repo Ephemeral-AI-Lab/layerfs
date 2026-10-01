@@ -101,6 +101,25 @@ class NamespaceOracle(unittest.TestCase):
                 namespace.sdk_master(None, "deep", None, None)
             execute.assert_not_called()
 
+    def test_fresh_owned_results_need_no_historical_local_image_receipt(self):
+        from families import workspace_shell_package as package
+        selections = [(namespace, "workspace-namespace-components-270-sdk-v1"),
+                      (package, "workspace-shell-package-many-128-sdk-v2")]
+        for family, selection in selections:
+            with self.subTest(family=family.__name__), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                results = root / "results"
+                results.mkdir()
+                common = SimpleNamespace(RESULTS=results, owned=lambda value: value,
+                    identities=lambda: {"source_dirty": False}, manifest_run=lambda value: None)
+                with patch.object(namespace.shared, "build", side_effect=RuntimeError("preparation reached")) as build:
+                    family.run(selection, results / "out", common)
+                self.assertEqual(build.call_count, 1)
+                self.assertIsNone(build.call_args.kwargs["reuse_image"])
+                summary = json.loads((results / "out/run.json").read_text())
+                self.assertEqual(summary["rows"][0]["status"], "NOT_RUN")
+                self.assertIn("preparation reached", summary["error"])
+
     def test_complete_selection_and_prospective_budgets(self):
         self.assertEqual(len(namespace.NATIVE), 10)
         self.assertEqual(len(namespace.SDK), 5)

@@ -320,7 +320,8 @@ def run(selection, output, common, *, sdk_cases=None, profile=PROFILE, schema=SC
     try:
         with (common.RESULTS / ".run.lock").open("a+b") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            prior = json.loads((common.RESULTS / "issue286-workspace-commit-fast-checkpoint-r062/prepared.json").read_text())
+            prior_path = common.RESULTS / "issue286-workspace-commit-fast-checkpoint-r062/prepared.json"
+            prior = json.loads(prior_path.read_text()) if prior_path.exists() else None
             prepared = shared.build(out, common, identity, reuse_image=prior, artifacts_only=True)
             init_build = common.build(out, common.target_path(), identity)
             shared.save(out / "init-build.json", init_build)

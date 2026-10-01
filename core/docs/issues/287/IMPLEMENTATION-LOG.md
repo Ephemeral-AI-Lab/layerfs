@@ -1853,3 +1853,21 @@ Publication URL and #287 record follow actual commit, no self-referential SHA.
 Current next action: publish complete measurement custody, prepare newly owned
 pre-R1 control and audit/acquire exact host fixtures once, then freeze targets.
 Independent correctness/resource R1 work continues; full R1 remainsPARTIAL.
+
+
+## Fresh isolated control setup precondition correction
+
+Published spec/custody4d60d9aae confirmed remote; #287comment5924973729.
+Fresh owned control worktree created from exact7edddbdb8 product; no foreign
+Cargo target will be used. Inspection before execution found F5/F7 unconditionally
+reading an old local image-reuse receipt, so fresh worktrees would fail before
+preparation even when an immutable image can be built normally. Make that optional
+receipt explicit, passing None to existing sealed image acquisition when absent.
+This does not change workloads/timers/cache/fixture bytes or sample status.
+Covering namespace8 external Python tests PASS0.138s (command0.232786709s),
+including real temporary fresh-results/lock/run-summary routes for both F5/F7,
+with deliberate product-free preparation stop. Earlier passing harness bodies
+reused;49distinct tests across checkpoint. No speed/product/provider run.
+Production LOC153673->153673(delta+0),Reference65417,Core88256 unchanged;
+same approved exact archive scope and counter as spec checkpoint. Control and
+candidate must receive this common source before either observation.
