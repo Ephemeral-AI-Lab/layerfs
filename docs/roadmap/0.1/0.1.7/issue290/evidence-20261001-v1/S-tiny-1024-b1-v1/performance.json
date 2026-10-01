@@ -1,0 +1,71 @@
+{
+  "cache_contract": "native/OS residency UNKNOWN; reads follow own insert",
+  "cache_verdict": "INELIGIBLE",
+  "case": "S-tiny-1024-b1-v1",
+  "client_scope": "Python sqlite3 adapter, bindings and fixture identity work included",
+  "command_status": "COMPLETE",
+  "durability": "runtime-only; MEMORY journal and synchronous OFF",
+  "insert_batch": 1,
+  "insert_transactions": 1024,
+  "list_queries": 9,
+  "metadata_file_bytes": 110592,
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 0,
+      "client_rss_after": 30834688,
+      "client_rss_before": 30588928,
+      "elapsed_ns": 20965292,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "insert_metadata",
+      "operations": 1024,
+      "ops_per_second": 48842.630000097306
+    },
+    {
+      "bytes": 0,
+      "client_rss_after": 30851072,
+      "client_rss_before": 30834688,
+      "elapsed_ns": 1122833,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "point_lookup",
+      "operations": 128,
+      "ops_per_second": 113997.36202979428
+    },
+    {
+      "bytes": 0,
+      "client_rss_after": 30851072,
+      "client_rss_before": 30851072,
+      "elapsed_ns": 581917,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "keyset_list",
+      "operations": 1024,
+      "ops_per_second": 1759701.1257619213
+    },
+    {
+      "bytes": 0,
+      "client_rss_after": 30851072,
+      "client_rss_before": 30851072,
+      "elapsed_ns": 656750,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "rename",
+      "operations": 128,
+      "ops_per_second": 194899.12447658926
+    }
+  ],
+  "pragmas": {
+    "busy_timeout": 0,
+    "cache_size": -512,
+    "foreign_keys": 1,
+    "journal_mode": "memory",
+    "mmap_size": 0,
+    "page_size": 4096,
+    "synchronous": 0,
+    "temp_store": 1
+  },
+  "records": 1024,
+  "sqlite_version": "3.51.2"
+}

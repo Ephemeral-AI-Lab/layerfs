@@ -1,0 +1,14 @@
+{
+  "command": [
+    "python3",
+    "tools/storage_probes/minio_probe.py",
+    "stop",
+    "--root",
+    "benchmark-results/storage-probes/provider-complete-v1"
+  ],
+  "status": "COMPLETE",
+  "exit": 0,
+  "wall_ns": 8338278500,
+  "limit_seconds": 10,
+  "scope": "final owned directory-master cleanup and provider stop; separate from performance"
+}

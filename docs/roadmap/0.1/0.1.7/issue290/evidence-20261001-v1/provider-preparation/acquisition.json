@@ -1,0 +1,13 @@
+{
+  "method": "explicit HTTP Range repair into separate root; original retained",
+  "original_sha256": "9a3e4b71c744125913a8b46a0b31663f7e311d4fd9491015b7eeddd7e6c88d3a",
+  "range_start": 25557715,
+  "headers": {
+    "Content-Length": "11339011",
+    "Content-Range": "bytes 25557715-36896725/36896726",
+    "Docker-Content-Digest": null
+  },
+  "bytes": 36896726,
+  "sha256": "f399aa93691336acf3ef6f79c08f97f2d43784ecf14d1f535c77bd3813082ee1",
+  "wall_ns": 12414232125
+}

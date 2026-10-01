@@ -1,0 +1,10 @@
+{
+  "case": "S-big-index-4096-v1",
+  "cleanup": "PASS",
+  "cleanup_ns": 1623917,
+  "cleanup_transactions": 32,
+  "proof": "PASS",
+  "proof_ns": 7172458,
+  "retained_empty_db_bytes": 237568,
+  "rows_checked": 4096
+}

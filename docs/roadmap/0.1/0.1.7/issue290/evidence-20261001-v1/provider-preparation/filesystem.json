@@ -1,0 +1,10 @@
+{
+  "df": "Filesystem   512-blocks       Used Available Capacity  Mounted on\n/dev/disk3s5 1942700360 1002457184 889226320    53%    /System/Volumes/Data\n",
+  "filesystem": {
+    "FilesystemType": "apfs",
+    "FileSystemPersonality": null,
+    "MountPoint": "/System/Volumes/Data",
+    "DeviceIdentifier": "disk3s5"
+  },
+  "scope": "provider data filesystem topology; no cache or physical I/O proof"
+}

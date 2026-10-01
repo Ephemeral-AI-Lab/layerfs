@@ -1,0 +1,10 @@
+{
+  "case": "S-tiny-1024-b1-v1",
+  "cleanup": "PASS",
+  "cleanup_ns": 1501916,
+  "cleanup_transactions": 8,
+  "proof": "PASS",
+  "proof_ns": 2069958,
+  "retained_empty_db_bytes": 110592,
+  "rows_checked": 1024
+}

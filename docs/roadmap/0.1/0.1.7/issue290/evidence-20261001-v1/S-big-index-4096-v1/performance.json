@@ -1,0 +1,60 @@
+{
+  "cache_contract": "native/OS residency UNKNOWN; reads follow own insert",
+  "cache_verdict": "INELIGIBLE",
+  "case": "S-big-index-4096-v1",
+  "client_scope": "Python sqlite3 adapter, bindings and fixture identity work included",
+  "command_status": "COMPLETE",
+  "durability": "runtime-only; MEMORY journal and synchronous OFF",
+  "insert_batch": 128,
+  "insert_transactions": 32,
+  "list_queries": 33,
+  "metadata_file_bytes": 237568,
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 0,
+      "client_rss_after": 30982144,
+      "client_rss_before": 30621696,
+      "elapsed_ns": 9654250,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "insert_metadata",
+      "operations": 4096,
+      "ops_per_second": 424269.1042804982
+    },
+    {
+      "bytes": 0,
+      "client_rss_after": 30998528,
+      "client_rss_before": 30982144,
+      "elapsed_ns": 1983125,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "point_lookup",
+      "operations": 256,
+      "ops_per_second": 129089.19004097069
+    },
+    {
+      "bytes": 0,
+      "client_rss_after": 31014912,
+      "client_rss_before": 30998528,
+      "elapsed_ns": 1942875,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "keyset_list",
+      "operations": 4096,
+      "ops_per_second": 2108215.9171331148
+    }
+  ],
+  "pragmas": {
+    "busy_timeout": 0,
+    "cache_size": -512,
+    "foreign_keys": 1,
+    "journal_mode": "memory",
+    "mmap_size": 0,
+    "page_size": 4096,
+    "synchronous": 0,
+    "temp_store": 1
+  },
+  "records": 4096,
+  "sqlite_version": "3.51.2"
+}

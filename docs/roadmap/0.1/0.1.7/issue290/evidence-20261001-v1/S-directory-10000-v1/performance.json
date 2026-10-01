@@ -1,0 +1,71 @@
+{
+  "cache_contract": "native/OS residency UNKNOWN; reads follow own insert",
+  "cache_verdict": "INELIGIBLE",
+  "case": "S-directory-10000-v1",
+  "client_scope": "Python sqlite3 adapter, bindings and fixture identity work included",
+  "command_status": "COMPLETE",
+  "durability": "runtime-only; MEMORY journal and synchronous OFF",
+  "insert_batch": 128,
+  "insert_transactions": 79,
+  "list_queries": 80,
+  "metadata_file_bytes": 888832,
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 0,
+      "client_rss_after": 31686656,
+      "client_rss_before": 30982144,
+      "elapsed_ns": 41684250,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "insert_metadata",
+      "operations": 10000,
+      "ops_per_second": 239898.76272213127
+    },
+    {
+      "bytes": 0,
+      "client_rss_after": 31686656,
+      "client_rss_before": 31686656,
+      "elapsed_ns": 1262375,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "point_lookup",
+      "operations": 128,
+      "ops_per_second": 101396.17783939005
+    },
+    {
+      "bytes": 0,
+      "client_rss_after": 31686656,
+      "client_rss_before": 31686656,
+      "elapsed_ns": 4270584,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "keyset_list",
+      "operations": 10000,
+      "ops_per_second": 2341600.118391302
+    },
+    {
+      "bytes": 0,
+      "client_rss_after": 31686656,
+      "client_rss_before": 31686656,
+      "elapsed_ns": 663625,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "rename",
+      "operations": 128,
+      "ops_per_second": 192880.01506875118
+    }
+  ],
+  "pragmas": {
+    "busy_timeout": 0,
+    "cache_size": -512,
+    "foreign_keys": 1,
+    "journal_mode": "memory",
+    "mmap_size": 0,
+    "page_size": 4096,
+    "synchronous": 0,
+    "temp_store": 1
+  },
+  "records": 10000,
+  "sqlite_version": "3.51.2"
+}

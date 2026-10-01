@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/tools/storage_probes/sqlite_probe.py",
+    "verify",
+    "--case",
+    "S-directory-10000-v1",
+    "--output",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/collection-20261001-v1/S-directory-10000-v1"
+  ],
+  "exit": 0,
+  "limit_seconds": 10,
+  "log": "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/collection-20261001-v1/S-directory-10000-v1-verify.log",
+  "status": "COMPLETE",
+  "wall_ns": 183522209
+}

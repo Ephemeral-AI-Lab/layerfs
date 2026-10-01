@@ -1,0 +1,9 @@
+{
+  "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "case": "M-directory-10000-v1",
+  "cleanup": "MASTER_RETAINED_FOR_OWNED_FINAL_CLEANUP",
+  "cleanup_ns": 17750,
+  "proof": "PASS",
+  "proof_ns": 502131625,
+  "requests": 12
+}

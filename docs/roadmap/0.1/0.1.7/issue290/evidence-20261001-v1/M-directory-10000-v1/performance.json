@@ -1,0 +1,30 @@
+{
+  "cache_contract": "server OS/page residency UNKNOWN; GET follows PUT",
+  "cache_verdict": "INELIGIBLE",
+  "case": "M-directory-10000-v1",
+  "command_status": "COMPLETE",
+  "input": "seeded synthetic memory, streamed in64KiB blocks",
+  "list_pages": 11,
+  "logical_files": 10000,
+  "minio_rss_after": 449593344,
+  "minio_rss_before": 447725568,
+  "object_bytes": 0,
+  "objects": 10000,
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 0,
+      "client_rss_after": 33914880,
+      "client_rss_before": 30212096,
+      "elapsed_ns": 496596125,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "list",
+      "operations": 10000,
+      "ops_per_second": 20137.08826261985
+    }
+  ],
+  "received_bytes": 2095934,
+  "requests": 11,
+  "sent_bytes": 0
+}

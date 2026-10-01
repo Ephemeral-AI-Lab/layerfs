@@ -1,0 +1,9 @@
+{
+  "body_sha256": "75f2d9828f2933dee0d38ff0591aa483af846b6ea4cd1c96b8f980e3fd84a0f3",
+  "case": "M-grouped-1024-v1",
+  "cleanup": "PASS",
+  "cleanup_ns": 4860292,
+  "proof": "PASS",
+  "proof_ns": 8798708,
+  "requests": 10
+}

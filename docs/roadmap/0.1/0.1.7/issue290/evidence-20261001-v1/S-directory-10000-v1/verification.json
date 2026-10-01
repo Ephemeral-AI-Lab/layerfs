@@ -1,0 +1,10 @@
+{
+  "case": "S-directory-10000-v1",
+  "cleanup": "PASS",
+  "cleanup_ns": 14505333,
+  "cleanup_transactions": 79,
+  "proof": "PASS",
+  "proof_ns": 20724500,
+  "retained_empty_db_bytes": 888832,
+  "rows_checked": 10000
+}

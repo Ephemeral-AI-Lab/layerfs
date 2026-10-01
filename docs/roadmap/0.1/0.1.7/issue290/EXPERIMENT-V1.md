@@ -111,3 +111,6 @@ The [standalone runner guide](../../../../../tools/storage_probes/README.md)
 provides exact provider preparation and selection commands. No throughput samples
 have run at this checkpoint. Initial specification commit:
 475a8d3f67740c64a1d6d030bd0fe5cef48035fc (local at preparation time).
+
+First collection recorded in [RESULTS-20261001-V1.md](RESULTS-20261001-V1.md);
+the prospective scope/profile above remains the original frozen selection.

@@ -1,0 +1,52 @@
+{
+  "cache_contract": "server OS/page residency UNKNOWN; GET follows PUT",
+  "cache_verdict": "INELIGIBLE",
+  "case": "M-grouped-1024-v1",
+  "command_status": "COMPLETE",
+  "input": "seeded synthetic memory, streamed in64KiB blocks",
+  "list_pages": 1,
+  "logical_files": 1024,
+  "minio_rss_after": 513703936,
+  "minio_rss_before": 513703936,
+  "object_bytes": 262144,
+  "objects": 4,
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 1048576,
+      "client_rss_after": 30375936,
+      "client_rss_before": 30031872,
+      "elapsed_ns": 13005542,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 76.89029799757672,
+      "name": "put",
+      "operations": 4,
+      "ops_per_second": 307.5611919903069
+    },
+    {
+      "bytes": 1048576,
+      "client_rss_after": 30425088,
+      "client_rss_before": 30375936,
+      "elapsed_ns": 4179833,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 239.24400807400679,
+      "name": "get",
+      "operations": 4,
+      "ops_per_second": 956.9760322960271
+    },
+    {
+      "bytes": 0,
+      "client_rss_after": 30474240,
+      "client_rss_before": 30441472,
+      "elapsed_ns": 2080375,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "list",
+      "operations": 4,
+      "ops_per_second": 1922.7302769933306
+    }
+  ],
+  "received_bytes": 1049688,
+  "requests": 9,
+  "sent_bytes": 1048576
+}

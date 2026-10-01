@@ -1,0 +1,16 @@
+{
+  "commit": "66e54589f2f0f313321300b4dbb8f256ea2eac30",
+  "hardware": "machdep.cpu.brand_string: Apple M3 Max\nhw.memsize: 38654705664\nhw.ncpu: 14",
+  "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "python": "3.14.3 (main, Feb  3 2026, 15:32:20) [Clang 17.0.0 (clang-1700.6.3.2)]",
+  "python_executable": "/opt/homebrew/opt/python@3.14/bin/python3.14",
+  "sqlite": "3.51.2",
+  "tool_sha256": {
+    "acquire.py": "18c9b601a9893a49482bc92770ee78df76206568fc74cec7795ca4c4c4958f36",
+    "common.py": "9af58ee9ffe51bff72ee26bb6611059496219936fa68b4dc0b9ffda85a259f27",
+    "minio_probe.py": "4de75883298098d1d220db44b5933e5c03a4d5827997b57691501b306ca1bbd9",
+    "run.py": "5a074405c1f3585717876be87754cd033a7d910f33fe955044c6a4d110f8db9e",
+    "sqlite_probe.py": "28d7e7eb1d7dca91e0c0afcd4b8c0eca01d17c979fb97b9365e4bb4176031468"
+  },
+  "tracked_dirty": false
+}

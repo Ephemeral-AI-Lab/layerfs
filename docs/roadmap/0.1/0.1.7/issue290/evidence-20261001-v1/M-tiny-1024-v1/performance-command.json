@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/tools/storage_probes/minio_probe.py",
+    "perf",
+    "--case",
+    "M-tiny-1024-v1",
+    "--output",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/collection-20261001-v1/M-tiny-1024-v1",
+    "--root",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/provider-complete-v1"
+  ],
+  "exit": 0,
+  "limit_seconds": 15,
+  "log": "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/collection-20261001-v1/M-tiny-1024-v1-perf.log",
+  "status": "COMPLETE",
+  "wall_ns": 1425688750
+}

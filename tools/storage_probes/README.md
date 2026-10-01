@@ -99,3 +99,7 @@ runtime metadata; a durable global catalog needs its own declared experiment.
 
 No throughput samples exist at harness preparation. pjdfstest, smallfile,
 mdbench, fio, fsstress and fsx are deferred to the later mounted-filesystem stage.
+
+First collection: [2026-10-01 report](../../docs/roadmap/0.1/0.1.7/issue290/RESULTS-20261001-V1.md).
+The report links exact receipts and limitations; harness preparation status
+above remains a historical checkpoint.

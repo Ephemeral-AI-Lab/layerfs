@@ -1,0 +1,12 @@
+{
+  "scope": "standalone host backend API observations",
+  "measurement_source": "66e54589f2f0f313321300b4dbb8f256ea2eac30",
+  "declared_interference_sqlite": "owned provider archive range acquisition active during SQLite collection; other owner processes not interrupted",
+  "declared_interference_minio": "acquisition and SQLite collection complete before MinIO collection; no builds started by this experiment",
+  "interference_limit": "single host snapshots retained locally; no continuous host isolation or phase-overlap proof",
+  "provider_reuse": "one verified native server reused across all four MinIO selections; 10000-key listing master acquired once",
+  "clone_method": "not applicable: fresh SQL databases/object creation cases; only listing reuses a read-only qualified master",
+  "build_mode": "native published provider bottle; no LayerFS build",
+  "verification_scope": "exact expected key lists/body SHA256, SQL metadata/range transcript, database integrity and final row/key cleanup; no LayerFS semantic, durability or memory proof",
+  "final_cleanup": "directory master empty and recorded owned server exited"
+}

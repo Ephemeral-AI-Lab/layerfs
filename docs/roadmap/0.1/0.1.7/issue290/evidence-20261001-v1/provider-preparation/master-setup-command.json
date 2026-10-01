@@ -1,0 +1,16 @@
+{
+  "command": [
+    "python3",
+    "tools/storage_probes/minio_probe.py",
+    "setup",
+    "--case",
+    "M-directory-10000-v1",
+    "--root",
+    "benchmark-results/storage-probes/provider-complete-v1"
+  ],
+  "status": "COMPLETE",
+  "exit": 0,
+  "wall_ns": 7995564959,
+  "limit_seconds": 120,
+  "scope": "untimed setup acquired once; not performance"
+}
