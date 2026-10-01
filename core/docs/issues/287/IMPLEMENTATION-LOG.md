@@ -1808,3 +1808,48 @@ Rust/shippedSQL/import/declaration/delegation counted; identical exclusions for
 test-only/inline/tests/examples/fixtures/tools/docs/manifests/generated/third-party.
 Exact compact comparison includes totals, class hashes and product tree seals;
 committed recount/publication/#287 record will be confirmed externally.
+
+
+## Assigned R1 finish: prospective speed and custody publication —2026-10-01
+
+Actual parent53b6bf741a5693f4d00ec98b914ce34645ee9ab3; branch/origin confirmed
+by ls-remote, selected published control7edddbdb8e8512627aed0ed42533ef099d802384
+is ancestor. Primary clean mainffdfa022f remains intact. Assigned worktree clean
+at entry, related chats idle, no active Cargo/runner owner; no managed attachments.
+Human handoff now authorizes implementation and six existing diagnostic rows.
+#287 latest requirements/comments and #288 read; #288 untouched; R2-R7 unstarted.
+
+Root owns measurement/Server/Bridge/acceptance/publication. Explicit current-thread
+workers own navigation/drafts, namespace and C2 graph allocation (no competing
+build/test/measurement). Interfaces freeze before dependent source. Developing
+product edits are excluded from this tools/spec checkpoint's staged tree.
+
+R1-FINISH-SPEED-SPEC.md and evidence/r1-finish-speed/SPEC.json freeze six existing
+cases/order/literal workloads/independent old-new manifests/15-25s/9s/one sample,
+host SDK/SQLite route and separate INELIGIBLE numeric verdict. Targets await one
+untouched control. No candidate optimization or measurement collected.
+
+Existing runner now seals shippedSQL/all src inputs/build scripts/manifests/flags,
+JSON/C/fixtures/helpers and external residency provider; complete compilation
+method fails closed on old Rust-only cache. New F5 host-v2 master algorithm uses
+existing public SDK Init/seed plus full independent manifest proof, never restores
+native Docker Store. Actual setup remains UNRUN; unavailable layouts refuse.
+F4 provenance chain audit and actual qualified control collection remain next.
+
+External Python owning command
+python3 -m unittest discover -s core/benchmark/fs-bench-pro/tests -p 'test_*.py'
+exit0:46 tests,0.732s (command wall0.940756708s). After adding two F5 route/corpus
+proofs, covering command test_workspace_namespace.py exit0:7 tests,0.123s,
+command wall0.157623083s. This makes48 distinct harness tests; product/provider
+proof not claimed. Same-source passing bodies reused. No native measurements,
+product Cargo or retired preflight/CI. Existing Apple readback0 refusal remains
+explicit; fresh provider probe pending separate scoped source.
+
+Production LOC for this tools/spec checkpoint:153673 ->153673(delta+0),
+Reference65417 ->65417,Core88256 ->88256. Exact first-parent/final staged archive
+comparison follows under evidence/r1-finish-speed/PRODUCTION-LOC-SPEC.json with
+same counter/method/per-file classification; developing unstaged source excluded.
+Publication URL and #287 record follow actual commit, no self-referential SHA.
+Current next action: publish complete measurement custody, prepare newly owned
+pre-R1 control and audit/acquire exact host fixtures once, then freeze targets.
+Independent correctness/resource R1 work continues; full R1 remainsPARTIAL.

@@ -18,6 +18,7 @@ ROOT = HERE.parents[2]
 CORE = ROOT / "core"
 RESULTS = ROOT / "benchmark-results/fs-bench-pro"
 sys.path.insert(0, str(HERE))
+from shared import custody  # noqa: E402
 from families import init_namespace as init  # noqa: E402
 from families import history_retention as history  # noqa: E402
 from families import workspace_write as write  # noqa: E402
@@ -80,19 +81,18 @@ def seal(paths):
 
 
 def identities():
-    product = list((CORE / "crates").glob("*/src/**/*.rs"))
-    product += list((CORE / "crates").glob("*/examples/*.rs"))
-    product += list((CORE / "crates").glob("*/Cargo.toml"))
-    product += list((CORE / "crates/layerfs-api").glob("*/src/**/*.rs"))
-    product += list((CORE / "crates/layerfs-api").glob("*/examples/*.rs"))
-    product += list((CORE / "crates/layerfs-api").glob("*/Cargo.toml"))
-    product += [CORE / "Cargo.toml", CORE / "Cargo.lock", ROOT / ".cargo/config.toml"]
-    harness = list(HERE.glob("**/*.py"))
+    product, harness = custody.inputs(ROOT, CORE, HERE)
+    product_seal = seal(product)
+    compilation_seal, environment = custody.compilation_seal(product_seal)
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True)
     return {"source_commit": source, "source_tree": tree, "source_dirty": bool(dirty),
-            "dirty_paths": dirty.splitlines(), "product_seal": seal(product),
+            "dirty_paths": dirty.splitlines(), "product_seal": product_seal,
+            "identity_method": custody.METHOD, "compilation_seal": compilation_seal,
+            "build_environment": environment,
+            "product_inputs": custody.inventory(ROOT, product),
+            "harness_inputs": custody.inventory(ROOT, harness),
             "harness_seal": seal(harness), "cargo_lock_sha256": digest(CORE / "Cargo.lock"),
             "contract_commit": CONTRACT_COMMIT, "build_profile": BUILD_PROFILE}
 
@@ -100,11 +100,12 @@ def identities():
 def build(out, target, identity):
     cache = RESULTS / "sdk-build-release.json"
     prior = json.loads(cache.read_text()) if cache.exists() else None
-    if prior and prior.get("build_profile") == BUILD_PROFILE and prior.get("product_seal") == identity["product_seal"] and all(
+    if (prior and prior.get("build_profile") == BUILD_PROFILE and prior.get("compilation_seal") == identity.get("compilation_seal") and
+        prior.get("identity_method") == custody.METHOD and all(
         Path(prior["binaries"][name]["path"]).is_file() and
         digest(prior["binaries"][name]["path"]) == prior["binaries"][name]["sha256"]
         for name in BINARIES
-    ):
+    )):
         return {"status": "PASS", "mode": "exact-binary-reuse", "wall_ns": 0,
                 "command": None, "build_profile": BUILD_PROFILE, "binaries": prior["binaries"]}
     started = time.monotonic_ns()
@@ -132,7 +133,9 @@ def build(out, target, identity):
         record["binaries"] = binaries
         if record["status"] == "PASS":
             write_json(cache, {"product_seal": identity["product_seal"],
-                               "build_profile": BUILD_PROFILE, "binaries": binaries})
+                               "build_profile": BUILD_PROFILE, "binaries": binaries,
+                               "identity_method": custody.METHOD,
+                               "compilation_seal": identity["compilation_seal"]})
     return record
 
 

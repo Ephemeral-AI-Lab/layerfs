@@ -167,28 +167,74 @@ def env(cursor=CURSOR):
 def sdk_master(out, layout, common, artifacts):
     from shell_package import case_spec
 
-    source = common.RESULTS / "workspace-commit-native-master-v1" / layout
-    sealed = json.loads((source / "prepared.json").read_text())
-    key = common.seal([source / "fixture.before", source / "store.sqlite", source / "history.sqlite"])
-    path = common.RESULTS / "workspace-namespace-sdk-master-v1" / key
+    # Private v2 provenance: host public SDK Init, then ordinary public seed.
+    # Old native/Docker-produced v1 masters remain archival and are never opened.
+    if layout not in ("small", "wide"):
+        raise ValueError("host namespace preparation not qualified for this layout")
+    values_tree = tree(layout)
+    expected = manifest({**values_tree, ".marker": b"baseline"})
+    key = hashlib.sha256(("host-sdk-namespace-master-v2\0" + expected).encode()).hexdigest()
+    path = common.RESULTS / "workspace-namespace-host-master-v2" / key
     if (path / "prepared.json").exists():
         result = json.loads((path / "prepared.json").read_text())
+        if result.get("provenance") != "host-public-sdk-init-and-seed-v2":
+            raise ValueError("namespace master provenance mismatch")
         for name, sha in result["files"].items():
             if shared.sha256(path / name) != sha:
                 raise ValueError("sealed SDK namespace master changed")
         return {**result, "reuse": True}
     path.mkdir(parents=True)
-    copy_master(sealed, path)
-    values = fields(sealed, "prepare-namespace-" + layout, "umask 022 && printf baseline > .marker")
+    source = path / "source"
+    source.mkdir(mode=0o755)
+    for name, data in sorted(values_tree.items()):
+        target = source / name
+        if data is None:
+            target.mkdir(parents=True, exist_ok=True)
+            target.chmod(0o755)
+        else:
+            target.write_bytes(data)
+            target.chmod(0o644)
+    (path / "old.tsv").write_text(expected)
+    created_record, stdout, _ = shared.execute([artifacts["benchmark_init"]["path"], str(source),
+        str(path / "store.sqlite"), str(path / "history.sqlite"), "family5-" + layout],
+        out / ("init-" + layout), timeout=15, env=env())
+    shared.save(out / ("init-" + layout + ".json"), created_record)
+    if created_record["exit_code"] != 0:
+        raise RuntimeError("host namespace SDK Init failed; retained setup evidence")
+    created = json.loads(stdout.splitlines()[-1])
+    if created.get("status") != "COMPLETE":
+        raise RuntimeError("host namespace Init incomplete")
+    values = {"scenario_id": "prepare-namespace-" + layout, "project_id": created["project_id"],
+              "genesis_layer": created["genesis_layer"], "genesis_root": created["root"],
+              "genesis_root_serial": str(created["root_serial"]),
+              "branch_body": hashlib.sha256(("namespace-" + layout).encode()).digest()[:16].hex(),
+              "command_hex": "umask 022 && printf baseline > .marker".encode().hex(),
+              "expected_failure": "0", "component_oracle": "1",
+              "telemetry_run": str(int.from_bytes(os.urandom(16), "big") or 1)}
     case_spec(path / "seed.case", values)
-    record, stdout, stderr = shared.execute([artifacts["benchmark_shell"]["path"], "seed-existing", str(path / "seed.case"),
-        str(path / "store.sqlite"), str(path / "history.sqlite"), artifacts["image_id"]], out / ("seed-" + layout), timeout=15, env=env())
+    record, stdout, stderr = shared.execute([artifacts["benchmark_shell"]["path"], "seed", str(path / "seed.case"),
+        str(path / "store.sqlite"), str(path / "history.sqlite"), artifacts["image_id"]],
+        out / ("seed-" + layout), timeout=15, env=env())
+    shared.save(out / ("seed-" + layout + ".json"), record)
     driver = shared.receipt_line(stdout)
     if record["exit_code"] != 0 or not driver or driver["status"] != "COMPLETE" or not commit.cleanup_complete(driver, commit.control_line(stdout), stderr):
         raise RuntimeError("SDK namespace seed failed; retained setup evidence")
-    result = {"path": str(path), "old_commit": driver["head_commit"], "preparation": record,
+    fixture = {"project_id": created["project_id"], "genesis_layer": created["genesis_layer"],
+               "root": created["root"], "root_serial": str(created["root_serial"]), "branch_id": driver["branch_id"]}
+    case_spec(path / "fixture.before", fixture)
+    case_spec(path / "verify.case", {**values, "branch_id": driver["branch_id"],
+        "old_commit": driver["head_commit"], "expected_failure": "1"})
+    proof, stdout, _ = shared.execute([artifacts["verify_checkpoint5"]["path"], str(path / "verify.case"),
+        str(path / "store.sqlite"), str(path / "history.sqlite"), str(path / "old.tsv"), str(path / "old.tsv")],
+        out / ("master-proof-" + layout), timeout=9, env=env())
+    shared.save(out / ("master-proof-" + layout + ".json"), proof)
+    if proof["exit_code"] != 0 or json.loads(stdout).get("status") != "PASS":
+        raise RuntimeError("namespace master full oracle failed")
+    result = {"path": str(path), "old_commit": driver["head_commit"],
+              "provenance": "host-public-sdk-init-and-seed-v2", "cursor_key": CURSOR,
+              "binding_key_hex": b"layerfs-bench-pro".hex(), "layout": layout,
+              "preparation": {"init": created_record, "seed": record, "full_proof": proof},
               "producer_identity": artifacts["identity"], "producer_binary": artifacts["benchmark_shell"],
-              "layout": layout, "source_master": sealed,
               "files": {name: shared.sha256(path / name) for name in ("store.sqlite", "history.sqlite", "fixture.before")}}
     for name in result["files"]:
         (path / name).chmod(0o444)
@@ -276,6 +322,11 @@ def run(selection, output, common, *, sdk_cases=None, profile=PROFILE, schema=SC
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             prior = json.loads((common.RESULTS / "issue286-workspace-commit-fast-checkpoint-r062/prepared.json").read_text())
             prepared = shared.build(out, common, identity, reuse_image=prior, artifacts_only=True)
+            init_build = common.build(out, common.target_path(), identity)
+            shared.save(out / "init-build.json", init_build)
+            if init_build["status"] != "PASS":
+                raise RuntimeError("host namespace SDK Init build failed or exceeded build budget")
+            prepared["artifacts"]["benchmark_init"] = init_build["binaries"]["benchmark_init"]
             summary["prepared"] = prepared
             masters = {layout: sdk_master(out, layout, common, {**prepared["artifacts"], "image_id": prepared["image_id"], "identity": identity}) for layout in dict.fromkeys(sdk_cases[name].layout for name in selected)}
             for name in selected:
