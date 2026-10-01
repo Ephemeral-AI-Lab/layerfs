@@ -38,7 +38,12 @@ fn root(outcome: &CommitOutcomeWire) -> [u8; 32] {
         CommitOutcomeWire::UpToDate { root, .. } => *root,
     }
 }
-pub fn run(out: &Path, config: &Path, image: &str) -> Result<(), String> {
+pub fn run(
+    out: &Path,
+    config: &Path,
+    image: &str,
+    scenario: Option<&crate::scenario::Scenario>,
+) -> Result<(), String> {
     std::fs::create_dir(out).map_err(|e| e.to_string())?;
     let text = std::fs::read_to_string(config).map_err(|e| e.to_string())?;
     let fields: Vec<_> = text.lines().collect();
@@ -163,7 +168,17 @@ pub fn run(out: &Path, config: &Path, image: &str) -> Result<(), String> {
     let second="printf SECOND | dd of=data bs=1 seek=100 conv=notrunc 2>/dev/null && test \"$(wc -c < data)\" -eq 4096";
     let mut rows = Vec::new();
     let mut roots = Vec::new();
-    for (name, command) in [("create", first), ("overwrite", second)] {
+    let mut created_heads = Vec::new();
+    let mut expected_head = None;
+    let commands: Vec<(&str, &str)> = match scenario {
+        Some(s) => s
+            .steps
+            .iter()
+            .map(|s| (s.name.as_str(), s.command.as_str()))
+            .collect(),
+        None => vec![("create", first), ("overwrite", second)],
+    };
+    for (name, command) in commands {
         let start = Instant::now();
         let exec = api.exec(&mount.id, command).map_err(|e| e.to_string())?;
         let exec_ms = start.elapsed().as_secs_f64() * 1000.;
@@ -177,6 +192,13 @@ pub fn run(out: &Path, config: &Path, image: &str) -> Result<(), String> {
         let start = Instant::now();
         let commit = api.commit(&mount.id).map_err(|e| e.to_string())?;
         let commit_ms = start.elapsed().as_secs_f64() * 1000.;
+        match &commit.outcome {
+            CommitOutcomeWire::Committed(c) => {
+                created_heads.push(c.clone());
+                expected_head = Some(c.commit)
+            }
+            CommitOutcomeWire::UpToDate { head, .. } => expected_head = *head,
+        }
         let id = root(&commit.outcome);
         roots.push(id);
         rows.push(format!("{{\"case\":\"{name}\",\"exec_ms\":{exec_ms},\"commit_ms\":{commit_ms},\"generation\":{},\"root\":\"{}\"}}",commit.generation,hex(&id)));
@@ -191,66 +213,79 @@ pub fn run(out: &Path, config: &Path, image: &str) -> Result<(), String> {
     stop.store(true, Ordering::SeqCst);
     worker.join().map_err(|_| "metadata owner panic")??;
     let proof = Instant::now();
-    let mut expected = vec![0; 4096];
-    expected[17..23].copy_from_slice(b"phase6");
-    for (index, id) in roots.iter().enumerate() {
-        if index == 1 {
-            expected[100..106].copy_from_slice(b"SECOND")
+    if let Some(scenario) = scenario {
+        for (root, step) in roots.iter().zip(&scenario.steps) {
+            let (files, bytes) = crate::scenario::verify(&reader, *root, &step.manifest)?;
+            eprintln!("P6_MANIFEST step={} files={files} bytes={bytes}", step.name);
         }
-        let mut fs = FilesystemRead::new(
-            &reader,
-            FilesystemRootId(layerfs_content::ObjectId::from_bytes(id).map_err(|e| e.to_string())?),
-        )
-        .map_err(|e| e.to_string())?;
-        let resolved = fs
-            .resolve(&LogicalPath::new("data").map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
-        let mut bytes = Vec::new();
-        let (result, _) = Timing::disabled("independent semantic readback", |t| {
-            layerfs_content::read_all_bounded(
+    } else {
+        let mut expected = vec![0; 4096];
+        expected[17..23].copy_from_slice(b"phase6");
+        for (index, id) in roots.iter().enumerate() {
+            if index == 1 {
+                expected[100..106].copy_from_slice(b"SECOND")
+            }
+            let mut fs = FilesystemRead::new(
                 &reader,
-                resolved.value.content_root,
-                4096,
-                &mut bytes,
-                t.child("read"),
+                FilesystemRootId(
+                    layerfs_content::ObjectId::from_bytes(id).map_err(|e| e.to_string())?,
+                ),
             )
-        });
-        result.map_err(|e| e.to_string())?;
-        if bytes != expected {
-            return Err(format!("independent bytes mismatch at publication {index}"));
-        }
-        let meta = fs
-            .read_portable(&LogicalPath::new("data").map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
-        if meta.mode != 0o644 {
-            return Err("portable mode oracle".into());
+            let resolved = fs
+                .resolve(&LogicalPath::new("data").map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+            let mut bytes = Vec::new();
+            let (result, _) = Timing::disabled("independent semantic readback", |t| {
+                layerfs_content::read_all_bounded(
+                    &reader,
+                    resolved.value.content_root,
+                    4096,
+                    &mut bytes,
+                    t.child("read"),
+                )
+            });
+            result.map_err(|e| e.to_string())?;
+            if bytes != expected {
+                return Err(format!("independent bytes mismatch at publication {index}"));
+            }
+            let meta = fs
+                .read_portable(&LogicalPath::new("data").map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+            if meta.mode != 0o644 {
+                return Err("portable mode oracle".into());
+            }
+            std::fs::write(out.join(format!("publication-{index}.data")), &bytes)
+                .map_err(|e| e.to_string())?;
         }
-        std::fs::write(out.join(format!("publication-{index}.data")), &bytes)
-            .map_err(|e| e.to_string())?;
     }
     let snapshot = authority.snapshot()?;
-    if snapshot.root != roots[1] || roots[0] == roots[1] {
+    if snapshot.root != *roots.last().ok_or("no roots")? || snapshot.head != expected_head {
         return Err("successor head oracle".into());
     }
-    let head = authority
-        .history
-        .commit(
-            layerfs_history::identity::CommitId::from_bytes(snapshot.head.ok_or("head absent")?)
-                .map_err(|e| e.to_string())?,
-        )
-        .map_err(|e| e.to_string())?
-        .ok_or("head missing")?;
-    let parent = authority
-        .history
-        .commit(head.parent.ok_or("parent absent")?)
-        .map_err(|e| e.to_string())?
-        .ok_or("parent missing")?;
-    if parent.root.as_bytes() != &roots[0] {
-        return Err("history parent oracle".into());
+    let mut selected = snapshot.head;
+    for expected in created_heads.iter().rev() {
+        let id = selected.ok_or("head absent")?;
+        let actual = authority
+            .history
+            .commit(layerfs_history::identity::CommitId::from_bytes(id).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?
+            .ok_or("head missing")?;
+        if actual.id.to_bytes() != expected.commit
+            || actual.root.as_bytes() != &expected.root
+            || actual.parent.map(|p| p.to_bytes()) != expected.parent
+        {
+            return Err("history head/root/parent oracle".into());
+        }
+        selected = actual.parent.map(|p| p.to_bytes());
+    }
+    if selected.is_some() {
+        return Err("unexpected earlier history parent".into());
     }
     let proof_ms = proof.elapsed().as_secs_f64() * 1000.;
+    let case_id = scenario.map_or("phase6-smoke", |s| s.id.as_str());
     let mut file = File::create(out.join("receipt.json")).map_err(|e| e.to_string())?;
-    writeln!(file,"{{\"schema\":1,\"kind\":\"correctness diagnostic\",\"cache_status\":\"INELIGIBLE: OS/page cache unknown\",\"sqlite_version\":\"{}\",\"image\":\"{}\",\"genesis_ms\":{genesis_ms},\"complete_command_ms\":{command_ms},\"proof_ms\":{proof_ms},\"rows\":[{}],\"semantic_proof\":\"PASS\",\"canonical_reference\":\"NOT_RUN\",\"physical_resources\":\"NOT_RUN\",\"cleanup\":\"PASS\"}}",rusqlite::version(),image,rows.join(",")).map_err(|e|e.to_string())?;
-    println!("first real SDK/FUSE/SQL/C1/C2/MinIO/C5 correctness path PASS; complete_command_ms={command_ms:.3} proof_ms={proof_ms:.3}; speed INELIGIBLE");
+    writeln!(file,"{{\"schema\":1,\"case_id\":\"{case_id}\",\"kind\":\"correctness diagnostic\",\"cache_status\":\"INELIGIBLE: OS/page cache unknown\",\"sqlite_version\":\"{}\",\"image\":\"{}\",\"genesis_ms\":{genesis_ms},\"complete_command_ms\":{command_ms},\"proof_ms\":{proof_ms},\"rows\":[{}],\"semantic_proof\":\"PASS\",\"canonical_reference\":\"NOT_RUN\",\"physical_resources\":\"NOT_RUN\",\"cleanup\":\"PASS\"}}",rusqlite::version(),image,rows.join(",")).map_err(|e|e.to_string())?;
+    println!("real SDK/FUSE/SQL/C1/C2/MinIO/C5 correctness path PASS; complete_command_ms={command_ms:.3} proof_ms={proof_ms:.3}; speed INELIGIBLE");
     Ok(())
 }

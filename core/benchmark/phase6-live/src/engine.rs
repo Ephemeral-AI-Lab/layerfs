@@ -47,6 +47,9 @@ pub struct Node {
     pub base_size: i64,
     pub base_visible: i64,
     pub children: i64,
+    pub parent: i64,
+    pub links: i64,
+    pub subdirs: i64,
 }
 pub fn now() -> (i64, u32) {
     let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
@@ -57,9 +60,9 @@ impl Engine {
         std::fs::create_dir_all(path.join("sources")).map_err(|e| e.to_string())?;
         let db = Connection::open(path.join("metadata.sqlite")).map_err(|e| e.to_string())?;
         db.busy_timeout(Duration::ZERO).map_err(|e| e.to_string())?;
-        db.execute_batch("PRAGMA journal_mode=MEMORY;PRAGMA synchronous=OFF;PRAGMA temp_store=MEMORY;PRAGMA cache_size=-2048;PRAGMA mmap_size=0;CREATE TABLE inodes(id INTEGER PRIMARY KEY,kind INTEGER,mode INTEGER,size INTEGER,seconds INTEGER,nanos INTEGER,root BLOB,dirty INTEGER,is_new INTEGER,base_size INTEGER,base_visible INTEGER,children INTEGER);CREATE INDEX dirty_inodes ON inodes(id) WHERE dirty=1;CREATE TABLE names(parent INTEGER,name BLOB,ino INTEGER,PRIMARY KEY(parent,name)) WITHOUT ROWID;CREATE INDEX names_ino ON names(ino);CREATE TABLE changed_names(parent INTEGER,name BLOB,ino INTEGER,PRIMARY KEY(parent,name)) WITHOUT ROWID;CREATE TABLE prepared(id INTEGER PRIMARY KEY,kind INTEGER,content BLOB,metadata BLOB,new_pos INTEGER);CREATE TABLE edits(ordinal INTEGER PRIMARY KEY,start INTEGER,end INTEGER,len INTEGER,source INTEGER,offset INTEGER);CREATE TABLE sources(id INTEGER PRIMARY KEY AUTOINCREMENT);CREATE TABLE extents(ino INTEGER,start INTEGER,end INTEGER,source INTEGER,offset INTEGER,PRIMARY KEY(ino,start)) WITHOUT ROWID;CREATE TABLE handles(id INTEGER PRIMARY KEY AUTOINCREMENT,ino INTEGER,flags INTEGER);").map_err(|e|e.to_string())?;
+        db.execute_batch("PRAGMA journal_mode=MEMORY;PRAGMA synchronous=OFF;PRAGMA temp_store=MEMORY;PRAGMA cache_size=-2048;PRAGMA mmap_size=0;CREATE TABLE inodes(id INTEGER PRIMARY KEY,kind INTEGER,mode INTEGER,size INTEGER,seconds INTEGER,nanos INTEGER,root BLOB,dirty INTEGER,is_new INTEGER,base_size INTEGER,base_visible INTEGER,children INTEGER,parent INTEGER,links INTEGER,subdirs INTEGER);CREATE INDEX dirty_inodes ON inodes(id) WHERE dirty=1;CREATE TABLE names(parent INTEGER,name BLOB,ino INTEGER,PRIMARY KEY(parent,name)) WITHOUT ROWID;CREATE INDEX names_ino ON names(ino);CREATE TABLE changed_names(parent INTEGER,name BLOB,ino INTEGER,PRIMARY KEY(parent,name)) WITHOUT ROWID;CREATE TABLE prepared(id INTEGER PRIMARY KEY,kind INTEGER,content BLOB,metadata BLOB,new_pos INTEGER);CREATE TABLE edits(ordinal INTEGER PRIMARY KEY,start INTEGER,end INTEGER,len INTEGER,source INTEGER,offset INTEGER);CREATE TABLE sources(id INTEGER PRIMARY KEY AUTOINCREMENT);CREATE TABLE extents(ino INTEGER,start INTEGER,end INTEGER,source INTEGER,offset INTEGER,PRIMARY KEY(ino,start)) WITHOUT ROWID;CREATE TABLE handles(id INTEGER PRIMARY KEY AUTOINCREMENT,ino INTEGER,flags INTEGER);").map_err(|e|e.to_string())?;
         db.execute(
-            "INSERT INTO inodes VALUES(1,2,493,0,0,0,NULL,0,0,0,0,0)",
+            "INSERT INTO inodes VALUES(1,2,493,0,0,0,NULL,0,0,0,0,0,1,1,0)",
             [],
         )
         .map_err(|e| e.to_string())?;
@@ -78,7 +81,7 @@ impl Engine {
     pub fn node(&self, id: i64) -> Result<Node, String> {
         self.db
             .query_row(
-                "SELECT kind,mode,size,seconds,nanos,root,dirty,is_new,base_size,base_visible,children FROM inodes WHERE id=?1",
+                "SELECT kind,mode,size,seconds,nanos,root,dirty,is_new,base_size,base_visible,children,parent,links,subdirs FROM inodes WHERE id=?1",
                 [id],
                 |r| {
                     Ok(Node {
@@ -94,6 +97,9 @@ impl Engine {
                         base_size: r.get(8)?,
                         base_visible: r.get(9)?,
                         children: r.get(10)?,
+                        parent: r.get(11)?,
+                        links: r.get(12)?,
+                        subdirs: r.get(13)?,
                     })
                 },
             )
@@ -116,10 +122,19 @@ impl Engine {
         kind: u8,
         mode: u32,
     ) -> Result<Node, String> {
+        if self.node(parent)?.links == 0 {
+            return Err("ENOENT".into());
+        }
         if self.node(parent)?.kind != 2 {
             return Err("ENOTDIR".into());
         }
-        if name.is_empty() || name.len() > 255 || name.contains(&0) || name.contains(&b'/') {
+        if name.is_empty()
+            || name == b"."
+            || name == b".."
+            || name.len() > 255
+            || name.contains(&0)
+            || name.contains(&b'/')
+        {
             return Err("EINVAL".into());
         }
         if self.lookup(parent, name)?.is_some() {
@@ -133,8 +148,8 @@ impl Engine {
         let (sec, nano) = now();
         let tx = self.db.transaction().map_err(|e| e.to_string())?;
         tx.execute(
-            "INSERT INTO inodes VALUES(?1,?2,?3,0,?4,?5,NULL,1,1,0,0,0)",
-            params![id, kind, mode & 0o777, sec, nano],
+            "INSERT INTO inodes VALUES(?1,?2,?3,0,?4,?5,NULL,1,1,0,0,0,?6,1,0)",
+            params![id, kind, mode & 0o777, sec, nano, parent],
         )
         .map_err(|e| e.to_string())?;
         tx.execute(
@@ -144,8 +159,8 @@ impl Engine {
         .map_err(|e| e.to_string())?;
         tx.execute("INSERT INTO changed_names VALUES(?1,?2,?3) ON CONFLICT(parent,name) DO UPDATE SET ino=excluded.ino", params![parent,name,id]).map_err(|e|e.to_string())?;
         tx.execute(
-            "UPDATE inodes SET dirty=1,children=children+1,seconds=?2,nanos=?3 WHERE id=?1",
-            params![parent, sec, nano],
+            "UPDATE inodes SET dirty=1,children=children+1,subdirs=subdirs+?4,seconds=?2,nanos=?3 WHERE id=?1",
+            params![parent, sec, nano,i64::from(kind==2)],
         )
         .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
@@ -357,6 +372,8 @@ impl Engine {
         }
         let (sec, nano) = now();
         let tx = self.db.transaction().map_err(|e| e.to_string())?;
+        tx.execute("UPDATE inodes SET links=links-1 WHERE id=?1", [id])
+            .map_err(|e| e.to_string())?;
         tx.execute(
             "DELETE FROM names WHERE parent=?1 AND name=?2",
             params![parent, name],
@@ -364,8 +381,8 @@ impl Engine {
         .map_err(|e| e.to_string())?;
         tx.execute("INSERT INTO changed_names VALUES(?1,?2,NULL) ON CONFLICT(parent,name) DO UPDATE SET ino=NULL",params![parent,name]).map_err(|e|e.to_string())?;
         tx.execute(
-            "UPDATE inodes SET dirty=1,children=children-1,seconds=?2,nanos=?3 WHERE id=?1",
-            params![parent, sec, nano],
+            "UPDATE inodes SET dirty=1,children=children-1,subdirs=subdirs-?4,seconds=?2,nanos=?3 WHERE id=?1",
+            params![parent, sec, nano,i64::from(n.kind==2)],
         )
         .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;

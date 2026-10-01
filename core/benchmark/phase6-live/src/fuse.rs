@@ -27,7 +27,13 @@ fn attr(n: &Node) -> FileAttr {
             FileType::RegularFile
         },
         perm: n.mode as u16,
-        nlink: if n.kind == 2 { 2 } else { 1 },
+        nlink: if n.links == 0 {
+            0
+        } else if n.kind == 2 {
+            2 + n.subdirs as u32
+        } else {
+            n.links as u32
+        },
         uid: 0,
         gid: 0,
         rdev: 0,
@@ -276,6 +282,31 @@ impl Filesystem for SqlFs {
             Err(e) => reply.error(e),
         }
     }
+    fn rename(
+        &self,
+        _: &Request,
+        parent: INodeNo,
+        name: &OsStr,
+        new_parent: INodeNo,
+        new_name: &OsStr,
+        flags: RenameFlags,
+        reply: ReplyEmpty,
+    ) {
+        let result = self.call(|e| match flags.bits() {
+            0 | 1 => e.rename(
+                parent.0 as i64,
+                name.as_bytes(),
+                new_parent.0 as i64,
+                new_name.as_bytes(),
+                flags.bits() == 1,
+            ),
+            _ => Err("EINVAL".into()),
+        });
+        match result {
+            Ok(()) => reply.ok(),
+            Err(e) => reply.error(e),
+        }
+    }
     fn opendir(&self, _: &Request, ino: INodeNo, flags: OpenFlags, reply: ReplyOpen) {
         match self.call(|e| {
             if e.node(ino.0 as i64)?.kind != 2 {
@@ -295,7 +326,7 @@ impl Filesystem for SqlFs {
         offset: u64,
         mut reply: ReplyDirectory,
     ) {
-        let result=self.call(|e|{e.handle(fh.0 as i64,ino.0 as i64,false)?;if offset>514{return Err("EINVAL".into())}let mut q=e.db.prepare("SELECT names.ino,names.name,inodes.kind FROM names JOIN inodes ON inodes.id=names.ino WHERE parent=?1 ORDER BY name LIMIT 512").map_err(|e|e.to_string())?;let rows=q.query_map([ino.0 as i64],|r|Ok((r.get::<_,i64>(0)?,r.get::<_,Vec<u8>>(1)?,r.get::<_,u8>(2)?))).map_err(|e|e.to_string())?;let mut values=vec![(ino.0,b".".to_vec(),2),(1,b"..".to_vec(),2)];for r in rows{let(i,n,k)=r.map_err(|e|e.to_string())?;values.push((i as u64,n,k))}Ok(values)});
+        let result=self.call(|e|{e.handle(fh.0 as i64,ino.0 as i64,false)?;if offset>514{return Err("EINVAL".into())}let mut q=e.db.prepare("SELECT names.ino,names.name,inodes.kind FROM names JOIN inodes ON inodes.id=names.ino WHERE parent=?1 ORDER BY name LIMIT 512").map_err(|e|e.to_string())?;let rows=q.query_map([ino.0 as i64],|r|Ok((r.get::<_,i64>(0)?,r.get::<_,Vec<u8>>(1)?,r.get::<_,u8>(2)?))).map_err(|e|e.to_string())?;let mut values=vec![(ino.0,b".".to_vec(),2),(e.node(ino.0 as i64)?.parent as u64,b"..".to_vec(),2)];for r in rows{let(i,n,k)=r.map_err(|e|e.to_string())?;values.push((i as u64,n,k))}Ok(values)});
         match result {
             Ok(rows) => {
                 for (index, (id, name, kind)) in rows.into_iter().enumerate().skip(offset as usize)

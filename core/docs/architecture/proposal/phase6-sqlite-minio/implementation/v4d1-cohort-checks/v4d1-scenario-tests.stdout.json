@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "deb4e05e2904de9ec8dbe618188629de8d598b449cfff3fef2193f9a68c21bfe",
+  "raw_utf8": "   Compiling phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/benchmark/phase6-live)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.86s\n     Running tests/scenario.rs (core/benchmark/phase6-live/target/debug/deps/scenario-e362324932d02afb)\n\nrunning 1 test\ntest sealed_input_exact_eof_and_manifest_refusal ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

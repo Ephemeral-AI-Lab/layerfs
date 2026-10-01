@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One real-provider correctness diagnostic; no performance admission."""
 from pathlib import Path
-import argparse, hashlib, json, os, secrets, shutil, socket, subprocess, time, urllib.request
+import argparse, fcntl, hashlib, json, os, secrets, shutil, socket, subprocess, time, urllib.request
 
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -11,12 +11,13 @@ def free_port():
         s.bind(('127.0.0.1', 0))
         return s.getsockname()[1]
 
-def main():
+def run():
     p = argparse.ArgumentParser()
     p.add_argument('--output', required=True)
     p.add_argument('--minio', required=True)
     p.add_argument('--image', required=True)
     p.add_argument('--driver', required=True)
+    p.add_argument('--case-file')
     p.add_argument('--purpose', default='real-provider correctness diagnostic')
     args = p.parse_args()
     out = Path(args.output).resolve()
@@ -49,6 +50,9 @@ def main():
                 'cache': 'INELIGIBLE: OS/page cache unknown',
                 'purpose': args.purpose,
                 'complete_child_limit_seconds': 15, 'separate_proof_limit_seconds': 9.5}
+    if args.case_file:
+        identity['case_file_sha256'] = sha(args.case_file)
+        identity['scenario_module_sha256'] = sha(root / 'core/benchmark/phase6-live/src/scenario.rs')
     (out / 'identity.json').write_text(json.dumps(identity, indent=2) + '\n')
     with open(out / 'minio-private.log', 'xb') as provider_log:
         os.chmod(out / 'minio-private.log', 0o600)
@@ -70,6 +74,9 @@ def main():
                     raise RuntimeError('provider readiness deadline')
                 time.sleep(.1)
         command = [str(Path(args.driver).resolve()), 'smoke', str(out / 'result'), str(private), args.image]
+        if args.case_file:
+            command[1] = 'scenario'
+            command.append(str(Path(args.case_file).resolve()))
         start = time.monotonic()
         with open(out / 'driver.stdout', 'xb') as stdout, open(out / 'driver.stderr', 'xb') as stderr:
             try:
@@ -96,6 +103,14 @@ def main():
             process.wait(timeout=5)
         (out / 'provider-drain.json').write_text(json.dumps({'pid': process.pid, 'exit': process.returncode,
                                                            'process_drained': True, 'data_retained': True})+'\n')
+
+def main():
+    root = Path(__file__).resolve().parents[3]
+    lock_path = root / 'benchmark-results/phase6-integration/.live-run.lock'
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open('a+b') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        run()
 
 if __name__ == '__main__':
     main()

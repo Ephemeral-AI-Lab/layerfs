@@ -304,3 +304,38 @@ actual namespace scaling evidence for V4c2b; no smaller empty-fixture substitute
 family-runner or SDK Init claim. Generic FUSE rename plus sealed generic driver
 input/full manifest proof are required. Full goal remains active. Freeze before
 collection, keep15/9.5s bounds, one sample, all failed/INELIGIBLE observations.
+
+## V4d1 generic live cohort runtime PARTIAL; actual collection next
+
+Parent `ffe8de23e758038355c05be54b61260736bc1605`. Own experimental Engine/FUSE/
+rename and generic scenario/driver/main/run/fixture preparation, external rename/
+scenario tests. Ordinary rename/no-replace/move/replace checks types, nonempty
+and ancestor cycles before name transaction; exact children/subdir/links/parent
+state updates without descendant mutation. Replaced open file still reads/writes
+through its issued handle. Real directory.. and live link counts corrected.
+No lifetime metadata/source retirement or complete syscall/concurrency claim.
+
+Generic sealed P6CASE1commands/manifests route through existing public WorkspaceApi;
+no daemon workload recognition. Expected complete owning wide/small/package trees
+acquired once, exact historical literal command SHA checks, marker/64KiB/1MiB
+payloads retained. Closed byte acquisition/seals retained. Generic cp seeds actual
+FUSE/canonical/MinIO/C5 head, literal target second head, one-file successor third;
+all phases inside complete child. Independent full path/kind/mode/size/SHA256 proof
+streams data for all retained roots and checks actual persisted C5head/parent chain.
+Generic no-op outcome can retain existing head; no fake distinct-root assertion.
+
+Nine construction/engine/rename checks PASS plus scenario EOF/duplicate-manifest
+check PASS, locked all-target Clippy/fmt/native release and Linux musl release
+builds PASS, Python compile/acquisition PASS. Initial construction checks failed
+because new create-parent subdir UPDATE had4placeholders but only3bindings; exact
+output/source demonstrated cause, corrected binding and covering commands once.
+Raw failure retained. Later driver history support/source changes covered by
+Clippy/build; unaffected transport/packing/file-facts proofs retained by scope.
+Full unchanged Core suites/examples and Linux Clippy unrun; product unchanged.
+
+Worktree-local nonblocking run lock added; no build/measurement overlap. Current
+one producer/512population/serial/operation/256handles/15s child/9.5s proof limits
+unchanged. All correctness/live named rows still pending; numerical cache remains
+INELIGIBLE. Next: publish runtime and run frozen namespace67/components270/many128
+once each; preserve failures and exact work counts before repairing namespace
+scaling. V4c2b/seven families/DeepSeek/full goal remain incomplete.

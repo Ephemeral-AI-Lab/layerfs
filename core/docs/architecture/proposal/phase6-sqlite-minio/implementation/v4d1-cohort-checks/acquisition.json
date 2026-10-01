@@ -1,0 +1,174 @@
+{
+  "schema": "phase6-live-cohort-input-v1",
+  "sources": {
+    "core/benchmark/fs-bench-pro/families/workspace_namespace.py": "a1f865a9d7fdbc8f1b2772b7c6da3a70dfd3022d8bf189426632ecd1543e52f7",
+    "core/benchmark/fs-bench-pro/families/workspace_shell_package.py": "ff55e57e40b6f5687c15a844bc0e916354477965e10577e24bdf2c0dbe95b032",
+    "core/benchmark/fs-bench-pro/shell_package.py": "407b9bd07edff441649ca840565005e4f74cd6a78fe97b1a35bac2ec54ec2775",
+    "core/docs/architecture/proposal/phase6-sqlite-minio/experiments/source-captures/r1-six-case-cohort.json": "ad02026dab43e3ebf3eed41e579e09bfef22b7efea173a5deb8a584ccf4b626f",
+    "core/benchmark/phase6-live/prepare_cohort.py": "c071da5ae33f715087f6c5fe66da90ee20ade2ff0eb9f2be2609fa8f118fbf05"
+  },
+  "cases": [
+    {
+      "id": "phase6-live-namespace67-v1",
+      "original_id": "workspace-namespace-move-replace-descendants-67-sdk-v1",
+      "label": "namespace67",
+      "case_file": "/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/benchmark-results/phase6-integration/v4d1-cohort-inputs/namespace67.case",
+      "case_sha256": "f77eb90a4b0f1bf39e57089a47372188a1b2bcd4842b6e9b51735a2cad368c75",
+      "original_command_sha256": "cb35b7de444aef1d31d91d4f66be2aa308b5979c990f177e4dbf5e8ca840718f",
+      "fixture_files": {
+        ".marker": "8ba8496a2525ae171ffd104d632dede6ef418d9b95962a9d88e2fcdbc8d48d24",
+        "packages/old/subtree/child/extra000.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra001.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra002.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra003.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra004.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra005.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra006.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra007.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra008.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra009.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra010.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra011.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra012.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra013.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra014.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra015.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra016.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra017.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra018.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra019.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra020.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra021.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra022.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra023.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra024.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra025.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra026.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra027.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra028.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra029.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra030.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra031.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra032.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra033.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra034.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra035.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra036.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra037.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra038.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra039.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra040.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra041.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra042.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra043.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra044.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra045.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra046.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra047.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra048.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra049.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra050.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra051.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra052.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra053.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra054.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra055.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra056.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra057.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra058.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra059.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra060.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra061.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra062.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/extra063.txt": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "packages/old/subtree/child/grand.txt": "40e80dbfeafb7de6dcf05054056236a924da3616e0f8b600524a92b9e7c7552e",
+        "packages/old/subtree/sibling.txt": "404efbe31361c38c2def0bcc17cddc29642b3890160765ec0174673604a49349"
+      },
+      "steps": [
+        {
+          "name": "seed",
+          "command_sha256": "f567510fd4838daf30735faaf1a9d3ba2c05d5e31ec12972c6c3af292149b639",
+          "manifest_sha256": "478aa879f6663fae094492a1a5568809d87a7b6577556e478ed3f0690436be68"
+        },
+        {
+          "name": "target",
+          "command_sha256": "cb35b7de444aef1d31d91d4f66be2aa308b5979c990f177e4dbf5e8ca840718f",
+          "manifest_sha256": "8775077ffd613372784857a5227c77c06ffeac7ebda831ff28411e0f1e159eab"
+        },
+        {
+          "name": "localized-successor",
+          "command_sha256": "8d1c0dcd34bad2ab70b50c402c7f0ae708b825588d3dab114ca038f231bffda2",
+          "manifest_sha256": "8d3015fc4b68ca231284ef80b432d849e5e57fd8d1b1e56ae1412066b988580e"
+        }
+      ]
+    },
+    {
+      "id": "phase6-live-components270-v1",
+      "original_id": "workspace-namespace-components-270-sdk-v1",
+      "label": "components270",
+      "case_file": "/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/benchmark-results/phase6-integration/v4d1-cohort-inputs/components270.case",
+      "case_sha256": "6109472bc9b65651a21ecfcd249a0dcd0e8b81f5d59fbdc3506aa4094a83aa9c",
+      "original_command_sha256": "d54cc7f047effcb4f4044b9693dd476cbf32e2b6d1a6b43851060f26b2b6b2e6",
+      "fixture_files": {
+        ".marker": "8ba8496a2525ae171ffd104d632dede6ef418d9b95962a9d88e2fcdbc8d48d24",
+        "packages/old/subtree/child/grand.txt": "40e80dbfeafb7de6dcf05054056236a924da3616e0f8b600524a92b9e7c7552e",
+        "packages/old/subtree/sibling.txt": "404efbe31361c38c2def0bcc17cddc29642b3890160765ec0174673604a49349"
+      },
+      "steps": [
+        {
+          "name": "seed",
+          "command_sha256": "b03a3e72348686ddd0f695ff4ba823df871073fd8068ceb1f4d87ae2e4752d43",
+          "manifest_sha256": "5cd3bd08b66f0de5bd21fd5eae23ee56d92290fb85783e0e4b43102e85db6a3a"
+        },
+        {
+          "name": "target",
+          "command_sha256": "d54cc7f047effcb4f4044b9693dd476cbf32e2b6d1a6b43851060f26b2b6b2e6",
+          "manifest_sha256": "16feb6bc8704a64b90c9b97082407c614793d1425578fbf2d63e6f48d84bcafa"
+        },
+        {
+          "name": "localized-successor",
+          "command_sha256": "ff5fdc57546740c6552f1e9e2cd3848ff66dd807ed6e663971d7d7ae9d67429e",
+          "manifest_sha256": "63284dde02a08b6b6b363fe0c82563704caa30c0d881cd0ca29bd9e3eade63fd"
+        }
+      ]
+    },
+    {
+      "id": "phase6-live-many128-v1",
+      "original_id": "workspace-shell-package-many-128-sdk-v2",
+      "label": "many128",
+      "case_file": "/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/benchmark-results/phase6-integration/v4d1-cohort-inputs/many128.case",
+      "case_sha256": "89f03a2e94db8adfd58fe8559ceebbb046c6592354d53a160c11249a4e3fd28b",
+      "original_command_sha256": "bf3ba753404474ac7e6189d640df5623d0cabfac2b830572051bc26f5bdb3f41",
+      "fixture_files": {
+        "node_modules/@fixture/core/BUILD_ID": "59854984853104df5c353e2f681a15fc7924742f9a2e468c29af248dce45ce03",
+        "node_modules/@fixture/core/index.js": "b1afbc34e670976fa43c07b93ceaec5c65278cd23c7a39b77c34aea63ef45951",
+        "node_modules/@fixture/core/package.json": "7c6caa232eaf96d4e1b9a7deeb3cfe360c17cab50122767791415a645893c27d",
+        "node_modules/@fixture/parser/lib/legacy.js": "be1c246881fabc2f3635d92d34f3294f2d48684014005e2155e1f9b8fb6dbb68",
+        "node_modules/@fixture/parser/lib/parse.js": "b0c9fefa98b76962401503ea6308a45165b177de3dee2979096e29fae1c73219",
+        "node_modules/@fixture/parser/package.json": "7d300522a50126bd7033a3572bbd49cf042a8cdbb73bca98492158cc63bf3a4d",
+        "node_modules/@fixture/ui/dist/ui.js": "44cb986c883c046ca43156bde31e6021119a2ac7fc26091698172c586447e677",
+        "node_modules/@fixture/ui/package.json": "8d34731bc1bc763aaab559da6943657927a0c631b1b2eac84f22f5ca73af5c5e",
+        "package-lock.json": "75c906f17e016501de1188e889ab95a7f788447891ab60afa55589498a311d3d"
+      },
+      "steps": [
+        {
+          "name": "seed",
+          "command_sha256": "c8b0cbcd26dc07bbcf2ecb9f660658e833193bfa1164389809c138536e40c275",
+          "manifest_sha256": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e"
+        },
+        {
+          "name": "target",
+          "command_sha256": "bf3ba753404474ac7e6189d640df5623d0cabfac2b830572051bc26f5bdb3f41",
+          "manifest_sha256": "8124069ea2c5a9c48a86073b4b941c8cd85582df6dae2d2413990d61d46cc713"
+        },
+        {
+          "name": "localized-successor",
+          "command_sha256": "807aa333144c1fce042f7bfa6b2e0dc7e275ffc2d933fea742290e56a77b03dc",
+          "manifest_sha256": "74e4b860a04459e654d0c4f8137d5d408688f6c1bed45fb629a968cfc8f0bccf"
+        }
+      ]
+    }
+  ],
+  "acquisition": "once from owning recipes; closed immutable Docker inputs; generic cp creates independent writable FUSE copy inside complete child",
+  "cache": "INELIGIBLE unknown; no warm/cold equivalence claim"
+}

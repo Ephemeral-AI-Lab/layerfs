@@ -28,3 +28,7 @@ pub mod edits;
 pub mod prepared;
 
 pub mod file_facts;
+
+pub mod rename;
+
+pub mod scenario;
