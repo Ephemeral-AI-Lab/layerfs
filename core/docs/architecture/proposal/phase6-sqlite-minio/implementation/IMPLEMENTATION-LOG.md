@@ -166,3 +166,50 @@ Freeze V4C1-SPEC.md before implementation/collection. Next: SQL dirty/new/name
 indexes, visible immutable base ranges, replayable current-final edit spool and
 prepared rows; preserve all real ACK/validation/C5/known installation behavior.
 Goal remains active with all three shapes/seven families/full DeepSeek groups.
+
+## V4c1 indexed construction runtime checkpoint (PARTIAL, provider run next)
+
+Parent `05d4b568ccd8c00a2314b23ed65004b8710a96d2`. Owned experimental runtime:
+engine/construction/daemon/lib, new edits/prepared modules, external construction
+checks. Replace live-id vectors and base-less rebuilds with partial dirty index,
+indexed live-name membership, changed-name tombstones, operation-owned SQL typed
+values and keyset/ordinal replay. Existing C1 update_filesystem and apply_edits
+perform actual construction against the selected immediate base. Metadata remains
+portable C1, storage remains actual C2/MinIO ACK before existing authority audit
+and conditional C5 publication. Installation adopts only prepared rows under the
+existing mutation lock and clears their extents/name changes; no full inode UPDATE.
+
+Maintain in-memory total-inode count and SQL per-directory child counts in mutation
+transactions instead of repeated population counts; parent mtime changes with name
+mutations. Same total512/serial512/handle256 limits remain. Explicit operation
+limits are512 changed inodes,512 changed names per directory and512 indexed file
+edits; refusal retains accepted mutable data, and no larger supported profile is
+claimed. Current edit spool shares the owned SQLite connection/cache and is rebuilt
+from final extents, not historical writes. Source retirement is still unqualified;
+unreferenced immutable source files are retained. V4c2 must provide admission and
+retirement/import/certification before the unbounded-population claim.
+
+External tests: six pass (three construction, three engine). Literal independent
+byte expectations prove overwrite/truncate/regrow and old-root preservation,
+changed-name tombstones/unrelated inode identity, plus1MiB immediate edit and
+large-to-small/small-to-large crossing. The large edit serves under4KiB local
+replacement bytes, not the unchanged megabyte; full C1 provider reads and physical
+containment remain separate unproved observations. This fixture is in-memory
+canonical objects plus actual SQLite/source files, not a real-provider speed row.
+
+Commands (own worktree, Cargo+1.85.1, locked): test --test construction --test engine;
+clippy --all-targets -- -D warnings; native release build; aarch64-musl release
+zigbuild. All pass. Initial compile errors (missing filesystem reexports, enum
+name and usize ToSql) were corrected; initial all-target Clippy rejected needless
+non-Drop test drops, corrected without suppressions. Passing tests reran only after
+new child-count/read-counter source changes and a new counted large-edit assertion.
+Prior passing unchanged transport/packing tests are reused by scope; full unchanged
+Core suites/examples and Linux Clippy not run. Product source remains unchanged.
+
+This is PARTIAL until the declared real-provider two-head run passes. Full-candidate
+host audit, C1 effective-cycle repeated walks, finite population quota, inherited
+mount/import, rename/link/symlink and physical resource qualification remain gates.
+All named cases, seven families and complete DeepSeek import/generic-locality work
+remain open. Next: seal runtime/build identities, run one affected real-provider
+4KiB create/overwrite treatment within15s child/9.5s separate proof and publish
+exact source/counts/outcomes; cache unknown remains INELIGIBLE.

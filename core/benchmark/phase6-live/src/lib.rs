@@ -23,3 +23,6 @@ pub mod read_window;
 pub mod metadata_catalog;
 
 pub mod minio_stats;
+
+pub mod edits;
+pub mod prepared;

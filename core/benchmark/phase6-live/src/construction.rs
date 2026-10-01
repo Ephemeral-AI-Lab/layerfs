@@ -1,13 +1,14 @@
 use crate::{
+    edits::Edits,
     engine::{Engine, Source},
-    objects::{Consumer, Reader},
+    prepared::Prepared,
 };
 use layerfs_content::{
     filesystem::{
         attributes::{
             build_attribute_tree, value::emit_value, AttributeEntry, AttributeKey, PortableMetadata,
         },
-        profile_id, scope_for_seed,
+        profile_id, scope_for_seed, FilesystemRootId,
     },
     inode_leaf::{InodeKind, InodeValue},
     *,
@@ -15,8 +16,8 @@ use layerfs_content::{
 use layerfs_telemetry::timer::Timing;
 
 pub fn metadata(
-    reader: &Reader,
-    consumer: &mut Consumer,
+    reader: &dyn AuthenticatedObjects,
+    consumer: &mut dyn FinalizedConsumer,
     mode: u32,
     sec: i64,
     nano: u32,
@@ -52,96 +53,128 @@ pub fn metadata(
         .map(|r| r.0)
         .map_err(|e| e.to_string())
 }
+#[derive(Clone, Copy, Default, Debug)]
+pub struct ConstructionWork {
+    pub dirty_inodes: usize,
+    pub directories: usize,
+    pub new_inodes: usize,
+    pub file_edits: usize,
+    pub changed_names: usize,
+}
 pub fn build(
     engine: &Engine,
     scope: InodeScope,
-    reader: &Reader,
-    consumer: &mut Consumer,
-) -> Result<(FilesystemResult, Vec<(i64, ObjectId)>), String> {
-    let ids = engine.live_ids()?;
-    if ids.len() > 512 {
-        return Err("construction inode admission".into());
-    }
-    let mut inodes = Vec::new();
-    let mut directories = Vec::new();
-    let mut files = Vec::new();
-    for id in &ids {
-        let n = engine.node(*id)?;
+    base: FilesystemRootId,
+    reader: &dyn AuthenticatedObjects,
+    consumer: &mut dyn FinalizedConsumer,
+) -> Result<(FilesystemResult, ConstructionWork), String> {
+    engine
+        .db
+        .execute("DELETE FROM prepared", [])
+        .map_err(|e| e.to_string())?;
+    let mut old = FilesystemRead::new(reader, base).map_err(|e| e.to_string())?;
+    let mut work = ConstructionWork::default();
+    let mut after = 0;
+    while let Some(n) = engine.next_dirty(after)? {
+        if work.dirty_inodes >= 512 {
+            return Err("changed inode admission 512".into());
+        }
+        after = n.id;
         let kind = InodeKind::from_code(n.kind).map_err(|e| e.to_string())?;
         let content = if n.kind == 1 {
-            if !n.dirty && n.root.is_some() {
-                ObjectId::from_bytes(n.root.as_deref().unwrap()).map_err(|e| e.to_string())?
-            } else {
-                let (result, _) = Timing::disabled("file.construct", |t| {
+            let policy = ConstructionPolicy::default();
+            let (result, _) = Timing::disabled("file.construct", |t| {
+                if let Some(root) = n.root.as_deref() {
+                    let root = ObjectId::from_bytes(root)?;
+                    let edits = Edits::prepare(engine, n.id).map_err(|_| ContentError::Io)?;
+                    work.file_edits += edits.len();
+                    apply_edits(
+                        policy,
+                        &policy.capacities(),
+                        reader,
+                        EditRequest {
+                            root,
+                            edits: &edits,
+                            source: &edits,
+                        },
+                        consumer,
+                        t.child("edit"),
+                    )
+                } else {
                     construct_stream(
-                        ConstructionPolicy::default(),
-                        &ConstructionPolicy::default().capacities(),
+                        policy,
+                        &policy.capacities(),
                         Source {
                             engine,
-                            id: *id,
+                            id: n.id,
                             at: 0,
                         },
                         consumer,
                         t.child("stream"),
                     )
-                });
-                let root = result.map_err(|e| e.to_string())?.root;
-                files.push((*id, root));
-                root
-            }
-        } else {
-            let mut q = engine
-                .db
-                .prepare("SELECT name,ino FROM names WHERE parent=?1 ORDER BY name")
-                .map_err(|e| e.to_string())?;
-            let rows = q
-                .query_map([id], |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, i64>(1)?)))
-                .map_err(|e| e.to_string())?;
-            let mut changes = Vec::new();
-            for row in rows {
-                let (name, ino) = row.map_err(|e| e.to_string())?;
-                changes.push((
-                    PathName::new(
-                        std::str::from_utf8(&name).map_err(|_| "non UTF8 C1 name unsupported")?,
-                    )
-                    .map_err(|e| e.to_string())?,
-                    Some(ino as u64),
-                ));
-            }
-            if changes.len() > 512 {
-                return Err("directory construction admission".into());
-            }
-            directories.push(DirectoryUpdate {
-                parent: *id as u64,
-                changes,
+                }
             });
-            ObjectId::for_bytes(b"initial directory content replaced by C1")
+            result.map_err(|e| e.to_string())?.root
+        } else if n.is_new {
+            // A real empty directory root is the typed initial content; C1 merges
+            // this operation's final names rather than trusting a placeholder.
+            layerfs_content::filesystem::directory::update::empty_directory(
+                &mut FilesystemObjects::new(reader, consumer),
+            )
+            .map_err(|e| e.to_string())?
+            .0
+        } else {
+            old.resolve_inode(n.id as u64)
+                .map_err(|e| e.to_string())?
+                .value
+                .content_root
         };
         let meta = metadata(reader, consumer, n.mode, n.seconds, n.nanos, kind)?;
-        inodes.push(InodeUpdate {
-            serial: *id as u64,
-            value: InodeValue {
-                kind,
-                namespace_ref_count: u64::from(*id != 1),
-                content_root: content,
-                metadata_root: meta,
-            },
-        });
+        let pos = if n.is_new {
+            Some(work.new_inodes as i64)
+        } else {
+            None
+        };
+        engine
+            .db
+            .execute(
+                "INSERT INTO prepared VALUES(?1,?2,?3,?4,?5)",
+                rusqlite::params![
+                    n.id,
+                    n.kind,
+                    content.as_bytes().as_slice(),
+                    meta.as_bytes().as_slice(),
+                    pos
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        work.dirty_inodes += 1;
+        work.directories += usize::from(kind == InodeKind::Directory);
+        work.new_inodes += usize::from(n.is_new);
     }
-    let input = FilesystemInput {
-        base: None,
-        scope,
-        root_serial: 1,
-        directories: &directories,
-        inodes: &inodes,
-        new_inodes: &ids.iter().map(|id| *id as u64).collect::<Vec<_>>(),
-        resources: FilesystemResources::default(),
+    let prepared = Prepared {
+        engine,
+        root: base,
+        inode_scope: scope,
+        counts: (work.directories, work.dirty_inodes, work.new_inodes),
     };
-    let result = build_filesystem(&mut FilesystemObjects::new(reader, consumer), &input, None)
-        .map_err(|e| e.to_string())?;
-    Ok((result, files))
+    use layerfs_content::filesystem::rows::RowSource;
+    let mut dirs = prepared.directories().map_err(|e| e.to_string())?;
+    while let Some(dir) = dirs.next_row().map_err(|e| e.to_string())? {
+        work.changed_names += dir.changes.len();
+    }
+    let result = update_filesystem(
+        &mut FilesystemObjects::new(reader, consumer),
+        &prepared,
+        None,
+    )
+    .map_err(|e| e.to_string())?;
+    Ok((result, work))
 }
-pub fn genesis(reader: &Reader, consumer: &mut Consumer) -> Result<FilesystemResult, String> {
+pub fn genesis(
+    reader: &dyn AuthenticatedObjects,
+    consumer: &mut dyn FinalizedConsumer,
+) -> Result<FilesystemResult, String> {
     let scope = scope_for_seed([6; 32]);
     let meta = metadata(reader, consumer, 0o755, 0, 0, InodeKind::Directory)?;
     let inodes = [InodeUpdate {
