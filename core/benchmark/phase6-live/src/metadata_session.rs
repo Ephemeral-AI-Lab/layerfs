@@ -27,7 +27,7 @@ impl Session {
         action: u8,
         payload: &[u8],
     ) -> Result<Vec<u8>, String> {
-        if payload.len().checked_add(8).is_none_or(|n| n > 16384) || action > 4 {
+        if payload.len().checked_add(8).is_none_or(|n| n > 16384) || action > 6 {
             return Err("metadata request capacity/action".into());
         }
         if self.quarantined {

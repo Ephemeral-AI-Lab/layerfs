@@ -1,6 +1,6 @@
 use crate::objects::{Locator, ROLES};
 use layerfs_content::ObjectId;
-pub const PREFIX: &[u8] = b"P6META4";
+pub const PREFIX: &[u8] = b"P6META5";
 pub struct Bytes<'a> {
     bytes: &'a [u8],
     at: usize,
@@ -21,6 +21,16 @@ impl<'a> Bytes<'a> {
     }
     pub fn u8(&mut self) -> Result<u8, String> {
         Ok(self.take::<1>()?[0])
+    }
+    pub fn u32(&mut self) -> Result<u32, String> {
+        Ok(u32::from_be_bytes(self.take()?))
+    }
+    pub fn count(&mut self) -> Result<usize, String> {
+        let n = u16::from_be_bytes(self.take()?) as usize;
+        if !(1..=128).contains(&n) {
+            return Err("batch count".into());
+        }
+        Ok(n)
     }
     pub fn u64(&mut self) -> Result<u64, String> {
         Ok(u64::from_be_bytes(self.take()?))
@@ -96,7 +106,10 @@ pub fn locator(out: &mut Vec<u8>, row: &Locator) {
     out.extend_from_slice(row.id.as_bytes());
     out.push(ROLES.iter().position(|r| *r == row.role).unwrap() as u8);
     out.extend_from_slice(&(row.length as u64).to_be_bytes());
-    out.extend_from_slice(&row.pack)
+    out.extend_from_slice(&row.pack);
+    out.extend_from_slice(&row.group.to_be_bytes());
+    out.extend_from_slice(&row.record.to_be_bytes());
+    out.extend_from_slice(&row.pack_id.to_be_bytes());
 }
 pub fn read_locator(b: &mut Bytes<'_>) -> Result<Locator, String> {
     Ok(Locator {
@@ -104,5 +117,8 @@ pub fn read_locator(b: &mut Bytes<'_>) -> Result<Locator, String> {
         role: *ROLES.get(b.u8()? as usize).ok_or("object role")?,
         length: usize::try_from(b.u64()?).map_err(|_| "canonical length")?,
         pack: b.take()?,
+        group: b.u32()?,
+        record: b.u32()?,
+        pack_id: b.u64()?,
     })
 }

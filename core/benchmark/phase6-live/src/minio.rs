@@ -1,6 +1,7 @@
 use sha2::{Digest, Sha256};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -9,6 +10,7 @@ pub struct Minio {
     pub bucket: String,
     pub access: String,
     pub secret: String,
+    pub stats: Arc<Mutex<crate::minio_stats::Statistics>>,
 }
 
 pub fn hex(bytes: &[u8]) -> String {
@@ -56,6 +58,12 @@ fn date() -> String {
     )
 }
 impl Minio {
+    pub fn statistics(&self) -> Result<crate::minio_stats::Statistics, String> {
+        self.stats
+            .lock()
+            .map(|s| *s)
+            .map_err(|_| "MinIO statistics owner".into())
+    }
     // The isolated local experiment deliberately has no TLS/provider fallback.
     pub fn call(
         &self,
@@ -66,6 +74,18 @@ impl Minio {
     ) -> Result<(u16, Vec<u8>), String> {
         if !key.bytes().all(|b| b.is_ascii_hexdigit()) || key.len() > 64 {
             return Err("invalid object key".into());
+        }
+        {
+            let mut stats = self.stats.lock().map_err(|_| "MinIO statistics owner")?;
+            match method {
+                "PUT" => {
+                    stats.put_calls += 1;
+                    stats.put_requested_bytes =
+                        stats.put_requested_bytes.saturating_add(body.len() as u64)
+                }
+                "GET" => stats.get_calls += 1,
+                _ => {}
+            }
         }
         let path = if key.is_empty() {
             format!("/{}", self.bucket)
@@ -155,6 +175,12 @@ impl Minio {
         reader
             .read_exact(&mut response)
             .map_err(|e| e.to_string())?;
+        if method == "GET" {
+            let mut stats = self.stats.lock().map_err(|_| "MinIO statistics owner")?;
+            stats.get_received_bytes = stats
+                .get_received_bytes
+                .saturating_add(response.len() as u64);
+        }
         Ok((status, response))
     }
     pub fn create_bucket(&self) -> Result<(), String> {

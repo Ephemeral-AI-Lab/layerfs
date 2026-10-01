@@ -50,16 +50,15 @@ pub fn run(out: &Path, config: &Path, image: &str) -> Result<(), String> {
         bucket: fields[1].into(),
         access: fields[2].into(),
         secret: fields[3].into(),
+        stats: Arc::new(std::sync::Mutex::new(Default::default())),
     };
     s3.create_bucket()?;
     let db = Arc::new(LocatorDb::create(&out.join("objects.sqlite"), s3.clone())?);
-    let reader = Reader {
-        s3: s3.clone(),
-        locators: db.clone(),
-    };
+    let reader = Reader::new(s3.clone(), db.clone());
     let mut consumer = Consumer::new(reader.clone())?;
     let start = Instant::now();
-    let genesis = construction::genesis(&reader, &mut consumer)?;
+    let genesis = construction::genesis(&consumer.reader.clone(), &mut consumer)?;
+    consumer.finish()?;
     let genesis_ms = start.elapsed().as_secs_f64() * 1000.;
     let history = sqlite::create(
         &out.join("history.sqlite"),

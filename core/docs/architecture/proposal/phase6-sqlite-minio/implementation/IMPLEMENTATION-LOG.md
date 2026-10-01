@@ -102,3 +102,34 @@ batch modules and owning placement/identity tests, then one real-provider treatm
 The existing C1 public directory/inode iterators are available for later paged
 import, but locality/namespace certification still requires V4c and its own proof.
 Goal active with all larger groups preserved; report major checkpoints to #293.
+
+## 2026-10-02 — V4b packing/batch source prepared
+
+Parent `a4770e33a5792e0a8bc2dbb3d3a44f1c3ec78e35`. Implement P6META5 exact
+packed locators and 128-ID ordered lookup/registration batches. Global SQLite
+assigns stable positive pack IDs, keeps full pack digests/group/record ordinals,
+and authenticates complete registration pages before short atomic transactions.
+Canonical payload remains in MinIO. Consumer owns one private bounded pending
+window, exact same-window/persisted CAS checks, explicit finish before genesis/
+READY, lane packs and shared wave decoder/group scratch. Known locator reuse
+avoids a second lookup; byte/count admission happens before payload reads.
+
+Four physical/codec/pending boundary tests PASS after correcting a demonstrated
+FAIL: the first 300-native-record test used legacy256 instead of the actual
+tight-lane16 group limit. Retain `v4b-packing-final.stdout` failure; corrected
+`v4b-packing-corrected.stdout` passes. Use actual C2 append_fits with running
+assembled size, avoiding quadratic repeated group summation. No C2 limit changed.
+Four real-wire session tests, host locked Clippy/fmt and locked Darwin/Linux
+ARMv8 release builds PASS. Existing engine tests unaffected/reused. Full-provider
+treatment NOT_RUN at this checkpoint. No physical memory/whole-goal completion.
+
+Next: single frozen actual SDK/FUSE/C1/C2/MinIO/C5 two-head treatment and observe
+pack/request/window counts plus exact retained byte/history/cleanup proof. V4c
+indexed dirty rows, immediate-base edits/incremental namespace certification and
+all larger workload/family/DeepSeek/locality gates remain required.
+
+V4b source additionally records fixed actual MinIO PUT/GET call counts, requested
+PUT body bytes and received GET body bytes, separately in daemon and authority
+processes. These are request/body observations, not physical disk/cache counters.
+The sealed build includes this instrumentation; no payload/register algorithm or
+limits changed. Full-provider treatment is still NOT_RUN before source freeze.

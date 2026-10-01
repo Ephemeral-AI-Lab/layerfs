@@ -1,6 +1,6 @@
 use crate::{
     minio::Minio,
-    objects::{read_locator, Locator, Locators, ROLES},
+    objects::{Locator, Locators},
     wire::{self, Bytes, Snapshot},
 };
 use layerfs_bridge::{
@@ -17,10 +17,8 @@ use layerfs_history::{
     records::*,
     sqlite::SqliteCatalog,
 };
-use rusqlite::{params, Connection, OptionalExtension};
 use std::{
     net::{TcpListener, ToSocketAddrs},
-    path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -28,68 +26,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub struct LocatorDb {
-    db: Mutex<Connection>,
-    pub s3: Minio,
-}
-impl LocatorDb {
-    pub fn create(path: &Path, s3: Minio) -> Result<Self, String> {
-        let db = Connection::open(path).map_err(|e| e.to_string())?;
-        db.execute_batch("PRAGMA journal_mode=MEMORY;PRAGMA synchronous=OFF;PRAGMA temp_store=MEMORY;PRAGMA cache_size=-2048;PRAGMA mmap_size=0;CREATE TABLE objects(id BLOB PRIMARY KEY,role INTEGER NOT NULL,length INTEGER NOT NULL,pack BLOB NOT NULL) WITHOUT ROWID;").map_err(|e|e.to_string())?;
-        db.busy_timeout(Duration::ZERO).map_err(|e| e.to_string())?;
-        Ok(Self {
-            db: Mutex::new(db),
-            s3,
-        })
-    }
-}
-impl Locators for LocatorDb {
-    fn lookup(&self, id: ObjectId) -> Result<Option<Locator>, String> {
-        let db = self.db.lock().map_err(|_| "locator owner")?;
-        db.query_row(
-            "SELECT role,length,pack FROM objects WHERE id=?1",
-            [id.as_bytes().as_slice()],
-            |r| {
-                let role: i64 = r.get(0)?;
-                let length: i64 = r.get(1)?;
-                let pack: Vec<u8> = r.get(2)?;
-                Ok((role, length, pack))
-            },
-        )
-        .optional()
-        .map_err(|e| e.to_string())?
-        .map(|(role, length, pack)| {
-            Ok(Locator {
-                id,
-                role: *ROLES.get(role as usize).ok_or("locator role")?,
-                length: usize::try_from(length).map_err(|_| "locator length")?,
-                pack: pack.try_into().map_err(|_| "pack digest width")?,
-            })
-        })
-        .transpose()
-    }
-    fn register(&self, row: &Locator) -> Result<(), String> {
-        let bytes = read_locator(&self.s3, row)?;
-        if let Some(old) = self.lookup(row.id)? {
-            if old.role != row.role || read_locator(&self.s3, &old)? != bytes {
-                return Err("registered CAS mismatch".into());
-            }
-            return Ok(());
-        }
-        let db = self.db.lock().map_err(|_| "locator owner")?;
-        db.execute(
-            "INSERT INTO objects VALUES (?1,?2,?3,?4)",
-            params![
-                row.id.as_bytes().as_slice(),
-                ROLES.iter().position(|r| *r == row.role).ok_or("role")? as i64,
-                row.length as i64,
-                row.pack.as_slice()
-            ],
-        )
-        .map_err(|e| e.to_string())?;
-        Ok(())
-    }
-}
+pub use crate::metadata_catalog::LocatorDb;
 #[derive(Clone)]
 pub struct Remote {
     pub endpoint: String,
@@ -106,7 +43,7 @@ impl Remote {
             .map_err(|_| "metadata session owner".into())
     }
     pub fn call(&self, action: u8, payload: &[u8]) -> Result<Vec<u8>, String> {
-        if payload.len().checked_add(8).is_none_or(|n| n > 16384) || action > 4 {
+        if payload.len().checked_add(8).is_none_or(|n| n > 16384) || action > 6 {
             return Err("metadata request capacity/action".into());
         }
         let address = self
@@ -135,6 +72,7 @@ impl Remote {
             bucket: b.string()?,
             access: b.string()?,
             secret: b.string()?,
+            stats: Arc::new(Mutex::new(Default::default())),
         };
         let snapshot = Snapshot::read(&mut b)?;
         let start = b.u64()?;
@@ -172,27 +110,64 @@ impl Remote {
     }
 }
 impl Locators for Remote {
-    fn lookup(&self, id: ObjectId) -> Result<Option<Locator>, String> {
-        let reply = self.call(1, id.as_bytes())?;
-        let mut b = Bytes::new(&reply);
-        let row = match b.u8()? {
-            0 => None,
-            1 => Some(wire::read_locator(&mut b)?),
-            _ => return Err("locator presence".into()),
-        };
-        b.done()?;
-        if row.as_ref().is_some_and(|r| r.id != id) {
-            return Err("lookup identity".into());
+    fn lookup_many(&self, ids: &[ObjectId]) -> Result<Vec<Option<Locator>>, String> {
+        if ids.is_empty() || ids.len() > 128 {
+            return Err("lookup page admission".into());
         }
-        Ok(row)
+        let mut p = (ids.len() as u16).to_be_bytes().to_vec();
+        for id in ids {
+            p.extend_from_slice(id.as_bytes())
+        }
+        let reply = self.call(5, &p)?;
+        let mut b = Bytes::new(&reply);
+        if b.count()? != ids.len() {
+            return Err("lookup cardinality".into());
+        }
+        let mut rows = Vec::new();
+        for id in ids {
+            let row = match b.u8()? {
+                0 => None,
+                1 => Some(wire::read_locator(&mut b)?),
+                _ => return Err("lookup presence".into()),
+            };
+            if row.as_ref().is_some_and(|r| r.id != *id || r.pack_id == 0) {
+                return Err("lookup identity".into());
+            }
+            rows.push(row);
+        }
+        b.done()?;
+        Ok(rows)
     }
-    fn register(&self, row: &Locator) -> Result<(), String> {
-        let mut p = Vec::new();
-        wire::locator(&mut p, row);
-        let reply = self.call(2, &p)?;
-        Bytes::new(&reply).done()
+    fn register_many(&self, rows: &[Locator]) -> Result<Vec<Locator>, String> {
+        if rows.is_empty() || rows.len() > 128 || rows.iter().any(|r| r.pack_id != 0) {
+            return Err("registration page admission".into());
+        }
+        let mut p = (rows.len() as u16).to_be_bytes().to_vec();
+        for row in rows {
+            wire::locator(&mut p, row)
+        }
+        let reply = self.call(6, &p)?;
+        let mut b = Bytes::new(&reply);
+        if b.count()? != rows.len() {
+            return Err("registration cardinality".into());
+        }
+        let mut result = Vec::new();
+        for input in rows {
+            let row = wire::read_locator(&mut b)?;
+            if row.id != input.id
+                || row.role != input.role
+                || row.length != input.length
+                || row.pack_id == 0
+            {
+                return Err("registration identity".into());
+            }
+            result.push(row);
+        }
+        b.done()?;
+        Ok(result)
     }
 }
+
 pub struct Authority {
     pub locators: Arc<LocatorDb>,
     pub history: SqliteCatalog,
@@ -261,6 +236,37 @@ impl Authority {
                 b.done()?;
                 self.locators.register(&row)?;
             }
+            5 => {
+                let count = b.count()?;
+                let mut ids = Vec::with_capacity(count);
+                for _ in 0..count {
+                    ids.push(ObjectId::from_bytes(&b.take::<32>()?).map_err(|e| e.to_string())?)
+                }
+                b.done()?;
+                out.extend_from_slice(&(count as u16).to_be_bytes());
+                for row in self.locators.lookup_many(&ids)? {
+                    match row {
+                        None => out.push(0),
+                        Some(row) => {
+                            out.push(1);
+                            wire::locator(&mut out, &row)
+                        }
+                    }
+                }
+            }
+            6 => {
+                let count = b.count()?;
+                let mut rows = Vec::with_capacity(count);
+                for _ in 0..count {
+                    rows.push(wire::read_locator(&mut b)?)
+                }
+                b.done()?;
+                let rows = self.locators.register_many(&rows)?;
+                out.extend_from_slice(&(count as u16).to_be_bytes());
+                for row in rows {
+                    wire::locator(&mut out, &row)
+                }
+            }
             3 => {
                 b.done()?;
                 self.snapshot()?.encode(&mut out)
@@ -277,10 +283,8 @@ impl Authority {
                     return Err("Branch selector".into());
                 }
                 let candidate = ObjectId::from_bytes(&root).map_err(|e| e.to_string())?;
-                let reader = crate::objects::Reader {
-                    s3: self.locators.s3.clone(),
-                    locators: self.locators.clone(),
-                };
+                let reader =
+                    crate::objects::Reader::new(self.locators.s3.clone(), self.locators.clone());
                 let fs = layerfs_content::FilesystemRead::new(
                     &reader,
                     layerfs_content::filesystem::FilesystemRootId(candidate),
@@ -350,6 +354,7 @@ impl Authority {
                         outcome,
                     }),
                 }));
+                eprintln!("P6_AUTHORITY_IO {}", self.locators.s3.statistics()?.json());
                 out = encode_response(&response).map_err(|e| e.to_string())?;
             }
             _ => return Err("metadata action unsupported".into()),

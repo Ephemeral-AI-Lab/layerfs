@@ -15,3 +15,11 @@ pub mod minio;
 pub mod objects;
 pub mod transport_stats;
 pub mod wire;
+
+pub mod packing;
+pub mod pending;
+pub mod read_window;
+
+pub mod metadata_catalog;
+
+pub mod minio_stats;

@@ -55,7 +55,7 @@ fn two_requests_share_real_authenticated_connection() {
         b"opaque response"
     );
     assert_eq!(session.statistics.connect_attempts, 1);
-    assert_eq!(session.statistics.calls, [0, 1, 1, 0, 0]);
+    assert_eq!(session.statistics.calls, [0, 1, 1, 0, 0, 0, 0]);
     server.join().unwrap();
 }
 #[test]
@@ -75,7 +75,7 @@ fn wrong_reply_identity_quarantines_without_resend() {
         .unwrap_err()
         .contains("quarantined"));
     assert_eq!(session.statistics.connect_attempts, 1);
-    assert_eq!(session.statistics.calls, [0, 0, 0, 0, 1]);
+    assert_eq!(session.statistics.calls, [0, 0, 0, 0, 1, 0, 0]);
     server.join().unwrap();
 }
 #[test]
@@ -93,7 +93,7 @@ fn oversized_input_refuses_before_connection_effect() {
         )
         .is_err());
     assert_eq!(session.statistics.connect_attempts, 0);
-    assert_eq!(session.statistics.calls, [0; 5]);
+    assert_eq!(session.statistics.calls, [0; 7]);
 }
 #[test]
 fn known_idle_rotation_opens_new_session_without_replaying_request() {
@@ -114,6 +114,6 @@ fn known_idle_rotation_opens_new_session_without_replaying_request() {
     std::thread::sleep(Duration::from_millis(2050));
     session.call(address, 1, &[7; 32], &key, 1, &[]).unwrap();
     assert_eq!(session.statistics.connect_attempts, 2);
-    assert_eq!(session.statistics.calls, [0, 2, 0, 0, 0]);
+    assert_eq!(session.statistics.calls, [0, 2, 0, 0, 0, 0, 0]);
     server.join().unwrap();
 }

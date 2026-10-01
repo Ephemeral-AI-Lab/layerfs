@@ -29,7 +29,9 @@ published after pack ACK and canonical authentication in one bounded transaction
 No payload BLOBs enter global SQLite.
 
 Use existing C2 profile limits unchanged: ordinary/native pack256 KiB,
-group target48 KiB, groups per pack256, records per group8191, pending objects512,
+group target48 KiB, lane-specific actual group-count limits (the legacy ceiling
+is256; tight ordinary/native/whole-file writes use the smaller public lane limit),
+records per group8191, pending objects512,
 pending canonical bytes4 MiB minus1. A read/registration page has128 locators;
 its retained canonical results have a declared 4 MiB-minus1 budget before payload
 reads. All group/pack format bounds remain the actual C2 bounds, including compact
