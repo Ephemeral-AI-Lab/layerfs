@@ -184,3 +184,15 @@ Cache state is INELIGIBLE and performance_claim=false. Preparation, sealed catal
 hashing, upload and proof wall are reported separately. No full SDK Init, cold
 bootstrap, power-loss durability, cross-process cloud fencing or speed admission
 follows from this standalone experiment. Product source is unchanged.
+
+The original full-import proof timed out; its receipt remains failed. The
+[prospective remainder diagnostic](../../docs/roadmap/0.1/0.1.7/issue290/DEEPSEEK-RECONSTRUCTION-DIAGNOSTIC-V1.md)
+finishes the original coverage in22 keyset batches,4096 files each except the last,
+10s per command, without repeating uploads or claiming aggregate speed:
+
+```sh
+python3 tools/storage_probes/repository_reconstruction.py --output benchmark-results/storage-probes/deepseek-reconstruction-remainder-v1
+```
+
+Raw cursor files stay private; safe batch receipts contain counts/cursor hashes.
+The original pack/metadata/first13,312-file proof is reused with identity seals.

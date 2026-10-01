@@ -13,7 +13,7 @@ use layerfs_storage::encoding::{decode_canonical, DecompressionWorkspace, GroupC
 use layerfs_storage::sqlite::lookup::ObjectLocation;
 use layerfs_storage::{StorageCapacities, StoragePolicy};
 use layerfs_telemetry::timer::Timing;
-use rusqlite::{params_from_iter, types::Value, Connection};
+use rusqlite::{params, params_from_iter, types::Value, Connection};
 
 use super::Result;
 struct Cache {
@@ -131,28 +131,58 @@ impl Write for Comparator {
 }
 
 pub fn verify(master: &Path, stage: &Path, downloaded: &Path) -> Result<()> {
+    selected(master, stage, downloaded, None)
+}
+
+pub fn verify_batch(
+    master: &Path,
+    stage: &Path,
+    downloaded: &Path,
+    cursor: &Path,
+    count: usize,
+    receipt: &Path,
+) -> Result<()> {
+    if count == 0 || count > 4096 {
+        return Err("batch count admission".into());
+    }
+    selected(
+        master,
+        stage,
+        downloaded,
+        Some((fs::read(cursor)?, count, receipt)),
+    )
+}
+
+fn selected(
+    master: &Path,
+    stage: &Path,
+    downloaded: &Path,
+    batch: Option<(Vec<u8>, usize, &Path)>,
+) -> Result<()> {
     let started = Instant::now();
     let db = Connection::open(stage.join("catalog.sqlite"))?;
     db.execute_batch(
         "PRAGMA query_only=ON; PRAGMA cache_size=-512; PRAGMA mmap_size=0; PRAGMA busy_timeout=0;",
     )?;
-    db.execute(
-        "ATTACH DATABASE ?1 AS original",
-        [master
-            .join("manifest.sqlite")
-            .to_str()
-            .ok_or("non-UTF8 database path")?],
-    )?;
-    for table in ["entries", "xattrs"] {
-        let columns = if table == "entries" {
-            "path,kind,mode,mtime,size,dev,ino,uid,gid,flags,link,sha256"
-        } else {
-            "path,name,value"
-        };
-        for (a, b) in [("main", "original"), ("original", "main")] {
-            let count: i64 = db.query_row(&format!("SELECT count(*) FROM(SELECT {columns} FROM {a}.{table} EXCEPT SELECT {columns} FROM {b}.{table})"), [], |r| r.get(0))?;
-            if count != 0 {
-                return Err("metadata comparison mismatch".into());
+    if batch.is_none() {
+        db.execute(
+            "ATTACH DATABASE ?1 AS original",
+            [master
+                .join("manifest.sqlite")
+                .to_str()
+                .ok_or("non-UTF8 database path")?],
+        )?;
+        for table in ["entries", "xattrs"] {
+            let columns = if table == "entries" {
+                "path,kind,mode,mtime,size,dev,ino,uid,gid,flags,link,sha256"
+            } else {
+                "path,name,value"
+            };
+            for (a, b) in [("main", "original"), ("original", "main")] {
+                let count: i64 = db.query_row(&format!("SELECT count(*) FROM(SELECT {columns} FROM {a}.{table} EXCEPT SELECT {columns} FROM {b}.{table})"), [], |r| r.get(0))?;
+                if count != 0 {
+                    return Err("metadata comparison mismatch".into());
+                }
             }
         }
     }
@@ -171,10 +201,13 @@ pub fn verify(master: &Path, stage: &Path, downloaded: &Path) -> Result<()> {
             group_decodes: 0,
         }),
     };
-    let mut query = provider
-        .db
-        .prepare("SELECT path,size,content_root FROM entries WHERE kind='file' ORDER BY path")?;
-    let mut rows = query.query([])?;
+    let (cursor, limit, receipt) = match &batch {
+        Some((cursor, limit, receipt)) => (cursor.clone(), i64::try_from(*limit)?, *receipt),
+        None => (Vec::new(), i64::MAX, stage),
+    };
+    let mut query = provider.db.prepare("SELECT path,size,content_root FROM entries WHERE kind='file' AND path>?1 ORDER BY path LIMIT ?2")?;
+    let mut rows = query.query(params![cursor, limit])?;
+    let mut last = Vec::new();
     let (mut files, mut bytes) = (0_u64, 0_u64);
     while let Some(r) = rows.next()? {
         let path: Vec<u8> = r.get(0)?;
@@ -201,11 +234,20 @@ pub fn verify(master: &Path, stage: &Path, downloaded: &Path) -> Result<()> {
         }
         files += 1;
         bytes += size;
-        if files % 1024 == 0 {
+        last = path;
+        if batch.is_none() && files % 1024 == 0 {
             fs::write(stage.join("reconstruction-progress.json"), format!("{{\"files\":{files},\"bytes\":{bytes},\"metadata\":\"PASS\",\"complete\":false}}\n"))?;
         }
     }
-    fs::write(stage.join("reconstruction.json"),format!("{{\"proof\":\"PASS\",\"files\":{files},\"bytes\":{bytes},\"metadata\":\"PASS\",\"exact_eof\":true,\"wall_ns\":{}}}\n",started.elapsed().as_nanos()))?;
+    if batch.is_some() {
+        if files != limit as u64 {
+            return Err("batch coverage cardinality".into());
+        }
+        fs::write(receipt.join("next-cursor.bin"), &last)?;
+        fs::write(receipt.join("batch-proof.json"),format!("{{\"proof\":\"PASS\",\"files\":{files},\"bytes\":{bytes},\"exact_eof\":true,\"next_cursor_blake3\":\"{}\",\"wall_ns\":{}}}\n",blake3::hash(&last).to_hex(),started.elapsed().as_nanos()))?;
+    } else {
+        fs::write(stage.join("reconstruction.json"),format!("{{\"proof\":\"PASS\",\"files\":{files},\"bytes\":{bytes},\"metadata\":\"PASS\",\"exact_eof\":true,\"wall_ns\":{}}}\n",started.elapsed().as_nanos()))?;
+    }
     eprintln!("exact reconstruction PASS: {files} files, {bytes} bytes");
     Ok(())
 }

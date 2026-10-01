@@ -82,6 +82,7 @@ fn main() -> Result<()> {
     match args.as_slice() {
         [_, action, master, output] if action == "prepare" => prepare(Path::new(master), Path::new(output)),
         [_, action, master, output, downloaded] if action == "verify" => read::verify(Path::new(master), Path::new(output), Path::new(downloaded)),
+        [_, action, master, output, downloaded, cursor, count, receipt] if action == "verify-batch" => read::verify_batch(Path::new(master), Path::new(output), Path::new(downloaded), Path::new(cursor), count.parse()?, Path::new(receipt)),
         _ => Err("usage: minio_repository_probe prepare MASTER OUTPUT | verify MASTER STAGE DOWNLOADED_PACKS".into()),
     }
 }
