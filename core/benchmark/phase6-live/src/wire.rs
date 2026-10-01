@@ -1,6 +1,6 @@
 use crate::objects::{Locator, ROLES};
 use layerfs_content::ObjectId;
-pub const PREFIX: &[u8] = b"P6META6";
+pub const PREFIX: &[u8] = b"P6META7";
 pub struct Bytes<'a> {
     bytes: &'a [u8],
     at: usize,

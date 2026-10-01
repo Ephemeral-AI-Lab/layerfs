@@ -1,5 +1,4 @@
 //! Isolated Phase 6 research runtime; not shipped product implementation.
-pub mod audit;
 pub mod construction;
 #[cfg(target_os = "linux")]
 pub mod daemon;
@@ -27,8 +26,6 @@ pub mod minio_stats;
 pub mod edits;
 pub mod prepared;
 
-pub mod file_facts;
-
 pub mod rename;
 
 pub mod scenario;
@@ -37,12 +34,6 @@ pub mod namespace_stream;
 
 pub mod proof;
 pub mod proof_plan;
-
-pub mod namespace_index;
-pub mod namespace_semantics;
-pub mod namespace_validation;
-pub mod tree_diff;
-pub mod tree_facts;
 
 pub mod directory;
 pub mod source_retirement;
@@ -54,3 +45,9 @@ pub mod sql_windows;
 pub mod span_write;
 
 pub mod reservations;
+
+#[cfg(target_os = "linux")]
+pub mod command_identity;
+pub mod publication;
+
+pub mod publication_failure;

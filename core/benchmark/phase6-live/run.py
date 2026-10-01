@@ -48,7 +48,7 @@ def run():
                 'armv8_build_config_sha256': sha(root / '.cargo/config.toml'),
                 'workload_source_sha256': sha(root / 'core/benchmark/phase6-live/src/driver.rs'),
                 'cache': 'INELIGIBLE: OS/page cache unknown',
-                'purpose': args.purpose,
+                'purpose': args.purpose, 'metadata_profile': 'P6META7 trusted daemon / locator schema2',
                 'complete_child_limit_seconds': 15, 'separate_proof_limit_seconds': 9.5}
     if args.case_file:
         identity['case_file_sha256'] = sha(args.case_file)
@@ -77,14 +77,15 @@ def run():
         if args.case_file:
             command[1] = 'scenario'
             command.append(str(Path(args.case_file).resolve()))
-        start = time.monotonic()
+        start = time.monotonic_ns()
         with open(out / 'driver.stdout', 'xb') as stdout, open(out / 'driver.stderr', 'xb') as stderr:
             try:
                 child = subprocess.run(command, env=env, stdout=stdout, stderr=stderr, timeout=15)
-                result = {'exit': child.returncode, 'wall_seconds': time.monotonic()-start}
+                result = {'exit': child.returncode, 'wall_ns': time.monotonic_ns()-start}
             except subprocess.TimeoutExpired:
-                result = {'exit': None, 'status': 'TIMEOUT', 'wall_seconds': time.monotonic()-start,
+                result = {'exit': None, 'status': 'TIMEOUT', 'wall_ns': time.monotonic_ns()-start,
                           'custody': 'owned container/volume and accepted writes retained; inspect exact owner'}
+        result['wall_seconds'] = result['wall_ns'] / 1_000_000_000
         (out / 'invocation.json').write_text(json.dumps(result, indent=2) + '\n')
         if result['exit'] != 0:
             raise RuntimeError('integration diagnostic failed; raw evidence retained')
@@ -93,16 +94,31 @@ def run():
             if line.startswith('P6_METADATA_STATS '):
                 statistics.append(json.loads(line[len('P6_METADATA_STATS '):]))
         (out / 'transport-statistics.json').write_text(json.dumps(statistics, indent=2) + '\n')
+        baseline = None
+        authority = []
+        for line in (out / 'driver.stderr').read_text().splitlines():
+            if line.startswith('P6_GLOBAL_BASELINE '):
+                if baseline is not None:
+                    raise RuntimeError('duplicate global baseline')
+                baseline = json.loads(line[len('P6_GLOBAL_BASELINE '):])
+            if line.startswith('P6_AUTHORITY_IO '):
+                authority.append(json.loads(line[len('P6_AUTHORITY_IO '):]))
+        performance = json.loads((out / 'result/performance.json').read_text())
+        isolated = baseline is not None and len(authority) == len(performance['rows']) and all(row == baseline for row in authority)
+        (out / 'authority-statistics.json').write_text(json.dumps({'baseline': baseline, 'known_publications': authority, 'normal_service_provider_io': 'PASS' if isolated else 'FAIL'}, indent=2)+'\n')
+        if not isolated:
+            raise RuntimeError('thin authority provider I/O/cardinality gate failed; evidence retained')
         proof_command = [str(Path(args.driver).resolve()), 'verify', str(out / 'result'), str(private)]
         if args.case_file:
             proof_command.append(str(Path(args.case_file).resolve()))
-        proof_start = time.monotonic()
+        proof_start = time.monotonic_ns()
         with open(out / 'proof.stdout', 'xb') as stdout, open(out / 'proof.stderr', 'xb') as stderr:
             try:
                 proof_child = subprocess.run(proof_command, env=env, stdout=stdout, stderr=stderr, timeout=9.5)
-                proof_result = {'exit': proof_child.returncode, 'wall_seconds': time.monotonic()-proof_start}
+                proof_result = {'exit': proof_child.returncode, 'wall_ns': time.monotonic_ns()-proof_start}
             except subprocess.TimeoutExpired:
-                proof_result = {'exit': None, 'status': 'TIMEOUT', 'wall_seconds': time.monotonic()-proof_start}
+                proof_result = {'exit': None, 'status': 'TIMEOUT', 'wall_ns': time.monotonic_ns()-proof_start}
+        proof_result['wall_seconds'] = proof_result['wall_ns'] / 1_000_000_000
         proof_result['plan_sha256'] = sha(out / 'result/proof-plan.bin')
         (out / 'proof-invocation.json').write_text(json.dumps(proof_result, indent=2)+'\n')
         if proof_result['exit'] != 0:
@@ -111,7 +127,8 @@ def run():
         proof = json.loads((out / 'result/proof.json').read_text())
         if proof['proof_ms'] >= 9500:
             raise RuntimeError('proof bound exceeded; not an admission PASS')
-        receipt = dict(performance, semantic_proof=proof['status'], proof_ms=proof['proof_ms'],
+        receipt = dict(performance, semantic_proof=proof['status'], proof_ms=proof['proof_ms'], proof_ns=proof['proof_ns'], normal_service_provider_io='PASS',
+                       performance_child_wall_ns=result['wall_ns'], proof_child_wall_ns=proof_result['wall_ns'],
                        performance_child_wall_seconds=result['wall_seconds'],
                        proof_child_wall_seconds=proof_result['wall_seconds'], proof_plan_sha256=proof_result['plan_sha256'])
         (out / 'result/receipt.json').write_text(json.dumps(receipt, indent=2)+'\n')

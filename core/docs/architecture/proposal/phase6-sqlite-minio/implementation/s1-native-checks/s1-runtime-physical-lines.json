@@ -1,0 +1,5 @@
+{
+  "before_runtime_physical_lines": 6485,
+  "after_runtime_physical_lines": 5319,
+  "scope": "all experimental runtime Rust src physical lines; includes comments/blanks; excludes tests/tools/docs; distinct from product LOC"
+}

@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "61fbebd26ef4e57920260f09e301e6984d255c6145cb22d1679fd26ba10429ba",
+  "raw_utf8": "   Compiling phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/benchmark/phase6-live)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.98s\n     Running tests/publication.rs (core/benchmark/phase6-live/target/debug/deps/publication-283ff0666b279205)\n\nrunning 1 test\ntest actual_c5_stage_race_retains_loser_and_roundtrips_context ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.01s\n\n"
+}

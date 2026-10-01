@@ -11,12 +11,8 @@ use layerfs_bridge::{
     contract::*,
 };
 use layerfs_content::ObjectId;
-use layerfs_history::{
-    catalog::HistoryCatalog,
-    identity::{BranchId, CommitId, LayerId, WorkspaceId},
-    records::*,
-    sqlite::SqliteCatalog,
-};
+use layerfs_history::{catalog::HistoryCatalog, identity::BranchId, sqlite::SqliteCatalog};
+
 use std::{
     net::{TcpListener, ToSocketAddrs},
     sync::{
@@ -97,7 +93,7 @@ impl Remote {
         revision: u64,
         base: &Snapshot,
         root: [u8; 32],
-    ) -> Result<WorkspaceCommitReportWire, String> {
+    ) -> Result<WorkspaceCommitOutcome, Failure> {
         let mut p = Vec::new();
         wire::blob(&mut p, workspace);
         p.extend_from_slice(&incarnation);
@@ -105,17 +101,15 @@ impl Remote {
         p.extend_from_slice(&revision.to_be_bytes());
         base.encode(&mut p);
         p.extend_from_slice(&root);
-        let response = decode_response(&self.call(4, &p)?).map_err(|e| e.to_string())?;
+        let reply = self.call(4, &p).map_err(|_| Failure::from(Code::Unknown))?;
+        let response = decode_response(&reply).map_err(|_| Failure::from(Code::Unknown))?;
         match response {
             Response::WorkspaceCommit(r)
                 if r.workspace == workspace && r.incarnation == incarnation =>
             {
-                match r.outcome {
-                    WorkspaceCommitOutcome::Completed(report) => Ok(report),
-                    _ => Err("publication failed".into()),
-                }
+                Ok(r.outcome)
             }
-            _ => Err("publication response identity".into()),
+            _ => Err(Code::Unknown.into()),
         }
     }
 }
@@ -184,6 +178,7 @@ pub struct Authority {
     pub branch: BranchId,
     pub daemon_s3: Minio,
     pub reservations: Mutex<crate::reservations::Book>,
+    pub publication: Mutex<crate::publication::Submission>,
 }
 impl Authority {
     pub fn snapshot(&self) -> Result<Snapshot, String> {
@@ -301,102 +296,29 @@ impl Authority {
                 let s = Snapshot::read(&mut b)?;
                 let root = b.take::<32>()?;
                 b.done()?;
-                if s.branch != self.branch.to_bytes() {
-                    return Err("Branch selector".into());
-                }
-                self.reservations
-                    .lock()
-                    .map_err(|_| "reservation owner")?
-                    .authorize(
-                        &crate::reservations::Owner {
-                            workspace: workspace.clone(),
-                            incarnation,
-                            project: s.stack,
-                            branch: s.branch,
-                        },
-                        s.scope,
-                        s.profile,
-                    )?;
-                let candidate = ObjectId::from_bytes(&root).map_err(|e| e.to_string())?;
-                crate::namespace_validation::prepare(self, &s, candidate)?;
-                let id = WorkspaceId::from_authority(incarnation).map_err(|e| e.to_string())?;
-                let base = LayerId::from_bytes(s.base).map_err(|e| e.to_string())?;
-                let stage = self
-                    .history
-                    .stage_changes(&StageRequest {
-                        workspace: id,
-                        branch: self.branch,
-                        expected_head: s
-                            .head
-                            .map(CommitId::from_bytes)
-                            .transpose()
-                            .map_err(|e| e.to_string())?,
-                        expected_base: base,
-                        expected_root: ObjectId::from_bytes(&s.root).map_err(|e| e.to_string())?,
-                        construction_base_root: ObjectId::from_bytes(&s.root)
-                            .map_err(|e| e.to_string())?,
-                        intended_commit_base: base,
-                        candidate_root: candidate,
-                        profile: ObjectId::from_bytes(&s.profile).map_err(|e| e.to_string())?,
-                        scope: ObjectId::from_bytes(&s.scope).map_err(|e| e.to_string())?,
-                        generation,
-                    })
-                    .map_err(|e| e.to_string())?;
-                let outcome = match self
-                    .history
-                    .commit_staged(&CommitStagedRequest {
-                        workspace: id,
-                        token: stage.token,
-                    })
-                    .map_err(|e| e.to_string())?
-                {
-                    CommitStagedOutcome::Committed(c) => CommitOutcomeWire::Committed(CommitWire {
-                        commit: c.id.to_bytes(),
-                        stack: c.stack.to_bytes(),
-                        root: *c.root.as_bytes(),
-                        parent: c.parent.map(|p| p.to_bytes()),
-                        base_layer: c.base_layer.to_bytes(),
-                    }),
-                    CommitStagedOutcome::UpToDate { head, root } => CommitOutcomeWire::UpToDate {
-                        head: head.map(|h| h.to_bytes()),
-                        root: *root.as_bytes(),
-                    },
+                let owner = crate::reservations::Owner {
+                    workspace: workspace.clone(),
+                    incarnation,
+                    project: s.stack,
+                    branch: s.branch,
                 };
-                let mut installed = s.clone();
-                match &outcome {
-                    CommitOutcomeWire::Committed(c) => {
-                        if c.root != root
-                            || c.stack != s.stack
-                            || c.base_layer != s.base
-                            || c.parent != s.head
-                        {
-                            return Err("known C5 result context".into());
-                        }
-                        installed.root = c.root;
-                        installed.head = Some(c.commit);
-                    }
-                    CommitOutcomeWire::UpToDate { head, root: known } => {
-                        if *known != root || *head != s.head {
-                            return Err("known C5 up-to-date context".into());
-                        }
-                        installed.root = *known;
-                        installed.head = *head;
-                    }
-                }
-                crate::namespace_validation::install(self, &s, &installed).map_err(|e| {
-                    format!("known C5 publication; namespace index install failed: {e}")
-                })?;
+                let candidate = ObjectId::from_bytes(&root).map_err(|e| e.to_string())?;
+                let outcome = crate::publication::submit(
+                    self,
+                    crate::publication::Request {
+                        owner: &owner,
+                        generation,
+                        revision,
+                        base: &s,
+                        root: candidate,
+                    },
+                );
                 let response = Response::WorkspaceCommit(Box::new(WorkspaceCommitWire {
                     workspace,
                     incarnation,
-                    outcome: WorkspaceCommitOutcome::Completed(WorkspaceCommitReportWire {
-                        generation,
-                        revision,
-                        stage_token: Some(stage.token.value()),
-                        outcome,
-                    }),
+                    outcome,
                 }));
-                eprintln!("P6_AUTHORITY_IO {}", self.locators.s3.statistics()?.json());
+                eprintln!("P6_AUTHORITY_IO {}", self.daemon_s3.statistics()?.json());
                 out = encode_response(&response).map_err(|e| e.to_string())?;
             }
             _ => return Err("metadata action unsupported".into()),

@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "481326973ef31a7933e5a1fc9fe4f2780ef726e503a3f53f7b7167705437b5e0",
+  "raw_utf8": "   Compiling phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/benchmark/phase6-live)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s\n     Running tests/proof_plan.rs (core/benchmark/phase6-live/target/debug/deps/proof_plan-c121bed1036f0887)\n\nrunning 2 tests\ntest known_reply_plan_roundtrip_exact_eof_and_counts ... ok\ntest reopened_locator_verifier_refuses_mutations_before_provider_io ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

@@ -8,19 +8,23 @@ SQL owns bindings and final extents, C1 constructs real canonical objects, C2
 encodes FULL records and builds packs, MinIO holds the acknowledged pack bodies,
 and the host's actual C5 SQLite catalog conditionally advances the Branch.
 
-The prospective scope and remaining gates are in
-[INTEGRATION-V3](../../docs/architecture/proposal/phase6-sqlite-minio/experiments/INTEGRATION-V3.md).
-No shipping product file is changed. The explicitly experimental inode-leaf FULL
-representation is not the shipping pooling/delta profile. The current experimental profile retains512inodes and256live handles. Indexed
-changed-only construction and service certification preserve immediate-base
-immutable subtrees; local sources retire through bounded reference windows. Live
-inode allocation uses owner-bound64serial C5pages through private P6META6/action7,
-with uncertainty quarantined and no serial recycling. See the current
-[implementation checklist](../../docs/architecture/proposal/phase6-sqlite-minio/implementation/CHECKLIST.md)
-for exact source-pinned proofs and remaining gates. Larger admitted populations,
-inherited mount/import, remaining generic syscalls, overlapping commands/Commit,
-mount failure recovery, canonical vectors and physical resource qualification
-remain open.
+The current owner-selected scope is
+[S1 simplified authority](../../docs/architecture/proposal/phase6-sqlite-minio/implementation/S1-SPEC.md).
+The global catalog has only immutable locator tables; C5 owns history and conditional
+Branch publication. Trusted daemon construction replaces duplicate service
+candidate/file/portable certification and namespace-index installation. Arbitrary
+commands use a separate nonroot identity and clean environment; private daemon
+backing is inaccessible. Actual provider boundary proof is required before claiming
+this experimental profile passes.
+
+The current profile retains512inodes/256handles,owner-bound64serial C5pages,one
+Workspace/Branch/producer,serialized capture/install and FULL-only experimental
+packing. Indexed changed-only construction and source retirement preserve immediate
+immutable bases. See the current
+[checklist](../../docs/architecture/proposal/phase6-sqlite-minio/implementation/CHECKLIST.md)
+for exactsource/gates. Larger admission/import,remaining syscalls/concurrency,
+delta/pooling/cutover,canonical and physical qualification remain open. No shipped
+product file is changed or release admitted. Deep270successorExeclatency is deferred.
 
 Build from the repository root (the root ARMv8 flags must be active):
 

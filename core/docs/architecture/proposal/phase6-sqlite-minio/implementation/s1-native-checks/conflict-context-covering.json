@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "9a0bfa697318a73c4eabf48989fcb792cb2ab8605d0cf7b16205a0d801d84df0",
+  "raw_utf8": "   Compiling phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/benchmark/phase6-live)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.15s\n     Running tests/publication.rs (core/benchmark/phase6-live/target/debug/deps/publication-283ff0666b279205)\n\nrunning 5 tests\ntest wrong_registered_role_cannot_be_published ... ok\ntest exact_typed_conflict_roundtrips_public_bridge_framing ... ok\ntest identity_context_generation_and_candidate_refuse_before_history_effects ... ok\ntest known_commit_and_clean_successor_need_no_provider_reads ... ok\ntest competing_branch_head_is_explicit_and_not_adopted_or_replayed ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.04s\n\n"
+}

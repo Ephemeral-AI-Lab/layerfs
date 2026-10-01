@@ -1,0 +1,28 @@
+{
+  "source_case": "phase6-live-many128-v1",
+  "source_sha256": "89f03a2e94db8adfd58fe8559ceebbb046c6592354d53a160c11249a4e3fd28b",
+  "case_sha256": "cac09ad197898e9c806e7c816f1073b3a3e1f3dd1b0dddc4aaf01c68d86a07ac",
+  "original_steps_preserved": true,
+  "original_step_seals": [
+    {
+      "name": "seed",
+      "command_sha256": "c8b0cbcd26dc07bbcf2ecb9f660658e833193bfa1164389809c138536e40c275",
+      "manifest_sha256": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e"
+    },
+    {
+      "name": "target",
+      "command_sha256": "bf3ba753404474ac7e6189d640df5623d0cabfac2b830572051bc26f5bdb3f41",
+      "manifest_sha256": "8124069ea2c5a9c48a86073b4b941c8cd85582df6dae2d2413990d61d46cc713"
+    },
+    {
+      "name": "localized-successor",
+      "command_sha256": "807aa333144c1fce042f7bfa6b2e0dc7e275ffc2d933fea742290e56a77b03dc",
+      "manifest_sha256": "74e4b860a04459e654d0c4f8137d5d408688f6c1bed45fb629a968cfc8f0bccf"
+    }
+  ],
+  "new_command": "test \"$(id -u)\" -eq 65534 || exit 1; test \"$(id -g)\" -eq 65534 || exit 1; test -z \"${LAYERFS_PRIVATE_KEY+x}${LAYERFS_ENDPOINT+x}${LAYERFS_CONTROL_PEERS+x}${MINIO_ROOT_PASSWORD+x}\" || exit 1; if cat /proc/1/environ >/dev/null 2>&1; then exit 1; fi; if ls /layerfs/backing >/dev/null 2>&1; then exit 1; fi; if kill -0 1 2>/dev/null; then exit 1; fi; awk '/^(CapInh|CapPrm|CapEff|CapAmb):/ {if ($2 != \"0000000000000000\") bad=1; n++} /^NoNewPrivs:/ {if ($2 != \"1\") bad=1; p++} END {if (bad || n != 4 || p != 1) exit 1}' /proc/self/status",
+  "new_manifest_sha256": "74e4b860a04459e654d0c4f8137d5d408688f6c1bed45fb629a968cfc8f0bccf",
+  "performance_limit_seconds": 15,
+  "proof_limit_seconds": 9.5,
+  "cache": "INELIGIBLE OS/page cache unknown"
+}

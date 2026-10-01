@@ -34,8 +34,8 @@ fn attr(n: &Node) -> FileAttr {
         } else {
             n.links as u32
         },
-        uid: 0,
-        gid: 0,
+        uid: crate::command_identity::UID,
+        gid: crate::command_identity::GID,
         rdev: 0,
         blksize: 4096,
         flags: 0,
@@ -58,15 +58,22 @@ fn error(e: String) -> Errno {
     }
 }
 impl SqlFs {
-    fn call<T>(&self, f: impl FnOnce(&mut Engine) -> Result<T, String>) -> Result<T, Errno> {
+    fn call<T>(
+        &self,
+        request: &Request,
+        f: impl FnOnce(&mut Engine) -> Result<T, String>,
+    ) -> Result<T, Errno> {
+        if request.uid() != crate::command_identity::UID && request.uid() != 0 {
+            return Err(Errno::EACCES);
+        }
         let mut e = self.engine.lock().map_err(|_| Errno::EIO)?;
         e.callbacks += 1;
         f(&mut e).map_err(error)
     }
 }
 impl Filesystem for SqlFs {
-    fn lookup(&self, _: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
-        match self.call(|e| {
+    fn lookup(&self, request: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
+        match self.call(request, |e| {
             let id = e
                 .lookup(parent.0 as i64, name.as_bytes())?
                 .ok_or("ENOENT")?;
@@ -76,15 +83,15 @@ impl Filesystem for SqlFs {
             Err(e) => reply.error(e),
         }
     }
-    fn getattr(&self, _: &Request, ino: INodeNo, _: Option<FileHandle>, reply: ReplyAttr) {
-        match self.call(|e| e.node(ino.0 as i64)) {
+    fn getattr(&self, request: &Request, ino: INodeNo, _: Option<FileHandle>, reply: ReplyAttr) {
+        match self.call(request, |e| e.node(ino.0 as i64)) {
             Ok(n) => reply.attr(&TTL, &attr(&n)),
             Err(e) => reply.error(e),
         }
     }
     fn create(
         &self,
-        _: &Request,
+        request: &Request,
         parent: INodeNo,
         name: &OsStr,
         mode: u32,
@@ -92,7 +99,7 @@ impl Filesystem for SqlFs {
         flags: i32,
         reply: ReplyCreate,
     ) {
-        match self.call(|e| {
+        match self.call(request, |e| {
             if flags & (libc::O_SYNC | libc::O_DSYNC) != 0 {
                 return Err("EINVAL".into());
             }
@@ -112,20 +119,22 @@ impl Filesystem for SqlFs {
     }
     fn mkdir(
         &self,
-        _: &Request,
+        request: &Request,
         parent: INodeNo,
         name: &OsStr,
         mode: u32,
         umask: u32,
         reply: ReplyEntry,
     ) {
-        match self.call(|e| e.create_node(parent.0 as i64, name.as_bytes(), 2, mode & !umask)) {
+        match self.call(request, |e| {
+            e.create_node(parent.0 as i64, name.as_bytes(), 2, mode & !umask)
+        }) {
             Ok(n) => reply.entry(&TTL, &attr(&n), Generation(1)),
             Err(e) => reply.error(e),
         }
     }
-    fn open(&self, _: &Request, ino: INodeNo, flags: OpenFlags, reply: ReplyOpen) {
-        match self.call(|e| {
+    fn open(&self, request: &Request, ino: INodeNo, flags: OpenFlags, reply: ReplyOpen) {
+        match self.call(request, |e| {
             let flags = flags.0;
             if flags & (libc::O_SYNC | libc::O_DSYNC) != 0 {
                 return Err("EINVAL".into());
@@ -141,7 +150,7 @@ impl Filesystem for SqlFs {
     }
     fn read(
         &self,
-        _: &Request,
+        request: &Request,
         ino: INodeNo,
         fh: FileHandle,
         offset: u64,
@@ -150,7 +159,7 @@ impl Filesystem for SqlFs {
         _: Option<LockOwner>,
         reply: ReplyData,
     ) {
-        match self.call(|e| {
+        match self.call(request, |e| {
             if size > 128 * 1024 || offset > i64::MAX as u64 {
                 return Err("EINVAL".into());
             }
@@ -166,7 +175,7 @@ impl Filesystem for SqlFs {
     }
     fn write(
         &self,
-        _: &Request,
+        request: &Request,
         ino: INodeNo,
         fh: FileHandle,
         offset: u64,
@@ -176,7 +185,7 @@ impl Filesystem for SqlFs {
         _: Option<LockOwner>,
         reply: ReplyWrite,
     ) {
-        match self.call(|e| {
+        match self.call(request, |e| {
             if offset > i64::MAX as u64 {
                 return Err("EFBIG".into());
             }
@@ -187,15 +196,22 @@ impl Filesystem for SqlFs {
             Err(e) => reply.error(e),
         }
     }
-    fn flush(&self, _: &Request, ino: INodeNo, fh: FileHandle, _: LockOwner, reply: ReplyEmpty) {
-        match self.call(|e| e.handle(fh.0 as i64, ino.0 as i64, false)) {
+    fn flush(
+        &self,
+        request: &Request,
+        ino: INodeNo,
+        fh: FileHandle,
+        _: LockOwner,
+        reply: ReplyEmpty,
+    ) {
+        match self.call(request, |e| e.handle(fh.0 as i64, ino.0 as i64, false)) {
             Ok(()) => reply.ok(),
             Err(e) => reply.error(e),
         }
     }
     fn release(
         &self,
-        _: &Request,
+        request: &Request,
         ino: INodeNo,
         fh: FileHandle,
         _: OpenFlags,
@@ -203,14 +219,14 @@ impl Filesystem for SqlFs {
         _: bool,
         reply: ReplyEmpty,
     ) {
-        match self.call(|e| e.close(fh.0 as i64, ino.0 as i64)) {
+        match self.call(request, |e| e.close(fh.0 as i64, ino.0 as i64)) {
             Ok(()) => reply.ok(),
             Err(e) => reply.error(e),
         }
     }
     fn setattr(
         &self,
-        _: &Request,
+        request: &Request,
         ino: INodeNo,
         mode: Option<u32>,
         uid: Option<u32>,
@@ -226,7 +242,7 @@ impl Filesystem for SqlFs {
         flags: Option<BsdFileFlags>,
         reply: ReplyAttr,
     ) {
-        match self.call(|e| {
+        match self.call(request,|e| {
             if uid.is_some() || gid.is_some() || flags.is_some() {
                 return Err("EINVAL".into());
             }
@@ -270,21 +286,25 @@ impl Filesystem for SqlFs {
             Err(e) => reply.error(e),
         }
     }
-    fn unlink(&self, _: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
-        match self.call(|e| e.unlink(parent.0 as i64, name.as_bytes(), false)) {
+    fn unlink(&self, request: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        match self.call(request, |e| {
+            e.unlink(parent.0 as i64, name.as_bytes(), false)
+        }) {
             Ok(()) => reply.ok(),
             Err(e) => reply.error(e),
         }
     }
-    fn rmdir(&self, _: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
-        match self.call(|e| e.unlink(parent.0 as i64, name.as_bytes(), true)) {
+    fn rmdir(&self, request: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        match self.call(request, |e| {
+            e.unlink(parent.0 as i64, name.as_bytes(), true)
+        }) {
             Ok(()) => reply.ok(),
             Err(e) => reply.error(e),
         }
     }
     fn rename(
         &self,
-        _: &Request,
+        request: &Request,
         parent: INodeNo,
         name: &OsStr,
         new_parent: INodeNo,
@@ -292,7 +312,7 @@ impl Filesystem for SqlFs {
         flags: RenameFlags,
         reply: ReplyEmpty,
     ) {
-        let result = self.call(|e| match flags.bits() {
+        let result = self.call(request, |e| match flags.bits() {
             0 | 1 => e.rename(
                 parent.0 as i64,
                 name.as_bytes(),
@@ -307,8 +327,8 @@ impl Filesystem for SqlFs {
             Err(e) => reply.error(e),
         }
     }
-    fn opendir(&self, _: &Request, ino: INodeNo, flags: OpenFlags, reply: ReplyOpen) {
-        match self.call(|e| {
+    fn opendir(&self, request: &Request, ino: INodeNo, flags: OpenFlags, reply: ReplyOpen) {
+        match self.call(request, |e| {
             if e.node(ino.0 as i64)?.kind != 2 {
                 return Err("ENOTDIR".into());
             }
@@ -320,13 +340,13 @@ impl Filesystem for SqlFs {
     }
     fn readdir(
         &self,
-        _: &Request,
+        request: &Request,
         ino: INodeNo,
         fh: FileHandle,
         offset: u64,
         mut reply: ReplyDirectory,
     ) {
-        let result = self.call(|e| {
+        let result = self.call(request, |e| {
             let handle = fh.0 as i64;
             let id = ino.0 as i64;
             e.handle(handle, id, false)?;
@@ -383,13 +403,13 @@ impl Filesystem for SqlFs {
     }
     fn releasedir(
         &self,
-        _: &Request,
+        request: &Request,
         ino: INodeNo,
         fh: FileHandle,
         _: OpenFlags,
         reply: ReplyEmpty,
     ) {
-        match self.call(|e| e.close(fh.0 as i64, ino.0 as i64)) {
+        match self.call(request, |e| e.close(fh.0 as i64, ino.0 as i64)) {
             Ok(()) => reply.ok(),
             Err(e) => reply.error(e),
         }

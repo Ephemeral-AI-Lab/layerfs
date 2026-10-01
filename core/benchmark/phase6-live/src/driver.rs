@@ -55,13 +55,15 @@ pub fn run(
         stats: Arc::new(std::sync::Mutex::new(Default::default())),
     };
     s3.create_bucket()?;
-    let db = Arc::new(LocatorDb::create(&out.join("objects.sqlite"), s3.clone())?);
+    let db = Arc::new(LocatorDb::create(&out.join("objects.sqlite"))?);
     let reader = Reader::new(s3.clone(), db.clone());
     let mut consumer = Consumer::new(reader.clone())?;
     let start = Instant::now();
     let genesis = construction::genesis(&consumer.reader.clone(), &mut consumer)?;
     consumer.finish()?;
-    let genesis_ms = start.elapsed().as_secs_f64() * 1000.;
+    let genesis_ns = start.elapsed().as_nanos();
+    let genesis_ms = genesis_ns as f64 / 1_000_000.;
+    eprintln!("P6_GLOBAL_BASELINE {}", reader.s3.statistics()?.json());
     let history = sqlite::create(
         &out.join("history.sqlite"),
         &HistoryCatalogConfig {
@@ -129,8 +131,8 @@ pub fn run(
         branch,
         daemon_s3,
         reservations: std::sync::Mutex::new(Default::default()),
+        publication: std::sync::Mutex::new(Default::default()),
     });
-    crate::namespace_validation::initialize(&authority)?;
     let stop = Arc::new(AtomicBool::new(false));
     let worker = {
         let a = authority.clone();
@@ -180,7 +182,8 @@ pub fn run(
     for (name, command) in commands {
         let start = Instant::now();
         let exec = api.exec(&mount.id, command).map_err(|e| e.to_string())?;
-        let exec_ms = start.elapsed().as_secs_f64() * 1000.;
+        let exec_ns = start.elapsed().as_nanos();
+        let exec_ms = exec_ns as f64 / 1_000_000.;
         if exec.exit_status != Some(0) || exec.stdout_truncated || exec.stderr_truncated {
             return Err(format!(
                 "command {name} failed: {:?} {}",
@@ -190,7 +193,8 @@ pub fn run(
         }
         let start = Instant::now();
         let commit = api.commit(&mount.id).map_err(|e| e.to_string())?;
-        let commit_ms = start.elapsed().as_secs_f64() * 1000.;
+        let commit_ns = start.elapsed().as_nanos();
+        let commit_ms = commit_ns as f64 / 1_000_000.;
         match &commit.outcome {
             CommitOutcomeWire::Committed(c) => {
                 created_heads.push(c.clone());
@@ -202,13 +206,13 @@ pub fn run(
         roots.push(id);
         writeln!(
             events,
-            "step={name} exec_ms={exec_ms} commit_ms={commit_ms} generation={} root={}",
+            "step={name} exec_ns={exec_ns} commit_ns={commit_ns} exec_ms={exec_ms} commit_ms={commit_ms} generation={} root={}",
             commit.generation,
             hex(&id)
         )
         .map_err(|e| e.to_string())?;
         events.flush().map_err(|e| e.to_string())?;
-        rows.push(format!("{{\"case\":\"{name}\",\"exec_ms\":{exec_ms},\"commit_ms\":{commit_ms},\"generation\":{},\"root\":\"{}\"}}",commit.generation,hex(&id)));
+        rows.push(format!("{{\"case\":\"{name}\",\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"exec_ms\":{exec_ms},\"commit_ms\":{commit_ms},\"generation\":{},\"root\":\"{}\"}}",commit.generation,hex(&id)));
     }
     api.unmount(&mount.id).map_err(|e| e.to_string())?;
     let mut logs = File::create(out.join("daemon.stderr")).map_err(|e| e.to_string())?;
@@ -218,7 +222,8 @@ pub fn run(
         .map_err(|e| format!("{e:?}"))?;
     stop.store(true, Ordering::SeqCst);
     worker.join().map_err(|_| "metadata owner panic")??;
-    let command_ms = total.elapsed().as_secs_f64() * 1000.;
+    let command_ns = total.elapsed().as_nanos();
+    let command_ms = command_ns as f64 / 1_000_000.;
     let plan = crate::proof_plan::Plan {
         scenario: scenario.map(|s| s.identity),
         branch: branch.to_bytes(),
@@ -236,7 +241,7 @@ pub fn run(
     plan.write(&out.join("proof-plan.bin"))?;
     let case_id = scenario.map_or("phase6-smoke", |s| s.id.as_str());
     let mut file = File::create(out.join("performance.json")).map_err(|e| e.to_string())?;
-    writeln!(file,"{{\"schema\":2,\"case_id\":\"{case_id}\",\"kind\":\"correctness diagnostic performance phase\",\"cache_status\":\"INELIGIBLE: OS/page cache unknown\",\"sqlite_version\":\"{}\",\"image\":\"{}\",\"genesis_ms\":{genesis_ms},\"complete_command_ms\":{command_ms},\"rows\":[{}],\"semantic_proof\":\"NOT_RUN\",\"canonical_reference\":\"NOT_RUN\",\"physical_resources\":\"NOT_RUN\",\"cleanup\":\"PASS\"}}",rusqlite::version(),image,rows.join(",")).map_err(|e|e.to_string())?;
+    writeln!(file,"{{\"schema\":3,\"case_id\":\"{case_id}\",\"kind\":\"correctness diagnostic performance phase\",\"cache_status\":\"INELIGIBLE: OS/page cache unknown\",\"sqlite_version\":\"{}\",\"image\":\"{}\",\"genesis_ns\":{genesis_ns},\"genesis_ms\":{genesis_ms},\"complete_command_ns\":{command_ns},\"complete_command_ms\":{command_ms},\"rows\":[{}],\"semantic_proof\":\"NOT_RUN\",\"canonical_reference\":\"NOT_RUN\",\"physical_resources\":\"NOT_RUN\",\"cleanup\":\"PASS\"}}",rusqlite::version(),image,rows.join(",")).map_err(|e|e.to_string())?;
     println!("SDK/FUSE/C1/C2/MinIO/C5 performance phase completed; separate proof pending");
     Ok(())
 }

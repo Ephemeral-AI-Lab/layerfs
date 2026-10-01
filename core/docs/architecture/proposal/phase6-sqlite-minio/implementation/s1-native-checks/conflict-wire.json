@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "f9ccf92d36d971d0736bd7b4e16f764258e8baf7445a0d735a41d8998ee12ad1",
+  "raw_utf8": "   Compiling phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/benchmark/phase6-live)\nerror[E0596]: cannot borrow `c.receive` as mutable, as `c` is not declared as mutable\n   --> tests/publication.rs:317:21\n    |\n317 |         let frame = c.receive.read().unwrap();\n    |                     ^^^^^^^^^ cannot borrow as mutable\n    |\nhelp: consider changing this to be mutable\n    |\n316 |         let mut c = connection::accept(stream, &[8; 32], &[peer]).unwrap();\n    |             +++\n\nFor more information about this error, try `rustc --explain E0596`.\nerror: could not compile `phase6-live-probe` (test \"publication\") due to 1 previous error\nwarning: build failed, waiting for other jobs to finish...\n"
+}

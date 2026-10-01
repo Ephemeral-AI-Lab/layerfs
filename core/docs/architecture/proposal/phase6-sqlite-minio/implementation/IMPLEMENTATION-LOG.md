@@ -644,3 +644,18 @@ trust protectedpublisher,retain immutableformat/exactCAS/Unknownwritecustody.
 Avoidquadraticwork;deferextreme270successorExecperformance,keepinitialCommitand
 ordinaryshalloweditgates. ARCHITECTURE/S1-SPEC freezefirstslice;next implementation
 and actual128/270realproviderproof. Fullbroadergoalopen,not#287continuation.
+
+## S1 simplified authority runtime PARTIAL
+
+Parent48a149e517f493c0f24dc8204c81dd27ab4a479c. Removed7certification/indexmodules
+and11catalogtables; globalcatalog2tables/noobjectI/O. Trusteddaemonconstruction
+andrealMinIOACK/exactCASretainbytes; actualC5conditionalpublication checks owner/
+context/generation/candidaterole with exactfailure grammar andno globalnamespace
+installation. Protectedroot/nonrootcommandboundary coded; Linuxliveproof next.
+Runtimephysical6485->5319(-1166),notshippingLOC.33uniqueactualC5/SQLite/native/
+constructor/pack/rename/source/window/proofchecks PASS;hostClippy/fmt/native/Linux
+release/Python PASS. InitialSQLunsigned/nativefixture/contextualHeadMovedfailures
+preserved;source-demonstratedcorrectedcoveringchecks. S1-RUNTIME/rawchecks record
+exactscope/gaps. Next sealedoriginal128+trustthen270+trust; noauthorityproviderI/O,
+fullreadonlybytes/history/cleanup,15/9.5bounds,cacheINELIGIBLE. DeepExecoptimization
+deferred,current512/256andbroaderfullgoalopen.

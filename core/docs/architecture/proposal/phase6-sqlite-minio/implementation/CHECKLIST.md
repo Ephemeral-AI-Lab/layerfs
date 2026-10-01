@@ -83,8 +83,11 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 - [ ] V4c3c1 owner-bound64serial C5 pages: runtime/checks delivered; live
   page-crossing proof next. [Runtime](V4C3C1-RUNTIME.md).
 
-Current action: owner-authorized S1 simplified trusted-daemon/global-publication
-model. [S1-SPEC](S1-SPEC.md). The stopped V4c3c1 source/checks were preserved PARTIAL
+- [ ] S1 simplified authority: runtime/33owningchecks delivered; actual
+ 128/270trusted-command/FUSE/MinIO/C5 byte/history/cleanup gate next.
+ [Runtime checkpoint](S1-RUNTIME.md).
+
+Current action: S1 frozen128then270liveproof for the simplified model. [S1-SPEC](S1-SPEC.md). The stopped V4c3c1 source/checks were preserved PARTIAL
 atc92263bfbb93a2f7bd0cf7a68479ed184dadf127;livegate unrun. Do not resume that old
 lane as a competing goal. First protect publishing authority,remove duplicate
 servicecertification/MinIOreads/indexinstallation,prove128and270initialCommit and

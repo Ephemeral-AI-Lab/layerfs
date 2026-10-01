@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "50e9bfafa1006e69fcf315f5ef2b6e2a390fbb5e6e3843a6398e74be42fd4c87",
+  "raw_utf8": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s\n     Running tests/publication.rs (core/benchmark/phase6-live/target/debug/deps/publication-283ff0666b279205)\n\nrunning 1 test\ntest lost_reply_after_real_c5_commit_is_unknown_and_never_resent ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.01s\n\n"
+}

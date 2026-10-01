@@ -37,7 +37,7 @@ pub fn verify(out: &Path, config: &Path, scenario: Option<&Scenario>) -> Result<
     };
     let reader = Reader::new(
         s3.clone(),
-        Arc::new(LocatorDb::open_read_only(&out.join("objects.sqlite"), s3)?),
+        Arc::new(LocatorDb::open_read_only(&out.join("objects.sqlite"))?),
     );
     let history = sqlite::open_read_only(
         &out.join("history.sqlite"),
@@ -113,8 +113,9 @@ pub fn verify(out: &Path, config: &Path, scenario: Option<&Scenario>) -> Result<
     if head.is_some() {
         return Err("proof earlier history".into());
     }
-    let ms = start.elapsed().as_secs_f64() * 1000.;
-    std::fs::write(out.join("proof.json"),format!("{{\"schema\":1,\"status\":\"PASS\",\"proof_ms\":{ms},\"canonical_reference\":\"NOT_RUN\",\"physical_resources\":\"NOT_RUN\",\"catalogs\":\"readonly\"}}\n")).map_err(|e|e.to_string())?;
+    let ns = start.elapsed().as_nanos();
+    let ms = ns as f64 / 1_000_000.;
+    std::fs::write(out.join("proof.json"),format!("{{\"schema\":1,\"status\":\"PASS\",\"proof_ns\":{ns},\"proof_ms\":{ms},\"canonical_reference\":\"NOT_RUN\",\"physical_resources\":\"NOT_RUN\",\"catalogs\":\"readonly\"}}\n")).map_err(|e|e.to_string())?;
     println!("readonly semantic/history proof PASS; proof_ms={ms}");
     Ok(())
 }

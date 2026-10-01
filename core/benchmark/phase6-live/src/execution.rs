@@ -49,7 +49,9 @@ pub fn execute(
     deadline: Instant,
 ) -> Result<Response, Failure> {
     let command = std::str::from_utf8(command).map_err(|_| Code::InvalidInput)?;
-    let mut child = Command::new("/bin/sh")
+    let mut launch = Command::new("/bin/sh");
+    crate::command_identity::configure(&mut launch);
+    let mut child = launch
         .arg("-c")
         .arg(command)
         .current_dir(path)
