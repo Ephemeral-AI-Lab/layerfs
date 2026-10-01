@@ -53,6 +53,12 @@ bound, and engine/physical memory qualification remains incomplete. Numerical
 observations retain uncontrolled-cache INELIGIBLE status. This checkpoint does
 not complete the open design gates above.
 
+The later [six-case metadata adaptation](experiments/COHORT-V2.md) and
+[v2 results](experiments/RESULTS-COHORT-V2.md) cover the owner-selected R1 workload
+shapes with distinct component timing boundaries. All six semantic/owner checks
+passed; one-edit preparation still traverses the whole current extent map.
+Full Exec/Commit and physical resource qualification remain unrun.
+
 ## Acceptance and performance planning
 
 - [ ] Map current acceptance in #248/#256/#249/#219/#259 and #276's deferred

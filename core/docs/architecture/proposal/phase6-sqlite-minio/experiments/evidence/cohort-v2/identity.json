@@ -1,0 +1,20 @@
+{
+  "source": "32dfbee814147dfb60716b0af5ead5bcd71c4812",
+  "tree": "ec29cc6d9129359f9a5ad7225dcf41a1768c1647",
+  "spec_commit": "b115fe2b34e27bd08ae1a216c8c0f3c64a23b090",
+  "binary_sha256": "9e33babd3294bf6a1868b1ded9019c2273a377d8be053cb4f92a2d23a87bc1ff",
+  "lock_sha256": "159bf7d800837645546d5b39746a1fb8afd3617ad4875f9a3fb60e4bdec6f417",
+  "oracle_sha256": "fda5b7c170e94267509b4dbe665f5dbadf43d7809b0c1c15dd3a60feba67cfcd",
+  "cohort_oracle_sha256": "344ac2d1e4d4fa0ef0315b22be4bc23b4e9bb5d2c7d83f1ccdcc948490066c32",
+  "collector_sha256": "eca4bf993670bd2ac4fc642da7dd4d721f8e674beb505e664a67c9b02bce160c",
+  "schema_sha256": "c15f405f5185e2c2a792ae7b24f1f56726345ef0bb7dc2b0fd577354829631da",
+  "cohort_schema_sha256": "08a1d0a6ee97865c4b568d3f59bfebdd71db86f9dfc3fb07cdf561a6e436773d",
+  "build_flags_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "build_profile": "release --locked; repository-root aarch64 flags",
+  "host": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "cache_contract": "uncontrolled OS cache; INELIGIBLE",
+  "sample_count": 1,
+  "construction_producers": 1,
+  "clone_method": "independent shutil.copyfile byte copy; no cold claim",
+  "dependency_parity": "PASS"
+}
