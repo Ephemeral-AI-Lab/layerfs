@@ -20,7 +20,7 @@ def read_case(path):
         if len(v)!=n:raise ValueError('source case EOF')
         at+=n;return v.decode()
     name=text();count=number()
-    if count!=3:raise ValueError('expected complete original three-step input')
+    if count not in (3,5):raise ValueError('expected sealed three/five-step input')
     steps=[tuple(text() for _ in range(3)) for _ in range(count)]
     if at!=len(raw):raise ValueError('source case trailing bytes')
     return name,steps,hashlib.sha256(raw).hexdigest()
@@ -37,7 +37,7 @@ def encode(name,steps):
 def main():
     p=argparse.ArgumentParser();p.add_argument('--source',required=True);p.add_argument('--output',required=True);p.add_argument('--identity',required=True);args=p.parse_args()
     source,steps,digest=read_case(args.source)
-    if source!='phase6-live-many128-v1':raise ValueError('original case identity')
+    if source!='phase6-live-many128-v1' or len(steps)!=3:raise ValueError('original case identity/cardinality')
     manifest=steps[-1][2]
     churn='i=0; while [ "$i" -lt 64 ]; do printf edit-0 > many/f0 || exit; i=$((i+1)); done; test "$(cat many/f0)" = edit-0 && test "$(find many -maxdepth 1 -type f | wc -l)" -eq 128'
     # Preserve pipeline failure: a failed retirement/count test must not be hidden

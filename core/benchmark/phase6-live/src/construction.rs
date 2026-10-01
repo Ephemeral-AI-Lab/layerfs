@@ -72,10 +72,7 @@ pub fn build(
 ) -> Result<(FilesystemResult, ConstructionWork), String> {
     engine.source_ready()?;
     let query_start = engine.row_queries.get();
-    engine
-        .db
-        .execute("DELETE FROM prepared", [])
-        .map_err(|e| e.to_string())?;
+    crate::sql_windows::clear(&engine.db, crate::sql_windows::Table::Prepared)?;
     let mut old = FilesystemRead::new(reader, base).map_err(|e| e.to_string())?;
     if old.root().scope() != scope
         || old.root().root_inode().serial() != 1

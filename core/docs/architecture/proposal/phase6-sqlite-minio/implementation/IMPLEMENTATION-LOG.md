@@ -581,3 +581,16 @@ predecessor/range seek, fixed SQLite work counters,64row SQL cleanup/adoption,
 unsealed prepare and explicit installation barriers, known/Unknown bytes retained.
 Current512/256profile remains; source/count/6root sparse live proofs before next
 paged reservation/admission/import. Full families/DeepSeek goal active.
+
+## V4c3b runtime PARTIAL: bounded span and SQL operations
+
+Parent5f3a725e583abf5b6eb9db05b27b450091b71b44. Predecessor+bounded range
+uses38SQLiteVMsteps at64and4097spans vsold275/16407; actual literal bytes/plan
+pass. Whole namespace operation/daemon adoption transactions replaced with guarded
+point/64row SQL mutations and cleanup; exact install barriers protect partialknown
+states, accepted bytes/pending/Unknown retained.24covering SQL/files/C1checks PASS,
+host Clippy/fmt/native+Linuxrelease and Pythonprep PASS. External uselessvec lint
+corrected without passing-suite repeat; undefined orchestration variable rejected
+before execution. Details V4C3B-RUNTIME.md/rawv4c3b-native-checks. Current512/256
+profile unchanged; physical journal/cache/rootvectors unrun. Next sealed6root full128
++sparse liveproof; then paged reserve/admission/import and full families/DeepSeek.

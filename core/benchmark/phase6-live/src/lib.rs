@@ -46,3 +46,7 @@ pub mod tree_facts;
 
 pub mod directory;
 pub mod source_retirement;
+
+pub mod install;
+pub mod span_read;
+pub mod sql_windows;

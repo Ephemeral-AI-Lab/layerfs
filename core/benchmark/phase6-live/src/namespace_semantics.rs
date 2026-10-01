@@ -115,8 +115,7 @@ pub fn validate(db: &Connection, w: &mut Work) -> Result<(), String> {
 fn walk(db: &Connection, start: i64, w: &mut Work) -> Result<(), String> {
     let mut id = start;
     let mut depth = 0;
-    db.execute("DELETE FROM namespace_stack", [])
-        .map_err(|e| e.to_string())?;
+    crate::sql_windows::clear(db, crate::sql_windows::Table::NamespaceStack)?;
     loop {
         if id == 1 {
             break;
@@ -150,12 +149,17 @@ fn walk(db: &Connection, start: i64, w: &mut Work) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         id = parent(db, id)?.ok_or("namespace disconnected parent chain")?;
     }
-    db.execute(
-        "UPDATE namespace_walk SET color=2 WHERE serial IN (SELECT serial FROM namespace_stack)",
-        [],
-    )
-    .map_err(|e| e.to_string())?;
-    db.execute("DELETE FROM namespace_stack", [])
-        .map_err(|e| e.to_string())?;
+    loop {
+        let tx = db.unchecked_transaction().map_err(|e| e.to_string())?;
+        let n=tx.execute("UPDATE namespace_walk SET color=2 WHERE serial IN (SELECT serial FROM namespace_stack ORDER BY depth LIMIT 64)",[]).map_err(|e|e.to_string())?;
+        tx.execute("DELETE FROM namespace_stack WHERE depth IN (SELECT depth FROM namespace_stack ORDER BY depth LIMIT 64)",[]).map_err(|e|e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        if n > crate::sql_windows::ROWS {
+            return Err("namespace parent color window".into());
+        }
+    }
     Ok(())
 }

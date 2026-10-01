@@ -24,7 +24,7 @@ pub struct Work {
 }
 impl Engine {
     pub fn source_ready(&self) -> Result<(), String> {
-        if self.retirement_failed {
+        if self.retirement_failed || self.installation_failed {
             return Err("source retirement owner quarantined".into());
         }
         Ok(())

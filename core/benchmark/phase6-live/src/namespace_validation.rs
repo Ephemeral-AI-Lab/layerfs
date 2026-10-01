@@ -29,9 +29,7 @@ pub fn prepare(a: &Authority, s: &Snapshot, candidate: ObjectId) -> Result<(), S
     let reader = Reader::new(a.locators.s3.clone(), a.locators.clone());
     let old = root(&reader, s.root)?;
     let new = root(&reader, *candidate.as_bytes())?;
-    let work = a
-        .locators
-        .sql_transaction(|db| index::prepare(db, s, old, new))?;
+    let work = a.locators.sql(|db| index::prepare(db, s, old, new))?;
     let mut after = 0;
     let mut portable = 0u64;
     let mut files = 0u64;
@@ -69,6 +67,5 @@ pub fn prepare(a: &Authority, s: &Snapshot, candidate: ObjectId) -> Result<(), S
     Ok(())
 }
 pub fn install(a: &Authority, old: &Snapshot, new: &Snapshot) -> Result<(), String> {
-    a.locators
-        .sql_transaction(|db| index::install_known(db, old, new))
+    a.locators.sql(|db| index::install_known(db, old, new))
 }

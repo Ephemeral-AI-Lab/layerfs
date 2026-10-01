@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "16ebae5b8a70c4593845b09493d4bfd1b0f954420cc080bb639ec2580752a09c",
+  "raw_utf8": "    Checking phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/benchmark/phase6-live)\nerror: useless use of `vec!`\n  --> tests/span_read.rs:77:24\n   |\n77 |     let mut expected = vec![0; 24];\n   |                        ^^^^^^^^^^^ help: you can use an array directly: `[0; 24]`\n   |\n   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#useless_vec\n   = note: `-D clippy::useless-vec` implied by `-D warnings`\n   = help: to override `-D warnings` add `#[allow(clippy::useless_vec)]`\n\nerror: could not compile `phase6-live-probe` (test \"span_read\") due to 1 previous error\n"
+}

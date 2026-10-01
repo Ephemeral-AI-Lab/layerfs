@@ -328,3 +328,38 @@ fn reversed_270_directory_chain_visits_each_parent_once() {
     assert_eq!(w.changed_names, 0);
     f.adopt(edited);
 }
+
+#[test]
+fn committed_index_installation_barrier_blocks_stale_source_and_seal() {
+    let f = Fixture::new();
+    let new = f.build(&BTreeMap::from([
+        (1, f.directory(&[("new", 2)])),
+        (2, file(2)),
+    ]));
+    f.prepare(new).unwrap();
+    f.db.execute(
+        "UPDATE namespace_state SET installing=1 WHERE singleton=1",
+        [],
+    )
+    .unwrap();
+    assert!(index::check_base(&f.db, &f.snapshot)
+        .unwrap_err()
+        .contains("installation incomplete"));
+    assert!(index::seal(
+        &f.db,
+        &f.snapshot,
+        ObjectId::from_bytes(&f.id(new)).unwrap()
+    )
+    .is_err());
+    assert!(f
+        .prepare(new)
+        .unwrap_err()
+        .contains("installation incomplete"));
+    assert_eq!(
+        index::committed(&f.db, 1)
+            .unwrap()
+            .unwrap()
+            .namespace_ref_count,
+        0
+    );
+}

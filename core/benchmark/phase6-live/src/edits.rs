@@ -30,10 +30,8 @@ impl<'a> Edits<'a> {
         {
             return Err("invalid immediate file base".into());
         }
-        engine
-            .db
-            .execute("DELETE FROM edits", [])
-            .map_err(|e| e.to_string())?;
+        engine.source_ready()?;
+        crate::sql_windows::clear(&engine.db, crate::sql_windows::Table::Edits)?;
         let mut q = engine.db.prepare_cached("SELECT start,min(end,?2),source,offset FROM extents WHERE ino=?1 AND start<?2 ORDER BY start").map_err(|e|e.to_string())?;
         let mut rows = q
             .query(params![id, node.base_visible])

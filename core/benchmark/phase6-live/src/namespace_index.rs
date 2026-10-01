@@ -1,5 +1,5 @@
 //! Certified single-Branch verification index and operation-local SQL work.
-use crate::{tree_diff, tree_facts, wire::Snapshot};
+use crate::{sql_windows, tree_diff, tree_facts, wire::Snapshot};
 use layerfs_content::{
     filesystem::FilesystemRoot,
     inode_leaf::{decode_inode_value, encode_inode_value, InodeKind, InodeValue},
@@ -7,7 +7,7 @@ use layerfs_content::{
 };
 use rusqlite::{params, Connection, OptionalExtension};
 pub const SCHEMA: &str = "
-CREATE TABLE namespace_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1),stamp BLOB NOT NULL);
+CREATE TABLE namespace_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1),stamp BLOB NOT NULL,installing INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE namespace_inodes(serial INTEGER PRIMARY KEY,value BLOB NOT NULL,parent INTEGER);
 CREATE TABLE namespace_pending(singleton INTEGER PRIMARY KEY CHECK(singleton=1),base BLOB NOT NULL,candidate BLOB NOT NULL,proved INTEGER NOT NULL,ready INTEGER NOT NULL);
 CREATE TABLE namespace_changes(serial INTEGER PRIMARY KEY,before BLOB,after BLOB);
@@ -104,18 +104,24 @@ pub fn initialize_empty(db: &Connection, s: &Snapshot, fs: FilesystemRoot) -> Re
     }
     db.execute("INSERT INTO namespace_inodes VALUES(1,?1,NULL)", [bytes])
         .map_err(|e| e.to_string())?;
-    db.execute("INSERT INTO namespace_state VALUES(1,?1)", [stamp(s)])
-        .map_err(|e| e.to_string())?;
+    db.execute(
+        "INSERT INTO namespace_state(singleton,stamp) VALUES(1,?1)",
+        [stamp(s)],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 pub fn check_base(db: &Connection, s: &Snapshot) -> Result<(), String> {
-    let saved: Vec<u8> = db
+    let (saved, installing): (Vec<u8>, bool) = db
         .query_row(
-            "SELECT stamp FROM namespace_state WHERE singleton=1",
+            "SELECT stamp,installing FROM namespace_state WHERE singleton=1",
             [],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .map_err(|e| e.to_string())?;
+    if installing {
+        return Err("namespace index installation incomplete".into());
+    }
     if saved != stamp(s) {
         return Err("namespace stale or uncertified selected base".into());
     }
@@ -135,7 +141,9 @@ pub fn prepare(
     {
         return Err("namespace candidate context".into());
     }
-    db.execute_batch("DELETE FROM namespace_pending;DELETE FROM namespace_changes;DELETE FROM namespace_effects;DELETE FROM namespace_walk;DELETE FROM namespace_stack;").map_err(|e|e.to_string())?;
+    sql_windows::clear_namespace(db)?;
+    db.execute("DELETE FROM namespace_pending", [])
+        .map_err(|e| e.to_string())?;
     let candidate = ObjectId::for_bytes(&new.encode().map_err(|e| e.to_string())?);
     db.execute(
         "INSERT INTO namespace_pending VALUES(1,?1,?2,0,0)",
@@ -249,6 +257,16 @@ pub fn install_known(db: &Connection, old: &Snapshot, new: &Snapshot) -> Result<
     if pending.0 != stamp(old) || pending.1 != new.root || !pending.2 {
         return Err("namespace known publication seal".into());
     }
+    if db
+        .execute(
+            "UPDATE namespace_state SET installing=1 WHERE singleton=1 AND installing=0",
+            [],
+        )
+        .map_err(|e| e.to_string())?
+        != 1
+    {
+        return Err("namespace installation owner".into());
+    }
     let mut after = 0;
     while let Some((id, _, value)) = next_changed(db, after)? {
         after = id;
@@ -282,11 +300,25 @@ pub fn install_known(db: &Connection, old: &Snapshot, new: &Snapshot) -> Result<
         )
         .map_err(|e| e.to_string())?;
     }
-    db.execute(
-        "UPDATE namespace_state SET stamp=?1 WHERE singleton=1",
-        [stamp(new)],
-    )
-    .map_err(|e| e.to_string())?;
-    db.execute_batch("DELETE FROM namespace_pending;DELETE FROM namespace_changes;DELETE FROM namespace_effects;DELETE FROM namespace_walk;DELETE FROM namespace_stack;").map_err(|e|e.to_string())?;
+    sql_windows::clear_namespace(db)?;
+    let tx = db.unchecked_transaction().map_err(|e| e.to_string())?;
+    if tx
+        .execute(
+            "UPDATE namespace_state SET stamp=?1,installing=0 WHERE singleton=1 AND installing=1",
+            [stamp(new)],
+        )
+        .map_err(|e| e.to_string())?
+        != 1
+    {
+        return Err("namespace installation stamp identity".into());
+    }
+    if tx
+        .execute("DELETE FROM namespace_pending WHERE singleton=1", [])
+        .map_err(|e| e.to_string())?
+        != 1
+    {
+        return Err("namespace pending installation identity".into());
+    }
+    tx.commit().map_err(|e| e.to_string())?;
     Ok(())
 }

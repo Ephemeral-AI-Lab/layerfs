@@ -2,8 +2,8 @@ use layerfs_content::{AuthenticatedObjects, ObjectId};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::{cell::Cell, sync::Arc};
 use std::{
-    fs::{File, OpenOptions},
-    io::{Read, Seek, SeekFrom, Write},
+    fs::OpenOptions,
+    io::{Read, Write},
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -22,6 +22,9 @@ pub struct Engine {
     pub directory_work: Cell<crate::directory::Work>,
     pub retirement_work: Cell<crate::source_retirement::Work>,
     pub(crate) retirement_failed: bool,
+    pub(crate) installation_failed: bool,
+    pub span_work: Cell<crate::span_read::Work>,
+    pub install_work: Cell<crate::install::Work>,
 }
 /// Logical source bytes served by the engine; not physical cache or all C1 reads.
 #[derive(Clone, Copy, Default, Debug)]
@@ -87,6 +90,9 @@ impl Engine {
             directory_work: Cell::new(Default::default()),
             retirement_work: Cell::new(Default::default()),
             retirement_failed: false,
+            installation_failed: false,
+            span_work: Cell::new(Default::default()),
+            install_work: Cell::new(Default::default()),
         })
     }
     pub fn node(&self, id: i64) -> Result<Node, String> {
@@ -329,6 +335,9 @@ impl Engine {
             return Ok(0);
         }
         let n = (size - at).min(out.len() as i64) as usize;
+        if n == 0 {
+            return Ok(0);
+        }
         out[..n].fill(0);
         let end = at + n as i64;
         if let Some(root) = node.root.as_deref() {
@@ -355,27 +364,7 @@ impl Engine {
                 self.reads.set(reads);
             }
         }
-        let mut statement=self.db.prepare_cached("SELECT start,end,source,offset FROM extents WHERE ino=?1 AND start<?2 AND end>?3 ORDER BY start").map_err(|e|e.to_string())?;
-        let mut rows = statement
-            .query(params![id, end, at])
-            .map_err(|e| e.to_string())?;
-        while let Some(r) = rows.next().map_err(|e| e.to_string())? {
-            let start: i64 = r.get(0).map_err(|e| e.to_string())?;
-            let stop: i64 = r.get(1).map_err(|e| e.to_string())?;
-            let source: i64 = r.get(2).map_err(|e| e.to_string())?;
-            let offset: i64 = r.get(3).map_err(|e| e.to_string())?;
-            let a = start.max(at);
-            let z = stop.min(end);
-            let mut file =
-                File::open(self.sources.join(source.to_string())).map_err(|e| e.to_string())?;
-            file.seek(SeekFrom::Start((offset + a - start) as u64))
-                .map_err(|e| e.to_string())?;
-            file.read_exact(&mut out[(a - at) as usize..(z - at) as usize])
-                .map_err(|e| e.to_string())?;
-            let mut reads = self.reads.get();
-            reads.local += (z - a) as u64;
-            self.reads.set(reads);
-        }
+        self.read_local_spans(id, at, end, out)?;
         Ok(n)
     }
     pub fn unlink(&mut self, parent: i64, name: &[u8], directory: bool) -> Result<(), String> {
@@ -413,41 +402,8 @@ impl Engine {
             [after], |r|r.get(0)).optional().map_err(|e|e.to_string())?;
         id.map(|id| self.node(id)).transpose()
     }
-    /// The caller holds the mutation lock through capture, publication and install.
-    pub fn install_prepared(&mut self) -> Result<(), String> {
-        self.source_ready()?;
-        let tx = self.db.transaction().map_err(|e| e.to_string())?;
-        tx.execute("UPDATE inodes SET root=(SELECT content FROM prepared WHERE id=inodes.id),base_size=size,base_visible=size,dirty=0,is_new=0,published=1 WHERE id IN(SELECT id FROM prepared) AND kind=1",[]).map_err(|e|e.to_string())?;
-        tx.execute(
-            "UPDATE inodes SET dirty=0,is_new=0,published=1 WHERE id IN(SELECT id FROM prepared) AND kind=2",
-            [],
-        )
-        .map_err(|e| e.to_string())?;
-        tx.execute(
-            "DELETE FROM extents WHERE ino IN(SELECT id FROM prepared WHERE kind=1)",
-            [],
-        )
-        .map_err(|e| e.to_string())?;
-        tx.execute(
-            "DELETE FROM changed_names WHERE parent IN(SELECT id FROM prepared WHERE kind=2)",
-            [],
-        )
-        .map_err(|e| e.to_string())?;
-        tx.execute("UPDATE inodes SET dirty=0,is_new=0,published=0 WHERE id IN(SELECT id FROM prepared WHERE kind=0)",[]).map_err(|e|e.to_string())?;
-        tx.execute(
-            "DELETE FROM changed_names WHERE parent IN(SELECT id FROM prepared WHERE kind=0)",
-            [],
-        )
-        .map_err(|e| e.to_string())?;
-        tx.execute("DELETE FROM prepared", [])
-            .map_err(|e| e.to_string())?;
-        tx.execute("DELETE FROM edits", [])
-            .map_err(|e| e.to_string())?;
-        tx.commit().map_err(|e| e.to_string())?;
-        self.drain_sources()?;
-        Ok(())
-    }
 }
+
 pub struct Source<'a> {
     pub engine: &'a Engine,
     pub id: i64,
