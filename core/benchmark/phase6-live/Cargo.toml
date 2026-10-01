@@ -1,0 +1,23 @@
+[package]
+name = "phase6-live-probe"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[workspace]
+
+[dependencies]
+layerfs-content = { path = "../../crates/layerfs-content" }
+layerfs-storage = { path = "../../crates/layerfs-storage" }
+layerfs-history = { path = "../../crates/layerfs-history" }
+layerfs-bridge = { path = "../../crates/layerfs-bridge" }
+layerfs-sdk = { path = "../../crates/layerfs-api/sdk" }
+layerfs-sandbox = { path = "../../crates/layerfs-sandbox" }
+layerfs-telemetry = { path = "../../crates/layerfs-telemetry", features = ["native"] }
+rusqlite = { version = "=0.40.2", features = ["bundled", "cache", "limits", "blob"] }
+sha2 = "=0.10.9"
+libc = "=0.2.189"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+fuser = { version = "=0.18.0", default-features = false }

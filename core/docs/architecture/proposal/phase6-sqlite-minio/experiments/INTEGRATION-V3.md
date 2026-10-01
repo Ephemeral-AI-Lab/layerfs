@@ -43,7 +43,9 @@ daemon: known result -> selected root installation -> explicit owner drain
 Global object locators and C5 history use separate databases owned by one host
 process. Payloads exist in MinIO, not in global SQLite BLOB storage. Locators are
 inserted only after a successful object PUT. The service authenticates the uploaded
-pack and candidate before publication. A failed or uncertain publication retains
+pack and walks the complete admitted candidate graph, including payloads and
+portable metadata, before publication. This validation is timed construction/
+publication work; it is not moved into setup. A failed or uncertain publication retains
 the pending candidate; it is never resent or inferred from a head query. There is
 no cross-database transaction or added crash-durability claim.
 
@@ -58,8 +60,9 @@ accepts a 32-byte object ID and returns presence, role, canonical length and the
 32-byte pack digest. Action 2 accepts that same locator tuple, authenticates the
 acknowledged object and registers it, returning an empty success. Action 3 returns
 the current fixed Branch snapshot (stack 17, branch 17, base 33, optional head
-1+33, root/scope/profile 32 each). Action 4 accepts Workspace incarnation 32,
-generation u64, captured snapshot and candidate root 32; its successful response
+1+33, root/scope/profile 32 each). Action 4 accepts a u16-length Workspace name (at most 63 bytes),
+Workspace incarnation 32, generation u64, captured revision u64, snapshot and
+candidate root 32; its successful response
 is the existing encoded `WorkspaceCommit` response with a real C5 outcome.
 Serials are reserved once during bootstrap, never reused; the first admitted
 512-inode profile consumes a fixed reservation of 512 serials. Every decoder
