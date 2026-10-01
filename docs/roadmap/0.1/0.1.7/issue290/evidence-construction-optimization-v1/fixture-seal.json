@@ -1,0 +1,9 @@
+{
+  "bytes_per_arm": 523127919,
+  "copy": "independent ordinary byte copies; no APFS clone/source hardlinks; two trees acquired together once",
+  "files": 101494,
+  "reference_catalog_sha256": "8514f24e74c1718fd1839a60428fa894316cc6c449772c500521bbe2968c150b",
+  "source_data_preconditioning": "setup writes may leave pages resident; cache equality UNKNOWN; not cold",
+  "validation": "every SHA256/size matched independent captured manifest",
+  "wall_ns": 35869010750
+}

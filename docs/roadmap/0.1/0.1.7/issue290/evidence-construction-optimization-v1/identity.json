@@ -1,0 +1,43 @@
+{
+  "binary_sha256": "864e48e59bfd71113f33b4e0f0edd30bab8297ffa3770fd15cfd9771b90f8be1",
+  "cache_verdict": "INELIGIBLE",
+  "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "fixture_seal": {
+    "bytes_per_arm": 523127919,
+    "copy": "independent ordinary byte copies; no APFS clone/source hardlinks; two trees acquired together once",
+    "files": 101494,
+    "reference_catalog_sha256": "8514f24e74c1718fd1839a60428fa894316cc6c449772c500521bbe2968c150b",
+    "source_data_preconditioning": "setup writes may leave pages resident; cache equality UNKNOWN; not cold",
+    "validation": "every SHA256/size matched independent captured manifest",
+    "wall_ns": 35869010750
+  },
+  "performance_claim": false,
+  "source": {
+    "commit": "91af4e2a63349f382bf70b7db6d19de81eed0980",
+    "hardware": "machdep.cpu.brand_string: Apple M3 Max\nhw.memsize: 38654705664\nhw.ncpu: 14",
+    "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "python": "3.14.3 (main, Feb  3 2026, 15:32:20) [Clang 17.0.0 (clang-1700.6.3.2)]",
+    "python_executable": "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "sqlite": "3.51.2",
+    "tool_sha256": {
+      "acquire.py": "18c9b601a9893a49482bc92770ee78df76206568fc74cec7795ca4c4c4958f36",
+      "acquire_deepseek_full.py": "e01fdaa0c05ec7d635b9a843bc1eaebbddd33d4b160a3f19fe2a969288b30dd8",
+      "catalog_probe.py": "ae1b1cad65a14ec23c0a4d6604b6829b5aa79d8e865bfe8ef1578a4ce11505d9",
+      "common.py": "bc8445df12d0553ecfd99c133614dc4ff69009e526cb2eee42a43dacc72db78e",
+      "concurrent_probe.py": "b5c6a7e40dbb98132eb4b4f6338d4cfd444e7a58c18b4957fcdb3bbcbbcf9749",
+      "construction_attribution.py": "61cb2ff8cc6000c2cd356b4c365f37df32bc29c9dab76ef81fb178ed7a48a463",
+      "construction_optimization.py": "ccc4a0ed5a2f041e282446fcf3054140302d3027fcf6e4d8e3ddd9f2d593205f",
+      "minio_probe.py": "4de75883298098d1d220db44b5933e5c03a4d5827997b57691501b306ca1bbd9",
+      "pack_probe.py": "08fd1209cc826d4287a852402c4f42e49d76b9369a951a40b1b792414357c974",
+      "repository_probe.py": "ab2bb2626f164128b17ff17fd57f887981a5e955c6b1f1ad647c1cda9834d92a",
+      "repository_reconstruction.py": "df80c49713ef3f251d2fd9a1201ea3fc3024920fc8d9437275141d81d77f7b31",
+      "repository_selftest.py": "7d21428ebc27703a343ed1cc7236b3c7d59d1f1594434f02eaf53221dcc6211d",
+      "run.py": "5a074405c1f3585717876be87754cd033a7d910f33fe955044c6a4d110f8db9e",
+      "run_v2.py": "682b2945af971b3509d53896cf2209bbade06c9119db31799f108b7359e2403b",
+      "run_wal.py": "e655097278326b5f51c9f5c478c6c8c62dced8d31ebd73100ff81d0688353d29",
+      "sqlite_probe.py": "28d7e7eb1d7dca91e0c0afcd4b8c0eca01d17c979fb97b9365e4bb4176031468",
+      "wal_probe.py": "a4d9b93cc93c6a12b877f76f4076bd813f9bd928fa89082a53882b60f0449679"
+    },
+    "tracked_dirty": false
+  }
+}

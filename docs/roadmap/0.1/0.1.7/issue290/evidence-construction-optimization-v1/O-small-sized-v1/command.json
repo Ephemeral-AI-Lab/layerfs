@@ -1,0 +1,18 @@
+{
+  "cache_verdict": "INELIGIBLE",
+  "child_system_seconds": 4.470641999999999,
+  "child_user_seconds": 0.8484880000000006,
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/core/target/release/examples/minio_repository_probe",
+    "opt-small",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/deepseek-full-import-v1/stage/catalog.sqlite",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/optimization-fixtures-v1/sized",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/construction-optimization-v1/O-small-sized-v1",
+    "sized"
+  ],
+  "exit": 0,
+  "limit_seconds": 25,
+  "performance_claim": false,
+  "status": "COMPLETE",
+  "wall_ns": 10875894958
+}

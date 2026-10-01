@@ -1,0 +1,15 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/core/crates/layerfs-storage)
+error[E0425]: cannot find value `engine` in this scope
+   --> crates/layerfs-storage/examples/repository_probe/optimize.rs:141:105
+    |
+141 |     fs::write(output.join("result.json"),format!("{{\"mechanism\":\"small-input\",\"sqlite_version\":\"{engine}\",\"sized\":{sized},\"fil...
+    |                                                                                                         ^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `engine` in this scope
+   --> crates/layerfs-storage/examples/repository_probe/optimize.rs:181:105
+    |
+181 |     fs::write(output.join("result.json"),format!("{{\"mechanism\":\"root-update\",\"sqlite_version\":\"{engine}\",\"cached\":{cached},\"f...
+    |                                                                                                         ^^^^^^ not found in this scope
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `layerfs-storage` (example "minio_repository_probe") due to 2 previous errors

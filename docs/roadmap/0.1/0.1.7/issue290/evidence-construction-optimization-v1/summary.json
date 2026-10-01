@@ -1,0 +1,25 @@
+{
+  "all_exact_proofs": "PASS",
+  "cache_verdict": "INELIGIBLE",
+  "full_import_speed": "NOT_RUN; original >25s, no resized/repeated full arm",
+  "performance_claim": false,
+  "root_update": {
+    "baseline_ns": 573948132,
+    "cached_ns": 387906323,
+    "observed_reduction_pct": 32.41439402402306
+  },
+  "small_input": {
+    "baseline_c1_exclusive_ns": 673816836,
+    "baseline_capacity_demand": 13303021568,
+    "baseline_open_ns": 5027804942,
+    "baseline_read_calls": 223387,
+    "baseline_read_ns": 5889138771,
+    "capacity_demand_ratio": 25.429767911125385,
+    "fewer_reads": 20399,
+    "sized_c1_exclusive_ns": 643586832,
+    "sized_capacity_demand": 523127919,
+    "sized_open_ns": 3668967542,
+    "sized_read_calls": 202988,
+    "sized_read_ns": 6319686700
+  }
+}
