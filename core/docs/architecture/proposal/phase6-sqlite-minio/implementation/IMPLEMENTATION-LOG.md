@@ -571,3 +571,13 @@ current read predicate can scan a prefix, MEMORYjournal whole-population transac
 would violate streaming bounds. Then paged reservations/admission/import/mount
 before increasing512/256profile, remaining syscalls/sevenfamilies/fullDeepSeek/
 physical/Unknown/concurrency/canonical gates. Full goal active.
+
+## V4c3b prospective bounded span/SQL dependency
+
+Parent715785ae3166491b1a8df41dddb6fe62d39813d6. Read predicate has no lower
+start bound and can scan earlier extents. Namespace/daemon outer transactions can
+make MEMORYjournal proportional to changed pages. Freeze V4C3B-SPEC.md: actual
+predecessor/range seek, fixed SQLite work counters,64row SQL cleanup/adoption,
+unsealed prepare and explicit installation barriers, known/Unknown bytes retained.
+Current512/256profile remains; source/count/6root sparse live proofs before next
+paged reservation/admission/import. Full families/DeepSeek goal active.
