@@ -218,3 +218,29 @@ cannot be isolated from framing through the public API. CPU totals cover the who
 child. Independent output proof compares exact catalog contents and every pack
 byte against the original import, reusing its original-byte reconstruction proofs.
 Neither instrumented wall nor mixed-file intervals are a new speed/scaling arm.
+
+## Concrete construction optimization comparisons
+
+[Prospective treatment contract](../../docs/roadmap/0.1/0.1.7/issue290/CONSTRUCTION-OPTIMIZATION-V1.md)
+registers two mechanism pairs, one attempt per arm. Root UPDATE reuses a cached
+statement; the importer now uses exact-size bounded input plus EOF and public
+construct_bytes for sealed small files, preserving streaming for large files.
+These changes are confined to the external backend import example; no product
+codec, threshold, worker or capacity change.
+
+```sh
+cargo +1.85.1 build --manifest-path core/Cargo.toml --locked --release -p layerfs-storage --example minio_repository_probe
+core/target/release/examples/minio_repository_probe opt-selfcheck
+python3 tools/storage_probes/construction_optimization.py setup
+python3 tools/storage_probes/construction_optimization.py run --output benchmark-results/storage-probes/construction-optimization-v1
+```
+
+Acquire the two independent small-file trees together once; retain their seal.
+Never repeat setup or a case. Root cases cover all103,108 roots,15s command/10s
+separate metadata proof each. Source cases cover all101,494 nonempty small files,
+523,127,919 bytes,25s command each with exact canonical roots/EOF checked inside.
+The source comparisons omit compression/CAS SQL in both arms to isolate source/C1
+cost; SQL comparisons omit source reads/encoding/object commits in both arms.
+OS cache effects/equality unverified: all numerical speed claims INELIGIBLE.
+Cumulative requested capacities are allocation demand, not peak memory. Full
+end-to-end import performance has not been rerun or claimed under this profile.

@@ -219,11 +219,25 @@ impl Packer {
     }
 
     pub fn update_file(&mut self, path: &[u8], root: ObjectId, files: u64) -> Result<()> {
+        self.update_file_mode(path, root, files, true)
+    }
+    pub fn update_file_mode(
+        &mut self,
+        path: &[u8],
+        root: ObjectId,
+        files: u64,
+        cached: bool,
+    ) -> Result<()> {
         let started = Instant::now();
-        self.db.execute(
-            "UPDATE entries SET content_root=?1 WHERE path=?2",
-            params![root.as_bytes().as_slice(), path],
-        )?;
+        let sql = "UPDATE entries SET content_root=?1 WHERE path=?2";
+        if cached {
+            self.db
+                .prepare_cached(sql)?
+                .execute(params![root.as_bytes().as_slice(), path])?;
+        } else {
+            self.db
+                .execute(sql, params![root.as_bytes().as_slice(), path])?;
+        }
         self.metrics.spans[m::FILE_ROOT].add(started, 0);
         if files % 256 == 0 {
             let started = Instant::now();

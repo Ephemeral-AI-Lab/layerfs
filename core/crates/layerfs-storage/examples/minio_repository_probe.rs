@@ -5,14 +5,16 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::time::Instant;
 
-use layerfs_content::{construct_stream, ConstructionPolicy};
+use layerfs_content::{construct_bytes, construct_stream, ConstructionPolicy};
 use layerfs_telemetry::timer::Timing;
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 
 #[path = "repository_probe/attribution.rs"]
 mod attribution;
 #[path = "repository_probe/metrics.rs"]
 mod metrics;
+#[path = "repository_probe/optimize.rs"]
+mod optimize;
 #[path = "repository_probe/packs.rs"]
 mod packs;
 #[path = "repository_probe/read.rs"]
@@ -39,23 +41,31 @@ fn prepare(master: &Path, output: &Path) -> Result<()> {
     while let Some(row) = rows.next()? {
         let path: Vec<u8> = row.get(0)?;
         let size = u64::try_from(row.get::<_, i64>(1)?)?;
-        let input = File::open(master.join("tree").join(std::ffi::OsStr::from_bytes(&path)))?;
-        let (result, _) = Timing::disabled("repository.construct", |scope| {
-            construct_stream(policy, &capacities, input, &mut packer, scope.child("file"))
-        });
-        let built = result?;
+        let mut input = File::open(master.join("tree").join(std::ffi::OsStr::from_bytes(&path)))?;
+        let built = if size < 131072 {
+            let bytes = optimize::sized_bytes(&mut input, usize::try_from(size)?)?;
+            let (result, _) = Timing::disabled("repository.construct", |scope| {
+                construct_bytes(
+                    policy,
+                    &capacities,
+                    &bytes,
+                    &mut packer,
+                    scope.child("file"),
+                )
+            });
+            result?
+        } else {
+            let (result, _) = Timing::disabled("repository.construct", |scope| {
+                construct_stream(policy, &capacities, input, &mut packer, scope.child("file"))
+            });
+            result?
+        };
         if built.logical_len != size {
             return Err("fixture length changed".into());
         }
-        packer.db.execute(
-            "UPDATE entries SET content_root=?1 WHERE path=?2",
-            params![built.root.as_bytes().as_slice(), path],
-        )?;
         files += 1;
         logical += size;
-        if files % 256 == 0 {
-            packer.db.execute_batch("COMMIT; BEGIN;")?;
-        }
+        packer.update_file(&path, built.root, files)?;
         if files % 4096 == 0 {
             eprintln!("constructed files={files} logical_bytes={logical}");
         }
@@ -88,6 +98,9 @@ fn main() -> Result<()> {
         [_, action, master, output, downloaded] if action == "verify" => read::verify(Path::new(master), Path::new(output), Path::new(downloaded)),
         [_, action, master, output, downloaded, cursor, count, receipt] if action == "verify-batch" => read::verify_batch(Path::new(master), Path::new(output), Path::new(downloaded), Path::new(cursor), count.parse()?, Path::new(receipt)),
         [_, action, master, output] if action == "diagnose" => attribution::diagnose(Path::new(master), Path::new(output)),
+        [_, action] if action == "opt-selfcheck" => optimize::selfcheck(),
+        [_, action, master, reference, output, mode] if action == "opt-root" && matches!(mode.as_str(),"cached"|"uncached") => optimize::root_updates(Path::new(master),Path::new(reference),Path::new(output),mode=="cached"),
+        [_, action, reference, fixture, output, mode] if action == "opt-small" && matches!(mode.as_str(),"sized"|"stream") => optimize::small_sources(Path::new(reference),Path::new(fixture),Path::new(output),mode=="sized"),
         _ => Err("usage: minio_repository_probe prepare|diagnose MASTER OUTPUT | verify MASTER STAGE DOWNLOADED_PACKS | verify-batch MASTER STAGE DOWNLOADED_PACKS CURSOR COUNT RECEIPT".into()),
     }
 }
