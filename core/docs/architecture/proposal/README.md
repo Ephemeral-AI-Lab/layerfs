@@ -152,8 +152,17 @@ is retained as research with the later owner direction appended.
 
 ## Contents
 
+**Phase 6 direction, 2026-10-01:** the
+[SQLite metadata and MinIO CAS proposal](phase6-sqlite-minio/README.md), tracked
+in [#293](https://github.com/Ephemeral-AI-Lab/layerfs/issues/293), starts a successor
+architecture design. It changes live/global metadata authority and the location
+of C1/C2 construction. Its interfaces and cutover remain open. The earlier
+co-design and storage-placement reasoning below is retained as historical design
+context; it does not freeze Phase 6 boundaries.
+
 | Document | Pair | State |
 | --- | --- | --- |
+| [`Phase 6: SQLite metadata and MinIO CAS`](phase6-sqlite-minio/README.md) | successor architecture | initial design folder; authority, streaming, Commit and design gates proposed; no implementation qualification |
 | [`FUSE / Workspace / snapshot overlay`](fuse-workspace-snapshot-overlay/README.md) | 1 | detailed proposal and implementation handoff: separate FUSE/Workspace libraries, overlay capture and history integration; no mounted qualification |
 | [`01-projection-and-runtime.md`](01-projection-and-runtime.md) | 1 | entry point to the detailed Workspace/FUSE proposal packet |
 | [`02-init-commit-and-concurrency.md`](02-init-commit-and-concurrency.md) | 2 | historical operational/concurrency exploration; current spec linked at entry |
