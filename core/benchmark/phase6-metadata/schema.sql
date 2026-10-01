@@ -1,0 +1,11 @@
+PRAGMA user_version=1;
+CREATE TABLE workspace(w INTEGER PRIMARY KEY, active INTEGER NOT NULL, pending INTEGER, counter INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE captures(w INTEGER PRIMARY KEY REFERENCES workspace(w), generation INTEGER NOT NULL);
+CREATE TABLE inodes(w INTEGER, ino INTEGER, born INTEGER, dead INTEGER, value INTEGER, size INTEGER, PRIMARY KEY(w,ino,born)) WITHOUT ROWID;
+CREATE UNIQUE INDEX inode_live ON inodes(w,ino) WHERE dead=9223372036854775807;
+CREATE INDEX inode_retire ON inodes(w,dead,ino,born);
+CREATE TABLE names(w INTEGER,parent INTEGER,name BLOB,born INTEGER,dead INTEGER,ino INTEGER,PRIMARY KEY(w,parent,name,born)) WITHOUT ROWID;
+CREATE UNIQUE INDEX name_live ON names(w,parent,name) WHERE dead=9223372036854775807;
+CREATE TABLE extents(w INTEGER,ino INTEGER,start INTEGER,born INTEGER,dead INTEGER,end INTEGER,source INTEGER,source_offset INTEGER,PRIMARY KEY(w,ino,start,born)) WITHOUT ROWID;
+CREATE UNIQUE INDEX extent_live ON extents(w,ino,start) WHERE dead=9223372036854775807;
+CREATE INDEX extent_retire ON extents(w,dead,ino,start,born);

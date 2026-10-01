@@ -1,0 +1,12 @@
+[package]
+name = "phase6-metadata-probe"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+publish = false
+
+[workspace]
+
+[dependencies]
+rusqlite = { version = "=0.40.2", features = ["cache", "hooks", "trace", "limits", "blob"] }
