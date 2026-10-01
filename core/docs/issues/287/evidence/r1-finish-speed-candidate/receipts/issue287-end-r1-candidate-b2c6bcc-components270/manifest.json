@@ -1,0 +1,61 @@
+{
+  "files": {
+    "init-build.json": {
+      "bytes": 786,
+      "sha256": "c79a58fb3f3ba423eee35fc599b8bcfb32755e514926cd364d8c14082ba7e1e7"
+    },
+    "preparation-reuse.json": {
+      "bytes": 92716,
+      "sha256": "1e7ef1d89da86b5fa92e6b189b53d5cf49277f01ddf7212be438ffa51c64cfde"
+    },
+    "prepared-artifacts.json": {
+      "bytes": 188272,
+      "sha256": "288f24b803c4c7a94a4ea10883856aed5ff3ddd55c5d5d9021b583c45eb32992"
+    },
+    "run.json": {
+      "bytes": 284090,
+      "sha256": "ee77748de116df2225c7c26eff81185ff456cfc8aa82216e871a8907f3454fd9"
+    },
+    "workspace-namespace-components-270-sdk-v1/case.before": {
+      "bytes": 944,
+      "sha256": "6e89f67b47a7e0e9dd830d7b75d2465bcdcc9f564a592dbaca543f173dbeb1e3"
+    },
+    "workspace-namespace-components-270-sdk-v1/case.verify": {
+      "bytes": 1032,
+      "sha256": "e1fdd9c61e34562626b575c9a9764fe2b5db756416799ff8c7aefe11d6baa002"
+    },
+    "workspace-namespace-components-270-sdk-v1/driver.stderr": {
+      "bytes": 361264,
+      "sha256": "d49dd709573231f491a21d85a432dcad52b4f6c060a7a9f2a13f3951785da0a6"
+    },
+    "workspace-namespace-components-270-sdk-v1/driver.stdout": {
+      "bytes": 984,
+      "sha256": "29211e3019e2ad341699c109852104d5cb6ea949a5a694abcdfee05663404ed7"
+    },
+    "workspace-namespace-components-270-sdk-v1/fixture.before": {
+      "bytes": 256,
+      "sha256": "14c50efee8ee3ee60e10aed383853675825fef89c486a34fa0ed9a31e21ead52"
+    },
+    "workspace-namespace-components-270-sdk-v1/history.sqlite": {
+      "bytes": 30720,
+      "sha256": "ad85c99014aad9f700910e0a7c00e0bebd6cb171fc634aca5e9b1bb2a7ccb067"
+    },
+    "workspace-namespace-components-270-sdk-v1/new.tsv": {
+      "bytes": 76932,
+      "sha256": "16feb6bc8704a64b90c9b97082407c614793d1425578fbf2d63e6f48d84bcafa"
+    },
+    "workspace-namespace-components-270-sdk-v1/old.tsv": {
+      "bytes": 444,
+      "sha256": "5cd3bd08b66f0de5bd21fd5eae23ee56d92290fb85783e0e4b43102e85db6a3a"
+    },
+    "workspace-namespace-components-270-sdk-v1/receipt.json": {
+      "bytes": 159938,
+      "sha256": "af4f8b4b888f4378c2421afc70f6c5cdcb0b7f4ef23e493a9d66db5d9b9cd307"
+    },
+    "workspace-namespace-components-270-sdk-v1/store.sqlite": {
+      "bytes": 256000,
+      "sha256": "f23bab1286a80ba2bff3606795401fcfc4f5f41a375ed6a8ec00109febcf8482"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

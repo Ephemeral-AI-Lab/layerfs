@@ -1,0 +1,17 @@
+{
+  "files": {
+    "run.json": {
+      "bytes": 94960,
+      "sha256": "9efabb1e884cdc6856ad07998c75f94c2d3cd6cded38d178a0501f733b2093bd"
+    },
+    "workspace-shell-package-many-128-sdk-v2.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "workspace-shell-package-many-128-sdk-v2.stdout": {
+      "bytes": 426,
+      "sha256": "2ca298254514dd5bbe819643c11a1c7f68d179569a06c3931ee36ddbe8fe7d28"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

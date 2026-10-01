@@ -1,0 +1,205 @@
+{
+  "files": {
+    "baseline.tsv": {
+      "bytes": 101,
+      "sha256": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927"
+    },
+    "build-daemon.json": {
+      "bytes": 515,
+      "sha256": "8cbaf6e430771a4ba5c1fd88a70568c5a85569530dbc79dac5e7d56442dcefdd"
+    },
+    "build-daemon.stderr": {
+      "bytes": 2770,
+      "sha256": "f4b29a33878d6d884514bf48e9a3ac043d488d8a26a94c5ab9955dbe7bd34ae8"
+    },
+    "build-daemon.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "build-sdk.json": {
+      "bytes": 482,
+      "sha256": "6f6ad4eeea66e8589c485b08a06ffa2ba90522897681942b3d4cccecc869d330"
+    },
+    "build-sdk.stderr": {
+      "bytes": 3689,
+      "sha256": "846b802d690874c878a030f6225c30c575dbb8f827a8b0ca3c1ae42137fe63eb"
+    },
+    "build-sdk.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "build-verifier.json": {
+      "bytes": 487,
+      "sha256": "ad4f0b1f72cfd18ff64d8d579da08ef58ad1d8193e27076023092eb2d168d787"
+    },
+    "build-verifier.stderr": {
+      "bytes": 190,
+      "sha256": "81d4c7f3a7732fcfa57b48ecff5c044a2c1f85af4bc79b0a35bf8b78dd32bc2c"
+    },
+    "build-verifier.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cache-self-check.json": {
+      "bytes": 128,
+      "sha256": "62cc92c902cb15cfa9a28670ac2406075c074952b97ac50135653111396c5021"
+    },
+    "image-build.json": {
+      "bytes": 504,
+      "sha256": "65941ba453a6dec98312d6d62ad064c80ce450857f31c9aa0abb9194455756ce"
+    },
+    "image-build.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "image-build.stdout": {
+      "bytes": 72,
+      "sha256": "d89a4d612ed4444061e3e46d99297ed942880e1c79b66a3ef9ce3e1e1fc20138"
+    },
+    "image-context/Dockerfile": {
+      "bytes": 174,
+      "sha256": "d351105281e5e33ecf4b861cdb4f7a42e199830723a73b7226b933223d7cf3e3"
+    },
+    "image-context/bin/write-separated": {
+      "bytes": 1415352,
+      "sha256": "f293d71f2a16aaeecb4de6c1c2cf5b74dfcb0e616204e591f83c3ef802a686d3"
+    },
+    "image-context/layerfs-daemon": {
+      "bytes": 2794816,
+      "sha256": "a8a309bb055c45d4548a9b7385036d28f3df3b35aea67b623290f34ac6280984"
+    },
+    "master-qualification/history.sqlite": {
+      "bytes": 86016,
+      "sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19"
+    },
+    "master-qualification/store.sqlite": {
+      "bytes": 626688,
+      "sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+    },
+    "master-reproof.json": {
+      "bytes": 1303,
+      "sha256": "f4ac9716c1db722a63c971c4822c350a75c869d63dd3eb3611e9e05a6ef7fb05"
+    },
+    "master-reproof.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "master-reproof.stdout": {
+      "bytes": 429,
+      "sha256": "1f7fe67d18d3a0aff50424403e14f277a4621e910206107ddc7f397d890b22d5"
+    },
+    "old.tsv": {
+      "bytes": 101,
+      "sha256": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927"
+    },
+    "prepared.json": {
+      "bytes": 97223,
+      "sha256": "4c34ebec1e7f00999e89e5eab14667fe43e18cb564793409de0d8f5fcc78902e"
+    },
+    "retained.tsv": {
+      "bytes": 101,
+      "sha256": "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7"
+    },
+    "run.json": {
+      "bytes": 93930,
+      "sha256": "f0571c2b6d60ed2f1f5d7657138e07e7b818f7ecff45c8d3039d3cc22f4c14ba"
+    },
+    "workspace-commit-clean-retained-writes-4097-v2.tsv": {
+      "bytes": 101,
+      "sha256": "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7"
+    },
+    "workspace-commit-clean-retained-writes-4097-v3.tsv": {
+      "bytes": 101,
+      "sha256": "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7"
+    },
+    "workspace-commit-clean-retained-writes-4097-v3/.lfcs-759ba9b986af0a15af73fbf65db8abba5d54ce7815370ffb0f648115ca1fb045/state-0000000000000001.sqlite": {
+      "bytes": 106496,
+      "sha256": "5eb1a971a02076f9b8ed3bef9dd43fce9c78627a33b14a165ec06514fccf673f"
+    },
+    "workspace-commit-clean-retained-writes-4097-v3/case.before": {
+      "bytes": 662,
+      "sha256": "b71d35657aa7fe2cb50b68e080cff923c7d5dc530ca4c8f98453c3a0fb07b6eb"
+    },
+    "workspace-commit-clean-retained-writes-4097-v3/driver.stderr": {
+      "bytes": 14233,
+      "sha256": "5ff62a5ae4aa42bb4603aaa71f819deabacfda3d521a3deb0f6832b4fefe8c69"
+    },
+    "workspace-commit-clean-retained-writes-4097-v3/driver.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "workspace-commit-clean-retained-writes-4097-v3/history.sqlite": {
+      "bytes": 86016,
+      "sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19"
+    },
+    "workspace-commit-clean-retained-writes-4097-v3/receipt.json": {
+      "bytes": 97284,
+      "sha256": "eaeec5a8717be7bdcd507c66bf87137f16dcd131474defce2cb4166d4beba857"
+    },
+    "workspace-commit-clean-retained-writes-4097-v3/store.sqlite": {
+      "bytes": 626688,
+      "sha256": "35659529922cb7f71c6a8f99cfa572b8f1af8ea50281bbe19ad3d53c2e7e32da"
+    },
+    "workspace-commit-full-pin-retained-writes-4097-read-31kib-v1.tsv": {
+      "bytes": 101,
+      "sha256": "bf309d76319f11c72d62a17ef80933cd6645975afaca87a19431c8072ae3310c"
+    },
+    "workspace-commit-one-edit-retained-writes-4097-v2.tsv": {
+      "bytes": 101,
+      "sha256": "bf309d76319f11c72d62a17ef80933cd6645975afaca87a19431c8072ae3310c"
+    },
+    "workspace-commit-one-edit-retained-writes-4097-v3.tsv": {
+      "bytes": 101,
+      "sha256": "bf309d76319f11c72d62a17ef80933cd6645975afaca87a19431c8072ae3310c"
+    },
+    "workspace-commit-sdk-reordered-base-copy-8kib-v1.tsv": {
+      "bytes": 101,
+      "sha256": "20398394245c7a7e04790b0446aa2ec52e806b5b9d4a3c9cc16552f6d06f558a"
+    },
+    "workspace-commit-sdk-stopping-refusal-fixture-release-v2.tsv": {
+      "bytes": 101,
+      "sha256": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927"
+    },
+    "workspace-commit-sdk-stopping-refusal-v1.tsv": {
+      "bytes": 101,
+      "sha256": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927"
+    },
+    "workspace-write-append-writes-100-v1.tsv": {
+      "bytes": 101,
+      "sha256": "8be1076d3284ca7daf8be30197fff138cbc9872a573b8d2bac80e3f41a9604fc"
+    },
+    "workspace-write-append-writes-4097-v1.tsv": {
+      "bytes": 101,
+      "sha256": "7c12367e33425fc3fa818c96772ff75d47001ef5247af2dab943bc35ad5f2ad4"
+    },
+    "workspace-write-append-writes-512-v1.tsv": {
+      "bytes": 101,
+      "sha256": "e38d9c6c5195845b903df9abded38bf33b52233d9470911dedb3bdafa42bae6f"
+    },
+    "workspace-write-dispersed-writes-100-v1.tsv": {
+      "bytes": 101,
+      "sha256": "b9f6ccc3fe182377f6eac4009450db59177649e4a906d812ef539f31c2c54079"
+    },
+    "workspace-write-dispersed-writes-4097-v1.tsv": {
+      "bytes": 101,
+      "sha256": "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7"
+    },
+    "workspace-write-dispersed-writes-512-v1.tsv": {
+      "bytes": 101,
+      "sha256": "ae3b7e9910992a681f306c0bbc26e61ea67101f082985d1c5f42e44006cf9bd9"
+    },
+    "workspace-write-repeated-writes-100-v1.tsv": {
+      "bytes": 101,
+      "sha256": "52ccb3b0de2001e89325508fa7aca6e48bb870df6a09541f4a66255ae553c8f6"
+    },
+    "workspace-write-repeated-writes-4097-v1.tsv": {
+      "bytes": 101,
+      "sha256": "18fc2fbd1999bcd041f3287870adfccb0b12762bf1876c7a6d2450d6b59e8532"
+    },
+    "workspace-write-repeated-writes-512-v1.tsv": {
+      "bytes": 101,
+      "sha256": "2e0aa88f8795f426e5270cf321a0013dbdfd773f52259f5f162f5683ba79909d"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

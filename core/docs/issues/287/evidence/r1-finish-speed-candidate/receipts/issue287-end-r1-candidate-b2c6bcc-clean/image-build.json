@@ -1,0 +1,15 @@
+{
+  "command": [
+    "docker",
+    "build",
+    "-q",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-candidate-b2c6bcc-clean/image-context"
+  ],
+  "exit_code": 0,
+  "mode": "build",
+  "started_ns": 124854673290583,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "d89a4d612ed4444061e3e46d99297ed942880e1c79b66a3ef9ce3e1e1fc20138",
+  "timeout": false,
+  "wall_ns": 9089219083
+}

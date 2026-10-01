@@ -1,0 +1,21 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-sdk",
+    "--example",
+    "benchmark_shell"
+  ],
+  "exit_code": 0,
+  "started_ns": 124803191536458,
+  "stderr_sha256": "846b802d690874c878a030f6225c30c575dbb8f827a8b0ca3c1ae42137fe63eb",
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "timeout": false,
+  "wall_ns": 29839352750
+}

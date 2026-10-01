@@ -1,0 +1,11 @@
+{
+  "schema": "issue287-final-report-checks-v1",
+  "all190_raw_copies_hash_match_original": true,
+  "all6_candidate_source_clean_at_collection": true,
+  "prospective_control_commands_preludes_oracles_match": true,
+  "four_completed_separate_proofs_and_two_not_run_preserved": true,
+  "source_boundary_fmt_clippy_examples": "Reuse already recorded unchanged product owning checks; no repeated full test or speed arm",
+  "full_core_status": "Original exit101 retained",
+  "aggregate_r1": "PARTIAL",
+  "checks": "Owned documentation links, exact raw copies, raw ns target arithmetic, unchanged product subtrees, staged whitespace excluding retained raw logs; no product change"
+}

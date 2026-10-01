@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "zigbuild",
+    "--release",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "--offline",
+    "--target",
+    "aarch64-unknown-linux-musl",
+    "-p",
+    "layerfs-daemon"
+  ],
+  "exit_code": 0,
+  "started_ns": 125093947131416,
+  "stderr_sha256": "765f1396d07f30f3a451cd3f9d9cad4e83c92c8e0aecf955ffc09061a6cf1e02",
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "timeout": false,
+  "wall_ns": 809342917
+}

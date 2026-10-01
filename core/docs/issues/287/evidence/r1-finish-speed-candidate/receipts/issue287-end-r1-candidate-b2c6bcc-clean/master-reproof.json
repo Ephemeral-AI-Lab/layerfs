@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/binary-archive/1a975da762facb84ffe8076738cd97ac3db839dd3a8f418a6e0cc4dcd625ec53/verify_checkpoint5",
+    "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/fourhop-patterns-prepared-v1/master/verify.case",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-candidate-b2c6bcc-clean/master-qualification/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-candidate-b2c6bcc-clean/master-qualification/history.sqlite",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-candidate-b2c6bcc-clean/old.tsv",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-candidate-b2c6bcc-clean/old.tsv"
+  ],
+  "exit_code": 0,
+  "started_ns": 124863892805791,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "1f7fe67d18d3a0aff50424403e14f277a4621e910206107ddc7f397d890b22d5",
+  "timeout": false,
+  "wall_ns": 708205042
+}

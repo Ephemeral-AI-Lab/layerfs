@@ -1,0 +1,17 @@
+{
+  "files": {
+    "run.json": {
+      "bytes": 95060,
+      "sha256": "4b31191efa35028c5fa57b3df5af00f99fb7d53038da06ed305ec19e0961c4a4"
+    },
+    "workspace-namespace-move-replace-descendants-67-sdk-v1.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "workspace-namespace-move-replace-descendants-67-sdk-v1.stdout": {
+      "bytes": 416,
+      "sha256": "6c96654ea03c5379668e7d3e0378076090db36b17da01240d03154f9f9d59ec9"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

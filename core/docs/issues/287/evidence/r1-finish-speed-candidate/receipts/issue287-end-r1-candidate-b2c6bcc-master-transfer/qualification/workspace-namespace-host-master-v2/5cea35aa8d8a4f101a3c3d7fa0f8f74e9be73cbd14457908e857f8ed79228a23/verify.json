@@ -1,0 +1,39 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/binary-archive/1a975da762facb84ffe8076738cd97ac3db839dd3a8f418a6e0cc4dcd625ec53/verify_checkpoint5",
+    "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-host-master-v2/5cea35aa8d8a4f101a3c3d7fa0f8f74e9be73cbd14457908e857f8ed79228a23/verify.case",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-candidate-b2c6bcc-master-transfer/qualification/workspace-namespace-host-master-v2/5cea35aa8d8a4f101a3c3d7fa0f8f74e9be73cbd14457908e857f8ed79228a23/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-candidate-b2c6bcc-master-transfer/qualification/workspace-namespace-host-master-v2/5cea35aa8d8a4f101a3c3d7fa0f8f74e9be73cbd14457908e857f8ed79228a23/history.sqlite",
+    "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-host-master-v2/5cea35aa8d8a4f101a3c3d7fa0f8f74e9be73cbd14457908e857f8ed79228a23/old.tsv",
+    "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-host-master-v2/5cea35aa8d8a4f101a3c3d7fa0f8f74e9be73cbd14457908e857f8ed79228a23/old.tsv"
+  ],
+  "environment": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_HISTORY_CURSOR_KEY": "3535353535353535353535353535353535353535353535353535353535353535"
+  },
+  "started_ns": 125088731118208,
+  "wall_ns": 53170000,
+  "budget_ns": 9000000000,
+  "exit_code": 0,
+  "timeout": false,
+  "status": "PASS",
+  "child": {
+    "status": "PASS",
+    "oracle": "issue273-checkpoint5-v1",
+    "old_commit": "12e337535dca23b6723ae17902fc8145158697721674687f7b64938645459de137",
+    "head_commit": "12e337535dca23b6723ae17902fc8145158697721674687f7b64938645459de137",
+    "advanced": false,
+    "old_paths": 73,
+    "old_files": 67,
+    "old_bytes": 94,
+    "new_paths": null,
+    "new_files": null,
+    "new_bytes": null,
+    "separated_runs": null,
+    "pattern_runs": null,
+    "namespace_identities": null,
+    "property_assertions": 0
+  },
+  "setup_only": true,
+  "performance_claim": false
+}

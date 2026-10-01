@@ -1,0 +1,39 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/binary-archive/1a975da762facb84ffe8076738cd97ac3db839dd3a8f418a6e0cc4dcd625ec53/verify_checkpoint5",
+    "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/verify.case",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-candidate-b2c6bcc-master-transfer/qualification/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-candidate-b2c6bcc-master-transfer/qualification/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/history.sqlite",
+    "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/old.tsv",
+    "/Users/yifanxu/.codex/worktrees/issue287-end-r1-control/layerfs/benchmark-results/fs-bench-pro/workspace-shell-package-master-v2/fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183/old.tsv"
+  ],
+  "environment": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_HISTORY_CURSOR_KEY": "3535353535353535353535353535353535353535353535353535353535353535"
+  },
+  "started_ns": 125088813946916,
+  "wall_ns": 56374959,
+  "budget_ns": 9000000000,
+  "exit_code": 0,
+  "timeout": false,
+  "status": "PASS",
+  "child": {
+    "status": "PASS",
+    "oracle": "issue273-checkpoint5-v1",
+    "old_commit": "125a151878902b9c8f4166a814441c727fa4e988d2bb8ee9460c0a462298d4757e",
+    "head_commit": "125a151878902b9c8f4166a814441c727fa4e988d2bb8ee9460c0a462298d4757e",
+    "advanced": false,
+    "old_paths": 18,
+    "old_files": 10,
+    "old_bytes": 11600261,
+    "new_paths": null,
+    "new_files": null,
+    "new_bytes": null,
+    "separated_runs": null,
+    "pattern_runs": null,
+    "namespace_identities": null,
+    "property_assertions": 0
+  },
+  "setup_only": true,
+  "performance_claim": false
+}

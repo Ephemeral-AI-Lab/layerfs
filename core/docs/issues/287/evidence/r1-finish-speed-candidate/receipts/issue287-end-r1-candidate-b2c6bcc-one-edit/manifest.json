@@ -1,0 +1,85 @@
+{
+  "files": {
+    "baseline.tsv": {
+      "bytes": 101,
+      "sha256": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927"
+    },
+    "preparation-reuse.json": {
+      "bytes": 92700,
+      "sha256": "a1991129e6b923d5e3068f5d70f47a1e8463e8243f804b4094d316e5e9ba0fd8"
+    },
+    "prepared.json": {
+      "bytes": 191381,
+      "sha256": "52ab44aa9bad669d8435292367874f7d606327f7ddfb9f91729a99e32e8fd32b"
+    },
+    "retained.tsv": {
+      "bytes": 101,
+      "sha256": "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7"
+    },
+    "run.json": {
+      "bytes": 93936,
+      "sha256": "e18b1137af4d4e0e66f7b9d17063c890a921a67038b11bb869539e34a150323f"
+    },
+    "workspace-commit-clean-retained-writes-4097-v2.tsv": {
+      "bytes": 101,
+      "sha256": "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7"
+    },
+    "workspace-commit-clean-retained-writes-4097-v3.tsv": {
+      "bytes": 101,
+      "sha256": "417be82bccaf4ee466112dd8538fcd10ec91d4841b2ff2406cfbf8cfb48c98e7"
+    },
+    "workspace-commit-full-pin-retained-writes-4097-read-31kib-v1.tsv": {
+      "bytes": 101,
+      "sha256": "bf309d76319f11c72d62a17ef80933cd6645975afaca87a19431c8072ae3310c"
+    },
+    "workspace-commit-one-edit-retained-writes-4097-v2.tsv": {
+      "bytes": 101,
+      "sha256": "bf309d76319f11c72d62a17ef80933cd6645975afaca87a19431c8072ae3310c"
+    },
+    "workspace-commit-one-edit-retained-writes-4097-v3.tsv": {
+      "bytes": 101,
+      "sha256": "bf309d76319f11c72d62a17ef80933cd6645975afaca87a19431c8072ae3310c"
+    },
+    "workspace-commit-one-edit-retained-writes-4097-v3/.lfcs-20aa6040ba548fccf6b057b940995aa2e6d1a09f5eb7b934fcd39236d51587fe/state-0000000000000001.sqlite": {
+      "bytes": 118784,
+      "sha256": "5dc783196aedf3d2878ed99869c2b3d48cc7fe36c5dfeebc8ccef26a43ec2259"
+    },
+    "workspace-commit-one-edit-retained-writes-4097-v3/case.before": {
+      "bytes": 737,
+      "sha256": "3402b5597a5f2a8069c21dcb1236f8f2834a9e4951922748133837ddb768549f"
+    },
+    "workspace-commit-one-edit-retained-writes-4097-v3/driver.stderr": {
+      "bytes": 14214,
+      "sha256": "27db8528f121479ffe31271da453ce56d404d8b136e59388fac70e64a9e5685c"
+    },
+    "workspace-commit-one-edit-retained-writes-4097-v3/driver.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "workspace-commit-one-edit-retained-writes-4097-v3/history.sqlite": {
+      "bytes": 86016,
+      "sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19"
+    },
+    "workspace-commit-one-edit-retained-writes-4097-v3/receipt.json": {
+      "bytes": 97341,
+      "sha256": "f730b98b1a9417799ebd6885456d06f0b24ffa433a82f922f40baaecaf8f614a"
+    },
+    "workspace-commit-one-edit-retained-writes-4097-v3/store.sqlite": {
+      "bytes": 626688,
+      "sha256": "35659529922cb7f71c6a8f99cfa572b8f1af8ea50281bbe19ad3d53c2e7e32da"
+    },
+    "workspace-commit-sdk-reordered-base-copy-8kib-v1.tsv": {
+      "bytes": 101,
+      "sha256": "20398394245c7a7e04790b0446aa2ec52e806b5b9d4a3c9cc16552f6d06f558a"
+    },
+    "workspace-commit-sdk-stopping-refusal-fixture-release-v2.tsv": {
+      "bytes": 101,
+      "sha256": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927"
+    },
+    "workspace-commit-sdk-stopping-refusal-v1.tsv": {
+      "bytes": 101,
+      "sha256": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

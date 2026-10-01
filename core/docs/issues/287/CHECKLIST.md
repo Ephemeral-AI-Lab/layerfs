@@ -1,13 +1,13 @@
 # Issue287 current implementation checklist
 
 > **Status: assigned R1 finish; aggregate R1 remains PARTIAL, no release candidate.**
-> Published parent `50a4f3a1934bc2e0d53cee69272b2c95b826278b`; final source publication follows this checkpoint.
+> Published product `b2c6bcc9735c6267576908cac31642aca6527d23`; [final assigned report](R1-FINISH-FINAL-REPORT-20261001.md) records the six once-only candidate results.
 
 Assignment: [R1 finish/speed](HANDOFF_R1_FINISH_AND_SPEED_20261001.md) authorizes the remaining R1 infrastructure and six existing observations. The [implementation checkpoint](R1-FINISH-IMPLEMENTATION-20261001.md) and [closure matrix](R1-FINISH-CLOSURE.md) record the actual source, cumulative owning proofs and every unresolved original gate. [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) remains append-only.
 
 All six untouched control observations and separate proofs are published. Real-route navigation, drafts, alias/fact/count/release authority, ordinary Empty/Small routes, working owners, native reset/reuse, captured engine factories and native purpose dispatch now have scoped evidence. Final fmt, all-target Clippy, examples and product boundary pass. The mandated full-Core command remains exit101 (1129 passing,19 failing,4 ignored); corrections retain that original result. The unchanged direct2049 deadline gate remains FAIL. Four required engine inner bodies remain NOT_RUN on the selected unsupported Apple provider. Strict8/global176/native32/physical and intermediate closing-before-join qualification remain open, as does R3-dependent early composite content release.
 
-Current next action: publish the exact staged product/LOC and collect the six candidate arms once against the frozen control targets, with separate9s proofs. Every numeric latency remains INELIGIBLE/performance_claim=false. #288 stays read-only/delegated, and R2–R7 remain unstarted. No aggregate R1 completion or release admission is claimed.
+Assigned finish/checkpoint is complete as evidence: the product is committed/pushed with exact LOC, and all six candidate commands were observed once. Four complete routes/proofs/cleanup PASS; two prelude commands timeout FAIL, final operands unavailable, cleanup UNKNOWN and proofs NOT_RUN. All six raw target rows miss; every numeric latency is INELIGIBLE. The final report retains all receipts and the required open gates. Stop at this assigned handoff; #288 remains read-only/delegated and R2–R7 unstarted. No aggregate R1 completion or release admission is claimed.
 
 - [x] Inspect actual primary/published/research source, ancestry, origin and artifacts.
 - [x] Create clean owned managed worktree and `codex/issue287-implementation` branch.

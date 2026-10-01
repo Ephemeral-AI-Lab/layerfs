@@ -1,0 +1,13 @@
+{
+  "files": {
+    "run.json": {
+      "bytes": 92842,
+      "sha256": "8017ba6fac528e9aa305d1bdaba117168f4cbf34cd196cd1a982a0113017a426"
+    },
+    "workspace-commit-one-edit-retained-writes-4097-v3/proof.json": {
+      "bytes": 272,
+      "sha256": "7db23f162073c06ff83c68a3b17c1a777cb18214bb3c4e2deebe8b49e69c3fd4"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

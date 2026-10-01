@@ -1,0 +1,14 @@
+{
+  "schema": "setup-transfer-attempt-v1",
+  "status": "FAIL",
+  "reason": "copytree supplied string paths; Path-only copy function raised AttributeError before first file copy",
+  "file_bytes_copied": 0,
+  "empty_owned_directories_removed": [
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-host-master-v2/5cea35aa8d8a4f101a3c3d7fa0f8f74e9be73cbd14457908e857f8ed79228a23",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/workspace-namespace-host-master-v2"
+  ],
+  "product_executed": false,
+  "measurement_sample": false,
+  "actual_monotonic_start_end": "unavailable for failed pre-copy attempt; not inferred",
+  "retained_tool_result": "initial transfer exec exit1 AttributeError str has no attribute is_file"
+}

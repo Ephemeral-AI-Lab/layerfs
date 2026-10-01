@@ -1,0 +1,105 @@
+{
+  "files": {
+    "init-build.json": {
+      "bytes": 786,
+      "sha256": "c79a58fb3f3ba423eee35fc599b8bcfb32755e514926cd364d8c14082ba7e1e7"
+    },
+    "package-image-context/Dockerfile": {
+      "bytes": 172,
+      "sha256": "4d3a3a99c8c86367666bec28d41df0f19f4623df43f71be2dfdcb46f93dd8e7f"
+    },
+    "package-image-context/layerfs-daemon": {
+      "bytes": 2794816,
+      "sha256": "a8a309bb055c45d4548a9b7385036d28f3df3b35aea67b623290f34ac6280984"
+    },
+    "package-image-context/v2/core/package.json": {
+      "bytes": 43,
+      "sha256": "a80af2b9778ab0d3d70a8cb1741d20918cef1cdc542b27cd955bd826e8ada79f"
+    },
+    "package-image-context/v2/package-lock.json": {
+      "bytes": 203,
+      "sha256": "6bce3148321ae7af2e066e6b17a580343dcfa19d703b78ad02bfadb9af864cc7"
+    },
+    "package-image-context/v2/parser/generated/tokenize.js": {
+      "bytes": 43,
+      "sha256": "98e633e62acced41620b996613dbb44bfab655d0cc5da79bf297f1bd00b88763"
+    },
+    "package-image-context/v2/parser/lib/parse.js": {
+      "bytes": 65536,
+      "sha256": "c795572611319db15a0295234595f10e094ac27d7b95a60618a4aa202c4b1874"
+    },
+    "package-image-context/v2/parser/package.json": {
+      "bytes": 45,
+      "sha256": "8e8bcde33a21c47de9bd78e3e8d43b5d410d85b16b2a3da4eb9be42ecd36d42b"
+    },
+    "package-image-context/v2/patch-4k.bin": {
+      "bytes": 4096,
+      "sha256": "26b7e40be0bcf3e6667020b3acf6e07faa17585b21b2936305dd6c9ad3860b15"
+    },
+    "package-image-context/v2/ui/dist/ui.js": {
+      "bytes": 1048576,
+      "sha256": "e51f1269253dd16031ab59c9a386c7f4d84b124bf174ca0283a74042ae1ea408"
+    },
+    "package-image-context/v2/ui/package.json": {
+      "bytes": 41,
+      "sha256": "5e72ba14dc582da9fc6bed008b4a2dcedfb226553c264812e31f2cc4b918948b"
+    },
+    "preparation-reuse.json": {
+      "bytes": 92716,
+      "sha256": "1e7ef1d89da86b5fa92e6b189b53d5cf49277f01ddf7212be438ffa51c64cfde"
+    },
+    "prepared-artifacts.json": {
+      "bytes": 188272,
+      "sha256": "288f24b803c4c7a94a4ea10883856aed5ff3ddd55c5d5d9021b583c45eb32992"
+    },
+    "prepared.json": {
+      "bytes": 188840,
+      "sha256": "b08a027fcbec4333ceb2ae967837f1c578f29a716a7d9ebe5b84ffc0ab1802ab"
+    },
+    "run.json": {
+      "bytes": 284767,
+      "sha256": "3d0a029b60e71623ae53fd3b999f05a18639b6cb49b798829f8600f825616331"
+    },
+    "workspace-shell-package-many-128-sdk-v2/case.before": {
+      "bytes": 980,
+      "sha256": "e8fb3236bc130e71c2dc4172cac657942eca1fbda6bcf34236523c1159cf08f7"
+    },
+    "workspace-shell-package-many-128-sdk-v2/case.verify": {
+      "bytes": 1068,
+      "sha256": "aabe6da6bf23aae43811d43b4742de838a5693a31084a77f331ee4d7606b21e9"
+    },
+    "workspace-shell-package-many-128-sdk-v2/driver.stderr": {
+      "bytes": 633519,
+      "sha256": "a9b67bfe3624fc8a6e95db4162de466ab44cee622b93a214b6d4a016c968206b"
+    },
+    "workspace-shell-package-many-128-sdk-v2/driver.stdout": {
+      "bytes": 978,
+      "sha256": "073f152ae7e9bb7ec65bdc6db4ee935463c4e2746a7c6f1a86192077ecb928d3"
+    },
+    "workspace-shell-package-many-128-sdk-v2/fixture.before": {
+      "bytes": 256,
+      "sha256": "66fb179d88b73d967dd8a97884baa6b347a4823d31ca106a04d0d166b8dc588c"
+    },
+    "workspace-shell-package-many-128-sdk-v2/history.sqlite": {
+      "bytes": 30720,
+      "sha256": "ff2833de93dc034b92453fcf81357a606ba95c0b22dfedfabf57e3aff8574c91"
+    },
+    "workspace-shell-package-many-128-sdk-v2/new.tsv": {
+      "bytes": 11795,
+      "sha256": "8124069ea2c5a9c48a86073b4b941c8cd85582df6dae2d2413990d61d46cc713"
+    },
+    "workspace-shell-package-many-128-sdk-v2/old.tsv": {
+      "bytes": 1266,
+      "sha256": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e"
+    },
+    "workspace-shell-package-many-128-sdk-v2/receipt.json": {
+      "bytes": 159735,
+      "sha256": "88734f2d253f71a834462bb7aeb49beef4c9cebabbeb588482d804dcff79a3f0"
+    },
+    "workspace-shell-package-many-128-sdk-v2/store.sqlite": {
+      "bytes": 344064,
+      "sha256": "fbd74363125fb2a7fdda2a5f54fc9311518570e3f266262aa368ddc2e05c3ba3"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

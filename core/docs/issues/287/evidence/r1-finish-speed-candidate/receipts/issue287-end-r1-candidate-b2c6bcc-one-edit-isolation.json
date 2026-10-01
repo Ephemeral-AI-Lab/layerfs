@@ -1,0 +1,20 @@
+{
+  "schema": "issue287-post-case-isolation-v1",
+  "observed_at_ns": 1790850389802095000,
+  "command": [
+    "docker",
+    "ps",
+    "--no-trunc",
+    "--filter",
+    "ancestor=sha256:b35866b47673c85634fd24b1e862276169374e0e9baf81a67c7c0acaa4d9ada9",
+    "--format",
+    "{{json .}}"
+  ],
+  "exit_code": 0,
+  "stdout": "",
+  "host_commands": [],
+  "no_active_candidate_instance": true,
+  "original_cleanup_status": "UNKNOWN",
+  "no_receipt_relabel": true,
+  "retained_exited_artifacts": true
+}

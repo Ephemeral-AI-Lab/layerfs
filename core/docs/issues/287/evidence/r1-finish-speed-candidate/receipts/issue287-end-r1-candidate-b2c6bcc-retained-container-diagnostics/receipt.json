@@ -1,0 +1,58 @@
+{
+  "schema": "issue287-retained-exited-candidate-diagnostics-v1",
+  "image_id": "sha256:b35866b47673c85634fd24b1e862276169374e0e9baf81a67c7c0acaa4d9ada9",
+  "containers": [
+    {
+      "inventory": {
+        "Command": "\"/layerfs-daemon --idle-sandbox 1 0 0\"",
+        "CreatedAt": "2026-10-01 18:25:58 +0800 CST",
+        "HealthStatus": "none",
+        "ID": "ae51a3d544b548ad1b1abba4d47106daf871f006bbd43024e605cf0f15297285",
+        "Image": "sha256:b35866b47673c85634fd24b1e862276169374e0e9baf81a67c7c0acaa4d9ada9",
+        "Labels": "desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/23456/tcp=127.0.0.1:,io.layerfs.owner=agent-sdk,io.layerfs.sandbox-name=bench-7ca74ab947290418-83871",
+        "LocalVolumes": "1",
+        "Mounts": "layerfs-5c5d7621dd0fa53414c6beffee76632f-root",
+        "Names": "layerfs-5c5d7621dd0fa53414c6beffee76632f",
+        "Networks": "bridge",
+        "Platform": {
+          "architecture": "arm64",
+          "os": "linux"
+        },
+        "Ports": "",
+        "RunningFor": "About a minute ago",
+        "Size": "8.19kB (virtual 13.5MB)",
+        "State": "exited",
+        "Status": "Exited (137) About a minute ago"
+      },
+      "log_exit_code": 0,
+      "observed_at_ns": 1790850437903375000
+    },
+    {
+      "inventory": {
+        "Command": "\"/layerfs-daemon --idle-sandbox 1 0 0\"",
+        "CreatedAt": "2026-10-01 18:25:08 +0800 CST",
+        "HealthStatus": "none",
+        "ID": "d91b4178547fb57ebf92b5f84fbfae5e43b03af268398c2e9c53c93b50498ede",
+        "Image": "sha256:b35866b47673c85634fd24b1e862276169374e0e9baf81a67c7c0acaa4d9ada9",
+        "Labels": "desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/23456/tcp=127.0.0.1:,io.layerfs.owner=agent-sdk,io.layerfs.sandbox-name=bench-197dfd91ffa3a8c4-83640",
+        "LocalVolumes": "1",
+        "Mounts": "layerfs-a33e336058be10db3fea64d7ab164198-root",
+        "Names": "layerfs-a33e336058be10db3fea64d7ab164198",
+        "Networks": "bridge",
+        "Platform": {
+          "architecture": "arm64",
+          "os": "linux"
+        },
+        "Ports": "",
+        "RunningFor": "2 minutes ago",
+        "Size": "8.19kB (virtual 13.5MB)",
+        "State": "exited",
+        "Status": "Exited (137) About a minute ago"
+      },
+      "log_exit_code": 0,
+      "observed_at_ns": 1790850437965462000
+    }
+  ],
+  "mutation": "none; logs/inspect only; exited containers and volumes retained",
+  "latency_claim": false
+}

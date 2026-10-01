@@ -1,0 +1,32 @@
+{
+  "schema": "issue287-post-timeout-isolation-classification-v1",
+  "observed_at_ns": 1790850374156096000,
+  "original_audit": "issue287-end-r1-candidate-b2c6bcc-clean-isolation.json",
+  "original_container": {
+    "Command": "\"/layerfs-daemon --idle-sandbox 1 0 0\"",
+    "CreatedAt": "2026-10-01 18:25:08 +0800 CST",
+    "HealthStatus": "none",
+    "ID": "d91b4178547fb57ebf92b5f84fbfae5e43b03af268398c2e9c53c93b50498ede",
+    "Image": "sha256:b35866b47673c85634fd24b1e862276169374e0e9baf81a67c7c0acaa4d9ada9",
+    "Labels": "desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/23456/tcp=127.0.0.1:,io.layerfs.owner=agent-sdk,io.layerfs.sandbox-name=bench-197dfd91ffa3a8c4-83640",
+    "LocalVolumes": "1",
+    "Mounts": "layerfs-a33e336058be10db3fea64d7ab164198-root",
+    "Names": "layerfs-a33e336058be10db3fea64d7ab164198",
+    "Networks": "bridge",
+    "Platform": {
+      "architecture": "arm64",
+      "os": "linux"
+    },
+    "Ports": "",
+    "RunningFor": "49 seconds ago",
+    "Size": "8.19kB (virtual 13.5MB)",
+    "State": "exited",
+    "Status": "Exited (137) 30 seconds ago"
+  },
+  "original_container_exited": true,
+  "original_host_process_absent": true,
+  "original_container_not_active": true,
+  "retained_original_container_and_volume": true,
+  "original_cleanup_status": "UNKNOWN",
+  "reason": "Original audit asserted absence of all containers, but retained exited137 container exists. Exited original instance cannot overlap next independent case; no cleanup PASS or source/oracle change follows. Exact instance filtered, no removal or interruption."
+}

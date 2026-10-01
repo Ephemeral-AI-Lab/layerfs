@@ -1,0 +1,45 @@
+[
+    {
+        "Id": "sha256:b35866b47673c85634fd24b1e862276169374e0e9baf81a67c7c0acaa4d9ada9",
+        "RepoTags": [],
+        "RepoDigests": [],
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-10-01T10:25:06.555224503Z",
+        "Config": {
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            ],
+            "Entrypoint": [
+                "/layerfs-daemon"
+            ],
+            "WorkingDir": "/"
+        },
+        "Architecture": "arm64",
+        "Os": "linux",
+        "Size": 5915970,
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:9fd9b3248f2fb670edfab1393d1d1e8cd828eb9c65de376b2fcc23268a45d500",
+                "sha256:048de5503519567c33e4c22a2926af6769869b2bf4fe6f2cbea74c0d3bfbc05d",
+                "sha256:bc809d99c71ef0ebf4303233be69a181e54b952f36078c4b9eed6f536c9af9f8"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "2026-10-01T10:25:06.712769003Z"
+        },
+        "Descriptor": {
+            "mediaType": "application/vnd.oci.image.index.v1+json",
+            "digest": "sha256:b35866b47673c85634fd24b1e862276169374e0e9baf81a67c7c0acaa4d9ada9",
+            "size": 855
+        },
+        "Identity": {
+            "Build": [
+                {
+                    "Ref": "ufas0l2qvf8pwtsnbm3qx6698",
+                    "CreatedAt": "2026-10-01T10:25:06.763716337Z"
+                }
+            ]
+        }
+    }
+]

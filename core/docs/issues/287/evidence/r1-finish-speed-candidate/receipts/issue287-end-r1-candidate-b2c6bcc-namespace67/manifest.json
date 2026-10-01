@@ -1,0 +1,61 @@
+{
+  "files": {
+    "init-build.json": {
+      "bytes": 786,
+      "sha256": "c79a58fb3f3ba423eee35fc599b8bcfb32755e514926cd364d8c14082ba7e1e7"
+    },
+    "preparation-reuse.json": {
+      "bytes": 92716,
+      "sha256": "1e7ef1d89da86b5fa92e6b189b53d5cf49277f01ddf7212be438ffa51c64cfde"
+    },
+    "prepared-artifacts.json": {
+      "bytes": 188272,
+      "sha256": "288f24b803c4c7a94a4ea10883856aed5ff3ddd55c5d5d9021b583c45eb32992"
+    },
+    "run.json": {
+      "bytes": 284116,
+      "sha256": "d6aee21c138a73736ab4befffebe7b24b746958645b718ea4186a0df17892ec8"
+    },
+    "workspace-namespace-move-replace-descendants-67-sdk-v1/case.before": {
+      "bytes": 1800,
+      "sha256": "0b8dd0c73fa76b4994dc28b2ee0a48a927616d4343b3c5d02cf2b031954cae05"
+    },
+    "workspace-namespace-move-replace-descendants-67-sdk-v1/case.verify": {
+      "bytes": 1888,
+      "sha256": "64de87be33498c8e7a754ad862e5b7004179d294de19bd929a920c273ded816e"
+    },
+    "workspace-namespace-move-replace-descendants-67-sdk-v1/driver.stderr": {
+      "bytes": 54399,
+      "sha256": "7e67b40837d07ab9cc7a0344714d39ffc288134696e83b089d3f9371b5690355"
+    },
+    "workspace-namespace-move-replace-descendants-67-sdk-v1/driver.stdout": {
+      "bytes": 986,
+      "sha256": "cd651de39498c775ac107933461ccc2ab98ee2765484d3957740c1bde9c26b63"
+    },
+    "workspace-namespace-move-replace-descendants-67-sdk-v1/fixture.before": {
+      "bytes": 256,
+      "sha256": "d377be5050c6facc9459961fa43792c1c12f27e4e2371c51a365768a300e184e"
+    },
+    "workspace-namespace-move-replace-descendants-67-sdk-v1/history.sqlite": {
+      "bytes": 30720,
+      "sha256": "7e1409defdee7bcb9821fa16cfee8581385fb8fabbe548081c931fd8254f5890"
+    },
+    "workspace-namespace-move-replace-descendants-67-sdk-v1/new.tsv": {
+      "bytes": 7675,
+      "sha256": "8775077ffd613372784857a5227c77c06ffeac7ebda831ff28411e0f1e159eab"
+    },
+    "workspace-namespace-move-replace-descendants-67-sdk-v1/old.tsv": {
+      "bytes": 7676,
+      "sha256": "478aa879f6663fae094492a1a5568809d87a7b6577556e478ed3f0690436be68"
+    },
+    "workspace-namespace-move-replace-descendants-67-sdk-v1/receipt.json": {
+      "bytes": 159988,
+      "sha256": "1044b6dddefd6997f9af0556df576bb0d8d8e85154d7202617326b19ec4becdc"
+    },
+    "workspace-namespace-move-replace-descendants-67-sdk-v1/store.sqlite": {
+      "bytes": 151552,
+      "sha256": "936549805f37cdaa64e7e057f77f9f35ce2a14fa0eb632b6aa9769b7a627243e"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

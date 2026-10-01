@@ -1,0 +1,15 @@
+{
+  "command": [
+    "docker",
+    "build",
+    "-q",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-end-r1-candidate-b2c6bcc-overwrite4k/image-context"
+  ],
+  "exit_code": 0,
+  "mode": "build",
+  "started_ns": 125095243928041,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "954bdadd4defb5ae90550ce281579c8f9feb402d20e15742cc44fd92c12ed868",
+  "timeout": false,
+  "wall_ns": 434073250
+}

@@ -1,0 +1,7 @@
+{
+  "case": "workspace-commit-one-edit-retained-writes-4097-v3",
+  "performance_receipt_sha256": "f730b98b1a9417799ebd6885456d06f0b24ffa433a82f922f40baaecaf8f614a",
+  "reason": "performance/route/pin/cleanup did not complete",
+  "sample_count": 0,
+  "status": "NOT_RUN"
+}

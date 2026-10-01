@@ -1,0 +1,3 @@
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-server)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-api/sdk)
+    Finished `release` profile [optimized] target(s) in 0.91s
