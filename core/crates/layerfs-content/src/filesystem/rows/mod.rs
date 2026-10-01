@@ -15,12 +15,15 @@ mod borrowed;
 mod check;
 mod checked;
 mod declaration;
+mod point;
+mod preparation;
 mod resident_cursor;
 mod source;
 mod spool;
 mod spool_bindings;
 mod spool_compatibility;
 mod spool_cursor;
+mod spool_point;
 mod spool_slots;
 mod spool_writer;
 mod update;
@@ -33,7 +36,10 @@ pub use borrowed::{CompatibilityBindingRows, SliceBindingRows};
 pub use check::{check_binding_input, check_input};
 pub use checked::CheckedBindings;
 pub use declaration::SpoolDeclaration;
+pub use point::{BindingPoint, BindingSourceId, BINDING_POINT_BYTES, BINDING_SOURCE_BYTES};
+pub use preparation::SpoolPreparation;
 pub(crate) use source::lookup_binding;
+pub(crate) use source::ordinal_binding;
 pub(crate) use source::serial_in_range;
 pub use source::{
     DirectoryRowSource, InodeRowSource, PreparedRows, RowSource, SerialRowSource,

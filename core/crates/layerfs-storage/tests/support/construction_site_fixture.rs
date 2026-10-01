@@ -1,0 +1,257 @@
+//! Actual immutable Slice row/source capabilities and independent native facts.
+
+use std::os::unix::fs::MetadataExt;
+use std::path::Path;
+
+use layerfs_content::filesystem::identity::InodeScope;
+use layerfs_content::filesystem::input::{DirectoryUpdate, FilesystemInput, FilesystemResources};
+use layerfs_content::filesystem::path::PathName;
+use layerfs_content::filesystem::rows::{
+    BindingPoint, BindingRows, DirectoryHeader, SliceBindingRows,
+};
+use layerfs_content::filesystem::state::{
+    SiteBirthSeal, SiteConstructionScopes, SiteRecord, SiteScope, StateRecord,
+};
+use layerfs_content::ObjectId;
+use layerfs_storage::construction_state::{ScratchAuthority, ScratchOwnerStatus, ScratchSession};
+use rusqlite::{Connection, OpenFlags};
+
+use super::{oracle, roots_oracle};
+
+pub const CLASS: u64 = 16 * 1024 * 1024;
+pub const ROWS: u64 = 65536;
+
+pub fn with_source<T>(
+    count: u32,
+    body: impl FnOnce(&SliceBindingRows<'_>, DirectoryHeader) -> T,
+) -> T {
+    let directories = [DirectoryUpdate {
+        parent: 1,
+        changes: (0..count)
+            .map(|ordinal| {
+                (
+                    PathName::new(&format!("n{ordinal:08x}")).unwrap(),
+                    Some(u64::from(count) + 1 - u64::from(ordinal)),
+                )
+            })
+            .collect(),
+    }];
+    let input = FilesystemInput {
+        base: None,
+        scope: InodeScope::from_object(ObjectId::from_bytes(&[0x42; 32]).unwrap()),
+        root_serial: 1,
+        directories: &directories,
+        inodes: &[],
+        new_inodes: &[],
+        resources: FilesystemResources::default(),
+    };
+    let source = SliceBindingRows::new(&input).unwrap();
+    let header = source.directory_header(1).unwrap().unwrap();
+    body(&source, header)
+}
+
+/// A distinct maximum-width source fixture; the accepted parent1 fixture above
+/// remains unchanged for identity-matched reuse of its earlier proof.
+pub fn with_maximum_parent_source<T>(
+    count: u32,
+    body: impl FnOnce(&SliceBindingRows<'_>, DirectoryHeader) -> T,
+) -> T {
+    let directories = [DirectoryUpdate {
+        parent: i64::MAX as u64,
+        changes: (0..count)
+            .map(|ordinal| {
+                (
+                    PathName::new(&format!("n{ordinal:08x}")).unwrap(),
+                    Some(u64::from(count) + 1 - u64::from(ordinal)),
+                )
+            })
+            .collect(),
+    }];
+    let input = FilesystemInput {
+        base: None,
+        scope: InodeScope::from_object(ObjectId::from_bytes(&[0x42; 32]).unwrap()),
+        root_serial: 1,
+        directories: &directories,
+        inodes: &[],
+        new_inodes: &[],
+        resources: FilesystemResources::default(),
+    };
+    let source = SliceBindingRows::new(&input).unwrap();
+    let header = source.directory_header(i64::MAX as u64).unwrap().unwrap();
+    body(&source, header)
+}
+
+pub fn scopes(session: &ScratchSession, source: &impl BindingRows) -> SiteConstructionScopes {
+    SiteConstructionScopes::new(
+        session.selection().clone(),
+        source.binding_source_id().unwrap(),
+    )
+    .unwrap()
+}
+
+pub fn status(authority: &ScratchAuthority, token: u64) -> ScratchOwnerStatus {
+    authority
+        .status()
+        .unwrap()
+        .into_iter()
+        .find(|owner| owner.token == token)
+        .unwrap()
+}
+
+pub fn external(path: &Path) -> Connection {
+    let connection = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NOFOLLOW,
+    )
+    .unwrap();
+    connection.busy_timeout(std::time::Duration::ZERO).unwrap();
+    connection
+        .execute_batch("PRAGMA synchronous=OFF; PRAGMA journal_mode=MEMORY;")
+        .unwrap();
+    connection
+}
+
+pub fn scalar(connection: &Connection, sql: &str) -> u64 {
+    let value: i64 = connection.query_row(sql, [], |row| row.get(0)).unwrap();
+    u64::try_from(value).expect("nonnegative actual SQLite scalar")
+}
+
+pub fn rows(path: &Path, table: &str) -> u64 {
+    scalar(
+        &external(path),
+        match table {
+            "sites" => "SELECT COUNT(*) FROM binding_sites",
+            "roots" => "SELECT COUNT(*) FROM directory_roots",
+            _ => panic!("unregistered count table"),
+        },
+    )
+}
+
+pub fn scope_bytes(scope: &SiteScope) -> [u8; 89] {
+    oracle::scope(
+        *scope.state().selection().selector(),
+        scope.state().selection().token(),
+        *scope.state().selection().owner_binding().unwrap(),
+        scope.source_id().as_bytes(),
+    )
+}
+
+pub fn point_bytes(scope: &SiteScope, header: DirectoryHeader, ordinal: u32) -> [u8; 28] {
+    oracle::point(
+        scope.source_id().as_bytes(),
+        header.parent(),
+        header.ordinal(),
+        ordinal,
+    )
+}
+
+pub fn birth(
+    scope: &SiteScope,
+    header: DirectoryHeader,
+    ordinal: u32,
+    has_base: bool,
+) -> SiteRecord {
+    SiteRecord::birth(
+        scope,
+        u64::from(header.binding_count()) + 1 - u64::from(ordinal),
+        BindingPoint::new(&header, ordinal).unwrap(),
+        has_base,
+    )
+    .unwrap()
+}
+
+pub fn expected_birth(
+    scope: &SiteScope,
+    header: DirectoryHeader,
+    count: u32,
+    has_base: impl Fn(u32) -> bool,
+) -> SiteBirthSeal {
+    let mut expected = oracle::Transcript::new(scope_bytes(scope), false);
+    for ordinal in 0..count {
+        expected.append(
+            u64::from(header.binding_count()) + 1 - u64::from(ordinal),
+            u8::from(has_base(ordinal)),
+            point_bytes(scope, header, ordinal),
+        );
+    }
+    SiteBirthSeal::decode(scope, &expected.seal()).unwrap()
+}
+
+pub fn insert(
+    session: &mut ScratchSession,
+    scope: &SiteScope,
+    header: DirectoryHeader,
+    count: u32,
+    has_base: impl Fn(u32) -> bool,
+) {
+    let mut batch = Vec::with_capacity(128);
+    for ordinal in 0..count {
+        batch.push(birth(scope, header, ordinal, has_base(ordinal)));
+        if batch.len() == 128 {
+            assert_eq!(
+                session.site_insert_batch(scope, &batch).unwrap(),
+                layerfs_content::filesystem::state::ClaimAdmission::Fresh
+            );
+            batch.clear();
+        }
+    }
+    if !batch.is_empty() {
+        assert_eq!(
+            session.site_insert_batch(scope, &batch).unwrap(),
+            layerfs_content::filesystem::state::ClaimAdmission::Fresh
+        );
+    }
+}
+
+pub fn root(scope: &layerfs_content::filesystem::state::StateScope, serial: u64) -> StateRecord {
+    StateRecord::directory_root(
+        scope,
+        serial,
+        ObjectId::from_bytes(&roots_oracle::root(serial)).unwrap(),
+    )
+    .unwrap()
+}
+
+pub fn identity(metadata: &std::fs::Metadata) -> [u8; 24] {
+    let mut bytes = [0; 24];
+    bytes[..8].copy_from_slice(&metadata.dev().to_be_bytes());
+    bytes[8..16].copy_from_slice(&metadata.ino().to_be_bytes());
+    bytes[16..20].copy_from_slice(&metadata.uid().to_be_bytes());
+    bytes[20..].copy_from_slice(&metadata.mode().to_be_bytes());
+    bytes
+}
+
+pub fn assert_header(base: &Path, owner: &ScratchOwnerStatus, scope: &SiteScope) {
+    let header: Vec<u8> = external(&owner.path)
+        .query_row("SELECT header FROM session_owner WHERE id=1", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(header.len(), 200);
+    assert_eq!(&header[..8], b"LFCSOWN3");
+    assert_eq!(&header[8..10], &3u16.to_be_bytes());
+    assert_eq!(&header[10..16], &[0; 6]);
+    assert_eq!(&header[16..24], &owner.token.to_be_bytes());
+    assert_eq!(&header[24..56], &owner.selector);
+    assert_eq!(&header[192..], &scope.source_id().as_bytes());
+    let parent = identity(&std::fs::metadata(base).unwrap());
+    let directory = identity(&std::fs::metadata(owner.path.parent().unwrap()).unwrap());
+    let file = identity(&std::fs::metadata(&owner.path).unwrap());
+    assert_eq!(&header[120..144], &parent);
+    assert_eq!(&header[144..168], &directory);
+    assert_eq!(&header[168..192], &file);
+    let mut digest = blake3::Hasher::new();
+    digest.update(b"layerfs/construction-state/native/v3\0");
+    digest.update(&header[88..120]);
+    digest.update(&parent);
+    digest.update(&directory);
+    digest.update(&file);
+    digest.update(&owner.selector);
+    digest.update(&owner.token.to_be_bytes());
+    digest.update(&scope.source_id().as_bytes());
+    assert_eq!(&header[56..88], digest.finalize().as_bytes());
+    assert_eq!(
+        &header[56..88],
+        scope.state().selection().owner_binding().unwrap()
+    );
+}

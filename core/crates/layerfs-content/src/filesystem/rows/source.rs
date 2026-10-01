@@ -45,6 +45,17 @@ pub trait SerialRowSource {
 /// requires that a cursor starts at the beginning of its sequence and that the
 /// key lookups answer the same rows the cursors would reach.
 pub trait RowSource {
+    /// Explicit bounded ordinal capability for the selected legacy adapter.
+    /// Unsupported is never caught to reconstruct a full directory row.
+    fn legacy_binding_at(
+        &self,
+        _parent: u64,
+        _ordinal: u32,
+    ) -> ContentResult<(crate::filesystem::path::PathName, Option<u64>)> {
+        Err(ContentError::UnsupportedProfile {
+            what: "binding ordinal access",
+        })
+    }
     /// Directory rows this update declares.
     fn directory_rows(&self) -> usize;
     /// Typed inode values this update declares.
@@ -99,6 +110,29 @@ pub(crate) fn lookup_binding(
         Some(serial) if serial_in_range(serial) => Ok(super::BindingLookup::Present(serial)),
         Some(_) => Err(ContentError::InvalidRecord("inode serial")),
     }
+}
+
+pub(crate) fn ordinal_binding(
+    row: &DirectoryUpdate,
+    ordinal: u32,
+) -> ContentResult<(crate::filesystem::path::PathName, Option<u64>)> {
+    if !serial_in_range(row.parent) {
+        return Err(ContentError::InvalidRecord("directory parent"));
+    }
+    let at = ordinal as usize;
+    let (name, child) = row
+        .changes
+        .get(at)
+        .ok_or(ContentError::InvalidRecord("binding ordinal"))?;
+    if at > 0 && row.changes[at - 1].0 >= *name
+        || row.changes.get(at + 1).is_some_and(|next| next.0 <= *name)
+    {
+        return Err(ContentError::NonCanonicalOrdering);
+    }
+    if child.is_some_and(|serial| !serial_in_range(serial)) {
+        return Err(ContentError::InvalidRecord("inode serial"));
+    }
+    Ok((name.clone(), *child))
 }
 
 /// One prepared update: its rows plus the fields the operation is addressed with.

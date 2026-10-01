@@ -1,0 +1,46 @@
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-history)
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_site_validation.rs:685:17
+    |
+685 |                 drop(objects);
+    |                 ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_site_validation.rs:685:22
+    |
+685 |                 drop(objects);
+    |                      ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+    = note: `-D clippy::drop-non-drop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::drop_non_drop)]`
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_site_validation.rs:686:17
+    |
+686 |                 drop(source);
+    |                 ^^^^^^^^^^^^
+    |
+note: argument has type `PointSource<'_>`
+   --> crates/layerfs-content/tests/binding_site_validation.rs:686:22
+    |
+686 |                 drop(source);
+    |                      ^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-content/tests/binding_site_validation.rs:718:9
+    |
+718 |         drop(objects);
+    |         ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_content::FilesystemObjects<'_>`
+   --> crates/layerfs-content/tests/binding_site_validation.rs:718:14
+    |
+718 |         drop(objects);
+    |              ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: could not compile `layerfs-content` (test "binding_site_validation") due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...

@@ -149,6 +149,17 @@ pub struct FilesystemInput<'a> {
 }
 
 impl RowSource for FilesystemInput<'_> {
+    fn legacy_binding_at(
+        &self,
+        parent: u64,
+        ordinal: u32,
+    ) -> ContentResult<(PathName, Option<u64>)> {
+        let index = self
+            .directories
+            .binary_search_by_key(&parent, |row| row.parent)
+            .map_err(|_| ContentError::InvalidRecord("directory selection"))?;
+        crate::filesystem::rows::ordinal_binding(&self.directories[index], ordinal)
+    }
     fn directory_rows(&self) -> usize {
         self.directories.len()
     }

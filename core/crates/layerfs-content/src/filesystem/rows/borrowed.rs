@@ -3,12 +3,14 @@
 use super::binding::{BindingAuthority, DirectoryHeader};
 use super::resident_cursor::{binding_bytes, ResidentBindings};
 use super::{
-    BindingLookup, BindingRowSource, BindingRows, DirectoryHeaderSource, DirectoryRowSource,
-    InodeRowSource, PreparedRows, RowSource, SerialRowSource,
+    BindingLookup, BindingPoint, BindingRowSource, BindingRows, BindingSourceId,
+    DirectoryHeaderSource, DirectoryRowSource, InodeRowSource, PreparedRows, RowSource,
+    SerialRowSource,
 };
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::identity::InodeScope;
 use crate::filesystem::input::{DirectoryUpdate, FilesystemInput, FilesystemResources};
+use crate::filesystem::path::PathName;
 use crate::filesystem::root::FilesystemRootId;
 use crate::object::inode_leaf::InodeValue;
 
@@ -42,6 +44,25 @@ impl<'a> SliceBindingRows<'a> {
 }
 
 impl BindingRows for SliceBindingRows<'_> {
+    fn binding_source_id(&self) -> ContentResult<BindingSourceId> {
+        Ok(self.authority.source_id())
+    }
+    fn binding_at(&self, point: &BindingPoint) -> ContentResult<(PathName, Option<u64>)> {
+        if !self.authority.accepts_point(point) {
+            return Err(ContentError::InvalidRecord("directory issuer"));
+        }
+        let index =
+            usize::try_from(point.header_descriptor()).map_err(|_| ContentError::LengthOverflow)?;
+        let row = self
+            .input
+            .directories
+            .get(index)
+            .ok_or(ContentError::InvalidRecord("directory selection"))?;
+        if row.parent != point.parent() {
+            return Err(ContentError::InvalidRecord("directory selection"));
+        }
+        super::ordinal_binding(row, point.binding_ordinal())
+    }
     fn directory_headers(&self) -> ContentResult<Box<dyn DirectoryHeaderSource + '_>> {
         Ok(Box::new(SliceHeaders { rows: self, at: 0 }))
     }
@@ -82,6 +103,13 @@ impl BindingRows for SliceBindingRows<'_> {
 }
 
 impl RowSource for SliceBindingRows<'_> {
+    fn legacy_binding_at(
+        &self,
+        parent: u64,
+        ordinal: u32,
+    ) -> ContentResult<(PathName, Option<u64>)> {
+        self.input.legacy_binding_at(parent, ordinal)
+    }
     fn directory_rows(&self) -> usize {
         self.input.directory_rows()
     }
@@ -164,6 +192,19 @@ impl<'a> CompatibilityBindingRows<'a> {
 }
 
 impl BindingRows for CompatibilityBindingRows<'_> {
+    fn binding_source_id(&self) -> ContentResult<BindingSourceId> {
+        Ok(self.authority.source_id())
+    }
+    fn binding_at(&self, point: &BindingPoint) -> ContentResult<(PathName, Option<u64>)> {
+        if !self.authority.accepts_point(point) {
+            return Err(ContentError::InvalidRecord("directory issuer"));
+        }
+        if point.header_descriptor() != point.parent() {
+            return Err(ContentError::InvalidRecord("directory descriptor"));
+        }
+        self.input
+            .legacy_binding_at(point.parent(), point.binding_ordinal())
+    }
     fn directory_headers(&self) -> ContentResult<Box<dyn DirectoryHeaderSource + '_>> {
         Ok(Box::new(CompatibilityHeaders {
             authority: &self.authority,
@@ -211,6 +252,13 @@ impl BindingRows for CompatibilityBindingRows<'_> {
 }
 
 impl RowSource for CompatibilityBindingRows<'_> {
+    fn legacy_binding_at(
+        &self,
+        parent: u64,
+        ordinal: u32,
+    ) -> ContentResult<(PathName, Option<u64>)> {
+        self.input.legacy_binding_at(parent, ordinal)
+    }
     fn directory_rows(&self) -> usize {
         self.input.directory_rows()
     }

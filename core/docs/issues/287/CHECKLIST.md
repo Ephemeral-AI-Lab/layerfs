@@ -1,16 +1,16 @@
 # Issue287 current implementation checklist
 
 > **Status: Current planning checklist; no release candidate exists.**
-> Current published checkpoint: `ad1d3514b08a000386a14109ed636ce2b5a6e251`
-> (R1d-binding-claims scoped exits PASS; full R1 remains PARTIAL/open).
+> Current published checkpoint: `420e6a2c0149326fe2c380ff0e4156eadd3d326d`
+> (R1d-prefetch64 scoped exits PASS; full R1 remains PARTIAL/open).
 
 Assignment: #287 implementation only. Benchmark qualification is delegated/unrun
 under #288. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
 packet; [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) is append-only.
 
-Current milestone: **R1d-prefetch64 bounded validation demand producer**.
-R1d-binding-claims commit/recount/normal push and #287 comment5920747051 confirmed;
-[current delivery](R1D-BINDING-CLAIMS-DELIVERY.md) records actual scoped proofs.
+Current milestone: **R1d-binding-sites combined paged site and base-fact authority**.
+R1d-prefetch64 commit/recount/normal push and #287 comment5921238411 confirmed;
+[current delivery](R1D-PREFETCH64-DELIVERY.md) records actual scoped proofs.
 Graph authority/engine/physical remain open, native selected-provider refusal
 stays explicit. [Selected claim contract](R1D-BINDING-CLAIMS-FREEZE.md) freezes
 typed exclusive claims and known retirement before DirectoryRoots construction.
@@ -104,7 +104,15 @@ R1d-prefetch64 current gates:
 - [x] Complete scalar count/EOF admission before prefetch grouped reads; bounded64 demand/missing/result waves in the real common validator (earlier allocation reads preserved).
 - [x] Independent byte/root/semantic and actual request/allocation/read/site-count proofs, including duplicate/absence/cache pressure and original provider failure custody (115 distinct primary; global physical admission remains open).
 - [x] Scoped owning locked checks and explicit memo/alias/graph/native/physical/#288 gaps.
-- [ ] Exact staged/committed LOC, checkpoint commit/push/publication and #287 update.
+- [x] Exact staged/committed LOC, checkpoint commit/push/publication and #287 update (420e6a2c0/comment5921238411).
+
+R1d-binding-sites prospective gates:
+
+- [x] Published parent, concrete Point/SourceId/preparation/native profile/phase/record/birth/final/index contract and nonoverlapping ownership selected.
+- [x] Issued bounded point access and combined paged site/fact authority in the real common Server/C1 path; legacy v1/v2 preserved.
+- [x] Independent identity/alias/work and actual native maximum/projection/Unknown/retirement/resource proofs (selected direct Darwin scope, including i64MAX parent width; global heap/physical admission remains open).
+- [x] Coherent owning checks, contracts/docs and explicit remaining graph/native/global/physical/#288 gaps (228 distinct primary PASS; failures/corrections retained).
+- [ ] Exact staged/committed LOC, checkpoint publication and #287 update.
 
 Named submilestones and dependencies:
 

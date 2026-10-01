@@ -71,6 +71,7 @@ pub struct FilesystemResult {
 
 mod compatibility;
 mod construction;
+mod sites;
 
 pub use compatibility::{
     build_filesystem, build_filesystem_binding_rows_with_state, build_filesystem_timed,
@@ -81,6 +82,9 @@ pub use compatibility::{
 pub use construction::{
     build_filesystem_binding_rows_with_construction_state,
     update_filesystem_binding_rows_with_construction_state,
+};
+pub use sites::{
+    build_filesystem_binding_rows_with_site_state, update_filesystem_binding_rows_with_site_state,
 };
 
 fn run_binding_state<'b>(

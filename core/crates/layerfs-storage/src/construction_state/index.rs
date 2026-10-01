@@ -27,7 +27,7 @@ fn blob(value: ValueRef<'_>, length: usize) -> StorageResult<&[u8]> {
 
 pub(crate) fn verify_header(
     connection: &Connection,
-    header: &[u8; 192],
+    header: &[u8],
     seal: Option<&StateSeal>,
 ) -> StorageResult<()> {
     let mut statement = connection.prepare(
@@ -37,7 +37,7 @@ pub(crate) fn verify_header(
     let row = rows.next()?.ok_or(StorageError::Integrity(
         "construction scratch owner missing",
     ))?;
-    if blob(row.get_ref(0)?, 192)? != header {
+    if blob(row.get_ref(0)?, header.len())? != header {
         return Err(StorageError::Integrity(
             "construction scratch owner association",
         ));

@@ -14,7 +14,10 @@ use std::path::{Path, PathBuf};
 use super::binding::BindingAuthority;
 use super::declaration::{table_bytes, FORMAT_VERSION, HEADER_BYTES};
 use super::spool_writer::DirectoryWrite;
-use super::{InodeRowSource, RowSource, SerialRowSource, SpoolDeclaration};
+use super::{
+    BindingPoint, BindingRows, InodeRowSource, RowSource, SerialRowSource, SpoolDeclaration,
+    SpoolPreparation,
+};
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::input::DirectoryUpdate;
 use crate::object::inode_leaf::InodeValue;
@@ -75,7 +78,15 @@ impl RowSpool {
         new_rows: usize,
         capacity: u64,
     ) -> ContentResult<Self> {
-        Self::create_inner(path, directory_rows, inode_rows, new_rows, capacity, None)
+        Self::create_inner(
+            path,
+            directory_rows,
+            inode_rows,
+            new_rows,
+            capacity,
+            None,
+            None,
+        )
     }
 
     /// Admits the complete declared shape before file creation or any write.
@@ -84,11 +95,16 @@ impl RowSpool {
         declaration: SpoolDeclaration,
         capacity: u64,
     ) -> ContentResult<Self> {
-        if declaration.required_bytes_upper()? > capacity {
-            return Err(ContentError::ResourceUnavailable {
-                what: "prepared row spool",
-            });
-        }
+        Self::create_prepared(path, SpoolPreparation::new(declaration, capacity)?)
+    }
+
+    /// Moves the already admitted source authority into this exact private file.
+    pub fn create_prepared(path: PathBuf, preparation: SpoolPreparation) -> ContentResult<Self> {
+        let SpoolPreparation {
+            declaration,
+            capacity,
+            authority,
+        } = preparation;
         Self::create_inner(
             path,
             declaration.directories,
@@ -96,6 +112,7 @@ impl RowSpool {
             declaration.fresh,
             capacity,
             Some(declaration),
+            Some(authority),
         )
     }
 
@@ -106,6 +123,7 @@ impl RowSpool {
         new_rows: usize,
         capacity: u64,
         declaration: Option<SpoolDeclaration>,
+        authority: Option<BindingAuthority>,
     ) -> ContentResult<Self> {
         let table_end = table_bytes(directory_rows, inode_rows, new_rows)?;
         if table_end > capacity {
@@ -113,7 +131,10 @@ impl RowSpool {
                 what: "prepared row spool",
             });
         }
-        let authority = BindingAuthority::new()?;
+        let authority = match authority {
+            Some(authority) => authority,
+            None => BindingAuthority::new()?,
+        };
         let file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -324,6 +345,18 @@ impl RowSpool {
 }
 
 impl RowSource for RowSpool {
+    fn legacy_binding_at(
+        &self,
+        parent: u64,
+        ordinal: u32,
+    ) -> ContentResult<(crate::filesystem::path::PathName, Option<u64>)> {
+        self.ensure_sealed()?;
+        let (index, slot) = self
+            .find(KIND_DIRECTORY, parent)?
+            .ok_or(ContentError::InvalidRecord("directory selection"))?;
+        let header = self.slot_header(index, &slot)?;
+        self.binding_at(&BindingPoint::new(&header, ordinal)?)
+    }
     fn directory_rows(&self) -> usize {
         self.directory_rows
     }

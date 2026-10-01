@@ -11,6 +11,7 @@ pub(crate) const ROW_LIMIT: u64 = 65_536;
 pub(crate) const RECORD_BYTES: u64 = 63;
 const SCHEMA: &str = include_str!("../../sql/construction_scratch.sql");
 const PHASED_SCHEMA: &str = include_str!("../../sql/construction_phased.sql");
+const SITES_SCHEMA: &str = include_str!("../../sql/construction_sites.sql");
 
 const LIMITS: &[(Limit, i32)] = &[
     (Limit::SQLITE_LIMIT_LENGTH, 65_536),
@@ -38,9 +39,10 @@ pub(crate) fn open(path: &std::path::Path) -> StorageResult<Connection> {
 
 pub(crate) fn initialize(
     connection: &Connection,
-    header: &[u8; 192],
+    header: &[u8],
     plan: Plan,
     claim_scope: Option<&[u8; 81]>,
+    site_scope: Option<&[u8; 89]>,
 ) -> StorageResult<ScratchProfile> {
     let journal: String =
         connection.query_row("PRAGMA journal_mode = MEMORY", [], |row| row.get(0))?;
@@ -66,7 +68,7 @@ pub(crate) fn initialize(
                 connection.execute_batch(SCHEMA)?;
                 connection.execute(
                     "INSERT INTO session_owner VALUES (1,?1,NULL,0,0,0,NULL)",
-                    [header.as_slice()],
+                    [header],
                 )?
             }
             Plan::ClaimsThenRoots {
@@ -77,7 +79,29 @@ pub(crate) fn initialize(
                     .ok_or(StorageError::Integrity("construction scratch phased scope"))?;
                 connection.execute_batch(PHASED_SCHEMA)?;
                 connection.execute("INSERT INTO session_owner VALUES (1,?1,NULL,0,0,0,NULL,?2,?3,?4,0,0,0,NULL,NULL,NULL)",
-                    rusqlite::params![header.as_slice(), directories as i64, bindings as i64, scope.as_slice()])?
+                    rusqlite::params![header, directories as i64, bindings as i64, scope.as_slice()])?
+            }
+            Plan::SitesThenRoots {
+                directories,
+                bindings,
+                ..
+            } => {
+                let scope =
+                    site_scope.ok_or(StorageError::Integrity("construction scratch site scope"))?;
+                connection.execute_batch(SITES_SCHEMA)?;
+                let affected = connection.execute(
+                    "INSERT INTO session_owner VALUES(1,?1,NULL,0,0,0,NULL,?2,?3)",
+                    rusqlite::params![header, directories as i64, bindings as i64],
+                )?;
+                if affected != 1 {
+                    return Err(StorageError::Integrity(
+                        "construction scratch site root owner",
+                    ));
+                }
+                connection.execute(
+                    "INSERT INTO site_owner VALUES(1,?1,0,0,0,NULL,NULL,NULL,NULL,NULL)",
+                    [scope.as_slice()],
+                )?
             }
         };
         if affected != 1 {

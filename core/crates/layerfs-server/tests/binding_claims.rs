@@ -3,9 +3,9 @@
 //! physical progress, release qualification, or performance claim.
 //!
 //! The phase test explicitly alters the owned external test scratch schema:
-//! a fixed root column requires claim_state3. It keeps production triggerdepth0
+//! a fixed root column requires site_owner.stage4. It keeps production triggerdepth0
 //! and foreign_keys1. The assertion proves first-root ordering; the owning C2
-//! provider tests separately prove that phase3 requires exact empty claims.
+//! provider tests separately prove that stage4 requires exact empty sites/indexes.
 
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 
@@ -195,7 +195,7 @@ impl Read for ObservedBody<'_> {
                 assert_eq!(metadata.nlink(), 1);
                 assert_eq!(metadata.blocks() * 512, 16 * 1024 * 1024);
             }
-            assert_eq!(number(self.library, &path, "PRAGMA user_version"), 2);
+            assert_eq!(number(self.library, &path, "PRAGMA user_version"), 3);
             self.scratch = Some(path);
         }
         let bytes = self.input.read(output)?;
@@ -209,7 +209,7 @@ impl Read for ObservedBody<'_> {
                     self.scratch.as_ref().unwrap(),
                     None,
                 );
-                assert_eq!(installed.trim(), "installed phase3 assertion; owner_columns16 root_columns4 trigger_depth0 foreign_keys1 pre_phase0 constraint787");
+                assert_eq!(installed.trim(), "installed stage4 assertion; owner_columns9 site_columns10 root_columns4 trigger_depth0 foreign_keys1 pre_phase0 constraint787");
             }
         }
         Ok(bytes)
@@ -292,7 +292,7 @@ fn stage_with_257_exclusive_directories_retires_claims_before_first_root_insert(
         ),
         0
     );
-    eprintln!("DIAGNOSTIC direct-legacy selected-provider Stage: claims257 directories258, one native16MiB owner; external required-phase3 FK held at every actual rootinsert, triggerdepth0 unchanged; known scratch/spool/Save cleanup. Provider proof separately owns exactemptyphase3; no heap/physical/progress/speed admission.");
+    eprintln!("DIAGNOSTIC direct-legacy selected-provider Stage: sites257 directories258, one native16MiB owner/source-bound profile3; external required-stage4 FK held at every actual rootinsert, triggerdepth0 unchanged; known scratch/spool/Save cleanup. Provider proof separately owns exactemptystage4; no heap/physical/progress/speed admission.");
 }
 
 #[test]
@@ -345,5 +345,91 @@ fn duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cle
         ]
     );
     assert_eq!(f.original_bytes(), ORIGINAL);
-    eprintln!("DIAGNOSTIC direct-legacy selected-provider Stage: duplicate257 repeatsclaim1 across two128-key windows; InvalidInput known, priorStage/base preserved and unfinishedSave/scratch/spool removed; no fallback/retry/performance admission.");
+    eprintln!("DIAGNOSTIC direct-legacy selected-provider Stage: duplicate257 repeatsite1 across two128-key windows; InvalidInput known, priorStage/base preserved and unfinishedSave/scratch/spool removed; no fallback/retry/performance admission.");
+}
+
+#[test]
+fn stored_site_permutation_and_retained_parent_refusal_preserve_real_stage_and_cleanup() {
+    let _serial = SERIAL.lock().unwrap();
+    let f = Fixture::with_directories("site-existing-permutation", 129);
+    let library = selected_library();
+    let workspace = [123; 32];
+    let before = f.list(f.root, b"");
+    assert_eq!(before.len(), 130);
+    let directories: Vec<_> = before
+        .iter()
+        .filter(|(name, _)| name.starts_with(b"d"))
+        .cloned()
+        .collect();
+    assert_eq!(directories.len(), 129);
+    for (name, serial) in &directories {
+        assert!(matches!(
+            f.stat(f.root, name),
+            Response::Stat { kind: 2, serial: found, .. } if found == *serial
+        ));
+        assert!(f.list(f.root, name).is_empty());
+    }
+    let changes: Vec<_> = directories
+        .iter()
+        .enumerate()
+        .map(|(index, (name, _))| {
+            (
+                name.clone(),
+                Some(directories[(index + 1) % directories.len()].1),
+            )
+        })
+        .collect();
+    let (header, raw) = f.prepared(workspace, 1, &[(f.root_serial, changes.clone())], &[]);
+    assert_eq!((header.totals.names, header.totals.fresh), (129, 0));
+    let mut body = ObservedBody::new(f.path(), &library, &raw, true);
+    let prior = f.stage(header, &mut body).unwrap();
+    body.known_cleanup();
+    assert_eq!(body.bytes, raw.len() as u64);
+    let mut expected = vec![(b"a".to_vec(), f.file_serial)];
+    expected.extend(
+        changes
+            .iter()
+            .map(|(name, serial)| (name.clone(), serial.unwrap())),
+    );
+    assert_eq!(f.list(prior.candidate_root, b""), expected);
+    assert_eq!(f.list(f.root, b""), before);
+    for (name, serial) in &expected[1..] {
+        assert!(matches!(
+            f.stat(prior.candidate_root, name),
+            Response::Stat { kind: 2, serial: found, .. } if found == *serial
+        ));
+        assert!(f.list(prior.candidate_root, name).is_empty());
+    }
+    let store = f.path().join("store.sqlite");
+    let saves = number(&library, &store, "SELECT count(*) FROM saves");
+    // The old d0000 binding is unmentioned and survives. Binding that existing
+    // non-file at x cannot gain a second parent, even after a prior valid Stage.
+    let (header, raw) = f.prepared(
+        workspace,
+        2,
+        &[(f.root_serial, vec![(b"x".to_vec(), Some(directories[0].1))])],
+        &[],
+    );
+    let mut body = ObservedBody::new(f.path(), &library, &raw, true);
+    let failure = f.stage(header, &mut body).unwrap_err();
+    body.known_cleanup();
+    assert_eq!(failure.code, Code::InvalidInput);
+    assert!(!failure.unknown);
+    assert_eq!(failure.cleanup, None);
+    assert_eq!(f.current_stage(workspace), prior);
+    assert_eq!(
+        number(&library, &store, "SELECT count(*) FROM saves"),
+        saves
+    );
+    assert_eq!(
+        number(
+            &library,
+            &store,
+            "SELECT count(*) FROM saves WHERE active_slot IS NOT NULL"
+        ),
+        0
+    );
+    assert_eq!(f.list(f.root, b""), before);
+    assert_eq!(f.original_bytes(), ORIGINAL);
+    eprintln!("DIAGNOSTIC direct-library profile3:129 existing sites cross128, actual source-bound birth/parent/final/retire->Stage with stage4FK; old/new serial restatement permutation preserved; surviving old parent refuses and priorStage/base/known Save-scratch cleanup remain exact. No speed/global/physical qualification.");
 }

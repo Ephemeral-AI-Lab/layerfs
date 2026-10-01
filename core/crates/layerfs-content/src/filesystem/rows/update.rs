@@ -9,12 +9,14 @@
 //! [`FilesystemInput`]: crate::filesystem::input::FilesystemInput
 
 use super::{
-    BindingLookup, BindingRowSource, BindingRows, DirectoryHeader, DirectoryHeaderSource,
-    DirectoryRowSource, InodeRowSource, PreparedRows, RowSource, SerialRowSource,
+    BindingLookup, BindingPoint, BindingRowSource, BindingRows, BindingSourceId, DirectoryHeader,
+    DirectoryHeaderSource, DirectoryRowSource, InodeRowSource, PreparedRows, RowSource,
+    SerialRowSource,
 };
 use crate::error::ContentResult;
 use crate::filesystem::identity::InodeScope;
 use crate::filesystem::input::{DirectoryUpdate, FilesystemResources};
+use crate::filesystem::path::PathName;
 use crate::filesystem::root::FilesystemRootId;
 use crate::object::inode_leaf::InodeValue;
 
@@ -33,6 +35,13 @@ pub struct PreparedUpdate<'a> {
 }
 
 impl RowSource for PreparedUpdate<'_> {
+    fn legacy_binding_at(
+        &self,
+        parent: u64,
+        ordinal: u32,
+    ) -> ContentResult<(PathName, Option<u64>)> {
+        self.rows.legacy_binding_at(parent, ordinal)
+    }
     fn directory_rows(&self) -> usize {
         self.rows.directory_rows()
     }
@@ -95,6 +104,13 @@ pub struct PreparedBindingUpdate<'a> {
 }
 
 impl RowSource for PreparedBindingUpdate<'_> {
+    fn legacy_binding_at(
+        &self,
+        parent: u64,
+        ordinal: u32,
+    ) -> ContentResult<(PathName, Option<u64>)> {
+        self.rows.legacy_binding_at(parent, ordinal)
+    }
     fn directory_rows(&self) -> usize {
         self.rows.directory_rows()
     }
@@ -128,6 +144,12 @@ impl RowSource for PreparedBindingUpdate<'_> {
 }
 
 impl BindingRows for PreparedBindingUpdate<'_> {
+    fn binding_source_id(&self) -> ContentResult<BindingSourceId> {
+        self.rows.binding_source_id()
+    }
+    fn binding_at(&self, point: &BindingPoint) -> ContentResult<(PathName, Option<u64>)> {
+        self.rows.binding_at(point)
+    }
     fn directory_headers(&self) -> ContentResult<Box<dyn DirectoryHeaderSource + '_>> {
         self.rows.directory_headers()
     }

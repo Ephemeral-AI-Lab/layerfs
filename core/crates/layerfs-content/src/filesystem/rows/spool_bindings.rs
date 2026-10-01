@@ -4,11 +4,33 @@ use super::declaration::checkpoint_count;
 use super::spool::{RowSpool, KIND_DIRECTORY};
 use super::spool_cursor::SpoolBindings;
 use super::spool_slots::Slot;
-use super::{BindingLookup, BindingRowSource, BindingRows, DirectoryHeader, DirectoryHeaderSource};
+use super::{
+    BindingLookup, BindingPoint, BindingRowSource, BindingRows, BindingSourceId, DirectoryHeader,
+    DirectoryHeaderSource,
+};
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::path::PathName;
 
 impl BindingRows for RowSpool {
+    fn binding_source_id(&self) -> ContentResult<BindingSourceId> {
+        self.ensure_known()?;
+        Ok(self.authority.source_id())
+    }
+    fn binding_at(&self, point: &BindingPoint) -> ContentResult<(PathName, Option<u64>)> {
+        if !self.authority.accepts_point(point) {
+            return Err(ContentError::InvalidRecord("directory issuer"));
+        }
+        self.ensure_sealed()?;
+        let index =
+            usize::try_from(point.header_descriptor()).map_err(|_| ContentError::LengthOverflow)?;
+        let slot = self
+            .directory_slot(index)?
+            .ok_or(ContentError::InvalidRecord("directory selection"))?;
+        if slot.key != point.parent() || point.binding_ordinal() >= slot.records {
+            return Err(ContentError::InvalidRecord("binding ordinal"));
+        }
+        self.ordinal_binding(&slot, point.binding_ordinal())
+    }
     fn directory_headers(&self) -> ContentResult<Box<dyn DirectoryHeaderSource + '_>> {
         self.ensure_sealed()?;
         Ok(Box::new(SpoolHeaders {
@@ -117,7 +139,12 @@ impl RowSpool {
         Ok(result)
     }
 
-    fn checked_checkpoint(&self, slot: &Slot, block: u64, groups: u64) -> ContentResult<u64> {
+    pub(super) fn checked_checkpoint(
+        &self,
+        slot: &Slot,
+        block: u64,
+        groups: u64,
+    ) -> ContentResult<u64> {
         let relative = self.checkpoint(slot, block)?;
         if block > 0 && self.checkpoint(slot, block - 1)? >= relative {
             return Err(ContentError::InvalidRecord("directory checkpoint order"));

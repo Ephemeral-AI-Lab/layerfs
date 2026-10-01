@@ -1,0 +1,10 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.28s
+     Running tests/construction_sites.rs (core/target/debug/deps/construction_sites-06acbc69e40e25c7)
+
+running 1 test
+LFCS3 maximum-width parent=i64MAX correctness/resource diagnostic: all-base sites=65536/3932160frameB, both indexes=["site_birth_order", "site_existing_parent"], site_pages=3932, retired_free_pages=3924, roots=65536/4128768frameB, final_pages=3932, same_file=Some(NativeIdentity { device: 16777230, inode: 856491577, uid: 501, mode: 33152 }), allocation=Some(16777216), retained_class=16777216; SiteRecord native_element=54B, returned_window128=6912B; caller fixture/names/oracles are excluded from these disk/count claims; no native heap/RSS/global/protected-progress/speed claim
+test unix::maximum_width_all_base_sites_two_indexes_retire_then_maximum_roots_in_same_class ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 2.27s
+

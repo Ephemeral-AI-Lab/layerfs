@@ -1,5 +1,19 @@
 # Storage (C2, `layerfs-storage`)
 
+> **#287 R1d native site implementation:** Against published parent
+> `420e6a2c0149326fe2c380ff0e4156eadd3d326d`, private LFCS profile3 selects
+> SourceId-associated Header200/native-binding-v3, table3 and sites1 -> roots2.
+> Logical Site60 records plus both all-site birth and partial existing-parent
+> indexes fit only if the actual provider proves the unchanged16MiB/4096-page
+> owner. Encoded arithmetic is separate from those B-trees, native heap/cache
+> and physical observations. Birth/fact/final/retirement transactions preserve
+> exact known/Unknown capsules with no resend/adoption/refund; roots require
+> empty retirement, COMMIT and native allocation observation. Existing v1/v2
+> formats/APIs/limits remain required. [Selected contract](../issues/287/R1D-BINDING-SITES-FREEZE.md)
+> and [scoped delivery](../issues/287/R1D-BINDING-SITES-DELIVERY.md) record
+> direct Apple-provider exits PASS, including maximum parent width and real
+> process Unknown. Global/physical healthy progress remains incomplete.
+
 > **#287 R1d phased construction state:** The source developed against parent
 > `d3a10aadbb7506772552474478b14ef25947c899` adds explicit LFCS private schema2
 > for claims1/table2 followed by roots2/table1 in one already admitted16MiB native

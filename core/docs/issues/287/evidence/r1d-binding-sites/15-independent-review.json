@@ -1,0 +1,40 @@
+{
+  "parent": "420e6a2c0149326fe2c380ff0e4156eadd3d326d",
+  "reviewer": "current-thread /root/r0_resources",
+  "execution": "read-only; no edits/Cargo/body runs",
+  "source_contract_findings": [
+    {
+      "finding": "parent positive but fullu64 overflow possible in rawPoint/parentport",
+      "correction": "existingpositive <=i64MAX checkedbeforeSQL; fullissuer/descriptorBLOB preserved"
+    },
+    {
+      "finding": "cumulativeSiteCapacity afterNative/BEGIN",
+      "correction": "preflightbeforeeffects; actualEXCLUSIVE/Busynegative proof01 passed"
+    },
+    {
+      "finding": "localdup maskedselectedcorruptrow",
+      "correction": "validateallselectedrowsbeforeDuplicate; actualcase01 passed"
+    },
+    {
+      "finding": "maximum parent1 excludes fullwidth INTEGER overhead",
+      "correction": "distincti64MAX maximumclass03 passed3932pages; originalparent1receipt preserved"
+    }
+  ],
+  "cleared_source_paths": [
+    "issuedSource/Point/Preparation",
+    "exactSourceBinding/header200 and native-v3",
+    "birthclosure including independentMAX and pending release",
+    "alias OR/restated/follow/activezero",
+    "sameTransaction immutablebirthrehash +keyfullseal",
+    "knownretirement/nativeallocationbeforeRoot permission",
+    "ServeruniqueSource and separateSave/nativecustody",
+    "selected-vsforeign C1preselection/abandonment"
+  ],
+  "remaining_open": [
+    "inheritedspool/multiple-cleanup error custody",
+    "graphmemo/unreachable/seen/frontier/references",
+    "globalnativeheap/cache/RSS/physicalhealthyprogress/Linux",
+    "fullCommit/runtime/concurrency/cutover/#288"
+  ],
+  "actual_root_body_updates": "Storage01/03 Unknown+nativewidth passed afterreview; source-only reviewer finalmessage initiallysaidunrun before receivingrootexecutionresults; no reviewer-runprovider proof isclaimed"
+}

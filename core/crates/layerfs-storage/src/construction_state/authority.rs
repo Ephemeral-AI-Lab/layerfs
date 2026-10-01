@@ -3,6 +3,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use layerfs_content::filesystem::rows::BindingSourceId;
 use layerfs_content::filesystem::state::StateSelection;
 
 use crate::error::{StorageError, StorageResult};
@@ -111,6 +112,17 @@ impl ScratchAuthority {
         bindings: u64,
     ) -> StorageResult<ScratchSession> {
         self.admit(selector, Plan::phased(directories, bindings)?)
+    }
+
+    /// Bind an already issued immutable row source before token/native/SQL effects.
+    pub fn begin_sites(
+        &self,
+        selector: [u8; 32],
+        directories: u64,
+        bindings: u64,
+        source: BindingSourceId,
+    ) -> StorageResult<ScratchSession> {
+        self.admit(selector, Plan::sites(directories, bindings, source)?)
     }
 
     fn admit(&self, selector: [u8; 32], plan: Plan) -> StorageResult<ScratchSession> {

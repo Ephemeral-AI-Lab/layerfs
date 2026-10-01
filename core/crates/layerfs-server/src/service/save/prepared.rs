@@ -17,6 +17,7 @@
 //! declaration states by naming a directory row - are checked here, after the
 //! body is complete, over the spool rather than over a resident copy of it.
 
+use super::filesystem::PreparedUpdate;
 use super::metadata::{build_metadata, patch_portable};
 use super::validation::validate_inode_role;
 use crate::service::{error::content, read::content::id};
@@ -27,7 +28,7 @@ use layerfs_content::filesystem::{FilesystemRead, FilesystemResources, InodeUpda
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{AuthenticatedObjects, ContentResult, FilesystemObjects};
 use layerfs_telemetry::timer::{Active, TimingScope};
-use std::{io::Read, path::PathBuf, time::Instant};
+use std::{path::PathBuf, time::Instant};
 
 /// Bytes beyond the declared body one receive spool may charge: its slot table.
 const SPOOL_SLOT_SLACK: u64 = 1024 * 1024;
@@ -82,13 +83,12 @@ pub(crate) fn receive<'a>(
     fs: &mut FilesystemRead<'a>,
     provider: &dyn AuthenticatedObjects,
     scope: &TimingScope<'_, Active>,
-    changes: &PreparedChanges,
-    body: &mut dyn Read,
+    update: PreparedUpdate<'_>,
     deadline: Instant,
 ) -> Result<Received, Failure> {
-    let (declaration, capacity) = planned_spool_admission(changes)?;
-    let mut spool =
-        RowSpool::create_declared(spool_path(), declaration, capacity).map_err(content)?;
+    // This preparation owns the source issuer already bound before native/Save
+    // effects. Consuming it gives the receive spool that exact authority.
+    let mut spool = RowSpool::create_prepared(spool_path(), update.preparation).map_err(content)?;
     let received = {
         let mut sink = SpoolSink {
             objects,
@@ -98,7 +98,12 @@ pub(crate) fn receive<'a>(
             spool: &mut spool,
             deadline,
         };
-        read_prepared_bindings(&changes.totals, changes.root_serial, body, &mut sink)
+        read_prepared_bindings(
+            &update.changes.totals,
+            update.changes.root_serial,
+            update.body,
+            &mut sink,
+        )
     };
     if let Err(error) = received {
         let _ = spool.cleanup();

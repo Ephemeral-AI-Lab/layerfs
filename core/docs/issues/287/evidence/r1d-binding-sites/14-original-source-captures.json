@@ -1,0 +1,42 @@
+[
+  {
+    "original_path": "core/crates/layerfs-storage/tests/construction_sites.rs",
+    "capture": "01-original-construction-sites.rs.txt",
+    "source_inventory": "01-storage-contract-SOURCE.json",
+    "sha256": "b9e0b9ae388387bec3061194a76deb449143d4448c50abfd380f624ce8e55d45",
+    "bytes": 49852,
+    "exact_match": true
+  },
+  {
+    "original_path": "core/crates/layerfs-storage/tests/support/construction_site_fixture.rs",
+    "capture": "01-original-construction-site-fixture.rs.txt",
+    "source_inventory": "01-storage-contract-SOURCE.json",
+    "sha256": "fdbea745fb992cb5bc12b08a8366eb23760b084bc5860cf3a54d8d2e9518d539",
+    "bytes": 7321,
+    "exact_match": true
+  },
+  {
+    "original_path": "core/crates/layerfs-server/tests/catalog_admission.rs",
+    "capture": "04-failed-catalog-admission.rs.txt",
+    "source_inventory": "04-server-composition-SOURCE.json",
+    "sha256": "95422861c1d415425f2046739a89d389727eeb8f01deb4223f9cb1e71d5e0c34",
+    "bytes": 52507,
+    "exact_match": true
+  },
+  {
+    "original_path": "core/crates/layerfs-server/src/service/save/prepared.rs",
+    "capture": "04-unused-import-prepared.rs.txt",
+    "source_inventory": "04-server-composition-SOURCE.json",
+    "sha256": "9cb012a56d9d13e66c897f4a501848c58bcaa2ded1f9f20e738115df9111aa0c",
+    "bytes": 14336,
+    "exact_match": true
+  },
+  {
+    "original_path": "core/crates/layerfs-content/tests/binding_site_validation.rs",
+    "capture": "08-failed-binding-site-validation.rs.txt",
+    "source_inventory": "08-owning-clippy-SOURCE.json",
+    "sha256": "a949df035b2ac65e1d3a78fc38162e09de444ab54a4249817f986760649de0e2",
+    "bytes": 30119,
+    "exact_match": true
+  }
+]

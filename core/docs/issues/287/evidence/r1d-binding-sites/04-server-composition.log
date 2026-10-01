@@ -1,0 +1,94 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-server)
+warning: unused import: `io::Read`
+  --> crates/layerfs-server/src/service/save/prepared.rs:31:11
+   |
+31 | use std::{io::Read, path::PathBuf, time::Instant};
+   |           ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `layerfs-server` (lib) generated 1 warning (run `cargo fix --lib -p layerfs-server` to apply 1 suggestion)
+    Finished `test` profile [optimized + debuginfo] target(s) in 9.25s
+     Running tests/binding_claims.rs (core/target/debug/deps/binding_claims-a9d7111de02db813)
+
+running 3 tests
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC direct-legacy selected-provider Stage: duplicate257 repeatsite1 across two128-key windows; InvalidInput known, priorStage/base preserved and unfinishedSave/scratch/spool removed; no fallback/retry/performance admission.
+test duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cleanup ... ok
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC direct-library profile3:129 existing sites cross128, actual source-bound birth/parent/final/retire->Stage with stage4FK; old/new serial restatement permutation preserved; surviving old parent refuses and priorStage/base/known Save-scratch cleanup remain exact. No speed/global/physical qualification.
+test stored_site_permutation_and_retained_parent_refusal_preserve_real_stage_and_cleanup ... ok
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC direct-legacy selected-provider Stage: sites257 directories258, one native16MiB owner/source-bound profile3; external required-stage4 FK held at every actual rootinsert, triggerdepth0 unchanged; known scratch/spool/Save cleanup. Provider proof separately owns exactemptystage4; no heap/physical/progress/speed admission.
+test stage_with_257_exclusive_directories_retires_claims_before_first_root_insert ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.26s
+
+     Running tests/catalog_admission.rs (core/target/debug/deps/catalog_admission-ca6d7075056c0650)
+
+running 8 tests
+test server_scratch_unknown_child ... ok
+test catalog_grants_read_only_authority_and_wrong_prepared_scope_refuse_before_save ... ok
+test aliases_share_one_catalog_allowance_and_distinct_provider_cells_keep_their_own ... ok
+test declared_directory_state_over_capacity_refuses_before_scratch_save_or_body ... ok
+
+thread 'allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused' panicked at crates/layerfs-server/tests/catalog_admission.rs:247:13:
+assertion `left == right` failed
+  left: 200
+ right: 192
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test real_catalog_contention_and_range_exhaustion_preserve_allocator_and_content ... ok
+test scratch_parent_refusal_precedes_save_and_body_without_a_hidden_retry ... ok
+test allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused ... FAILED
+
+thread 'scratch_unknown_preserves_publication_and_reports_owned_save_cleanup' panicked at crates/layerfs-server/tests/catalog_admission.rs:1382:9:
+child locked=false: stdout=
+running 1 test
+test server_scratch_unknown_child ... FAILED
+
+failures:
+
+failures:
+    server_scratch_unknown_child
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.25s
+
+ stderr=
+thread 'server_scratch_unknown_child' panicked at crates/layerfs-server/tests/catalog_admission.rs:247:13:
+assertion `left == right` failed
+  left: 200
+ right: 192
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+test scratch_unknown_preserves_publication_and_reports_owned_save_cleanup ... FAILED
+
+failures:
+
+failures:
+    allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused
+    scratch_unknown_preserves_publication_and_reports_owned_save_cleanup
+
+test result: FAILED. 6 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+error: test failed, to rerun pass `-p layerfs-server --test catalog_admission`

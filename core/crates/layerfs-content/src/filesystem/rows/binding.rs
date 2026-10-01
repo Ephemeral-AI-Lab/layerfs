@@ -2,7 +2,7 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::{PreparedRows, RowSource};
+use super::{BindingPoint, BindingSourceId, PreparedRows, RowSource};
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::path::PathName;
 
@@ -59,6 +59,16 @@ impl BindingAuthority {
         })
     }
 
+    /// Read-only view of this already issued source; no new token is burned.
+    pub const fn source_id(&self) -> BindingSourceId {
+        BindingSourceId::issued(self.token)
+    }
+
+    /// True only for a point issued under this live source.
+    pub fn accepts_point(&self, point: &BindingPoint) -> bool {
+        self.source_id() == point.source_id()
+    }
+
     /// True only for a header issued by this live source.
     pub fn accepts(&self, header: &DirectoryHeader) -> bool {
         self.token == header.issuer
@@ -92,6 +102,9 @@ pub struct DirectoryHeader {
 }
 
 impl DirectoryHeader {
+    pub(super) const fn source_id(&self) -> BindingSourceId {
+        BindingSourceId::issued(self.issuer)
+    }
     /// Parent serial whose final names this selection describes.
     pub const fn parent(&self) -> u64 {
         self.parent
@@ -155,6 +168,18 @@ pub trait BindingRowSource {
 
 /// Scalar directory input plus the retained typed-value/fresh row contract.
 pub trait BindingRows: RowSource {
+    /// Exact live source authority; old external providers fail explicitly.
+    fn binding_source_id(&self) -> ContentResult<BindingSourceId> {
+        Err(ContentError::UnsupportedProfile {
+            what: "binding source identity",
+        })
+    }
+    /// One issued element, preserving tombstones and original failure custody.
+    fn binding_at(&self, _point: &BindingPoint) -> ContentResult<(PathName, Option<u64>)> {
+        Err(ContentError::UnsupportedProfile {
+            what: "binding ordinal access",
+        })
+    }
     /// Opens a parent-ordered pass over scalar directory selections.
     fn directory_headers(&self) -> ContentResult<Box<dyn DirectoryHeaderSource + '_>>;
     /// Selects the changed directory with this parent, if it has a row.

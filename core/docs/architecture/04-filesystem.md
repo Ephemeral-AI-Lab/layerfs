@@ -1,5 +1,18 @@
 # Filesystem trees
 
+> **#287 R1d binding-sites implementation:** Source developed against published parent
+> `420e6a2c0149326fe2c380ff0e4156eadd3d326d` selects combined typed paged
+> exclusive sites and monotone base facts. Issued Point28 restores one name
+> through the same source with bounded ordinal access; source-associated
+> SiteScope89/frame60 records retire the new-route site/name/parent/base-list
+> populations. Source-order immutable birth closure and final same-transaction
+> birth revalidation precede key-ordered mutable seal verification/retirement.
+> Alias OR/restated-entry/follow/active-zero semantics and explicit legacy v1/v2
+> paths remain required. [Selected contract](../issues/287/R1D-BINDING-SITES-FREEZE.md)
+> records interfaces; [scoped delivery](../issues/287/R1D-BINDING-SITES-DELIVERY.md)
+> records independent canonical/alias/count and direct-provider exits PASS.
+> Graph/memo/reference and full R1 remain open; no global/physical admission.
+
 > **#287 R1d bounded validation prefetch:** Source developed against published
 > parent `ad1d3514b08a000386a14109ed636ce2b5a6e251` replaces the complete
 > demand/missing populations with two fixed arrays of64 serials. An exact

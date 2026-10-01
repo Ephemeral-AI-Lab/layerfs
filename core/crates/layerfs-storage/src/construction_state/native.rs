@@ -458,12 +458,34 @@ impl NativeFile {
     }
 
     pub(crate) fn binding(&self, selector: &[u8; 32], token: u64) -> StorageResult<[u8; 32]> {
+        self.binding_for(selector, token, None)
+    }
+
+    pub(crate) fn sites_binding(
+        &self,
+        selector: &[u8; 32],
+        token: u64,
+        source: layerfs_content::filesystem::rows::BindingSourceId,
+    ) -> StorageResult<[u8; 32]> {
+        self.binding_for(selector, token, Some(source))
+    }
+
+    fn binding_for(
+        &self,
+        selector: &[u8; 32],
+        token: u64,
+        source: Option<layerfs_content::filesystem::rows::BindingSourceId>,
+    ) -> StorageResult<[u8; 32]> {
         let directory = self
             .directory
             .lock()
             .map_err(|_| StorageError::Integrity("construction scratch directory lock"))?;
         let mut digest = blake3::Hasher::new();
-        digest.update(b"layerfs/construction-state/native/v1\0");
+        digest.update(if source.is_some() {
+            b"layerfs/construction-state/native/v3\0"
+        } else {
+            b"layerfs/construction-state/native/v1\0"
+        });
         digest.update(&directory.nonce);
         digest.update(&directory.parent.encode());
         digest.update(
@@ -482,6 +504,9 @@ impl NativeFile {
         );
         digest.update(selector);
         digest.update(&token.to_be_bytes());
+        if let Some(source) = source {
+            digest.update(&source.as_bytes());
+        }
         Ok(*digest.finalize().as_bytes())
     }
 
@@ -526,6 +551,24 @@ impl NativeFile {
                 .ok_or(StorageError::Integrity("construction scratch file header"))?
                 .encode(),
         );
+        Ok(header)
+    }
+
+    pub(crate) fn sites_header(
+        &self,
+        selector: &[u8; 32],
+        token: u64,
+        binding: &[u8; 32],
+        source: layerfs_content::filesystem::rows::BindingSourceId,
+    ) -> StorageResult<[u8; 200]> {
+        // The v1/v2 encoder retains its exact earlier prefix. Only the closed
+        // private v3 magic/version and issued source suffix change.
+        let earlier = self.header(selector, token, binding, 2)?;
+        let mut header = [0; 200];
+        header[..192].copy_from_slice(&earlier);
+        header[..8].copy_from_slice(b"LFCSOWN3");
+        header[8..10].copy_from_slice(&3u16.to_be_bytes());
+        header[192..].copy_from_slice(&source.as_bytes());
         Ok(header)
     }
 

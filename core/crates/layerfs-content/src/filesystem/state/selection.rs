@@ -109,6 +109,8 @@ pub enum StateTable {
     DirectoryRoots = 1,
     /// Exclusive directory/symlink binding membership during validation.
     BindingClaims = 2,
+    /// Exclusive sites and monotone base facts for one selected row source.
+    BindingSites = 3,
 }
 
 impl StateTable {

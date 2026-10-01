@@ -1,5 +1,16 @@
 # Service, bridge, daemon and hosted telemetry
 
+> **#287 R1d source/site composition:** Source developed over published
+> parent `420e6a2c0149326fe2c380ff0e4156eadd3d326d` carries one admitted
+> SpoolPreparation by value before native/Save/body effects. Native Header200
+> binds that existing source issuer; receive consumes it into the actual spool.
+> Explicit SiteConstructionScopes/common C1 site state replace prepared claim
+> dispatch through independent native/Save cleanup, with wire-v1 and resource
+> limits unchanged. [Selected contract](../issues/287/R1D-BINDING-SITES-FREEZE.md)
+> preserves phase/order/source/Unknown obligations. [Scoped delivery](../issues/287/R1D-BINDING-SITES-DELIVERY.md)
+> records actual direct Service composition/provider/check exits PASS. Native
+> Apple guard refusal, physical/protected progress and concurrency remain open.
+
 > **#287 R1d claim-to-root composition:** The source developed against parent
 > `d3a10aadbb7506772552474478b14ef25947c899` selects explicit phased scratch
 > before Save/body effects from exact directory/name declarations. The same

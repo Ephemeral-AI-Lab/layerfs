@@ -9,13 +9,13 @@ use std::{
 };
 
 use layerfs_bridge::contract::{Code, Failure, PreparedChanges};
-use layerfs_content::ObjectId;
+use layerfs_content::{filesystem::rows::SpoolPreparation, ObjectId};
 use layerfs_storage::{
     construction_state::{ScratchAuthority, ScratchSession},
     Store,
 };
 
-use super::error::storage;
+use super::error::{content, storage};
 
 enum Authority {
     Unopened,
@@ -51,8 +51,12 @@ impl Construction {
     }
 
     /// Admits before Save/body effects after catalog/head/scope validation.
-    pub(crate) fn begin(&self, changes: &PreparedChanges) -> Result<ScratchSession, Failure> {
-        super::save::prepared::planned_spool_admission(changes)?;
+    pub(crate) fn begin(
+        &self,
+        changes: &PreparedChanges,
+    ) -> Result<(ScratchSession, SpoolPreparation), Failure> {
+        let (declaration, capacity) = super::save::prepared::planned_spool_admission(changes)?;
+        let preparation = SpoolPreparation::new(declaration, capacity).map_err(content)?;
         let authority = {
             let mut cell = self.authority.try_lock().map_err(|_| Code::Ownership)?;
             if matches!(*cell, Authority::Unopened) {
@@ -77,12 +81,14 @@ impl Construction {
         context.extend_from_slice(&changes.base);
         context.extend_from_slice(&changes.scope);
         context.extend_from_slice(&changes.root_serial.to_be_bytes());
-        authority
-            .begin_phased(
+        let state = authority
+            .begin_sites(
                 *ObjectId::for_bytes(&context).as_bytes(),
                 changes.totals.directories,
                 changes.totals.names,
+                preparation.source_id(),
             )
-            .map_err(storage)
+            .map_err(storage)?;
+        Ok((state, preparation))
     }
 }

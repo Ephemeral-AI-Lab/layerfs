@@ -1,0 +1,32 @@
+{
+  "parent": "420e6a2c0149326fe2c380ff0e4156eadd3d326d",
+  "branch": "codex/issue287-implementation",
+  "worktree": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "construction_sites",
+    "unix::maximum_width_all_base_sites_two_indexes_retire_then_maximum_roots_in_same_class",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "source_scope": "storage",
+  "tested_inputs_before_sha256": "1c5c5ee7825a2a42d03e8c0075f4c2afdaa471415b9efdf1a9bec968d755a866",
+  "seal_method": "sorted relative UTF8 path + NUL + exact filebytes + NUL",
+  "cargo_target_dir": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target",
+  "explicit_rustflags": null,
+  "started_utc": "2026-10-01T00:00:29.524273+00:00",
+  "scope": "implementation contract/provider/count/resource checks; no benchmark/speed/release admission",
+  "wall_seconds": 6.720858999993652,
+  "exit": 0,
+  "tested_inputs_after_sha256": "1c5c5ee7825a2a42d03e8c0075f4c2afdaa471415b9efdf1a9bec968d755a866",
+  "tested_inputs_unchanged": true
+}

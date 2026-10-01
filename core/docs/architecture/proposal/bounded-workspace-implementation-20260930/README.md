@@ -29,6 +29,15 @@ allocation-check precedence, typed errors, memo limits and all open graph/native
 physical gates. Verification status belongs to the owning checklist and log;
 these changes do not promote historical performance evidence.
 
+R1d-binding-sites is implemented against published parent
+`420e6a2c0149326fe2c380ff0e4156eadd3d326d`. Its
+[shared freeze](../../../issues/287/R1D-BINDING-SITES-FREEZE.md) binds issued
+ordinal points/source preparation, combined paged sites/base facts, exact birth
+closure/final revalidation and both real native indexes under unchanged limits.
+[Scoped delivery](../../../issues/287/R1D-BINDING-SITES-DELIVERY.md) records228
+distinct primary checks and native maximum-width/Unknown proofs. Graph/global/
+physical and full R1 remain open; historical receipts retain their identities.
+
 The owner requests one deep implementation design combining bounded-memory
 live backing and Commit, targeted optimization/bug fixes, concurrent opaque
 commands and multiple Workspaces. Three subagents research Workspace,

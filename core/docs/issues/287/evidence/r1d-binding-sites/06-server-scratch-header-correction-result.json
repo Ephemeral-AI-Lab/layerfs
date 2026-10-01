@@ -1,0 +1,32 @@
+{
+  "parent": "420e6a2c0149326fe2c380ff0e4156eadd3d326d",
+  "branch": "codex/issue287-implementation",
+  "worktree": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "catalog_admission",
+    "scratch_unknown_preserves_publication_and_reports_owned_save_cleanup",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "source_scope": "server",
+  "tested_inputs_before_sha256": "bbbf0ff0a40d709e1ba25524ab75ffc4419f02177f69b9cd96b2a203e3783f56",
+  "seal_method": "sorted relative UTF8 path + NUL + exact filebytes + NUL",
+  "cargo_target_dir": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target",
+  "explicit_rustflags": null,
+  "started_utc": "2026-10-01T00:05:59.320387+00:00",
+  "scope": "implementation contract/provider/count/resource checks; no benchmark/speed/release admission",
+  "wall_seconds": 1.3104568749986356,
+  "exit": 0,
+  "tested_inputs_after_sha256": "bbbf0ff0a40d709e1ba25524ab75ffc4419f02177f69b9cd96b2a203e3783f56",
+  "tested_inputs_unchanged": true
+}

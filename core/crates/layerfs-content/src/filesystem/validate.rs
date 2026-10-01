@@ -16,10 +16,12 @@ use crate::filesystem::identity::InodeScope;
 use crate::filesystem::inode::read::{lookup_many, InodeReadWork, InodeTable};
 use crate::filesystem::root::{FilesystemRoot, FilesystemRootId};
 use crate::filesystem::rows::{
-    check_binding_input, CompatibilityBindingRows, PreparedBindingRows, PreparedRows,
+    check_binding_input, CompatibilityBindingRows, DirectoryHeader, PreparedBindingRows,
+    PreparedRows,
 };
 use crate::filesystem::state::{
-    BindingClaimState, BindingClaims, ResidentClaims, StateScope, StateSelection, StateTable,
+    BindingClaimState, BindingClaims, BindingSiteState, BindingSites, ResidentClaims, SiteScope,
+    StateScope, StateSelection, StateTable,
 };
 use crate::object::inode_leaf::InodeKind;
 use crate::object::{AuthenticatedObjects, ObjectId};
@@ -30,9 +32,11 @@ mod cycles;
 mod effective;
 mod facts;
 mod prefetch;
+mod site_aliases;
 
 pub use prefetch::ValidationPrefetchWork;
 
+use crate::filesystem::path::PathName;
 use aliases::BindingSite;
 use binding::{selected, Bindings, Headers};
 use facts::ValidationState;
@@ -292,6 +296,90 @@ pub fn check_with_claims<'a, S: BindingClaimState + ?Sized>(
     outcome
 }
 
+/// Validates source-bound exclusive sites, facts, exact final seal and retirement.
+/// All errors terminalize this selected attempt once without native cleanup.
+pub fn check_with_sites<'a, S: BindingSiteState + ?Sized>(
+    reader: &dyn AuthenticatedObjects,
+    input: &'a dyn PreparedBindingRows,
+    unreachable: &BTreeMap<u64, ()>,
+    work: &mut ValidationWork,
+    state: &mut S,
+    scope: &SiteScope,
+) -> ContentResult<CheckedTopologyInput<'a>> {
+    select_site_input(input, scope)?;
+    check_sites_selected(reader, input, unreachable, work, state, scope)
+}
+
+pub(crate) fn select_site_input(
+    input: &dyn PreparedBindingRows,
+    scope: &SiteScope,
+) -> ContentResult<()> {
+    // An unavailable/foreign source has not selected this owner. Preserve that
+    // error without consuming another live source's attempt.
+    if input.binding_source_id()? != scope.source_id() {
+        return Err(ContentError::InvalidOrderingRecord("site input source"));
+    }
+    Ok(())
+}
+
+pub(crate) fn check_sites_selected<'a, S: BindingSiteState + ?Sized>(
+    reader: &dyn AuthenticatedObjects,
+    input: &'a dyn PreparedBindingRows,
+    unreachable: &BTreeMap<u64, ()>,
+    work: &mut ValidationWork,
+    state: &mut S,
+    scope: &SiteScope,
+) -> ContentResult<CheckedTopologyInput<'a>> {
+    let outcome = (|| {
+        check_binding_input(input)?;
+        let declared = claim_shape(input)?;
+        let mut sites = BindingSites::new(state, scope.clone(), declared)?;
+        let (topology, mut facts) = check_binding_semantics(
+            reader,
+            input,
+            work,
+            |child, header, ordinal, has_base, _name| {
+                sites.claim(
+                    child,
+                    header,
+                    ordinal,
+                    has_base,
+                    !unreachable.contains_key(&header.parent()),
+                )
+            },
+        )?;
+        let mut sites = sites.close_membership()?;
+        let members = sites.members().clone();
+        let active_stored = sites.active_stored();
+        let aliases_before = work.inode_pages_read;
+        let outcome = site_aliases::check(
+            site_aliases::SiteAliasInput {
+                reader,
+                input,
+                topology: &topology,
+                members: &members,
+                active_stored,
+                unreachable,
+            },
+            work,
+            &mut facts,
+            sites.state(),
+        );
+        charge_site(work, aliases_before, |sites| &mut sites.aliases);
+        outcome?;
+        // Preserve the ordinary alias verdict before root/cycle decisions. A
+        // later semantic failure still abandons the already retired attempt.
+        sites.finish(input, unreachable, &members)?;
+        let checked =
+            check_remaining(reader, input, topology, unreachable, work, &mut facts, None)?;
+        Ok(checked)
+    })();
+    if outcome.is_err() {
+        let _ = state.site_abandon(scope);
+    }
+    outcome
+}
+
 fn claim_shape(input: &dyn PreparedBindingRows) -> ContentResult<usize> {
     let mut headers = Headers::new(input)?;
     let mut count = 0usize;
@@ -311,6 +399,57 @@ fn check_semantics<'a, S: BindingClaimState + ?Sized>(
     claims: &mut BindingClaims<'_, S>,
     mut additions: Option<&mut BTreeMap<u64, u64>>,
 ) -> ContentResult<CheckedTopologyInput<'a>> {
+    let mut sites: BTreeMap<u64, BindingSite> = BTreeMap::new();
+    let (topology, mut state) = check_binding_semantics(
+        reader,
+        input,
+        work,
+        |child, header, _ordinal, has_base, name| {
+            claims.claim(child)?;
+            if let Some(additions) = additions.as_deref_mut() {
+                additions.insert(child, 1);
+            }
+            if has_base {
+                sites.insert(
+                    child,
+                    BindingSite {
+                        parent: header.parent(),
+                        name,
+                    },
+                );
+            }
+            Ok(())
+        },
+    )?;
+    let aliases_before = work.inode_pages_read;
+    let outcome = aliases::check(
+        reader,
+        input,
+        &topology,
+        &sites,
+        unreachable,
+        work,
+        &mut state,
+    );
+    charge_site(work, aliases_before, |sites| &mut sites.aliases);
+    outcome?;
+    check_remaining(
+        reader,
+        input,
+        topology,
+        unreachable,
+        work,
+        &mut state,
+        additions,
+    )
+}
+
+fn check_binding_semantics(
+    reader: &dyn AuthenticatedObjects,
+    input: &dyn PreparedBindingRows,
+    work: &mut ValidationWork,
+    mut claim: impl FnMut(u64, &DirectoryHeader, u32, bool, PathName) -> ContentResult<()>,
+) -> ContentResult<(FilesystemTopology, ValidationState)> {
     let declared = declared_limit(input);
     let rows = input
         .directory_rows()
@@ -324,10 +463,6 @@ fn check_semantics<'a, S: BindingClaimState + ?Sized>(
     }
     let topology =
         FilesystemTopology::load(reader, input.base(), input.scope(), input.root_serial())?;
-    // Children with a stored record that this batch binds exactly once, by the
-    // parent that binds them: the final pass decides whether that binding is the
-    // one the base already has or a second parent.
-    let mut sites: BTreeMap<u64, BindingSite> = BTreeMap::new();
     // The allocator precondition is checked before anything else: a serial the
     // caller calls new must not already exist in the base it addresses.
     let allocation_before = work.inode_pages_read;
@@ -380,7 +515,10 @@ fn check_semantics<'a, S: BindingClaimState + ?Sized>(
             }
         }
         let mut bindings = Bindings::new(input, header)?;
+        let mut ordinal = 0_u32;
         while let Some((name, binding)) = bindings.next()? {
+            let selected_ordinal = ordinal;
+            ordinal = ordinal.checked_add(1).ok_or(ContentError::LengthOverflow)?;
             let Some(child) = binding else {
                 continue;
             };
@@ -404,42 +542,26 @@ fn check_semantics<'a, S: BindingClaimState + ?Sized>(
             if kind == InodeKind::RegularFile {
                 continue;
             }
-            // A same-batch duplicate is refused here, before any base record is
-            // consulted: a directory or a symlink has one binding outside the
+            // A same-batch duplicate is refused here, before the base-listing
+            // alias pass: a directory or a symlink has one binding outside the
             // root and the batch already names it twice.
-            claims.claim(child)?;
-            if let Some(additions) = additions.as_deref_mut() {
-                additions.insert(child, 1);
-            }
-            // The batch names it once; a stored record may already own that one
-            // binding, and the base name decides whether this is the same
-            // binding or a second parent. The decision needs a base listing, so
-            // it is deferred to one final pass over the children that have a
-            // stored record.
-            if stored.is_some() {
-                sites.insert(
-                    child,
-                    BindingSite {
-                        parent: header.parent(),
-                        name,
-                    },
-                );
-            }
+            claim(child, &header, selected_ordinal, stored.is_some(), name)?;
         }
     }
     drop(rows);
     charge_site(work, bindings_before, |sites| &mut sites.bindings);
-    let aliases_before = work.inode_pages_read;
-    aliases::check(
-        reader,
-        input,
-        &topology,
-        &sites,
-        unreachable,
-        work,
-        &mut state,
-    )?;
-    charge_site(work, aliases_before, |sites| &mut sites.aliases);
+    Ok((topology, state))
+}
+
+fn check_remaining<'a>(
+    reader: &dyn AuthenticatedObjects,
+    input: &'a dyn PreparedBindingRows,
+    topology: FilesystemTopology,
+    unreachable: &BTreeMap<u64, ()>,
+    work: &mut ValidationWork,
+    state: &mut ValidationState,
+    additions: Option<&mut BTreeMap<u64, u64>>,
+) -> ContentResult<CheckedTopologyInput<'a>> {
     // Only the old public result owns this population. The bounded route has
     // neither a regular-file marker nor a second map of exclusive claims.
     if let Some(additions) = additions {
@@ -465,7 +587,7 @@ fn check_semantics<'a, S: BindingClaimState + ?Sized>(
         }
     }
     let checked = CheckedTopologyInput { input, topology };
-    cycles::check_effective_cycles(reader, &checked, unreachable, work, &mut state)?;
+    cycles::check_effective_cycles(reader, &checked, unreachable, work, state)?;
     Ok(checked)
 }
 

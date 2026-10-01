@@ -31,14 +31,14 @@ pub use sorted::{DirectoryRoot, SortedWork, MAXIMUM_SCRATCH_BYTES};
 pub use symlink::SymlinkTarget;
 pub use update::{
     build_filesystem, build_filesystem_binding_rows_with_construction_state,
-    build_filesystem_binding_rows_with_state, build_filesystem_timed, build_filesystem_with_state,
-    build_filesystem_with_state_timed, update_filesystem,
-    update_filesystem_binding_rows_with_construction_state,
-    update_filesystem_binding_rows_with_state, update_filesystem_timed,
-    update_filesystem_with_state, update_filesystem_with_state_timed, FilesystemResult,
-    FilesystemUpdateCounters,
+    build_filesystem_binding_rows_with_site_state, build_filesystem_binding_rows_with_state,
+    build_filesystem_timed, build_filesystem_with_state, build_filesystem_with_state_timed,
+    update_filesystem, update_filesystem_binding_rows_with_construction_state,
+    update_filesystem_binding_rows_with_site_state, update_filesystem_binding_rows_with_state,
+    update_filesystem_timed, update_filesystem_with_state, update_filesystem_with_state_timed,
+    FilesystemResult, FilesystemUpdateCounters,
 };
 pub use validate::{
-    check, check_bindings, check_with_claims, CheckedBindingInput, CheckedInput,
+    check, check_bindings, check_with_claims, check_with_sites, CheckedBindingInput, CheckedInput,
     CheckedTopologyInput, FilesystemTopology,
 };

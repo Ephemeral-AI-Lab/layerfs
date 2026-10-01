@@ -1,0 +1,1060 @@
+//! Actual LFCS3 native/SQLite providers, literal byte oracles and failure custody.
+//! Implementation correctness/resource diagnostics only; no performance admission.
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[path = "support/construction_site_fixture.rs"]
+mod fixture;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[path = "support/construction_site_oracle.rs"]
+mod oracle;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[path = "support/construction_site_process.rs"]
+mod process;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[path = "support/construction_oracle.rs"]
+mod roots_oracle;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod support;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[path = "support/construction_site_unknown.rs"]
+mod unknown;
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod unix {
+    use layerfs_content::filesystem::rows::{BindingAuthority, BindingPoint, BindingRows};
+    use layerfs_content::filesystem::state::{
+        BindingSiteState, ClaimAdmission, SiteBirthSeal, SiteConstructionScopes, SiteCursor,
+        SiteKey, SiteObservation, SitePageLimit, SiteParentPageLimit, SiteRecord, SiteScope,
+        StateScope, StateTable,
+    };
+    use layerfs_content::ContentError;
+    use layerfs_storage::construction_state::{ScratchAuthority, ScratchDisposition};
+    use layerfs_storage::StorageError;
+    use rusqlite::OptionalExtension;
+
+    use super::fixture::*;
+    use super::{oracle, roots_oracle, support::TempDir};
+
+    #[test]
+    fn maximum_all_base_sites_two_indexes_retire_then_maximum_roots_in_same_class() {
+        with_source(ROWS as u32, |source, header| {
+            let temp = TempDir::new("sites_maximum");
+            let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+            let mut session = authority
+                .begin_sites([0x51; 32], ROWS, ROWS, source.binding_source_id().unwrap())
+                .unwrap();
+            let selected = scopes(&session, source);
+            let owner = status(&authority, session.selection().token());
+            assert_header(temp.path(), &owner, selected.sites());
+            assert_eq!(session.profile().unwrap().version, 3);
+            let capacity = session.site_capacity(selected.sites()).unwrap();
+            assert_eq!(
+                (capacity.records(), capacity.encoded_bytes()),
+                (ROWS, ROWS * 60)
+            );
+            insert(&mut session, selected.sites(), header, ROWS as u32, |_| {
+                true
+            });
+            assert_eq!(rows(&owner.path, "sites"), ROWS);
+            assert_eq!(rows(&owner.path, "roots"), 0);
+            let expected = expected_birth(selected.sites(), header, ROWS as u32, |_| true);
+            let members = session.site_close_membership(&expected).unwrap();
+            let raw_scope = scope_bytes(selected.sites());
+            let expected_members =
+                oracle::membership(&expected.encode(), Some(oracle::key(&raw_scope, ROWS + 1)));
+            assert_eq!(members.encode(), expected_members);
+            let mut after = None;
+            let mut ordinal = 0u32;
+            loop {
+                let page = session
+                    .site_parent_page(&members, 1, after, SiteParentPageLimit::default())
+                    .unwrap();
+                assert!(page.records().len() <= 128);
+                assert_eq!(page.maximum(), Some(ROWS as u32 - 1));
+                for record in page.records() {
+                    assert_eq!(
+                        record.encode(),
+                        oracle::record(
+                            &raw_scope,
+                            ROWS + 1 - u64::from(ordinal),
+                            1,
+                            point_bytes(selected.sites(), header, ordinal)
+                        )
+                    );
+                    let (name, child) = source.binding_at(&record.point()).unwrap();
+                    assert_eq!(name.as_str(), format!("n{ordinal:08x}"));
+                    assert_eq!(child, Some(record.key().serial()));
+                    ordinal += 1;
+                }
+                assert_eq!(
+                    page.encode_header(),
+                    oracle::parent_page(
+                        &expected_members,
+                        1,
+                        Some(ordinal - 1),
+                        Some(ROWS as u32 - 1),
+                        page.records().len() as u16,
+                        page.eof()
+                    )
+                );
+                after = page.last();
+                if page.eof() {
+                    break;
+                }
+            }
+            assert_eq!(u64::from(ordinal), ROWS);
+            let terminal = session
+                .site_parent_page(
+                    &members,
+                    1,
+                    after,
+                    SiteParentPageLimit::new(128, 189).unwrap(),
+                )
+                .unwrap();
+            assert!(terminal.eof() && terminal.records().is_empty());
+            let mut observations = Vec::with_capacity(128);
+            for serial in 2..=ROWS + 1 {
+                observations.push(SiteObservation::new(
+                    SiteKey::new(selected.sites(), serial).unwrap(),
+                    serial % 2 == 0,
+                ));
+                if observations.len() == 128 {
+                    session
+                        .site_observe_base_batch(&members, &observations)
+                        .unwrap();
+                    observations.clear();
+                }
+            }
+            assert!(observations.is_empty());
+            let seal = session.site_final_seal(&members).unwrap();
+            let mut expected_final = oracle::Transcript::new(raw_scope, true);
+            for serial in 2..=ROWS + 1 {
+                expected_final.append(
+                    serial,
+                    if serial % 2 == 0 { 7 } else { 3 },
+                    point_bytes(selected.sites(), header, (ROWS + 1 - serial) as u32),
+                );
+            }
+            assert_eq!(seal.encode(), expected_final.seal());
+            let mut after = None;
+            let mut serial = 2;
+            loop {
+                let page = session
+                    .site_sealed_page(&seal, after, SitePageLimit::default())
+                    .unwrap();
+                for record in page.records() {
+                    assert_eq!(
+                        record.encode(),
+                        oracle::record(
+                            &raw_scope,
+                            serial,
+                            if serial % 2 == 0 { 7 } else { 3 },
+                            point_bytes(selected.sites(), header, (ROWS + 1 - serial) as u32)
+                        )
+                    );
+                    serial += 1;
+                }
+                assert_eq!(
+                    page.encode_header(),
+                    oracle::page(
+                        &expected_final.seal(),
+                        Some(oracle::key(&raw_scope, serial - 1)),
+                        page.records().len() as u16,
+                        page.eof()
+                    )
+                );
+                after = page.last();
+                if page.eof() {
+                    break;
+                }
+            }
+            assert_eq!(serial, ROWS + 2);
+            let terminal = session
+                .site_sealed_page(&seal, after, SitePageLimit::new(128, 171).unwrap())
+                .unwrap();
+            assert!(terminal.eof() && terminal.records().is_empty());
+            let connection = external(&owner.path);
+            let site_pages = scalar(&connection, "PRAGMA page_count");
+            let index_names:Vec<String>=connection.prepare("SELECT name FROM sqlite_schema WHERE type='index' AND tbl_name='binding_sites' ORDER BY name").unwrap().query_map([],|row|row.get(0)).unwrap().map(Result::unwrap).collect();
+            assert_eq!(
+                index_names,
+                vec!["site_birth_order", "site_existing_parent"]
+            );
+            drop(connection);
+            session.site_retire(&seal).unwrap();
+            assert_eq!(rows(&owner.path, "sites"), 0);
+            assert_eq!(authority.reserved_bytes().unwrap(), CLASS);
+            let connection = external(&owner.path);
+            let state: (i64, i64, i64) = connection
+                .query_row(
+                    "SELECT stage,records,remaining FROM site_owner",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                )
+                .unwrap();
+            assert_eq!(state, (4, ROWS as i64, 0));
+            for sql in ["SELECT 1 FROM binding_sites LIMIT 1","SELECT 1 FROM binding_sites INDEXED BY site_birth_order LIMIT 1","SELECT 1 FROM binding_sites INDEXED BY site_existing_parent WHERE (flags&1)=1 LIMIT 1"] {assert!(connection.query_row(sql,[],|_|Ok(())).optional().unwrap().is_none());}
+            let free_pages = scalar(&connection, "PRAGMA freelist_count");
+            assert!(free_pages > 0);
+            drop(connection);
+            let capacity = session.capacity(selected.roots()).unwrap();
+            assert_eq!(
+                (capacity.records(), capacity.encoded_bytes()),
+                (ROWS, ROWS * 63)
+            );
+            let root_scope = roots_oracle::scope(
+                owner.selector,
+                owner.token,
+                *session.selection().owner_binding().unwrap(),
+                2,
+            );
+            let mut expected_roots = roots_oracle::Transcript::new(root_scope);
+            let mut roots = Vec::with_capacity(128);
+            for serial in 1..=ROWS {
+                expected_roots.append(serial);
+                roots.push(root(selected.roots(), serial));
+                if roots.len() == 128 {
+                    session.append(selected.roots(), &roots).unwrap();
+                    roots.clear();
+                }
+            }
+            let root_seal = session.seal(selected.roots()).unwrap();
+            assert_eq!(root_seal.encode(), expected_roots.seal());
+            assert_eq!(rows(&owner.path, "roots"), ROWS);
+            let final_owner = status(&authority, owner.token);
+            let final_pages = scalar(&external(&owner.path), "PRAGMA page_count");
+            assert_eq!(final_owner.file, owner.file);
+            assert_eq!(final_owner.allocated_bytes, Some(CLASS));
+            assert!(site_pages <= 4096 && final_pages <= 4096);
+            eprintln!("LFCS3 bounded correctness/resource diagnostic: all-base sites={ROWS}/{}frameB, both indexes={index_names:?}, site_pages={site_pages}, retired_free_pages={free_pages}, roots={ROWS}/{}frameB, final_pages={final_pages}, same_file={:?}, allocation={:?}, retained_class={CLASS}; SiteRecord native_element={}B, returned_window128={}B; caller fixture/names/oracles are excluded from these disk/count claims; no native heap/RSS/global/protected-progress/speed claim",ROWS*60,ROWS*63,owner.file,final_owner.allocated_bytes,std::mem::size_of::<SiteRecord>(),128*std::mem::size_of::<SiteRecord>());
+            session.complete_phase(selected.roots()).unwrap();
+            session.release().unwrap();
+            session.release().unwrap();
+            assert!(!owner.path.exists());
+            assert_eq!(authority.reserved_bytes().unwrap(), 0);
+        });
+    }
+
+    #[test]
+    fn empty_and_header_only_parent_and_sealed_pages_preserve_exact_eof() {
+        with_source(0, |source, header| {
+            let temp = TempDir::new("sites_empty");
+            let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+            let mut session = authority
+                .begin_sites([0x52; 32], 0, 0, source.binding_source_id().unwrap())
+                .unwrap();
+            let selected = scopes(&session, source);
+            let expected = expected_birth(selected.sites(), header, 0, |_| false);
+            let members = session.site_close_membership(&expected).unwrap();
+            assert_eq!(members.maximum(), None);
+            let page = session
+                .site_parent_page(
+                    &members,
+                    1,
+                    None,
+                    SiteParentPageLimit::new(128, 189).unwrap(),
+                )
+                .unwrap();
+            assert!(page.records().is_empty() && page.eof());
+            assert_eq!(
+                page.encode_header(),
+                oracle::parent_page(
+                    &oracle::membership(&expected.encode(), None),
+                    1,
+                    None,
+                    None,
+                    0,
+                    true
+                )
+            );
+            assert!(!session.site_parent_present(&members, 1).unwrap());
+            session.site_observe_base_batch(&members, &[]).unwrap();
+            let seal = session.site_final_seal(&members).unwrap();
+            let expected_final = oracle::Transcript::new(scope_bytes(selected.sites()), true);
+            assert_eq!(seal.encode(), expected_final.seal());
+            let page = session
+                .site_sealed_page(&seal, None, SitePageLimit::new(128, 171).unwrap())
+                .unwrap();
+            assert_eq!(
+                page.encode_header(),
+                oracle::page(&expected_final.seal(), None, 0, true)
+            );
+            assert_eq!(page.records().len(), 0);
+            session.site_retire(&seal).unwrap();
+            assert_eq!(session.capacity(selected.roots()).unwrap().records(), 0);
+            session.append(selected.roots(), &[]).unwrap();
+            session.seal(selected.roots()).unwrap();
+            session.release().unwrap();
+        });
+    }
+
+    #[test]
+    fn facts_are_monotone_and_parent_projection_preserves_zero_ordinal_and_birth_flags() {
+        with_source(3, |source, header| {
+            let temp = TempDir::new("sites_facts");
+            let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+            let mut session = authority
+                .begin_sites([0x53; 32], 1, 3, source.binding_source_id().unwrap())
+                .unwrap();
+            let selected = scopes(&session, source);
+            insert(&mut session, selected.sites(), header, 3, |ordinal| {
+                ordinal != 1
+            });
+            let members = session
+                .site_close_membership(&expected_birth(selected.sites(), header, 3, |ordinal| {
+                    ordinal != 1
+                }))
+                .unwrap();
+            let key = SiteKey::new(selected.sites(), 4).unwrap();
+            session
+                .site_observe_base_batch(
+                    &members,
+                    &[
+                        SiteObservation::new(key, true),
+                        SiteObservation::new(key, false),
+                        SiteObservation::new(key, true),
+                    ],
+                )
+                .unwrap();
+            assert_eq!(
+                session
+                    .site_get(selected.sites(), key)
+                    .unwrap()
+                    .unwrap()
+                    .flags(),
+                7
+            );
+            let page = session
+                .site_parent_page(&members, 1, None, SiteParentPageLimit::new(1, 249).unwrap())
+                .unwrap();
+            assert_eq!(page.last(), Some(0));
+            assert_eq!(page.records()[0].flags(), 1);
+            assert!(!page.eof());
+            let next = session
+                .site_parent_page(&members, 1, page.last(), SiteParentPageLimit::default())
+                .unwrap();
+            assert_eq!(next.last(), Some(2));
+            assert_eq!(next.records().len(), 1);
+            assert_eq!(next.records()[0].flags(), 1);
+            assert!(next.eof());
+            let terminal = session
+                .site_parent_page(
+                    &members,
+                    1,
+                    Some(2),
+                    SiteParentPageLimit::new(128, 189).unwrap(),
+                )
+                .unwrap();
+            assert_eq!(terminal.last(), Some(2));
+            assert!(terminal.eof() && terminal.records().is_empty());
+            let seal = session.site_final_seal(&members).unwrap();
+            let mut expected = oracle::Transcript::new(scope_bytes(selected.sites()), true);
+            for serial in 2..=4 {
+                expected.append(
+                    serial,
+                    match serial {
+                        4 => 7,
+                        3 => 0,
+                        _ => 1,
+                    },
+                    point_bytes(selected.sites(), header, (4 - serial) as u32),
+                );
+            }
+            assert_eq!(seal.encode(), expected.seal());
+            session.site_retire(&seal).unwrap();
+            session.release().unwrap();
+        });
+    }
+
+    #[test]
+    fn opaque_descriptor_and_positive_maximum_parent_are_lossless_blob_coordinates() {
+        let source = BindingAuthority::new().unwrap();
+        let header = source.header(i64::MAX as u64, u64::MAX, 1, 11).unwrap();
+        let temp = TempDir::new("sites_full_point");
+        let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+        let mut session = authority
+            .begin_sites([0x54; 32], 0, 1, source.source_id())
+            .unwrap();
+        let selected =
+            SiteConstructionScopes::new(session.selection().clone(), source.source_id()).unwrap();
+        let record = SiteRecord::birth(
+            selected.sites(),
+            2,
+            BindingPoint::new(&header, 0).unwrap(),
+            true,
+        )
+        .unwrap();
+        session
+            .site_insert_batch(selected.sites(), &[record])
+            .unwrap();
+        let owner = status(&authority, session.selection().token());
+        let mut expected = oracle::Transcript::new(scope_bytes(selected.sites()), false);
+        expected.append(2, 1, point_bytes(selected.sites(), header, 0));
+        let birth = SiteBirthSeal::decode(selected.sites(), &expected.seal()).unwrap();
+        let members = session.site_close_membership(&birth).unwrap();
+        let page = session
+            .site_parent_page(
+                &members,
+                i64::MAX as u64,
+                None,
+                SiteParentPageLimit::default(),
+            )
+            .unwrap();
+        assert_eq!(page.records()[0].point().header_descriptor(), u64::MAX);
+        assert_eq!(page.records()[0].point().parent(), i64::MAX as u64);
+        let stored: Vec<u8> = external(&owner.path)
+            .query_row("SELECT point FROM binding_sites", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            stored,
+            oracle::point(source.source_id().as_bytes(), i64::MAX as u64, u64::MAX, 0)
+        );
+        session.release().unwrap();
+    }
+
+    #[test]
+    fn local_and_cross_batch_duplicates_are_terminal_without_current_batch_effects() {
+        for local in [true, false] {
+            with_source(129, |source, header| {
+                let temp = TempDir::new("sites_duplicate");
+                let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+                let mut session = authority
+                    .begin_sites([0x55; 32], 1, 130, source.binding_source_id().unwrap())
+                    .unwrap();
+                let selected = scopes(&session, source);
+                let owner = status(&authority, session.selection().token());
+                insert(&mut session, selected.sites(), header, 128, |_| true);
+                let batch = if local {
+                    vec![
+                        birth(selected.sites(), header, 128, true),
+                        birth(selected.sites(), header, 128, true),
+                    ]
+                } else {
+                    vec![
+                        birth(selected.sites(), header, 128, true),
+                        birth(selected.sites(), header, 0, true),
+                    ]
+                };
+                assert_eq!(
+                    session.site_insert_batch(selected.sites(), &batch).unwrap(),
+                    ClaimAdmission::Duplicate
+                );
+                assert_eq!(rows(&owner.path, "sites"), 128);
+                assert_eq!(rows(&owner.path, "roots"), 0);
+                assert!(session.site_capacity(selected.sites()).is_err());
+                assert!(session.capacity(selected.roots()).is_err());
+                assert!(session.site_get(selected.sites(), batch[0].key()).is_err());
+                assert!(!session.is_quarantined());
+                session.site_abandon(selected.sites()).unwrap();
+                session.release().unwrap();
+            });
+        }
+    }
+
+    #[test]
+    fn existing_duplicate_does_not_mask_later_corrupt_selected_row() {
+        with_source(3, |source, header| {
+            let temp = TempDir::new("sites_duplicate_corrupt");
+            let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+            let mut session = authority
+                .begin_sites([0x56; 32], 1, 4, source.binding_source_id().unwrap())
+                .unwrap();
+            let selected = scopes(&session, source);
+            let owner = status(&authority, session.selection().token());
+            insert(&mut session, selected.sites(), header, 2, |_| true);
+            let connection = external(&owner.path);
+            connection
+                .execute_batch("PRAGMA ignore_check_constraints=ON")
+                .unwrap();
+            assert_eq!(
+                connection
+                    .execute(
+                        "UPDATE binding_sites SET flags=2 WHERE key=?1",
+                        [birth(selected.sites(), header, 1, true)
+                            .key()
+                            .as_bytes()
+                            .as_slice()]
+                    )
+                    .unwrap(),
+                1
+            );
+            drop(connection);
+            let error = session
+                .site_insert_batch(
+                    selected.sites(),
+                    &[
+                        birth(selected.sites(), header, 0, true),
+                        birth(selected.sites(), header, 1, true),
+                    ],
+                )
+                .unwrap_err();
+            assert!(matches!(
+                error,
+                StorageError::Integrity("construction scratch site flags")
+            ));
+            assert_eq!(rows(&owner.path, "sites"), 2);
+            assert_eq!(rows(&owner.path, "roots"), 0);
+            assert!(session.capacity(selected.roots()).is_err());
+            session.release().unwrap();
+        });
+    }
+
+    #[test]
+    fn local_input_duplicate_does_not_mask_later_corrupt_selected_row() {
+        with_source(2, |source, header| {
+            let temp = TempDir::new("sites_local_duplicate_corrupt");
+            let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+            let mut session = authority
+                .begin_sites([0x56; 32], 1, 5, source.binding_source_id().unwrap())
+                .unwrap();
+            let selected = scopes(&session, source);
+            let owner = status(&authority, session.selection().token());
+            insert(&mut session, selected.sites(), header, 2, |_| true);
+            let connection = external(&owner.path);
+            connection
+                .execute_batch("PRAGMA ignore_check_constraints=ON")
+                .unwrap();
+            assert_eq!(
+                connection
+                    .execute(
+                        "UPDATE binding_sites SET flags=2 WHERE key=?1",
+                        [birth(selected.sites(), header, 1, true)
+                            .key()
+                            .as_bytes()
+                            .as_slice()]
+                    )
+                    .unwrap(),
+                1
+            );
+            drop(connection);
+            let first = birth(selected.sites(), header, 0, true);
+            let later = birth(selected.sites(), header, 1, true);
+            let error = session
+                .site_insert_batch(selected.sites(), &[first, first, later])
+                .unwrap_err();
+            assert!(
+                matches!(
+                    error,
+                    StorageError::Integrity("construction scratch site flags")
+                ),
+                "all selected stored classes precede local Duplicate outcome: {error:?}"
+            );
+            assert_eq!(rows(&owner.path, "sites"), 2);
+            assert_eq!(rows(&owner.path, "roots"), 0);
+            assert!(!session.is_quarantined());
+            assert!(session.capacity(selected.roots()).is_err());
+            session.release().unwrap();
+        });
+    }
+
+    #[test]
+    fn declaration_and_window_refusals_precede_native_or_site_effects() {
+        with_source(129, |source, header| {
+            let temp = TempDir::new("sites_admission");
+            let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+            for (directories, bindings) in [(ROWS + 1, 0), (0, ROWS + 1)] {
+                assert!(matches!(
+                    authority.begin_sites(
+                        [0x57; 32],
+                        directories,
+                        bindings,
+                        source.binding_source_id().unwrap()
+                    ),
+                    Err(StorageError::CapacityExceeded { .. })
+                ));
+                assert!(authority.status().unwrap().is_empty());
+                assert_eq!(authority.reserved_bytes().unwrap(), 0);
+                assert_eq!(std::fs::read_dir(temp.path()).unwrap().count(), 0);
+            }
+            let mut session = authority
+                .begin_sites([0x57; 32], 1, 129, source.binding_source_id().unwrap())
+                .unwrap();
+            let selected = scopes(&session, source);
+            let owner = status(&authority, session.selection().token());
+            let batch: Vec<_> = (0..129)
+                .map(|ordinal| birth(selected.sites(), header, ordinal, true))
+                .collect();
+            assert!(matches!(
+                session.site_insert_batch(selected.sites(), &batch),
+                Err(StorageError::CapacityExceeded {
+                    limit: 128,
+                    actual: 129,
+                    ..
+                })
+            ));
+            assert_eq!(rows(&owner.path, "sites"), 0);
+            assert_eq!(rows(&owner.path, "roots"), 0);
+            session.release().unwrap();
+        });
+    }
+
+    #[test]
+    fn cumulative_declared_class_refuses_before_sql_under_actual_exclusive_lock() {
+        with_source(3, |source, header| {
+            let temp = TempDir::new("sites_cumulative_admission");
+            let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+            let mut session = authority
+                .begin_sites([0x57; 32], 1, 2, source.binding_source_id().unwrap())
+                .unwrap();
+            let selected = scopes(&session, source);
+            let owner = status(&authority, session.selection().token());
+            insert(&mut session, selected.sites(), header, 2, |_| true);
+            let before = std::fs::metadata(&owner.path).unwrap();
+            let holder = external(&owner.path);
+            let blocked = external(&owner.path);
+            holder.execute_batch("BEGIN EXCLUSIVE").unwrap();
+            assert_eq!(scalar(&holder, "SELECT records FROM site_owner"), 2);
+            let refusal = blocked
+                .query_row::<i64, _, _>("SELECT records FROM site_owner", [], |row| row.get(0))
+                .unwrap_err();
+            assert!(
+                matches!(refusal, rusqlite::Error::SqliteFailure(code, _) if code.code == rusqlite::ErrorCode::DatabaseBusy),
+                "actual negative control establishes the EXCLUSIVE barrier"
+            );
+            let error = session
+                .site_insert_batch(
+                    selected.sites(),
+                    &[birth(selected.sites(), header, 2, true)],
+                )
+                .unwrap_err();
+            assert!(
+                matches!(
+                    error,
+                    StorageError::CapacityExceeded {
+                        what: "construction scratch site rows",
+                        limit: 2,
+                        actual: 3
+                    }
+                ),
+                "capacity precedes native reservation/SQL/Busy: {error:?}"
+            );
+            let current = status(&authority, owner.token);
+            assert_eq!(current.disposition, ScratchDisposition::Failed);
+            assert_eq!(current.allocated_bytes, Some(CLASS));
+            assert!(!current.failure.as_ref().unwrap().contains("site attempt"));
+            assert!(!current.quarantined && !current.release_attempted);
+            assert_eq!(scalar(&holder, "SELECT records FROM site_owner"), 2);
+            assert_eq!(scalar(&holder, "SELECT COUNT(*) FROM binding_sites"), 2);
+            assert_eq!(scalar(&holder, "SELECT COUNT(*) FROM directory_roots"), 0);
+            let after = std::fs::metadata(&owner.path).unwrap();
+            assert_eq!(identity(&before), identity(&after));
+            assert_eq!(before.len(), after.len());
+            use std::os::unix::fs::MetadataExt;
+            assert_eq!(before.blocks(), after.blocks());
+            holder.execute_batch("ROLLBACK").unwrap();
+            drop(blocked);
+            drop(holder);
+            session.release().unwrap();
+        });
+    }
+
+    #[test]
+    fn roots_are_denied_in_each_unretired_phase_and_declared_roots_remain_exact() {
+        for phase in 0..3 {
+            with_source(1, |source, header| {
+                let temp = TempDir::new("sites_root_fence");
+                let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+                let mut session = authority
+                    .begin_sites([0x58; 32], 1, 1, source.binding_source_id().unwrap())
+                    .unwrap();
+                let selected = scopes(&session, source);
+                let owner = status(&authority, session.selection().token());
+                insert(&mut session, selected.sites(), header, 1, |_| true);
+                if phase > 0 {
+                    let members = session
+                        .site_close_membership(&expected_birth(selected.sites(), header, 1, |_| {
+                            true
+                        }))
+                        .unwrap();
+                    if phase == 2 {
+                        session.site_final_seal(&members).unwrap();
+                    }
+                }
+                assert!(session.capacity(selected.roots()).is_err());
+                assert!(session
+                    .append(selected.roots(), &[root(selected.roots(), 1)])
+                    .is_err());
+                assert_eq!(rows(&owner.path, "roots"), 0);
+                session.release().unwrap();
+            });
+        }
+        with_source(0, |source, header| {
+            let temp = TempDir::new("sites_exact_root_limit");
+            let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+            let mut session = authority
+                .begin_sites([0x58; 32], 1, 0, source.binding_source_id().unwrap())
+                .unwrap();
+            let selected = scopes(&session, source);
+            let owner = status(&authority, session.selection().token());
+            let members = session
+                .site_close_membership(&expected_birth(selected.sites(), header, 0, |_| false))
+                .unwrap();
+            let seal = session.site_final_seal(&members).unwrap();
+            session.site_retire(&seal).unwrap();
+            assert!(matches!(
+                session.append(
+                    selected.roots(),
+                    &[root(selected.roots(), 1), root(selected.roots(), 2)]
+                ),
+                Err(StorageError::CapacityExceeded {
+                    limit: 1,
+                    actual: 2,
+                    ..
+                })
+            ));
+            assert_eq!(rows(&owner.path, "roots"), 0);
+            session.release().unwrap();
+        });
+    }
+
+    #[test]
+    fn foreign_owner_source_and_abandon_refuse_without_terminalizing_selected_owner() {
+        with_source(1, |source, header| {
+            with_source(1, |foreign_source, _| {
+                let temp = TempDir::new("sites_foreign");
+                let authority = ScratchAuthority::new(temp.path(), 2).unwrap();
+                let mut session = authority
+                    .begin_sites([0x59; 32], 1, 1, source.binding_source_id().unwrap())
+                    .unwrap();
+                let mut foreign = authority
+                    .begin_sites(
+                        [0x59; 32],
+                        1,
+                        1,
+                        foreign_source.binding_source_id().unwrap(),
+                    )
+                    .unwrap();
+                let selected = scopes(&session, source);
+                let other = scopes(&foreign, foreign_source);
+                let wrong_source = SiteScope::new(
+                    StateScope::new(session.selection().clone(), 1, StateTable::BindingSites)
+                        .unwrap(),
+                    foreign_source.binding_source_id().unwrap(),
+                )
+                .unwrap();
+                for wrong in [other.sites(), &wrong_source] {
+                    let error = session.adapter().site_capacity(wrong).unwrap_err();
+                    assert_eq!(
+                        error,
+                        ContentError::InvalidOrderingRecord("site foreign scope")
+                    );
+                    assert_eq!(session.adapter().site_abandon(wrong).unwrap_err(), error);
+                    assert!(session.take_failure().is_none());
+                    assert_eq!(
+                        status(&authority, session.selection().token()).disposition,
+                        ScratchDisposition::Open
+                    );
+                }
+                insert(&mut session, selected.sites(), header, 1, |_| true);
+                let members = session
+                    .site_close_membership(&expected_birth(selected.sites(), header, 1, |_| true))
+                    .unwrap();
+                let seal = session.site_final_seal(&members).unwrap();
+                session.site_retire(&seal).unwrap();
+                assert_eq!(session.capacity(selected.roots()).unwrap().records(), 1);
+                session.release().unwrap();
+                foreign.release().unwrap();
+            });
+        });
+    }
+
+    #[test]
+    fn unexpected_birth_digest_refuses_before_facts_and_retains_known_custody() {
+        with_source(2, |source, header| {
+            let temp = TempDir::new("sites_bad_birth");
+            let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+            let mut session = authority
+                .begin_sites([0x5a; 32], 1, 2, source.binding_source_id().unwrap())
+                .unwrap();
+            let selected = scopes(&session, source);
+            let owner = status(&authority, session.selection().token());
+            insert(&mut session, selected.sites(), header, 2, |_| true);
+            let mut wrong = expected_birth(selected.sites(), header, 2, |_| true).encode();
+            wrong[106] ^= 1;
+            let expected = SiteBirthSeal::decode(selected.sites(), &wrong).unwrap();
+            assert!(matches!(
+                session.site_close_membership(&expected),
+                Err(StorageError::Integrity(
+                    "construction scratch expected site birth seal"
+                ))
+            ));
+            let stage: i64 = external(&owner.path)
+                .query_row("SELECT stage FROM site_owner", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(stage, 0);
+            assert_eq!(rows(&owner.path, "sites"), 2);
+            let failure = status(&authority, owner.token).failure.unwrap();
+            assert!(failure.contains("expected birth="));
+            assert!(failure.contains("proposed membership="));
+            assert!(session.capacity(selected.roots()).is_err());
+            session.release().unwrap();
+        });
+    }
+
+    #[test]
+    fn final_seal_rechecks_immutable_base_point_and_redundant_coordinates() {
+        for corruption in ["base", "point", "parent", "source"] {
+            with_source(2, |source, header| {
+                let temp = TempDir::new("sites_immutable_corrupt");
+                let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+                let mut session = authority
+                    .begin_sites([0x5b; 32], 1, 2, source.binding_source_id().unwrap())
+                    .unwrap();
+                let selected = scopes(&session, source);
+                let owner = status(&authority, session.selection().token());
+                insert(&mut session, selected.sites(), header, 2, |_| true);
+                let members = session
+                    .site_close_membership(&expected_birth(selected.sites(), header, 2, |_| true))
+                    .unwrap();
+                let connection = external(&owner.path);
+                let key = birth(selected.sites(), header, 0, true).key();
+                match corruption {
+                    "base" => {
+                        assert_eq!(
+                            connection
+                                .execute(
+                                    "UPDATE binding_sites SET flags=0 WHERE key=?1",
+                                    [key.as_bytes().as_slice()]
+                                )
+                                .unwrap(),
+                            1
+                        );
+                    }
+                    "parent" => {
+                        assert_eq!(
+                            connection
+                                .execute(
+                                    "UPDATE binding_sites SET parent=2 WHERE key=?1",
+                                    [key.as_bytes().as_slice()]
+                                )
+                                .unwrap(),
+                            1
+                        );
+                    }
+                    _ => {
+                        let mut point = point_bytes(selected.sites(), header, 0);
+                        point[if corruption == "source" { 0 } else { 16 }] ^= 1;
+                        assert_eq!(
+                            connection
+                                .execute(
+                                    "UPDATE binding_sites SET point=?1 WHERE key=?2",
+                                    rusqlite::params![point.as_slice(), key.as_bytes().as_slice()]
+                                )
+                                .unwrap(),
+                            1
+                        );
+                    }
+                }
+                drop(connection);
+                assert!(session.site_final_seal(&members).is_err());
+                assert_eq!(rows(&owner.path, "roots"), 0);
+                assert!(session.capacity(selected.roots()).is_err());
+                assert!(!session.is_quarantined());
+                session.release().unwrap();
+            });
+        }
+    }
+
+    #[test]
+    fn invalid_parent_and_insufficient_nonempty_page_headers_refuse_before_output() {
+        for mode in [0, 1, 2, 3] {
+            with_source(1, |source, header| {
+                let temp = TempDir::new("sites_page_refusal");
+                let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+                let mut session = authority
+                    .begin_sites([0x5c; 32], 1, 1, source.binding_source_id().unwrap())
+                    .unwrap();
+                let selected = scopes(&session, source);
+                insert(&mut session, selected.sites(), header, 1, |_| true);
+                let members = session
+                    .site_close_membership(&expected_birth(selected.sites(), header, 1, |_| true))
+                    .unwrap();
+                match mode {
+                    0 => assert!(matches!(
+                        session.site_parent_present(&members, 0),
+                        Err(StorageError::Content(ContentError::InvalidOrderingRecord(
+                            "site parent"
+                        )))
+                    )),
+                    1 => assert!(matches!(
+                        session.site_parent_page(
+                            &members,
+                            u64::MAX,
+                            None,
+                            SiteParentPageLimit::default()
+                        ),
+                        Err(StorageError::Content(ContentError::InvalidOrderingRecord(
+                            "site parent"
+                        )))
+                    )),
+                    2 => assert!(session
+                        .site_parent_page(
+                            &members,
+                            1,
+                            None,
+                            SiteParentPageLimit::new(128, 189).unwrap()
+                        )
+                        .is_err()),
+                    _ => {
+                        let seal = session.site_final_seal(&members).unwrap();
+                        assert!(session
+                            .site_sealed_page(&seal, None, SitePageLimit::new(128, 171).unwrap())
+                            .is_err());
+                    }
+                }
+                assert!(session.capacity(selected.roots()).is_err());
+                session.release().unwrap();
+            });
+        }
+    }
+
+    #[test]
+    fn missing_and_surplus_sealed_rows_cannot_be_retired_into_root_permission() {
+        for missing in [true, false] {
+            with_source(3, |source, header| {
+                let temp = TempDir::new("sites_sealed_population");
+                let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+                let mut session = authority
+                    .begin_sites([0x5d; 32], 1, 3, source.binding_source_id().unwrap())
+                    .unwrap();
+                let selected = scopes(&session, source);
+                let owner = status(&authority, session.selection().token());
+                insert(&mut session, selected.sites(), header, 2, |_| true);
+                let members = session
+                    .site_close_membership(&expected_birth(selected.sites(), header, 2, |_| true))
+                    .unwrap();
+                let seal = session.site_final_seal(&members).unwrap();
+                let connection = external(&owner.path);
+                if missing {
+                    assert_eq!(
+                        connection
+                            .execute(
+                                "DELETE FROM binding_sites WHERE key=?1",
+                                [birth(selected.sites(), header, 1, true)
+                                    .key()
+                                    .as_bytes()
+                                    .as_slice()]
+                            )
+                            .unwrap(),
+                        1
+                    );
+                } else {
+                    let extra = birth(selected.sites(), header, 2, true);
+                    assert_eq!(
+                        connection
+                            .execute(
+                                "INSERT INTO binding_sites VALUES(?1,?2,?3,?4,?5)",
+                                rusqlite::params![
+                                    extra.key().as_bytes().as_slice(),
+                                    i64::from(extra.flags()),
+                                    extra.point().encode().as_slice(),
+                                    1i64,
+                                    2i64
+                                ]
+                            )
+                            .unwrap(),
+                        1
+                    );
+                }
+                drop(connection);
+                {
+                    let mut adapter = session.adapter();
+                    let mut cursor = SiteCursor::new(&mut adapter, seal.clone()).unwrap();
+                    assert!(cursor.next_page(SitePageLimit::default()).is_err());
+                    assert!(cursor.next_page(SitePageLimit::default()).is_err());
+                }
+                assert!(session.site_retire(&seal).is_err());
+                assert_eq!(rows(&owner.path, "roots"), 0);
+                session.release().unwrap();
+            });
+        }
+    }
+
+    #[test]
+    fn known_second_retirement_window_failure_keeps_exact_prior_progress_and_denies_roots() {
+        with_source(257, |source, header| {
+            let temp = TempDir::new("sites_partial_retire");
+            let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+            let mut session = authority
+                .begin_sites([0x5e; 32], 1, 257, source.binding_source_id().unwrap())
+                .unwrap();
+            let selected = scopes(&session, source);
+            let owner = status(&authority, session.selection().token());
+            insert(&mut session, selected.sites(), header, 257, |_| true);
+            let members = session
+                .site_close_membership(&expected_birth(selected.sites(), header, 257, |_| true))
+                .unwrap();
+            let seal = session.site_final_seal(&members).unwrap();
+            let connection = external(&owner.path);
+            connection.execute_batch("CREATE TABLE external_pin(key BLOB PRIMARY KEY REFERENCES binding_sites(key)) STRICT, WITHOUT ROWID").unwrap();
+            connection
+                .execute(
+                    "INSERT INTO external_pin VALUES(?1)",
+                    [SiteKey::new(selected.sites(), 130)
+                        .unwrap()
+                        .as_bytes()
+                        .as_slice()],
+                )
+                .unwrap();
+            drop(connection);
+            let error = session.site_retire(&seal).unwrap_err();
+            assert!(matches!(
+                error,
+                StorageError::Engine(rusqlite::Error::SqliteFailure(..))
+            ));
+            assert!(!session.is_quarantined());
+            assert_eq!(rows(&owner.path, "sites"), 129);
+            let progress: (i64, i64, Vec<u8>) = external(&owner.path)
+                .query_row(
+                    "SELECT stage,remaining,after_key FROM site_owner",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                )
+                .unwrap();
+            assert_eq!((progress.0, progress.1), (3, 129));
+            assert_eq!(progress.2, oracle::key(&scope_bytes(selected.sites()), 129));
+            let failure = status(&authority, owner.token).failure.unwrap();
+            assert!(failure.contains("site attempt Retire: before=129, proposed=1"));
+            assert!(session.capacity(selected.roots()).is_err());
+            assert_eq!(rows(&owner.path, "roots"), 0);
+            session.release().unwrap();
+            assert_eq!(authority.reserved_bytes().unwrap(), 0);
+        });
+    }
+
+    #[test]
+    fn actual_primary_birth_and_partial_parent_plans_have_exact_order_without_temp_sort() {
+        with_source(3, |source, header| {
+            let temp = TempDir::new("sites_plans");
+            let authority = ScratchAuthority::new(temp.path(), 1).unwrap();
+            let mut session = authority
+                .begin_sites([0x5f; 32], 1, 3, source.binding_source_id().unwrap())
+                .unwrap();
+            let selected = scopes(&session, source);
+            let owner = status(&authority, session.selection().token());
+            insert(&mut session, selected.sites(), header, 3, |_| true);
+            let connection = external(&owner.path);
+            let queries=[("SELECT key,flags,point,parent,binding_ordinal FROM binding_sites WHERE key>x'00' ORDER BY key LIMIT 128","PRIMARY KEY",true),("SELECT key,flags,point,parent,binding_ordinal FROM binding_sites INDEXED BY site_birth_order WHERE (parent,binding_ordinal)>(1,0) ORDER BY parent,binding_ordinal LIMIT 128","site_birth_order",true),("SELECT key,flags,point,parent,binding_ordinal FROM binding_sites INDEXED BY site_birth_order ORDER BY parent,binding_ordinal LIMIT 128","site_birth_order",false),("SELECT key,flags,point,parent,binding_ordinal FROM binding_sites INDEXED BY site_existing_parent WHERE (flags&1)=1 AND parent=1 AND binding_ordinal>0 ORDER BY binding_ordinal LIMIT 128","site_existing_parent",true),("SELECT key,flags,point,parent,binding_ordinal FROM binding_sites INDEXED BY site_existing_parent WHERE (flags&1)=1 AND parent=1 ORDER BY binding_ordinal DESC LIMIT 1","site_existing_parent",true)];
+            for (sql, index, range) in queries {
+                let plan: Vec<String> = connection
+                    .prepare(&format!("EXPLAIN QUERY PLAN {sql}"))
+                    .unwrap()
+                    .query_map([], |row| row.get(3))
+                    .unwrap()
+                    .map(Result::unwrap)
+                    .collect();
+                let text = plan.join("\n");
+                assert!(text.contains(index), "{text}");
+                assert!(!text.contains("TEMP B-TREE"), "{text}");
+                if range {
+                    assert!(text.contains("SEARCH"), "{text}");
+                }
+                eprintln!("LFCS3 actual SQLite indexed plan: {text}");
+            }
+            let columns:Vec<(String,i64)>=connection.prepare("SELECT m.name,(SELECT COUNT(*) FROM pragma_table_info(m.name)) FROM sqlite_schema m WHERE m.type='table' ORDER BY m.name").unwrap().query_map([],|row|Ok((row.get(0)?,row.get(1)?))).unwrap().map(Result::unwrap).collect();
+            assert!(columns.iter().all(|(_, count)| *count <= 16));
+            drop(connection);
+            session.release().unwrap();
+        });
+    }
+}

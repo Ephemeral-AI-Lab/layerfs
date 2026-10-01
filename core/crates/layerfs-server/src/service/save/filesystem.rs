@@ -14,8 +14,10 @@
 use super::prepared::{check_subjects, receive, Received};
 use crate::service::{error::content, read::content::id};
 use layerfs_bridge::contract::*;
-use layerfs_content::filesystem::rows::PreparedBindingUpdate as StreamedUpdate;
-use layerfs_content::filesystem::state::{ConstructionScopes, ConstructionState};
+use layerfs_content::filesystem::rows::{
+    PreparedBindingUpdate as StreamedUpdate, SpoolPreparation,
+};
+use layerfs_content::filesystem::state::{SiteConstructionScopes, SiteConstructionState};
 use layerfs_content::filesystem::{root::FilesystemRootId, FilesystemRead, InodeScope};
 use layerfs_content::{
     AuthenticatedObjects, FilesystemObjects, FilesystemResources, FinalizedConsumer,
@@ -36,14 +38,16 @@ pub(crate) struct PreparedUpdate<'a> {
     pub(crate) changes: &'a PreparedChanges,
     /// The ordered body the request declared.
     pub(crate) body: &'a mut dyn Read,
+    /// Unique admitted source authority moved into the receive spool once.
+    pub(crate) preparation: SpoolPreparation,
 }
 
 pub(crate) fn update(
     provider: &dyn AuthenticatedObjects,
-    update: &mut PreparedUpdate<'_>,
+    update: PreparedUpdate<'_>,
     consumer: &mut dyn FinalizedConsumer,
-    state: &mut dyn ConstructionState,
-    state_scope: &ConstructionScopes,
+    state: &mut dyn SiteConstructionState,
+    state_scope: &SiteConstructionScopes,
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<(Root, u64), Failure> {
@@ -61,15 +65,7 @@ pub(crate) fn update(
     // canonical work it needs on the way in: the role check on a saved file's
     // roots, the portable patch of a maintained directory, the first metadata of
     // a declared one.
-    let received = receive(
-        &mut objects,
-        &mut fs,
-        provider,
-        scope,
-        update.changes,
-        update.body,
-        deadline,
-    )?;
+    let received = receive(&mut objects, &mut fs, provider, scope, update, deadline)?;
     let Received { rows } = received;
     let mut rows = rows;
     let resources = FilesystemResources::default();
@@ -85,7 +81,7 @@ pub(crate) fn update(
         rows: &rows,
     };
     let result =
-        layerfs_content::filesystem::update::update_filesystem_binding_rows_with_construction_state(
+        layerfs_content::filesystem::update::update_filesystem_binding_rows_with_site_state(
             &mut objects,
             &input,
             None,

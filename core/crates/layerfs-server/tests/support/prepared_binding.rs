@@ -41,6 +41,11 @@ pub struct Fixture {
 
 impl Fixture {
     pub fn new(label: &str) -> Self {
+        Self::with_directories(label, 0)
+    }
+
+    /// Real immutable imported directory fixtures, prepared before the operation.
+    pub fn with_directories(label: &str, directories: usize) -> Self {
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT: AtomicU64 = AtomicU64::new(1);
         let path = std::env::temp_dir().join(format!(
@@ -88,6 +93,9 @@ impl Fixture {
         let source = path.join("source");
         std::fs::create_dir(&source).unwrap();
         std::fs::write(source.join("a"), ORIGINAL).unwrap();
+        for index in 0..directories {
+            std::fs::create_dir(source.join(format!("d{index:04}"))).unwrap();
+        }
         service.set_import_root(&source).unwrap();
         let created = dispatch(
             &service,

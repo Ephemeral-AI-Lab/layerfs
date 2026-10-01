@@ -1277,3 +1277,291 @@ Next: publish this checkpoint with exact counted source/#287 update, then freeze
 R1d-binding-sites complete combined typed site/monotone-base-fact/native owner
 contract and issuer-bound point access before implementation. No guessed tag or
 source authority may enable that path; seen/frontier remains a separate gate.
+
+## R1d-prefetch64 checkpoint published; next combined site authority
+
+Actual commit `420e6a2c0149326fe2c380ff0e4156eadd3d326d`, fulltree
+`b29fc8e038873bc43d3272ec30e9ba41f07a8e01`. Committedarchive recount exactly
+matches before/after/per-file staged results: reference65417 unchanged, Core
+78168→78339(+171), combined143585→143756(+171), with both product subtrees
+unchanged after doc/evidence additions. Normal push and exact origin branch SHA
+confirmed. Latest #287 body requirements/history preserved; exact appended body
+and one substantive checkpoint comment5921238411 confirmed. Full R1 stays open.
+No other issue/task/main merge/closure/benchmark/release action occurred.
+
+Next R1d-binding-sites source is this published commit. Read-only audits identify
+source-issued Point28 and Site60 framing, native SourceId binding before effects
+through admitted SpoolPreparation, exact birth-shape closure/final revalidation
+and real parent indexes as load-bearing. Bare integer descriptors and repeated
+header/NB/whole-row reconstruction are prohibited. Existing alias OR policy,
+restated whole-entry skip, selected-site follow order and activeStoredCount early
+return must remain intact; graphseen/pending/base memo remain separate gates.
+A shared exact contract/ownership freeze precedes any next product edit.
+
+## R1d-binding-sites selected complete responsibility and ownership
+
+First parent remains published420e6a2c0149326fe2c380ff0e4156eadd3d326d.
+[Exact freeze](R1D-BINDING-SITES-FREEZE.md) selects combined typed paged non-file
+exclusive sites and monotone base facts, retiring the actual new-route resident
+site/name/target-parent/base-binding-list authorities. SC-03/05/07/08. Graph
+seen/pending/unreachable/base memo and laterreference remain separate open gates.
+
+Source/point audits identified the existing six producer/delegation paths and
+prohibited NB-fold/full-row/prefix work in repeated point queries. Point28 carries
+the existing issuer; opaqueSourceId restoration and actual receiver checks remain
+necessary, with no new registry or namespace certification claim. Pure admitted
+SpoolPreparation owns the one issuer before native/Save/body and moves it into
+actual RowSpool; source-associated nativev3 Header200 binds it before effects.
+
+Site60/SiteScope89/birth+finalSeal138/Membership164/finalPage171/parentPage189
+and stage0..4 are explicitly selected; oldv1/v2 APIs/bytes stay compatible.
+Nativev3 max(63D,60B) arithmetic and unchanged16MiB/4096pages/512KiBcache/alllimits
+include two REAL native indexes. Source-order birth closure and SAMEtransaction
+final birth rehash prevent changed immutable points/base-bit between phases.
+Alias expected result preserves OR, whole-old-entry restatement skip, onceper
+parent site follow/order and scalar active-zero early return. Original errors,
+exact known/Unknown capsules, metadata-only abandonment and retirement/native
+observation before root permission are gates, not inferredPASS.
+
+C1 owner owns row/source/point/preparation/types/ports/coordinator/validation and
+external Content proofs; C2 owner owns Storage profile/native/schema/index/session/
+lifecycle/custody and real provider maximum/Unknown proofs; Root alone integrates
+Server/shared Bridge contracts, checks, docs/count/commit/push/#287. Reviewer
+read-only. Workers preserve others and run no Cargo/commit/push/issues.
+Concrete public signatures and byte grammar are frozen before coding, with
+independent expected vectors/semantic models and exact prospective exit gates.
+Next: complete source/state paths, verify owning real provider resources/custody
+and integration; no next enablement or benchmark/release claim before proofs.
+
+## R1d-binding-sites shared declarations and Server source ownership
+
+Owners acknowledge the exact freeze. C1 source/point/preparation and closed site
+ports/codecs have landed for C2 integration; these declarations alone are not a
+completed milestone. Reviewer verified Membership164/ParentHeader189/full7869
+and clarified persisted parent/public parent ports must enforcepositive<=i64MAX
+before signedSQL casts. Some(0) ordinal remains distinct fromNone bypresence.
+
+Root Server moves SpoolPreparation byvalue: Construction.begin pure-admits and
+returns source-bound nativev3 session pluspreparation; PreparedUpdate owns that
+preparation; receive consumes the same issuer into actualRowSpool. New explicit
+SiteConstructionScopes/common C1 update route replaces the prepared v2 dispatch,
+preserving existing independent Save/scratch cleanup. Byvalue existing request
+carrier avoids extra argument managers or mutable partial source reuse. Four
+owned production interfaces formatted withRust1.85.1; noCargo/body proof yet.
+
+Root external Service phase assertion is prospectively updated for current
+schema3/root-owner9columns/site-owner10 and site stage4, with unchanged actual
+selectedSQLite NOFOLLOW/FK1/triggerdepth0 and negative787 control. Catalog scratch
+version assertion now3. Historical earlier receipts remain unchanged. Schema/
+source fields will be rechecked against the coherent finalnative implementation
+before testing; no anticipated proof is countedPASS.
+
+Next: complete common paged algorithm and native lifecycle/provider proof source,
+then freeze source and run covering owning checks. No worker Cargo or new
+benchmark campaign; native maxfit/global/physical/graph gates remain unrun.
+
+## R1d-binding-sites source preselection and stored-site Server proof plan
+
+Independent landed-type review found no blocker in exact encodings, monotone
+flags, capacity/continuation guards, native source binding or schema3. C1 birth
+maximum must match returned membership maximum as well as its expected seal.
+
+Foreign source identity acquisition/mismatch is now explicitly BEFORE attempt
+selection in validator and both new construction entry APIs, with no foreign
+owner mutation. After exact match, every owned shape/source/checker/postchecker
+failure abandons once. Firstparty issuer getters are static/noI/O; real body
+failures occur after that match. This narrows the former ambiguous all-error
+statement without guessing source adoption or changing selected error custody.
+
+Root prospective external Service case imports129actual empty directories plus
+originalfile before the operation. It performs a full existing-directory name
+permutation crossing128, expecting explicit old/new serial restatement semantics,
+source-bound native births/projection/finalseal/retirement and exact candidate
+names/kinds/serials. A subsequent unmentioned surviving oldbinding plus new x
+binding must refuse, preserve priorStage/originalroot/bytes and known Save/scratch
+cleanup. Existing fresh257/duplicate257 and catalog/Unknown bodies remain covers.
+The input serials come from the immutable imported base, never candidate output.
+Static fixture review corrected the new expected wire directorykind to existing
+kind2 before any check ran. No body result is claimed yet.
+
+Next: coherent C1/C2 source/test freezes, then root-owned meaningful covering
+checks and exact provider observation. This candidate remains unverified.
+
+## R1d-binding-sites independent Server draft review and retained cleanup gap
+
+Read-only review found no new unique-issuer or cleanup-domain blocker: one
+prepared authority flows before native/Save/body through byvalue request into
+actualsource; native known release, quarantine retention, independent Save abort
+and Savefinish-beforeCatalog remain separate. It ran no Cargo/diagnostic and
+does not qualify draft code. Source preselection is outside all three public
+C1 owning wrappers; exact matching-source failures retain once-only terminalization.
+
+Inherited unresolved boundary, now recorded explicitly for later R3/R4: receive
+discards a legacy spoolcleanup error; early post-receive failures depend on Drop;
+a primary C1 failure can hide simultaneously evaluated rows.cleanup failure.
+Current normal-cleanup and native/Save Unknown proofs do not establish that
+multiple-cleanup custody. Required complete composition remains open; no source
+error rollback/adoption/refund or hidden cleanupPASS is inferred.
+
+Next: finalcoherent source/provider/tests and root-owned covering checks, then
+resolve any demonstrated cause from retained outputs. No benchmark qualification.
+
+## R1d-binding-sites independent native admission-order finding
+
+Read-only review found the draft public site_insert_batch checks window/framing
+but cumulative records+batch against declaredB/frame60 only inside mutation,
+after native reserve and BEGIN. That violates this slice's exact pre-effect
+capacity gate. C2 owner will check overflow/cumulative count/class in public
+preflight before attempt/reserve/SQL, retaining transaction consistency recheck.
+The real C1 caller already checks immediate pending/provider duplicate before
+its declaration gate; no duplicate precedence is relaxed. Planned real-provider
+lock/capacity proof must distinguish capacity from Busy/native effects with no
+fake allocator/hook. No body ran and no passing result is inferred.
+
+A second independent native source finding concerns the NEWv3 whole-batch
+validation claim: a local duplicate key/point returnedDuplicate before later
+selected stored rows were decoded. The frozen contract requires every such row
+validated first, so a later malformed row cannot be masked. C2 correction will
+retain a localDuplicate flag, validate selected stored rows, then acknowledge
+Duplicate/noadditions and terminalize. Existing v1/v2 source/precedence is not
+changed. Real C1 immediate duplicate-vs-later-semantic-error precedence is a
+separate unchanged boundary. External localdup+latercorrupt selected row is an
+independent required case; no old stored-duplicate proof substitutes for it.
+
+Both v3 native source findings are corrected prospectively: checked cumulative
+count/frame60 occurs before native effects, with transaction recheck retained;
+localDuplicate is carried while every selected stored row is checked before
+Duplicate rollback. Planned external EXCLUSIVE/BUSYnegative capacity/noattempt/
+unchangednative and localdup+corrupttail cases give independent cause evidence.
+No Cargo has run; no correction-body PASS is claimed.
+
+C1 static order review also places final alias predicate/verification/retirement
+immediately after facts, before remaining shared root/cycle checks, preserving
+original alias-before-cycle verdicts. A later selected checker failure abandons
+and denies root work even if retirement was already known. No root construction
+or canonical publication occurs until all checker gates pass.
+
+## R1d-binding-sites Storage source freeze awaiting owning body
+
+Storage owner freezes21owned files at f2abf92c3a6d92fda8cdc7086cfb533f92295953cca7dd1a3c0794a2a33c2a99
+(worker declaration: sorted path length8/path/content length8/contentSHA256).
+Prospective construction_sites18primary +2process helpers cover actual maximum
+sites/indexes/retire/roots, both newpreflight corrections, literal vectors/native
+header reconstruction and5fresh-process Unknown phases. Scoped formatter passed;
+a prior external-helper delimiter parse error was fixed before finalformat and
+noCargo/body ran. Maxphysical fit and all5provider bodies remainUNRUN.
+
+Read-only reviewer confirms corrected preflight checks fullselection/source/stage/
+retainedfailure before capacity, then count/frame60 before verify/reserve/attempt/
+BEGIN. Localdup now waits for allselectedrow validation. Old claim-session/index
+and v1/v2 SQL source remain unchanged. Prospective owning C2 suite also covers
+construction_claims/state because shared Resource/header/profile/native paths
+changed. Its inputclosure can exclude unrelated externalContent/Server tests,
+but allcompile product dependencies mustfreeze before running.
+
+## R1d-binding-sites first owning provider and C1 outcomes
+
+01 Storage owning locked construction_sites/claims/state PASS42distinctprimary
+(49reported minus7emptyhelpers). Source inputseal d68485d68eff0752231d57085aa96bba1baccef1766fc32290e4d805bc3d66bf
+unchanged. Nativev3 all-base65536/twoindexes:3425pages, retirement3417freepages,
+maxroots final3425samefile/allocated16777216. SiteRecord actual54bytes/window128
+6912, framedsites3932160. All5freshProcessSHARED/COMMIT Unknown phases pass
+originalerror/exactcapsule/noRoot/retainedidentity-credit/noreplay proofs. Actual
+AppleSQLite3.51.0; directprovider scope only. Newv3 corrections capacityunder
+EXCLUSIVE/Busynegative and localduplicate+latercorrupt row alsoPASS. v1/v2 bodies
+pass after shared native/header/resource changes. Initial warning was unused
+external root-oracle page_header, not product/bodyfailure.
+
+Independent review then identified wider supported parent INTEGER storage:
+parent1 omits payloadbytes versusi64MAX. The original passingvector/receipt is
+retained; distinct03maximum-width case changes ONLY newexternaltarget/fixture,
+uses realSlice source parenti64MAX and preserves the original maxbody exactly.
+Its root-page header/record actualbyte assertion also uses the previouslyunused
+oracle, resolving warning withoutoldsource/lint suppression.
+
+03narrow maximumwidth case PASS1 newprimary,20otherbodiesnotrun/reused. Allbase
+65536 with both indexes:3932pages/3924retiredfree; maximumroots final3932samefile/
+allocated16777216, within unchanged4096pages. Exact source seal
+1c5c5ee7825a2a42d03e8c0075f4c2afdaa471415b9efdf1a9bec968d755a866 unchanged.
+No quota/slack/page/worker change or performance row. Observed widthcase closes
+that selected nativefile exit; globalengine/cache/RSS/healthyphysical/Linux proof
+is separate and remains unavailable/unrun.
+
+02 Content owning locked new4targets plusaffectedlegacy/canonical/index/prefetch
+PASS141distinctprimary,29new+112covering. Content+Telemetry inputseal
+c7234adea7811f35c82bdf4724a9f3a971eb181bcc50c0fd600d3c6e8a046ab4 unchanged.
+Independent literalPoint/frame/birth/final/membership/page vectors, sourceforeign/
+selectedcustody, permutation/tombstone/backedge/uncertifiedOR/activezero/alias-vs-
+cycle and allsealedv1 fixtures throughactualnewcaller pass. Realspool4097names
+pointqueries decode<=16,2adjacentchecks/0nameprobes; N129 dispatch258visits/2parent
+pages/387pointresolutions/0historicalbindingrows. These actual countdiagnostics
+are distinct from graph/memo/global/physical/speed proofs.
+
+Next: actualServer composition04 inprogress, then owning lint/examples/fmt/guard,
+source/window review, exactLOC/publication. Allrawresults/commands/sourceinventories
+are append-only in evidence/r1d-binding-sites. No benchmark/#288 execution.
+
+## R1d-binding-sites first Server composition refusal and narrow correction
+
+04actualServer composition FAIL101: all3binding/site primary casesPASS (fresh257,
+duplicate257/priorStage, stored129permutation+survivingparentrefusal). Catalog
+5primaryPASS/2FAIL plus1emptyhelper; the actual observed v3header200 was compared
+to old192 atcatalog_admission247. This prebody observer failure alsoblocked the
+fresh scratchUnknownchild. Prepared/history targets didNOTRUN after that failed
+target. Product source inputs unchanged duringattempt; unused Read importwarning
+followed the new byvalue request carrier.
+
+Exact original catalog test and unusedimport productionfile are captured and
+hashmatched to04inventory before correction. Correctonlyexternal expected
+header to200 and removeunusedimport; noalgorithm/quota/profile effect changed.
+05exact two-Save/catalog allocator coverPASS1;06exact scratchUnknown coverPASS1,
+including both storeLockedfalse/true realSHARED/RESERVED processbarriers, exact
+retainednative identity/credit, known Save abort or actualOwnershipcleanup
+refusal, noStage/Branch update or queryadoption. Otherpassing bodies reused.
+Server inputseal bbbf0ff0a40d709e1ba25524ab75ffc4419f02177f69b9cd96b2a203e3783f56
+unchanged05/06. The original failed observer/blocked body is not discardedPASS.
+
+07 runs onlypreviouslyunrun prepared/history targets. Next alltargetlint/examples/
+fmt/guard and exact counted checkpoint; current mainR1 remainsopen.
+
+## R1d-binding-sites owning checks and scoped exit totals
+
+07previouslyunrun Server prepared/history PASS34primary (28history/6prepared),
+sourceunchanged. Serverunique44primary across04/05/06/07, reusedpassedbodies and
+emptyhelper excluded; 04failedoldheaderobserver remainsFAIL. Total228distinct
+primaryPASS: Content141, Storage43(including distincti64MAXwidth), Server44.
+
+08warningdenying alltargetClippy FAIL101 on3non-owning external borrow-wrapper
+drops atbinding_site_validation685/686/718, no productfinding. Exactoriginal
+source captured/hashmatched beforecorrection. Removeonlythese3drops, usingnormal
+NLL afterlastuse; ownedcleanup/drops/assertions untouched and passingbodies not
+rerun. 09sameowningClippy PASS0. Lockedowning examples10 PASS0, wholeCorefmt11
+PASS0, productguard12 PASS442/selftests13 PASS9. FinalallCoretestinputseal
+74ac357c0e136e6d5b4d3b4c95760ba2bbc22370198676832cf5389d85f9d5b6 unchanged
+09/10/11/12/13. RootARMv8flags andownedcore/target are inallCargo metadata.
+UnchangedSDK/countertoolproofs reused; fullfinalCorechecks remainR7.
+
+These exits prove scopedbytes/alias/work/nativefile/knownUnknown custody only.
+Graphmemo/unreachable/seen/frontier/reference populations, native/globalheap/
+cache/RSS/physicalhealthyprogress/Linux, inheritedspool/multiplecleanup and
+R2–R7/fullCommit/runtime/concurrency/cutover remainopen. Source/hash/capability
+binding is not certifiednamespaceparent policy. No benchmark/#288 campaign or
+releaseadmission. Next: exact stagedproductioncomparison andcheckpointpublication,
+then select/freeze nextcomplete paged graphauthority from source/resource audits.
+
+## R1d-binding-sites final staged production comparison
+
+Production LOC: 143756 -> 147464 (delta +3708)
+Reference: 65417 -> 65417 (delta +0)
+Core: 78339 -> 82047 (delta +3708)
+Method: tools/production_loc.py blob a1cb6c064dd150dbc3aa19648a3748b5aeb741b5;
+SHA256 0d798f53263c0f18636d96ccdfdc3728f501f53b066e90577d251859f1f117b2;
+git archive first-parent/final staged tree crates core/crates, same scan/per_file;
+production Rust + shipped SQL, excludes test-only/inline tests, external tests,
+examples/fixtures/tools/docs/generated/third-party inputs.
+
+Counted Core subtree `a66773173612b10a0407c3b3dcb5714ca9753623`; reference subtree
+`498dd1917812ae90efb8841f57e22bfc284e96fb`. Final doc/evidence staging must preserve
+these exact counted product trees. New shipped schema3 SQL is included; reference
+unchanged, compatible old authority retained explicitly, no legacy retirement.
+Next: commit, exact archive recount, normal publication and one #287 checkpoint.

@@ -13,9 +13,11 @@ use rusqlite::Connection;
 use crate::error::{StorageError, StorageResult};
 
 use super::authority::{Shared, Slot};
+use super::header::Header;
 use super::native::{NativeFile, RESERVED_BYTES};
 use super::phased::Phased;
 use super::plan::Plan;
+use super::sites::Sites;
 use super::status::{ScratchDisposition, ScratchOwnerStatus, ScratchProfile};
 use super::{index, profile};
 
@@ -23,12 +25,13 @@ pub(crate) struct Resource {
     pub(crate) selection: StateSelection,
     pub(crate) native: NativeFile,
     pub(crate) connection: Option<Connection>,
-    header: Option<[u8; 192]>,
+    header: Option<Header>,
     ledger: Option<StateLedger>,
     seal: Option<StateSeal>,
     logical_released: bool,
     plan: Plan,
     pub(crate) phased: Option<Phased>,
+    pub(crate) sites: Option<Sites>,
     pub(crate) release_attempted: bool,
     pub(crate) unknown: Cell<bool>,
 }
@@ -45,6 +48,7 @@ impl Resource {
             logical_released: false,
             plan,
             phased: None,
+            sites: None,
             release_attempted: false,
             unknown: Cell::new(false),
         }
@@ -67,6 +71,19 @@ impl Resource {
                 None => attempt.description(),
             }),
             None => failure,
+        };
+        let failure = if let Some(sites) = &self.sites {
+            if failure.is_some() || sites.failed.get() {
+                Some(format!(
+                    "{}; {}",
+                    failure.unwrap_or_default(),
+                    sites.description()
+                ))
+            } else {
+                failure
+            }
+        } else {
+            failure
         };
         let failure = match self
             .phased
@@ -113,13 +130,19 @@ impl Resource {
         ))?;
         index::verify_header(
             connection,
-            self.header.as_ref().ok_or(StorageError::Integrity(
-                "construction scratch header unavailable",
-            ))?,
+            self.header
+                .as_ref()
+                .ok_or(StorageError::Integrity(
+                    "construction scratch header unavailable",
+                ))?
+                .as_bytes(),
             self.seal.as_ref(),
         )?;
         if let Some(phased) = &self.phased {
             super::claim_index::verify(connection, phased)?;
+        }
+        if let Some(sites) = &self.sites {
+            super::site_index::verify(connection, sites)?;
         }
         Ok(connection)
     }
@@ -135,6 +158,9 @@ impl Resource {
         }
         if let Some(phased) = &self.phased {
             phased.check_roots(scope)?;
+        }
+        if let Some(sites) = &self.sites {
+            sites.check_roots(scope)?;
         }
         if self
             .ledger
@@ -250,6 +276,9 @@ impl ScratchSession {
             if let Some(phased) = &resource.phased {
                 phased.failed.set(true);
             }
+            if let Some(sites) = &resource.sites {
+                sites.failed.set(true);
+            }
         }
         if self.description.borrow().is_none() {
             *self.description.borrow_mut() = Some(error.to_string());
@@ -280,9 +309,18 @@ impl ScratchSession {
                     .phased
                     .as_ref()
                     .is_some_and(|state| state.failed.get())
+                || resource
+                    .sites
+                    .as_ref()
+                    .is_some_and(|state| state.failed.get())
             {
                 ScratchDisposition::Failed
-            } else if resource.seal.is_some() {
+            } else if resource.seal.is_some()
+                || resource
+                    .sites
+                    .as_ref()
+                    .is_some_and(|state| state.seal.is_some())
+            {
                 ScratchDisposition::Sealed
             } else {
                 ScratchDisposition::Open
@@ -337,16 +375,33 @@ impl ScratchSession {
                 }
                 return Err(error);
             }
-            let binding = resource
-                .native
-                .binding(resource.selection.selector(), resource.selection.token())?;
+            let binding = match resource.plan {
+                Plan::SitesThenRoots { source, .. } => resource.native.sites_binding(
+                    resource.selection.selector(),
+                    resource.selection.token(),
+                    source,
+                )?,
+                _ => resource
+                    .native
+                    .binding(resource.selection.selector(), resource.selection.token())?,
+            };
             resource.selection.bind_owner(binding)?;
-            let header = resource.native.header(
-                resource.selection.selector(),
-                resource.selection.token(),
-                &binding,
-                resource.plan.version(),
-            )?;
+            let header = match resource.plan {
+                Plan::SitesThenRoots { source, .. } => {
+                    Header::Sites(resource.native.sites_header(
+                        resource.selection.selector(),
+                        resource.selection.token(),
+                        &binding,
+                        source,
+                    )?)
+                }
+                _ => Header::Earlier(resource.native.header(
+                    resource.selection.selector(),
+                    resource.selection.token(),
+                    &binding,
+                    resource.plan.version(),
+                )?),
+            };
             resource.header = Some(header);
             if let Plan::ClaimsThenRoots {
                 directories,
@@ -355,6 +410,19 @@ impl ScratchSession {
             {
                 resource.phased = Some(Phased::new(&resource.selection, directories, bindings)?);
             }
+            if let Plan::SitesThenRoots {
+                directories,
+                bindings,
+                source,
+            } = resource.plan
+            {
+                resource.sites = Some(Sites::new(
+                    &resource.selection,
+                    directories,
+                    bindings,
+                    source,
+                )?);
+            }
             let connection = profile::open(&resource.native.path)?;
             resource.connection = Some(connection);
             resource.native.verify()?;
@@ -362,11 +430,13 @@ impl ScratchSession {
                 .phased
                 .as_ref()
                 .map(|state| state.claims.as_bytes());
+            let sites = resource.sites.as_ref().map(|state| state.scope.as_bytes());
             profile::initialize(
                 resource.connection.as_ref().unwrap(),
-                &header,
+                resource.header.as_ref().unwrap().as_bytes(),
                 resource.plan,
                 claims.as_ref(),
+                sites.as_ref(),
             )?;
             resource.native.verify()?;
             Ok(())
