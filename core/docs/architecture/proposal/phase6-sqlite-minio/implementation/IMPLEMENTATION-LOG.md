@@ -552,3 +552,22 @@ postpublication install error with pending retained. Changed-source source/const
 checks retained by scope; no unchanged suite replay. Initial staged count and unused
 binary archives retained; recompute exact final staged source after this correction.
 No live sample has run yet.
+
+## V4c3a live catalog/source dependency COMPLETE; full goal open
+
+Runtime54033db99c6aa01bb4728cbd739f189390ba1b4e. Original full128first3steps
+plus generic64overwrites/find and physical no-source/all128names observation pass
+5root readonly bytes/metadata/history and cleanup, including exact cleanUpToDate.
+External performance/proof7.733829875/4.161389375s under15/9.5, one source/run.
+Target/local/churn/clean Commit626.307208/44.047958/40.453834/22.773542ms;
+cacheINELIGIBLE/canonical-physicalNOT_RUN. Source files217retired in68batches,
+max64, pendingfalse; churn64additionalretirements. Directory15pages/519decoded
+rows,64row/1308payload/3292ownedpeak, actual inventory128. No whole vectors/
+history-source scan. Runtime guards preserve readable bytes/Unknown pending.
+RESULTS-V4C3A.md and rawv4c3a-native-cohort record exact method/limits/identities.
+
+Next V4c3b bounded large-file span range keysets and short SQL operation windows:
+current read predicate can scan a prefix, MEMORYjournal whole-population transaction
+would violate streaming bounds. Then paged reservations/admission/import/mount
+before increasing512/256profile, remaining syscalls/sevenfamilies/fullDeepSeek/
+physical/Unknown/concurrency/canonical gates. Full goal active.

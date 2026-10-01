@@ -72,8 +72,12 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
   and local one-file service counts. [RESULTS-V4C2B2](RESULTS-V4C2B2.md).
   Physical/larger population/independent canonical qualification remains open.
 
-Current action: V4c3a bounded indexed directory cookies and reference-counted
-source retirement, per [frozen dependency](V4C3A-SPEC.md), retaining512/256profile
-until actual covering checks/live proof. Then V4c3b paged reservations/admission
-and explicit inherited import/mount, remaining syscalls and genuine seven-family/
-complete DeepSeek generic/locality/resource proofs. Full goal remains active.
+- [x] V4c3a bounded cookie directory pages and referenced local source retirement;
+  original full128five-root generic enumeration/churn/cleanUpToDate live proof.
+  [RESULTS-V4C3A](RESULTS-V4C3A.md). Larger/physical/orphan/custody gates stay open.
+
+Current action: V4c3b bounded large-file span keysets and short SQL operation
+windows, then paged reservations/admission/inherited import/mount before raising
+current512/256profile. Freeze exact source/count proofs, preserve accepted/Unknown
+custody. Remaining generic syscalls, genuine seven-family/complete DeepSeek
+commands/locality/resource proofs remain required. Full goal active.

@@ -1,0 +1,5 @@
+step=seed exec_ms=20.882416 commit_ms=113.56824999999999 generation=1 root=2b767909e4bdcc1183efde0bac30725b8652ec0fa1d2ddb67692fb7a7a9e05a0
+step=target exec_ms=87.527292 commit_ms=626.307208 generation=2 root=14225e6517cecce70a14fdbad76ea57d15e1e7df09ce93bf921280a1eb3bfc30
+step=localized-successor exec_ms=6.759 commit_ms=44.047958 generation=3 root=d9ceee6bc668f4db19869792bcdc6be8fb842481f36c66769105aabb5eeba034
+step=enumeration-churn exec_ms=97.573667 commit_ms=40.453834 generation=4 root=bbf6a50d0f040f913b349b0b1a94623818cdfe07599d5f30080d344b87543181
+step=clean-retirement exec_ms=80.634084 commit_ms=22.773542 generation=5 root=bbf6a50d0f040f913b349b0b1a94623818cdfe07599d5f30080d344b87543181

@@ -1,0 +1,12 @@
+{
+  "cumulative_by_step": [
+    "P6_LIVE_SQL directory=Work { pages: 0, rows: 0, peak_rows: 0, peak_payload_bytes: 0, peak_owned_bytes: 0 } retirement=Work { batches: 1, retired: 24, peak_rows: 24 } pending=false",
+    "P6_LIVE_SQL directory=Work { pages: 5, rows: 173, peak_rows: 64, peak_payload_bytes: 1308, peak_owned_bytes: 3292 } retirement=Work { batches: 3, retired: 152, peak_rows: 64 } pending=false",
+    "P6_LIVE_SQL directory=Work { pages: 5, rows: 173, peak_rows: 64, peak_payload_bytes: 1308, peak_owned_bytes: 3292 } retirement=Work { batches: 4, retired: 153, peak_rows: 64 } pending=false",
+    "P6_LIVE_SQL directory=Work { pages: 10, rows: 346, peak_rows: 64, peak_payload_bytes: 1308, peak_owned_bytes: 3292 } retirement=Work { batches: 68, retired: 217, peak_rows: 64 } pending=false",
+    "P6_LIVE_SQL directory=Work { pages: 15, rows: 519, peak_rows: 64, peak_payload_bytes: 1308, peak_owned_bytes: 3292 } retirement=Work { batches: 68, retired: 217, peak_rows: 64 } pending=false"
+  ],
+  "clean_same_root": true,
+  "no_local_source_files_command_success": true,
+  "diagnostic": true
+}
