@@ -1,18 +1,33 @@
 //! Native configuration: telemetry and the history catalog binding.
 //!
-//! Nothing here has a default. A history catalog is configured with an explicit
+//! Indexed construction scratch has an explicit16MiB default. A history catalog
+//! is configured with an explicit
 //! binding key and an explicit mode, because the binding key is what ties the
 //! catalog file to the content authority it describes, and "create" versus
 //! "open read-only" is the difference between holding writable continuity and
 //! being unable to allocate. An absent catalog simply leaves history
 //! unconfigured; a partially configured one is refused.
 use layerfs_bridge::contract::{Code, Failure};
+use layerfs_content::filesystem::state::GraphCapacity;
 use layerfs_history::sqlite::{create, open_read_only};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig};
 use layerfs_telemetry::{
     output::{Identity, OutputConfig, OutputMode},
     runtime::{Configuration, MonitorConfig, Runtime},
 };
+
+/// One indexed construction-state owner; absence selects the explicit default.
+/// Invalid/unaligned values refuse rather than changing or rounding the profile.
+pub(crate) fn construction_scratch() -> Result<GraphCapacity, Failure> {
+    match std::env::var("LAYERFS_CONSTRUCTION_SCRATCH_BYTES") {
+        Ok(value) => {
+            let bytes = value.parse::<u64>().map_err(|_| Code::InvalidInput)?;
+            GraphCapacity::new(bytes).map_err(crate::service::error::content)
+        }
+        Err(std::env::VarError::NotPresent) => Ok(GraphCapacity::default()),
+        Err(std::env::VarError::NotUnicode(_)) => Err(Code::InvalidInput.into()),
+    }
+}
 /// Builds the configured history catalog, if the operator configured one.
 ///
 /// `LAYERFS_HISTORY_CATALOG` names the file. `LAYERFS_HISTORY_BINDING` is the

@@ -1,0 +1,802 @@
+//! Owning source, verdict order, failure fences and one-expansion count proofs.
+#![allow(dead_code)]
+#[path = "support/graph_state.rs"]
+mod oracle;
+mod support;
+use layerfs_content::filesystem::rows::*;
+use layerfs_content::filesystem::state::*;
+use layerfs_content::filesystem::validate::{check_with_graph, ValidationWork};
+use layerfs_content::filesystem::{
+    build_filesystem_binding_rows_with_graph_state,
+    update_filesystem_binding_rows_with_graph_state, DirectoryUpdate, FilesystemInput,
+    FilesystemPhases, FilesystemRootId, InodeScope, InodeUpdate, PathName,
+};
+use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
+use layerfs_content::{ContentError, ContentResult, ObjectId, ObjectRole};
+use oracle::{scopes, ObservedGraph};
+use std::cell::Cell;
+use std::collections::BTreeMap;
+use support::filesystem::{resources, synthetic, value, with_objects, TreeStore};
+fn envelope(value: &[u8]) -> Vec<u8> {
+    let mut bytes = b"LFSO\x01".to_vec();
+    bytes.extend_from_slice(&((value.len() + 4) as u32).to_be_bytes());
+    bytes.extend_from_slice(&(value.len() as u32).to_be_bytes());
+    bytes.extend_from_slice(value);
+    bytes
+}
+fn page(
+    magic: &[u8; 8],
+    role: u8,
+    level: u8,
+    count: usize,
+    total: u64,
+    total_bytes: u64,
+    rows: &[u8],
+) -> Vec<u8> {
+    let mut value = magic.to_vec();
+    value.extend_from_slice(&1u16.to_be_bytes());
+    value.extend_from_slice(&[role, level, 0]);
+    value.extend_from_slice(&(count as u16).to_be_bytes());
+    value.extend_from_slice(&total.to_be_bytes());
+    value.extend_from_slice(&total_bytes.to_be_bytes());
+    value.extend_from_slice(rows);
+    envelope(&value)
+}
+// Independently encoded v1 pages from literal grammar, no LayerFS page/root encoder.
+fn base(vertices: usize, edges: &[(u64, u64)]) -> (TreeStore, FilesystemRootId, InodeScope) {
+    let mut seed = b"layerfs/inode-scope/v1\0".to_vec();
+    seed.extend_from_slice(&[0xa7; 32]);
+    let scope = InodeScope::from_object(ObjectId::for_bytes(&seed));
+    let mut store = TreeStore::new();
+    let mut content = Vec::new();
+    for serial in 1..=vertices as u64 {
+        let children: Vec<_> = edges
+            .iter()
+            .filter(|(p, _)| *p == serial)
+            .map(|(_, child)| *child)
+            .collect();
+        let mut rows = Vec::new();
+        for (ordinal, child) in children.iter().enumerate() {
+            let name = format!("e{ordinal:04}");
+            rows.extend_from_slice(&(name.len() as u16).to_be_bytes());
+            rows.extend_from_slice(name.as_bytes());
+            rows.extend_from_slice(&child.to_be_bytes());
+        }
+        let root = store.insert(
+            ObjectRole::DirectoryLeaf,
+            page(
+                b"LFS6NSP\0",
+                1,
+                0,
+                children.len(),
+                children.len() as u64,
+                rows.len() as u64,
+                &rows,
+            ),
+        );
+        content.push(root);
+    }
+    let groups = vertices.div_ceil(100);
+    let width = vertices.div_ceil(groups);
+    let mut summaries = Vec::new();
+    for start in (0..vertices).step_by(width) {
+        let end = (start + width).min(vertices);
+        let mut rows = Vec::new();
+        for i in start..end {
+            let serial = i as u64 + 1;
+            rows.extend_from_slice(&serial.to_be_bytes());
+            rows.push(2);
+            let incoming = edges.iter().filter(|(_, c)| *c == serial).count() as u64;
+            rows.extend_from_slice(&incoming.to_be_bytes());
+            rows.extend_from_slice(content[i].as_bytes());
+            rows.extend_from_slice(synthetic("metadata").as_bytes());
+        }
+        let leaf = store.insert(
+            ObjectRole::InodeLeaf,
+            page(
+                b"LFS6INT\0",
+                7,
+                0,
+                end - start,
+                (end - start) as u64,
+                rows.len() as u64,
+                &rows,
+            ),
+        );
+        // Branch separators are inclusive child maxima; leaf partitions stay unchanged.
+        summaries.push((end as u64, leaf));
+    }
+    let table = if summaries.len() == 1 {
+        summaries[0].1
+    } else {
+        let mut rows = Vec::new();
+        for (serial, id) in &summaries {
+            rows.extend_from_slice(&serial.to_be_bytes());
+            rows.extend_from_slice(id.as_bytes());
+        }
+        store.insert(
+            ObjectRole::InodeBranch,
+            page(
+                b"LFS6INT\0",
+                8,
+                1,
+                summaries.len(),
+                vertices as u64,
+                vertices as u64 * 81,
+                &rows,
+            ),
+        )
+    };
+    let profile=ObjectId::for_bytes(b"layerfs/namespace-profile/scoped-inline/v1\0scope32;serial8;inode81;leaf50-100;branch64-127;page8192;depth31;directory-fill2/5");
+    let mut root = b"LFS6FSR\0".to_vec();
+    root.extend_from_slice(&1u16.to_be_bytes());
+    root.extend_from_slice(&[6, 0]);
+    root.extend_from_slice(profile.as_bytes());
+    root.extend_from_slice(scope.object().as_bytes());
+    root.extend_from_slice(&1u64.to_be_bytes());
+    root.extend_from_slice(table.as_bytes());
+    let base = store.insert(ObjectRole::FilesystemRoot, envelope(&root));
+    (store, FilesystemRootId(base), scope)
+}
+fn selected(source: &dyn PreparedBindingRows) -> GraphConstructionScopes {
+    scopes(
+        source.binding_source_id().unwrap(),
+        source.scope(),
+        source.base(),
+        source.root_serial(),
+        GraphCapacity::default(),
+    )
+}
+#[test]
+fn all257_chain_seeds_share_one_graph_and_preserve_independent_base_root() {
+    let edges: Vec<_> = (1..257).map(|serial| (serial, serial + 1)).collect();
+    let (mut store, root, scope) = base(257, &edges);
+    let rows: Vec<_> = (1..=257)
+        .map(|serial| DirectoryUpdate {
+            parent: serial,
+            changes: if serial < 257 {
+                vec![(PathName::new("e0000").unwrap(), Some(serial + 1))]
+            } else {
+                Vec::new()
+            },
+        })
+        .collect();
+    let input = FilesystemInput {
+        base: Some(root),
+        scope,
+        root_serial: 1,
+        directories: &rows,
+        inodes: &[],
+        new_inodes: &[],
+        resources: resources(),
+    };
+    let source = SliceBindingRows::new(&input).unwrap();
+    let scopes = selected(&source);
+    let mut state = ObservedGraph::new(&scopes, rows.len(), 256);
+    let result = with_objects(&mut store, |objects| {
+        update_filesystem_binding_rows_with_graph_state(
+            objects,
+            &source,
+            None,
+            &mut state,
+            &scopes,
+            &FilesystemPhases::disabled(),
+        )
+    })
+    .unwrap();
+    assert_eq!(
+        result.root, root,
+        "independent preexisting canonical bytes are the no-op expected root"
+    );
+    let work = result.counters.validation.graph;
+    assert_eq!(
+        (
+            work.seed_occurrences,
+            work.node_expansions,
+            work.nodes,
+            work.edges
+        ),
+        (256, 256, 256, 255)
+    );
+    assert_eq!(
+        (
+            work.source_entries,
+            work.raw_directory_edges,
+            work.solver_entered,
+            work.edge_steps,
+            work.popped_members
+        ),
+        (255, 255, 256, 255, 256)
+    );
+    assert_eq!(
+        (
+            work.append_batches,
+            work.cas_batches,
+            work.pop_batches,
+            work.proof_pages
+        ),
+        (255, 768, 256, 2)
+    );
+    assert_eq!(
+        (work.max_children, work.max_targets, work.max_page_records),
+        (1, 3, 128)
+    );
+    assert_eq!(state.expansions, 256);
+    assert_eq!(state.retirements, 1);
+    eprintln!("C1 graph count diagnostic:257-directory base,256 overlapping seeds,256 expansions/entries,255 unique edges,255 emitted adjacency entries,768 closed CAS calls,256 bounded SCC pops; unchanged independent base root {}",root.0);
+}
+#[test]
+fn old_nonseed_descendant_cycle_is_accepted_by_actual_new_update_caller() {
+    let (mut store, root, scope) = base(4, &[(1, 2), (2, 3), (3, 4), (4, 3)]);
+    let rows = [DirectoryUpdate {
+        parent: 1,
+        changes: vec![(PathName::new("e0000").unwrap(), Some(2))],
+    }];
+    let input = FilesystemInput {
+        base: Some(root),
+        scope,
+        root_serial: 1,
+        directories: &rows,
+        inodes: &[],
+        new_inodes: &[],
+        resources: resources(),
+    };
+    let source = SliceBindingRows::new(&input).unwrap();
+    let scopes = selected(&source);
+    let mut state = ObservedGraph::new(&scopes, 1, 1);
+    let result = with_objects(&mut store, |objects| {
+        update_filesystem_binding_rows_with_graph_state(
+            objects,
+            &source,
+            None,
+            &mut state,
+            &scopes,
+            &FilesystemPhases::disabled(),
+        )
+    })
+    .unwrap();
+    assert_eq!(result.root, root);
+    assert_eq!(result.counters.validation.graph.node_expansions, 3);
+    assert_eq!(result.counters.validation.graph.popped_members, 3);
+}
+#[test]
+fn selected_old_cycle_rejects_after_sites_retire_without_canonical_output() {
+    let (mut store, root, scope) = base(4, &[(1, 2), (2, 3), (3, 4), (4, 3)]);
+    let rows = [DirectoryUpdate {
+        parent: 3,
+        changes: vec![(PathName::new("e0000").unwrap(), Some(4))],
+    }];
+    let input = FilesystemInput {
+        base: Some(root),
+        scope,
+        root_serial: 1,
+        directories: &rows,
+        inodes: &[],
+        new_inodes: &[],
+        resources: resources(),
+    };
+    let source = SliceBindingRows::new(&input).unwrap();
+    let scopes = selected(&source);
+    let mut state = ObservedGraph::new(&scopes, 1, 1);
+    let emitted = store.order().len();
+    let result = with_objects(&mut store, |objects| {
+        update_filesystem_binding_rows_with_graph_state(
+            objects,
+            &source,
+            None,
+            &mut state,
+            &scopes,
+            &FilesystemPhases::disabled(),
+        )
+    });
+    assert_eq!(
+        result.unwrap_err(),
+        ContentError::InvalidRecord("effective tree cycle")
+    );
+    assert_eq!(state.stage, GraphStage::Rejected);
+    assert_eq!(state.sites.retirements, 1);
+    assert_eq!(state.abandonments, 1);
+    assert_eq!(store.order().len(), emitted);
+    assert!(state.capacity(scopes.roots()).is_err());
+}
+#[test]
+fn retained_parent_alias_keeps_priority_over_graph_cycle() {
+    let (mut store, root, scope) = base(4, &[(1, 2), (2, 3), (3, 4), (4, 3)]);
+    let rows = [DirectoryUpdate {
+        parent: 1,
+        changes: vec![(PathName::new("new").unwrap(), Some(4))],
+    }];
+    let input = FilesystemInput {
+        base: Some(root),
+        scope,
+        root_serial: 1,
+        directories: &rows,
+        inodes: &[],
+        new_inodes: &[],
+        resources: resources(),
+    };
+    let source = SliceBindingRows::new(&input).unwrap();
+    let scopes = selected(&source);
+    let mut state = ObservedGraph::new(&scopes, 1, 1);
+    let result = with_objects(&mut store, |objects| {
+        update_filesystem_binding_rows_with_graph_state(
+            objects,
+            &source,
+            None,
+            &mut state,
+            &scopes,
+            &FilesystemPhases::disabled(),
+        )
+    });
+    assert_eq!(
+        result.unwrap_err(),
+        ContentError::InvalidRecord("multiple parents")
+    );
+    assert!(state.nodes.is_empty());
+    assert_eq!(state.stage, GraphStage::Deferred);
+    assert_eq!(state.sites.retirements, 0);
+    assert_eq!(state.abandonments, 1);
+}
+fn empty_input<'a>(
+    rows: &'a [DirectoryUpdate],
+    values: &'a [InodeUpdate],
+    new: &'a [u64],
+) -> FilesystemInput<'a> {
+    FilesystemInput {
+        base: None,
+        scope: layerfs_content::filesystem::scope_for_seed([0x31; 32]),
+        root_serial: 1,
+        directories: rows,
+        inodes: values,
+        new_inodes: new,
+        resources: resources(),
+    }
+}
+#[test]
+fn foreign_budget_or_getter_failure_consumes_no_site_owner_through_all_entries() {
+    for entry in 0..3 {
+        for getter in [false, true] {
+            let rows = [DirectoryUpdate {
+                parent: 1,
+                changes: Vec::new(),
+            }];
+            let values = [InodeUpdate {
+                serial: 1,
+                value: value(
+                    InodeKind::Directory,
+                    synthetic("directory"),
+                    synthetic("metadata"),
+                ),
+            }];
+            let new = [1];
+            let input = empty_input(&rows, &values, &new);
+            let mut source = PointSource::new(&input);
+            let selected = selected(&source);
+            let actual = selected.graph().subject();
+            let foreign = GraphConstructionScopes::new(
+                selected.roots().selection().clone(),
+                GraphSubject::new(
+                    actual.source_id(),
+                    actual.namespace(),
+                    actual.base(),
+                    actual.root_serial(),
+                    GraphCapacity::new(48 * 1024 * 1024).unwrap(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            let mut state = ObservedGraph::new(&selected, 1, 0);
+            if getter {
+                source.source_error = true;
+            }
+            let chosen = if getter { &selected } else { &foreign };
+            let mut store = TreeStore::new();
+            let result = if entry == 0 {
+                check_with_graph(
+                    &store,
+                    &source,
+                    &BTreeMap::new(),
+                    &mut ValidationWork::default(),
+                    &mut state,
+                    chosen,
+                )
+                .map(|_| ())
+            } else {
+                with_objects(&mut store, |objects| {
+                    if entry == 1 {
+                        build_filesystem_binding_rows_with_graph_state(
+                            objects,
+                            &source,
+                            None,
+                            &mut state,
+                            chosen,
+                            &FilesystemPhases::disabled(),
+                        )
+                        .map(|_| ())
+                    } else {
+                        update_filesystem_binding_rows_with_graph_state(
+                            objects,
+                            &source,
+                            None,
+                            &mut state,
+                            chosen,
+                            &FilesystemPhases::disabled(),
+                        )
+                        .map(|_| ())
+                    }
+                })
+            };
+            assert!(result.is_err());
+            assert_eq!((state.sites.abandonments, state.abandonments), (0, 0));
+            assert!(state.sites.batches.is_empty());
+            assert!(state.nodes.is_empty());
+            assert!(store.order().is_empty());
+            source.source_error = false;
+            with_objects(&mut store, |objects| {
+                build_filesystem_binding_rows_with_graph_state(
+                    objects,
+                    &source,
+                    None,
+                    &mut state,
+                    &selected,
+                    &FilesystemPhases::disabled(),
+                )
+            })
+            .unwrap();
+            assert_eq!(state.stage, GraphStage::Retired);
+        }
+    }
+}
+#[test]
+fn selected_source_cursor_failure_abandons_once_and_original_error_survives() {
+    let rows = [DirectoryUpdate {
+        parent: 1,
+        changes: Vec::new(),
+    }];
+    let values = [InodeUpdate {
+        serial: 1,
+        value: value(
+            InodeKind::Directory,
+            synthetic("directory"),
+            synthetic("metadata"),
+        ),
+    }];
+    let new = [1];
+    let input = empty_input(&rows, &values, &new);
+    let mut source = PointSource::new(&input);
+    let scopes = selected(&source);
+    let mut state = ObservedGraph::new(&scopes, 1, 0);
+    source.refuse_bindings = true;
+    let mut store = TreeStore::new();
+    let result = with_objects(&mut store, |objects| {
+        build_filesystem_binding_rows_with_graph_state(
+            objects,
+            &source,
+            None,
+            &mut state,
+            &scopes,
+            &FilesystemPhases::disabled(),
+        )
+    });
+    assert_eq!(
+        result.unwrap_err(),
+        ContentError::ProviderFailure {
+            what: "selected cursor"
+        }
+    );
+    assert_eq!((state.sites.abandonments, state.abandonments), (1, 1));
+    assert!(state.nodes.is_empty());
+    assert!(store.order().is_empty());
+    source.refuse_bindings = false;
+    assert!(with_objects(&mut store, |objects| {
+        build_filesystem_binding_rows_with_graph_state(
+            objects,
+            &source,
+            None,
+            &mut state,
+            &scopes,
+            &FilesystemPhases::disabled(),
+        )
+    })
+    .is_err());
+    assert_eq!(state.abandonments, 1);
+}
+#[test]
+fn selected_graph_append_failure_preserves_private_rows_and_emits_no_root() {
+    let rows = [
+        DirectoryUpdate {
+            parent: 1,
+            changes: vec![(PathName::new("child").unwrap(), Some(2))],
+        },
+        DirectoryUpdate {
+            parent: 2,
+            changes: Vec::new(),
+        },
+    ];
+    let values = [
+        InodeUpdate {
+            serial: 1,
+            value: value(
+                InodeKind::Directory,
+                synthetic("directory"),
+                synthetic("metadata"),
+            ),
+        },
+        InodeUpdate {
+            serial: 2,
+            value: value(
+                InodeKind::Directory,
+                synthetic("directory"),
+                synthetic("metadata"),
+            ),
+        },
+    ];
+    let new = [1, 2];
+    let input = empty_input(&rows, &values, &new);
+    let source = PointSource::new(&input);
+    let scopes = selected(&source);
+    let mut state = ObservedGraph::new(&scopes, 2, 1);
+    state.fail_at = Some("graph append");
+    let mut store = TreeStore::new();
+    let result = with_objects(&mut store, |objects| {
+        build_filesystem_binding_rows_with_graph_state(
+            objects,
+            &source,
+            None,
+            &mut state,
+            &scopes,
+            &FilesystemPhases::disabled(),
+        )
+    });
+    assert_eq!(
+        result.unwrap_err(),
+        ContentError::ProviderFailure {
+            what: "graph append"
+        }
+    );
+    assert_eq!(state.sites.retirements, 1);
+    assert_eq!(state.nodes.len(), 1);
+    assert_eq!(state.abandonments, 1);
+    assert_eq!(state.retirements, 0);
+    assert!(store.order().is_empty());
+    assert!(state.capacity(scopes.roots()).is_err());
+}
+#[test]
+fn post_graph_retirement_root_capacity_refusal_terminalizes_same_owner() {
+    let rows = [
+        DirectoryUpdate {
+            parent: 1,
+            changes: vec![(PathName::new("child").unwrap(), Some(2))],
+        },
+        DirectoryUpdate {
+            parent: 2,
+            changes: Vec::new(),
+        },
+    ];
+    let values = [
+        InodeUpdate {
+            serial: 1,
+            value: value(
+                InodeKind::Directory,
+                synthetic("directory"),
+                synthetic("metadata"),
+            ),
+        },
+        InodeUpdate {
+            serial: 2,
+            value: value(
+                InodeKind::Directory,
+                synthetic("directory"),
+                synthetic("metadata"),
+            ),
+        },
+    ];
+    let new = [1, 2];
+    let input = empty_input(&rows, &values, &new);
+    let source = PointSource::new(&input);
+    let scopes = selected(&source);
+    let mut state = ObservedGraph::new(&scopes, 1, 1);
+    let mut store = TreeStore::new();
+    assert!(with_objects(&mut store, |objects| {
+        build_filesystem_binding_rows_with_graph_state(
+            objects,
+            &source,
+            None,
+            &mut state,
+            &scopes,
+            &FilesystemPhases::disabled(),
+        )
+    })
+    .is_err());
+    assert_eq!(state.retirements, 1);
+    assert_eq!(state.abandonments, 1);
+    assert_eq!(state.sites.abandonments, 1);
+    assert!(state.capacity(scopes.roots()).is_err());
+    assert!(store.order().is_empty());
+}
+
+#[test]
+fn configured48_admits_33000_fresh_directories_without_raising_request_or_work_limits() {
+    // Count/resource contract diagnostic using a finite external provider; no physical disk/RAM claim.
+    let count = 33_000u64;
+    let rows: Vec<_> = (1..=count)
+        .map(|serial| DirectoryUpdate {
+            parent: serial,
+            changes: if serial < count {
+                vec![(PathName::new("e").unwrap(), Some(serial + 1))]
+            } else {
+                Vec::new()
+            },
+        })
+        .collect();
+    let values: Vec<_> = (1..=count)
+        .map(|serial| InodeUpdate {
+            serial,
+            value: value(
+                InodeKind::Directory,
+                synthetic("directory"),
+                synthetic("metadata"),
+            ),
+        })
+        .collect();
+    let serials: Vec<_> = (1..=count).collect();
+    let input = empty_input(&rows, &values, &serials);
+    let source = SliceBindingRows::new(&input).unwrap();
+    for budget in [16 * 1024 * 1024, 48 * 1024 * 1024] {
+        let selected = scopes(
+            source.binding_source_id().unwrap(),
+            input.scope,
+            None,
+            1,
+            GraphCapacity::new(budget).unwrap(),
+        );
+        let mut state = ObservedGraph::new(&selected, count as usize, (count - 1) as usize);
+        let mut work = ValidationWork::default();
+        let result = check_with_graph(
+            &TreeStore::new(),
+            &source,
+            &BTreeMap::new(),
+            &mut work,
+            &mut state,
+            &selected,
+        );
+        if budget == 16 * 1024 * 1024 {
+            assert!(matches!(
+                result,
+                Err(ContentError::BoundedCapacityExceeded {
+                    what: "graph.records",
+                    limit: 65_536,
+                    actual: 65_537
+                })
+            ));
+            assert_eq!(state.nodes.len() + state.edges.len(), 65_535);
+            assert_eq!(state.abandonments, 1);
+            assert_eq!(state.retirements, 0);
+        } else {
+            result.unwrap();
+            assert_eq!(
+                (
+                    work.graph.nodes,
+                    work.graph.edges,
+                    work.graph.node_expansions
+                ),
+                (33_000, 32_999, 33_000)
+            );
+            assert_eq!(work.graph.source_entries, 32_999);
+            assert_eq!(work.graph.raw_directory_edges, 32_999);
+            assert_eq!(work.graph.solver_entered, 0);
+            assert_eq!(state.retirements, 1);
+            assert_eq!(state.abandonments, 0);
+            assert!(
+                work.graph.max_children <= 63
+                    && work.graph.max_targets <= 128
+                    && work.graph.max_page_records <= 128
+            );
+            eprintln!("C1 configured disk count diagnostic:48MiB subject,33,000 reachable fresh dirs+32,999 arcs=65,999 full records; same request/work/window profile; finite provider excludes native fit/physical qualification");
+        }
+    }
+}
+
+struct PointSource<'a> {
+    inner: SliceBindingRows<'a>,
+    source_error: bool,
+    refuse_bindings: bool,
+    points: Cell<u64>,
+    whole: Cell<u64>,
+    headers: Cell<u64>,
+}
+impl<'a> PointSource<'a> {
+    fn new(input: &'a FilesystemInput<'a>) -> Self {
+        Self {
+            inner: SliceBindingRows::new(input).unwrap(),
+            source_error: false,
+            refuse_bindings: false,
+            points: Cell::new(0),
+            whole: Cell::new(0),
+            headers: Cell::new(0),
+        }
+    }
+}
+impl RowSource for PointSource<'_> {
+    fn directory_rows(&self) -> usize {
+        self.inner.directory_rows()
+    }
+    fn inode_rows(&self) -> usize {
+        self.inner.inode_rows()
+    }
+    fn new_rows(&self) -> usize {
+        self.inner.new_rows()
+    }
+    fn directories(&self) -> ContentResult<Box<dyn DirectoryRowSource + '_>> {
+        self.whole.set(self.whole.get() + 1);
+        Err(ContentError::UnsupportedProfile {
+            what: "whole source",
+        })
+    }
+    fn directory_for(&self, _: u64) -> ContentResult<Option<DirectoryUpdate>> {
+        self.whole.set(self.whole.get() + 1);
+        Err(ContentError::UnsupportedProfile {
+            what: "whole source",
+        })
+    }
+    fn inodes(&self) -> ContentResult<Box<dyn InodeRowSource + '_>> {
+        self.inner.inodes()
+    }
+    fn new_inodes(&self) -> ContentResult<Box<dyn SerialRowSource + '_>> {
+        self.inner.new_inodes()
+    }
+    fn value_for(&self, serial: u64) -> ContentResult<Option<InodeValue>> {
+        self.inner.value_for(serial)
+    }
+    fn new_position(&self, serial: u64) -> ContentResult<Option<usize>> {
+        self.inner.new_position(serial)
+    }
+}
+impl PreparedRows for PointSource<'_> {
+    fn base(&self) -> Option<FilesystemRootId> {
+        self.inner.base()
+    }
+    fn scope(&self) -> InodeScope {
+        self.inner.scope()
+    }
+    fn root_serial(&self) -> u64 {
+        self.inner.root_serial()
+    }
+    fn resources(&self) -> layerfs_content::filesystem::FilesystemResources {
+        self.inner.resources()
+    }
+}
+impl BindingRows for PointSource<'_> {
+    fn binding_source_id(&self) -> ContentResult<BindingSourceId> {
+        if self.source_error {
+            Err(ContentError::ProviderFailure {
+                what: "source identity",
+            })
+        } else {
+            self.inner.binding_source_id()
+        }
+    }
+    fn binding_at(&self, point: &BindingPoint) -> ContentResult<(PathName, Option<u64>)> {
+        self.points.set(self.points.get() + 1);
+        self.inner.binding_at(point)
+    }
+    fn directory_headers(&self) -> ContentResult<Box<dyn DirectoryHeaderSource + '_>> {
+        self.headers.set(self.headers.get() + 1);
+        self.inner.directory_headers()
+    }
+    fn directory_header(&self, parent: u64) -> ContentResult<Option<DirectoryHeader>> {
+        self.inner.directory_header(parent)
+    }
+    fn bindings(&self, header: &DirectoryHeader) -> ContentResult<Box<dyn BindingRowSource + '_>> {
+        if self.refuse_bindings {
+            Err(ContentError::ProviderFailure {
+                what: "selected cursor",
+            })
+        } else {
+            self.inner.bindings(header)
+        }
+    }
+    fn binding_for(&self, parent: u64, name: &[u8]) -> ContentResult<BindingLookup> {
+        self.inner.binding_for(parent, name)
+    }
+}

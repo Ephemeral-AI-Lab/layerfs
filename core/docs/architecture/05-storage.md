@@ -1,5 +1,17 @@
 # Storage (C2, `layerfs-storage`)
 
+> **#287 configurable graph scratch working source:** Against published parent
+> `79639cc6f58ae78eeb1fb638996b1d6948767215`, selected private profile4 binds
+> Subject106/Header298/GraphScope188, sites1 -> graph2 -> roots3 and an explicitly
+> configured indexed construction-state disk budget. Default/minimum16MiB,
+> R=S/256/L=63R/P=S/4096 are admission arithmetic; actual native fit/progress
+> remains an owning proof. Old profiles1-3 stay16MiB. Caches/windows/workers/
+> deadlines do not grow; active/retained credits sum captured owner budgets.
+> [Shared contract](../issues/287/R1D-EFFECTIVE-GRAPH-FREEZE.md) preserves
+> known/Unknown custody, indexes and retirement. [Scoped delivery](../issues/287/R1D-EFFECTIVE-GRAPH-DELIVERY.md) records direct
+> Apple provider checks;
+> global/physical/aggregate temporary-disk and Linux gates remain incomplete.
+
 > **#287 R1d native site implementation:** Against published parent
 > `420e6a2c0149326fe2c380ff0e4156eadd3d326d`, private LFCS profile3 selects
 > SourceId-associated Header200/native-binding-v3, table3 and sites1 -> roots2.

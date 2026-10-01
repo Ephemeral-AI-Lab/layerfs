@@ -3,6 +3,7 @@
 pub(crate) enum Header {
     Earlier([u8; 192]),
     Sites([u8; 200]),
+    Graph([u8; 298]),
 }
 
 impl Header {
@@ -10,6 +11,7 @@ impl Header {
         match self {
             Self::Earlier(bytes) => bytes,
             Self::Sites(bytes) => bytes,
+            Self::Graph(bytes) => bytes,
         }
     }
 }

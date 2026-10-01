@@ -1,0 +1,7 @@
+{
+  "source": "core/crates/layerfs-content/tests/effective_graph_semantics.rs",
+  "bytes": 10832,
+  "sha256": "b2b0c089b19cad4f8a42d4c56528906720f8d02d5d6f7b204bf3b5cd16e80d32",
+  "failure": "E0308 PathName::new expects &str; test passed bytes at line129",
+  "candidate_tests_executed": 0
+}

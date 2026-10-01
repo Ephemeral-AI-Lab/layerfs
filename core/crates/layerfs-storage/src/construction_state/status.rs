@@ -90,7 +90,7 @@ pub struct ScratchProfile {
     pub cache_size: i64,
     /// Disabled mmap limit.
     pub mmap_size: i64,
-    /// Maximum logical database pages within the16MiB class.
+    /// Maximum logical database pages within this owner's captured class.
     pub max_page_count: i64,
     /// Accepted synchronous mode, selected as OFF=0.
     pub synchronous: i64,

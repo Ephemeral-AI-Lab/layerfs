@@ -1,0 +1,28 @@
+{
+  "parent": "79639cc6f58ae78eeb1fb638996b1d6948767215",
+  "scope": "prospective independent expected-result vector preparation only; no candidate/provider/performance PASS",
+  "command": [
+    "python3",
+    "core/crates/layerfs-content/tests/fixtures/effective_graph/generate.py"
+  ],
+  "exit": 0,
+  "method": "<=16 vertex nonzero Floyd-Warshall; fresh root reachability/exact incoming observations; literal expectations asserted before fixture emission; no candidate/LayerFS imports",
+  "cases": 20,
+  "files": [
+    {
+      "path": "core/crates/layerfs-content/tests/fixtures/effective_graph/generate.py",
+      "sha256": "9bf23e3fd6b308db85a8f4e04fdf624d2d5ec7f7b53bdb138c7e6234b00fbce1",
+      "bytes": 5043
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/fixtures/effective_graph/vectors.json",
+      "sha256": "906e5b162890c8f8c903bd82230475a79b84bd6cf7f8b4e2d1c55cfc0f598676",
+      "bytes": 9306
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/fixtures/effective_graph/manifest.rs",
+      "sha256": "ad9e98f157907b9fd26bde34afd2f2aeafb7ebae1cc9a58ff9cefb33aa988cb2",
+      "bytes": 3807
+    }
+  ]
+}

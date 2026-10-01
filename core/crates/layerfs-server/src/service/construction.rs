@@ -9,7 +9,15 @@ use std::{
 };
 
 use layerfs_bridge::contract::{Code, Failure, PreparedChanges};
-use layerfs_content::{filesystem::rows::SpoolPreparation, ObjectId};
+use layerfs_content::{
+    filesystem::{
+        root::FilesystemRootId,
+        rows::SpoolPreparation,
+        state::{GraphCapacity, GraphSubject},
+        InodeScope,
+    },
+    ObjectId,
+};
 use layerfs_storage::{
     construction_state::{ScratchAuthority, ScratchSession},
     Store,
@@ -27,11 +35,16 @@ enum Authority {
 pub(crate) struct Construction {
     parent: PathBuf,
     maximum_owners: u8,
+    capacity: GraphCapacity,
     authority: Mutex<Authority>,
 }
 
 impl Construction {
-    pub(crate) fn new(store: &Store, maximum_owners: u8) -> Result<Self, Failure> {
+    pub(crate) fn new(
+        store: &Store,
+        maximum_owners: u8,
+        capacity: GraphCapacity,
+    ) -> Result<Self, Failure> {
         let parent = store.path().parent().ok_or(Code::InvalidInput)?;
         let parent = if parent.as_os_str().is_empty() {
             Path::new(".")
@@ -46,6 +59,7 @@ impl Construction {
         Ok(Self {
             parent,
             maximum_owners,
+            capacity,
             authority: Mutex::new(Authority::Unopened),
         })
     }
@@ -57,6 +71,16 @@ impl Construction {
     ) -> Result<(ScratchSession, SpoolPreparation), Failure> {
         let (declaration, capacity) = super::save::prepared::planned_spool_admission(changes)?;
         let preparation = SpoolPreparation::new(declaration, capacity).map_err(content)?;
+        let subject = GraphSubject::new(
+            preparation.source_id(),
+            InodeScope::from_object(ObjectId::from_bytes(&changes.scope).map_err(content)?),
+            Some(FilesystemRootId(
+                ObjectId::from_bytes(&changes.base).map_err(content)?,
+            )),
+            changes.root_serial,
+            self.capacity,
+        )
+        .map_err(content)?;
         let authority = {
             let mut cell = self.authority.try_lock().map_err(|_| Code::Ownership)?;
             if matches!(*cell, Authority::Unopened) {
@@ -82,11 +106,11 @@ impl Construction {
         context.extend_from_slice(&changes.scope);
         context.extend_from_slice(&changes.root_serial.to_be_bytes());
         let state = authority
-            .begin_sites(
+            .begin_graph(
                 *ObjectId::for_bytes(&context).as_bytes(),
                 changes.totals.directories,
                 changes.totals.names,
-                preparation.source_id(),
+                subject,
             )
             .map_err(storage)?;
         Ok((state, preparation))

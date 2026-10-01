@@ -31,9 +31,16 @@ mod binding;
 mod cycles;
 mod effective;
 mod facts;
+mod graph;
+mod graph_build;
+mod graph_solve;
+mod graph_verify;
 mod prefetch;
 mod site_aliases;
 
+pub(crate) use graph::{check_graph_selected, select_graph_input};
+pub use graph::{check_with_graph, ValidationGraphWork};
+pub use graph_solve::solve_effective_graph;
 pub use prefetch::ValidationPrefetchWork;
 
 use crate::filesystem::path::PathName;
@@ -74,6 +81,8 @@ pub struct ValidationWork {
     pub inode_pages_by_site: ValidationReadSites,
     /// Actual bounded initial-demand production and lookup attempts.
     pub prefetch: ValidationPrefetchWork,
+    /// Actual effective graph construction and selective SCC work.
+    pub graph: ValidationGraphWork,
 }
 
 /// Where one validation's inode pages were read.
@@ -575,6 +584,13 @@ fn check_remaining<'a>(
             }
         }
     }
+    check_root_checks(input)?;
+    let checked = CheckedTopologyInput { input, topology };
+    cycles::check_effective_cycles(reader, &checked, unreachable, work, state)?;
+    Ok(checked)
+}
+
+fn check_root_checks(input: &dyn PreparedBindingRows) -> ContentResult<()> {
     check_root_invariants(input)?;
     if input.base().is_none() {
         let mut values = input.inodes()?;
@@ -586,9 +602,7 @@ fn check_remaining<'a>(
             }
         }
     }
-    let checked = CheckedTopologyInput { input, topology };
-    cycles::check_effective_cycles(reader, &checked, unreachable, work, state)?;
-    Ok(checked)
+    Ok(())
 }
 
 /// Charges one inode lookup's work.

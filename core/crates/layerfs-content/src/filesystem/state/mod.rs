@@ -12,6 +12,7 @@ mod claim_seal;
 mod construction;
 mod cursor;
 mod directory_roots;
+mod graph;
 mod page;
 mod port;
 mod records;
@@ -43,6 +44,7 @@ pub use claim_seal::{ClaimLedger, ClaimSeal, CLAIM_SEAL_BYTES};
 pub use construction::{ConstructionScopes, ConstructionState};
 pub use cursor::StateCursor;
 pub(crate) use directory_roots::DirectoryRoots;
+pub use graph::*;
 pub use page::{PageLimit, StatePage, STATE_PAGE_HEADER_BYTES};
 pub use port::IndexedState;
 pub use records::{

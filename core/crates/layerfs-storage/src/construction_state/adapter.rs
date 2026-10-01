@@ -13,7 +13,7 @@ use super::ScratchSession;
 
 /// Borrowed C1 port for one exact private C2 session.
 pub struct ScratchAdapter<'a> {
-    session: &'a mut ScratchSession,
+    pub(super) session: &'a mut ScratchSession,
 }
 
 impl ScratchAdapter<'_> {

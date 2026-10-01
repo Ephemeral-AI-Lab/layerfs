@@ -1,0 +1,19 @@
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-history)
+error: the loop variable `i` is used to index `content`
+  --> crates/layerfs-content/tests/effective_graph_validation.rs:85:18
+   |
+85 |         for i in start..end {
+   |                  ^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_range_loop
+   = note: `-D clippy::needless-range-loop` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::needless_range_loop)]`
+help: consider using an iterator and enumerate()
+   |
+85 |         for (i, <item>) in content.iter().enumerate().take(end).skip(start) {
+   |             ~~~~~~~~~~~    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error: could not compile `layerfs-content` (test "effective_graph_validation") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

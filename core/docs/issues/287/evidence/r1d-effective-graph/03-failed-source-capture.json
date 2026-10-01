@@ -1,0 +1,8 @@
+{
+  "source": {
+    "path": "core/crates/layerfs-content/tests/effective_graph_validation.rs",
+    "bytes": 26654,
+    "sha256": "18bd1dc976cfa2223966baf48e22c03d6f5e29bda035550f79378425b8519b13"
+  },
+  "reason": "independent inode branch fixture uses child minimum, reader requires maximum; root source diagnosis before correction"
+}

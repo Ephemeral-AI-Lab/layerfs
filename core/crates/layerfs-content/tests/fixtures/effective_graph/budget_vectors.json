@@ -1,0 +1,77 @@
+{
+  "scope": "prospective format/admission arithmetic only, not provider/file-fit/healthy progress qualification",
+  "cases": [
+    {
+      "name": "zero",
+      "native_bytes": 0,
+      "valid": false,
+      "records": 0,
+      "logical_bytes": 0,
+      "pages": 0
+    },
+    {
+      "name": "below_minimum",
+      "native_bytes": 16773120,
+      "valid": false,
+      "records": 0,
+      "logical_bytes": 0,
+      "pages": 0
+    },
+    {
+      "name": "unaligned",
+      "native_bytes": 16777217,
+      "valid": false,
+      "records": 0,
+      "logical_bytes": 0,
+      "pages": 0
+    },
+    {
+      "name": "default16",
+      "native_bytes": 16777216,
+      "valid": true,
+      "records": 65536,
+      "logical_bytes": 4128768,
+      "pages": 4096
+    },
+    {
+      "name": "configured32",
+      "native_bytes": 33554432,
+      "valid": true,
+      "records": 131072,
+      "logical_bytes": 8257536,
+      "pages": 8192
+    },
+    {
+      "name": "configured48",
+      "native_bytes": 50331648,
+      "valid": true,
+      "records": 196608,
+      "logical_bytes": 12386304,
+      "pages": 12288
+    },
+    {
+      "name": "configured64",
+      "native_bytes": 67108864,
+      "valid": true,
+      "records": 262144,
+      "logical_bytes": 16515072,
+      "pages": 16384
+    },
+    {
+      "name": "format_maximum_unqualified",
+      "native_bytes": 1099511623680,
+      "valid": true,
+      "records": 4294967280,
+      "logical_bytes": 270582938640,
+      "pages": 268435455
+    },
+    {
+      "name": "above_format_range",
+      "native_bytes": 1099511627776,
+      "valid": false,
+      "records": 0,
+      "logical_bytes": 0,
+      "pages": 0
+    }
+  ]
+}

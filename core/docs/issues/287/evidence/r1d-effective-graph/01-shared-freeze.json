@@ -1,0 +1,23 @@
+{
+  "parent": "79639cc6f58ae78eeb1fb638996b1d6948767215",
+  "scope": "shared contract selected before product edits; prospective checks unrun",
+  "files": [
+    {
+      "path": "core/docs/issues/287/R1D-EFFECTIVE-GRAPH-FREEZE.md",
+      "sha256": "d1739a0b8cb7ddc20aa59e22e0a1c6a6e786b496e8e176412f2841ff97de7e1f"
+    },
+    {
+      "path": "core/docs/issues/287/R1D-EFFECTIVE-GRAPH-DRAFT.md",
+      "sha256": "695b906c99ccc826619de90e3d8d57aebd9e4d6fae232385b9bc4f1ee496d66a"
+    },
+    {
+      "path": "core/docs/issues/287/R1D-EFFECTIVE-GRAPH-NATIVE-DRAFT.md",
+      "sha256": "1b7cdf7eb421a95b9a3d67e29c8ca8a64496b5140c882fcc9e71a5d3e4cdb574"
+    },
+    {
+      "path": "core/docs/issues/287/R1D-EFFECTIVE-GRAPH-INTEGRATION-DRAFT.md",
+      "sha256": "84b43807a6f34d212447fbd464e29df38f7fb0d90b8d85ab1f94dccf28135b63"
+    }
+  ],
+  "pause_after_this_checkpoint": true
+}

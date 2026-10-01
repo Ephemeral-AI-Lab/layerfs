@@ -1,0 +1,304 @@
+//! Pre-pinned graph predicates through the actual C1 solver and owning checker.
+#![allow(dead_code)]
+#[path = "support/graph_state.rs"]
+mod oracle;
+mod support;
+mod manifest {
+    include!("fixtures/effective_graph/manifest.rs");
+}
+use layerfs_content::filesystem::rows::{BindingRows, SliceBindingRows};
+use layerfs_content::filesystem::state::*;
+use layerfs_content::filesystem::validate::{
+    check_with_graph, solve_effective_graph, ValidationGraphWork, ValidationWork,
+};
+use layerfs_content::filesystem::{
+    scope_for_seed, DirectoryUpdate, FilesystemInput, FilesystemRootId, InodeUpdate, PathName,
+};
+use layerfs_content::object::inode_leaf::InodeKind;
+use layerfs_content::{ContentError, ContentResult};
+use oracle::{scopes, ObservedGraph};
+use std::collections::BTreeMap;
+use support::filesystem::{resources, synthetic, value, TreeStore};
+fn direct(case: &manifest::Case) -> (ObservedGraph, GraphAdjacencySeal) {
+    direct_edges(case.root, case.edges, case.seeds)
+}
+fn direct_edges(
+    root: u64,
+    edges: &[(u64, u64)],
+    seeds: &[(u64, u64)],
+) -> (ObservedGraph, GraphAdjacencySeal) {
+    let empty: Vec<DirectoryUpdate> = Vec::new();
+    let values: Vec<InodeUpdate> = Vec::new();
+    let fresh: Vec<u64> = Vec::new();
+    let input = FilesystemInput {
+        base: Some(FilesystemRootId(synthetic("graph-base"))),
+        scope: scope_for_seed([9; 32]),
+        root_serial: root,
+        directories: &empty,
+        inodes: &values,
+        new_inodes: &fresh,
+        resources: resources(),
+    };
+    let source = SliceBindingRows::new(&input).unwrap();
+    let selected = scopes(
+        source.binding_source_id().unwrap(),
+        input.scope,
+        input.base,
+        root,
+        GraphCapacity::default(),
+    );
+    let mut state = ObservedGraph::direct(&selected);
+    let mut seeds: Vec<_> = seeds
+        .iter()
+        .map(|(_, child)| GraphNodeKey::new(selected.graph(), *child).unwrap())
+        .collect();
+    seeds.sort_unstable();
+    seeds.dedup();
+    state.graph_seed_batch(selected.graph(), &seeds).unwrap();
+    while let Some(mut parent) = state.graph_unexpanded(selected.graph()).unwrap() {
+        let children: Vec<_> = edges
+            .iter()
+            .filter(|(serial, _)| *serial == parent.key().serial())
+            .map(|(_, child)| GraphNodeKey::new(selected.graph(), *child).unwrap())
+            .collect();
+        if !children.is_empty() {
+            let ack = state
+                .graph_append(selected.graph(), &parent, &children)
+                .unwrap();
+            parent = ack.parent().unwrap();
+        }
+        state.graph_expanded(selected.graph(), &parent).unwrap();
+    }
+    let seal = state.graph_seal(selected.graph()).unwrap();
+    (state, seal)
+}
+fn verdict(result: ContentResult<()>) -> &'static str {
+    match result {
+        Ok(()) => "pass",
+        Err(ContentError::InvalidRecord("effective tree cycle")) => "cycle",
+        Err(ContentError::InvalidRecord("multiple parents")) => "multiple_parents",
+        Err(error) => panic!("unexpected error:{error}"),
+    }
+}
+fn update_case(index: usize) {
+    let case = &manifest::CASES[index];
+    assert!(!case.fresh);
+    let (mut state, seal) = direct(case);
+    let mut work = ValidationGraphWork::default();
+    let result = solve_effective_graph(&mut state, &seal, &mut work);
+    assert_eq!(
+        verdict(result),
+        case.expected,
+        "{} independent nonzero closure",
+        case.name
+    );
+    if case.expected == "pass" {
+        assert_eq!(work.solver_entered, seal.nodes());
+        assert_eq!(work.popped_members, seal.nodes());
+        assert_eq!(work.edge_steps, seal.edges());
+        let proof = state.graph_finish(&seal).unwrap();
+        let mut cursor = GraphProofCursor::new(proof.clone());
+        while !cursor.finished() {
+            let page = state
+                .graph_proof_page(&proof, cursor.after(), GraphPageLimit::default())
+                .unwrap();
+            cursor.accept(&page, GraphPageLimit::default()).unwrap();
+        }
+        state.graph_retire(&proof).unwrap();
+        assert_eq!(state.stage, GraphStage::Retired);
+    } else {
+        assert_eq!(state.stage, GraphStage::Rejected);
+        assert!(state.failed);
+    }
+}
+fn fresh_case(index: usize) {
+    let case = &manifest::CASES[index];
+    assert!(case.fresh);
+    let directories: Vec<_> = case
+        .vertices
+        .iter()
+        .map(|parent| DirectoryUpdate {
+            parent: *parent,
+            changes: case
+                .edges
+                .iter()
+                .enumerate()
+                .filter(|(_, edge)| edge.0 == *parent)
+                .map(|(i, (_, child))| (PathName::new(&format!("n{i:04}")).unwrap(), Some(*child)))
+                .collect(),
+        })
+        .collect();
+    let inodes: Vec<_> = case
+        .vertices
+        .iter()
+        .map(|serial| InodeUpdate {
+            serial: *serial,
+            value: value(
+                InodeKind::Directory,
+                synthetic("directory"),
+                synthetic("metadata"),
+            ),
+        })
+        .collect();
+    let input = FilesystemInput {
+        base: None,
+        scope: scope_for_seed([11; 32]),
+        root_serial: case.root,
+        directories: &directories,
+        inodes: &inodes,
+        new_inodes: case.declared,
+        resources: resources(),
+    };
+    let source = SliceBindingRows::new(&input).unwrap();
+    let selected = scopes(
+        source.binding_source_id().unwrap(),
+        input.scope,
+        None,
+        case.root,
+        GraphCapacity::default(),
+    );
+    let mut state = ObservedGraph::new(&selected, directories.len(), case.edges.len());
+    let excluded = case
+        .excluded
+        .iter()
+        .map(|serial| (*serial, ()))
+        .collect::<BTreeMap<_, _>>();
+    let mut work = ValidationWork::default();
+    let store = TreeStore::new();
+    let result =
+        check_with_graph(&store, &source, &excluded, &mut work, &mut state, &selected).map(|_| ());
+    assert_eq!(
+        verdict(result),
+        case.expected,
+        "{} independent root reach/incoming",
+        case.name
+    );
+    if case.expected == "pass" {
+        assert_eq!(state.stage, GraphStage::Retired);
+        assert_eq!(work.graph.solver_entered, 0);
+    } else {
+        assert!(state.failed);
+        assert_eq!(state.abandonments, 1);
+    }
+}
+macro_rules! update_vector {
+    ($name:ident,$index:expr) => {
+        #[test]
+        fn $name() {
+            update_case($index);
+        }
+    };
+}
+macro_rules! fresh_vector {
+    ($name:ident,$index:expr) => {
+        #[test]
+        fn $name() {
+            fresh_case($index);
+        }
+    };
+}
+update_vector!(no_seed_old_cycle, 0);
+update_vector!(isolated_selected_child, 1);
+update_vector!(selected_self_loop, 2);
+update_vector!(old_descendant_cycle_without_seed_return, 3);
+update_vector!(selected_descendant_in_old_cycle, 4);
+update_vector!(selected_child_reaches_parent, 5);
+update_vector!(disconnected_selected_component_cycle, 6);
+update_vector!(overlapping_seed_closures, 7);
+update_vector!(final_batch_two_edge_cycle, 8);
+update_vector!(acyclic_seed_plus_cyclic_seed, 9);
+update_vector!(diamond_old_alias_dag, 10);
+update_vector!(maximum_serial_selected_cycle, 19);
+fresh_vector!(empty_fresh_root, 11);
+fresh_vector!(fresh_chain, 12);
+fresh_vector!(fresh_disconnected_directory, 13);
+fresh_vector!(fresh_disconnected_cycle, 14);
+fresh_vector!(fresh_excluded_parent_does_not_reach_child, 15);
+fresh_vector!(fresh_excluded_component, 16);
+fresh_vector!(fresh_reachable_multiple_parents, 17);
+fresh_vector!(fresh_repeated_parent_binding, 18);
+#[test]
+fn cyclic_component_129_returns_two_bounded_member_windows() {
+    let mut edges: Vec<_> = (1..129).map(|n| (n, n + 1)).collect();
+    edges.push((129, 1));
+    let (mut state, seal) = direct_edges(130, &edges, &[(130, 129)]);
+    let mut work = ValidationGraphWork::default();
+    assert_eq!(
+        verdict(solve_effective_graph(&mut state, &seal, &mut work)),
+        "cycle"
+    );
+    assert_eq!(work.pop_batches, 2);
+    assert_eq!(work.popped_members, 129);
+    assert_eq!(work.max_page_records, 128);
+    assert_eq!(state.stage, GraphStage::Rejected);
+}
+#[test]
+fn same_scope_known_rejected_attempt_cannot_resume_or_enable_roots() {
+    let (mut state, seal) = direct(&manifest::CASES[2]);
+    let mut work = ValidationGraphWork::default();
+    assert_eq!(
+        verdict(solve_effective_graph(&mut state, &seal, &mut work)),
+        "cycle"
+    );
+    assert!(state
+        .graph_node_page(&seal, None, GraphPageLimit::default())
+        .is_err());
+    assert!(state.graph_finish(&seal).is_err());
+    let other = state.scope.clone();
+    state.graph_abandon(&other).unwrap();
+    assert!(state.graph_capacity(&other).is_err());
+}
+
+#[test]
+fn public_solver_provider_failure_after_entry_abandons_exactly_once() {
+    let (mut state, seal) = direct(&manifest::CASES[3]);
+    state.fail_at = Some("graph edge page");
+    let mut work = ValidationGraphWork::default();
+    let result = solve_effective_graph(&mut state, &seal, &mut work);
+    assert_eq!(
+        result,
+        Err(ContentError::ProviderFailure {
+            what: "graph edge page"
+        })
+    );
+    assert_eq!(work.solver_entered, 1);
+    assert!(state.current.is_some());
+    assert_eq!(state.abandonments, 1);
+    state.fail_at = None;
+    assert!(solve_effective_graph(&mut state, &seal, &mut work).is_err());
+    assert_eq!(state.abandonments, 1);
+}
+#[test]
+fn public_solver_rejects_malformed_ack_after_native_entry_and_terminalizes_once() {
+    let (mut state, seal) = direct(&manifest::CASES[1]);
+    state.corrupt_ack = true;
+    let result = solve_effective_graph(&mut state, &seal, &mut ValidationGraphWork::default());
+    assert_eq!(
+        result,
+        Err(ContentError::InvalidOrderingRecord(
+            "graph solver acknowledgement"
+        ))
+    );
+    assert_eq!(state.discovery, 1);
+    assert!(state.current.is_some());
+    assert_eq!(state.abandonments, 1);
+    assert!(state.failed);
+}
+#[test]
+fn public_solver_pure_selection_getter_error_preserves_unconsumed_owner() {
+    let (mut state, seal) = direct(&manifest::CASES[1]);
+    state.fail_at = Some("graph select");
+    let mut work = ValidationGraphWork::default();
+    assert_eq!(
+        solve_effective_graph(&mut state, &seal, &mut work),
+        Err(ContentError::ProviderFailure {
+            what: "graph select"
+        })
+    );
+    assert_eq!(state.stage, GraphStage::AdjacencySealed);
+    assert_eq!(state.abandonments, 0);
+    assert_eq!(work.cas_batches, 0);
+    state.fail_at = None;
+    solve_effective_graph(&mut state, &seal, &mut work).unwrap();
+    assert_eq!(state.abandonments, 0);
+}

@@ -10,6 +10,7 @@ use layerfs_bridge::{
     adapters::native::connection::{Peer, VerifiedPeer},
     contract::{Code, Failure},
 };
+use layerfs_content::filesystem::state::GraphCapacity;
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_sandbox::{OwnerConfig, SandboxOwner};
 use layerfs_storage::Store;
@@ -80,6 +81,15 @@ struct Listening {
 impl Server {
     /// Prepare a fresh Store and history catalog for a first Init.
     pub fn create(config: ServerConfig) -> Result<Self, Failure> {
+        Self::create_with_construction_scratch(config, GraphCapacity::default().scratch_bytes())
+    }
+
+    /// Creates with an explicit per-operation indexed construction-state budget.
+    pub fn create_with_construction_scratch(
+        config: ServerConfig,
+        scratch_bytes: u64,
+    ) -> Result<Self, Failure> {
+        let capacity = GraphCapacity::new(scratch_bytes).map_err(crate::service::error::content)?;
         if config.history != HistoryMode::Create {
             return Err(Code::InvalidInput.into());
         }
@@ -87,19 +97,32 @@ impl Server {
             store::create(&config.store_path, scope.child("store"))
         })
         .0?;
-        Self::assemble(config, store)
+        Self::assemble(config, store, capacity)
     }
 
     /// Open a prepared Store clone and reopen its history catalog writable.
     pub fn open(config: ServerConfig) -> Result<Self, Failure> {
+        Self::open_with_construction_scratch(config, GraphCapacity::default().scratch_bytes())
+    }
+
+    /// Opens with the captured disk budget; cache and work bounds stay unchanged.
+    pub fn open_with_construction_scratch(
+        config: ServerConfig,
+        scratch_bytes: u64,
+    ) -> Result<Self, Failure> {
+        let capacity = GraphCapacity::new(scratch_bytes).map_err(crate::service::error::content)?;
         if config.history != HistoryMode::OpenWritable {
             return Err(Code::InvalidInput.into());
         }
         let store = store::open(&config.store_path)?;
-        Self::assemble(config, store)
+        Self::assemble(config, store, capacity)
     }
 
-    fn assemble(config: ServerConfig, store: Store) -> Result<Self, Failure> {
+    fn assemble(
+        config: ServerConfig,
+        store: Store,
+        capacity: GraphCapacity,
+    ) -> Result<Self, Failure> {
         if config.binding_key.is_empty()
             || config.binding_key.len() > 128
             || config.incarnation == 0
@@ -125,7 +148,7 @@ impl Server {
         let daemon_public = VerifiedPeer::from_private(&daemon_private)?
             .public_key()
             .to_owned();
-        let service = Service::new(
+        let service = Service::with_construction_scratch(
             vec![StoreAccess {
                 id: PRIMARY_STORE,
                 store: store.clone(),
@@ -133,6 +156,7 @@ impl Server {
                 grants: store::grants(&[host_public, daemon_public])?,
             }],
             config.runtime.recorder(),
+            capacity.scratch_bytes(),
         )?;
         Ok(Self {
             service: Arc::new(service),

@@ -1,5 +1,17 @@
 # Service, bridge, daemon and hosted telemetry
 
+> **#287 graph/configuration working composition:** Source over parent
+> `79639cc6f58ae78eeb1fb638996b1d6948767215` adds explicit configured Service/
+> Server constructors and `LAYERFS_CONSTRUCTION_SCRATCH_BYTES`, retaining old
+> constructor signatures with16MiB default. The setting budgets each indexed
+> construction-state owner; spool/runs/live Workspace have separate limits.
+> Captured subject and configured native authority precede Save/body, graph
+> validation/known retirement precedes roots, and native cleanup precedes Save
+> finish/Stage. [Shared freeze](../issues/287/R1D-EFFECTIVE-GRAPH-FREEZE.md)
+> carries exact boundaries; [scoped delivery](../issues/287/R1D-EFFECTIVE-GRAPH-DELIVERY.md) records composed
+> Service checks. Apple bootstrap
+> refusal, inherited multiple-cleanup, physical/control/concurrency remain open.
+
 > **#287 R1d source/site composition:** Source developed over published
 > parent `420e6a2c0149326fe2c380ff0e4156eadd3d326d` carries one admitted
 > SpoolPreparation by value before native/Save/body effects. Native Header200

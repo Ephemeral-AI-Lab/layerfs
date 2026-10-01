@@ -111,6 +111,10 @@ pub enum StateTable {
     BindingClaims = 2,
     /// Exclusive sites and monotone base facts for one selected row source.
     BindingSites = 3,
+    /// Closed effective directory vertices and external solver state.
+    GraphNodes = 4,
+    /// Closed effective directory arcs and exact multiplicity.
+    GraphEdges = 5,
 }
 
 impl StateTable {

@@ -6,6 +6,7 @@
 //! owner until a versioned result owner can represent every completed Save.
 use crate::service::{admission::Admission, construction::Construction, read, save};
 use layerfs_bridge::contract::*;
+use layerfs_content::filesystem::state::GraphCapacity;
 use layerfs_history::HistoryCatalog;
 use layerfs_storage::Store;
 use layerfs_telemetry::operation::{Diagnostic, OperationRecorder};
@@ -42,6 +43,17 @@ pub struct Service {
 }
 impl Service {
     pub fn new(stores: Vec<StoreAccess>, recorder: OperationRecorder) -> Result<Self, Failure> {
+        Self::with_construction_scratch(stores, recorder, GraphCapacity::default().scratch_bytes())
+    }
+
+    /// Captures one indexed construction-state disk budget per operation.
+    /// Other temporary owners and the working/cache windows keep their own bounds.
+    pub fn with_construction_scratch(
+        stores: Vec<StoreAccess>,
+        recorder: OperationRecorder,
+        scratch_bytes: u64,
+    ) -> Result<Self, Failure> {
+        let capacity = GraphCapacity::new(scratch_bytes).map_err(crate::service::error::content)?;
         if stores.is_empty() || stores.len() > 4 {
             return Err(Code::Capacity.into());
         }
@@ -60,7 +72,9 @@ impl Service {
         let construction = stores
             .iter()
             .enumerate()
-            .map(|(index, store)| Construction::new(&store.store, admission.content_limit(index)))
+            .map(|(index, store)| {
+                Construction::new(&store.store, admission.content_limit(index), capacity)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             stores,

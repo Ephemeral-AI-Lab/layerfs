@@ -1,7 +1,8 @@
-//! The three closed private profiles and pre-effect sequential-phase arithmetic.
+//! Closed private profiles and pre-effect sequential-phase arithmetic.
 
 use crate::error::{StorageError, StorageResult};
 use layerfs_content::filesystem::rows::BindingSourceId;
+use layerfs_content::filesystem::state::{GraphCapacity, GraphSubject};
 
 use super::profile::{RECORD_BYTES, ROW_LIMIT};
 
@@ -17,9 +18,37 @@ pub(crate) enum Plan {
         bindings: u64,
         source: BindingSourceId,
     },
+    SitesGraphThenRoots {
+        directories: u64,
+        bindings: u64,
+        source: BindingSourceId,
+        capacity: GraphCapacity,
+    },
 }
 
 impl Plan {
+    pub(crate) fn graph(
+        directories: u64,
+        bindings: u64,
+        subject: &GraphSubject,
+    ) -> StorageResult<Self> {
+        // Prepared D/B limits stay independent of the selected graph capacity.
+        let _ = Self::sites(directories, bindings, subject.source_id())?;
+        Ok(Self::SitesGraphThenRoots {
+            directories,
+            bindings,
+            source: subject.source_id(),
+            capacity: subject.capacity(),
+        })
+    }
+
+    pub(crate) const fn scratch_bytes(self) -> u64 {
+        match self {
+            Self::SitesGraphThenRoots { capacity, .. } => capacity.scratch_bytes(),
+            _ => super::native::RESERVED_BYTES,
+        }
+    }
+
     pub(crate) fn sites(
         directories: u64,
         bindings: u64,
@@ -75,6 +104,7 @@ impl Plan {
             Self::Legacy => 1,
             Self::ClaimsThenRoots { .. } => 2,
             Self::SitesThenRoots { .. } => 3,
+            Self::SitesGraphThenRoots { .. } => 4,
         }
     }
 
@@ -83,6 +113,7 @@ impl Plan {
             Self::Legacy => ROW_LIMIT,
             Self::ClaimsThenRoots { directories, .. }
             | Self::SitesThenRoots { directories, .. } => directories,
+            Self::SitesGraphThenRoots { directories, .. } => directories,
         }
     }
 }

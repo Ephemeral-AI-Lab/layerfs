@@ -1,0 +1,404 @@
+{
+  "parent": "79639cc6f58ae78eeb1fb638996b1d6948767215",
+  "source_sha256": "232326d9436f01cc58ec9d8c93ee11b9b5ce20c9ec89741a306e018af307861e",
+  "method": "sorted relative UTF8 path NUL exact bytes NUL; owned changed/new production and external proofs",
+  "files": [
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/mod.rs",
+      "bytes": 1902,
+      "sha256": "71864ce42779dbc67746c51fc0f3df26b58bc7685f686f94083b51b795185c03"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/ack.rs",
+      "bytes": 11775,
+      "sha256": "2d6a4060cd1af3931d02038c8ecf7eced45a1b29524217b63e06c04dce63ffbe"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/capacity.rs",
+      "bytes": 3340,
+      "sha256": "17838fd6f8ef251e5b6928856ba1f937f6ac901bb13f09f35867fef0e1feef48"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/construction.rs",
+      "bytes": 1844,
+      "sha256": "a096e884fe14cf92e4f867eaada38d51f9cd02714b8d8ad6a24a767eec0f412f"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/cursor.rs",
+      "bytes": 7273,
+      "sha256": "794cc61a35050a16624665b00d46a978337e54618e8d6fc47debf0686297fc3f"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/edge.rs",
+      "bytes": 2989,
+      "sha256": "f65e129b1baf406ae70b418c0c7fc18c08b6c1e0d107ef91f3087b23253237f2"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/keys.rs",
+      "bytes": 3520,
+      "sha256": "a0dd00cdf7669d8bead992eb41beb7e9892acd82a8c0a8d07fdcf18858bd4adc"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/ledger.rs",
+      "bytes": 5656,
+      "sha256": "88322757f11f5e31cd11d13ebc4f44c5033673a5eeb1354f1b75864bebd68ab8"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/mod.rs",
+      "bytes": 1422,
+      "sha256": "db9bf35d1ba2a48274051871ad7f9b7fbf14e63ab0b8e9e5714421c2dd23b5ca"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/mutation.rs",
+      "bytes": 9724,
+      "sha256": "35a2aecb32baeb30fdbea3c39da88051b4ada268b9b455c46dfb05cfb3d94e81"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/node.rs",
+      "bytes": 10953,
+      "sha256": "f8e5d6785543261f2a3f48f542636a067e553c5bdcb8133c3ba269f38e31c6a4"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/page.rs",
+      "bytes": 11659,
+      "sha256": "ece2507382e7585179f7c49cbd96e9ab6cd43c8a931b695014cd2179de2e9c7f"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/port.rs",
+      "bytes": 3891,
+      "sha256": "2b00bde513a6d87225e570acdcaec7732bbc68efdada29f651e104a635117b63"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/scope.rs",
+      "bytes": 1622,
+      "sha256": "c1615161ee590640c82d83a9ebc4d4424c7baf3d49ca7760fd7168d68eae0e8f"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/seal.rs",
+      "bytes": 6592,
+      "sha256": "dcb0d983180bde12a86873d1da3905453ed8b7644df5ed8d74d7838023e3345c"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/stage.rs",
+      "bytes": 1495,
+      "sha256": "93e1654893017619c0a2963013f97548547fe5e27584997e5e619cc7c0d655ad"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/subject.rs",
+      "bytes": 4739,
+      "sha256": "c0b46d604d094597bab320c3a139bccb060d716e55d8869ad9d151e9b4b69839"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/graph/totals.rs",
+      "bytes": 1935,
+      "sha256": "3762d8d8442e917d03fd1627ab04d4c35fd2d7639b7d6cee3e608b1fda20a28d"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/mod.rs",
+      "bytes": 2518,
+      "sha256": "2dc3c60abec9651bfa99b998c319a947de86c4691756d15b2b7e33c012a77680"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/state/selection.rs",
+      "bytes": 5605,
+      "sha256": "d4cf862e436f5840a779bb8a3e269e4ceee337b8bc5876fa9a692f73a7602691"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/update.rs",
+      "bytes": 30508,
+      "sha256": "811f851a3f57e91877b30ae609583b2702447384f0c37d27380874fda27b0279"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/update/graph.rs",
+      "bytes": 4390,
+      "sha256": "1bc58c31f6a98346807b7376350bdd574a06649712e09905df200eacf0a45c41"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate.rs",
+      "bytes": 26573,
+      "sha256": "4410510b4080ca4f90c9660bc07876fa57a95b7149d45bf44b21d8c7b99b7493"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate/graph.rs",
+      "bytes": 6970,
+      "sha256": "c22b1d2aaa826ff6d1510158762bd11cc18c0d59e7495eafd398e60ca2be1b53"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate/graph_build.rs",
+      "bytes": 12430,
+      "sha256": "05a512b52bc8cb23d9c4e9900b34edc1751066621e1b26a6c9b446718cf7b025"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate/graph_solve.rs",
+      "bytes": 11844,
+      "sha256": "eec6769c695e77c7878123df2592b947ae1cf047eed4e665c31ca5a3af307d00"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate/graph_verify.rs",
+      "bytes": 4171,
+      "sha256": "d470e0ec10c3ae63590ffd79503dc1e7750969039e1504a33bd6f2dc2d22bf4f"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/effective_graph_codecs.rs",
+      "bytes": 18325,
+      "sha256": "61a6891791f1294e61941eccd58b35b557d77e9a96a1400dd3a3b604273be885"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/effective_graph_reference.rs",
+      "bytes": 6729,
+      "sha256": "f839c8e74fcb9fe94e5c7d6fe033e9e5e4ca1b38737147693a707f546df273c9"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/effective_graph_semantics.rs",
+      "bytes": 10711,
+      "sha256": "f3f5612177f546c50b7c22c7a9e6cd9313051139bfdd18b39c6d520e259dcbe0"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/effective_graph_validation.rs",
+      "bytes": 26913,
+      "sha256": "14d1057ca56be14d9dc776fef23f3a5cc5dc8163638ea3a4c11933f5109149b2"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/fixtures/effective_graph/budget_manifest.rs",
+      "bytes": 573,
+      "sha256": "75440d446d22eb842e7d0f7c6ce765904985dc3275542e407ef8ca3e61dff3d9"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/fixtures/effective_graph/budget_vectors.json",
+      "bytes": 1665,
+      "sha256": "f6c8e9fa7b7f66fd3d34a84a080884c16e7d472e258105165c0cce0746c47021"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/fixtures/effective_graph/budget_vectors.py",
+      "bytes": 1661,
+      "sha256": "4c0a4bcb8299d71399d280e65051c30e6a0041529b363bc8dec387821849251c"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/fixtures/effective_graph/generate.py",
+      "bytes": 5043,
+      "sha256": "9bf23e3fd6b308db85a8f4e04fdf624d2d5ec7f7b53bdb138c7e6234b00fbce1"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/fixtures/effective_graph/manifest.rs",
+      "bytes": 3807,
+      "sha256": "ad9e98f157907b9fd26bde34afd2f2aeafb7ebae1cc9a58ff9cefb33aa988cb2"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/fixtures/effective_graph/vectors.json",
+      "bytes": 9306,
+      "sha256": "906e5b162890c8f8c903bd82230475a79b84bd6cf7f8b4e2d1c55cfc0f598676"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/support/graph_state.rs",
+      "bytes": 29133,
+      "sha256": "5d45ee56e6e63f23be36f5b13e7e3c6335879e8a328efa3c6ca8ad0d7cea0b2f"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/host/assembly.rs",
+      "bytes": 9886,
+      "sha256": "9cdcd28ac870757d19ffdd8622baafc138f346cbd21046e506a22d0e46841169"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/host/config.rs",
+      "bytes": 6069,
+      "sha256": "5524e6ae5da4d2eb2f8b09ed6d14db53624c8438b99e6cb10958782f51d7686d"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/host/run.rs",
+      "bytes": 2853,
+      "sha256": "b3cf2353ce57b84ef2541a2e1a5119bc9d5d6042424174d0854c28122779fbe2"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/service/construction.rs",
+      "bytes": 4221,
+      "sha256": "2bdb613b5d81619c91fb557e43d3b76f6408433c8032d6384c7fee84b172c008"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/service/handler.rs",
+      "bytes": 10523,
+      "sha256": "924b2cba8a6214856d09da8f30d16961df0d7a2a60135c4de8ef7efda40090ce"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/service/save/catalog.rs",
+      "bytes": 14590,
+      "sha256": "ce61d55b7a6d6e997c29629d322b3d168d7a33e7dfb01abe7ffacc80c0973c3c"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/service/save/filesystem.rs",
+      "bytes": 4257,
+      "sha256": "5584034bca9c9b1b906727ae9e264723de5726214ccb367152da52775c5dac14"
+    },
+    {
+      "path": "core/crates/layerfs-server/tests/binding_claims.rs",
+      "bytes": 21507,
+      "sha256": "d2312ceb8a7c80295d5a5e6a8981f70aea5abd6dc67ff8fee5c6d813948f2f93"
+    },
+    {
+      "path": "core/crates/layerfs-server/tests/catalog_admission.rs",
+      "bytes": 52507,
+      "sha256": "6b31024ab8c5161e0f2c259da20c03e96127e7289b06cf9e7f79316abb1088c5"
+    },
+    {
+      "path": "core/crates/layerfs-server/tests/construction_config.rs",
+      "bytes": 1791,
+      "sha256": "1064a78098422786271b5f545b7f7fb1dad0949222be2c5f00ad378bf7b8f074"
+    },
+    {
+      "path": "core/crates/layerfs-server/tests/support/claim_phase_assertion.py",
+      "bytes": 5835,
+      "sha256": "8656f125e335fbda4194a946c9b171e815931c208572567f36ae3f3d519afe62"
+    },
+    {
+      "path": "core/crates/layerfs-server/tests/support/prepared_binding.rs",
+      "bytes": 12451,
+      "sha256": "d852be6b8eb2b4705c6121fe65d9e31dc5c15937be03e4b892ff04956d3af7a2"
+    },
+    {
+      "path": "core/crates/layerfs-storage/sql/construction_graph.sql",
+      "bytes": 5872,
+      "sha256": "33f53cc0e153b94125d30debcf74d0f78472959d864384707d554b63d43506c0"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/adapter.rs",
+      "bytes": 7130,
+      "sha256": "15becb2d41ee7e8a408973cd08db823642c81a6ba1361ad20cc9d822b4c07e8f"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/authority.rs",
+      "bytes": 12069,
+      "sha256": "104e8e4799a65e62aef017ce652230746ab49566f0419d315d09842eaf29a3e0"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/graph_adapter.rs",
+      "bytes": 5526,
+      "sha256": "c4b961d499611c6e6a34ac2a4f8d89d950d42ac0860ac0918bc1953a3abe34ba"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/graph_build.rs",
+      "bytes": 11041,
+      "sha256": "43101df6a20ff3f7c7eea7d17acb70ed3ecd427c9f56d73981a3e5622028ad90"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/graph_index.rs",
+      "bytes": 11876,
+      "sha256": "1ba61d520ead9d96bbf88e25bcd6070db37e2a7f7f33223a3eebff44f5b00321"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/graph_lifecycle.rs",
+      "bytes": 11389,
+      "sha256": "a6af01d68bd605b69708d22e062f2f37a4562024b546410e38d943d26de88de4"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/graph_pop.rs",
+      "bytes": 6843,
+      "sha256": "f4587a098a1b8e5aee54ff761c94ad149291ae490d9e5559591fa9092f48e413"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/graph_queries.rs",
+      "bytes": 7733,
+      "sha256": "a4eecc0e1d1a213661c727b79961e00b19d2cfe474fc7cefd7af0724f3cdb60b"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/graph_retire.rs",
+      "bytes": 3561,
+      "sha256": "a9a2aec6638403a6930f1c688cf2b2f0853297280b0268d47e6294eab0d193d6"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/graph_scan.rs",
+      "bytes": 7797,
+      "sha256": "f9d16f4b5e47193954dddbcd3ea97c85bed15d5560f9d359b683e16251c800af"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/graph_session.rs",
+      "bytes": 10765,
+      "sha256": "16479a591883b0fc87df32b7528477c5a1a43b99792896ed5ca717257448da03"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/graph_solve.rs",
+      "bytes": 9081,
+      "sha256": "1becdc105301315ce86d56a164b724f0a3a7bb3ad81dfaafc6eddd66bd781964"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/graph_state.rs",
+      "bytes": 10431,
+      "sha256": "ed81babf2f10cae09fec8582652720c38187b6b030402ed62318892a8abe130b"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/graph_write.rs",
+      "bytes": 5172,
+      "sha256": "15893c2e65363b864e196cd305fbf981bc5668135526d64445abdc1b5d881f92"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/header.rs",
+      "bytes": 394,
+      "sha256": "bfa35fa8f8afcfc6fb9540225e370fed26ae5d6c2af0dcdc997ac668374bb81b"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/mod.rs",
+      "bytes": 767,
+      "sha256": "a9a5c6deb1f81979beef1cfb0daadc9439cb8048babbb5f5e3f7611e3d444951"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/native.rs",
+      "bytes": 24603,
+      "sha256": "7efcd32741d63d55aaf3a2ebffa53c97c06454379cea8f7baa7710739f97d408"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/plan.rs",
+      "bytes": 3765,
+      "sha256": "3887f55434ee749cd753a01f392deaa83e95a7cd8fb5e6da21e7974a92707a21"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/profile.rs",
+      "bytes": 9099,
+      "sha256": "b056bc4af9fbea78107354a0536e8252072f77360419b30f2a680c5bbcbe3498"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/session.rs",
+      "bytes": 28267,
+      "sha256": "aeaf26955e2ad78281fd8d47ba254ba98b8e0eaf04fe1485ed3578310e3d192b"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/sites.rs",
+      "bytes": 6627,
+      "sha256": "ac15d14b9c4a611330f7ed54f283d3543b8f29fcba2eceadd9c11371eb620263"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/status.rs",
+      "bytes": 4021,
+      "sha256": "e5362c98a087633e2c8efc66ecb5aa81540086a9e3d682aecbc44bc15ead0639"
+    },
+    {
+      "path": "core/crates/layerfs-storage/tests/construction_graph.rs",
+      "bytes": 25111,
+      "sha256": "4c2e438bb792b8faa3ae9ad5b7cb0173d3d59d0f14264367776041fec696e337"
+    },
+    {
+      "path": "core/crates/layerfs-storage/tests/support/construction_graph_fixture.rs",
+      "bytes": 9606,
+      "sha256": "8254b91eb8af6ed3b0a82d8afea97f577112728617c89128cdbf0e7a09c54ac1"
+    },
+    {
+      "path": "core/crates/layerfs-storage/tests/support/construction_graph_oracle.rs",
+      "bytes": 4264,
+      "sha256": "6ff89475d3587b71130ea822ffc93922a89582162d228f94c678ea12f67decfc"
+    },
+    {
+      "path": "core/crates/layerfs-storage/tests/support/construction_graph_process.rs",
+      "bytes": 4778,
+      "sha256": "07065fc95b22df2612569686b1520840619abd6b6c922337c03c476831206ee9"
+    },
+    {
+      "path": "core/crates/layerfs-storage/tests/support/construction_graph_resources.rs",
+      "bytes": 19042,
+      "sha256": "aa535abb22f2c2f1bf6a2278bd5bf4ee7ee79aa7eaf98adf6720f19694b09f96"
+    },
+    {
+      "path": "core/crates/layerfs-storage/tests/support/construction_graph_unknown.rs",
+      "bytes": 15289,
+      "sha256": "a66dc61d405ae3d794cb40e80a1429580f245ea241e155aea9e55fa568ccc902"
+    }
+  ],
+  "scope": "current coherent product/proof source; execution verdicts and platform/resource gaps separate",
+  "supersedes": "SOURCE-FREEZE.json; only retained external fixture/observer corrections, product unchanged"
+}

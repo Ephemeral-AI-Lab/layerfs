@@ -4,7 +4,7 @@ use rusqlite::{limits::Limit, Connection, OpenFlags};
 
 use crate::error::{StorageError, StorageResult};
 
-use super::{native::RESERVED_BYTES, plan::Plan, status::ScratchProfile};
+use super::{plan::Plan, status::ScratchProfile};
 
 pub(crate) const APPLICATION_ID: i64 = 0x4c46_4353;
 pub(crate) const ROW_LIMIT: u64 = 65_536;
@@ -12,6 +12,7 @@ pub(crate) const RECORD_BYTES: u64 = 63;
 const SCHEMA: &str = include_str!("../../sql/construction_scratch.sql");
 const PHASED_SCHEMA: &str = include_str!("../../sql/construction_phased.sql");
 const SITES_SCHEMA: &str = include_str!("../../sql/construction_sites.sql");
+const GRAPH_SCHEMA: &str = include_str!("../../sql/construction_graph.sql");
 
 const LIMITS: &[(Limit, i32)] = &[
     (Limit::SQLITE_LIMIT_LENGTH, 65_536),
@@ -43,6 +44,7 @@ pub(crate) fn initialize(
     plan: Plan,
     claim_scope: Option<&[u8; 81]>,
     site_scope: Option<&[u8; 89]>,
+    graph_scope: Option<&[u8; 188]>,
 ) -> StorageResult<ScratchProfile> {
     let journal: String =
         connection.query_row("PRAGMA journal_mode = MEMORY", [], |row| row.get(0))?;
@@ -103,6 +105,34 @@ pub(crate) fn initialize(
                     [scope.as_slice()],
                 )?
             }
+            Plan::SitesGraphThenRoots {
+                directories,
+                bindings,
+                capacity,
+                ..
+            } => {
+                let sites = site_scope
+                    .ok_or(StorageError::Integrity("construction scratch graph sites"))?;
+                let graph = graph_scope
+                    .ok_or(StorageError::Integrity("construction scratch graph scope"))?;
+                connection.execute_batch(GRAPH_SCHEMA)?;
+                if connection.execute(
+                    "INSERT INTO session_owner VALUES(1,?1,NULL,0,0,0,NULL,?2,?3,?4,?5,?6)",
+                    rusqlite::params![header, directories as i64, bindings as i64,
+                        capacity.scratch_bytes() as i64, capacity.records() as i64, capacity.encoded_bytes() as i64],
+                )? != 1 || connection.execute(
+                    "INSERT INTO site_owner VALUES(1,?1,0,0,0,NULL,NULL,NULL,NULL,NULL)", [sites.as_slice()],
+                )? != 1 || connection.execute(
+                    "INSERT INTO graph_owner VALUES(1,?1,0,0,0,0,?2,0,0,NULL,NULL,NULL,NULL,NULL,NULL,0)",
+                    rusqlite::params![graph.as_slice(), 0u64.to_be_bytes().as_slice()],
+                )? != 1 {
+                    return Err(StorageError::Integrity("construction scratch graph owner insertion"));
+                }
+                connection.execute(
+                    "INSERT INTO solver_owner VALUES(1,?1,0,0,1,0,0,0,0,0,0)",
+                    [graph.as_slice()],
+                )?
+            }
         };
         if affected != 1 {
             return Err(StorageError::Integrity(
@@ -112,13 +142,17 @@ pub(crate) fn initialize(
         Ok(())
     })();
     finish_write(connection, schema)?;
-    let pages: i64 = connection.query_row("PRAGMA max_page_count=4096", [], |row| row.get(0))?;
-    if pages != (RESERVED_BYTES / 4096) as i64 {
+    let maximum = plan.scratch_bytes() / 4096;
+    let pages: i64 =
+        connection.query_row(&format!("PRAGMA max_page_count={maximum}"), [], |row| {
+            row.get(0)
+        })?;
+    if pages != maximum as i64 {
         return Err(StorageError::UnsupportedPolicy {
             field: "construction scratch logical page limit",
         });
     }
-    readback(connection, plan.version())
+    readback(connection, plan)
 }
 
 pub(crate) fn finish_write(
@@ -146,7 +180,7 @@ pub(crate) fn finish_transaction<T>(
     }
 }
 
-pub(crate) fn readback(connection: &Connection, version: u16) -> StorageResult<ScratchProfile> {
+pub(crate) fn readback(connection: &Connection, plan: Plan) -> StorageResult<ScratchProfile> {
     let read =
         |sql: &str| -> StorageResult<i64> { Ok(connection.query_row(sql, [], |row| row.get(0))?) };
     let profile = ScratchProfile {
@@ -165,11 +199,11 @@ pub(crate) fn readback(connection: &Connection, version: u16) -> StorageResult<S
     if profile
         != (ScratchProfile {
             application_id: APPLICATION_ID,
-            version: i64::from(version),
+            version: i64::from(plan.version()),
             page_size: 4096,
             cache_size: -512,
             mmap_size: 0,
-            max_page_count: 4096,
+            max_page_count: (plan.scratch_bytes() / 4096) as i64,
             synchronous: 0,
             temp_store: 2,
             foreign_keys: 1,

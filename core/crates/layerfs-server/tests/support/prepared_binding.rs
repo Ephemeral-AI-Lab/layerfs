@@ -46,6 +46,18 @@ impl Fixture {
 
     /// Real immutable imported directory fixtures, prepared before the operation.
     pub fn with_directories(label: &str, directories: usize) -> Self {
+        Self::with_shape(label, directories, false, 16 * 1024 * 1024)
+    }
+
+    pub fn with_scratch(label: &str, scratch_bytes: u64) -> Self {
+        Self::with_shape(label, 0, false, scratch_bytes)
+    }
+
+    pub fn with_chain(label: &str, inner_directories: usize) -> Self {
+        Self::with_shape(label, inner_directories, true, 16 * 1024 * 1024)
+    }
+
+    fn with_shape(label: &str, directories: usize, chain: bool, scratch_bytes: u64) -> Self {
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT: AtomicU64 = AtomicU64::new(1);
         let path = std::env::temp_dir().join(format!(
@@ -76,7 +88,7 @@ impl Fixture {
             .unwrap(),
         );
         let peer = VerifiedPeer::from_private(&[7; 32]).unwrap();
-        let mut service = Service::new(
+        let mut service = Service::with_construction_scratch(
             vec![StoreAccess {
                 id: 1,
                 store,
@@ -88,13 +100,20 @@ impl Fixture {
                 }],
             }],
             OperationRecorder::disabled(),
+            scratch_bytes,
         )
         .unwrap();
         let source = path.join("source");
         std::fs::create_dir(&source).unwrap();
         std::fs::write(source.join("a"), ORIGINAL).unwrap();
+        let mut nested = source.clone();
         for index in 0..directories {
-            std::fs::create_dir(source.join(format!("d{index:04}"))).unwrap();
+            if chain {
+                nested.push("d");
+                std::fs::create_dir(&nested).unwrap();
+            } else {
+                std::fs::create_dir(source.join(format!("d{index:04}"))).unwrap();
+            }
         }
         service.set_import_root(&source).unwrap();
         let created = dispatch(

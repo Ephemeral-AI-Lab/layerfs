@@ -71,6 +71,7 @@ pub struct FilesystemResult {
 
 mod compatibility;
 mod construction;
+mod graph;
 mod sites;
 
 pub use compatibility::{
@@ -82,6 +83,9 @@ pub use compatibility::{
 pub use construction::{
     build_filesystem_binding_rows_with_construction_state,
     update_filesystem_binding_rows_with_construction_state,
+};
+pub use graph::{
+    build_filesystem_binding_rows_with_graph_state, update_filesystem_binding_rows_with_graph_state,
 };
 pub use sites::{
     build_filesystem_binding_rows_with_site_state, update_filesystem_binding_rows_with_site_state,

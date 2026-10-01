@@ -1,0 +1,181 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.78s
+     Running tests/binding_claim_codecs.rs (core/target/debug/deps/binding_claim_codecs-075259538d5103e6)
+
+running 8 tests
+test closed_tables_and_scopes_refuse_before_resident_allocation_or_append ... ok
+test header_only_empty_terminal_page_is_supported_and_abandon_is_metadata_terminal ... ok
+test cursor_refuses_missing_premature_wrong_digest_and_wrong_seal_without_resend ... ok
+test independent_empty_small_and_maximum_serial_transcripts ... ok
+test known_duplicate_terminalizes_and_sealed_retired_access_is_denied ... ok
+test malformed_fixed_frame_and_terminal_arithmetic_are_refused ... ok
+test width_capacity_and_129th_record_refusal_are_distinct ... ok
+test page_bounds_use_32_byte_claim_records_and_exact_empty_eof_continuation ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/binding_claim_validation.rs (core/target/debug/deps/binding_claim_validation-6df40dd8cc3c2c85)
+
+running 17 tests
+test shape_admission_refuses_before_claim_batch_root_and_canonical_effects ... ok
+test early_build_and_update_base_refusals_terminalize_the_selected_owner ... ok
+test first_unflushed_duplicate_terminalizes_same_owner_before_any_root_work ... ok
+test legacy_result_preserves_one_for_each_directory_symlink_and_zero_for_files ... ok
+test provider_acknowledgement_error_is_preserved_and_abandoned_without_seal_or_retirement ... ok
+test second_partial_window_duplicates_are_detected_without_a_second_transaction ... ok
+test cross_batch_duplicate_wins_over_a_later_bad_parent_kind_and_cannot_retry ... ok
+test regular_aliases_emit_no_claims_and_legacy_additions_are_zero ... ok
+test source_shape_failure_precedes_duplicate_or_provider_effects ... ok
+test stored_regular_kind_wins_over_caller_directory_value_and_allows_aliases ... ok
+C1 dispatch count proof: K257, claim transactions3, verifier pages3, window128; explicit resident provider, no physical/speed qualification
+test wide_exclusive_bindings_use_three_transactions_and_three_verification_pages ... ok
+test early_resource_refusal_abandons_once_releases_ordering_and_denies_reentry ... ok
+test early_fallible_binding_source_refusal_abandons_once_and_denies_reentry ... ok
+test postchecker_root_shape_refusal_terminalizes_even_after_known_claim_retirement ... ok
+test retirement_failure_releases_ordering_once_and_denies_root_allocation_and_bytes ... ok
+test complete_existing_directory_permutation_uses_one_claim_then_keeps_alias_work_linear ... ok
+test full_257_directory_build_retires_claims_before_root_admission_and_emission ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/binding_points.rs (core/target/debug/deps/binding_points-5dd3538901a06643)
+
+running 8 tests
+test literal_point28_empty_eof_range_and_full_u64_descriptor ... ok
+test old_external_ordinal_capability_refuses_without_error_driven_row_fallback ... ok
+test borrowed_compatibility_and_both_prepared_delegates_preserve_exact_elements ... ok
+test preparation_admits_before_issuance_and_creation_preserves_known_failures ... ok
+test real_spool_receiver_checks_foreign_wrong_parent_descriptor_and_ordinal_before_names ... ok
+test adjacent_checkpoint_span_corruption_refuses_before_selected_name_decode ... ok
+test later_corruption_in_selected_block_prevents_return_of_an_earlier_valid_point ... ok
+Point count proof:4097 names, exactly<=16 selected-block decodes,2 checked adjacent slots,0 name probes; cache/RSS/storage timing not measured
+test real_spool_point_decodes_only_one_complete16_block_with_zero_name_probes ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/binding_site_codecs.rs (core/target/debug/deps/binding_site_codecs-46aec9bd669e7d1f)
+
+running 8 tests
+test exact_headers96_138_164_171_189_and_valid_some_zero_ordinal ... ok
+test bounded_windows_include_headers_actual_capacity_and_refuse129th_record ... ok
+test literal_scope89_point28_and_all_closed_frame60_flag_values ... ok
+test changed_immutable_birth_refuses_final_seal_and_never_enables_roots ... ok
+test header_only_empty_eof_and_sticky_corrupt_digest_never_resend_or_retire ... ok
+test independent_empty_and_non_key_sorted_birth_seals_and_key_sorted_final_seals ... ok
+test frame_flags_lengths_foreign_source_scope_and_table_fences ... ok
+test parent_projection_is_birth_only_and_ordered_with_exact_maximum ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/binding_site_reference.rs (core/target/debug/deps/binding_site_reference-ade78a9f2b80675a)
+
+running 2 tests
+test new_site_caller_preserves_every_sealed_v1_construction_root_and_object_set ... ok
+test new_site_caller_preserves_every_sealed_v1_update_root_and_object_set ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/binding_site_validation.rs (core/target/debug/deps/binding_site_validation-65d3bf7820b38286)
+
+running 11 tests
+test regular_aliases_create_zero_sites_and_preserve_the_old_zero_additions_result ... ok
+test original_provider_failures_and_wrong_membership_maximum_keep_roots_disabled ... ok
+test foreign_and_unavailable_source_identity_leave_the_rightful_owner_unselected_in_all_entries ... ok
+test a_new_name_is_followed_and_removing_an_old_back_edge_allows_the_move ... ok
+test matching_source_cursor_and_early_entry_and_post_retirement_capacity_failures_abandon_once ... ok
+test independent_uncertified_base_preserves_or_between_removed_and_retained_old_aliases ... ok
+C1 site dispatch: K257,3 birth batches,3 final pages,window128; finite external semantic oracle, no physical/speed proof
+test first_window_and_cross128_duplicates_precede_a_later_missing_kind_and_terminalize_once ... ok
+test wide_births_acknowledge_three128_windows_then_verify_and_retire_before_roots ... ok
+test zero_active_stored_sites_do_not_add_a_base_walk_or_walk_limit_refusal ... ok
+C1 permutation count proof:N129,258 entry visits,2 parent pages,387 point resolutions,0 historical binding rows
+test star_permutation_follows_each_changed_site_once_and_skips_old_serial_edges ... ok
+test full_name255_star_uses_the_same_point_and_visit_law_without_retained_names ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/effective_graph_codecs.rs (core/target/debug/deps/effective_graph_codecs-6c3b290ab9d352e9)
+
+running 13 tests
+test independent_nine_budget_literals ... ok
+test actual_vec_capacity_and_combined_build_window_are_independent ... ok
+C1 native ownership count diagnostic:Node=56 Edge=40 NodeChange=120 EdgeChange=84 Mutation=272 Hasher=1920; combined128-target ack max15360 +63child keys1575; simultaneous chooser128+pop128+edge1 record bytes14376test header_only_empty_eof_and_sticky_forged_count_refusal ... ok; proof hashers3840. Encoded widths60/43 and128 records are separate; source/peeks/allocator metadata/memo/provider/cache/Unknown/native/OS excluded.
+
+test independent_subject106_scope188_and_capacity_derivation ... ok
+test independent_adjacency285_and_proof317_literal_hashes ... ok
+test descend_equal_targets_refuses_before_provider_callback ... ok
+test aggregate_full_records_refuse_at_exact_default_capacity ... ok
+test independent_node60_edge43_and_mode_fences ... ok
+test cross_table_keys_and_issued_owner_are_not_interchangeable ... ok
+test leave_root_full_record_bytes_refuse_before_provider_at377_boundary ... ok
+test atomic_descend_counts_two_targets_and_duplicate_batches_refuse ... ok
+test parent_edge_max_and_positive_after_are_checked_without_rank ... ok
+test native_type_ownership_counts_are_separate_from_encoded_windows ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/effective_graph_reference.rs (core/target/debug/deps/effective_graph_reference-9b3f0bcfa947821d)
+
+running 2 tests
+test new_graph_caller_preserves_every_sealed_v1_construction_root_and_object_set ... ok
+test new_graph_caller_preserves_every_sealed_v1_update_root_and_object_set ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/effective_graph_semantics.rs (core/target/debug/deps/effective_graph_semantics-f2504470532244f0)
+
+running 25 tests
+test fresh_reachable_multiple_parents ... ok
+test fresh_disconnected_directory ... ok
+test fresh_excluded_component ... ok
+test fresh_excluded_parent_does_not_reach_child ... ok
+test fresh_repeated_parent_binding ... ok
+test empty_fresh_root ... ok
+test acyclic_seed_plus_cyclic_seed ... ok
+test disconnected_selected_component_cycle ... ok
+test fresh_disconnected_cycle ... ok
+test isolated_selected_child ... ok
+test final_batch_two_edge_cycle ... ok
+test no_seed_old_cycle ... ok
+test maximum_serial_selected_cycle ... ok
+test diamond_old_alias_dag ... ok
+test fresh_chain ... ok
+test old_descendant_cycle_without_seed_return ... ok
+test overlapping_seed_closures ... ok
+test public_solver_provider_failure_after_entry_abandons_exactly_once ... ok
+test public_solver_pure_selection_getter_error_preserves_unconsumed_owner ... ok
+test public_solver_rejects_malformed_ack_after_native_entry_and_terminalizes_once ... ok
+test same_scope_known_rejected_attempt_cannot_resume_or_enable_roots ... ok
+test selected_child_reaches_parent ... ok
+test selected_descendant_in_old_cycle ... ok
+test selected_self_loop ... ok
+test cyclic_component_129_returns_two_bounded_member_windows ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/effective_graph_validation.rs (core/target/debug/deps/effective_graph_validation-d542eadb0f599290)
+
+running 9 tests
+test selected_source_cursor_failure_abandons_once_and_original_error_survives ... ok
+test post_graph_retirement_root_capacity_refusal_terminalizes_same_owner ... ok
+test retained_parent_alias_keeps_priority_over_graph_cycle ... ok
+test selected_graph_append_failure_preserves_private_rows_and_emits_no_root ... ok
+test selected_old_cycle_rejects_after_sites_retire_without_canonical_output ... ok
+test old_nonseed_descendant_cycle_is_accepted_by_actual_new_update_caller ... ok
+test foreign_budget_or_getter_failure_consumes_no_site_owner_through_all_entries ... ok
+
+thread 'all257_chain_seeds_share_one_graph_and_preserve_independent_base_root' panicked at crates/layerfs-content/tests/effective_graph_validation.rs:185:6:
+called `Result::unwrap()` on an `Err` value: InvalidRecord("inode child summary")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test all257_chain_seeds_share_one_graph_and_preserve_independent_base_root ... FAILED
+C1 configured disk count diagnostic:48MiB subject,33,000 reachable fresh dirs+32,999 arcs=65,999 full records; same request/work/window profile; finite provider excludes native fit/physical qualification
+test configured48_admits_33000_fresh_directories_without_raising_request_or_work_limits ... ok
+
+failures:
+
+failures:
+    all257_chain_seeds_share_one_graph_and_preserve_independent_base_root
+
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.71s
+
+error: test failed, to rerun pass `-p layerfs-content --test effective_graph_validation`

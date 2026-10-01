@@ -1,0 +1,24 @@
+{
+  "parent": "79639cc6f58ae78eeb1fb638996b1d6948767215",
+  "command": [
+    "python3",
+    "core/crates/layerfs-content/tests/fixtures/effective_graph/budget_vectors.py"
+  ],
+  "exit": 0,
+  "scope": "independent prospective arithmetic literal assertions; no candidate/provider/benchmark qualification",
+  "cases": 9,
+  "files": [
+    {
+      "path": "core/crates/layerfs-content/tests/fixtures/effective_graph/budget_vectors.py",
+      "sha256": "4c0a4bcb8299d71399d280e65051c30e6a0041529b363bc8dec387821849251c"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/fixtures/effective_graph/budget_vectors.json",
+      "sha256": "f6c8e9fa7b7f66fd3d34a84a080884c16e7d472e258105165c0cce0746c47021"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/fixtures/effective_graph/budget_manifest.rs",
+      "sha256": "75440d446d22eb842e7d0f7c6ce765904985dc3275542e407ef8ca3e61dff3d9"
+    }
+  ]
+}

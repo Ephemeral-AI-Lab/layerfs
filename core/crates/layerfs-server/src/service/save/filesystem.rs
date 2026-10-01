@@ -17,7 +17,7 @@ use layerfs_bridge::contract::*;
 use layerfs_content::filesystem::rows::{
     PreparedBindingUpdate as StreamedUpdate, SpoolPreparation,
 };
-use layerfs_content::filesystem::state::{SiteConstructionScopes, SiteConstructionState};
+use layerfs_content::filesystem::state::{GraphConstructionScopes, GraphConstructionState};
 use layerfs_content::filesystem::{root::FilesystemRootId, FilesystemRead, InodeScope};
 use layerfs_content::{
     AuthenticatedObjects, FilesystemObjects, FilesystemResources, FinalizedConsumer,
@@ -46,8 +46,8 @@ pub(crate) fn update(
     provider: &dyn AuthenticatedObjects,
     update: PreparedUpdate<'_>,
     consumer: &mut dyn FinalizedConsumer,
-    state: &mut dyn SiteConstructionState,
-    state_scope: &SiteConstructionScopes,
+    state: &mut dyn GraphConstructionState,
+    state_scope: &GraphConstructionScopes,
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<(Root, u64), Failure> {
@@ -81,7 +81,7 @@ pub(crate) fn update(
         rows: &rows,
     };
     let result =
-        layerfs_content::filesystem::update::update_filesystem_binding_rows_with_site_state(
+        layerfs_content::filesystem::update::update_filesystem_binding_rows_with_graph_state(
             &mut objects,
             &input,
             None,

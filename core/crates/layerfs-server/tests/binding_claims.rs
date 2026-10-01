@@ -3,9 +3,9 @@
 //! physical progress, release qualification, or performance claim.
 //!
 //! The phase test explicitly alters the owned external test scratch schema:
-//! a fixed root column requires site_owner.stage4. It keeps production triggerdepth0
+//! fixed root columns require site_owner.stage4 and graph_owner.stage7. It keeps production triggerdepth0
 //! and foreign_keys1. The assertion proves first-root ordering; the owning C2
-//! provider tests separately prove that stage4 requires exact empty sites/indexes.
+//! provider tests separately prove exact empty Sites/Graph retirement.
 
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 
@@ -143,6 +143,7 @@ struct ObservedBody<'a> {
     before_spools: BTreeSet<PathBuf>,
     eof: bool,
     bytes: u64,
+    scratch_bytes: u64,
 }
 
 impl<'a> ObservedBody<'a> {
@@ -157,6 +158,7 @@ impl<'a> ObservedBody<'a> {
             before_spools: spools(),
             eof: false,
             bytes: 0,
+            scratch_bytes: 16 * 1024 * 1024,
         }
     }
 
@@ -193,9 +195,36 @@ impl Read for ObservedBody<'_> {
                 let metadata = std::fs::metadata(&path).unwrap();
                 assert_eq!(metadata.mode() & 0o777, 0o600);
                 assert_eq!(metadata.nlink(), 1);
-                assert_eq!(metadata.blocks() * 512, 16 * 1024 * 1024);
+                assert_eq!(metadata.blocks() * 512, self.scratch_bytes);
             }
-            assert_eq!(number(self.library, &path, "PRAGMA user_version"), 3);
+            assert_eq!(number(self.library, &path, "PRAGMA user_version"), 4);
+            // max_page_count belongs to the production connection's Pager.
+            // This separate reader observes persisted identity/budget only;
+            // owning C2 tests require exact live connection readback.
+            assert_eq!(
+                number(
+                    self.library,
+                    &path,
+                    "SELECT selected_bytes FROM session_owner"
+                ),
+                self.scratch_bytes
+            );
+            assert_eq!(
+                number(
+                    self.library,
+                    &path,
+                    "SELECT graph_records FROM session_owner"
+                ),
+                self.scratch_bytes / 256
+            );
+            assert_eq!(
+                number(
+                    self.library,
+                    &path,
+                    "SELECT graph_record_bytes FROM session_owner"
+                ),
+                (self.scratch_bytes / 256) * 63
+            );
             self.scratch = Some(path);
         }
         let bytes = self.input.read(output)?;
@@ -209,7 +238,7 @@ impl Read for ObservedBody<'_> {
                     self.scratch.as_ref().unwrap(),
                     None,
                 );
-                assert_eq!(installed.trim(), "installed stage4 assertion; owner_columns9 site_columns10 root_columns4 trigger_depth0 foreign_keys1 pre_phase0 constraint787");
+                assert_eq!(installed.trim(), "installed site4 graph7 assertions; owner_columns12 site_columns10 graph_columns16 solver_columns11 root_columns5 trigger_depth0 foreign_keys1 pre_phase0 constraint787");
             }
         }
         Ok(bytes)
@@ -292,7 +321,7 @@ fn stage_with_257_exclusive_directories_retires_claims_before_first_root_insert(
         ),
         0
     );
-    eprintln!("DIAGNOSTIC direct-legacy selected-provider Stage: sites257 directories258, one native16MiB owner/source-bound profile3; external required-stage4 FK held at every actual rootinsert, triggerdepth0 unchanged; known scratch/spool/Save cleanup. Provider proof separately owns exactemptystage4; no heap/physical/progress/speed admission.");
+    eprintln!("DIAGNOSTIC direct-legacy selected-provider Stage: sites257 directories258, one native16MiB owner/source-bound profile4; external required-site4/graph7 FKs held at every actual rootinsert, triggerdepth0 unchanged; known scratch/spool/Save cleanup. Provider proof separately owns exactemptystage4; no heap/physical/progress/speed admission.");
 }
 
 #[test]
@@ -431,5 +460,102 @@ fn stored_site_permutation_and_retained_parent_refusal_preserve_real_stage_and_c
     );
     assert_eq!(f.list(f.root, b""), before);
     assert_eq!(f.original_bytes(), ORIGINAL);
-    eprintln!("DIAGNOSTIC direct-library profile3:129 existing sites cross128, actual source-bound birth/parent/final/retire->Stage with stage4FK; old/new serial restatement permutation preserved; surviving old parent refuses and priorStage/base/known Save-scratch cleanup remain exact. No speed/global/physical qualification.");
+    eprintln!("DIAGNOSTIC direct-library profile4:129 existing sites cross128, actual source-bound birth/parent/final/retire->Stage with site4/graph7 FKs; old/new serial restatement permutation preserved; surviving old parent refuses and priorStage/base/known Save-scratch cleanup remain exact. No speed/global/physical qualification.");
+}
+
+#[test]
+fn configured_48mib_state_budget_is_bound_before_body_and_retires_before_roots() {
+    let _serial = SERIAL.lock().unwrap();
+    let budget = 48 * 1024 * 1024;
+    let f = Fixture::with_scratch("graph-configured", budget);
+    let library = selected_library();
+    let (rows, declarations) = directories(&f, 129, false);
+    let (header, raw) = f.prepared([124; 32], 1, &rows, &declarations);
+    let mut body = ObservedBody::new(f.path(), &library, &raw, true);
+    body.scratch_bytes = budget;
+    let stage = f.stage(header.clone(), &mut body).unwrap();
+    body.known_cleanup();
+    assert_eq!(body.bytes, raw.len() as u64);
+    assert_eq!(f.current_stage(header.workspace), stage);
+    assert_eq!(f.list(stage.candidate_root, b"").len(), 130);
+    assert_eq!(f.list(f.root, b""), vec![(b"a".to_vec(), f.file_serial)]);
+    assert_eq!(f.original_bytes(), ORIGINAL);
+    assert_eq!(
+        number(
+            &library,
+            &f.path().join("store.sqlite"),
+            "SELECT count(*) FROM saves WHERE active_slot IS NOT NULL"
+        ),
+        0
+    );
+    eprintln!("DIAGNOSTIC configured48MiB actual native reservation/header/selectedS-R-L before body; one owner, sites4/graph7 root fences and known scratch/spool/Save cleanup. RAM/work/request limits unchanged; no larger input or speed/physical admission.");
+}
+
+#[test]
+fn overlapping_257_directory_chain_restatement_preserves_root_and_cycle_preserves_stage() {
+    let _serial = SERIAL.lock().unwrap();
+    // Root plus256 ordinary imported directories; deepest path has256 components.
+    let f = Fixture::with_chain("graph-chain", 256);
+    let library = selected_library();
+    let mut path = Vec::new();
+    let mut parent = f.root_serial;
+    let mut rows = Vec::new();
+    let mut first = None;
+    let mut second = None;
+    for index in 0..256 {
+        if index != 0 {
+            path.push(b'/');
+        }
+        path.push(b'd');
+        let Response::Stat { serial, kind, .. } = f.stat(f.root, &path) else {
+            panic!("directory stat");
+        };
+        assert_eq!(kind, 2);
+        rows.push((parent, vec![(b"d".to_vec(), Some(serial))]));
+        if index == 0 {
+            first = Some(serial);
+        }
+        if index == 1 {
+            second = Some(serial);
+        }
+        parent = serial;
+    }
+    rows.push((parent, Vec::new()));
+    rows.sort_by_key(|row| row.0);
+    assert!(rows.windows(2).all(|pair| pair[0].0 < pair[1].0));
+    let workspace = [125; 32];
+    let (header, raw) = f.prepared(workspace, 1, &rows, &[]);
+    assert_eq!((header.totals.directories, header.totals.names), (257, 256));
+    let mut body = ObservedBody::new(f.path(), &library, &raw, true);
+    let prior = f.stage(header, &mut body).unwrap();
+    body.known_cleanup();
+    // The expected identity is the immutable pre-operation root, not candidate output.
+    assert_eq!(prior.candidate_root, f.root);
+    assert_eq!(f.current_stage(workspace), prior);
+    assert_eq!(f.original_bytes(), ORIGINAL);
+    let first = first.unwrap();
+    let second = second.unwrap();
+    let mut cycle = vec![
+        (f.root_serial, vec![(b"d".to_vec(), None)]),
+        (second, vec![(b"back".to_vec(), Some(first))]),
+    ];
+    cycle.sort_by_key(|row| row.0);
+    let (header, raw) = f.prepared(workspace, 2, &cycle, &[]);
+    let mut body = ObservedBody::new(f.path(), &library, &raw, true);
+    let error = f.stage(header, &mut body).unwrap_err();
+    body.known_cleanup();
+    assert_eq!(error.code, Code::InvalidInput);
+    assert!(!error.unknown);
+    assert_eq!(error.cleanup, None);
+    assert_eq!(f.current_stage(workspace), prior);
+    assert_eq!(f.original_bytes(), ORIGINAL);
+    assert_eq!(
+        number(
+            &library,
+            &f.path().join("store.sqlite"),
+            "SELECT count(*) FROM saves WHERE active_slot IS NOT NULL"
+        ),
+        0
+    );
+    eprintln!("DIAGNOSTIC real Service imported257-directory chain/all256 restated edges; independent unchangedBase root and phase fences. Final-batch ancestor move forms selected cycle: known InvalidInput, priorStage/base/Save-scratch-spool cleanup exact. C1 owns actual expansion/SCC count proof; no timing or speed admission.");
 }

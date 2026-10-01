@@ -48,12 +48,13 @@ fn configured_peers() -> Result<(Vec<Peer>, Vec<Grant>), Failure> {
 }
 
 pub fn run() -> Result<(), Failure> {
+    let construction_scratch = config::construction_scratch()?;
     let private = key(&env("LAYERFS_PRIVATE_KEY")?)?;
     let (peers, grants) = configured_peers()?;
     let store = store::open(std::path::Path::new(&env("LAYERFS_STORE")?))?;
     let capacity = store::capacity(&store)?;
     let runtime = config::telemetry(1);
-    let mut service = Service::new(
+    let mut service = Service::with_construction_scratch(
         vec![StoreAccess {
             id: 1,
             store,
@@ -61,6 +62,7 @@ pub fn run() -> Result<(), Failure> {
             history: config::history()?,
         }],
         runtime.recorder(),
+        construction_scratch.scratch_bytes(),
     )?;
     if let Some(root) = std::env::var_os("LAYERFS_IMPORT_ROOT") {
         service.set_import_root(std::path::Path::new(&root))?;

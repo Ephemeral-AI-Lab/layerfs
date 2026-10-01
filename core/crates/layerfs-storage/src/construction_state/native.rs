@@ -10,6 +10,31 @@ use super::status::NativeIdentity;
 
 pub(crate) const RESERVED_BYTES: u64 = 16 * 1024 * 1024;
 
+pub(crate) fn validate_budget(bytes: u64) -> StorageResult<()> {
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        let _ = bytes;
+        Err(StorageError::UnsupportedPolicy {
+            field: "construction scratch native platform",
+        })
+    }
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    {
+        let _: nix::libc::off_t =
+            bytes
+                .try_into()
+                .map_err(|_| StorageError::UnsupportedPolicy {
+                    field: "construction scratch native budget width",
+                })?;
+        let _: usize = bytes
+            .try_into()
+            .map_err(|_| StorageError::UnsupportedPolicy {
+                field: "construction scratch native budget address width",
+            })?;
+        Ok(())
+    }
+}
+
 pub(crate) struct NativeDirectory {
     pub(crate) path: PathBuf,
     pub(crate) parent: NativeIdentity,
@@ -32,6 +57,7 @@ pub(crate) struct NativeFile {
     pub(crate) directory_identity: Option<NativeIdentity>,
     pub(crate) identity: Option<NativeIdentity>,
     pub(crate) allocated: Option<u64>,
+    pub(crate) reserved_bytes: u64,
     pub(crate) quarantined: bool,
     name: String,
     file: Option<File>,
@@ -250,6 +276,7 @@ impl NativeFile {
     pub(crate) fn prepare(
         directory: Arc<Mutex<NativeDirectory>>,
         token: u64,
+        reserved_bytes: u64,
     ) -> StorageResult<Self> {
         let name = format!("state-{token:016x}.sqlite");
         let (path, parent, directory_identity) = {
@@ -265,6 +292,7 @@ impl NativeFile {
             directory_identity,
             identity: None,
             allocated: None,
+            reserved_bytes,
             quarantined: false,
             name,
             file: None,
@@ -390,7 +418,7 @@ impl NativeFile {
             let metadata = file.metadata().map_err(StorageError::Io)?;
             if identity(&metadata) != expected
                 || metadata.nlink() != 1
-                || metadata.len() > RESERVED_BYTES
+                || metadata.len() > self.reserved_bytes
             {
                 return Err(StorageError::Integrity(
                     "construction scratch file descriptor",
@@ -415,8 +443,8 @@ impl NativeFile {
             crate::sqlite::native_reservation::reserve_to(
                 file,
                 &metadata,
-                RESERVED_BYTES,
-                RESERVED_BYTES,
+                self.reserved_bytes,
+                self.reserved_bytes,
                 "construction scratch physical reservation",
             )?;
             self.observe_allocation()
@@ -446,10 +474,10 @@ impl NativeFile {
                     "construction scratch allocated bytes",
                 ))?;
             self.allocated = Some(allocated);
-            if allocated != RESERVED_BYTES {
+            if allocated != self.reserved_bytes {
                 return Err(StorageError::CapacityExceeded {
                     what: "construction scratch physical class",
-                    limit: RESERVED_BYTES,
+                    limit: self.reserved_bytes,
                     actual: allocated,
                 });
             }
@@ -458,7 +486,7 @@ impl NativeFile {
     }
 
     pub(crate) fn binding(&self, selector: &[u8; 32], token: u64) -> StorageResult<[u8; 32]> {
-        self.binding_for(selector, token, None)
+        self.binding_for(selector, token, None, None)
     }
 
     pub(crate) fn sites_binding(
@@ -467,7 +495,16 @@ impl NativeFile {
         token: u64,
         source: layerfs_content::filesystem::rows::BindingSourceId,
     ) -> StorageResult<[u8; 32]> {
-        self.binding_for(selector, token, Some(source))
+        self.binding_for(selector, token, Some(source), None)
+    }
+
+    pub(crate) fn graph_binding(
+        &self,
+        selector: &[u8; 32],
+        token: u64,
+        subject: &layerfs_content::filesystem::state::GraphSubject,
+    ) -> StorageResult<[u8; 32]> {
+        self.binding_for(selector, token, None, Some(&subject.encode()))
     }
 
     fn binding_for(
@@ -475,13 +512,16 @@ impl NativeFile {
         selector: &[u8; 32],
         token: u64,
         source: Option<layerfs_content::filesystem::rows::BindingSourceId>,
+        subject: Option<&[u8; 106]>,
     ) -> StorageResult<[u8; 32]> {
         let directory = self
             .directory
             .lock()
             .map_err(|_| StorageError::Integrity("construction scratch directory lock"))?;
         let mut digest = blake3::Hasher::new();
-        digest.update(if source.is_some() {
+        digest.update(if subject.is_some() {
+            b"layerfs/construction-state/native/v4\0"
+        } else if source.is_some() {
             b"layerfs/construction-state/native/v3\0"
         } else {
             b"layerfs/construction-state/native/v1\0"
@@ -506,6 +546,9 @@ impl NativeFile {
         digest.update(&token.to_be_bytes());
         if let Some(source) = source {
             digest.update(&source.as_bytes());
+        }
+        if let Some(subject) = subject {
+            digest.update(subject);
         }
         Ok(*digest.finalize().as_bytes())
     }
@@ -569,6 +612,22 @@ impl NativeFile {
         header[..8].copy_from_slice(b"LFCSOWN3");
         header[8..10].copy_from_slice(&3u16.to_be_bytes());
         header[192..].copy_from_slice(&source.as_bytes());
+        Ok(header)
+    }
+
+    pub(crate) fn graph_header(
+        &self,
+        selector: &[u8; 32],
+        token: u64,
+        binding: &[u8; 32],
+        subject: &layerfs_content::filesystem::state::GraphSubject,
+    ) -> StorageResult<[u8; 298]> {
+        let earlier = self.header(selector, token, binding, 2)?;
+        let mut header = [0; 298];
+        header[..192].copy_from_slice(&earlier);
+        header[..8].copy_from_slice(b"LFCSOWN4");
+        header[8..10].copy_from_slice(&4u16.to_be_bytes());
+        header[192..].copy_from_slice(&subject.encode());
         Ok(header)
     }
 

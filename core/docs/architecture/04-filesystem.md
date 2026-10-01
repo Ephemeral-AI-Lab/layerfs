@@ -1,5 +1,16 @@
 # Filesystem trees
 
+> **#287 effective graph working source:** Against published parent
+> `79639cc6f58ae78eeb1fb638996b1d6948767215`, the selected graph path builds
+> one compact effective adjacency and uses external selective SCC state after
+> known Site retirement. Only cyclic components containing selected directory
+> children reject updates; fresh root reachability remains a separate proof.
+> [Shared contract](../issues/287/R1D-EFFECTIVE-GRAPH-FREEZE.md) fixes Node60/
+> Edge43, source/context/budget binding, bounded windows and exact retirement
+> before roots. [Scoped delivery](../issues/287/R1D-EFFECTIVE-GRAPH-DELIVERY.md) records the
+> owning checks and precise direct-provider exits.
+> Alias/memo/reference/native/global/physical and full R1 remain open.
+
 > **#287 R1d binding-sites implementation:** Source developed against published parent
 > `420e6a2c0149326fe2c380ff0e4156eadd3d326d` selects combined typed paged
 > exclusive sites and monotone base facts. Issued Point28 restores one name

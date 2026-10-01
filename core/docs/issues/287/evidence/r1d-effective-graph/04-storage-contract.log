@@ -1,0 +1,184 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 8.91s
+     Running tests/construction_claims.rs (core/target/debug/deps/construction_claims-49ea96ee4d5c81d3)
+
+running 18 tests
+test unix::claimed_pages_middle_maximum_and_small_byte_bounds_use_exact_primary_keys ... ok
+test unix::closed_primary_key_queries_have_no_temp_sort_or_prefix_count ... ok
+test unix::empty_and_header_only_sealed_pages_complete_without_allocating_records ... ok
+test unix::exact_abandon_is_sticky_metadata_and_foreign_abandon_changes_no_owner ... ok
+test unix::existing_duplicate_does_not_mask_a_later_selected_corrupt_class ... ok
+test unix::foreign_keys_wrong_owner_and_forged_seals_never_change_rows ... ok
+test unix::known_partial_retirement_keeps_remaining_rows_and_blocks_roots ... ok
+test unix::maximum_claims_retire_then_maximum_roots_share_one_native_class ... LFCS2 correctness/resource diagnostic: claims=65536/2097152frameB, roots=65536/4128768frameB, claim_pages=570, retired_free_pages=565, final_pages=1836, same_file=Some(NativeIdentity { device: 16777230, inode: 856592491, uid: 501, mode: 33152 }), allocated=Some(16777216), retained_class=16777216; claim native_element=25, wave128=3200B; no speed/global heap/RSS/protected-progress claim
+ok
+test unix::phased_admission_and_per_batch_declaration_refuse_before_effects ... ok
+test unix::real_malformed_class_and_key_refuse_seal_with_known_cleanup ... ok
+test unix::real_shared_reader_commit_unknown_retains_exact_capsule_and_class ... LFCS2 actual reader provider: version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; current executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_claims-49ea96ee4d5c81d3, READ_ONLY|NOFOLLOW, busy0
+LFCS2 SHARED barrier acknowledged by actual BEGIN+SELECT records=0 before writer
+
+
+LFCS2 actual reader provider: version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; current executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_claims-49ea96ee4d5c81d3, READ_ONLY|NOFOLLOW, busy0
+LFCS2 SHARED barrier acknowledged by actual BEGIN+SELECT records=2 before writer
+
+
+LFCS2 actual reader provider: version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; current executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_claims-49ea96ee4d5c81d3, READ_ONLY|NOFOLLOW, busy0
+LFCS2 SHARED barrier acknowledged by actual BEGIN+SELECT records=2 before writer
+
+
+ok
+test unix::root_capacity_and_effects_are_denied_until_exact_claim_retirement ... ok
+test unix::roots_keep_the_exact_declared_limit_after_retirement ... ok
+test unix::same_and_cross_window_duplicates_acknowledge_no_current_rows_and_terminalize ... ok
+test unix::sealed_surplus_and_missing_rows_refuse_without_unlocking_roots ... ok
+test unix::shared_reader_child ... ok
+test unix::short_header_only_nonempty_refuses_without_a_page_or_mutation ... ok
+test unix::unknown_writer_child ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s
+
+     Running tests/construction_graph.rs (core/target/debug/deps/construction_graph-e13c80764ab65597)
+
+running 19 tests
+test resources::configured48_native_format_maximum_sum_retire_and_reuse_is_not_whole_c1_work_admission ... LFCS4 configured native-format maximum diagnostic: S=50331648,R=196608,L=12386304,N=131072,E=65536,sum=196608,pages=4200,retired_free=4184,roots=65536,final_pages=4200,same_file=Some(NativeIdentity { device: 16777230, inode: 856592545, uid: 501, mode: 33152 }); raw-base128Ki entry charge would exceed unchangedC1work65536, so this is strictly native-format/provider proof; configured whole-C1 case is separate; no global/RAM/speed claim
+ok
+test resources::maximum_default_deep_chain_fills_live_stack_and_widest_pointer_fields ... LFCS4 native-format maximum depth diagnostic: S=16777216,nodes=32768,edges=32767,sum=65535,actual_stack=32768,stack_pages=1297,DFSparent/after actuali64MAX-adjacent,rank=32768,retired_free=1281,same_file=Some(NativeIdentity { device: 16777230, inode: 856592715, uid: 501, mode: 33152 }); independent arithmetic/closed real native transitions; no C1 work/global/RAM/speed claim
+ok
+test resources::maximum_default_edge_heavy_dag_keeps_one_aggregate_record_class ... LFCS4 native-format maximum edge diagnostic: S=16777216,N=512,E=65024,sum=65536,full_frame_bytes=2826752,edge_pages=803,retired_free=787,same_file=Some(NativeIdentity { device: 16777230, inode: 856592774, uid: 501, mode: 33152 }); no enlarged class or whole-C1 work/global/RAM/speed claim
+ok
+test resources::maximum_default_node_population_reuses_widest_sites_then_maximum_roots ... LFCS4 native-format maximum node diagnostic: S=16777216,R=65536,nodes=65536,edges=0,Node60=3932160,widest_parent_sites_pages=3940,unexpanded_index_pages=3940,full_rank_pages=3940,retired_free=3924,roots=65536,final_pages=3940,same_file=Some(NativeIdentity { device: 16777230, inode: 856592798, uid: 501, mode: 33152 }),actual_Rust_Node=56B,Edge=40B; caller fixtures/oracles excluded; no whole-C1 work/global/RAM/protected-progress/speed claim
+ok
+test resources::provably_new_maximum_capacity_refuses_before_query_reserve_attempt_under_exclusive ... ok
+test unix::cyclic_seed_last_pop_returns_members_and_known_rejection_without_provider_error ... ok
+test unix::fresh_root_only_reachability_is_not_scc_done ... ok
+test unix::independent_multiarc_bytes_seals_pages_live_solver_and_roots ... ok
+test unix::known_partial_retirement_keeps_progress_and_denies_roots_without_retry ... ok
+test unix::literal_header_schema_selected_subject_and_empty_graph_root_phase ... ok
+test unix::mixed_legacy_and_configured_owners_sum_and_refund_their_captured_budgets ... ok
+test unix::old_nonseed_descendant_cycle_keeps_seed_acyclic_and_closes_exact_proof ... ok
+test unix::overdeclared_source_shape_refuses_before_slot_file_and_sql ... ok
+test unix::pure_foreign_subject_selection_under_exclusive_lock_preserves_valid_site_owner ... ok
+test unix::selected_redundant_projection_corruption_refuses_no_current_batch_effects ... ok
+test unix::zero_progress_page_capacity_refuses_before_query_under_real_exclusive_owner ... ok
+test unknown::actual_shared_reader_unknown_seed_append_expand_seal_solver_last_pop_proof_and_retire ... LFCS4 actual reader SQLite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW,busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_graph-e13c80764ab65597
+
+
+LFCS4 actual reader SQLite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW,busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_graph-e13c80764ab65597
+
+
+LFCS4 actual reader SQLite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW,busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_graph-e13c80764ab65597
+
+
+LFCS4 actual reader SQLite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW,busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_graph-e13c80764ab65597
+
+
+LFCS4 actual reader SQLite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW,busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_graph-e13c80764ab65597
+
+
+LFCS4 actual reader SQLite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW,busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_graph-e13c80764ab65597
+
+
+LFCS4 actual reader SQLite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW,busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_graph-e13c80764ab65597
+
+
+LFCS4 actual reader SQLite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW,busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_graph-e13c80764ab65597
+
+
+LFCS4 actual reader SQLite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW,busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_graph-e13c80764ab65597
+
+
+LFCS4 actual reader SQLite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW,busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_graph-e13c80764ab65597
+
+
+LFCS4 actual reader SQLite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW,busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_graph-e13c80764ab65597
+
+
+ok
+test unknown::reader_child ... ok
+test unknown::writer_child ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 364.68s
+
+     Running tests/construction_sites.rs (core/target/debug/deps/construction_sites-06acbc69e40e25c7)
+
+running 21 tests
+test unix::actual_primary_birth_and_partial_parent_plans_have_exact_order_without_temp_sort ... LFCS3 actual SQLite indexed plan: SEARCH binding_sites USING PRIMARY KEY (key>?)
+LFCS3 actual SQLite indexed plan: SEARCH binding_sites USING INDEX site_birth_order ((parent,binding_ordinal)>(?,?))
+LFCS3 actual SQLite indexed plan: SCAN binding_sites USING INDEX site_birth_order
+LFCS3 actual SQLite indexed plan: SEARCH binding_sites USING INDEX site_existing_parent (parent=? AND binding_ordinal>?)
+LFCS3 actual SQLite indexed plan: SEARCH binding_sites USING INDEX site_existing_parent (parent=?)
+ok
+test unix::cumulative_declared_class_refuses_before_sql_under_actual_exclusive_lock ... ok
+test unix::declaration_and_window_refusals_precede_native_or_site_effects ... ok
+test unix::empty_and_header_only_parent_and_sealed_pages_preserve_exact_eof ... ok
+test unix::existing_duplicate_does_not_mask_later_corrupt_selected_row ... ok
+test unix::facts_are_monotone_and_parent_projection_preserves_zero_ordinal_and_birth_flags ... ok
+test unix::final_seal_rechecks_immutable_base_point_and_redundant_coordinates ... ok
+test unix::foreign_owner_source_and_abandon_refuse_without_terminalizing_selected_owner ... ok
+test unix::invalid_parent_and_insufficient_nonempty_page_headers_refuse_before_output ... ok
+test unix::known_second_retirement_window_failure_keeps_exact_prior_progress_and_denies_roots ... ok
+test unix::local_and_cross_batch_duplicates_are_terminal_without_current_batch_effects ... ok
+test unix::local_input_duplicate_does_not_mask_later_corrupt_selected_row ... ok
+test unix::maximum_all_base_sites_two_indexes_retire_then_maximum_roots_in_same_class ... LFCS3 bounded correctness/resource diagnostic: all-base sites=65536/3932160frameB, both indexes=["site_birth_order", "site_existing_parent"], site_pages=3425, retired_free_pages=3417, roots=65536/4128768frameB, final_pages=3425, same_file=Some(NativeIdentity { device: 16777230, inode: 856595876, uid: 501, mode: 33152 }), allocation=Some(16777216), retained_class=16777216; SiteRecord native_element=54B, returned_window128=6912B; caller fixture/names/oracles are excluded from these disk/count claims; no native heap/RSS/global/protected-progress/speed claim
+ok
+test unix::maximum_width_all_base_sites_two_indexes_retire_then_maximum_roots_in_same_class ... LFCS3 maximum-width parent=i64MAX correctness/resource diagnostic: all-base sites=65536/3932160frameB, both indexes=["site_birth_order", "site_existing_parent"], site_pages=3932, retired_free_pages=3924, roots=65536/4128768frameB, final_pages=3932, same_file=Some(NativeIdentity { device: 16777230, inode: 856595882, uid: 501, mode: 33152 }), allocation=Some(16777216), retained_class=16777216; SiteRecord native_element=54B, returned_window128=6912B; caller fixture/names/oracles are excluded from these disk/count claims; no native heap/RSS/global/protected-progress/speed claim
+ok
+test unix::missing_and_surplus_sealed_rows_cannot_be_retired_into_root_permission ... ok
+test unix::opaque_descriptor_and_positive_maximum_parent_are_lossless_blob_coordinates ... ok
+test unix::roots_are_denied_in_each_unretired_phase_and_declared_roots_remain_exact ... ok
+test unix::unexpected_birth_digest_refuses_before_facts_and_retains_known_custody ... ok
+test unknown::reader_child ... ok
+test unknown::real_shared_reader_unknown_birth_close_facts_final_and_retire_keep_exact_owner ... LFCS3 actual reader: sqlite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW/busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_sites-06acbc69e40e25c7
+LFCS3 actual BEGIN+SELECT SHARED barrier acknowledged: records=0,stage=0
+
+
+LFCS3 actual reader: sqlite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW/busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_sites-06acbc69e40e25c7
+LFCS3 actual BEGIN+SELECT SHARED barrier acknowledged: records=2,stage=0
+
+
+LFCS3 actual reader: sqlite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW/busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_sites-06acbc69e40e25c7
+LFCS3 actual BEGIN+SELECT SHARED barrier acknowledged: records=2,stage=1
+
+
+LFCS3 actual reader: sqlite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW/busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_sites-06acbc69e40e25c7
+LFCS3 actual BEGIN+SELECT SHARED barrier acknowledged: records=2,stage=1
+
+
+LFCS3 actual reader: sqlite=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; READ_ONLY|NOFOLLOW/busy0, executable=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_sites-06acbc69e40e25c7
+LFCS3 actual BEGIN+SELECT SHARED barrier acknowledged: records=2,stage=2
+
+
+ok
+test unknown::writer_child ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.48s
+
+     Running tests/construction_state.rs (core/target/debug/deps/construction_state-c6776b32353acc5f)
+
+running 11 tests
+test unix::append_count_and_order_refuse_before_batch_rows_and_keep_typed_failure ... ok
+test unix::byte_limit_empty_and_small_pages_have_exact_eof_and_selected_seal ... ok
+test unix::changed_phase_and_borrowed_malformed_rows_fail_closed ... ok
+test unix::directory_roots_65536_stream_seal_pages_and_native_release ... LFCS correctness/resource diagnostic: rows=65536, record_bytes=4128768, SQLite_pages=1835, apparent_bytes=7516160, allocated_bytes=16777216, class=16777216; no speed/heap/RSS claim
+ok
+test unix::explicit_identity_failure_and_restoration_never_authorize_retry ... ok
+test unix::indexed_queries_and_real_sql_ownership_preserve_original_error ... LFCS indexed-query diagnostic: ["SEARCH directory_roots USING PRIMARY KEY (key=?)"]
+LFCS indexed-query diagnostic: ["SEARCH directory_roots USING PRIMARY KEY (key<?)"]
+LFCS indexed-query diagnostic: ["SEARCH directory_roots USING PRIMARY KEY (key>? AND key<?)"]
+ok
+test unix::owner_admission_and_native_path_authority_refuse_before_effects ... ok
+test unix::real_failed_commit_keeps_unknown_owner_credit_after_error_handoff ... LFCS writer actual runtime: binary=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_state-c6776b32353acc5f version=3.51.0; supplied ScratchAuthority/ScratchSession, no alternate provider
+LFCS reader selected library: /usr/lib/libsqlite3.dylib (compatibility version 9.0.0, current version 358.0.0)
+LFCS reader actual runtime: binary=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/debug/deps/construction_state-c6776b32353acc5f version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl; same current executable/provider, READ_ONLY|NOFOLLOW, busy0
+LFCS reader barrier: BEGIN and SELECT acknowledged, SHARED retained until control RELEASE
+LFCS reader completion: ROLLBACK acknowledged and selected connection closed before release acknowledgement
+
+
+ok
+test unix::release_identity_child ... ok
+test unix::unknown_commit_child ... ok
+test unix::unknown_shared_reader_child ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+

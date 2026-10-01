@@ -90,12 +90,22 @@ impl Sites {
         bindings: u64,
         source: BindingSourceId,
     ) -> StorageResult<Self> {
+        Self::with_roots_phase(selection, directories, bindings, source, 2)
+    }
+
+    pub(crate) fn with_roots_phase(
+        selection: &StateSelection,
+        directories: u64,
+        bindings: u64,
+        source: BindingSourceId,
+        roots_phase: u64,
+    ) -> StorageResult<Self> {
         Ok(Self {
             scope: SiteScope::new(
                 StateScope::new(selection.clone(), 1, StateTable::BindingSites)?,
                 source,
             )?,
-            roots: StateScope::new(selection.clone(), 2, StateTable::DirectoryRoots)?,
+            roots: StateScope::new(selection.clone(), roots_phase, StateTable::DirectoryRoots)?,
             declared_roots: directories,
             declared_sites: bindings,
             stage: SiteStage::BirthOpen,

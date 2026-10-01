@@ -4,8 +4,8 @@ use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 
 use layerfs_content::filesystem::state::{
-    PageLimit, StateCapacity, StateKey, StateLedger, StatePage, StateRecord, StateScope, StateSeal,
-    StateSelection, StateTable,
+    GraphSubject, PageLimit, StateCapacity, StateKey, StateLedger, StatePage, StateRecord,
+    StateScope, StateSeal, StateSelection, StateTable,
 };
 use layerfs_content::ContentError;
 use rusqlite::Connection;
@@ -13,8 +13,9 @@ use rusqlite::Connection;
 use crate::error::{StorageError, StorageResult};
 
 use super::authority::{Shared, Slot};
+use super::graph_state::Graph;
 use super::header::Header;
-use super::native::{NativeFile, RESERVED_BYTES};
+use super::native::NativeFile;
 use super::phased::Phased;
 use super::plan::Plan;
 use super::sites::Sites;
@@ -32,12 +33,19 @@ pub(crate) struct Resource {
     plan: Plan,
     pub(crate) phased: Option<Phased>,
     pub(crate) sites: Option<Sites>,
+    pub(crate) graph: Option<Graph>,
+    pub(crate) graph_subject: Option<GraphSubject>,
     pub(crate) release_attempted: bool,
     pub(crate) unknown: Cell<bool>,
 }
 
 impl Resource {
-    pub(crate) fn new(selection: StateSelection, native: NativeFile, plan: Plan) -> Self {
+    pub(crate) fn new(
+        selection: StateSelection,
+        native: NativeFile,
+        plan: Plan,
+        subject: Option<GraphSubject>,
+    ) -> Self {
         Self {
             selection,
             native,
@@ -49,6 +57,8 @@ impl Resource {
             plan,
             phased: None,
             sites: None,
+            graph: None,
+            graph_subject: subject,
             release_attempted: false,
             unknown: Cell::new(false),
         }
@@ -100,6 +110,22 @@ impl Resource {
             )),
             None => failure,
         };
+        let failure = if let Some(graph) = &self.graph {
+            if failure.is_some()
+                || graph.failed.get()
+                || graph.stage == layerfs_content::filesystem::state::GraphStage::Rejected
+            {
+                Some(format!(
+                    "{}; {}",
+                    failure.unwrap_or_default(),
+                    graph.description()
+                ))
+            } else {
+                failure
+            }
+        } else {
+            failure
+        };
         ScratchOwnerStatus {
             token: self.selection.token(),
             selector: *self.selection.selector(),
@@ -108,7 +134,7 @@ impl Resource {
             parent: self.native.parent,
             directory: self.native.directory_identity,
             file: self.native.identity,
-            reserved_bytes: RESERVED_BYTES,
+            reserved_bytes: self.native.reserved_bytes,
             allocated_bytes: self.native.allocated,
             failure,
             quarantined: unknown || self.unknown.get() || self.native.quarantined,
@@ -144,6 +170,9 @@ impl Resource {
         if let Some(sites) = &self.sites {
             super::site_index::verify(connection, sites)?;
         }
+        if let Some(graph) = &self.graph {
+            super::graph_index::verify(connection, graph)?;
+        }
         Ok(connection)
     }
 
@@ -161,6 +190,9 @@ impl Resource {
         }
         if let Some(sites) = &self.sites {
             sites.check_roots(scope)?;
+        }
+        if let Some(graph) = &self.graph {
+            graph.check_roots(scope)?;
         }
         if self
             .ledger
@@ -279,6 +311,9 @@ impl ScratchSession {
             if let Some(sites) = &resource.sites {
                 sites.failed.set(true);
             }
+            if let Some(graph) = &resource.graph {
+                graph.failed.set(true);
+            }
         }
         if self.description.borrow().is_none() {
             *self.description.borrow_mut() = Some(error.to_string());
@@ -313,6 +348,10 @@ impl ScratchSession {
                     .sites
                     .as_ref()
                     .is_some_and(|state| state.failed.get())
+                || resource.graph.as_ref().is_some_and(|state| {
+                    state.failed.get()
+                        || state.stage == layerfs_content::filesystem::state::GraphStage::Rejected
+                })
             {
                 ScratchDisposition::Failed
             } else if resource.seal.is_some()
@@ -376,6 +415,16 @@ impl ScratchSession {
                 return Err(error);
             }
             let binding = match resource.plan {
+                Plan::SitesGraphThenRoots { .. } => resource.native.graph_binding(
+                    resource.selection.selector(),
+                    resource.selection.token(),
+                    resource
+                        .graph_subject
+                        .as_ref()
+                        .ok_or(StorageError::Integrity(
+                            "construction scratch graph subject",
+                        ))?,
+                )?,
                 Plan::SitesThenRoots { source, .. } => resource.native.sites_binding(
                     resource.selection.selector(),
                     resource.selection.token(),
@@ -387,6 +436,19 @@ impl ScratchSession {
             };
             resource.selection.bind_owner(binding)?;
             let header = match resource.plan {
+                Plan::SitesGraphThenRoots { .. } => Header::Graph(
+                    resource.native.graph_header(
+                        resource.selection.selector(),
+                        resource.selection.token(),
+                        &binding,
+                        resource
+                            .graph_subject
+                            .as_ref()
+                            .ok_or(StorageError::Integrity(
+                                "construction scratch graph subject",
+                            ))?,
+                    )?,
+                ),
                 Plan::SitesThenRoots { source, .. } => {
                     Header::Sites(resource.native.sites_header(
                         resource.selection.selector(),
@@ -423,6 +485,32 @@ impl ScratchSession {
                     source,
                 )?);
             }
+            if let Plan::SitesGraphThenRoots {
+                directories,
+                bindings,
+                source,
+                ..
+            } = resource.plan
+            {
+                resource.sites = Some(Sites::with_roots_phase(
+                    &resource.selection,
+                    directories,
+                    bindings,
+                    source,
+                    3,
+                )?);
+                resource.graph = Some(Graph::new(
+                    &resource.selection,
+                    resource
+                        .graph_subject
+                        .as_ref()
+                        .ok_or(StorageError::Integrity(
+                            "construction scratch graph subject",
+                        ))?
+                        .clone(),
+                    bindings,
+                )?);
+            }
             let connection = profile::open(&resource.native.path)?;
             resource.connection = Some(connection);
             resource.native.verify()?;
@@ -431,12 +519,14 @@ impl ScratchSession {
                 .as_ref()
                 .map(|state| state.claims.as_bytes());
             let sites = resource.sites.as_ref().map(|state| state.scope.as_bytes());
+            let graph = resource.graph.as_ref().map(|state| state.scope.as_bytes());
             profile::initialize(
                 resource.connection.as_ref().unwrap(),
                 resource.header.as_ref().unwrap().as_bytes(),
                 resource.plan,
                 claims.as_ref(),
                 sites.as_ref(),
+                graph.as_ref(),
             )?;
             resource.native.verify()?;
             Ok(())
@@ -451,6 +541,13 @@ impl ScratchSession {
             .as_ref()
             .expect("live scratch session")
             .selection
+    }
+
+    /// The exact immutable source/namespace/base/budget subject captured before native effects.
+    pub fn graph_subject(&self) -> Option<&GraphSubject> {
+        self.resource
+            .as_ref()
+            .and_then(|resource| resource.graph_subject.as_ref())
     }
 
     /// Original typed C2 failure retained by the C1 adapter, handed off once.
@@ -475,7 +572,7 @@ impl ScratchSession {
                 .resource
                 .as_ref()
                 .ok_or(StorageError::Integrity("construction scratch released"))?;
-            profile::readback(resource.verify()?, resource.plan.version())
+            profile::readback(resource.verify()?, resource.plan)
         })();
         self.finish(result)
     }

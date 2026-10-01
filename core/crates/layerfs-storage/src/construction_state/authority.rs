@@ -4,11 +4,11 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use layerfs_content::filesystem::rows::BindingSourceId;
-use layerfs_content::filesystem::state::StateSelection;
+use layerfs_content::filesystem::state::{GraphSubject, StateSelection};
 
 use crate::error::{StorageError, StorageResult};
 
-use super::native::{NativeDirectory, NativeFile, RESERVED_BYTES};
+use super::native::{NativeDirectory, NativeFile};
 use super::plan::Plan;
 use super::session::{Resource, ScratchSession};
 use super::status::{ScratchDisposition, ScratchOwnerStatus};
@@ -99,7 +99,7 @@ impl ScratchAuthority {
                 actual: declared_bytes,
             });
         }
-        self.admit(selector, Plan::Legacy)
+        self.admit(selector, Plan::Legacy, None)
     }
 
     /// Admit exclusive claims followed by roots in the same native class.
@@ -111,7 +111,7 @@ impl ScratchAuthority {
         directories: u64,
         bindings: u64,
     ) -> StorageResult<ScratchSession> {
-        self.admit(selector, Plan::phased(directories, bindings)?)
+        self.admit(selector, Plan::phased(directories, bindings)?, None)
     }
 
     /// Bind an already issued immutable row source before token/native/SQL effects.
@@ -122,10 +122,30 @@ impl ScratchAuthority {
         bindings: u64,
         source: BindingSourceId,
     ) -> StorageResult<ScratchSession> {
-        self.admit(selector, Plan::sites(directories, bindings, source)?)
+        self.admit(selector, Plan::sites(directories, bindings, source)?, None)
     }
 
-    fn admit(&self, selector: [u8; 32], plan: Plan) -> StorageResult<ScratchSession> {
+    /// Capture one source/namespace/base/budget subject for Sites, Graph and Roots.
+    /// Native conversions and D/B declarations precede token, slot and file effects.
+    pub fn begin_graph(
+        &self,
+        selector: [u8; 32],
+        directories: u64,
+        bindings: u64,
+        subject: GraphSubject,
+    ) -> StorageResult<ScratchSession> {
+        let plan = Plan::graph(directories, bindings, &subject)?;
+        self.admit(selector, plan, Some(subject))
+    }
+
+    fn admit(
+        &self,
+        selector: [u8; 32],
+        plan: Plan,
+        subject: Option<GraphSubject>,
+    ) -> StorageResult<ScratchSession> {
+        let budget = plan.scratch_bytes();
+        super::native::validate_budget(budget)?;
         let selection = StateSelection::issue(selector)?;
         let status = {
             let directory = self
@@ -143,7 +163,7 @@ impl ScratchAuthority {
                 parent: directory.parent,
                 directory: directory.identity,
                 file: None,
-                reserved_bytes: RESERVED_BYTES,
+                reserved_bytes: budget,
                 allocated_bytes: None,
                 failure: None,
                 quarantined: false,
@@ -165,28 +185,29 @@ impl ScratchAuthority {
             slots[index] = Slot::Active(status);
             index
         };
-        let native = match NativeFile::prepare(self.shared.directory.clone(), selection.token()) {
-            Ok(native) => native,
-            Err(original) => {
-                // Preparation has no native/SQL effects. A known empty admission
-                // can be refunded; bootstrap never enters this path.
-                match self.shared.slots.lock() {
-                    Ok(mut slots) => {
-                        slots[slot] = Slot::Empty;
-                        return Err(original);
-                    }
-                    Err(_) => {
-                        return Err(StorageError::CleanupFailed {
-                            original: Box::new(original),
-                            cleanup: Box::new(StorageError::Integrity(
-                                "construction scratch owner lock",
-                            )),
-                        })
+        let native =
+            match NativeFile::prepare(self.shared.directory.clone(), selection.token(), budget) {
+                Ok(native) => native,
+                Err(original) => {
+                    // Preparation has no native/SQL effects. A known empty admission
+                    // can be refunded; bootstrap never enters this path.
+                    match self.shared.slots.lock() {
+                        Ok(mut slots) => {
+                            slots[slot] = Slot::Empty;
+                            return Err(original);
+                        }
+                        Err(_) => {
+                            return Err(StorageError::CleanupFailed {
+                                original: Box::new(original),
+                                cleanup: Box::new(StorageError::Integrity(
+                                    "construction scratch owner lock",
+                                )),
+                            })
+                        }
                     }
                 }
-            }
-        };
-        let resource = Resource::new(selection, native, plan);
+            };
+        let resource = Resource::new(selection, native, plan, subject);
         let mut session = ScratchSession::new(self.shared.clone(), slot, resource);
         session.initialize()?;
         Ok(session)
@@ -219,11 +240,15 @@ impl ScratchAuthority {
             .slots
             .lock()
             .map_err(|_| StorageError::Integrity("construction scratch owner lock"))?;
-        Ok(slots
-            .iter()
-            .filter(|slot| !matches!(slot, Slot::Empty))
-            .count() as u64
-            * RESERVED_BYTES)
+        slots.iter().try_fold(0u64, |total, slot| {
+            let bytes = match slot {
+                Slot::Empty => 0,
+                Slot::Active(status) | Slot::Retained { status, .. } => status.reserved_bytes,
+            };
+            total.checked_add(bytes).ok_or(StorageError::Integrity(
+                "construction scratch aggregate reservation overflow",
+            ))
+        })
     }
 
     /// Takes the original typed adapter error once from a retained owner.

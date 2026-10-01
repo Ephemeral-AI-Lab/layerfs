@@ -542,3 +542,16 @@ No product tests, builds, benchmarks or host capability probes run in this
 research task. Local link/anchor/whitespace validation and source-size counting
 are document checks. [ACCEPTANCE.md](ACCEPTANCE.md) defines the future focused
 checks, unchanged Family2 reuse and every remaining qualification obligation.
+
+
+## Effective graph implementation checkpoint
+
+Parent79639cc6 source develops [R1d-effective-graph](../../../issues/287/R1D-EFFECTIVE-GRAPH-DELIVERY.md)
+under the [frozen typed contract](../../../issues/287/R1D-EFFECTIVE-GRAPH-FREEZE.md).
+One paged adjacency/selective SCC replaces per-seed repeated walks on the strict
+prepared route. Per-operation indexed native scratch defaults to16MiB and is
+explicitly configurable; actual graph/request/work/cache/window and provider
+proofs remain separate. Existing [speed/source review](../../../issues/287/SCRATCH-SPEED-REVIEW-DRAFT.md)
+records eight modules/seven historical report groups without running a campaign.
+Full R1/R2–R7, native engine/physical/Linux and #288 qualification remain open.
+Owner direction: complete this checkpoint publication, then pause implementation.

@@ -1565,3 +1565,182 @@ Counted Core subtree `a66773173612b10a0407c3b3dcb5714ca9753623`; reference subtr
 these exact counted product trees. New shipped schema3 SQL is included; reference
 unchanged, compatible old authority retained explicitly, no legacy retirement.
 Next: commit, exact archive recount, normal publication and one #287 checkpoint.
+
+## R1d-binding-sites published checkpoint
+
+Actual commit `79639cc6f58ae78eeb1fb638996b1d6948767215`, full tree
+`a9b678aca14f97037d14cc0f9419e8a7304f3b98`; staged tree exact match and
+fresh committed archive recount matches all before/after/per-file/product data.
+Normal push confirmed exact remote HEAD; #287 latest body preserved/appended and
+one exact checkpoint comment confirmed: https://github.com/Ephemeral-AI-Lab/layerfs/issues/287#issuecomment-5922121604.
+Full R1 stays unchecked. Next: freeze complete paged graph work law and explicit
+simultaneous native/window admission from coordinated read-only source audits.
+No benchmark/#288/CI/main merge or unrelated issue action.
+
+## R1d-effective-graph prospective scope and independent expectation pin
+
+Parent79639cc6f published. Coordinated read-only audits show the old update walks
+rebuild seen/frontier for every selected directory child, revisiting overlapping
+subgraphs. Paging that walk is insufficient. A selective SCC over one union of
+seed closures can preserve the exact v1 predicate: reject cyclic SCC containing
+selected child; an old descendant cycle without a path back to the seed stays
+accepted. Generic active-cycle rejection would change this uncertified v1 case.
+Fresh root reachability must remain independent of SCC discovery; disconnected
+and excluded-parent cases cannot become Done/adopted.
+
+Select post-site-retirement graph scope only; Sites Facts alias seen/frontier and
+ValidationState memo remain open. Graph phases can sequentially reuse the single
+native owner before roots. Initial class cannot grant131072 nodes+65536 edges:
+retain TOTAL node+edge rows<=65536 and full encoded bytes<=4128768. Admit fixed
+capacity before effects; exact distinct capacity refusal before offending private
+batch retains previous private custody. This is not whole-input prospective fit,
+because v1 lacks authenticated population counts. Above-cap graphs remain explicit
+capability-limited, no fallback/profile growth/work clamp.
+
+Root independent test-data preparation imported no LayerFS/candidate code.
+20 literal semantic cases checked by <=16-vertex nonzero Floyd-Warshall/fresh root
+walk and exact incoming observations. vectors.json SHA256
+906e5b162890c8f8c903bd82230475a79b84bd6cf7f8b4e2d1c55cfc0f598676;
+manifest.rs SHA256 ad9e98f157907b9fd26bde34afd2f2aeafb7ebae1cc9a58ff9cefb33aa988cb2.
+Only expected vectors generated, candidate proof bodies UNRUN. No benchmark.
+C1 and native interface drafts are docs-only; no product tag/version/interface
+allocation or implementation has preceded coordinated shared freeze.
+Next: review drafts/record grammar/native shapes and freeze concrete ownership.
+
+## Owner direction during graph contract selection: configurable metadata scratch
+
+User asked whether65,536/4,128,768 limits file/workspace/edit sizes. Answer records
+these as construction/graph per-operation metadata limits, not payload4MiB or
+workspace65kfiles. Source currentBridgeMAX_FILE4GiB, prepared counts65keach and
+traversalwork65k remain distinct limits. Small directorymove can needlargev1graph.
+User then directs efficient construction plus user-configurable metadata temporary
+scratch. Incorporate before sharedfreeze:16MiB DEFAULT preserved, graph total
+record/byte allowance derived and bound to selected budget; no independent65k
+hardstop defeating larger setting. No auto-growth or RAM/cache/window/worker/
+timeout increase. Earlier fixed-only draft is superseded by this user direction,
+not retroactive qualification of higher limits or historical receipts.
+
+Review proposes B page-aligned>=16MiB, R=B/256, L=checked(R*63), P=B/4096;
+default exactly65536/4128768/4096. Format range must fitu32 discoveries/off_t/
+provider pages; all actual schema/index/freelist/OS/native overhead mustfitB.
+Native resource/status/header/binding/refund must use exact selected budget;
+aggregate admission sums heterogeneous owners, never count*default. Larger
+profiles need owningproofs; physical/engine/cache/Linux and #288 remainopen.
+No product/sourceprofile changed yet; drafts/constructors/interfaces unallocated.
+Next: finalize parameterized context/header/closedmutation grammar and freeze.
+
+## R1d-effective-graph shared freeze and implementation ownership
+
+Sharedfreeze d1739a0b8cb7ddc20aa59e22e0a1c6a6e786b496e8e176412f2841ff97de7e1f
+selected beforeproduct edits. Sourceparent79639cc6f unchanged. Concrete private4,
+Nodes4/Edges5, Fresh1/Update2, stages0Deferred/1Seed/2Expand/3Adj/4Solve/5Proof/
+6Retiring/7Retired/8Rejected; Subject106/Scope188/Header298 andparambudget.
+C1 ownsContent graph/newcallers/tests; C2 ownsnative4/budget/SQL/provider/tests;
+RootownsServerconfiguration/composition/externalfences andintegration/publication.
+Root-onlyCargo, owncore/target, preserveallothers/independentfixtures.
+
+Native lastSCC knownCOMMIT+observation returns completedboundedmember ACK with
+RejectedCycle whileownerstickyfailed; C1foldsindependently/no postfailurequery.
+Unknown retains actualproviderfailure/decision/rows, neversemantic-knownACK.
+Projectedadjacency pages normalizedimmutable; livegetterbeforeCAS. Closed atomic
+Descend, exactFIRST/EOF/return/LeaveRoot andboundedmemberwindows selected. No
+quadraticincoming/component rescans; exactclosedappend invariants/aggregate sums.
+
+RootServer edits nowcapturevalidatedbudget (default16), addconfiguredService/
+Serverconstructor/nativeenv, buildcapturedsubjectbeforeSave/body, anduseactual
+GraphScopes/newcommonC1caller. ExternalEOFgate requiresSite4ANDGraph7; current
+newprospective48MiB andordinary257directorychain/restatement/cycle tests UNRUN.
+No Cargo/providerbody ornewperformance measurement. Allowningexits pending.
+Latesthumanstopboundary: finishTHIScheckpoint checks/LOC/recount/push/#287 then
+PAUSE. Read-onlyexistingeight-module speedreviewdraft prepared independently;
+no reuse/smallpath product work orsubsequentcheckpoint authorized beforedirection.
+
+## Effective-graph coordinated solver interface clarification
+
+Beforedependentedit, Rootapproved ordinarypublic solve_effective_graph coordinator
+usedbyactualchecker. Independent20graphpredicates includeearlieralias/root-invalid
+compositions; publicreusableC1solverbounds isolategraph expectation withouttestonly
+hook/sourceinclude/alternatealgorithm. Actualowningnewcallerpriority andsealedv1
+root/objectset proofs remainrequired. C1recordsadditionbeforeland; nativeowner
+notified. Externalfiniteprovider iscontract/oracleonly, notphysicalproof.
+
+## Effective-graph independent static corrections before owning checks
+
+Reviewer found refactorcounter work.graph underValidationGraphWork and same-node
+Descend targets notchecked withinonemutation. C1correctedcounter andpureproposal/
+endpoint guards; no Cargo/body ran. Reviewer thenfoundfullprovidercontext only
+checkedafterSite effects andstandalonepublicsolver C1errorlackabandonment.
+Root/C1selected puregraph_select beforeSite effects/outerfence, sameinneralgorithm
+withcoordinatedpublicvscommon once-onlyerrorfences. Nativecontextselectorpure/noSQL
+andcapacitymutationpermissionretainsknownSitesretirement. Source/provider proofs
+forthesecorrections remainunrun. ConfiguredrawN131072/E65536formatproof cannotbe
+promotedtoC1workpass; Baseedges doublecharge. Owningscope keepsactualrates.
+
+
+### R1d-effective-graph owning gate: retained external fixture failures
+
+Parent79639cc6. 02-content-contract exit101 before any test body: external
+PathName::new received bytes rather than the required str. Only that fixture
+call changed; failed exact source and command/source/log/result remain in
+evidence/r1d-effective-graph. 03-content-fixture-correction then passed102
+primary bodies and failed the257-chain fixture with InvalidRecord inode child
+summary; later targets were not run. Source diagnosis: literal branch fixture
+encoded child minima, while v1 requires inclusive maxima. Its valid86/86/85
+partitions remain; only external separators become86/172/257. Product source
+unchanged. Reuse passed bodies; run the corrected body and unrun targets only.
+These original failures remain evidence, not new provider/speed conclusions.
+
+
+### R1d-effective-graph native completion and observer correction
+
+04-storage-contract exit0, unchanged tested production/Storage inputs:
+60 distinct primary PASS (17new graph +43shared legacy targets), excluding
+empty process helpers. Direct AppleSQLite3.51.0 native configured48 maximum
+uses4200pages, default widestSites/graph/roots3940, deepstack1297 and edgeheavy803.
+Eleven actual SHARED-lock/COMMIT Unknown phases retain exact ownership/credit.
+384.589707s complete correctness command includes all maximum/provider bodies;
+this is count/resource proof, not a15/25s speed row or native engine qualification.
+07 corrected canonical chain preserved expected root and graph work but its
+external max_targets assertion counted only CAS3 instead of128-node seed ACKs.
+08 previously unrun Content targets exit0 with87bodies. 09 Server exit101:
+external observer queried proposed selected_S/R/L names instead of actual
+selected_bytes/graph_records/graph_record_bytes. First body failed; four others
+reported poisoned external test mutex; later targets not run. Exact09 test/helper
+sources retained before correction. Only observer SQL names changed, product
+source unchanged. 10 selects failed/unrun Server bodies; no passing body repeated.
+
+
+### R1d-effective-graph coherent final verification
+
+All scoped owning exits complete in direct Darwin scope:297primary Content190/
+Storage60/Server47. Helpers/guard bodies excluded. Original02/03/07/09/12 red
+results retained with exact external corrections; no product correction after
+freeze. 10Server,11isolated C1,13owning Clippy,14examples,15wholeCore fmt exit0.
+05boundary477files and06eleven guard self-tests exit0; product unchanged after
+those checks, so reused. Complete commands/source inventories/results/rawlogs
+are retained. Final79file owned seal232326d9436f01cc58ec9d8c93ee11b9b5ce20c9ec89741a306e018af307861e;
+final all-Core check inputs58489e665914a1dd428f7bac0a69eb6dbcdf33d0f6a343a7a3925b9759f6fcd1.
+Native/global hardlimit/physical/protected/Linux/aggregate temp and mainR1-R7
+gates remain incomplete. Existing speed source/count review identifies fresh
+DB/schema initialization and524288 native solver CAS/pop transactions in the
+raw196608-record fixture; no timing improvement/benchmark admission claimed.
+Per owner instruction, next after exact checkpoint publication is paused
+implementation plus existing evidence review; no pooling/small-path/new product
+checkpoint or #288 campaign selected.
+
+
+### R1d-effective-graph exact staged LOC and publication gate
+
+Production LOC:147464 →153673 (delta+6209). Reference:65417 →65417 (delta0).
+Core:82047 →88256 (delta+6209): Content+3260, Storage+2875, Server+74.
+Same tools/production_loc.py blob a1cb6c064dd150dbc3aa19648a3748b5aeb741b5,
+SHA256 0d798f53263c0f18636d96ccdfdc3728f501f53b066e90577d251859f1f117b2.
+Both snapshots use git archive first-parent/final staged tree crates core/crates
+and identical counter.scan/per_file. Rust and shipped SQL/import/declaration/
+delegation count; tests/examples/fixtures/tools/docs/manifests/generated/
+third-party/test-only branches do not. Reference and old explicit APIs remain;
+this is added bounded graph authority, not reference retirement.
+
+[Exact comparison](evidence/r1d-effective-graph/PRODUCTION-LOC.json) records
+classification and production source trees. Committed archive reproduction and
+actual publication/#287 URLs are post-commit records in the external checkpoint.

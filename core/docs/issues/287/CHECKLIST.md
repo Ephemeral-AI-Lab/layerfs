@@ -1,16 +1,18 @@
 # Issue287 current implementation checklist
 
 > **Status: Current planning checklist; no release candidate exists.**
-> Current published checkpoint: `420e6a2c0149326fe2c380ff0e4156eadd3d326d`
-> (R1d-prefetch64 scoped exits PASS; full R1 remains PARTIAL/open).
+> Current published checkpoint: `79639cc6f58ae78eeb1fb638996b1d6948767215`
+> (R1d-binding-sites scoped exits PASS; full R1 remains PARTIAL/open).
 
 Assignment: #287 implementation only. Benchmark qualification is delegated/unrun
 under #288. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
 packet; [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) is append-only.
 
-Current milestone: **R1d-binding-sites combined paged site and base-fact authority**.
-R1d-prefetch64 commit/recount/normal push and #287 comment5921238411 confirmed;
-[current delivery](R1D-PREFETCH64-DELIVERY.md) records actual scoped proofs.
+Current milestone: **R1d-effective-graph implementation, configured scratch and owning proofs**.
+R1d-binding-sites commit/recount/normal push and exact #287 body/comment confirmed;
+[current delivery](R1D-BINDING-SITES-DELIVERY.md) records228 scoped primary proofs.
+Graph source/resource audits must select complete work law and simultaneous
+admission before new product edits; no graph profile/table allocation is assumed.
 Graph authority/engine/physical remain open, native selected-provider refusal
 stays explicit. [Selected claim contract](R1D-BINDING-CLAIMS-FREEZE.md) freezes
 typed exclusive claims and known retirement before DirectoryRoots construction.
@@ -106,13 +108,23 @@ R1d-prefetch64 current gates:
 - [x] Scoped owning locked checks and explicit memo/alias/graph/native/physical/#288 gaps.
 - [x] Exact staged/committed LOC, checkpoint commit/push/publication and #287 update (420e6a2c0/comment5921238411).
 
-R1d-binding-sites prospective gates:
+R1d-binding-sites delivered gates:
 
 - [x] Published parent, concrete Point/SourceId/preparation/native profile/phase/record/birth/final/index contract and nonoverlapping ownership selected.
 - [x] Issued bounded point access and combined paged site/fact authority in the real common Server/C1 path; legacy v1/v2 preserved.
 - [x] Independent identity/alias/work and actual native maximum/projection/Unknown/retirement/resource proofs (selected direct Darwin scope, including i64MAX parent width; global heap/physical admission remains open).
 - [x] Coherent owning checks, contracts/docs and explicit remaining graph/native/global/physical/#288 gaps (228 distinct primary PASS; failures/corrections retained).
-- [ ] Exact staged/committed LOC, checkpoint publication and #287 update.
+- [x] Exact staged/committed LOC, checkpoint publication and #287 update (5922121604).
+
+
+R1d-effective-graph scoped delivered gates:
+
+- [x] Freeze complete post-site-retirement cycle/reachability scope, typed formats/ports/phases, exact Node+Edge sum and nonoverlapping ownership before product edits ([selected contract](R1D-EFFECTIVE-GRAPH-FREEZE.md)).
+- [x] One bounded effective adjacency build and global selective SCC proof replace repeated per-seed walks; preserve unrelated old-cycle and fresh root-reachability verdicts.
+- [x] Default65536 total-record/4128768-byte/16MiB class plus explicitly configured temporary-disk profile; bounded RAM windows unchanged, exact incremental refusal before offending batch, selected capacity is not whole-input fit.
+- [x] Independent pre-pinned graph/v1 expected results and actual maximum native fields/index/reuse/custody/count proofs.
+- [x] Covering owning checks and explicit alias/memo/global/physical/Linux/#288 remaining gates.
+- [x] Exact first-parent/final staged production LOC prepared; actual committed recount/publication/#287 are recorded in the external checkpoint after commit.
 
 Named submilestones and dependencies:
 
@@ -135,3 +147,8 @@ Named submilestones and dependencies:
 
 Each delivery gets exact LOC commit and #287 checkpoint. Incomplete gates stay
 unchecked; dependent enablement stays disabled. No #288 campaign/issue edit.
+
+Latest owner stop instruction: complete current effective-graph checkpoint checks/
+exact LOC/publication/#287, then **pause further implementation**. Provide existing
+eight-module speed evidence/source setup-cost review; no new campaign or next
+checkpoint/reuse/small-path implementation before renewed user direction.

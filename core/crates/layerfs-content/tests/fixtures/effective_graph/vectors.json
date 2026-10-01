@@ -1,0 +1,642 @@
+{
+  "method": "nonzero Floyd-Warshall; fresh root walk and exact incoming observations; <=16 vertices",
+  "cases": [
+    {
+      "name": "no_seed_old_cycle",
+      "mode": "update",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        3
+      ],
+      "edges": [
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          2
+        ]
+      ],
+      "seeds": [],
+      "declared": [],
+      "excluded": [],
+      "expected": "pass"
+    },
+    {
+      "name": "isolated_selected_child",
+      "mode": "update",
+      "root": 1,
+      "vertices": [
+        1,
+        2
+      ],
+      "edges": [
+        [
+          1,
+          2
+        ]
+      ],
+      "seeds": [
+        [
+          1,
+          2
+        ]
+      ],
+      "declared": [],
+      "excluded": [],
+      "expected": "pass"
+    },
+    {
+      "name": "selected_self_loop",
+      "mode": "update",
+      "root": 1,
+      "vertices": [
+        1,
+        2
+      ],
+      "edges": [
+        [
+          2,
+          2
+        ]
+      ],
+      "seeds": [
+        [
+          2,
+          2
+        ]
+      ],
+      "declared": [],
+      "excluded": [],
+      "expected": "cycle"
+    },
+    {
+      "name": "old_descendant_cycle_without_seed_return",
+      "mode": "update",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "seeds": [
+        [
+          1,
+          2
+        ]
+      ],
+      "declared": [],
+      "excluded": [],
+      "expected": "pass"
+    },
+    {
+      "name": "selected_descendant_in_old_cycle",
+      "mode": "update",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "seeds": [
+        [
+          3,
+          4
+        ]
+      ],
+      "declared": [],
+      "excluded": [],
+      "expected": "cycle"
+    },
+    {
+      "name": "selected_child_reaches_parent",
+      "mode": "update",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        3
+      ],
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      "seeds": [
+        [
+          1,
+          2
+        ]
+      ],
+      "declared": [],
+      "excluded": [],
+      "expected": "cycle"
+    },
+    {
+      "name": "disconnected_selected_component_cycle",
+      "mode": "update",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        9
+      ],
+      "edges": [
+        [
+          9,
+          2
+        ],
+        [
+          2,
+          9
+        ]
+      ],
+      "seeds": [
+        [
+          9,
+          2
+        ]
+      ],
+      "declared": [],
+      "excluded": [],
+      "expected": "cycle"
+    },
+    {
+      "name": "overlapping_seed_closures",
+      "mode": "update",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          5
+        ]
+      ],
+      "seeds": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "declared": [],
+      "excluded": [],
+      "expected": "pass"
+    },
+    {
+      "name": "final_batch_two_edge_cycle",
+      "mode": "update",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        3
+      ],
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          2
+        ]
+      ],
+      "seeds": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          2
+        ]
+      ],
+      "declared": [],
+      "excluded": [],
+      "expected": "cycle"
+    },
+    {
+      "name": "acyclic_seed_plus_cyclic_seed",
+      "mode": "update",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          5,
+          6
+        ],
+        [
+          6,
+          5
+        ]
+      ],
+      "seeds": [
+        [
+          1,
+          2
+        ],
+        [
+          4,
+          5
+        ]
+      ],
+      "declared": [],
+      "excluded": [],
+      "expected": "cycle"
+    },
+    {
+      "name": "diamond_old_alias_dag",
+      "mode": "update",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          5
+        ],
+        [
+          4,
+          5
+        ]
+      ],
+      "seeds": [
+        [
+          1,
+          2
+        ]
+      ],
+      "declared": [],
+      "excluded": [],
+      "expected": "pass"
+    },
+    {
+      "name": "empty_fresh_root",
+      "mode": "fresh",
+      "root": 1,
+      "vertices": [
+        1
+      ],
+      "edges": [],
+      "seeds": [],
+      "declared": [
+        1
+      ],
+      "excluded": [],
+      "expected": "pass"
+    },
+    {
+      "name": "fresh_chain",
+      "mode": "fresh",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "seeds": [],
+      "declared": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "excluded": [],
+      "expected": "pass"
+    },
+    {
+      "name": "fresh_disconnected_directory",
+      "mode": "fresh",
+      "root": 1,
+      "vertices": [
+        1,
+        2
+      ],
+      "edges": [],
+      "seeds": [],
+      "declared": [
+        1,
+        2
+      ],
+      "excluded": [],
+      "expected": "cycle"
+    },
+    {
+      "name": "fresh_disconnected_cycle",
+      "mode": "fresh",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        3
+      ],
+      "edges": [
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          2
+        ]
+      ],
+      "seeds": [],
+      "declared": [
+        1,
+        2,
+        3
+      ],
+      "excluded": [],
+      "expected": "cycle"
+    },
+    {
+      "name": "fresh_excluded_parent_does_not_reach_child",
+      "mode": "fresh",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        3
+      ],
+      "edges": [
+        [
+          2,
+          3
+        ]
+      ],
+      "seeds": [],
+      "declared": [
+        1,
+        2,
+        3
+      ],
+      "excluded": [
+        2
+      ],
+      "expected": "cycle"
+    },
+    {
+      "name": "fresh_excluded_component",
+      "mode": "fresh",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        3
+      ],
+      "edges": [
+        [
+          2,
+          3
+        ]
+      ],
+      "seeds": [],
+      "declared": [
+        1,
+        2,
+        3
+      ],
+      "excluded": [
+        2,
+        3
+      ],
+      "expected": "pass"
+    },
+    {
+      "name": "fresh_reachable_multiple_parents",
+      "mode": "fresh",
+      "root": 1,
+      "vertices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "seeds": [],
+      "declared": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "excluded": [],
+      "expected": "multiple_parents"
+    },
+    {
+      "name": "fresh_repeated_parent_binding",
+      "mode": "fresh",
+      "root": 1,
+      "vertices": [
+        1,
+        2
+      ],
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "seeds": [],
+      "declared": [
+        1,
+        2
+      ],
+      "excluded": [],
+      "expected": "multiple_parents"
+    },
+    {
+      "name": "maximum_serial_selected_cycle",
+      "mode": "update",
+      "root": 1,
+      "vertices": [
+        1,
+        9223372036854775806,
+        9223372036854775807
+      ],
+      "edges": [
+        [
+          1,
+          9223372036854775806
+        ],
+        [
+          9223372036854775806,
+          9223372036854775807
+        ],
+        [
+          9223372036854775807,
+          9223372036854775806
+        ]
+      ],
+      "seeds": [
+        [
+          1,
+          9223372036854775806
+        ],
+        [
+          9223372036854775806,
+          9223372036854775807
+        ]
+      ],
+      "declared": [],
+      "excluded": [],
+      "expected": "cycle"
+    }
+  ]
+}
