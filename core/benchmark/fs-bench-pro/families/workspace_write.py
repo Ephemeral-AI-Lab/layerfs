@@ -147,7 +147,51 @@ def assess_numeric_cache(row):
             "reason": "Commit cache domain is not proved by cold host source plus private direct I/O"}
 
 
+def preparation_cache(runner, identity, artifacts_only):
+    fields = {name: identity[name] for name in ("identity_method", "compilation_seal", "harness_seal")}
+    fields["scope"] = "artifacts" if artifacts_only else "qualified-master"
+    key = hashlib.sha256(json.dumps(fields, sort_keys=True).encode()).hexdigest()
+    return runner.RESULTS / "sdk-preparation-v2" / (key + ".json"), fields
+
+
+def reuse_preparation(cache, fields, out, runner, identity):
+    value = json.loads(cache.read_text())
+    if value.get("method") != "sealed-sdk-preparation-v2" or value.get("inputs") != fields:
+        raise ValueError("preparation input custody mismatch")
+    prepared = value["prepared"]
+    for name, artifact in prepared["artifacts"].items():
+        path = Path(artifact["path"]).resolve()
+        if not path.is_relative_to(runner.RESULTS.resolve()) or sha256(path) != artifact["sha256"]:
+            raise ValueError(f"prepared binary custody mismatch: {name}")
+    source = Path(value["source_receipt"]).resolve()
+    if not source.is_relative_to(runner.RESULTS.resolve()) or sha256(source) != value["source_receipt_sha256"]:
+        raise ValueError("preparation receipt custody mismatch")
+    if subprocess.check_output(["docker", "image", "inspect", prepared["image_id"], "--format", "{{.Id}}"], text=True).strip() != prepared["image_id"]:
+        raise ValueError("prepared immutable image mismatch")
+    prepared = {**prepared, "identity": identity,
+                "dependency_reuse": {"method": "sealed-sdk-preparation-v2", "cache": str(cache),
+                    "cache_sha256": sha256(cache), "original_producer": value["prepared"]["identity"],
+                    "original_receipt": str(source)},
+                "build_mode": "exact sealed preparation reuse; no rebuild or master requalification"}
+    save(out / "preparation-reuse.json", prepared["dependency_reuse"])
+    save(out / ("prepared-artifacts.json" if fields["scope"] == "artifacts" else "prepared.json"), prepared)
+    return prepared
+
+
+def publish_preparation(cache, fields, out, prepared, artifacts_only):
+    source = out / ("prepared-artifacts.json" if artifacts_only else "prepared.json")
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    if cache.exists():
+        raise ValueError("prepared cache publication already exists")
+    save(cache, {"method": "sealed-sdk-preparation-v2", "inputs": fields,
+                 "prepared": prepared, "source_receipt": str(source),
+                 "source_receipt_sha256": sha256(source)})
+
+
 def build(out, runner, identity, *, reuse_image=None, artifacts_only=False):
+    cache, cache_inputs = preparation_cache(runner, identity, artifacts_only)
+    if cache.exists():
+        return reuse_preparation(cache, cache_inputs, out, runner, identity)
     if sys.platform != "darwin":
         raise RuntimeError("this cold-source profile requires Darwin mincore/msync and libproc")
     for name, expected in DIRECT_IO_FILES.items():
@@ -173,6 +217,9 @@ def build(out, runner, identity, *, reuse_image=None, artifacts_only=False):
         save(out / f"build-{name}.json", result)
         if result["exit_code"] != 0:
             raise RuntimeError(f"{name} locked release build failed")
+    after_build = runner.identities()
+    if any(after_build[name] != identity[name] for name in ("compilation_seal", "harness_seal")):
+        raise ValueError("source inputs changed during preparation build")
     sources = {
         "benchmark_shell": target / "release/examples/benchmark_shell",
         "verify_checkpoint5": target / "release/examples/verify_checkpoint5",
@@ -223,6 +270,7 @@ def build(out, runner, identity, *, reuse_image=None, artifacts_only=False):
                     "writer_binary_sha256": WRITER_SHA256, "image_build": image,
                     "build_mode": "worktree-local locked release; exact daemon/image reuse when sealed"}
         save(out / "prepared-artifacts.json", prepared)
+        publish_preparation(cache, cache_inputs, out, prepared, artifacts_only)
         return prepared
     old = master()
     oracle = manifests()
@@ -231,9 +279,18 @@ def build(out, runner, identity, *, reuse_image=None, artifacts_only=False):
         (out / f"{name}.tsv").write_text(content)
     cursor = json.loads(MASTER.read_text())["cursor_key"]
     env = {**os.environ, "LAYERFS_HISTORY_CURSOR_KEY": cursor, "LAYERFS_CONSTRUCTION_WORKERS": "1"}
+    qualification = out / "master-qualification"
+    qualification.mkdir()
+    for name in ("store", "history"):
+        source = Path(old["path"]) / (name + ".sqlite")
+        destination = qualification / (name + ".sqlite")
+        shutil.copyfile(source, destination)
+        destination.chmod(0o644)
+        if sha256(destination) != old[name + "_sha256"]:
+            raise ValueError("master qualification independent copy mismatch")
     proof, stdout, _ = execute([artifacts["verify_checkpoint5"]["path"],
-        str(Path(old["path"]) / "verify.case"), str(Path(old["path"]) / "store.sqlite"),
-        str(Path(old["path"]) / "history.sqlite"), str(out / "old.tsv"), str(out / "old.tsv")],
+        str(Path(old["path"]) / "verify.case"), str(qualification / "store.sqlite"),
+        str(qualification / "history.sqlite"), str(out / "old.tsv"), str(out / "old.tsv")],
         out / "master-reproof", timeout=9, env=env)
     save(out / "master-reproof.json", proof)
     if proof["exit_code"] != 0 or json.loads(stdout).get("status") != "PASS":
@@ -250,6 +307,7 @@ def build(out, runner, identity, *, reuse_image=None, artifacts_only=False):
                 "device_read_threshold": "90% of cloned Store+history allocated bytes",
                 "build_mode": "worktree-local locked release; sealed static writer reuse"}
     save(out / "prepared.json", prepared)
+    publish_preparation(cache, cache_inputs, out, prepared, artifacts_only)
     return prepared
 
 

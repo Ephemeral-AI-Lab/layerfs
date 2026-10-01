@@ -120,6 +120,10 @@ def build(out, target, identity):
               "compiled_units": (out / "build.log").read_text(errors="replace").count("Compiling "),
               "command": BUILD, "target": str(target), "build_profile": BUILD_PROFILE}
     if process.returncode == 0:
+        if identity.get("identity_method") == custody.METHOD:
+            after_build = identities()
+            if after_build["compilation_seal"] != identity["compilation_seal"]:
+                raise ValueError("compilation inputs changed during build")
         binaries = {}
         for name in BINARIES:
             source = target / BINARY_DIR / name
