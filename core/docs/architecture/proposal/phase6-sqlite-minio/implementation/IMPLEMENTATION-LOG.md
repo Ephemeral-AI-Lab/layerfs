@@ -151,3 +151,18 @@ simultaneous resource, shipping pooling/delta, large import and all locality
 gates remain incomplete. Next: V4c immediate-base SQL overlay/changed catalogs,
 local file edits, paged namespace construction and incremental certification;
 then generic namespace/package syscall scope and all owner workload groups.
+
+## 2026-10-02 — V4c responsibility/dependency split
+
+Parent `0e3fee4ba365d7ddb75fb58c54c1d2e0f0af5621`; clean source confirmed.
+V4c1 replaces daemon full-population/full-file construction with indexed dirty
+rows and immediate-base C1 edits/COW. V4c2 owns actual certified incremental
+authority publication, paged import and inherited mount, including removal of
+the total512 population limit through representation/admission rather than
+raising it. Current authority audit and C1 subtree cycle scans remain explicit
+locality/scaling gaps. V4c1 cannot be reported as whole-path locality completion.
+
+Freeze V4C1-SPEC.md before implementation/collection. Next: SQL dirty/new/name
+indexes, visible immutable base ranges, replayable current-final edit spool and
+prepared rows; preserve all real ACK/validation/C5/known installation behavior.
+Goal remains active with all three shapes/seven families/full DeepSeek groups.
