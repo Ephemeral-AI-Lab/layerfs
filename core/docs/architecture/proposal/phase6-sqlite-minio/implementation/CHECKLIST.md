@@ -28,7 +28,7 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 - [x] V4a: count/timing diagnostics and persistent authenticated metadata session;
   exact request IDs, EOF/version checks, bounded rotation and no resend; prove
   actual session counts and preserved full-path bytes/heads/cleanup.
-- [ ] V4b: bounded multi-object packs, locator batches, admitted decode/locator
+- [x] V4b: bounded multi-object packs, locator batches, admitted decode/locator
   windows, immutable object ACK/registration and exact CAS collision checking.
 - [ ] V4c: indexed changed catalogs, paged prepared rows, immediate-base C1 edits
   and filesystem COW; incremental certified publication validation, bounded source
@@ -54,6 +54,6 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 - [ ] Final owning locked checks, source/binary/image/provider seals, per-commit
   production LOC and checkpoint comments on #294; major results linked from #293.
 
-Current action: V4b bounded multi-object packing/locator batching with exact
-ACK/private-pending/collision/read-window custody. Every larger group remains incomplete. Use meaningful submilestones;
+Current action: V4c indexed changed catalogs and immediate-base file/namespace
+construction with certified incremental publication and inherited reads. Every larger group remains incomplete. Use meaningful submilestones;
 retain failed attempts and keep one concrete next action across continuations.

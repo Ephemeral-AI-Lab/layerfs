@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "e20d46fc4ebaf1ffcc285115368d4079d9cbef0ea156826f4a6ce42c4740bf22",
+  "raw_utf8": "\nrunning 4 tests\ntest packed_locator_codec_has_exact_fields_and_eof ... ok\ntest native_pack_group_ceiling_seals_without_losing_objects ... ok\ntest multi_record_pack_reconstructs_exact_input_objects ... ok\ntest pending_count_and_byte_refusal_preserves_accepted_objects ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s\n\n"
+}

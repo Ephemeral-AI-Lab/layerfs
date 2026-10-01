@@ -133,3 +133,21 @@ PUT body bytes and received GET body bytes, separately in daemon and authority
 processes. These are request/body observations, not physical disk/cache counters.
 The sealed build includes this instrumentation; no payload/register algorithm or
 limits changed. Full-provider treatment is still NOT_RUN before source freeze.
+
+## 2026-10-02 — V4b full-provider packed treatment passed
+
+Source `fc8a9f8a4f1c8b2cecff155c93cd099bb748c652`; one prospective treatment,
+child6.275378 s, proof20.155667 ms, bytes/mode/retained-version/head/parent/cleanup
+PASS. Three known uploaded packs per Commit, private window peak18objects/5674
+canonical bytes. Overwrite calls: one batch lookup, three batch registrations,
+one publication (five total); one metadata connection across both Commits.
+Observed Commit44.687959/41.091458 ms remains cache INELIGIBLE. Actual daemon PUT
+count3 per Commit; overwrite GET4 body2593bytes. Authority GET26 between completed
+publications still includes whole candidate validation; locality is NOT proved.
+Raw failed tight-group boundary and corrected pass are retained with checks.
+
+V4b's declared small-path packing/locator/window gate is complete. Physical
+simultaneous resource, shipping pooling/delta, large import and all locality
+gates remain incomplete. Next: V4c immediate-base SQL overlay/changed catalogs,
+local file edits, paged namespace construction and incremental certification;
+then generic namespace/package syscall scope and all owner workload groups.

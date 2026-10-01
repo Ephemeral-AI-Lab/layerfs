@@ -1,0 +1,47 @@
+{
+  "source": "fc8a9f8a4f1c8b2cecff155c93cd099bb748c652",
+  "overwrite_action_calls": [
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    3
+  ],
+  "connections_total": 1,
+  "packing": [
+    {
+      "packs": 3,
+      "peak_objects": 18,
+      "peak_bytes": 5674
+    },
+    {
+      "packs": 3,
+      "peak_objects": 18,
+      "peak_bytes": 5674
+    }
+  ],
+  "daemon_io_cumulative": [
+    {
+      "put_calls": 3,
+      "get_calls": 2,
+      "put_requested_bytes": 1468,
+      "get_received_bytes": 1254
+    },
+    {
+      "put_calls": 6,
+      "get_calls": 6,
+      "put_requested_bytes": 2796,
+      "get_received_bytes": 3847
+    }
+  ],
+  "overwrite_io_delta": {
+    "put_calls": 3,
+    "get_calls": 4,
+    "put_requested_bytes": 1328,
+    "get_received_bytes": 2593
+  },
+  "physical_memory": "NOT_RUN",
+  "cache": "INELIGIBLE"
+}

@@ -1,0 +1,14 @@
+{
+  "source": "fc8a9f8a4f1c8b2cecff155c93cd099bb748c652",
+  "image": "sha256:5eb2fc94bbde7f637ce19846d0f5ca58cc4bf0905161bf5e6b9314c68599e78c",
+  "driver_sha256": "d0f126d07c54b18d143b4ef52efa293c30559975c705280a37a268f3b2f4e73c",
+  "minio_sha256": "b107901fd1afe7b36165c6aa66bb027f96e2ec2b690eebe8c9376746d9a9b0df",
+  "harness_sha256": "be75c9b47f2b3d0d74d9b7f52b915e2c9119a95fb5bc459e12c3330830cd5daa",
+  "dependency_lock_sha256": "94ab50d4fe1c8a7ef1206770f17717020003c76a546c42a2b7c90d4285c9cdac",
+  "armv8_build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "workload_source_sha256": "55228f78dd679bf08fd1891bfd696c51527f0da933129f8a123158c373e4b2f5",
+  "cache": "INELIGIBLE: OS/page cache unknown",
+  "purpose": "v4b-bounded-packed-locator-treatment",
+  "complete_child_limit_seconds": 15,
+  "separate_proof_limit_seconds": 9.5
+}

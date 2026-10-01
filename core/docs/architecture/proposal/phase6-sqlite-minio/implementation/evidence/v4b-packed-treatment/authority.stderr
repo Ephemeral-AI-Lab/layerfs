@@ -1,0 +1,3 @@
+P6_AUTHORITY_IO {"put_calls":3,"get_calls":28,"put_requested_bytes":1254,"get_received_bytes":22020}
+P6_AUTHORITY_IO {"put_calls":3,"get_calls":54,"put_requested_bytes":1254,"get_received_bytes":41318}
+metadata session closed: Deadline unknown=false cleanup=None history=None

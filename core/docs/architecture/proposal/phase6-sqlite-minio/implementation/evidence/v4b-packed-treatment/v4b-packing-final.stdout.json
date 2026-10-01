@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "37bdcbbb5da7dbc2284ed1607a71e964bbae72837de5ad2fdc0bb4a4c0153a1c",
+  "raw_utf8": "\nrunning 4 tests\ntest packed_locator_codec_has_exact_fields_and_eof ... ok\ntest native_pack_group_ceiling_seals_without_losing_objects ... FAILED\ntest multi_record_pack_reconstructs_exact_input_objects ... ok\ntest pending_count_and_byte_refusal_preserves_accepted_objects ... ok\n\nfailures:\n\n---- native_pack_group_ceiling_seals_without_losing_objects stdout ----\n\nthread 'native_pack_group_ceiling_seals_without_losing_objects' panicked at tests/packing.rs:122:84:\ncalled `Result::unwrap()` on an `Err` value: \"storage integrity: pack group count\"\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    native_pack_group_ceiling_seals_without_losing_objects\n\ntest result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s\n\n"
+}
