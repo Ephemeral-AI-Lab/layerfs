@@ -87,3 +87,18 @@ canonical state, batching/read windows and real ACK/collision custody; then
 V4c SQL changed catalogs/immediate-parent edits/incremental namespace certificates.
 All three named live shapes, all seven families and complete DeepSeek/locality
 proof remain required. Genuine public SDK MinIO Init binding remains a prerequisite.
+
+## 2026-10-02 — V4b interfaces selected prospectively
+
+Parent `88e9a37b43506157f559daec53ec141ef0b50415`. Read actual C2 limits and
+public directory/inode streaming builders. Freeze P6META5 packed locator fields,
+128-ID batches, positive authority pack IDs, exact page/EOF order, existing C2
+pack/group/pending limits and private-pending/finish/ACK/collision custody in
+V4B-SPEC.md. No guessed pack ordinals or limit enlargement; no collection or
+implementation completion at this prospective checkpoint.
+
+Next: replace unary physical object writer/reader with bounded pending/packing/
+batch modules and owning placement/identity tests, then one real-provider treatment.
+The existing C1 public directory/inode iterators are available for later paged
+import, but locality/namespace certification still requires V4c and its own proof.
+Goal active with all larger groups preserved; report major checkpoints to #293.
