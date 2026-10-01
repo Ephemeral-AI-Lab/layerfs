@@ -66,3 +66,7 @@ Byte correctness, speed, physical containment, namespace certification and
 cloud durability remain separate proofs. The existing qualification companion
 [#288](https://github.com/Ephemeral-AI-Lab/layerfs/issues/288) has not been run by
 this design work; future qualification scope must be reconciled explicitly.
+
+The first real SDK/FUSE/SQL/MinIO/C5 integration proof is recorded in
+[RESULTS-INTEGRATION-V3](experiments/RESULTS-INTEGRATION-V3.md), with its finite
+research profile and remaining speed/resource/canonical gates.

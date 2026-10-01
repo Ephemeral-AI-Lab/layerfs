@@ -1,0 +1,4 @@
+{
+  "raw_stdout_sha256": "2d46cefa7716f71d9016f18086a85cf20bf362d24648f69236a9844f999f1632",
+  "raw_stdout_utf8": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 3 tests\ntest ordinary_final_state_sources_and_handles ... ok\ntest exact_handle_admission_and_refund ... ok\ntest repeated_overwrites_do_not_retain_write_history ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

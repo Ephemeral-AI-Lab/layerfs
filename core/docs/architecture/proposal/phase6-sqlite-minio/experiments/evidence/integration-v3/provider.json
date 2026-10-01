@@ -1,0 +1,13 @@
+{
+  "minio_version": "minio version RELEASE.2025-10-15T17-29-55Z (commit-id=9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a)\nRuntime: go1.26.3 darwin/arm64\nLicense: GNU AGPLv3 - https://www.gnu.org/licenses/agpl-3.0.html\nCopyright: 2015-2025 MinIO, Inc.",
+  "linux_binary": {
+    "sha256": "65638189d75b7a3259537fb59d19776886716a8579fa84d81fe0b9879303ccca",
+    "archive": "benchmark-results/phase6-integration/binary-archive/65638189d75b7a3259537fb59d19776886716a8579fa84d81fe0b9879303ccca/phase6-live-probe"
+  },
+  "sqlite_version": "3.53.2",
+  "profile": "bundled libsqlite3-sys 0.38.2; MEMORY/synchronous OFF/temp MEMORY/busy0; daemon and global catalog lifetime connections",
+  "publication_byte_sha256": {
+    "0": "94c8dc2c380e7f81aea54490e601e9d815066cc690d70b968abea07b5ac3f20e",
+    "1": "592ae90e7d1ae85f2306ec980d6410f24f597a115143ea61d60bda3241d5714f"
+  }
+}

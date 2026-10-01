@@ -1,0 +1,14 @@
+{
+  "source": "2aebefc14860a9c66ba0aeaf83a9dd1da69d6b0f",
+  "image": "sha256:835635e16eff34096fc95e0ad50201fe2693ce4a7c1b80dfaad1d9d85e847ab8",
+  "driver_sha256": "6f030e18cdb9fba6ff8988fd4b7f27618327f3d77fa7ea3c662061a89ecf59ca",
+  "minio_sha256": "b107901fd1afe7b36165c6aa66bb027f96e2ec2b690eebe8c9376746d9a9b0df",
+  "harness_sha256": "9e308cf290a9d984f9c2ae21f3b3143f8ef7dba93424affdf8573dff6dcabfbf",
+  "dependency_lock_sha256": "94ab50d4fe1c8a7ef1206770f17717020003c76a546c42a2b7c90d4285c9cdac",
+  "armv8_build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "workload_source_sha256": "c7f14feed14b736ad5de89607975197f6a1d92bf752bb9926feaa572baf71727",
+  "cache": "INELIGIBLE: OS/page cache unknown",
+  "purpose": "first complete real-provider correctness diagnostic",
+  "complete_child_limit_seconds": 15,
+  "separate_proof_limit_seconds": 9.5
+}

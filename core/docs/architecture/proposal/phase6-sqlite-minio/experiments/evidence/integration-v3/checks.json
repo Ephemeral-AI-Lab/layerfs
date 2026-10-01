@@ -1,0 +1,45 @@
+{
+  "rust_external_tests": {
+    "command": "cargo +1.85.1 test --manifest-path core/benchmark/phase6-live/Cargo.toml --locked",
+    "exit": 0,
+    "tests": 3
+  },
+  "host_clippy": {
+    "command": "cargo +1.85.1 clippy --manifest-path core/benchmark/phase6-live/Cargo.toml --locked --all-targets -- -D warnings",
+    "exit": 0
+  },
+  "fmt": {
+    "command": "cargo +1.85.1 fmt --manifest-path core/benchmark/phase6-live/Cargo.toml -- --check",
+    "exit": 0
+  },
+  "boundary": {
+    "command": "python3 core/tools/check_product_boundary.py",
+    "exit": 0,
+    "scanned_files": 357
+  },
+  "boundary_self_tests": {
+    "command": "python3 -m unittest discover -s core/tools -p 'test_*.py'",
+    "exit": 0,
+    "tests": 9
+  },
+  "release_builds": {
+    "host": "cargo +1.85.1 build --manifest-path core/benchmark/phase6-live/Cargo.toml --locked --release",
+    "linux": "cargo +1.85.1 zigbuild --manifest-path core/benchmark/phase6-live/Cargo.toml --locked --release --target aarch64-unknown-linux-musl",
+    "exit": 0
+  },
+  "third_party_lock_parity": {
+    "new_versions": [],
+    "checksum_mismatches": []
+  },
+  "unrun": [
+    "full unchanged Core product suites",
+    "Linux warning-denying Clippy",
+    "independent canonical root vectors",
+    "physical memory/cache proof",
+    "six integrated cohort shapes",
+    "failure/Unknown injection and mount-death",
+    "source GC",
+    "localized edits",
+    "pooled metadata and delta integration"
+  ]
+}

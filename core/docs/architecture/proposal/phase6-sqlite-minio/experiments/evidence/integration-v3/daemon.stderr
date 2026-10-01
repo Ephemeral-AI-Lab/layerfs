@@ -1,0 +1,6 @@
+control session ended: Io unknown=false cleanup=None history=None
+SQL FUSE: ENOENT
+P6 commit generation=1 revision=9 callbacks=35 objects=11 pack_bytes=3959 duplicates=7 root=8fe6ba447276b1f092d6c301cddc062ba851ff8cc402720c645a38311e7286fc
+P6 commit generation=2 revision=15 callbacks=61 objects=7 pack_bytes=2556 duplicates=11 root=9a639bf1a4251297685d368ab025ec2c0d5d4df034a0743bf4276f1d327dd225
+P6 explicit unmount callbacks=61 handles=0
+control session ended: Io unknown=false cleanup=None history=None
