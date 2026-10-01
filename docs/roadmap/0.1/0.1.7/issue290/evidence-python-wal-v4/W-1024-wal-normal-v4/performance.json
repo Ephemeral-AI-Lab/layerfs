@@ -1,0 +1,192 @@
+{
+  "cache_contract": "OS/native residency unknown; read-after-write; no cold claim",
+  "cache_verdict": "INELIGIBLE",
+  "case": "W-1024-wal-normal-v4",
+  "close_ns": 420417,
+  "durability_scope": "sync/checkpoint cost and transaction-visible state; no power-loss proof",
+  "events": [
+    {
+      "ack_ns": 1723708,
+      "begin_ns": 51250,
+      "branch": 0,
+      "commit_or_rollback_ns": 310583,
+      "expected": 0,
+      "mutation_ns": 1359625,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1452000,
+      "begin_ns": 4542,
+      "branch": 0,
+      "commit_or_rollback_ns": 141875,
+      "expected": 1,
+      "mutation_ns": 1304125,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1448541,
+      "begin_ns": 3500,
+      "branch": 0,
+      "commit_or_rollback_ns": 133583,
+      "expected": 2,
+      "mutation_ns": 1310875,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1449916,
+      "begin_ns": 2875,
+      "branch": 0,
+      "commit_or_rollback_ns": 136000,
+      "expected": 3,
+      "mutation_ns": 1310500,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1464834,
+      "begin_ns": 2875,
+      "branch": 0,
+      "commit_or_rollback_ns": 135542,
+      "expected": 4,
+      "mutation_ns": 1325833,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1443583,
+      "begin_ns": 3541,
+      "branch": 0,
+      "commit_or_rollback_ns": 137541,
+      "expected": 5,
+      "mutation_ns": 1302000,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1424666,
+      "begin_ns": 2958,
+      "branch": 0,
+      "commit_or_rollback_ns": 124583,
+      "expected": 6,
+      "mutation_ns": 1296667,
+      "outcome": "COMMITTED",
+      "owner": 0
+    },
+    {
+      "ack_ns": 1447459,
+      "begin_ns": 2709,
+      "branch": 0,
+      "commit_or_rollback_ns": 130959,
+      "expected": 7,
+      "mutation_ns": 1313250,
+      "outcome": "COMMITTED",
+      "owner": 0
+    }
+  ],
+  "final_checkpoint_result": [
+    0,
+    0,
+    0
+  ],
+  "locators_per_publication": 1024,
+  "performance_claim": false,
+  "phases": [
+    {
+      "bytes": 0,
+      "client_rss_after": 42582016,
+      "client_rss_before": 41975808,
+      "elapsed_ns": 11881209,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "publication_ack",
+      "operations": 8,
+      "ops_per_second": 673.3321499520798
+    },
+    {
+      "bytes": 0,
+      "client_rss_after": 42582016,
+      "client_rss_before": 42582016,
+      "elapsed_ns": 975917,
+      "memory_scope": "current RSS snapshots; not a phase peak or physical bound",
+      "mib_per_second": 0.0,
+      "name": "final_checkpoint",
+      "operations": 1,
+      "ops_per_second": 1024.6773035001952
+    }
+  ],
+  "pragmas": {
+    "busy_timeout": 0,
+    "cache_size": -512,
+    "checkpoint_fullfsync": 0,
+    "foreign_keys": 1,
+    "fullfsync": 0,
+    "journal_mode": "wal",
+    "mmap_size": 0,
+    "page_size": 4096,
+    "synchronous": 1,
+    "temp_store": 1,
+    "wal_autocheckpoint": 1000
+  },
+  "profile": "wal-normal",
+  "provider": {
+    "actual_library_path": "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/sqlite-3.51.3-provider/libsqlite3.dylib",
+    "binary_sha256": "07636ec80a476c0bdca006628a6d38f68deab70bdd799aebdc219d482b4c748d",
+    "compile_options": [
+      "ATOMIC_INTRINSICS=1",
+      "COMPILER=clang-16.0.0",
+      "DEFAULT_AUTOVACUUM",
+      "DEFAULT_CACHE_SIZE=-2000",
+      "DEFAULT_FILE_FORMAT=4",
+      "DEFAULT_JOURNAL_SIZE_LIMIT=-1",
+      "DEFAULT_MMAP_SIZE=0",
+      "DEFAULT_PAGE_SIZE=4096",
+      "DEFAULT_PCACHE_INITSZ=20",
+      "DEFAULT_RECURSIVE_TRIGGERS",
+      "DEFAULT_SECTOR_SIZE=4096",
+      "DEFAULT_SYNCHRONOUS=2",
+      "DEFAULT_WAL_AUTOCHECKPOINT=1000",
+      "DEFAULT_WAL_SYNCHRONOUS=2",
+      "DEFAULT_WORKER_THREADS=0",
+      "DIRECT_OVERFLOW_READ",
+      "ENABLE_COLUMN_METADATA",
+      "MALLOC_SOFT_LIMIT=1024",
+      "MAX_ATTACHED=10",
+      "MAX_COLUMN=2000",
+      "MAX_COMPOUND_SELECT=500",
+      "MAX_DEFAULT_PAGE_SIZE=8192",
+      "MAX_EXPR_DEPTH=1000",
+      "MAX_FUNCTION_ARG=1000",
+      "MAX_LENGTH=1000000000",
+      "MAX_LIKE_PATTERN_LENGTH=50000",
+      "MAX_MMAP_SIZE=0x7fff0000",
+      "MAX_PAGE_COUNT=0xfffffffe",
+      "MAX_PAGE_SIZE=65536",
+      "MAX_SQL_LENGTH=1000000000",
+      "MAX_TRIGGER_DEPTH=1000",
+      "MAX_VARIABLE_NUMBER=32766",
+      "MAX_VDBE_OP=250000000",
+      "MAX_WORKER_THREADS=8",
+      "MUTEX_PTHREADS",
+      "SYSTEM_MALLOC",
+      "TEMP_STORE=1",
+      "THREADSAFE=1"
+    ],
+    "source_id": "2026-03-13 10:38:09 737ae4a34738ffa0c3ff7f9bb18df914dd1cad163f28fd6b6e114a344fe6d618",
+    "version": "3.51.3"
+  },
+  "publication_and_checkpoint_ns": 12857126,
+  "publications": 8,
+  "reader_pinned": false,
+  "setup_checkpoint": [
+    0,
+    0,
+    0
+  ],
+  "sql_commit_ns": 1250666,
+  "sql_mutation_ns": 10522875,
+  "wal_bytes_after_checkpoint": 0,
+  "wal_bytes_before_checkpoint": 568592
+}

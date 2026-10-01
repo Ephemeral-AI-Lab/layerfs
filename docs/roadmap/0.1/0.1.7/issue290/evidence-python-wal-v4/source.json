@@ -1,0 +1,22 @@
+{
+  "commit": "b4669b00dd17c94c59de8d1fcb90a7bf53383dd7",
+  "hardware": "machdep.cpu.brand_string: Apple M3 Max\nhw.memsize: 38654705664\nhw.ncpu: 14",
+  "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "python": "3.14.3 (main, Feb  3 2026, 15:32:20) [Clang 17.0.0 (clang-1700.6.3.2)]",
+  "python_executable": "/opt/homebrew/opt/python@3.14/bin/python3.14",
+  "sqlite": "3.51.2",
+  "tool_sha256": {
+    "acquire.py": "18c9b601a9893a49482bc92770ee78df76206568fc74cec7795ca4c4c4958f36",
+    "catalog_probe.py": "ae1b1cad65a14ec23c0a4d6604b6829b5aa79d8e865bfe8ef1578a4ce11505d9",
+    "common.py": "35157df83a14b037dccf712ac109c30bcf334a7f633e27102a5344c2800458a1",
+    "concurrent_probe.py": "b5c6a7e40dbb98132eb4b4f6338d4cfd444e7a58c18b4957fcdb3bbcbbcf9749",
+    "minio_probe.py": "4de75883298098d1d220db44b5933e5c03a4d5827997b57691501b306ca1bbd9",
+    "pack_probe.py": "08fd1209cc826d4287a852402c4f42e49d76b9369a951a40b1b792414357c974",
+    "run.py": "5a074405c1f3585717876be87754cd033a7d910f33fe955044c6a4d110f8db9e",
+    "run_v2.py": "682b2945af971b3509d53896cf2209bbade06c9119db31799f108b7359e2403b",
+    "run_wal.py": "e655097278326b5f51c9f5c478c6c8c62dced8d31ebd73100ff81d0688353d29",
+    "sqlite_probe.py": "28d7e7eb1d7dca91e0c0afcd4b8c0eca01d17c979fb97b9365e4bb4176031468",
+    "wal_probe.py": "a4d9b93cc93c6a12b877f76f4076bd813f9bd928fa89082a53882b60f0449679"
+  },
+  "tracked_dirty": false
+}

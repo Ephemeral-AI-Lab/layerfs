@@ -1,0 +1,8 @@
+{
+  "case": "W-reader-normal-v4",
+  "cleanup": "PASS",
+  "cleanup_ns": 385708,
+  "proof": "PASS",
+  "proof_ns": 14680333,
+  "scope": "exact reopened catalog state and checkpoint/snapshot facts; no crash/power-loss proof"
+}

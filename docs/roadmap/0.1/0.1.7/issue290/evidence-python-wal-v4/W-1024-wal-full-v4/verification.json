@@ -1,0 +1,8 @@
+{
+  "case": "W-1024-wal-full-v4",
+  "cleanup": "PASS",
+  "cleanup_ns": 213958,
+  "proof": "PASS",
+  "proof_ns": 14149958,
+  "scope": "exact reopened catalog state and checkpoint/snapshot facts; no crash/power-loss proof"
+}

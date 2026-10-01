@@ -1,0 +1,8 @@
+{
+  "case": "W-128-delete-fullfsync-v4",
+  "cleanup": "PASS",
+  "cleanup_ns": 326584,
+  "proof": "PASS",
+  "proof_ns": 1846292,
+  "scope": "exact reopened catalog state and checkpoint/snapshot facts; no crash/power-loss proof"
+}

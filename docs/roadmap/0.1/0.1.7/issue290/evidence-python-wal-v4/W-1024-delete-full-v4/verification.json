@@ -1,0 +1,8 @@
+{
+  "case": "W-1024-delete-full-v4",
+  "cleanup": "PASS",
+  "cleanup_ns": 356917,
+  "proof": "PASS",
+  "proof_ns": 12578333,
+  "scope": "exact reopened catalog state and checkpoint/snapshot facts; no crash/power-loss proof"
+}

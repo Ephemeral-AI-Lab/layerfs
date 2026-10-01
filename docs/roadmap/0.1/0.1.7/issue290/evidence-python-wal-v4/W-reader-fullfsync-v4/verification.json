@@ -1,0 +1,8 @@
+{
+  "case": "W-reader-fullfsync-v4",
+  "cleanup": "PASS",
+  "cleanup_ns": 266667,
+  "proof": "PASS",
+  "proof_ns": 13944458,
+  "scope": "exact reopened catalog state and checkpoint/snapshot facts; no crash/power-loss proof"
+}

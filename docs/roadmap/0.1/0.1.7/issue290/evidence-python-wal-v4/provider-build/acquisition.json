@@ -1,0 +1,7 @@
+{
+  "url": "https://www.sqlite.org/2026/sqlite-amalgamation-3510300.zip",
+  "zip_sha256": "acb1e6f5d832484bf6d32b681e858c38add8b2acdfd42ac5df24b8afb46552b4",
+  "sqlite3_c_sha3_256": "32d5424f97e0a7fc5ed2f6335afbb58be4e0298bd7117a34e39d345ff13d859e",
+  "release_reference": "https://www.sqlite.org/releaselog/3_51_3.html",
+  "source": "official unchanged amalgamation; isolated build, no patch/vendor/global install"
+}

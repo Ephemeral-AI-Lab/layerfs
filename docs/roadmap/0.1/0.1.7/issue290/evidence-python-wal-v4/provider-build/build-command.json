@@ -1,0 +1,20 @@
+{
+  "command": [
+    "clang",
+    "-O2",
+    "-DSQLITE_THREADSAFE=1",
+    "-DSQLITE_ENABLE_COLUMN_METADATA",
+    "-dynamiclib",
+    "benchmark-results/storage-probes/sqlite-3.51.3-provider/sqlite3.c",
+    "-o",
+    "benchmark-results/storage-probes/sqlite-3.51.3-provider/libsqlite3.dylib",
+    "-Wl,-install_name,@rpath/libsqlite3.dylib"
+  ],
+  "exit": 0,
+  "wall_ns": 11955366334,
+  "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+  "source_sha3_256": "32d5424f97e0a7fc5ed2f6335afbb58be4e0298bd7117a34e39d345ff13d859e",
+  "untouched_source": true,
+  "global_install": false,
+  "binary_sha256": "07636ec80a476c0bdca006628a6d38f68deab70bdd799aebdc219d482b4c748d"
+}

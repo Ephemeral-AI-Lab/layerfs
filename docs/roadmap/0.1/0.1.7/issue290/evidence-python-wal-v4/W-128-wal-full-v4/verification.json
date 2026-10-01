@@ -1,0 +1,8 @@
+{
+  "case": "W-128-wal-full-v4",
+  "cleanup": "PASS",
+  "cleanup_ns": 179625,
+  "proof": "PASS",
+  "proof_ns": 2925042,
+  "scope": "exact reopened catalog state and checkpoint/snapshot facts; no crash/power-loss proof"
+}

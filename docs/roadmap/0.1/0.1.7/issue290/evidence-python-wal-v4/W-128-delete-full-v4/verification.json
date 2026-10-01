@@ -1,0 +1,8 @@
+{
+  "case": "W-128-delete-full-v4",
+  "cleanup": "PASS",
+  "cleanup_ns": 304208,
+  "proof": "PASS",
+  "proof_ns": 1778292,
+  "scope": "exact reopened catalog state and checkpoint/snapshot facts; no crash/power-loss proof"
+}

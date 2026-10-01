@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/tools/storage_probes/wal_probe.py",
+    "perf",
+    "--case",
+    "W-reader-fullfsync-v4",
+    "--provider",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/sqlite-3.51.3-provider",
+    "--output",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/collection-wal-v4/W-reader-fullfsync-v4"
+  ],
+  "exit": 0,
+  "library_override": "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/sqlite-3.51.3-provider",
+  "limit_seconds": 15,
+  "status": "COMPLETE",
+  "wall_ns": 349363125
+}

@@ -1,0 +1,8 @@
+{
+  "case": "W-128-wal-fullfsync-v4",
+  "cleanup": "PASS",
+  "cleanup_ns": 183709,
+  "proof": "PASS",
+  "proof_ns": 3024875,
+  "scope": "exact reopened catalog state and checkpoint/snapshot facts; no crash/power-loss proof"
+}
