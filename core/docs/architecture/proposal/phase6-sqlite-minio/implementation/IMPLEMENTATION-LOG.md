@@ -473,3 +473,13 @@ RESULTS-V4C2B1.md/rawv4c2b1-native-cohort preserve exact outcomes/proofplan seal
 Next V4c2b2 certified incremental service namespace/root-diff proof before removing
 full walk; then paged population/import/retirement/generic syscall/family/DeepSeek
 obligations. Goal active. This completed dependency is not full V4c or qualification.
+
+## V4c2b2 incremental service contract prospective freeze
+
+Parent `dc632e1c329fd9d58647011de89d05e4f0a85152`. Previous turn was progress:
+published SQL-native producer and all3named semantic gates, service O(N) quantified.
+Freeze actual intrinsic tree facts + paired selected-root Merkle differences +
+indexed ref/parent-chain proof on existing global SQL before replacing full audit.
+C5condition/known install/Unknown custody retained; no weak client assertion or
+fallback. Current single-Branch512profile unchanged; all broader goal open. Next
+implement/external proofs then frozen changed-service original cohort.
