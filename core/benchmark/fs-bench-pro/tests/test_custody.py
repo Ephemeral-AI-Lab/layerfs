@@ -1,5 +1,7 @@
 """External build-custody and source-classification regression proofs."""
 import hashlib
+import json
+from types import SimpleNamespace
 from pathlib import Path
 import sys
 import tempfile
@@ -70,6 +72,57 @@ class Custody(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "build entered"):
                     runner.build(output, results / "target", {
                         "product_seal": "same", "compilation_seal": "SQL-inclusive"})
+
+    def test_sealed_preparation_reuses_only_matching_binaries_and_receipt(self):
+        from families import workspace_write as write
+        with tempfile.TemporaryDirectory() as directory:
+            results = Path(directory)
+            original, output = results / "original", results / "new"
+            original.mkdir(); output.mkdir()
+            binary = results / "binary"; binary.write_bytes(b"release")
+            identity = {"identity_method": custody.METHOD, "compilation_seal": "sql-v1", "harness_seal": "harness"}
+            common = SimpleNamespace(RESULTS=results)
+            cache, fields = write.preparation_cache(common, identity, True)
+            prepared = {"identity": identity, "artifacts": {"benchmark_shell": {
+                "path": str(binary), "sha256": write.sha256(binary)}}, "image_id": "sha256:image"}
+            write.save(original / "prepared-artifacts.json", prepared)
+            write.publish_preparation(cache, fields, original, prepared, True)
+            with patch.object(write.subprocess, "check_output", return_value="sha256:image\n"):
+                result = write.reuse_preparation(cache, fields, output, common, identity)
+                self.assertIn("no rebuild", result["build_mode"])
+                self.assertEqual(result["dependency_reuse"]["original_producer"], identity)
+                binary.write_bytes(b"altered")
+                with self.assertRaisesRegex(ValueError, "binary custody"):
+                    write.reuse_preparation(cache, fields, output, common, identity)
+            sql_change = {**identity, "compilation_seal": "sql-v2"}
+            self.assertNotEqual(write.preparation_cache(common, sql_change, True)[0], cache)
+            self.assertNotEqual(write.preparation_cache(common, identity, False)[0], cache)
+
+    def test_corrupt_preparation_receipt_never_triggers_regeneration(self):
+        from families import workspace_write as write
+        with tempfile.TemporaryDirectory() as directory:
+            results = Path(directory)
+            identity = {"identity_method": custody.METHOD, "compilation_seal": "SQL", "harness_seal": "harness"}
+            common = SimpleNamespace(RESULTS=results)
+            cache, _ = write.preparation_cache(common, identity, False)
+            cache.parent.mkdir(); cache.write_text("unfinished publication")
+            with patch.object(write, "execute") as execute:
+                with self.assertRaises(json.JSONDecodeError):
+                    write.build(results, common, identity)
+                execute.assert_not_called()
+
+    def test_build_input_change_refuses_before_archive_publication(self):
+        with tempfile.TemporaryDirectory() as directory:
+            results = Path(directory); output = results / "out"; output.mkdir()
+            identity = {"identity_method": custody.METHOD, "product_seal": "product",
+                        "compilation_seal": "before"}
+            with patch.object(runner, "RESULTS", results), patch.object(
+                    runner.subprocess, "run", return_value=SimpleNamespace(returncode=0)), patch.object(
+                    runner, "identities", return_value={"compilation_seal": "changed SQL"}):
+                with self.assertRaisesRegex(ValueError, "inputs changed"):
+                    runner.build(output, results / "target", identity)
+            self.assertFalse((results / "binary-archive").exists())
+            self.assertFalse((results / "sdk-build-release.json").exists())
 
 
 if __name__ == "__main__":

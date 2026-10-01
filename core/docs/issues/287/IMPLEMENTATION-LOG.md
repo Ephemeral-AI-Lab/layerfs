@@ -1871,3 +1871,38 @@ reused;49distinct tests across checkpoint. No speed/product/provider run.
 Production LOC153673->153673(delta+0),Reference65417,Core88256 unchanged;
 same approved exact archive scope and counter as spec checkpoint. Control and
 candidate must receive this common source before either observation.
+
+
+## Sealed campaign preparation reuse and provider scope
+
+Actual isolated control5687f7020bb1da96b3b7bfac0cdbabc6d12a0ec9 published;
+product remains exact7ed control. First-use locked release host build passed
+22.831058208s within30s, owncore/target. No performance sample collected.
+
+Source inspection found repeated shared.build artifact/master qualification per
+selected SDK command. Existing helper now caches complete successful preparation
+by versioned compilation+harness identities and scope, verifies owned immutable
+binary/source-receipt hashes and current immutable image on reuse, records original
+producer/receipt/cache reuse, and never regenerates corrupt/unfinished input.
+Qualified master proof runs once on independent writable byte copies, keeping the
+immutable master closed. All writes remain setup; no measured work is reused.
+Post-build source-input checks refuse executable publication across source changes.
+New common preparation bytes must be published/overlaid before either sample.
+
+External custody5 tests PASS0.013s(command0.082541666s); after adding input-change
+refusal, coveringcustody6 PASS0.014s(command0.098448709s),52distinct harness tests
+across these tool checkpoints, no product/providerPASS inferred. Old passing bodies
+reused; no arm replays. Production totals unchanged153673/reference65417/Core88256
+on exact first-parent/staged snapshot archives, same approved method/exclusions.
+
+Early fresh isolated cause diagnostic used unchanged public external
+sqlite_engine_diagnostic.py (existing source SHA256dd47256c9e540ebae65fe109ebca352d4d01fa617c8428068f0bfb2cb15370fe).
+ActualApple3.51.0 selected/usr/lib/libsqlite3.dylib again returns config0/init0,
+prior0/setterprior0/readback0 for33554432; native8192 tracking0->8192->0,
+onefree/noreset/noretry. No guard is issued, noSQLNOMEM/native-ready/physical proof
+can pass that scope. Existing unchanged owning bootstrap/refusal/source evidence
+is reused explicitly; Linux component topology remains distinct/unrun.
+Current next action: common preparation publication/acquisition followed by six
+untouched control observations/9s separate proofs and committed targets. Product
+infrastructure owners continue; reset/reuse/empty/graphspeed optimization waits
+control targets; noR2-R7 or #288edit.
