@@ -1,0 +1,16 @@
+{
+  "source": "7496b7bed3e97dd8decad6c197e2532081ecc035",
+  "image": "sha256:f1a2fee8c6f1e6ed6edac9715ba624a64a45c0cd91d5cc4175be05f246a70fbb",
+  "driver_sha256": "4b02c44d626c2efadb31bf239e1d9082ad5b500700b056f2138028e56a9c69cb",
+  "minio_sha256": "b107901fd1afe7b36165c6aa66bb027f96e2ec2b690eebe8c9376746d9a9b0df",
+  "harness_sha256": "1356898d1e9910d23a095079ce7fd216ad420e722e13ef354fd7cb4de1e712d1",
+  "dependency_lock_sha256": "94ab50d4fe1c8a7ef1206770f17717020003c76a546c42a2b7c90d4285c9cdac",
+  "armv8_build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "workload_source_sha256": "afc66488f2702d84540e89dbc7b954075a1d0094ecc1fea3e0005fb57052d179",
+  "cache": "INELIGIBLE: OS/page cache unknown",
+  "purpose": "V4c3b corrected bounded mutation/span/SQL work and independent decimal oracle mode; original full128plus sparse6root source-covering diagnostic; failed predecessor retained",
+  "complete_child_limit_seconds": 15,
+  "separate_proof_limit_seconds": 9.5,
+  "case_file_sha256": "8c702ca7d4af806e5725ceb3d60b8e168bde2ab8bb835d9e70d17022b690e136",
+  "scenario_module_sha256": "c3d0bbb10a87773b131ff7ca9682b68a01450daa86ca0d379a0824372a5999fd"
+}

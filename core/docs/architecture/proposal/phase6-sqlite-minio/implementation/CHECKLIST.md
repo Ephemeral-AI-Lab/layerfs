@@ -76,8 +76,11 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
   original full128five-root generic enumeration/churn/cleanUpToDate live proof.
   [RESULTS-V4C3A](RESULTS-V4C3A.md). Larger/physical/orphan/custody gates stay open.
 
-Current action: V4c3b bounded large-file span keysets and short SQL operation
-windows, then paged reservations/admission/inherited import/mount before raising
+- [x] V4c3b bounded read/write span keysets and short SQL windows; corrected
+  full128+sparse six-root live semantic/history/cleanup proof.
+  [RESULTS-V4C3B](RESULTS-V4C3B.md). Initial failed oracle retained; physical gates open.
+
+Current action: V4c3c paged reservations/admission/inherited import/mount before raising
 current512/256profile. Freeze exact source/count proofs, preserve accepted/Unknown
 custody. Remaining generic syscalls, genuine seven-family/complete DeepSeek
 commands/locality/resource proofs remain required. Full goal active.

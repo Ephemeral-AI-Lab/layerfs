@@ -1,0 +1,62 @@
+{
+  "schema": 2,
+  "case_id": "phase6-live-stream128-v1",
+  "kind": "correctness diagnostic performance phase",
+  "cache_status": "INELIGIBLE: OS/page cache unknown",
+  "sqlite_version": "3.53.2",
+  "image": "sha256:f1a2fee8c6f1e6ed6edac9715ba624a64a45c0cd91d5cc4175be05f246a70fbb",
+  "genesis_ms": 7.4315,
+  "complete_command_ms": 7284.712708999999,
+  "rows": [
+    {
+      "case": "seed",
+      "exec_ms": 44.778667,
+      "commit_ms": 124.058458,
+      "generation": 1,
+      "root": "8a209b0421420f8275e2f4be213bc0d36a699543c8824101b17b18866da275c7"
+    },
+    {
+      "case": "target",
+      "exec_ms": 146.951833,
+      "commit_ms": 668.963208,
+      "generation": 2,
+      "root": "33a10ec1b262081a140b727d6a287959f1c3b5da1af22ee4b54723e7018b5447"
+    },
+    {
+      "case": "localized-successor",
+      "exec_ms": 3.794667,
+      "commit_ms": 48.544458,
+      "generation": 3,
+      "root": "9789994567114c74747e08439bd184602b1df333829f19dc3038305ff133013b"
+    },
+    {
+      "case": "enumeration-churn",
+      "exec_ms": 99.25150000000001,
+      "commit_ms": 42.564333000000005,
+      "generation": 4,
+      "root": "30692f90eff74e0540349ad0b8dc93f2a2a6a7f4a83b0a2896abf1715f156e3d"
+    },
+    {
+      "case": "clean-retirement",
+      "exec_ms": 81.6615,
+      "commit_ms": 17.964000000000002,
+      "generation": 5,
+      "root": "30692f90eff74e0540349ad0b8dc93f2a2a6a7f4a83b0a2896abf1715f156e3d"
+    },
+    {
+      "case": "sparse-span-read",
+      "exec_ms": 84.787417,
+      "commit_ms": 59.615500000000004,
+      "generation": 6,
+      "root": "71b923a7a4adfc7963af634b348b09008defbee86b3d653f57d583652ee58fb3"
+    }
+  ],
+  "semantic_proof": "PASS",
+  "canonical_reference": "NOT_RUN",
+  "physical_resources": "NOT_RUN",
+  "cleanup": "PASS",
+  "proof_ms": 4876.950875,
+  "performance_child_wall_seconds": 8.082603166985791,
+  "proof_child_wall_seconds": 4.900773041008506,
+  "proof_plan_sha256": "4bdd8d12659cdb8a795e33c539d757d6e54c1e78cb2ef7d52e6b3a0239c6d19f"
+}

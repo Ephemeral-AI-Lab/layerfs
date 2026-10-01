@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "bfd5dac8f4bfb95e5d3d0680d0974c1f485cbb800559ea8ce2da5a61f6048e0b",
+  "raw_utf8": "P6_MANIFEST step=seed files=9 bytes=1114501\nP6_MANIFEST step=target files=137 bytes=1115287\nP6_MANIFEST step=localized-successor files=137 bytes=1115288\nP6_MANIFEST step=enumeration-churn files=137 bytes=1115288\nP6_MANIFEST step=clean-retirement files=137 bytes=1115288\nP6_MANIFEST step=sparse-span-read files=138 bytes=1373337\n"
+}

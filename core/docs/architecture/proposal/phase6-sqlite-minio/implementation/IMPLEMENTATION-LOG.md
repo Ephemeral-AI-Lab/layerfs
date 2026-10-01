@@ -605,3 +605,16 @@ and whole-tail truncate transactions. New read38VM64/4097 vsold275/16407, new
 mutation50VM vsold270/16402.17covering checks/hostClippy/fmt/native+Linuxrelease
 PASS; unaffected index7reused by scope. V4C3B-CORRECTION.md/raw failed evidence
 preserved. Next corrected-source6root gate with original budgets; full goal active.
+
+## V4c3b corrected live dependency COMPLETE; full goal open
+
+Parent/runtime7496b7bed3e97dd8decad6c197e2532081ecc035. Corrected full128+sparse
+six-root publicSDK/FUSE/SQL/C1/C2/MinIO/C5 bytes/modes/history/cleanup PASS. Six
+publication operations/five created Commits, fifth exact cleanUpToDate. Performance
+child8.082603167s/proof4.900773041s within15/9.5; cacheINELIGIBLE, canonical/physical
+NOT_RUN. Local Commit48.544458ms/sparse59.6155ms. Actual span38VM64/4097 and
+mutation50VM64/4097; final retirement281files/203batches/max64, pendingfalse;
+install peak64rows. RESULTS-V4C3B.md and rawcorrected cohort preserve identities,
+failed predecessor remains FAIL. Current512/256profile unchanged. Next V4c3c paged
+reservations/admission/inherited import/mount, then remaining generic syscalls,
+seven owning families and completeDeepSeek/locality/resource gates. Goal active.
