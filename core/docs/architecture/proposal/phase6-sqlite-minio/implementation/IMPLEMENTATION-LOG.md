@@ -293,3 +293,14 @@ Full namespace/portable walk and C5 condition remain. All larger groups, populat
 admission/parent/cycle/import/inherited/retirement/Unknown/resource proofs open.
 Next: V4c2b exact incremental namespace architecture with certified base and
 streaming changes/refcounts/parent proof, before removing namespace validation.
+
+## V4d1 concrete live cohort prospective freeze
+
+Parent `f76d91ce07e3b20719aeb566fd05110d408a503f`. Previous goal turn was progress:
+published V4c1/V4c2a runtimes and actual provider evidence. Next concrete action
+is the full named67/270/128live composition, preserving owning fixture bytes/
+commands and adding one-file successor counts, per V4D1-COHORT.md. This supplies
+actual namespace scaling evidence for V4c2b; no smaller empty-fixture substitute,
+family-runner or SDK Init claim. Generic FUSE rename plus sealed generic driver
+input/full manifest proof are required. Full goal remains active. Freeze before
+collection, keep15/9.5s bounds, one sample, all failed/INELIGIBLE observations.
