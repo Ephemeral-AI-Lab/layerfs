@@ -1744,3 +1744,24 @@ this is added bounded graph authority, not reference retirement.
 [Exact comparison](evidence/r1d-effective-graph/PRODUCTION-LOC.json) records
 classification and production source trees. Committed archive reproduction and
 actual publication/#287 URLs are post-commit records in the external checkpoint.
+
+
+### R1d-effective-graph status metadata correction
+
+Parent7a3a9b34c product source unchanged. The checklist introduction still named
+79639cc6f and prospective graph work even though its delivered section and
+#287comment5923757156 recorded completed graph publication. Correct only the
+introduction/current next action to the actual published product pin, scoped
+proofs, fullR1 incomplete, R2-R7 unstarted and requested implementation pause.
+This is documentation maintenance, not another product delivery or speed PASS.
+Algorithmic count/index evidence removes repeated graph walks; fresh SQLite
+initialization and per-step transaction/allocation cost remain open risks.
+No benchmark, product test, dependency, resource limit or runtime change.
+
+Production LOC:153673 ->153673 (delta0). Reference65417 ->65417 (delta0);
+Core88256 ->88256 (delta0). Same counter blob a1cb6c064dd150dbc3aa19648a3748b5aeb741b5/
+SHA2560d798f53263c0f18636d96ccdfdc3728f501f53b066e90577d251859f1f117b2;
+first-parent/final staged git archive crates core/crates +counter.scan/per_file,
+production Rust/shipped SQL, identical exclusions. No changed production inputs.
+Checklist local links pass; unchanged product tests/lint/resource proofs reused.
+Actual resulting docs commit/recount/publication are external #287 records.

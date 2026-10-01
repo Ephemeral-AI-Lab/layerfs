@@ -1,23 +1,29 @@
 # Issue287 current implementation checklist
 
 > **Status: Current planning checklist; no release candidate exists.**
-> Current published checkpoint: `79639cc6f58ae78eeb1fb638996b1d6948767215`
-> (R1d-binding-sites scoped exits PASS; full R1 remains PARTIAL/open).
+> Current published product checkpoint: `7a3a9b34c7c976ee8e63ba0db07833ffeda02a10`
+> (R1d-effective-graph scoped exits PASS; full R1 remains PARTIAL/open).
 
 Assignment: #287 implementation only. Benchmark qualification is delegated/unrun
 under #288. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
 packet; [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) is append-only.
 
-Current milestone: **R1d-effective-graph implementation, configured scratch and owning proofs**.
-R1d-binding-sites commit/recount/normal push and exact #287 body/comment confirmed;
-[current delivery](R1D-BINDING-SITES-DELIVERY.md) records228 scoped primary proofs.
-Graph source/resource audits must select complete work law and simultaneous
-admission before new product edits; no graph profile/table allocation is assumed.
-Graph authority/engine/physical remain open, native selected-provider refusal
-stays explicit. [Selected claim contract](R1D-BINDING-CLAIMS-FREEZE.md) freezes
-typed exclusive claims and known retirement before DirectoryRoots construction.
-R0 is published and linked in #287 comment5911332695. Native/engine/physical
-protection and concurrent enablement remain gated on their owning proofs.
+Current rollout stage: **R1, construction-state integration and resource foundations**.
+The R1d-effective-graph slice is committed, recounted, normally pushed and linked
+in #287 comment5923757156. [Current delivery](R1D-EFFECTIVE-GRAPH-DELIVERY.md)
+records297 scoped primary tests and the separate work/resource/platform outcomes.
+R0 is complete. Full R1 still needs alias/memo/frontier/reference/final-row/release
+authority and engine/protected/physical gates. R2–R7 implementation has not begun;
+existing Phase4.5 product behavior remains the base for their replacement.
+
+Current next action: **implementation paused after the completed graph checkpoint**,
+as directed by the owner. The [speed review](SCRATCH-SPEED-REVIEW-DRAFT.md) records
+fresh SQLite initialization, indexed solver transaction/allocation costs and
+prospective known-clean reuse/empty-topology work. None of those speed proposals
+is implemented or qualified. The graph count proof establishes once-per-node
+expansion; it does not establish unchanged SDK Commit/Exec wall latency.
+Native selected-provider refusal remains explicit; native/global/physical/Linux
+protection and concurrency enablement stay gated on actual owning proofs.
 
 - [x] Inspect actual primary/published/research source, ancestry, origin and artifacts.
 - [x] Create clean owned managed worktree and `codex/issue287-implementation` branch.
