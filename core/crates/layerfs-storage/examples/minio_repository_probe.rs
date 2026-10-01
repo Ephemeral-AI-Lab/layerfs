@@ -9,6 +9,10 @@ use layerfs_content::{construct_stream, ConstructionPolicy};
 use layerfs_telemetry::timer::Timing;
 use rusqlite::{params, Connection};
 
+#[path = "repository_probe/attribution.rs"]
+mod attribution;
+#[path = "repository_probe/metrics.rs"]
+mod metrics;
 #[path = "repository_probe/packs.rs"]
 mod packs;
 #[path = "repository_probe/read.rs"]
@@ -83,6 +87,7 @@ fn main() -> Result<()> {
         [_, action, master, output] if action == "prepare" => prepare(Path::new(master), Path::new(output)),
         [_, action, master, output, downloaded] if action == "verify" => read::verify(Path::new(master), Path::new(output), Path::new(downloaded)),
         [_, action, master, output, downloaded, cursor, count, receipt] if action == "verify-batch" => read::verify_batch(Path::new(master), Path::new(output), Path::new(downloaded), Path::new(cursor), count.parse()?, Path::new(receipt)),
-        _ => Err("usage: minio_repository_probe prepare MASTER OUTPUT | verify MASTER STAGE DOWNLOADED_PACKS".into()),
+        [_, action, master, output] if action == "diagnose" => attribution::diagnose(Path::new(master), Path::new(output)),
+        _ => Err("usage: minio_repository_probe prepare|diagnose MASTER OUTPUT | verify MASTER STAGE DOWNLOADED_PACKS | verify-batch MASTER STAGE DOWNLOADED_PACKS CURSOR COUNT RECEIPT".into()),
     }
 }

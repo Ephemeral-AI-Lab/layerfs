@@ -196,3 +196,25 @@ python3 tools/storage_probes/repository_reconstruction.py --output benchmark-res
 
 Raw cursor files stay private; safe batch receipts contain counts/cursor hashes.
 The original pack/metadata/first13,312-file proof is reused with identity seals.
+
+## Construction attribution diagnostic
+
+[Prospective diagnostic contract](../../docs/roadmap/0.1/0.1.7/issue290/CONSTRUCTION-ATTRIBUTION-DIAGNOSTIC-V1.md)
+freezes one count-driven instrumented construction,180s limit and a separate10s
+output-invariance proof. Reuse the closed master and independently verified
+original import; no acquisition/server/upload or new speed comparison.
+
+```sh
+cargo +1.85.1 build --manifest-path core/Cargo.toml --locked --release -p layerfs-storage --example minio_repository_probe
+python3 tools/storage_probes/construction_attribution.py run --output benchmark-results/storage-probes/construction-attribution-v1
+```
+
+Counters exist only in the external example. Fixed arrays record nested C1/source/
+consumer times, SQL operations, C2 encode roles/probe, group lanes, assembly/hash/
+write costs, three file cohorts and streamed4096-file intervals. Source reads are
+kernel-call elapsed from unknown page cache, not physical disk time. C1 residual
+includes canonical hashing/tree/control and timer overhead; group compression
+cannot be isolated from framing through the public API. CPU totals cover the whole
+child. Independent output proof compares exact catalog contents and every pack
+byte against the original import, reusing its original-byte reconstruction proofs.
+Neither instrumented wall nor mixed-file intervals are a new speed/scaling arm.

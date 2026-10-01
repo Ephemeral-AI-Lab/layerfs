@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use layerfs_content::{ContentError, ContentResult, FinalizedConsumer, FinalizedObject, ObjectId};
 use layerfs_storage::cas::SaveProfile;
@@ -12,7 +13,7 @@ use layerfs_storage::policy::{GROUP_TARGET, PACK_LIMIT, RECORD_COUNT_LIMIT};
 use layerfs_storage::{StorageCapacities, StoragePolicy};
 use rusqlite::{params, Connection, OptionalExtension};
 
-use super::Result;
+use super::{metrics as m, Result};
 #[derive(Default)]
 struct Lane {
     records: Vec<Vec<u8>>,
@@ -25,6 +26,7 @@ struct Lane {
 
 pub struct Packer {
     pub db: Connection,
+    pub metrics: m::Metrics,
     root: PathBuf,
     lanes: [Lane; 5],
     codec: CompressionWorkspace,
@@ -47,6 +49,7 @@ impl Packer {
           INSERT INTO publication VALUES(0); BEGIN;")?;
         Ok(Self {
             db,
+            metrics: m::Metrics::default(),
             root: root.join("packs"),
             lanes: std::array::from_fn(|_| Lane::default()),
             codec: CompressionWorkspace::new()?,
@@ -64,22 +67,36 @@ impl Packer {
         if state.groups.is_empty() {
             return Ok(());
         }
+        let started = Instant::now();
         let bytes = assemble_consuming(lane, std::mem::take(&mut state.groups))?;
+        self.metrics.spans[m::ASSEMBLY].add(started, bytes.len() as u64);
         if bytes.len() > PACK_LIMIT || self.bytes + bytes.len() as u64 > 4 * 1024 * 1024 * 1024 {
             return Err("prepared pack disk admission exceeded".into());
         }
         let id = self.packs;
+        let io_started = Instant::now();
+        let started = Instant::now();
         fs::write(self.root.join(format!("pack-{id:08}.bin")), &bytes)?;
+        self.metrics.pack_write.add(started, bytes.len() as u64);
+        let started = Instant::now();
+        let digest = blake3::hash(&bytes).to_hex().to_string();
+        self.metrics.pack_hash.add(started, bytes.len() as u64);
+        self.metrics.spans[m::PACK_IO].add(io_started, bytes.len() as u64);
+        let started = Instant::now();
         self.db
             .prepare_cached("INSERT INTO packs VALUES(?1,?2,?3)")?
             .execute(params![
                 i64::try_from(id)?,
                 i64::try_from(bytes.len())?,
-                blake3::hash(&bytes).to_hex().to_string()
+                digest
             ])?;
+        self.metrics.spans[m::PACK_INSERT].add(started, 0);
+        let started = Instant::now();
         let mut update = self.db.prepare_cached("UPDATE objects SET pack_id=?1,group_no=?2,record_no=?3 WHERE id=?4 AND pack_id IS NULL")?;
+        self.metrics.spans[m::LOCATOR_PREPARE].add(started, 0);
         for (group, members) in state.members.drain(..).enumerate() {
             for (record, member) in members.into_iter().enumerate() {
+                let started = Instant::now();
                 if update.execute(params![
                     i64::try_from(id)?,
                     i64::try_from(group)?,
@@ -89,6 +106,7 @@ impl Packer {
                 {
                     return Err("locator publication cardinality".into());
                 }
+                self.metrics.spans[m::LOCATOR_UPDATE].add(started, 0);
             }
         }
         self.packs += 1;
@@ -107,7 +125,18 @@ impl Packer {
         } else {
             None
         };
+        let started = Instant::now();
         let group = build_group(lane, &state.records, codec)?;
+        let elapsed = started.elapsed().as_nanos();
+        self.metrics.spans[m::GROUP].add_elapsed(elapsed, group.bytes.len() as u64);
+        let counters = &mut self.metrics.groups[lane.index()];
+        counters.span.add_elapsed(elapsed, group.bytes.len() as u64);
+        counters.decoded_bytes += group.decoded_length as u64;
+        if group.codec == layerfs_storage::pack::GroupCodec::Raw {
+            counters.raw_groups += 1;
+        } else {
+            counters.compressed_groups += 1;
+        }
         state.records.clear();
         state.payload = 0;
         let members = std::mem::take(&mut state.ids);
@@ -123,11 +152,15 @@ impl Packer {
 
     fn put(&mut self, object: FinalizedObject) -> Result<()> {
         let id = object.id();
+        let started = Instant::now();
         let existing: Option<(u8, i64)> = self
             .db
             .prepare_cached("SELECT role,canonical_length FROM objects WHERE id=?1")?
             .query_row([id.as_bytes().as_slice()], |r| Ok((r.get(0)?, r.get(1)?)))
             .optional()?;
+        let elapsed = started.elapsed().as_nanos();
+        self.metrics.spans[m::MEMBERSHIP].add_elapsed(elapsed, 0);
+        self.metrics.membership[usize::from(existing.is_some())].add_elapsed(elapsed, 0);
         if let Some((role, length)) = existing {
             if role != object.role().code() || usize::try_from(length)? != object.canonical_len() {
                 return Err("duplicate identity descriptor mismatch".into());
@@ -135,6 +168,7 @@ impl Packer {
             self.duplicates += 1;
             return Ok(());
         }
+        let started = Instant::now();
         let encoded = encode_full(
             object.canonical(),
             object.role(),
@@ -142,6 +176,13 @@ impl Packer {
             &mut self.codec,
             &mut self.profile,
         )?;
+        let elapsed = started.elapsed().as_nanos();
+        self.metrics.spans[m::ENCODE].add_elapsed(elapsed, encoded.width() as u64);
+        let role = &mut self.metrics.encodings[object.role().code() as usize - 1];
+        role.span.add_elapsed(elapsed, encoded.width() as u64);
+        role.canonical_bytes += object.canonical_len() as u64;
+        role.raw_bytes += encoded.raw_length as u64;
+        role.stored += u64::from(encoded.is_stored());
         let lane = encoded.lane;
         if lane == PackLane::Singleton || lane == PackLane::PooledMetadata {
             return Err("unexpected default file construction lane".into());
@@ -153,6 +194,7 @@ impl Packer {
         {
             self.group(lane)?;
         }
+        let started = Instant::now();
         self.db
             .prepare_cached("INSERT INTO objects(id,role,canonical_length) VALUES(?1,?2,?3)")?
             .execute(params![
@@ -160,6 +202,7 @@ impl Packer {
                 object.role().code(),
                 i64::try_from(object.canonical_len())?
             ])?;
+        self.metrics.spans[m::OBJECT_INSERT].add(started, 0);
         let state = &mut self.lanes[lane.index()];
         state.payload += encoded.width();
         state.records.push(encoded.record);
@@ -167,32 +210,62 @@ impl Packer {
         self.objects += 1;
         // Bound private MEMORY-journal transaction work by emitted objects.
         if self.objects % 256 == 0 {
+            let started = Instant::now();
             self.db.execute_batch("COMMIT; BEGIN;")?;
+            self.metrics.spans[m::TRANSACTION].add(started, 0);
+            self.metrics.commits_object += 1;
         }
         Ok(())
     }
 
+    pub fn update_file(&mut self, path: &[u8], root: ObjectId, files: u64) -> Result<()> {
+        let started = Instant::now();
+        self.db.execute(
+            "UPDATE entries SET content_root=?1 WHERE path=?2",
+            params![root.as_bytes().as_slice(), path],
+        )?;
+        self.metrics.spans[m::FILE_ROOT].add(started, 0);
+        if files % 256 == 0 {
+            let started = Instant::now();
+            self.db.execute_batch("COMMIT; BEGIN;")?;
+            self.metrics.spans[m::TRANSACTION].add(started, 0);
+            self.metrics.commits_file += 1;
+        }
+        Ok(())
+    }
+    pub fn probe_ns(&self) -> u64 {
+        self.profile.diag.probe_ns
+    }
     pub fn finish(&mut self) -> Result<()> {
         for lane in PackLane::ALL {
             self.group(lane)?;
             self.seal(lane)?;
         }
+        let started = Instant::now();
         let pending: i64 = self.db.query_row(
             "SELECT count(*) FROM objects WHERE pack_id IS NULL",
             [],
             |r| r.get(0),
         )?;
+        self.metrics.spans[m::VALIDATION].add(started, 0);
         if pending != 0 {
             return Err("unsealed objects".into());
         }
+        let started = Instant::now();
         self.db.execute_batch("COMMIT;")?;
+        self.metrics.spans[m::TRANSACTION].add(started, 0);
+        self.metrics.commits_final += 1;
         Ok(())
     }
 }
 
 impl FinalizedConsumer for Packer {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
-        self.put(object).map_err(|error| {
+        let bytes = object.canonical_len() as u64;
+        let started = Instant::now();
+        let result = self.put(object);
+        self.metrics.consumer.add(started, bytes);
+        result.map_err(|error| {
             eprintln!("pack consumer failed: {error}");
             ContentError::ProviderFailure {
                 what: "standalone repository pack consumer",
