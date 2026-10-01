@@ -1,0 +1,143 @@
+{
+  "batches": [
+    {
+      "bytes": 228931805,
+      "command_wall_ns": 1354047709,
+      "files": 4096,
+      "index": 0
+    },
+    {
+      "bytes": 226528008,
+      "command_wall_ns": 1364652166,
+      "files": 4096,
+      "index": 1
+    },
+    {
+      "bytes": 441931264,
+      "command_wall_ns": 2073775083,
+      "files": 4096,
+      "index": 2
+    },
+    {
+      "bytes": 103145208,
+      "command_wall_ns": 782881583,
+      "files": 4096,
+      "index": 3
+    },
+    {
+      "bytes": 81504920,
+      "command_wall_ns": 728301041,
+      "files": 4096,
+      "index": 4
+    },
+    {
+      "bytes": 65852980,
+      "command_wall_ns": 728158583,
+      "files": 4096,
+      "index": 5
+    },
+    {
+      "bytes": 41229147,
+      "command_wall_ns": 612347209,
+      "files": 4096,
+      "index": 6
+    },
+    {
+      "bytes": 359185521,
+      "command_wall_ns": 1811458791,
+      "files": 4096,
+      "index": 7
+    },
+    {
+      "bytes": 36958518,
+      "command_wall_ns": 506121042,
+      "files": 4096,
+      "index": 8
+    },
+    {
+      "bytes": 46180978,
+      "command_wall_ns": 614987500,
+      "files": 4096,
+      "index": 9
+    },
+    {
+      "bytes": 26871285,
+      "command_wall_ns": 559069791,
+      "files": 4096,
+      "index": 10
+    },
+    {
+      "bytes": 53076555,
+      "command_wall_ns": 670021625,
+      "files": 4096,
+      "index": 11
+    },
+    {
+      "bytes": 118891677,
+      "command_wall_ns": 942760375,
+      "files": 4096,
+      "index": 12
+    },
+    {
+      "bytes": 123950276,
+      "command_wall_ns": 1039968416,
+      "files": 4096,
+      "index": 13
+    },
+    {
+      "bytes": 46066438,
+      "command_wall_ns": 616065209,
+      "files": 4096,
+      "index": 14
+    },
+    {
+      "bytes": 26958278,
+      "command_wall_ns": 556691417,
+      "files": 4096,
+      "index": 15
+    },
+    {
+      "bytes": 77963200,
+      "command_wall_ns": 830143625,
+      "files": 4096,
+      "index": 16
+    },
+    {
+      "bytes": 34299614,
+      "command_wall_ns": 667902125,
+      "files": 4096,
+      "index": 17
+    },
+    {
+      "bytes": 67780833,
+      "command_wall_ns": 779121375,
+      "files": 4096,
+      "index": 18
+    },
+    {
+      "bytes": 35967412,
+      "command_wall_ns": 726852208,
+      "files": 4096,
+      "index": 19
+    },
+    {
+      "bytes": 33670878,
+      "command_wall_ns": 660067708,
+      "files": 4096,
+      "index": 20
+    },
+    {
+      "bytes": 32442784,
+      "command_wall_ns": 619083000,
+      "files": 3780,
+      "index": 21
+    }
+  ],
+  "bytes": 3475776149,
+  "files": 103108,
+  "original_phase": "TIMEOUT",
+  "performance_sample": false,
+  "reused_bytes": 1166388570,
+  "reused_files": 13312,
+  "status": "EXHAUSTIVE_CORRECTNESS_PASS"
+}

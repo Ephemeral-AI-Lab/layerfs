@@ -1,0 +1,12 @@
+{
+  "logical_disk_bytes": {
+    "captured_master": 3551278503,
+    "import_and_proof": 4369435331
+  },
+  "combined": 7920713834,
+  "admission_bytes": 17179869184,
+  "physical_allocation": "UNOBSERVED",
+  "catalog_sha256": "8514f24e74c1718fd1839a60428fa894316cc6c449772c500521bbe2968c150b",
+  "catalog_bytes": 93188096,
+  "retention": "owned MinIO data/catalog/packs/master retained; owned provider stopped"
+}

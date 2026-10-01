@@ -1,0 +1,6 @@
+{
+  "status": "NOT_RUN",
+  "reason": "clean-source admission rejected before any proof command; one owned CLI branch differed from committed source; restored exact HEAD file",
+  "proof_commands": 0,
+  "performance_sample": false
+}

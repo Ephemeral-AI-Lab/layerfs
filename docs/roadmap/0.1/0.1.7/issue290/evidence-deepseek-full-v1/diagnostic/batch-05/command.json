@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/core/target/release/examples/minio_repository_probe",
+    "verify-batch",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/deepseek-full-master-v2",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/deepseek-full-import-v1/stage",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/deepseek-full-import-v1/downloaded-packs",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/deepseek-reconstruction-remainder-v2/batch-04/next-cursor.bin",
+    "4096",
+    "/Users/yifanxu/.codex/worktrees/issue290-storage-probes/layerfs/benchmark-results/storage-probes/deepseek-reconstruction-remainder-v2/batch-05"
+  ],
+  "exit": 0,
+  "limit_seconds": 10,
+  "status": "COMPLETE",
+  "wall_ns": 728158583
+}
