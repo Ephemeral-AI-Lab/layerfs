@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "bd4909b23c2ca884fa23dfe1e12ba43c4fdce54285f67a5f1ebd72bb9893abe8",
+  "raw_utf8": "   Compiling phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/benchmark/phase6-live)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.19s\n     Running tests/tree_diff.rs (core/benchmark/phase6-live/target/debug/deps/tree_diff-270fef48daff5faf)\n\nrunning 2 tests\ntest missing_and_forged_child_summary_or_role_refused ... ok\ntest actual_tree_split_merge_difference_matches_full_map_and_skips_reuse ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s\n\n"
+}

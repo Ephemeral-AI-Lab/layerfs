@@ -283,25 +283,7 @@ impl Authority {
                     return Err("Branch selector".into());
                 }
                 let candidate = ObjectId::from_bytes(&root).map_err(|e| e.to_string())?;
-                let reader =
-                    crate::objects::Reader::new(self.locators.s3.clone(), self.locators.clone());
-                let fs = layerfs_content::FilesystemRead::new(
-                    &reader,
-                    layerfs_content::filesystem::FilesystemRootId(candidate),
-                )
-                .map_err(|e| e.to_string())?;
-                if fs.root().scope().object().as_bytes() != &s.scope
-                    || fs.root().profile().as_bytes() != &s.profile
-                {
-                    return Err("candidate scope/profile".into());
-                }
-                crate::audit::candidate(
-                    &reader,
-                    candidate,
-                    fs.root().scope(),
-                    fs.root().profile(),
-                    &self.locators,
-                )?;
+                crate::namespace_validation::prepare(self, &s, candidate)?;
                 let id = WorkspaceId::from_authority(incarnation).map_err(|e| e.to_string())?;
                 let base = LayerId::from_bytes(s.base).map_err(|e| e.to_string())?;
                 let stage = self
@@ -345,6 +327,30 @@ impl Authority {
                         root: *root.as_bytes(),
                     },
                 };
+                let mut installed = s.clone();
+                match &outcome {
+                    CommitOutcomeWire::Committed(c) => {
+                        if c.root != root
+                            || c.stack != s.stack
+                            || c.base_layer != s.base
+                            || c.parent != s.head
+                        {
+                            return Err("known C5 result context".into());
+                        }
+                        installed.root = c.root;
+                        installed.head = Some(c.commit);
+                    }
+                    CommitOutcomeWire::UpToDate { head, root: known } => {
+                        if *known != root || *head != s.head {
+                            return Err("known C5 up-to-date context".into());
+                        }
+                        installed.root = *known;
+                        installed.head = *head;
+                    }
+                }
+                crate::namespace_validation::install(self, &s, &installed).map_err(|e| {
+                    format!("known C5 publication; namespace index install failed: {e}")
+                })?;
                 let response = Response::WorkspaceCommit(Box::new(WorkspaceCommitWire {
                     workspace,
                     incarnation,

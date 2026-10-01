@@ -37,3 +37,9 @@ pub mod namespace_stream;
 
 pub mod proof;
 pub mod proof_plan;
+
+pub mod namespace_index;
+pub mod namespace_semantics;
+pub mod namespace_validation;
+pub mod tree_diff;
+pub mod tree_facts;

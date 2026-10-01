@@ -25,7 +25,23 @@ impl LocatorDb {
             .map_err(|e| e.to_string())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?;
-        if names != ["file_edges", "file_facts", "objects", "packs"] {
+        if names
+            != [
+                "file_edges",
+                "file_facts",
+                "namespace_changes",
+                "namespace_effects",
+                "namespace_inodes",
+                "namespace_pending",
+                "namespace_stack",
+                "namespace_state",
+                "namespace_walk",
+                "objects",
+                "packs",
+                "tree_items",
+                "tree_nodes",
+            ]
+        {
             return Err("readonly locator schema".into());
         }
         drop(q);
@@ -43,10 +59,35 @@ impl LocatorDb {
         let db = self.db.lock().map_err(|_| "locator owner")?;
         crate::file_facts::certify_file(&db, root)
     }
+    /// SQL-only work: callers must release this owner before canonical/provider I/O.
+    pub fn sql<T>(&self, work: impl FnOnce(&Connection) -> Result<T, String>) -> Result<T, String> {
+        if !self.writable {
+            return Err("readonly namespace mutation refused".into());
+        }
+        let db = self.db.lock().map_err(|_| "locator owner")?;
+        work(&db)
+    }
+    pub fn sql_transaction<T>(
+        &self,
+        work: impl FnOnce(&Connection) -> Result<T, String>,
+    ) -> Result<T, String> {
+        if !self.writable {
+            return Err("readonly namespace mutation refused".into());
+        }
+        let mut db = self.db.lock().map_err(|_| "locator owner")?;
+        let tx = db.transaction().map_err(|e| e.to_string())?;
+        let result = work(&tx)?;
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(result)
+    }
     pub fn create(path: &Path, s3: Minio) -> Result<Self, String> {
         let db = Connection::open(path).map_err(|e| e.to_string())?;
         db.execute_batch("PRAGMA journal_mode=MEMORY;PRAGMA synchronous=OFF;PRAGMA temp_store=MEMORY;PRAGMA cache_size=-2048;PRAGMA mmap_size=0;PRAGMA foreign_keys=ON;CREATE TABLE packs(id INTEGER PRIMARY KEY AUTOINCREMENT,digest BLOB NOT NULL UNIQUE);CREATE TABLE objects(id BLOB PRIMARY KEY,role INTEGER NOT NULL,length INTEGER NOT NULL,pack_id INTEGER NOT NULL REFERENCES packs(id),group_no INTEGER NOT NULL,record_no INTEGER NOT NULL) WITHOUT ROWID;").map_err(|e|e.to_string())?;
+        db.execute_batch(crate::tree_facts::SCHEMA)
+            .map_err(|e| e.to_string())?;
         db.execute_batch(crate::file_facts::SCHEMA)
+            .map_err(|e| e.to_string())?;
+        db.execute_batch(crate::namespace_index::SCHEMA)
             .map_err(|e| e.to_string())?;
         db.busy_timeout(Duration::ZERO).map_err(|e| e.to_string())?;
         Ok(Self {
@@ -185,6 +226,7 @@ impl Locators for LocatorDb {
             )
             .map_err(|e| e.to_string())?;
             crate::file_facts::record(&tx, row.id, row.role, &canonical[index])?;
+            crate::tree_facts::record(&tx, row.id, row.role, &canonical[index])?;
             let mut saved = row.clone();
             saved.pack_id = pack_id as u64;
             inserted.insert(saved.id, saved.clone());

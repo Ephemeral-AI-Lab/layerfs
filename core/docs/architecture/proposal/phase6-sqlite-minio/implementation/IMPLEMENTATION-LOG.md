@@ -483,3 +483,16 @@ indexed ref/parent-chain proof on existing global SQL before replacing full audi
 C5condition/known install/Unknown custody retained; no weak client assertion or
 fallback. Current single-Branch512profile unchanged; all broader goal open. Next
 implement/external proofs then frozen changed-service original cohort.
+
+## V4c2b2 runtime PARTIAL: intrinsic/diff/namespace proof integrated
+
+Parent a6392f0fb212338537acd372e79a3dfb86aa343e. Existing global SQL now derives
+authenticated compact facts, certifies child closures, computes selected-root
+changes, verifies actual reference/parent/cycle semantics and stamps only known
+C5installation. Complete service candidate walk replaced, empty genesis/readonly
+proof retain full independent checks. Current bounded512/256/single-Branch profile
+unchanged; semantic structure8PASS/locked host Clippy/fmt/native+Linux release PASS.
+Initial fixture/lint errors retained, corrected from source/output. Details in
+V4C2B2-RUNTIME.md and v4c2b2-native-checks. Cursor4MiB owned arithmetic is not
+physical qualification. No new live row yet. Next original67/270/128changed-service
+cohort with actual bytes/history/cleanup/work counts. Full goal remains active.

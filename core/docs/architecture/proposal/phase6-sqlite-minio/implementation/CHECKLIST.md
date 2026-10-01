@@ -65,8 +65,14 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 - [ ] Final owning locked checks, source/binary/image/provider seals, per-commit
   production LOC and checkpoint comments on #294; major results linked from #293.
 
-Current action: V4c2b2 certified incremental service namespace/root-diff proof
+- [x] V4c2b2 structural dependency: intrinsic facts, selected-root differences,
+  indexed reference/parent proof, exact stamp and known C5installation;8external
+  C1/SQLite tests pass. [Runtime checkpoint](V4C2B2-RUNTIME.md).
+- [ ] V4c2b2 real-provider changed-service cohort and locality counts.
+
+Current action: V4c2b2 frozen real-provider original67/270/128proof of incremental
+service namespace/root-diff proof
 against exact selected base, refs/cycles/aliases/reachability/file/portable closure,
-known/Unknown/C5publication. Freeze its contract before replacing the complete
-service walk. Then admitted populations/import/retirement/syscalls and all seven
+known/Unknown/C5publication. Record exact changed-source service counts, bytes/history/cleanup and retained
+failures before calling this dependency complete. Then admitted populations/import/retirement/syscalls and all seven
 owning families/complete DeepSeek generic/locality work. Full goal remains active.

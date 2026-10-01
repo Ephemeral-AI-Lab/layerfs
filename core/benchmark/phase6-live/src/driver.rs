@@ -130,6 +130,7 @@ pub fn run(
         daemon_s3,
         bootstrap_taken: AtomicBool::new(false),
     });
+    crate::namespace_validation::initialize(&authority)?;
     let stop = Arc::new(AtomicBool::new(false));
     let worker = {
         let a = authority.clone();
