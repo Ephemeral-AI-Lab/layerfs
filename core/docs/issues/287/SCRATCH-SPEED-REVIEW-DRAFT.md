@@ -65,7 +65,9 @@ is presented as a median or a complete Server/SQLite attribution.
 | Package / `workspace-shell-package-many-1025-sdk-v2` | `8e92c96a30cbb9e731b63ebfdd772b48e3ef50a4` | Commit9,629,237,416ns; Exec8,315,172,083ns; command18,795,341,167ns | Scaling work is substantial; full Server timer tree is clipped. No exclusive scratch/SQLite breakdown is available. |
 
 The clean retained SDK control in r062 records Commit5,356,833ns and a verifier
-with `advanced=false`. It must not be assumed to take the nonempty Stage path.
+with `advanced=false`. It does not prove bypass of Stage. At product7a3, Workspace always submits
+composite Commit and Server unconditionally enters Stage/construction; empty
+populations still pay native lifecycle work before UpToDate is determined.
 The F7 native [r079](../286/experiments/20260930-workspace-shell-package-native-checkpoint-r079.md)
 at source`6599e64a60ee99e17bb9080c2cdcba019676a432` separately proves observer
 refusal/custody/refund in383,237,667ns complete component command; that is safety
@@ -94,7 +96,7 @@ The current call graph contains these real owners/actions:
    base descriptor/identity, private directory nonce/name and fixed owner slots.
    The shared private-directory authority is already reused. It is incorrect
    to count full directory initialization as new work on every later Stage.
-2. Each nonempty prepared Stage admits a new exact operation/source, creates a
+2. Each prepared Stage, including an empty change set, admits a new exact operation/source, creates a
    fresh O_EXCL private file, reserves the captured default16MiB or configured class, and observes its identity,
    apparent size and physical allocation. The source token is prepared once
    and moved into the actual input spool.

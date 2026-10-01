@@ -1,0 +1,30 @@
+{
+  "planning_parent": "a0a4066e877189f45009e9d6dc766488caf4fde6",
+  "document_sha256": "950ee13653758c1284e9c93f55e4d69b73fdbfbf3efdae0248ba83f183b5e4ca",
+  "review_scope": "read-only handoff review; no code edits/build/tests/runtime/benchmark/verifier",
+  "reviews": [
+    {
+      "owner": "r0_oracles",
+      "scope": "C1 state/draft/frontier/currentness/R1-R3 boundary",
+      "result": "no critical flaw",
+      "clarification": "upstream parent/unreachable authority before Sites/Graph made explicit"
+    },
+    {
+      "owner": "r1_catalog",
+      "scope": "C2 reuse/reset/Store resource/provider/protected native/R3 custody",
+      "result": "no critical contradiction",
+      "clarifications": [
+        "scratch-owner success versus independentStore/C5 uncertainty",
+        "explicit return-idle distinct from release close/unlink",
+        "full General/Catalog/Control/preauth/refusal/closing/terminal vector",
+        "actual compiled capsule/Resource overlap"
+      ]
+    },
+    {
+      "owner": "r0_resources",
+      "scope": "six cases/CLI/seals/setup/control/targets/eligibility",
+      "result": "no critical mistake",
+      "clarification": "cohort identity kept separate from emitted family profiles"
+    }
+  ]
+}

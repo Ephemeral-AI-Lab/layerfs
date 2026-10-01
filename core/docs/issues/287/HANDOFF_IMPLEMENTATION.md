@@ -308,3 +308,19 @@ Do not call benchmark or release admission complete. Do not claim every deferred
 ticket or every SC tier solved. Leave tickets open unless separately instructed
 to close them after their full acceptance. Finish the authorized implementation
 work; do not stop after publishing a plan or the first small slice.
+
+
+## Owner-requested R1 finish and focused speed addendum —2026-10-01
+
+The [R1 finish/speed handoff](HANDOFF_R1_FINISH_AND_SPEED_20261001.md) is the
+current specific assignment when supplied to the next implementation agent. It
+starts from actual published product7a3a9b34c and docs parenta0a4066e, preserves
+passed R1 deliveries and defines remaining named R1 source/resource gates.
+It authorizes only its focused six-existing-case control/candidate measurement
+selection and minimal seal/host-setup work. This is a scoped exception to the
+earlier implementation-only measurement restriction, not permission for the
+seven-family campaign, new runners/families, Family2/10240 or #288 edits.
+The R3-dependent composition gate and genuine provider limitations stay open.
+Preparing this plan does not resume implementation or run measurements in this
+chat. The handoff agent continues within assigned R1 scope, then stops after its
+final source-pinned R1/speed report; it does not start R2-R7 under that handoff.

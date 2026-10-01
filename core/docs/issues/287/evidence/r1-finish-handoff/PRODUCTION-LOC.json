@@ -1,0 +1,103 @@
+{
+  "parent": "a0a4066e877189f45009e9d6dc766488caf4fde6",
+  "staged_tree": "c92e992e63a1fd46ffc25f0b72f521d5b5c11f76",
+  "method": {
+    "counter": "tools/production_loc.py",
+    "git_blob": "a1cb6c064dd150dbc3aa19648a3748b5aeb741b5",
+    "sha256": "0d798f53263c0f18636d96ccdfdc3728f501f53b066e90577d251859f1f117b2",
+    "snapshots": "git archive <first-parent or final staged/committed tree> crates core/crates; tar data extraction; same counter.scan/per_file",
+    "scope": "first-party reference/Core Rust + shipped runtime SQL; imports/declarations/delegation included; test-only branches/inline modules, tests/examples/fixtures/tools/docs/manifests/generated/third-party excluded"
+  },
+  "delta": {
+    "combined": 0,
+    "reference": 0,
+    "core": 0
+  },
+  "product_trees": {
+    "core/crates": "49dc128d8391b29a23a00ff43973eb8ea163bfdc",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "changed_production_files": [],
+  "before": {
+    "total": {
+      "scopes": {
+        "core": {
+          "files": 477,
+          "lines": 88256,
+          "crates": {
+            "layerfs-api": 796,
+            "layerfs-bridge": 6923,
+            "layerfs-content": 23496,
+            "layerfs-daemon": 2151,
+            "layerfs-fuse": 1447,
+            "layerfs-history": 2658,
+            "layerfs-sandbox": 1106,
+            "layerfs-server": 4358,
+            "layerfs-storage": 16229,
+            "layerfs-telemetry": 2257,
+            "layerfs-workspace": 26835
+          }
+        },
+        "reference": {
+          "files": 193,
+          "lines": 65417,
+          "crates": {
+            "layerfs-cli": 1142,
+            "layerfs-content": 15701,
+            "layerfs-daemon": 3233,
+            "layerfs-fuse": 10986,
+            "layerfs-layerstack-store": 18376,
+            "layerfs-materialization": 358,
+            "layerfs-monitor": 414,
+            "layerfs-sdk": 979,
+            "layerfs-workspace": 11776,
+            "layerfs-workspace-core": 2452
+          }
+        }
+      },
+      "combined": 153673
+    },
+    "per_file_classification_sha256": "9814aa93ad67fd15e9e3357141640d39f14664ce8230ea7e852cf4c7963c472e"
+  },
+  "after": {
+    "total": {
+      "scopes": {
+        "core": {
+          "files": 477,
+          "lines": 88256,
+          "crates": {
+            "layerfs-api": 796,
+            "layerfs-bridge": 6923,
+            "layerfs-content": 23496,
+            "layerfs-daemon": 2151,
+            "layerfs-fuse": 1447,
+            "layerfs-history": 2658,
+            "layerfs-sandbox": 1106,
+            "layerfs-server": 4358,
+            "layerfs-storage": 16229,
+            "layerfs-telemetry": 2257,
+            "layerfs-workspace": 26835
+          }
+        },
+        "reference": {
+          "files": 193,
+          "lines": 65417,
+          "crates": {
+            "layerfs-cli": 1142,
+            "layerfs-content": 15701,
+            "layerfs-daemon": 3233,
+            "layerfs-fuse": 10986,
+            "layerfs-layerstack-store": 18376,
+            "layerfs-materialization": 358,
+            "layerfs-monitor": 414,
+            "layerfs-sdk": 979,
+            "layerfs-workspace": 11776,
+            "layerfs-workspace-core": 2452
+          }
+        }
+      },
+      "combined": 153673
+    },
+    "per_file_classification_sha256": "9814aa93ad67fd15e9e3357141640d39f14664ce8230ea7e852cf4c7963c472e"
+  }
+}

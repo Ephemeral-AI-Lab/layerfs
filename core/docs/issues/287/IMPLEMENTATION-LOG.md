@@ -1765,3 +1765,46 @@ first-parent/final staged git archive crates core/crates +counter.scan/per_file,
 production Rust/shipped SQL, identical exclusions. No changed production inputs.
 Checklist local links pass; unchanged product tests/lint/resource proofs reused.
 Actual resulting docs commit/recount/publication are external #287 records.
+
+
+### Owner-requested remaining-R1 and speed handoff preparation —2026-10-01
+
+Parenta0a4066e877189f45009e9d6dc766488caf4fde6; product7a3a9b34c unchanged.
+Human requested an implementation plan for the next agent to finish remainingR1
+and measure its speed. Current-thread read-only C1/C2/measurement audits supplied
+source-aware ownership, named retirement/working-resource/native gates and six
+existing case IDs. No product implementation, build, test, benchmark or verifier
+ran in preparation. Current implementation pause remains.
+
+Plan records two newly checked measurement prerequisites: runner product seal
+omits shippedSQL and Python harness seal alone omits registries/workload inputs;
+F5 current SDK setup restores Docker-produced native Stores and is prohibited for
+a new host-owned measurement. Agent must repair minimal custody/host setup before
+collection or retain NOT_RUN. Current numeric cache INELIGIBLE stays explicit.
+Clean Workspace Commit always submits compositeCommit and enters ServerStage
+with empty populations; advanced=false is no-head-advance, not no-scratch proof.
+Correct that incomplete speed-review wording without rewriting any old receipts.
+
+New specific handoff supplies named R1 work, inherited/closed gates, immutable
+source/oracle/resource contracts, scratch root-retirement/reset/known-clean reuse,
+verified-empty state, C1 remaining frontiers/drafts/facts/aliases/count/release,
+actual Store-alias/byte owners, engine shapes/protected native progress, explicit
+R3-dependent release and scoped six-case baseline/finalcandidate speed report.
+No #288 update/fullcampaign/R2-R7 continuation is selected by plan preparation.
+
+Plan peer reviews found no critical source/scope/measurement flaw. Clarifications
+were incorporated: scratch-owner success versus independent Store/C5 uncertainty,
+explicit return-idle versus native release/refund, exact General/Catalog/Control/
+preauth/refusal/closing/terminal vector, compiled capsule overlap, parent/unreachable
+state upstream of Sites/Graph, and cohort identity separate from family profiles.
+657-line handoff SHA256950ee13653758c1284e9c93f55e4d69b73fdbfbf3efdae0248ba83f183b5e4ca.
+73local links resolve; source audit28files and three read-only reviews retained.
+Whitespace check exit0; product/benchmark/tool/flag paths unchanged.
+Production LOC:153673 ->153673(delta0); Reference65417 ->65417(delta0);
+Core88256 ->88256(delta0). Same counter blob a1cb6c064dd150dbc3aa19648a3748b5aeb741b5/
+SHA2560d798f53263c0f18636d96ccdfdc3728f501f53b066e90577d251859f1f117b2;
+identical first-parent/final staged git archive crates core/crates +scan/per_file.
+Rust/shippedSQL/import/declaration/delegation counted; identical exclusions for
+test-only/inline/tests/examples/fixtures/tools/docs/manifests/generated/third-party.
+Exact compact comparison includes totals, class hashes and product tree seals;
+committed recount/publication/#287 record will be confirmed externally.

@@ -5,7 +5,9 @@
 > (R1d-effective-graph scoped exits PASS; full R1 remains PARTIAL/open).
 
 Assignment: #287 implementation only. Benchmark qualification is delegated/unrun
-under #288. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
+under #288. The owner-requested [R1 finish/speed handoff](HANDOFF_R1_FINISH_AND_SPEED_20261001.md)
+defines a focused six-existing-case measurement exception when assigned; no
+implementation or measurement starts merely by preparing that plan. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
 packet; [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) is append-only.
 
 Current rollout stage: **R1, construction-state integration and resource foundations**.
@@ -16,7 +18,7 @@ R0 is complete. Full R1 still needs alias/memo/frontier/reference/final-row/rele
 authority and engine/protected/physical gates. R2–R7 implementation has not begun;
 existing Phase4.5 product behavior remains the base for their replacement.
 
-Current next action: **implementation paused after the completed graph checkpoint**,
+Current next action: **R1 finish/speed handoff prepared; implementation remains paused**,
 as directed by the owner. The [speed review](SCRATCH-SPEED-REVIEW-DRAFT.md) records
 fresh SQLite initialization, indexed solver transaction/allocation costs and
 prospective known-clean reuse/empty-topology work. None of those speed proposals

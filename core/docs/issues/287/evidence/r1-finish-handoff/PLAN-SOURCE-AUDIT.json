@@ -1,0 +1,161 @@
+{
+  "planning_parent": "a0a4066e877189f45009e9d6dc766488caf4fde6",
+  "product": "7a3a9b34c7c976ee8e63ba0db07833ffeda02a10",
+  "prepared_date": "2026-10-01 Asia/Shanghai",
+  "scope": "read-only source planning and document validation; no product changes/builds/tests/benchmark/verifier",
+  "local_links_checked": 73,
+  "missing_links": [],
+  "source_inventory": [
+    {
+      "path": ".cargo/config.toml",
+      "bytes": 2363,
+      "sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+    },
+    {
+      "path": "benchmark/AGENTS.md",
+      "bytes": 8492,
+      "sha256": "c18de5690916c706d2d3323acfa3de533c35072212d14563ab9e3ab6af249fa5"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/AGENTS.md",
+      "bytes": 3574,
+      "sha256": "29d0912a49dd2c05b38867dd72ec0746493cdcae291a52a5d5b026de10388919"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/families/workspace_commit.py",
+      "bytes": 18455,
+      "sha256": "1535708ce9e6765f503fd9843814403ec2714589a5d951f7d7188f3def1c1326"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/families/workspace_commit_native.py",
+      "bytes": 16653,
+      "sha256": "38b08433fc0b4299951713ac0e0429d294026145316359c4f7d5c456db4527f3"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/families/workspace_namespace.py",
+      "bytes": 20363,
+      "sha256": "a1f865a9d7fdbc8f1b2772b7c6da3a70dfd3022d8bf189426632ecd1543e52f7"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/families/workspace_shell_package.py",
+      "bytes": 14443,
+      "sha256": "ff55e57e40b6f5687c15a844bc0e916354477965e10577e24bdf2c0dbe95b032"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/registry/workspace-shell-package-v1.json",
+      "bytes": 3097,
+      "sha256": "1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/runner.py",
+      "bytes": 29061,
+      "sha256": "01a5fb873df299c1efe8f2abdb8132f248e9040381c1522fd897540ba177b516"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro/writers/write-separated.c",
+      "bytes": 2379,
+      "sha256": "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/tree.rs",
+      "bytes": 39289,
+      "sha256": "b514677a93a7a70535b87517a45406e58d6b5bb8eeb49c6cfb1072f8c961f576"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mapping/read.rs",
+      "bytes": 24226,
+      "sha256": "6c6212e980b2fdb2e2333036e660f3e914768fe694328fdcbf3683cb9e79ea7b"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/reduce.rs",
+      "bytes": 22202,
+      "sha256": "9dce3fc9a0ad0e205fb19963a599cca02b4ee5ed3801fa70ee514fbf09f81da1"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/release.rs",
+      "bytes": 8405,
+      "sha256": "ef80f9be2970601475215611402c17a83407fc3d86c29933b256a1e4e638edbd"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/update.rs",
+      "bytes": 30508,
+      "sha256": "811f851a3f57e91877b30ae609583b2702447384f0c37d27380874fda27b0279"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate/facts.rs",
+      "bytes": 5049,
+      "sha256": "4abd6650389e33ee26ee261ee3dc4ab428e27b7ef5b1365d3a976528bad5ef15"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate/site_aliases.rs",
+      "bytes": 7956,
+      "sha256": "443b5d61c40641290149d8621880642c73804416f6da5e3b3e1a1ea6af11ccfb"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/host/acceptor.rs",
+      "bytes": 7998,
+      "sha256": "f2f7d644c0eddf5560ed927d5de048e052f905b9795b315bc81bc9d0088ee337"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/service/admission.rs",
+      "bytes": 4717,
+      "sha256": "7d6f3a86968b27b2249cebda669e653a35b4976694a980bf631e75a7008ff346"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/service/construction.rs",
+      "bytes": 4221,
+      "sha256": "2bdb613b5d81619c91fb557e43d3b76f6408433c8032d6384c7fee84b172c008"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/service/handler.rs",
+      "bytes": 10523,
+      "sha256": "924b2cba8a6214856d09da8f30d16961df0d7a2a60135c4de8ef7efda40090ce"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/service/save/catalog.rs",
+      "bytes": 14590,
+      "sha256": "ce61d55b7a6d6e997c29629d322b3d168d7a33e7dfb01abe7ffacc80c0973c3c"
+    },
+    {
+      "path": "core/crates/layerfs-storage/sql/construction_graph.sql",
+      "bytes": 5872,
+      "sha256": "33f53cc0e153b94125d30debcf74d0f78472959d864384707d554b63d43506c0"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/lifecycle.rs",
+      "bytes": 16049,
+      "sha256": "7de7d8b0ed652cadc006c1943942527ea2b2f8577c058ce2facb48971c34eb56"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/profile.rs",
+      "bytes": 9099,
+      "sha256": "b056bc4af9fbea78107354a0536e8252072f77360419b30f2a680c5bbcbe3498"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/construction_state/session.rs",
+      "bytes": 28267,
+      "sha256": "aeaf26955e2ad78281fd8d47ba254ba98b8e0eaf04fe1485ed3578310e3d192b"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/operation.rs",
+      "bytes": 3198,
+      "sha256": "a9d3f0acd1abd803612320dae2f9ad4ae851b742a25a07c807365db2667f1df5"
+    },
+    {
+      "path": "tools/production_loc.py",
+      "bytes": 16417,
+      "sha256": "0d798f53263c0f18636d96ccdfdc3728f501f53b066e90577d251859f1f117b2"
+    }
+  ],
+  "audit_findings": [
+    "growing C1 owners remain beyond graph",
+    "scratch roots logical completion is not idle eligibility",
+    "Save effects precede index/codec clones and publication clones followSQL",
+    "per-StoreAccess scratch/admission duplicate same-Store aliases",
+    "native guard not yet supplied to all factories; Darwin32MiB readback0",
+    "current clean Commit always reaches Stage/construction",
+    "benchmark product seal omits shippedSQL; Python harness seal omits other inputs",
+    "F5 SDK bootstrap restores prohibited Docker-produced preparedStores",
+    "six-case current numeric cache eligibilityINELIGIBLE"
+  ]
+}
