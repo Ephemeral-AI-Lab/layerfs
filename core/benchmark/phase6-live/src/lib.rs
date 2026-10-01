@@ -12,4 +12,5 @@ pub mod fuse;
 pub mod metadata;
 pub mod minio;
 pub mod objects;
+pub mod transport_stats;
 pub mod wire;

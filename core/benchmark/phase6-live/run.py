@@ -17,6 +17,7 @@ def main():
     p.add_argument('--minio', required=True)
     p.add_argument('--image', required=True)
     p.add_argument('--driver', required=True)
+    p.add_argument('--purpose', default='real-provider correctness diagnostic')
     args = p.parse_args()
     out = Path(args.output).resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -46,7 +47,7 @@ def main():
                 'armv8_build_config_sha256': sha(root / '.cargo/config.toml'),
                 'workload_source_sha256': sha(root / 'core/benchmark/phase6-live/src/driver.rs'),
                 'cache': 'INELIGIBLE: OS/page cache unknown',
-                'purpose': 'first complete real-provider correctness diagnostic',
+                'purpose': args.purpose,
                 'complete_child_limit_seconds': 15, 'separate_proof_limit_seconds': 9.5}
     (out / 'identity.json').write_text(json.dumps(identity, indent=2) + '\n')
     with open(out / 'minio-private.log', 'xb') as provider_log:
@@ -80,6 +81,11 @@ def main():
         (out / 'invocation.json').write_text(json.dumps(result, indent=2) + '\n')
         if result['exit'] != 0:
             raise RuntimeError('integration diagnostic failed; raw evidence retained')
+        statistics = []
+        for line in (out / 'result/daemon.stderr').read_text().splitlines():
+            if line.startswith('P6_METADATA_STATS '):
+                statistics.append(json.loads(line[len('P6_METADATA_STATS '):]))
+        (out / 'transport-statistics.json').write_text(json.dumps(statistics, indent=2) + '\n')
         receipt = json.loads((out / 'result/receipt.json').read_text())
         if receipt['proof_ms'] >= 9500:
             raise RuntimeError('proof bound exceeded; not an admission PASS')

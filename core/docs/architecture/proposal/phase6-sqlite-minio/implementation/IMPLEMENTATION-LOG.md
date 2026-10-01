@@ -24,3 +24,17 @@ product enablement in this checkpoint. Next: fixed-size transport instrumentatio
 one labelled diagnostic, then one session lifetime treatment preserving custody.
 All five owner groups and all seven families are still incomplete. No #288 update,
 release claim, merge, rollback or other-owner mutation is authorized.
+
+## 2026-10-02 — V4a transport counters prepared
+
+Parent `46c3dc7cf0f206731ff63a23a1207f093e60db6b`. Added fixed five-action
+actual request counts/times and actual connection attempt/authentication time,
+shared across Remote clones and emitted cumulatively after each known Commit.
+Collector retains a purpose label and the exact parsed statistics beside raw logs.
+Native per-call connection algorithm, P6META3, storage/construction/oracles and
+limits are unchanged. Owning host Clippy/fmt and locked Darwin/Linux ARMv8 release
+builds pass. Existing engine-only tests are unaffected and reused; real full-path
+diagnostic remains NOT_RUN at this source checkpoint.
+
+Next: one fresh sealed count-driven diagnostic on V3's exact two-head workload,
+then inspect actual connection and request costs before the single session change.

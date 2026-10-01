@@ -96,8 +96,15 @@ pub struct Remote {
     pub selector: u32,
     pub private: [u8; 32],
     pub server: [u8; 32],
+    pub stats: Arc<Mutex<crate::transport_stats::Statistics>>,
 }
 impl Remote {
+    pub fn statistics(&self) -> Result<crate::transport_stats::Statistics, String> {
+        self.stats
+            .lock()
+            .map(|s| *s)
+            .map_err(|_| "metadata statistics owner".into())
+    }
     pub fn call(&self, action: u8, payload: &[u8]) -> Result<Vec<u8>, String> {
         let address = self
             .endpoint
@@ -106,14 +113,23 @@ impl Remote {
             .next()
             .ok_or("service address")?;
         let deadline = Instant::now() + Duration::from_secs(5);
-        let mut c = connection::connect_until(
+        let connected = Instant::now();
+        let connection_result = connection::connect_until(
             address,
             self.selector,
             &self.private,
             &self.server,
             deadline,
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string());
+        {
+            let mut stats = self.stats.lock().map_err(|_| "metadata statistics owner")?;
+            stats.connect_attempts += 1;
+            stats.connect_ns = stats
+                .connect_ns
+                .saturating_add(connected.elapsed().as_nanos() as u64);
+        }
+        let mut c = connection_result?;
         c.receive.deadline(deadline);
         c.send.deadline(deadline);
         let mut bytes = wire::PREFIX.to_vec();
@@ -122,6 +138,7 @@ impl Remote {
         if bytes.len() > 16384 {
             return Err("metadata request capacity".into());
         }
+        let requested = Instant::now();
         c.send
             .write(&Frame {
                 kind: Kind::Begin,
@@ -129,7 +146,17 @@ impl Remote {
                 bytes,
             })
             .map_err(|e| e.to_string())?;
-        let frame = c.receive.read().map_err(|e| e.to_string())?;
+        let received = c.receive.read().map_err(|e| e.to_string());
+        {
+            let mut stats = self.stats.lock().map_err(|_| "metadata statistics owner")?;
+            if let Some(count) = stats.calls.get_mut(action as usize) {
+                *count += 1;
+            }
+            if let Some(time) = stats.request_ns.get_mut(action as usize) {
+                *time = time.saturating_add(requested.elapsed().as_nanos() as u64);
+            }
+        }
+        let frame = received?;
         if frame.id != 1 || frame.kind != Kind::Success {
             return Err("metadata failure/identity".into());
         }
