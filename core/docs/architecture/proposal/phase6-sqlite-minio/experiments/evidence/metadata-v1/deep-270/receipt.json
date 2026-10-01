@@ -1,0 +1,81 @@
+{
+  "case": "deep-270",
+  "status": "COMPLETE",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/benchmark/phase6-metadata/target/release/phase6-metadata-probe",
+    "run",
+    "deep-270",
+    "/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/benchmark-results/phase6-metadata/run-v1/deep-270/sample.sqlite",
+    "/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/benchmark-results/phase6-metadata/run-v1/deep-270"
+  ],
+  "setup_ns": 11808000,
+  "setup_fresh": true,
+  "master_sha256": "5628b192ff4093fe0c097d7816b8f96a883595f524fc992bd6552b716d10669f",
+  "copy_ns": 322667,
+  "performance_claim": false,
+  "cache_verdict": "INELIGIBLE",
+  "sample_count": 1,
+  "complete_command_ns": 182699584,
+  "exit_code": 0,
+  "operation": {
+    "schema": 1,
+    "case": "deep-270",
+    "operation_ns": 175221208,
+    "open_setup_ns": 1670459,
+    "close_ns": 160833,
+    "metrics": {
+      "opens": 0,
+      "sql_calls": 27003,
+      "distinct_sql_texts": 4,
+      "sql_ns": 167684741,
+      "vm_steps": 567077,
+      "fullscan_steps": 0,
+      "sorts": 0,
+      "reprepares": 0,
+      "changed_rows": 1,
+      "transactions": 1,
+      "tx_max_changed_rows": 1,
+      "tx_max_ns": 181417,
+      "page_max_rows": 1,
+      "page_max_field_bytes": 8
+    },
+    "sqlite_version": "3.51.0",
+    "profile": {
+      "journal_mode": "memory",
+      "synchronous": 0,
+      "temp_store": 2,
+      "foreign_keys": 1,
+      "busy_timeout": 0,
+      "cache_size": -512,
+      "page_size": 4096,
+      "mmap_size": 0
+    },
+    "sqlite_memory_current_bytes": 0,
+    "sqlite_memory_operation_high_bytes": 0,
+    "db_bytes": 77824,
+    "inode_rows": 271,
+    "obsolete_inode_rows": 0,
+    "extent_rows": 0,
+    "capture_rows": 0,
+    "coordinated_mutators_completed": 0,
+    "row_window_status": "PASS",
+    "transaction_row_status": "PASS",
+    "cache_verdict": "INELIGIBLE",
+    "performance_claim": false,
+    "admission_eligible": false
+  },
+  "verification": {
+    "readonly_engine": "3.51.2",
+    "scope": "complete final metadata / source-coordinate byte oracle; no canonical root or provider payload claim",
+    "selected_rows_verified": 0,
+    "status": "PASS",
+    "verifier_ns": 1464875
+  },
+  "retained_sidecars": {},
+  "resource_observation": {
+    "physical_containment": "UNAVAILABLE",
+    "OS_file_cache": "UNAVAILABLE",
+    "sqlite_highwater_scope": "operation-reset engine allocations only; not total process memory"
+  },
+  "cleanup": "PASS"
+}

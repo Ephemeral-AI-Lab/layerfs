@@ -1,0 +1,18 @@
+{
+  "source": "81ddccbba97076ab940092b5b15c5fbc7938d2cf",
+  "tree": "b2a14ae9c94bf0823200035cf4d5f9b4190a2b25",
+  "spec_commit": "15b2ca92091188b4282a0d104ec50985933d6ea0",
+  "binary_sha256": "cc0601c273d27f3404aab13f6fe2917e4049930b2cc0dc1e5903488fd7921603",
+  "lock_sha256": "159bf7d800837645546d5b39746a1fb8afd3617ad4875f9a3fb60e4bdec6f417",
+  "oracle_sha256": "b2a141539b1dd01edbc86785218d640095f612befd14c4471b28ee092154db36",
+  "collector_sha256": "b06db656a2174a4764dd0371d2f7dbe86a606c4a7804b965646c758843d24adb",
+  "schema_sha256": "c15f405f5185e2c2a792ae7b24f1f56726345ef0bb7dc2b0fd577354829631da",
+  "build_flags_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "build_profile": "release --locked; repository-root aarch64 flags",
+  "host": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "cache_contract": "uncontrolled OS cache; INELIGIBLE",
+  "sample_count": 1,
+  "construction_producers": 1,
+  "clone_method": "independent shutil.copyfile byte copy; no cold claim",
+  "dependency_parity": "PASS"
+}

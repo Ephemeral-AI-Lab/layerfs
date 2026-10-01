@@ -43,6 +43,16 @@ All items below are open. Creating this folder does not freeze their contracts.
   cleanup. Assign non-overlapping files and one coordinated contract owner;
   define dependencies and exit proofs before starting it.
 
+## Standalone metadata experiment checkpoint
+
+[#294](https://github.com/Ephemeral-AI-Lab/layerfs/issues/294) owns the first
+[prospective metadata experiment](experiments/METADATA-V1.md) and its
+[v1 results](experiments/RESULTS-METADATA-V1.md). All 15 correctness cases passed;
+the fragmented overwrite/truncate representation failed the transaction-row
+bound, and engine/physical memory qualification remains incomplete. Numerical
+observations retain uncontrolled-cache INELIGIBLE status. This checkpoint does
+not complete the open design gates above.
+
 ## Acceptance and performance planning
 
 - [ ] Map current acceptance in #248/#256/#249/#219/#259 and #276's deferred

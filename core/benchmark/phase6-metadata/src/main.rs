@@ -131,6 +131,23 @@ fn run(case: &str, path: &Path, output: &Path) -> Result<()> {
     }
     let operation_ns = t.elapsed().as_nanos();
     let (engine_current, engine_high) = engine::memory(false)?;
+    // All-zero counters while the engine has performed work are unavailable,
+    // including native builds with DEFAULT_MEMSTATUS=0. Never report zero use.
+    let memory_status = if engine_current == 0 && engine_high == 0 {
+        "UNAVAILABLE"
+    } else {
+        "OBSERVED_ENGINE_ONLY"
+    };
+    let engine_current = if memory_status == "UNAVAILABLE" {
+        "null".to_owned()
+    } else {
+        engine_current.to_string()
+    };
+    let engine_high = if memory_status == "UNAVAILABLE" {
+        "null".to_owned()
+    } else {
+        engine_high.to_string()
+    };
     let close = Instant::now();
     if let Some(db) = e.take() {
         combined.absorb(&db.m);
@@ -177,7 +194,7 @@ fn run(case: &str, path: &Path, output: &Path) -> Result<()> {
         .query_row("SELECT COUNT(*) FROM captures", [], |r| r.get(0))?;
     observed.db.close().map_err(|(_, err)| err)?;
     let db_bytes = fs::metadata(path)?.len();
-    let receipt=format!("{{\"schema\":1,\"case\":\"{case}\",\"operation_ns\":{operation_ns},\"open_setup_ns\":{open_ns},\"close_ns\":{close_ns},\"metrics\":{},\"sqlite_version\":\"{version}\",\"profile\":{{\"journal_mode\":\"{journal}\",{}}},\"sqlite_memory_current_bytes\":{engine_current},\"sqlite_memory_operation_high_bytes\":{engine_high},\"db_bytes\":{db_bytes},\"inode_rows\":{inode_rows},\"obsolete_inode_rows\":{obsolete},\"extent_rows\":{extent_rows},\"capture_rows\":{captures},\"coordinated_mutators_completed\":{overlap_completed},\"row_window_status\":\"{}\",\"transaction_row_status\":\"{}\",\"cache_verdict\":\"INELIGIBLE\",\"performance_claim\":false,\"admission_eligible\":false}}\n",combined.json(),profile.join(","),if combined.page_fields_bytes<=16384 {"PASS"}else{"FAIL"},if combined.tx_max_changed<=512 {"PASS"}else{"FAIL"});
+    let receipt=format!("{{\"schema\":2,\"case\":\"{case}\",\"operation_ns\":{operation_ns},\"open_setup_ns\":{open_ns},\"close_ns\":{close_ns},\"metrics\":{},\"sqlite_version\":\"{version}\",\"profile\":{{\"journal_mode\":\"{journal}\",{}}},\"sqlite_memory_status\":\"{memory_status}\",\"sqlite_memory_current_bytes\":{engine_current},\"sqlite_memory_operation_high_bytes\":{engine_high},\"db_bytes\":{db_bytes},\"inode_rows\":{inode_rows},\"obsolete_inode_rows\":{obsolete},\"extent_rows\":{extent_rows},\"capture_rows\":{captures},\"coordinated_mutators_completed\":{overlap_completed},\"row_window_status\":\"{}\",\"transaction_row_status\":\"{}\",\"cache_verdict\":\"INELIGIBLE\",\"performance_claim\":false,\"admission_eligible\":false}}\n",combined.json(),profile.join(","),if combined.page_fields_bytes<=16384 {"PASS"}else{"FAIL"},if combined.tx_max_changed<=512 {"PASS"}else{"FAIL"});
     fs::write(output.join("operation.json"), &receipt)?;
     print!("{receipt}");
     Ok(())
@@ -189,6 +206,31 @@ fn main() -> Result<()> {
     }
     match args[1].as_str() {
         "prepare" => prepare(&args[2], Path::new(&args[3])),
+        "inspect-memory" => {
+            let db = Engine::open(Path::new(&args[3]))?;
+            let (current, high) = engine::memory(false)?;
+            let unavailable = current == 0 && high == 0;
+            println!(
+                "{{\"schema\":2,\"memory_status\":\"{}\",\"current_bytes\":{},\"high_bytes\":{}}}",
+                if unavailable {
+                    "UNAVAILABLE"
+                } else {
+                    "OBSERVED_ENGINE_ONLY"
+                },
+                if unavailable {
+                    "null".to_owned()
+                } else {
+                    current.to_string()
+                },
+                if unavailable {
+                    "null".to_owned()
+                } else {
+                    high.to_string()
+                }
+            );
+            db.db.close().map_err(|(_, err)| err)?;
+            Ok(())
+        }
         "run" => {
             if args.len() != 5 {
                 return Err("run requires OUTPUT".into());

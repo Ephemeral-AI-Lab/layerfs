@@ -36,3 +36,9 @@ The v1 affected-range transaction intentionally permits proportional changed-row
 work so it can expose the predeclared 512-row target failure. No fallback/profile
 increase turns that failure into PASS. These tools allocate no product schema,
 API, canonical root, durability or concurrency capability.
+
+The first v1 collection linked Darwin SQLite 3.51.0, compiled with
+`DEFAULT_MEMSTATUS=0`; its raw zero engine allocation fields are unavailable
+observations. They remain in the original receipts. Operation receipt schema 2
+encodes unavailable counters as null with an explicit status. This correction
+does not authorize recollecting those v1 performance rows.
