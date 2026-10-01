@@ -141,3 +141,46 @@ Actual source/build/provider seals, original fixture references and expected
 outcomes accompany the results. No cold, peak-memory or power-loss claim follows.
 
 Four-group results: [2026-10-01 v2 report](../../docs/roadmap/0.1/0.1.7/issue290/RESULTS-20261001-V2.md).
+
+## Full closed repository import
+
+The [prospective contract](../../docs/roadmap/0.1/0.1.7/issue290/EXPERIMENT-DEEPSEEK-FULL-V1.md)
+includes every captured entry under deepseek-harness, including .git, ignored
+files and symlinks. The existing closed independent master is reused; never
+regenerate it for a sample. This tool writes no source files. Private catalog
+contains all opaque metadata plus real C1 file content roots and C2 locators;
+MinIO holds actual packed FULL representations. It does not produce a canonical
+filesystem namespace root, Branch or Commit, and performs no mount/daemon work.
+
+```sh
+cargo +1.85.1 build --manifest-path core/Cargo.toml --locked --release -p layerfs-storage --example minio_repository_probe
+DYLD_LIBRARY_PATH="$PWD/benchmark-results/storage-probes/sqlite-3.51.3-provider" python3 tools/storage_probes/repository_selftest.py --root benchmark-results/storage-probes/repository-selftest-v1
+python3 tools/storage_probes/repository_probe.py run --output benchmark-results/storage-probes/deepseek-full-import-v1
+```
+
+The self-test is correctness only, on four synthetic files, and never a throughput
+sample. Its fresh root rejects reuse. The full run requires committed clean source,
+a fresh output, sealed MinIO and fixed SQLite3.51.3 providers, the closed manifest
+identity and at least16GiB available disk. Native C1/C2 preparation has180s; upload
+and WAL/FULL/fullfsync publication have25s including final checkpoint; download,
+exact pack comparison and public C1/C2 reconstruction share one10s proof. Each
+stage is attempted once; timeouts and partial ACK/proof progress remain evidence.
+Only provider/worker cleanup runs after a miss; no automatic resend or completion
+adoption. Packs, private catalog and owned MinIO data remain in the output for the
+requested import. Credentials and captured content must stay private.
+
+Construction has one producer and indexed CAS lookups, one unfinished record
+group and one pack tail per active lane. Group targets48KiB, native/ordinary
+ceilings64KiB, whole-file groups bounded by256KiB packs, records<=1024 and groups
+<=256. Record/ID vectors are bounded by those limits, not corpus counts. Private
+SQL transactions commit at most256 new objects or256 file-root updates per batch;
+cache512KiB/mmap0, MEMORY/OFF staging. SQLite engine/OS memory remains unobserved.
+Upload has four connections, eight queued/outstanding tasks, at most four256KiB
+body allocations. Proof has four original+download body pairs, eight256KiB decoded
+pack-cache entries, the existing512KiB group cache and bounded32-object C1 waves.
+These are representation/window arithmetic, not measured physical-memory bounds.
+
+Cache state is INELIGIBLE and performance_claim=false. Preparation, sealed catalog
+hashing, upload and proof wall are reported separately. No full SDK Init, cold
+bootstrap, power-loss durability, cross-process cloud fencing or speed admission
+follows from this standalone experiment. Product source is unchanged.

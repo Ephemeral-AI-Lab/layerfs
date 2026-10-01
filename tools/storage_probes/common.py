@@ -59,7 +59,9 @@ class S3:
         self.received = 0
 
     def call(self, method, key='', query=None, size=0, payload_hash=EMPTY_HASH,
-             consume=False, verify_hash=False, block=BLOCK, request_headers=None, body_gate=None):
+             consume=False, verify_hash=False, block=BLOCK, request_headers=None, body_gate=None, data=None, response_limit=None):
+        if data is not None and len(data) != size:
+            raise ValueError('real request body size mismatch')
         path = '/' + self.config['bucket'] + ('/' + key if key else '')
         path = urllib.parse.quote(path, safe='/~')
         pairs = sorted((str(k), str(v)) for k, v in (query or {}).items())
@@ -87,8 +89,10 @@ class S3:
         for name, value in (request_headers or {}).items():
             self.connection.putheader(name, value)
         self.connection.endheaders()
-        for offset in range(0, size, len(block)):
-            self.connection.send(block[:min(len(block), size - offset)])
+        width = 65536 if data is not None else len(block)
+        for offset in range(0, size, width):
+            self.connection.send(data[offset:offset + width] if data is not None
+                                 else block[:min(width, size - offset)])
             if offset == 0 and body_gate is not None:
                 body_gate()
         response = self.connection.getresponse()
@@ -114,7 +118,9 @@ class S3:
                     digest.update(data)
             self.received += count
             return count, digest.hexdigest() if digest else None
-        data = response.read()
+        data = response.read() if response_limit is None else response.read(response_limit + 1)
+        if response_limit is not None and len(data) > response_limit:
+            raise RuntimeError('response body exceeds declared admission')
         self.received += len(data)
         return data
 
