@@ -83,7 +83,11 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 - [ ] V4c3c1 owner-bound64serial C5 pages: runtime/checks delivered; live
   page-crossing proof next. [Runtime](V4C3C1-RUNTIME.md).
 
-Current action: V4c3c1 live reservation-page proof, then admitted population and inherited import/mount before raising
-current512/256profile. Freeze exact source/count proofs, preserve accepted/Unknown
-custody. Remaining generic syscalls, genuine seven-family/complete DeepSeek
-commands/locality/resource proofs remain required. Full goal active.
+Current action: owner-authorized S1 simplified trusted-daemon/global-publication
+model. [S1-SPEC](S1-SPEC.md). The stopped V4c3c1 source/checks were preserved PARTIAL
+atc92263bfbb93a2f7bd0cf7a68479ed184dadf127;livegate unrun. Do not resume that old
+lane as a competing goal. First protect publishing authority,remove duplicate
+servicecertification/MinIOreads/indexinstallation,prove128and270initialCommit and
+shallowedits.270component successorExecoptimization deferred nice-to-have;correctness
+and noquadraticwork retained. Current512/256,serialization/FULLexperimentlimits and
+broaderfamilies/DeepSeek/import/resource/compatibility gates remainopen.

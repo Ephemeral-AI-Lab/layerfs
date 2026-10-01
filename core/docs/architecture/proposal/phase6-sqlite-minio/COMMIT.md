@@ -34,11 +34,15 @@ live Workspace --capture--> immutable G1; writes continue in G2
    batches. Build compressed/delta packs with exact locators. Upload immutable
    objects and preserve required delta-base custody.
 3. **READY:** prove complete input/result seals, validated namespace/metadata and
-   required pack ACKs. Reserve installation, control, outcome and cleanup
+   required pack ACKs in the daemon. The trusted daemon supplies READY; the global
+   service does not fetch candidate packs for a second filesystem certification.
+   Reserve installation, control, outcome and cleanup
    capacity before the final publication request.
 4. **Publish:** atomically check the expected Branch head and expose the complete
-   committed metadata/history reference in a short global SQLite transaction.
-   Exact staging, fencing and outcome records remain a required design decision.
+   committed root/history reference through the existing C5conditional transaction.
+   Check authenticated owner, scope/profile, exact current base/head/root and
+   registered candidate role. Global SQL owns no second filesystem namespace index.
+   Broader deployment fencing/restart outcome resolution remain required decisions.
 5. **Install:** apply a known result to the actual current successor, preserving
    intervening writes and candidate captures. Never replace a newer G2 with a
    stale captured version.

@@ -12,8 +12,10 @@ owning SQLite. Move streaming C1/C2 construction to the daemon/client. Preserve
 bounded memory, ordinary filesystem mutations, history, concurrent ownership and
 exact failure/Unknown custody.
 
-This folder starts the design. Interfaces, formats, schemas, resource profiles,
-trust and persistence choices remain **open — required**. No checkbox in #293 is
+The owner selected the simplified ownership model on2026-10-02 and authorized
+implementation. [ARCHITECTURE](ARCHITECTURE.md) and [S1-SPEC](implementation/S1-SPEC.md)
+record the chosen authority/trust path and exact first delivery. Broader profiles,
+concurrency,import/cutover,compatibility and persistence remain **open — required**. No checkbox in #293 is
 satisfied merely by creating these documents. Phase 6 is the successor design
 direction to [#290](https://github.com/Ephemeral-AI-Lab/layerfs/issues/290);
 it is distinct from the historical Core Stage 6 numbering.

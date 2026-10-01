@@ -631,3 +631,16 @@ open_read_only signature compile failure retained/corrected. Current512/256other
 limits unchanged. V4C3C1-SPEC/RUNTIME and rawchecks record scope. Next frozen
 full128+sparse live boundary proof, then admitted populations/inherited mount; all
 sevenfamilies/fullDeepSeek/physical/generic remaining gates open. Full goal active.
+
+## Owner revision: simplified Phase6 authority,2026-10-02
+
+The owner stopped the prior implementation slice for architectural review,then
+explicitly authorized issue/docs updates and aggressive implementation of the
+simpler model. V4c3c1stagedsource/checks preservedPARTIAL inpublishedc92263bfbb93a2f7bd0cf7a68479ed184dadf127;
+liveproofunrun. No oldevidence deleted/promoted. #293ownsselecteddaemonSQLite/
+correctness/C1C2/directMinIO + smallglobalidentity/locator/history/conditionalBranch.
+Remove servicecandidate/portable/filecertification and namespaceindexinstallation;
+trust protectedpublisher,retain immutableformat/exactCAS/Unknownwritecustody.
+Avoidquadraticwork;deferextreme270successorExecperformance,keepinitialCommitand
+ordinaryshalloweditgates. ARCHITECTURE/S1-SPEC freezefirstslice;next implementation
+and actual128/270realproviderproof. Fullbroadergoalopen,not#287continuation.

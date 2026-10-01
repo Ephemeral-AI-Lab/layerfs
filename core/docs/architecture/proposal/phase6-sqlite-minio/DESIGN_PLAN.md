@@ -5,10 +5,12 @@
 
 ## Current next action
 
-Audit the selected published baseline and produce a source-backed responsibility
-map: current authorities, reusable C1/C2/history primitives, displaced mechanisms
-and the proposed SQL/root relationship. This is the first prerequisite for
-freezing schemas or starting product implementation.
+Implement [S1-SPEC](implementation/S1-SPEC.md): protected trusted daemon publisher,
+two-table locator catalog and C5conditional publication with zero service-side
+candidate pack reads. Remove displaced certification/index/install machinery.
+Prove original128and270initialCommit plus shallow successors. Extreme-depth
+successorExecoptimization deferred. Broader streaming/import/families/physical
+completion remains open; historical checkpoints below retain their original scope.
 
 ## Design gates
 

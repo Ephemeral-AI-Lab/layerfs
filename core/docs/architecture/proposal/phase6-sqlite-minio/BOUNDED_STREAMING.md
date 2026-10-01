@@ -15,7 +15,8 @@ target, not a measured capability or a promise of infinite storage.
 | Inodes, names, extents, owners and locations | Daemon SQLite | Indexed cursor pages bounded by rows and encoded bytes |
 | Captured generations and pending construction facts | Versioned SQL records / immutable source references | Selected roots, bounded drafts and progress cursors |
 | Payload and historical chunks | Immutable backing and MinIO packs | Source, chunker, codec, pack, upload and read windows |
-| Committed namespace, locators and history | Global SQLite / canonical immutable objects | Bounded verification and publication batches |
+| Committed namespace | Canonical immutable objects | Daemon construction/read windows |
+| Locators, identities and history | Global SQLite | Bounded registration and short publication |
 | Cleanup candidates | Indexed retirement records | Bounded claimed batch with retained pins/outcome custody |
 
 Symbolic accounting to freeze after interface selection:
