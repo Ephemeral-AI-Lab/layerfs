@@ -18,6 +18,7 @@ pub struct Step {
 }
 pub struct Scenario {
     pub id: String,
+    pub identity: [u8; 32],
     pub steps: Vec<Step>,
 }
 fn number(r: &mut impl Read) -> Result<u32, String> {
@@ -74,7 +75,12 @@ impl Scenario {
         if f.read(&mut [0]).map_err(|e| e.to_string())? != 0 {
             return Err("scenario trailing bytes".into());
         }
-        Ok(Self { id, steps })
+        let identity = Sha256::digest(std::fs::read(path).map_err(|e| e.to_string())?).into();
+        Ok(Self {
+            id,
+            steps,
+            identity,
+        })
     }
 }
 #[derive(Clone)]

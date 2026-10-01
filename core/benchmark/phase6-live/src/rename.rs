@@ -79,8 +79,11 @@ impl Engine {
         .map_err(|e| e.to_string())?;
         tx.execute("INSERT INTO changed_names VALUES(?1,?2,NULL) ON CONFLICT(parent,name) DO UPDATE SET ino=NULL",params![parent,name]).map_err(|e|e.to_string())?;
         if let Some(n) = &replaced {
-            tx.execute("UPDATE inodes SET links=links-1 WHERE id=?1", [n.id])
-                .map_err(|e| e.to_string())?;
+            tx.execute(
+                "UPDATE inodes SET links=links-1,dirty=1 WHERE id=?1",
+                [n.id],
+            )
+            .map_err(|e| e.to_string())?;
         }
         tx.execute("INSERT INTO names VALUES(?1,?2,?3) ON CONFLICT(parent,name) DO UPDATE SET ino=excluded.ino",params![new_parent,new_name,id]).map_err(|e|e.to_string())?;
         tx.execute("INSERT INTO changed_names VALUES(?1,?2,?3) ON CONFLICT(parent,name) DO UPDATE SET ino=excluded.ino",params![new_parent,new_name,id]).map_err(|e|e.to_string())?;

@@ -51,6 +51,7 @@ pub struct Node {
     pub parent: i64,
     pub links: i64,
     pub subdirs: i64,
+    pub published: bool,
 }
 pub fn now() -> (i64, u32) {
     let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
@@ -61,9 +62,9 @@ impl Engine {
         std::fs::create_dir_all(path.join("sources")).map_err(|e| e.to_string())?;
         let db = Connection::open(path.join("metadata.sqlite")).map_err(|e| e.to_string())?;
         db.busy_timeout(Duration::ZERO).map_err(|e| e.to_string())?;
-        db.execute_batch("PRAGMA journal_mode=MEMORY;PRAGMA synchronous=OFF;PRAGMA temp_store=MEMORY;PRAGMA cache_size=-2048;PRAGMA mmap_size=0;CREATE TABLE inodes(id INTEGER PRIMARY KEY,kind INTEGER,mode INTEGER,size INTEGER,seconds INTEGER,nanos INTEGER,root BLOB,dirty INTEGER,is_new INTEGER,base_size INTEGER,base_visible INTEGER,children INTEGER,parent INTEGER,links INTEGER,subdirs INTEGER);CREATE INDEX dirty_inodes ON inodes(id) WHERE dirty=1;CREATE TABLE names(parent INTEGER,name BLOB,ino INTEGER,PRIMARY KEY(parent,name)) WITHOUT ROWID;CREATE INDEX names_ino ON names(ino);CREATE TABLE changed_names(parent INTEGER,name BLOB,ino INTEGER,PRIMARY KEY(parent,name)) WITHOUT ROWID;CREATE TABLE prepared(id INTEGER PRIMARY KEY,kind INTEGER,content BLOB,metadata BLOB,new_pos INTEGER);CREATE TABLE edits(ordinal INTEGER PRIMARY KEY,start INTEGER,end INTEGER,len INTEGER,source INTEGER,offset INTEGER);CREATE TABLE sources(id INTEGER PRIMARY KEY AUTOINCREMENT);CREATE TABLE extents(ino INTEGER,start INTEGER,end INTEGER,source INTEGER,offset INTEGER,PRIMARY KEY(ino,start)) WITHOUT ROWID;CREATE TABLE handles(id INTEGER PRIMARY KEY AUTOINCREMENT,ino INTEGER,flags INTEGER);").map_err(|e|e.to_string())?;
+        db.execute_batch("PRAGMA journal_mode=MEMORY;PRAGMA synchronous=OFF;PRAGMA temp_store=MEMORY;PRAGMA cache_size=-2048;PRAGMA mmap_size=0;CREATE TABLE inodes(id INTEGER PRIMARY KEY,kind INTEGER,mode INTEGER,size INTEGER,seconds INTEGER,nanos INTEGER,root BLOB,dirty INTEGER,is_new INTEGER,base_size INTEGER,base_visible INTEGER,children INTEGER,parent INTEGER,links INTEGER,subdirs INTEGER,published INTEGER);CREATE INDEX dirty_inodes ON inodes(id) WHERE dirty=1;CREATE TABLE names(parent INTEGER,name BLOB,ino INTEGER,PRIMARY KEY(parent,name)) WITHOUT ROWID;CREATE INDEX names_ino ON names(ino);CREATE TABLE changed_names(parent INTEGER,name BLOB,ino INTEGER,PRIMARY KEY(parent,name)) WITHOUT ROWID;CREATE TABLE prepared(id INTEGER PRIMARY KEY,kind INTEGER,content BLOB,metadata BLOB,new_pos INTEGER);CREATE TABLE edits(ordinal INTEGER PRIMARY KEY,start INTEGER,end INTEGER,len INTEGER,source INTEGER,offset INTEGER);CREATE TABLE sources(id INTEGER PRIMARY KEY AUTOINCREMENT);CREATE TABLE extents(ino INTEGER,start INTEGER,end INTEGER,source INTEGER,offset INTEGER,PRIMARY KEY(ino,start)) WITHOUT ROWID;CREATE TABLE handles(id INTEGER PRIMARY KEY AUTOINCREMENT,ino INTEGER,flags INTEGER);").map_err(|e|e.to_string())?;
         db.execute(
-            "INSERT INTO inodes VALUES(1,2,493,0,0,0,NULL,0,0,0,0,0,1,1,0)",
+            "INSERT INTO inodes VALUES(1,2,493,0,0,0,NULL,0,0,0,0,0,1,1,0,1)",
             [],
         )
         .map_err(|e| e.to_string())?;
@@ -83,7 +84,7 @@ impl Engine {
     pub fn node(&self, id: i64) -> Result<Node, String> {
         self.db
             .query_row(
-                "SELECT kind,mode,size,seconds,nanos,root,dirty,is_new,base_size,base_visible,children,parent,links,subdirs FROM inodes WHERE id=?1",
+                "SELECT kind,mode,size,seconds,nanos,root,dirty,is_new,base_size,base_visible,children,parent,links,subdirs,published FROM inodes WHERE id=?1",
                 [id],
                 |r| {
                     Ok(Node {
@@ -102,6 +103,7 @@ impl Engine {
                         parent: r.get(11)?,
                         links: r.get(12)?,
                         subdirs: r.get(13)?,
+                        published:r.get(14)?,
                     })
                 },
             )
@@ -158,7 +160,7 @@ impl Engine {
         let (sec, nano) = now();
         let tx = self.db.transaction().map_err(|e| e.to_string())?;
         tx.execute(
-            "INSERT INTO inodes VALUES(?1,?2,?3,0,?4,?5,NULL,1,1,0,0,0,?6,1,0)",
+            "INSERT INTO inodes VALUES(?1,?2,?3,0,?4,?5,NULL,1,1,0,0,0,?6,1,0,0)",
             params![id, kind, mode & 0o777, sec, nano, parent],
         )
         .map_err(|e| e.to_string())?;
@@ -279,7 +281,7 @@ impl Engine {
         .map_err(|e| e.to_string())?;
         let (sec, nano) = now();
         tx.execute(
-            "UPDATE inodes SET size=max(size,?2),seconds=?3,nanos=?4,dirty=1 WHERE id=?1",
+            "UPDATE inodes SET size=max(size,?2),seconds=?3,nanos=?4,dirty=CASE WHEN links>0 OR published=1 THEN 1 ELSE 0 END WHERE id=?1",
             params![id, end, sec, nano],
         )
         .map_err(|e| e.to_string())?;
@@ -304,7 +306,7 @@ impl Engine {
         .map_err(|e| e.to_string())?;
         let (sec, nano) = now();
         tx.execute(
-            "UPDATE inodes SET size=?2,base_visible=min(base_visible,?2),seconds=?3,nanos=?4,dirty=1 WHERE id=?1",
+            "UPDATE inodes SET size=?2,base_visible=min(base_visible,?2),seconds=?3,nanos=?4,dirty=CASE WHEN links>0 OR published=1 THEN 1 ELSE 0 END WHERE id=?1",
             params![id, size, sec, nano],
         )
         .map_err(|e| e.to_string())?;
@@ -382,7 +384,7 @@ impl Engine {
         }
         let (sec, nano) = now();
         let tx = self.db.transaction().map_err(|e| e.to_string())?;
-        tx.execute("UPDATE inodes SET links=links-1 WHERE id=?1", [id])
+        tx.execute("UPDATE inodes SET links=links-1,dirty=1 WHERE id=?1", [id])
             .map_err(|e| e.to_string())?;
         tx.execute(
             "DELETE FROM names WHERE parent=?1 AND name=?2",
@@ -402,16 +404,16 @@ impl Engine {
     /// Keyset access uses the partial dirty index and indexed live-name membership.
     pub fn next_dirty(&self, after: i64) -> Result<Option<Node>, String> {
         let id: Option<i64> = self.db.query_row(
-            "SELECT id FROM inodes WHERE dirty=1 AND id>?1 AND (id=1 OR EXISTS(SELECT 1 FROM names WHERE ino=inodes.id)) ORDER BY id LIMIT 1",
+            "SELECT id FROM inodes WHERE dirty=1 AND id>?1 AND (links>0 OR published=1) ORDER BY id LIMIT 1",
             [after], |r|r.get(0)).optional().map_err(|e|e.to_string())?;
         id.map(|id| self.node(id)).transpose()
     }
     /// The caller holds the mutation lock through capture, publication and install.
     pub fn install_prepared(&mut self) -> Result<(), String> {
         let tx = self.db.transaction().map_err(|e| e.to_string())?;
-        tx.execute("UPDATE inodes SET root=(SELECT content FROM prepared WHERE id=inodes.id),base_size=size,base_visible=size,dirty=0,is_new=0 WHERE id IN(SELECT id FROM prepared) AND kind=1",[]).map_err(|e|e.to_string())?;
+        tx.execute("UPDATE inodes SET root=(SELECT content FROM prepared WHERE id=inodes.id),base_size=size,base_visible=size,dirty=0,is_new=0,published=1 WHERE id IN(SELECT id FROM prepared) AND kind=1",[]).map_err(|e|e.to_string())?;
         tx.execute(
-            "UPDATE inodes SET dirty=0,is_new=0 WHERE id IN(SELECT id FROM prepared) AND kind=2",
+            "UPDATE inodes SET dirty=0,is_new=0,published=1 WHERE id IN(SELECT id FROM prepared) AND kind=2",
             [],
         )
         .map_err(|e| e.to_string())?;
@@ -425,6 +427,16 @@ impl Engine {
             [],
         )
         .map_err(|e| e.to_string())?;
+        tx.execute("UPDATE inodes SET dirty=0,is_new=0,published=0 WHERE id IN(SELECT id FROM prepared WHERE kind=0)",[]).map_err(|e|e.to_string())?;
+        tx.execute(
+            "DELETE FROM changed_names WHERE parent IN(SELECT id FROM prepared WHERE kind=0)",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+        tx.execute("DELETE FROM prepared", [])
+            .map_err(|e| e.to_string())?;
+        tx.execute("DELETE FROM edits", [])
+            .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
         Ok(())
     }

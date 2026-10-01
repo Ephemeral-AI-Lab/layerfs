@@ -243,7 +243,7 @@ impl Filesystem for SqlFs {
             }
             if let Some(m) = mode {
                 e.db.execute(
-                    "UPDATE inodes SET mode=?2,dirty=1 WHERE id=?1",
+                    "UPDATE inodes SET mode=?2,dirty=CASE WHEN links>0 OR published=1 THEN 1 ELSE 0 END WHERE id=?1",
                     params![id, m & 0o777],
                 )
                 .map_err(|e| e.to_string())?;
@@ -258,7 +258,7 @@ impl Filesystem for SqlFs {
                     }
                 };
                 e.db.execute(
-                    "UPDATE inodes SET seconds=?2,nanos=?3,dirty=1 WHERE id=?1",
+                    "UPDATE inodes SET seconds=?2,nanos=?3,dirty=CASE WHEN links>0 OR published=1 THEN 1 ELSE 0 END WHERE id=?1",
                     params![id, sec, nano],
                 )
                 .map_err(|e| e.to_string())?;

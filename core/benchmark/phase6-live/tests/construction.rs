@@ -155,8 +155,9 @@ fn changed_names_and_one_dirty_file_preserve_unrelated_values() {
     let (third, work) = build(&engine, &mut objects, second.root);
     assert_eq!(
         (work.dirty_inodes, work.directories, work.changed_names),
-        (1, 1, 1)
+        (2, 1, 1)
     );
+    assert_eq!(work.removals, 1);
     assert!(FilesystemRead::new(&objects, third.root)
         .unwrap()
         .resolve(&LogicalPath::new("dir/a").unwrap())
@@ -220,4 +221,162 @@ fn large_immediate_file_edit_keeps_tail_and_old_root() {
     assert_eq!(payload(&objects, large_again.root, "large"), regrown);
     drop(engine);
     std::fs::remove_dir_all(path).unwrap();
+}
+
+fn legacy_complete(engine: &Engine, objects: &mut Objects) -> FilesystemRootId {
+    use layerfs_content::inode_leaf::{InodeKind, InodeValue};
+    let mut ids = Vec::new();
+    let mut q = engine
+        .db
+        .prepare("SELECT id FROM inodes WHERE links>0 ORDER BY id")
+        .unwrap();
+    for r in q.query_map([], |r| r.get::<_, i64>(0)).unwrap() {
+        ids.push(r.unwrap())
+    }
+    let reader = objects.clone();
+    let mut inodes = Vec::new();
+    let mut dirs = Vec::new();
+    for id in &ids {
+        let n = engine.node(*id).unwrap();
+        let kind = InodeKind::from_code(n.kind).unwrap();
+        let content = if n.kind == 1 {
+            let (r, _) = Timing::disabled("reference whole small file", |t| {
+                construct_stream(
+                    ConstructionPolicy::default(),
+                    &ConstructionPolicy::default().capacities(),
+                    phase6_live_probe::engine::Source {
+                        engine,
+                        id: *id,
+                        at: 0,
+                    },
+                    objects,
+                    t.child("file"),
+                )
+            });
+            r.unwrap().root
+        } else {
+            let changes = engine
+                .directory_entries(*id)
+                .unwrap()
+                .into_iter()
+                .map(|(i, name, _)| {
+                    (
+                        PathName::new(std::str::from_utf8(&name).unwrap()).unwrap(),
+                        Some(i as u64),
+                    )
+                })
+                .collect();
+            dirs.push(DirectoryUpdate {
+                parent: *id as u64,
+                changes,
+            });
+            ObjectId::for_bytes(b"reference placeholder replaced by actual C1 directory")
+        };
+        let meta =
+            construction::metadata(&reader, objects, n.mode, n.seconds, n.nanos, kind).unwrap();
+        inodes.push(InodeUpdate {
+            serial: *id as u64,
+            value: InodeValue {
+                kind,
+                namespace_ref_count: u64::from(*id != 1),
+                content_root: content,
+                metadata_root: meta,
+            },
+        });
+    }
+    let new: Vec<_> = ids.iter().map(|i| *i as u64).collect();
+    let input = FilesystemInput {
+        base: None,
+        scope: scope_for_seed([6; 32]),
+        root_serial: 1,
+        directories: &dirs,
+        inodes: &inodes,
+        new_inodes: &new,
+        resources: FilesystemResources::default(),
+    };
+    build_filesystem(&mut FilesystemObjects::new(&reader, objects), &input, None)
+        .unwrap()
+        .root
+}
+#[test]
+fn sql_native_namespace_matches_legacy_and_consumes270names_once() {
+    let (p, mut e, mut objects, base) = fresh();
+    let mut parent = 1;
+    for _ in 0..270 {
+        parent = e.create_node(parent, b"d", 2, 0o755).unwrap().id;
+    }
+    let file = e.create_node(parent, b"file", 1, 0o644).unwrap().id;
+    e.write(file, 0, b"leaf").unwrap();
+    let reference = legacy_complete(&e, &mut objects);
+    let (first, w) = build(&e, &mut objects, base);
+    assert_eq!(first.root, reference);
+    assert_eq!(w.changed_names, 271);
+    assert_eq!(w.prepared_queries.name_rows, 271);
+    assert!(w.prepared_queries.directory_lookups < 600);
+    assert_eq!(w.prepared_queries.fresh_lookups, 0);
+    e.install_prepared().unwrap();
+    e.write(file, 0, b"NEXT").unwrap();
+    let (next, w) = build(&e, &mut objects, first.root);
+    assert_eq!(w.dirty_inodes, 1);
+    assert_eq!(next.root, legacy_complete(&e, &mut objects));
+    drop(e);
+    std::fs::remove_dir_all(p).unwrap();
+}
+#[test]
+fn tombstone_open_orphan_and_fresh_cancel_have_no_lifetime_scan() {
+    let (p, mut e, mut objects, base) = fresh();
+    let dir = e.create_node(1, b"dir", 2, 0o755).unwrap().id;
+    let f = e.create_node(dir, b"file", 1, 0o644).unwrap().id;
+    e.write(f, 0, b"OLD").unwrap();
+    let (first, _) = build(&e, &mut objects, base);
+    e.install_prepared().unwrap();
+    let h = e.open(f, libc::O_RDWR).unwrap();
+    e.unlink(dir, b"file", false).unwrap();
+    let (second, w) = build(&e, &mut objects, first.root);
+    assert_eq!(w.removals, 1);
+    assert_eq!(second.root, legacy_complete(&e, &mut objects));
+    e.install_prepared().unwrap();
+    e.write(f, 0, b"FD!").unwrap();
+    let mut b = [0; 3];
+    e.read(f, 0, &mut b).unwrap();
+    assert_eq!(&b, b"FD!");
+    assert!(e.next_dirty(0).unwrap().is_none());
+    let temp = e.create_node(dir, b"temp", 1, 0o644).unwrap().id;
+    e.write(temp, 0, b"cancelled").unwrap();
+    e.unlink(dir, b"temp", false).unwrap();
+    let (third, w) = build(&e, &mut objects, second.root);
+    assert_eq!(w.removals, 0);
+    assert_eq!(third.root, legacy_complete(&e, &mut objects));
+    e.install_prepared().unwrap();
+    assert!(e.next_dirty(0).unwrap().is_none());
+    e.close(h, f).unwrap();
+    drop(e);
+    std::fs::remove_dir_all(p).unwrap();
+}
+
+#[test]
+fn moved_directory_replacement_and_new_empty_match_legacy_namespace() {
+    let (p, mut e, mut objects, base) = fresh();
+    let a = e.create_node(1, b"a", 2, 0o755).unwrap().id;
+    let b = e.create_node(1, b"b", 2, 0o755).unwrap().id;
+    let dir = e.create_node(a, b"tree", 2, 0o755).unwrap().id;
+    let f = e.create_node(dir, b"data", 1, 0o644).unwrap().id;
+    e.write(f, 0, b"old").unwrap();
+    e.create_node(1, b"empty", 2, 0o755).unwrap();
+    let (first, _) = build(&e, &mut objects, base);
+    assert_eq!(first.root, legacy_complete(&e, &mut objects));
+    e.install_prepared().unwrap();
+    e.rename(a, b"tree", b, b"moved", false).unwrap();
+    let replacement = e.create_node(dir, b"next", 1, 0o644).unwrap().id;
+    e.write(replacement, 0, b"new").unwrap();
+    e.rename(dir, b"next", dir, b"data", false).unwrap();
+    let (second, w) = build(&e, &mut objects, first.root);
+    assert_eq!(w.removals, 1);
+    assert_eq!(second.root, legacy_complete(&e, &mut objects));
+    assert_eq!(payload(&objects, second.root, "b/moved/data"), b"new");
+    assert_eq!(payload(&objects, first.root, "a/tree/data"), b"old");
+    e.install_prepared().unwrap();
+    assert!(e.next_dirty(0).unwrap().is_none());
+    drop(e);
+    std::fs::remove_dir_all(p).unwrap();
 }

@@ -32,3 +32,8 @@ pub mod file_facts;
 pub mod rename;
 
 pub mod scenario;
+
+pub mod namespace_stream;
+
+pub mod proof;
+pub mod proof_plan;

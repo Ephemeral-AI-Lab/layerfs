@@ -8,10 +8,7 @@ use layerfs_bridge::{
     adapters::native::connection::{Peer, VerifiedPeer},
     contract::CommitOutcomeWire,
 };
-use layerfs_content::{
-    filesystem::{profile_id, scope_for_seed, FilesystemRootId},
-    FilesystemRead, LogicalPath,
-};
+use layerfs_content::filesystem::{profile_id, scope_for_seed};
 use layerfs_history::{
     catalog::{HistoryCatalog, HistoryCatalogConfig},
     identity::{BranchId, HistoryName, LayerStackId},
@@ -20,7 +17,7 @@ use layerfs_history::{
 };
 use layerfs_sandbox::{random, OwnerConfig, SandboxOwner};
 use layerfs_sdk::WorkspaceApi;
-use layerfs_telemetry::{runtime::Runtime, timer::Timing};
+use layerfs_telemetry::runtime::Runtime;
 use std::{
     fs::File,
     io::Write,
@@ -168,6 +165,7 @@ pub fn run(
     let second="printf SECOND | dd of=data bs=1 seek=100 conv=notrunc 2>/dev/null && test \"$(wc -c < data)\" -eq 4096";
     let mut rows = Vec::new();
     let mut roots = Vec::new();
+    let mut events = File::create(out.join("phase-events.log")).map_err(|e| e.to_string())?;
     let mut created_heads = Vec::new();
     let mut expected_head = None;
     let commands: Vec<(&str, &str)> = match scenario {
@@ -201,6 +199,14 @@ pub fn run(
         }
         let id = root(&commit.outcome);
         roots.push(id);
+        writeln!(
+            events,
+            "step={name} exec_ms={exec_ms} commit_ms={commit_ms} generation={} root={}",
+            commit.generation,
+            hex(&id)
+        )
+        .map_err(|e| e.to_string())?;
+        events.flush().map_err(|e| e.to_string())?;
         rows.push(format!("{{\"case\":\"{name}\",\"exec_ms\":{exec_ms},\"commit_ms\":{commit_ms},\"generation\":{},\"root\":\"{}\"}}",commit.generation,hex(&id)));
     }
     api.unmount(&mount.id).map_err(|e| e.to_string())?;
@@ -209,83 +215,27 @@ pub fn run(
         .delete_with_logs(sandbox, &mut logs)
         .0
         .map_err(|e| format!("{e:?}"))?;
-    let command_ms = total.elapsed().as_secs_f64() * 1000.;
     stop.store(true, Ordering::SeqCst);
     worker.join().map_err(|_| "metadata owner panic")??;
-    let proof = Instant::now();
-    if let Some(scenario) = scenario {
-        for (root, step) in roots.iter().zip(&scenario.steps) {
-            let (files, bytes) = crate::scenario::verify(&reader, *root, &step.manifest)?;
-            eprintln!("P6_MANIFEST step={} files={files} bytes={bytes}", step.name);
-        }
-    } else {
-        let mut expected = vec![0; 4096];
-        expected[17..23].copy_from_slice(b"phase6");
-        for (index, id) in roots.iter().enumerate() {
-            if index == 1 {
-                expected[100..106].copy_from_slice(b"SECOND")
-            }
-            let mut fs = FilesystemRead::new(
-                &reader,
-                FilesystemRootId(
-                    layerfs_content::ObjectId::from_bytes(id).map_err(|e| e.to_string())?,
-                ),
-            )
-            .map_err(|e| e.to_string())?;
-            let resolved = fs
-                .resolve(&LogicalPath::new("data").map_err(|e| e.to_string())?)
-                .map_err(|e| e.to_string())?;
-            let mut bytes = Vec::new();
-            let (result, _) = Timing::disabled("independent semantic readback", |t| {
-                layerfs_content::read_all_bounded(
-                    &reader,
-                    resolved.value.content_root,
-                    4096,
-                    &mut bytes,
-                    t.child("read"),
-                )
-            });
-            result.map_err(|e| e.to_string())?;
-            if bytes != expected {
-                return Err(format!("independent bytes mismatch at publication {index}"));
-            }
-            let meta = fs
-                .read_portable(&LogicalPath::new("data").map_err(|e| e.to_string())?)
-                .map_err(|e| e.to_string())?;
-            if meta.mode != 0o644 {
-                return Err("portable mode oracle".into());
-            }
-            std::fs::write(out.join(format!("publication-{index}.data")), &bytes)
-                .map_err(|e| e.to_string())?;
-        }
-    }
-    let snapshot = authority.snapshot()?;
-    if snapshot.root != *roots.last().ok_or("no roots")? || snapshot.head != expected_head {
-        return Err("successor head oracle".into());
-    }
-    let mut selected = snapshot.head;
-    for expected in created_heads.iter().rev() {
-        let id = selected.ok_or("head absent")?;
-        let actual = authority
-            .history
-            .commit(layerfs_history::identity::CommitId::from_bytes(id).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?
-            .ok_or("head missing")?;
-        if actual.id.to_bytes() != expected.commit
-            || actual.root.as_bytes() != &expected.root
-            || actual.parent.map(|p| p.to_bytes()) != expected.parent
-        {
-            return Err("history head/root/parent oracle".into());
-        }
-        selected = actual.parent.map(|p| p.to_bytes());
-    }
-    if selected.is_some() {
-        return Err("unexpected earlier history parent".into());
-    }
-    let proof_ms = proof.elapsed().as_secs_f64() * 1000.;
+    let command_ms = total.elapsed().as_secs_f64() * 1000.;
+    let plan = crate::proof_plan::Plan {
+        scenario: scenario.map(|s| s.identity),
+        branch: branch.to_bytes(),
+        head: expected_head,
+        roots,
+        commits: created_heads
+            .into_iter()
+            .map(|c| crate::proof_plan::Head {
+                id: c.commit,
+                root: c.root,
+                parent: c.parent,
+            })
+            .collect(),
+    };
+    plan.write(&out.join("proof-plan.bin"))?;
     let case_id = scenario.map_or("phase6-smoke", |s| s.id.as_str());
-    let mut file = File::create(out.join("receipt.json")).map_err(|e| e.to_string())?;
-    writeln!(file,"{{\"schema\":1,\"case_id\":\"{case_id}\",\"kind\":\"correctness diagnostic\",\"cache_status\":\"INELIGIBLE: OS/page cache unknown\",\"sqlite_version\":\"{}\",\"image\":\"{}\",\"genesis_ms\":{genesis_ms},\"complete_command_ms\":{command_ms},\"proof_ms\":{proof_ms},\"rows\":[{}],\"semantic_proof\":\"PASS\",\"canonical_reference\":\"NOT_RUN\",\"physical_resources\":\"NOT_RUN\",\"cleanup\":\"PASS\"}}",rusqlite::version(),image,rows.join(",")).map_err(|e|e.to_string())?;
-    println!("real SDK/FUSE/SQL/C1/C2/MinIO/C5 correctness path PASS; complete_command_ms={command_ms:.3} proof_ms={proof_ms:.3}; speed INELIGIBLE");
+    let mut file = File::create(out.join("performance.json")).map_err(|e| e.to_string())?;
+    writeln!(file,"{{\"schema\":2,\"case_id\":\"{case_id}\",\"kind\":\"correctness diagnostic performance phase\",\"cache_status\":\"INELIGIBLE: OS/page cache unknown\",\"sqlite_version\":\"{}\",\"image\":\"{}\",\"genesis_ms\":{genesis_ms},\"complete_command_ms\":{command_ms},\"rows\":[{}],\"semantic_proof\":\"NOT_RUN\",\"canonical_reference\":\"NOT_RUN\",\"physical_resources\":\"NOT_RUN\",\"cleanup\":\"PASS\"}}",rusqlite::version(),image,rows.join(",")).map_err(|e|e.to_string())?;
+    println!("SDK/FUSE/C1/C2/MinIO/C5 performance phase completed; separate proof pending");
     Ok(())
 }

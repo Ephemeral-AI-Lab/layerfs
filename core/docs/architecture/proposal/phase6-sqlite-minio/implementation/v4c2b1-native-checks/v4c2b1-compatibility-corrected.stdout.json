@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "4fc8e732df4c3e35f15888b1e2b7176d2c14982dcdb8f1f409509ca8cddef0ed",
+  "raw_utf8": "   Compiling phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/benchmark/phase6-live)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.20s\n     Running tests/construction.rs (core/benchmark/phase6-live/target/debug/deps/construction-1811a6b516760649)\n\nrunning 5 tests\ntest published_overlay_truncate_regrow_and_ordinal_eof ... ok\ntest changed_names_and_one_dirty_file_preserve_unrelated_values ... ok\ntest tombstone_open_orphan_and_fresh_cancel_have_no_lifetime_scan ... ok\ntest large_immediate_file_edit_keeps_tail_and_old_root ... ok\ntest sql_native_namespace_matches_legacy_and_consumes270names_once ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s\n\n"
+}

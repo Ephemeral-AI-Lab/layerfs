@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "4cf61ebd9cd9807483b89f059e68c41d3f79c1f7716081d3c9dcc27a5388bdde",
+  "raw_utf8": "    Checking phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sqlite-minio-design/layerfs/core/benchmark/phase6-live)\nerror[E0433]: failed to resolve: use of undeclared type `FilesystemUpdateCounters`\n  --> src/construction.rs:85:24\n   |\n85 |     let mut counters = FilesystemUpdateCounters::default();\n   |                        ^^^^^^^^^^^^^^^^^^^^^^^^ use of undeclared type `FilesystemUpdateCounters`\n   |\nhelp: consider importing one of these structs\n   |\n1  + use crate::construction::filesystem::FilesystemUpdateCounters;\n   |\n1  + use layerfs_content::filesystem::FilesystemUpdateCounters;\n   |\n\nFor more information about this error, try `rustc --explain E0433`.\nerror: could not compile `phase6-live-probe` (lib) due to 1 previous error\n"
+}

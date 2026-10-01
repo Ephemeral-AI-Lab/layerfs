@@ -410,3 +410,46 @@ sorted primitives; published/removal/orphan bookkeeping; keep/enhance independen
 service validation; separate actual15s performance and9.5s readonly proof children.
 No weaker oracle, cap increase or retroactive PASS. Next implement/externally check,
 publish frozen source then changed-constructor covering cohort; full goal active.
+
+## V4c2b1 SQL-native constructor/separate readonly proof runtime PARTIAL
+
+Parent `b4ae103f07ac84743a25c5b6fc977f3cbfc7647b`. Own construction/namespace_stream/
+engine/rename/FUSE membership, audit, driver/scenario/proof_plan/proof/main/run/
+readonly locator modules and external checks. Replace generic prepared replay with
+keyset Names/Values streams through actual C1sorted directory/inode primitives,
+portable metadata and unchanged immediate file edits/namespace format. Retire old
+PreparedRows runtime implementation (fixed counters only remain). SQL links/
+parent uniqueness/cycle checks establish live invariants; service remains independent
+full closure plus exact single-link refs/complete inode membership/level/fill/count
+checks before actual C5publication. No end-to-end validation silently removed.
+
+Published membership flag permits exact tombstones and excludes fresh cancelled/
+open orphan data from namespace scans. Writes/truncate/setattr on unlinked orphans
+retain data without entering namespace dirty index. Known install clears captured
+prepared/edit/name ledgers and membership, keeps orphan sources/handles. Serialized
+profile and current512/256/C2/SQL/transport bounds remain; no population/migration/
+retirement/concurrency/canonical/physical claim.
+
+Performance child now ends after actual unmount/delete/service drain and writes
+incremental phase events, performance receipt and exact P6PROOF1known-reply plan.
+Separate9.5s verifier opens actual locator/C5catalogs readonly, binds scenariohash/
+EOF/head plan, full MinIO/manifests/history and reports independently. Existing15s
+performance gate unchanged; old270TIMEOUTunchanged, no guessed adoption/resend.
+
+Checks: baseline construction/engine/rename10PASS after explicit tombstone count
+expectation corrected; extra270linear/legacy-compatible/tombstone/orphan/fresh-cancel
+checks5construction PASS, moved directory/replacement/new empty1PASS; plan EOF and
+readonly mutation-before-I/O2PASS. Compatibility uses prior official C1whole builder
+on captured source facts, not an independent canonical math oracle.270fresh names
+served271once, directory lookups<600 versus old39295; source readonly tests do not
+claim real MinIO proof. Actual cohort next. Script replacement failed before edits
+and accidentally reran3unchanged construction checks; retained/acknowledged, no new
+proof claim from repeat. Initial missing reexport, tombstone count assertion and
+Clippy complex tuple defects corrected from output/source, no lint suppression.
+
+Host all-target locked Clippy/fmt/native release and Linux musl release builds PASS;
+Python compile PASS. Prior unchanged session/packing/file-facts proofs retained by
+scope; full unchanged Core suites/examples/Linux Clippy unrun. Product unchanged.
+Next publish/source seal, changed-constructor full67/270/128covering cohort with
+separate15/9.5limits; service whole-population cost, family/DeepSeek and all larger
+gates remain open. Goal active.

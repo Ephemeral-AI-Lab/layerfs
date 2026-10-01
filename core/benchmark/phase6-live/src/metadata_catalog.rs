@@ -10,9 +10,36 @@ use std::{collections::BTreeMap, path::Path, sync::Mutex, time::Duration};
 pub struct LocatorDb {
     db: Mutex<Connection>,
     pub s3: Minio,
+    writable: bool,
 }
 impl LocatorDb {
+    pub fn open_read_only(path: &Path, s3: Minio) -> Result<Self, String> {
+        let db = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|e| e.to_string())?;
+        db.execute_batch("PRAGMA query_only=ON;PRAGMA cache_size=-2048;PRAGMA mmap_size=0")
+            .map_err(|e| e.to_string())?;
+        db.busy_timeout(Duration::ZERO).map_err(|e| e.to_string())?;
+        let mut q=db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").map_err(|e|e.to_string())?;
+        let names = q
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        if names != ["file_edges", "file_facts", "objects", "packs"] {
+            return Err("readonly locator schema".into());
+        }
+        drop(q);
+        Ok(Self {
+            db: Mutex::new(db),
+            s3,
+            writable: false,
+        })
+    }
+
     pub fn certify_file(&self, root: ObjectId) -> Result<crate::file_facts::Work, String> {
+        if !self.writable {
+            return Err("readonly certificate mutation refused".into());
+        }
         let db = self.db.lock().map_err(|_| "locator owner")?;
         crate::file_facts::certify_file(&db, root)
     }
@@ -25,6 +52,7 @@ impl LocatorDb {
         Ok(Self {
             db: Mutex::new(db),
             s3,
+            writable: true,
         })
     }
 }
@@ -73,6 +101,9 @@ impl Locators for LocatorDb {
         Ok(ids.iter().map(|id| found.get(id).cloned()).collect())
     }
     fn register_many(&self, rows: &[Locator]) -> Result<Vec<Locator>, String> {
+        if !self.writable {
+            return Err("readonly locator mutation refused".into());
+        }
         if rows.is_empty()
             || rows.len() > 128
             || rows

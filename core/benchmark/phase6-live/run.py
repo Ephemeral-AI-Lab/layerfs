@@ -93,9 +93,28 @@ def run():
             if line.startswith('P6_METADATA_STATS '):
                 statistics.append(json.loads(line[len('P6_METADATA_STATS '):]))
         (out / 'transport-statistics.json').write_text(json.dumps(statistics, indent=2) + '\n')
-        receipt = json.loads((out / 'result/receipt.json').read_text())
-        if receipt['proof_ms'] >= 9500:
+        proof_command = [str(Path(args.driver).resolve()), 'verify', str(out / 'result'), str(private)]
+        if args.case_file:
+            proof_command.append(str(Path(args.case_file).resolve()))
+        proof_start = time.monotonic()
+        with open(out / 'proof.stdout', 'xb') as stdout, open(out / 'proof.stderr', 'xb') as stderr:
+            try:
+                proof_child = subprocess.run(proof_command, env=env, stdout=stdout, stderr=stderr, timeout=9.5)
+                proof_result = {'exit': proof_child.returncode, 'wall_seconds': time.monotonic()-proof_start}
+            except subprocess.TimeoutExpired:
+                proof_result = {'exit': None, 'status': 'TIMEOUT', 'wall_seconds': time.monotonic()-proof_start}
+        proof_result['plan_sha256'] = sha(out / 'result/proof-plan.bin')
+        (out / 'proof-invocation.json').write_text(json.dumps(proof_result, indent=2)+'\n')
+        if proof_result['exit'] != 0:
+            raise RuntimeError('separate proof failed; actual performance and data retained')
+        performance = json.loads((out / 'result/performance.json').read_text())
+        proof = json.loads((out / 'result/proof.json').read_text())
+        if proof['proof_ms'] >= 9500:
             raise RuntimeError('proof bound exceeded; not an admission PASS')
+        receipt = dict(performance, semantic_proof=proof['status'], proof_ms=proof['proof_ms'],
+                       performance_child_wall_seconds=result['wall_seconds'],
+                       proof_child_wall_seconds=proof_result['wall_seconds'], proof_plan_sha256=proof_result['plan_sha256'])
+        (out / 'result/receipt.json').write_text(json.dumps(receipt, indent=2)+'\n')
         print(json.dumps(result))
     finally:
         if process.poll() is None:
