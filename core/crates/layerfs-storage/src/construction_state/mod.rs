@@ -1,6 +1,34 @@
 //! Private, admitted DirectoryRoots construction state and explicit custody.
 
 mod adapter;
+mod canonical_layout;
+mod canonical_status;
+mod fact_adapter;
+mod fact_index;
+mod fact_lifecycle;
+mod fact_mutation;
+mod fact_read;
+mod fact_session;
+mod fact_state;
+mod occupation;
+
+mod alias_adapter;
+mod alias_index;
+mod alias_mutation;
+mod alias_session;
+mod alias_state;
+mod draft_adapter;
+mod draft_create;
+mod draft_emission;
+mod draft_index;
+mod draft_links;
+mod draft_retire;
+mod draft_session;
+mod draft_state;
+mod draft_temporary;
+mod draft_write;
+mod session_init;
+
 mod authority;
 mod claim_index;
 mod claim_lifecycle;
@@ -8,6 +36,7 @@ mod claim_session;
 mod graph_adapter;
 mod graph_build;
 mod graph_index;
+mod graph_layout;
 mod graph_lifecycle;
 mod graph_pop;
 mod graph_queries;
@@ -23,6 +52,9 @@ mod native;
 mod phased;
 mod plan;
 mod profile;
+mod root_reset;
+mod root_retire;
+mod root_session;
 mod session;
 mod site_index;
 mod site_lifecycle;
@@ -34,5 +66,33 @@ mod status;
 
 pub use adapter::ScratchAdapter;
 pub use authority::ScratchAuthority;
+pub use draft_adapter::DraftAdapter;
+pub use graph_layout::GraphWorkingLayout;
+pub use root_retire::{RootRetirementProgress, RootRetirementStage};
 pub use session::ScratchSession;
 pub use status::{NativeIdentity, ScratchDisposition, ScratchOwnerStatus, ScratchProfile};
+
+mod count_adapter;
+mod count_index;
+mod count_lifecycle;
+mod count_mutation;
+mod count_read;
+mod count_session;
+mod count_state;
+mod pool_authority;
+mod pool_draft;
+mod pool_ready;
+mod pool_session;
+mod pool_state;
+mod rebind_context;
+mod rebind_index;
+mod rebind_session;
+mod rebind_state;
+mod release_adapter;
+mod release_index;
+mod release_lifecycle;
+mod release_mutation;
+mod release_session;
+mod release_state;
+
+pub use pool_state::{PoolCounter, PoolCounters, PoolStatus};

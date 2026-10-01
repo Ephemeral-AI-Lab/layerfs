@@ -1,5 +1,6 @@
 //! Exact replay admission and one fixed raw-occurrence prefetch producer.
 use super::binding::{Bindings, Headers};
+use super::fact_access::FactAccess;
 use super::{ValidationState, ValidationWork, ALLOCATION_CHECK_BATCH};
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::inode::read::InodeTable;
@@ -37,27 +38,37 @@ struct Completed {
     transcript: [u8; 32],
 }
 
-pub(super) fn read(
+/// Fixed raw64 producer/replay admission, including exact selected transcript hashers.
+pub const fn validation_fact_producer_working_bytes() -> usize {
+    std::mem::size_of::<Wave>()
+        + 2 * std::mem::size_of::<Completed>()
+        + std::mem::size_of::<blake3::Hasher>()
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) fn read_with<S: ?Sized>(
     reader: &dyn AuthenticatedObjects,
     input: &dyn PreparedBindingRows,
     table: InodeTable,
     state: &mut ValidationState,
     declared: usize,
     work: &mut ValidationWork,
+    provider: &mut S,
+    access: FactAccess<S>,
 ) -> ContentResult<()> {
     // The count/EOF hasher is gone before replay. Only fixed totals and32 bytes
     // survive; no serial, name or row population enters this handoff.
+    let _producer = access.working(state, provider, validation_fact_producer_working_bytes())?;
     let admitted = visit(input, declared, |_| Ok(()))?;
     let mut wave = Wave::new();
     let replayed = visit(input, declared, |serial| {
-        wave.push(serial, reader, table, state, work)
+        wave.push(serial, reader, table, state, work, provider, access)
     })?;
     if replayed != admitted {
         return Err(ContentError::InvalidRecord("prefetch source replay"));
     }
     // Full waves may already have read data. A changed replay never buys the
     // final tail, reaches semantic mutation, or adopts a new source.
-    wave.flush(reader, table, state, work)
+    wave.flush(reader, table, state, work, provider, access)
 }
 
 fn visit(
@@ -144,13 +155,16 @@ impl Wave {
             used: 0,
         }
     }
-    fn push(
+    #[allow(clippy::too_many_arguments)]
+    fn push<S: ?Sized>(
         &mut self,
         serial: u64,
         reader: &dyn AuthenticatedObjects,
         table: InodeTable,
         state: &mut ValidationState,
         work: &mut ValidationWork,
+        provider: &mut S,
+        access: FactAccess<S>,
     ) -> ContentResult<()> {
         if self.used == ALLOCATION_CHECK_BATCH {
             return Err(ContentError::InvalidRecord("prefetch pending bound"));
@@ -160,20 +174,23 @@ impl Wave {
         work.prefetch.examined_occurrences = work.prefetch.examined_occurrences.saturating_add(1);
         work.prefetch.max_pending = work.prefetch.max_pending.max(self.used as u64);
         if self.used == ALLOCATION_CHECK_BATCH {
-            self.flush(reader, table, state, work)?;
+            self.flush(reader, table, state, work, provider, access)?;
         }
         Ok(())
     }
-    fn flush(
+    #[allow(clippy::too_many_arguments)]
+    fn flush<S: ?Sized>(
         &mut self,
         reader: &dyn AuthenticatedObjects,
         table: InodeTable,
         state: &mut ValidationState,
         work: &mut ValidationWork,
+        provider: &mut S,
+        access: FactAccess<S>,
     ) -> ContentResult<()> {
         let mut count = 0;
         for &serial in &self.pending[..self.used] {
-            if state.known(serial) {
+            if access.known(state, provider, table, serial)? {
                 work.prefetch.memo_hits = work.prefetch.memo_hits.saturating_add(1);
             } else {
                 self.missing[count] = serial;
@@ -192,7 +209,14 @@ impl Wave {
             .prefetch
             .local_duplicates
             .saturating_add((count - unique) as u64);
-        state.prefetch_wave(reader, table, &self.missing[..unique], work)?;
+        access.prefetch(
+            state,
+            provider,
+            reader,
+            table,
+            &self.missing[..unique],
+            work,
+        )?;
         self.used = 0;
         Ok(())
     }

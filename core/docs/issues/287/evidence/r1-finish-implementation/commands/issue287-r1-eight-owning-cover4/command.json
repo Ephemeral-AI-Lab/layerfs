@@ -1,0 +1,40 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "canonical_state_population",
+    "--test",
+    "canonical_state_records",
+    "--test",
+    "small_file_authority",
+    "--test",
+    "no_draft_authority",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "construction_counts",
+    "--test",
+    "canonical_namespace_pipeline",
+    "--test",
+    "scratch_pool",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "small_file_authority",
+    "--test",
+    "no_draft_authority"
+  ],
+  "exit": 101,
+  "wall_ns": 2534769625,
+  "source_change": {
+    "core/crates/layerfs-content/tests/small_file_authority.rs": "1a9b92e17fe6b1feaa10fdb06ce0a9e19b322594e3ae12269b4d8c090d927c01"
+  },
+  "cause": "externalSmalltestimportsactualBindingRows trait fordirectory_headers assertion"
+}

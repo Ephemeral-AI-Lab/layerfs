@@ -1,0 +1,28 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "scratch_pool",
+    "--",
+    "--skip",
+    "unix::actual_finished_draft6_resets_before_idle_and_rebinds_full_scope_without_new_birth",
+    "--skip",
+    "unix::actual_metadata_observer_withholds_idle_but_scope_copy_is_stale_after_rebind",
+    "--skip",
+    "unix::corrupt_idle_projection_is_retained_and_cannot_fall_back_to_empty_second_slot"
+  ],
+  "exit": 0,
+  "wall_ns": 6676803916,
+  "source_change": {
+    "core/crates/layerfs-storage/src/construction_state/rebind_index.rs": "4fddf1c20f8c397cea586218e43b1d74725c2e281645a27c5a716a8227220f35",
+    "core/crates/layerfs-storage/tests/scratch_pool.rs": "9daaba5e94dfc8ebc7747f6a5ed247fad9aa37b36a4257131fa190460c377bf3"
+  },
+  "cause": "sameTxnCASsolver_owner188scope oldtonew withALLresetinitialscalars; originalexactsolververification preserved"
+}

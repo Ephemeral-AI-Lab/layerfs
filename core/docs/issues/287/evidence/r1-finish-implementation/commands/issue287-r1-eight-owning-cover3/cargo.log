@@ -1,0 +1,29 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-storage)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+error[E0599]: no method named `directory_headers` found for struct `VerifiedSmallFileRows` in the current scope
+   --> crates/layerfs-content/tests/small_file_authority.rs:208:10
+    |
+207 |       assert!(rows
+    |  _____________-
+208 | |         .directory_headers()
+    | |_________-^^^^^^^^^^^^^^^^^
+    |
+   ::: /Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content/src/filesystem/rows/binding.rs:184:8
+    |
+184 |       fn directory_headers(&self) -> ContentResult<Box<dyn DirectoryHeaderSource + '_>>;
+    |          ----------------- the method is available for `VerifiedSmallFileRows` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: there is a method `directory_header` with a similar name, but with different arguments
+   --> /Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content/src/filesystem/rows/binding.rs:186:5
+    |
+186 |     fn directory_header(&self, parent: u64) -> ContentResult<Option<DirectoryHeader>>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: trait `BindingRows` which provides `directory_headers` is implemented but not in scope; perhaps you want to import it
+    |
+2   + use layerfs_content::filesystem::rows::BindingRows;
+    |
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `layerfs-content` (test "small_file_authority") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

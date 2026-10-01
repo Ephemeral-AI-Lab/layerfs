@@ -1,0 +1,1685 @@
+{
+  "commands": [
+    {
+      "command_metadata": {
+        "cause": "originalsealedRootfixturesexternalrootdocsneededbyrelativepublicoracle; locallypreparedsameeffectruns actualcountwitness/Unknown/fullrowchecks",
+        "commands": [
+          {
+            "command": [
+              "cargo",
+              "+1.85.1",
+              "test",
+              "--manifest-path",
+              "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+              "--locked",
+              "-p",
+              "layerfs-content",
+              "--test",
+              "edit_reference",
+              "--",
+              "--show-output"
+            ],
+            "exit": 0,
+            "wall_ns": 8152135792
+          },
+          {
+            "command": [
+              "cargo",
+              "+1.85.1",
+              "test",
+              "--manifest-path",
+              "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+              "--locked",
+              "-p",
+              "layerfs-storage",
+              "--test",
+              "draft_temporaries",
+              "--test",
+              "construction_drafts",
+              "--test",
+              "draft_reference_quanta",
+              "--",
+              "--show-output"
+            ],
+            "exit": 0,
+            "wall_ns": 14016297000
+          }
+        ],
+        "immutable_oracle_copy": {
+          "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/batch-normalized.json": "f85b9480daac41a0fe70ca495db44fd0635660dbdd580f8c20edc08d9ed427ed",
+          "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/half-partition-90-90.json": "44f71d7986e0779f4e9b1d46716fe14bae29995263e7b5bbb9291e3b7d877427",
+          "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/height-growth.json": "ccd588365a7e093b52971d9c6c1012f4fc7aed1fc5827f6ba7652b1807089196",
+          "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/interior-multi-level.json": "da90244c57d71b932b78c381954131e48045275121ebbcba895b10aaf77c705e",
+          "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/join-80-100.json": "21fc57e86955ceb84cbee4699a7170e5a92e46747f82d08a8f9062c329d425b2",
+          "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/root-collapse.json": "5bab3b12b1f5a73aa27d930118749f44080ae25e40f94aff9e0fff2ea00be102",
+          "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/unequal-height-join.json": "742f0cf46c373d4553e1528e3aa41cd0f9689851dbbc153b77d3623f308322af",
+          "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/untouched-sibling.json": "d4adb1be743edbe23053c16716a6f7573f4dce12cb7eb95c0a91c8deaa400b56",
+          "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260917T034500Z/repartition-80-100.json": "9912ff5a4a73d4bb2f1ff75e666d685c0781506c511dec7a2d848bc89582c8be"
+        },
+        "source_change": {
+          "core/crates/layerfs-content/src/file/edit/draft_port.rs": "f4c6e89307d9b1e37f8dbfc9355b84922a693f06f7439e205e15f965e2f1d2a3",
+          "core/crates/layerfs-storage/src/construction_state/draft_write.rs": "7874262fd018df944e8439093250e98e6fb7c7cd98a784cf01a1ab45959b8ac8",
+          "core/crates/layerfs-storage/tests/draft_reference_quanta.rs": "4816550cf2c139d3f9d71e868fbf52fd247779372badaf81e9c513cfef1e23f7"
+        }
+      },
+      "files_sha256": {
+        "1.json": "c5de5c44fc16415a040b9e58350a83cd86b51afb44b319b14aab9c9878013f41",
+        "1.log": "0ec63fa0ff9113f33b59221fc6a016818bb7dcd28c3a797799a1529b44747860",
+        "2.json": "0e535856ade5116832be07616a5b84c088306f51157db5b8de3bf3d149cdb24d",
+        "2.log": "51c11664502b32621d337e5ba80b9518f7af4802d31d7ac95aa3ec983c40f8e6",
+        "command.json": "dd32ecdbd3f4b9cfa4e6e7bcb83e9e606af8ad746c419308a82f19a0d1bfc0af"
+      },
+      "name": "issue287-r1-draft-fixture-native-quanta-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-draft-fixture-native-quanta-cover"
+    },
+    {
+      "command_metadata": {
+        "cause": "restoreoldlogicalbodycounteroveractualretention; NEWaggregatepeak retainsalladmission; originalfrontierassertsunchanged dualcountdiagnostics",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-content",
+          "--test",
+          "edit_bounds",
+          "--",
+          "--show-output"
+        ],
+        "exit": 101,
+        "source_change": {
+          "core/crates/layerfs-content/src/file/edit/draft_port.rs": "33df7b410d30d9814d003ac21e213023c36fcd77b092c01822eac0b0a287c844",
+          "core/crates/layerfs-content/src/file/edit/draft_record.rs": "2cc9812973b97da3940700a6d0f1de576fae201fb8c2da0d9b6350c8c617e679",
+          "core/crates/layerfs-content/src/file/edit/draft_resident.rs": "bf51337ba7fc310671bc77bd90288d392b57c21f28dcc240b6692880e59dc46b",
+          "core/crates/layerfs-content/src/file/edit/tree.rs": "bdcf7419e5053ca94676e9bde31617f0be4807853428bf592a5d21302ae23f92",
+          "core/crates/layerfs-content/tests/edit_bounds.rs": "974bdacc42e98c056ddf3b86b92c83c1def72753c8223749e974f3c1c8ceb5d8",
+          "core/crates/layerfs-storage/src/construction_state/draft_create.rs": "a661ded3ac5f2e7fdcc174d6424d1291b1b1daf12cbcc8621d424726eb1e2b3f",
+          "core/crates/layerfs-storage/src/construction_state/draft_retire.rs": "3601589b62f123fc4cc5512eab2301e2b5094061945f4f2457007aee89229339"
+        },
+        "wall_ns": 9767016917
+      },
+      "files_sha256": {
+        "cargo.log": "163032f434e651a2570ca6cc777276ff4b570cec9acc9b9029f1f70cad5b48ef",
+        "command.json": "b7875a147f5c6ac70657ef4ad5e05cbbb7e3c9f7711846cf9382ea4e6ee51932"
+      },
+      "name": "issue287-r1-dual-draft-counter-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-dual-draft-counter-cover"
+    },
+    {
+      "command_metadata": {
+        "cause": "Freshhasrealroot1 enrolled/expandedbyactualroottransition evenD0B0; UpdateemptyGraphkept; noFreshseedorweakenedgate",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "construction_counts",
+          "--",
+          "--skip",
+          "unix::update_seed_transcript_fifo_current_retention_external_depth_and_full_names"
+        ],
+        "exit": 101,
+        "source_change": {
+          "core/crates/layerfs-storage/tests/construction_counts.rs": "2b9e1c6d614c3580d8d3367c6ed36ed8e6bf8879fca66292e012af7164c7bdb9",
+          "core/crates/layerfs-storage/tests/scratch_pool.rs": "77390d269583d6112d8a8ef59c912825ffe8748c24f4ae0eb95de68b49300a91"
+        },
+        "wall_ns": 5381097583
+      },
+      "files_sha256": {
+        "cargo.log": "567e58cc62b95a6607de97301ccea5cbe7d61b5fdcc0ad6e8965333fc42941f2",
+        "command.json": "c8ce5f71724580ebdc7fac55b00dc99682458428f0515cee83b0950447f03b0f"
+      },
+      "name": "issue287-r1-eight-count-fresh-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-count-fresh-cover"
+    },
+    {
+      "command_metadata": {
+        "cause": "existingFreshproofreachable-root finish; selectiveSCCisUpdate-only; actualfreshRoot/expanded/sealstillrequired",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "construction_counts",
+          "--",
+          "--skip",
+          "unix::update_seed_transcript_fifo_current_retention_external_depth_and_full_names"
+        ],
+        "exit": 0,
+        "source_change": {
+          "core/crates/layerfs-storage/tests/construction_counts.rs": "94513c0eb93bafe4aa91d56ada301e9661bd90ef14dbaad639bceb629e4fb755",
+          "core/crates/layerfs-storage/tests/scratch_pool.rs": "5397a6c296f969c12eccc5da63a415bf3b770897f492c9a4d443ffb21c23b853"
+        },
+        "wall_ns": 3734994708
+      },
+      "files_sha256": {
+        "cargo.log": "a9e1af0eac1168a05a74bcd51b51ab1e26f0d11759cedbbba99ba8a4fd6b3450",
+        "command.json": "327c74804870d7258e13923c388c2d4ec5e79e3e1949bbedd941fd47215fe9bd"
+      },
+      "name": "issue287-r1-eight-count-fresh-mode-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-count-fresh-mode-cover"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "construction_counts",
+          "--test",
+          "scratch_pool"
+        ],
+        "exit": 101,
+        "source": "eight original+retained corrective overlays; counts/pool runtimeunrunafterpipeline exit",
+        "wall_ns": 15312195458
+      },
+      "files_sha256": {
+        "cargo.log": "8e274a945e94d24e9e39b8ed2af1c296bc5dc7a135e125599721e575dc31a281",
+        "command.json": "c9ab7bbb28ef23564d032f409e13066105907f1cab48c308119cbf0f02d608f5"
+      },
+      "name": "issue287-r1-eight-count-pool-unrun",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-count-pool-unrun"
+    },
+    {
+      "command_metadata": {
+        "cause": "guardedbirth/cleanup eachnativeSQLboundary +atomicTEMPscopebirth acceptance; realprivate/publictwoownerscopeproof, actualsupportedguardUnsupportedNOT_RUN scoped",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "birth_scope",
+          "--test",
+          "write_admission",
+          "--test",
+          "multi_writer",
+          "--test",
+          "persistence_failure",
+          "--test",
+          "save_working",
+          "--test",
+          "engine_participation",
+          "--",
+          "--show-output"
+        ],
+        "exit": 101,
+        "source_change": {
+          "core/crates/layerfs-storage/src/cas/lifecycle.rs": "cb3eb1c2e9d546c07b917d517ac0fca6ed6dde08cac9167803309e0ad05fa2a9",
+          "core/crates/layerfs-storage/src/sqlite/cleanup.rs": "588194826a49c913b83b0d1f197be5f8bcdaaceee405a8e7099d4eb30ca2b82a",
+          "core/crates/layerfs-storage/src/sqlite/ownership.rs": "a2aae43f4481c65f5243bdfdd0d7b9acd40d6b5c61a520579a75de4b326fce43",
+          "core/crates/layerfs-storage/tests/birth_scope.rs": "c7f3724ed3b668cb911ff0edc1fc00ab8e6719ce00b4f756a98a7121393590eb",
+          "core/crates/layerfs-storage/tests/engine_participation.rs": "7f0905b443d1041492750e327d9ce7b5e4224a149a1153880080de4d4529be7b"
+        },
+        "wall_ns": 12422189500
+      },
+      "files_sha256": {
+        "cargo.log": "597a2a8db6ed3541ad370f31debe5e39d9a37d0c02506c011554fbe191f6459c",
+        "command.json": "c888f0f0494ad617e2caa21a28b44bc26177e5c92b36ee1298cff12f8d03d6ce"
+      },
+      "name": "issue287-r1-eight-engine-boundary-birth-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-engine-boundary-birth-cover"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "engine_participation",
+          "-p",
+          "layerfs-history",
+          "--test",
+          "engine_participation",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "engine_participation",
+          "--test",
+          "native_read_saturation",
+          "--test",
+          "native_purposes"
+        ],
+        "exit": 0,
+        "scope": "engineparticipation actualproviderUnsupported becomesexplicitcomponentNOT_RUN; nativecompatpurpose/saturatedread/drain notstrict/global/physical",
+        "source_change": {
+          "core/crates/layerfs-history/tests/engine_participation.rs": "4922317174c3efb89062adebfee848d8a4b42fd522068a34785da61be08ff007",
+          "core/crates/layerfs-server/tests/engine_participation.rs": "7b3311ebf6a4a83e5c72261b151f79cb6f99c5a0d2e754568bb82ac6e5869fef",
+          "core/crates/layerfs-server/tests/native_purposes.rs": "45422bf10940cb0ef95cbeadd29b492968a3eed0819f306d35ebf58db10c7de0",
+          "core/crates/layerfs-server/tests/native_read_saturation.rs": "9d95af11a59ec4a4522b01f4c4480c02f513838e6f13fbe15446c7ef3d607dc5",
+          "core/crates/layerfs-server/tests/support/native_saturation.rs": "865fd2131bcfec1f4712de0e17b5d8d3c0c32dde90e230381e6af016ef8b6f66",
+          "core/crates/layerfs-storage/tests/engine_participation.rs": "daa279be00315abf30a6a99d7b29c4651b0f2735fcec4ee42484099cbaafcd1b"
+        },
+        "wall_ns": 8928733375
+      },
+      "files_sha256": {
+        "cargo.log": "0772e37f5dfb3b59ae9650422ad558272d1e56abdb980511879417c507b87f95",
+        "command.json": "d80ea62058f34b8fb08a7063bc014329d62db265b47719deb591e52de7032020"
+      },
+      "name": "issue287-r1-eight-engine-native-unrun",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-engine-native-unrun"
+    },
+    {
+      "command_metadata": {
+        "cause": "independentnativeBASEscope/serial/phase acquisitions provegenuinefirstroot1 andnofinalBASEprefixreread; diagnosticactualtablemergereads separated",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "canonical_namespace_pipeline",
+          "--",
+          "--nocapture"
+        ],
+        "exit": 0,
+        "source_change": {
+          "core/crates/layerfs-storage/tests/canonical_namespace_pipeline.rs": "d26e282eb294e2f90404b0c74930645cc6e590c2093eeae6fe0cf81507fb00a4"
+        },
+        "wall_ns": 4508283500
+      },
+      "files_sha256": {
+        "cargo.log": "89ab7e38838ec8da26bc6314514cf9dc8944efafef8c3f75332bfbf2c22e09bc",
+        "command.json": "743392b7596b86afd7c808bc4ab237ec24bcefa9601754dcfc412c7939130370"
+      },
+      "name": "issue287-r1-eight-native-memo-cause-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-native-memo-cause-cover"
+    },
+    {
+      "command_metadata": {
+        "cause": "reject malformed empty EditSequence final length before provider/emission",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-content",
+          "--test",
+          "no_draft_authority",
+          "inconsistent_empty_sequence_refuses_captured_shape_before_provider_or_emission",
+          "--",
+          "--show-output"
+        ],
+        "exit": 0,
+        "source_change": {
+          "core/crates/layerfs-content/src/file/edit/no_draft.rs": "95bc96a7a62b596d94477d1d1b988f3cec8d0c8491e91feba8a0122bff9e0526",
+          "core/crates/layerfs-content/tests/no_draft_authority.rs": "f3b121dbec1f6f2073dbe532b6eb687747d40a5eaa918cf7a2071e8798698aeb"
+        },
+        "wall_ns": 13356206541
+      },
+      "files_sha256": {
+        "cargo.log": "41168045721b1c6e2908555bceb7ad0842207202e21683de9aab5b6ba7854b1b",
+        "command.json": "f974b8dcad7ba7a3df320e4d1efbfad36eba0823335fc7beb8342fd467e8007c"
+      },
+      "name": "issue287-r1-eight-no-draft-shape-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-no-draft-shape-cover"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-content",
+          "--test",
+          "canonical_state_population",
+          "--test",
+          "canonical_state_records",
+          "--test",
+          "small_file_authority",
+          "--test",
+          "no_draft_authority",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "construction_counts",
+          "--test",
+          "canonical_namespace_pipeline",
+          "--test",
+          "scratch_pool",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "small_file_authority",
+          "--test",
+          "no_draft_authority"
+        ],
+        "exit": 101,
+        "source_inventory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/source-inventory.json",
+        "source_inventory_sha256": "3c8e35787c0196e1f1f18d7e460dbd1a48be7708f48d47752e081e564a5c3deb",
+        "wall_ns": 20076569250
+      },
+      "files_sha256": {
+        "cargo.log": "f15de6409070bdcce91958396f8ea1924cd0bc75ed8ddbc49302aafb946dd02a",
+        "command.json": "8fe778cdee9761fd30d857e9aa93208a43b0bd0392e680ef42703668bdc27535"
+      },
+      "name": "issue287-r1-eight-owning",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-owning"
+    },
+    {
+      "command_metadata": {
+        "cause": "exactport/import/0-dirhelper plusinline255UTF8ReleaseName retainsCopy/full291wire andactualoldproposednamecustody",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-content",
+          "--test",
+          "canonical_state_population",
+          "--test",
+          "canonical_state_records",
+          "--test",
+          "small_file_authority",
+          "--test",
+          "no_draft_authority",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "construction_counts",
+          "--test",
+          "canonical_namespace_pipeline",
+          "--test",
+          "scratch_pool",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "small_file_authority",
+          "--test",
+          "no_draft_authority"
+        ],
+        "exit": 101,
+        "source_change": {
+          "core/crates/layerfs-content/src/filesystem/path.rs": "044316eabf9a2ce22eed9b163a0d0e6d7d9bc35da1ee13ea77521437963c11c1",
+          "core/crates/layerfs-content/src/filesystem/references/release_state.rs": "002898bc3e01a4920c3a38640a8f1b470a9eb81e81c2ced530ab59326f646cb3",
+          "core/crates/layerfs-content/src/filesystem/state/mod.rs": "2ee77c1698b80c3a585ffeceab3dba864e631faa16f00c5ce5c37595d9636c07",
+          "core/crates/layerfs-content/src/filesystem/state/release_name.rs": "a6d746d7a3c7259ce9d7331cc475eed63d7dbc333fd68426a9ca1077c1a10ccb",
+          "core/crates/layerfs-content/src/filesystem/state/release_records.rs": "85f5d8202b723eefa33eba9bcc4cf455551dd78efca33cc0182e433b79cb7cc3",
+          "core/crates/layerfs-content/src/filesystem/state/root_cursor.rs": "68c0ba82dae240d6c086afcbafb16d755d4bd98346051f96cbc400533c578303",
+          "core/crates/layerfs-content/src/filesystem/state/small_file_owner.rs": "c848c183b4d03df5d96a8dc434fdd4bf8523bf91c337eb960135c012b5b95315",
+          "core/crates/layerfs-content/src/filesystem/update/canonical_body.rs": "cf0ea9546f46ad68f9373696a32d95beb0758184286b9636322e30463fac4d34",
+          "core/crates/layerfs-content/tests/canonical_state_records.rs": "a3474b42b6f22981f58f087dee7dc591272b90691b0ee698fceef95cd85877b4",
+          "core/crates/layerfs-storage/tests/construction_counts.rs": "08818d03af12c00b02972a8acbe5f9a9841c5b137b8fb67563cedf50212686d4"
+        },
+        "wall_ns": 3390259417
+      },
+      "files_sha256": {
+        "cargo.log": "5ce614ea036477fba3846f8d070527596ba374547896b73aba481730fff2c326",
+        "command.json": "cf2b6dcaef3b2cb2f6c192bdd971b08db90d68ccfdc3835995bf59de1bec4d55"
+      },
+      "name": "issue287-r1-eight-owning-cover1",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-owning-cover1"
+    },
+    {
+      "command_metadata": {
+        "cause": "realcoordinator-only pageallocationmove cratevisibility/doc, samecallerpagecreditthroughactualVecdrop",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-content",
+          "--test",
+          "canonical_state_population",
+          "--test",
+          "canonical_state_records",
+          "--test",
+          "small_file_authority",
+          "--test",
+          "no_draft_authority",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "construction_counts",
+          "--test",
+          "canonical_namespace_pipeline",
+          "--test",
+          "scratch_pool",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "small_file_authority",
+          "--test",
+          "no_draft_authority"
+        ],
+        "exit": 101,
+        "source_change": {
+          "core/crates/layerfs-content/src/filesystem/state/page.rs": "56925caf870d3ee7dd2017a60cb59ac938944a1c75ee9339b1661a65d88d7e3b"
+        },
+        "wall_ns": 9451456167
+      },
+      "files_sha256": {
+        "cargo.log": "53b6fa377984200081b49ad8862bbcf42fda8a4345774526350df58bb14c217b",
+        "command.json": "54ee3486759c51b49070afb2cc505022818fbdc5441126ee30391bfbbf9177c5"
+      },
+      "name": "issue287-r1-eight-owning-cover2",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-owning-cover2"
+    },
+    {
+      "command_metadata": {
+        "cause": "document24realCountReleasepublicportscope/admission/EOF/custody boundaries; behavior/layoutsame",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-content",
+          "--test",
+          "canonical_state_population",
+          "--test",
+          "canonical_state_records",
+          "--test",
+          "small_file_authority",
+          "--test",
+          "no_draft_authority",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "construction_counts",
+          "--test",
+          "canonical_namespace_pipeline",
+          "--test",
+          "scratch_pool",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "small_file_authority",
+          "--test",
+          "no_draft_authority"
+        ],
+        "exit": 101,
+        "source_change": {
+          "core/crates/layerfs-storage/src/construction_state/count_lifecycle.rs": "8c34a733683f72b2981ad775d2571d501f0af017bde6e780688ed98988febaff",
+          "core/crates/layerfs-storage/src/construction_state/count_read.rs": "1d37841ac3fbae741c8e5fa07d885cc720f3f1708d6baddccdb827a9888c595b",
+          "core/crates/layerfs-storage/src/construction_state/count_session.rs": "678cbfb9adfb6abc804052d0df5dc4f55898868f0efb32039282aeefd0510c94",
+          "core/crates/layerfs-storage/src/construction_state/release_lifecycle.rs": "2186316be57bb8da2f22316a7e9101f2184e01d0ad356bd728283d1503bc0e35",
+          "core/crates/layerfs-storage/src/construction_state/release_session.rs": "7e68727b86304c9427e9851effbf68d1ee8649898cd293a99fbb2abe647e9732"
+        },
+        "wall_ns": 7022307667
+      },
+      "files_sha256": {
+        "cargo.log": "06e0dd52fb33a80577116ad51e3fa0aa0e0944c214eae523bd858c3179cd144b",
+        "command.json": "49349f66b50b9f74c94a51a081a59831d1bffb323ca2c3f74fccd0e0e3295eae"
+      },
+      "name": "issue287-r1-eight-owning-cover3",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-owning-cover3"
+    },
+    {
+      "command_metadata": {
+        "cause": "externalSmalltestimportsactualBindingRows trait fordirectory_headers assertion",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-content",
+          "--test",
+          "canonical_state_population",
+          "--test",
+          "canonical_state_records",
+          "--test",
+          "small_file_authority",
+          "--test",
+          "no_draft_authority",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "construction_counts",
+          "--test",
+          "canonical_namespace_pipeline",
+          "--test",
+          "scratch_pool",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "small_file_authority",
+          "--test",
+          "no_draft_authority"
+        ],
+        "exit": 101,
+        "source_change": {
+          "core/crates/layerfs-content/tests/small_file_authority.rs": "1a9b92e17fe6b1feaa10fdb06ce0a9e19b322594e3ae12269b4d8c090d927c01"
+        },
+        "wall_ns": 2534769625
+      },
+      "files_sha256": {
+        "cargo.log": "07c46cd5d2b33491d5b147cf5da37faf7bf4eefb1dbde3de474a5c26f942639d",
+        "command.json": "ee3a4e2cd6c7c8edc854f68d028804ce93dde462fe2eb386dc1f1c483f81437a"
+      },
+      "name": "issue287-r1-eight-owning-cover4",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-owning-cover4"
+    },
+    {
+      "command_metadata": {
+        "cause": "externalnativepipeline usesrealScratchAdapter andownedfixtureName; snakecasewarningcorrection",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-content",
+          "--test",
+          "canonical_state_population",
+          "--test",
+          "canonical_state_records",
+          "--test",
+          "small_file_authority",
+          "--test",
+          "no_draft_authority",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "construction_counts",
+          "--test",
+          "canonical_namespace_pipeline",
+          "--test",
+          "scratch_pool",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "small_file_authority",
+          "--test",
+          "no_draft_authority"
+        ],
+        "exit": 101,
+        "source_change": {
+          "core/crates/layerfs-storage/tests/canonical_namespace_pipeline.rs": "103c0100256fed4fe019c991811eceb5b98c808fabc57c96bf0c8cbec4fc021f",
+          "core/crates/layerfs-storage/tests/scratch_pool.rs": "4b4ff8f4170833ab4b40e0484d95f8a7ab6aab9cf8a9f7c22780f09319abc020"
+        },
+        "wall_ns": 10604806459
+      },
+      "files_sha256": {
+        "cargo.log": "6b057f5281a089aaf151ab31d9b30f9737a9580b98792026e2f08eafac89354b",
+        "command.json": "2dde835490cb295ff4ef1c7783416edba26e1f4e927f49e8542c62a8983318cc"
+      },
+      "name": "issue287-r1-eight-owning-cover5",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-owning-cover5"
+    },
+    {
+      "command_metadata": {
+        "cause": "seal exactemptyRootphase beforecomplete, logicalabandon alone is not knownreset or reuseeligibility",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "scratch_pool",
+          "--",
+          "--skip",
+          "unix::actual_finished_draft6_resets_before_idle_and_rebinds_full_scope_without_new_birth"
+        ],
+        "exit": 101,
+        "source_change": {
+          "core/crates/layerfs-storage/tests/scratch_pool.rs": "a323a931ebab6ec34e279309d892b9679e1e7a257b7fef4e43c6a0ce893d1859"
+        },
+        "wall_ns": 4671150292
+      },
+      "files_sha256": {
+        "cargo.log": "181f2d179114ed58f82e6bf2cba01bdcd48286af8bd6ac764475be2eb5ba07a4",
+        "command.json": "b46657e961662565c955b868b7c1b32e949b4c7227bb7fbb76d625aa51bfe36d"
+      },
+      "name": "issue287-r1-eight-pool-root-seal-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-pool-root-seal-cover"
+    },
+    {
+      "command_metadata": {
+        "cause": "sameTxnCASsolver_owner188scope oldtonew withALLresetinitialscalars; originalexactsolververification preserved",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "scratch_pool",
+          "--",
+          "--skip",
+          "unix::actual_finished_draft6_resets_before_idle_and_rebinds_full_scope_without_new_birth",
+          "--skip",
+          "unix::actual_metadata_observer_withholds_idle_but_scope_copy_is_stale_after_rebind",
+          "--skip",
+          "unix::corrupt_idle_projection_is_retained_and_cannot_fall_back_to_empty_second_slot"
+        ],
+        "exit": 0,
+        "source_change": {
+          "core/crates/layerfs-storage/src/construction_state/rebind_index.rs": "4fddf1c20f8c397cea586218e43b1d74725c2e281645a27c5a716a8227220f35",
+          "core/crates/layerfs-storage/tests/scratch_pool.rs": "9daaba5e94dfc8ebc7747f6a5ed247fad9aa37b36a4257131fa190460c377bf3"
+        },
+        "wall_ns": 6676803916
+      },
+      "files_sha256": {
+        "cargo.log": "b4109784c6304948d9aa6bce87111b58f7fc5fb9a94fa86756be81708cdd2fc2",
+        "command.json": "753427ac8d23e2736059c7ef6e85e7d50c6c24e75031b0979c202604efda11f8"
+      },
+      "name": "issue287-r1-eight-pool-solver-scope-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-pool-solver-scope-cover"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "scratch_pool"
+        ],
+        "exit": 101,
+        "source": "eight original+retained corrective overlays; all6pool first runtime",
+        "wall_ns": 3473637875
+      },
+      "files_sha256": {
+        "cargo.log": "64cad3dcd37e7231063c77e3f6cb2091301056fab0be5073855cfcf837363bd6",
+        "command.json": "1b0d6def39b1b847915a77182f3bf445f8ec246c17ab7732570524fe51e693d4"
+      },
+      "name": "issue287-r1-eight-pool-unrun",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-pool-unrun"
+    },
+    {
+      "command_metadata": {
+        "cause": "readOnlyNOFOLLOW observer usescanonicalsameinode/devregularleaf, /var intermediaryalias verifiednotproviderfallback; originalNativepathstable",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "scratch_reuse",
+          "--",
+          "--show-output"
+        ],
+        "exit": 101,
+        "source_change": {
+          "core/crates/layerfs-server/tests/support/scratch_reuse.rs": "bea05c2e49330a7c208b1f4b98660ce84e566d95d3153e367d45f73fb55f80da",
+          "core/crates/layerfs-server/tests/support/scratch_reuse_query.py": "5303772b38bef2c1cf21f7c5d39b56c33afc81a9da920732f8788a2906c9670b",
+          "core/crates/layerfs-server/tests/support/scratch_reuse_reader.py": "69d2bacf2985520c6a4dbc5eecb9cb22ee48f29f0429a9864bd99ae7e6d99823"
+        },
+        "wall_ns": 6881568708
+      },
+      "files_sha256": {
+        "cargo.log": "2201957f0591a1b6cce6d783207a905f78e317864577afac756ad9bb3baebc27",
+        "command.json": "13aaf7328839e4055971ef691ef3f43bda2975d9d8d9048f962142a9dd7ce791"
+      },
+      "name": "issue287-r1-eight-service-canonical-path-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-service-canonical-path-cover"
+    },
+    {
+      "command_metadata": {
+        "cause": "Darwin fdescfs path stat differs from actualdescriptor fstat; observeexistingFD only noopen/dup",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "scratch_reuse",
+          "--",
+          "--show-output"
+        ],
+        "exit": 101,
+        "source_change": {
+          "core/crates/layerfs-server/tests/support/scratch_reuse.rs": "44f1a096fc30c5bd46692becee0afb0eb0fa49db356fc3028ba0f1efd00d373d"
+        },
+        "wall_ns": 7084315583
+      },
+      "files_sha256": {
+        "cargo.log": "f620b5abc654476aa216987f5a1522ebfa403280cf081c49fd6d6ac4b2298512",
+        "command.json": "af4074408d76906e9ed76426fb0b4aaeea6f718c9d879a7acd8eb045ebc85243"
+      },
+      "name": "issue287-r1-eight-service-fstat-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-service-fstat-cover"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "scratch_reuse",
+          "--test",
+          "native_terminal_custody",
+          "--",
+          "--show-output"
+        ],
+        "exit": 101,
+        "scope": "firstactualServiceprofile8reuse/StoreUnknownseparation andclosedSource/slowOutput/joinedcancel compatibilityproof; noStrictphysical",
+        "source_change": {
+          "core/crates/layerfs-server/tests/native_terminal_custody.rs": "ced12b55ca26de1a6651a2067f1e4953d51e4abcb66308c6bd7a4fe531fd5e07",
+          "core/crates/layerfs-server/tests/scratch_reuse.rs": "3d1c98363a00aa6fd432dc23e89f151ea00593f8f325844168e296730fd4bcf1",
+          "core/crates/layerfs-server/tests/support/native_saturation.rs": "f33e4fec64b465e18ddc8966cabe442201eb111a2b4df29963ec8727784febae",
+          "core/crates/layerfs-server/tests/support/scratch_reuse.rs": "58c82bf459499504e7439c21a9f9b3c33b10c725f12e6ab3c61d2c266aa66d5d",
+          "core/crates/layerfs-server/tests/support/scratch_reuse_query.py": "3565f59973448a2ce2a59b2a83a33df52998fe75d0acb2331409fb2c64c53db5",
+          "core/crates/layerfs-server/tests/support/scratch_reuse_reader.py": "bb16771bd794a2516a20126b55aafe934416c4b488b4ad73d2914e31874293a1"
+        },
+        "wall_ns": 6641066042
+      },
+      "files_sha256": {
+        "cargo.log": "0faac6a6769e6e0b027ce16e869bd9941a62ab4385fda4d4b5a69c0a453242b7",
+        "command.json": "5c29bf083f7281b27b79314acb68083950e48de8946133b9c3a5a25347b48095"
+      },
+      "name": "issue287-r1-eight-service-reuse-terminal-unrun",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-eight-service-reuse-terminal-unrun"
+    },
+    {
+      "command_metadata": {
+        "cause": "exactexistingStorageErrorUnsupportedPolicy fieldname, providerzero-readback bodies explicitlyNOT_RUN",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-storage",
+          "--test",
+          "engine_bootstrap",
+          "--",
+          "--show-output"
+        ],
+        "exit": 0,
+        "source_change": {
+          "core/crates/layerfs-storage/tests/engine_bootstrap.rs": "213851d566dc4cbd72a7527c4426e3a894c6676631bef844d284770a9444b28e"
+        },
+        "wall_ns": 4585635708
+      },
+      "files_sha256": {
+        "cargo.log": "1b0454a9fb8df5c7b178329cbacf1b49e19ea2152ffdbe8683846a93a9a2f92b",
+        "command.json": "093c5ebb9aebfa64ee338deeaa594430dcbaccae66a4b4dcb13c404438ed05e8"
+      },
+      "name": "issue287-r1-engine-capability-typed-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-engine-capability-typed-cover"
+    },
+    {
+      "command_metadata": {
+        "cause": "equivalent lint correction, inlineParentSeal remains charged/noBox, typealiases retain actual fn semantics",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "clippy",
+          "--manifest-path",
+          "core/Cargo.toml",
+          "--locked",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit": 101,
+        "source_change": {
+          "core/crates/layerfs-content/src/file/mapping/navigation.rs": "2d9e2f25e5390ebc3507842e4c3dd719db8efb97599bc35c14b86281ad04b917",
+          "core/crates/layerfs-content/src/filesystem/state/parent_access.rs": "073ca63e74577663a2a97fa1d98986a15ae8395da593d8c111bbadb3442794e1",
+          "core/crates/layerfs-content/src/filesystem/update.rs": "ef9af712c30b5887053523b63035a1f73224fc6a013df94ab1b8c31f80fed5a4",
+          "core/crates/layerfs-content/src/filesystem/validate/fact_access.rs": "21c3aad6c61e844d29de34c4721e2c2d6b116335d6248136ba0e1020290e89af"
+        },
+        "wall_ns": 7592570209
+      },
+      "files_sha256": {
+        "cargo.log": "7d01441c5dd9d1b327f2d5431e27847688869809a6c0ab259886ece16a04aa2d",
+        "command.json": "2e56303bb0663fb841aef820f6d726692c71acc0f0cd3f6600c5a13bf35ff3f1"
+      },
+      "name": "issue287-r1-final-clippy-content-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-final-clippy-content-cover"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "clippy",
+          "--manifest-path",
+          "core/Cargo.toml",
+          "--locked",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit": 101,
+        "wall_ns": 12646821250
+      },
+      "files_sha256": {
+        "cargo.log": "6882fc195992166f9e428377d8702141832f85723f114bc65b497e2ade25c5ae",
+        "command.json": "7c8beefe47163598f2ad99496f0042af7f04e2b3978dcbd69a0afa165ffa1b33"
+      },
+      "name": "issue287-r1-final-clippy-first",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-final-clippy-first"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "clippy",
+          "--manifest-path",
+          "core/Cargo.toml",
+          "--locked",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit": 101,
+        "source_changes_during_command": [],
+        "source_inventory_sha256": "9f4bacd591cab661e8d9b1237b1463d11eb0de1801a49333328579da81db2a97",
+        "wall_ns": 1301690000,
+        "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+      },
+      "files_sha256": {
+        "cargo.log": "68d740e847b5f5ad67d3e13108b1160ad36f538be0b644e0d40b8e7605c71a20",
+        "command.json": "ed6f808866cdf9f80e38b627ae6680acea2413b6c199515db7297eb9b7f7167e",
+        "source.json": "9f4bacd591cab661e8d9b1237b1463d11eb0de1801a49333328579da81db2a97"
+      },
+      "name": "issue287-r1-final-clippy-server-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-final-clippy-server-cover"
+    },
+    {
+      "command_metadata": {
+        "cause": "storage13focused lintfiles andcontent2externalAPI/lint corrections",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "clippy",
+          "--manifest-path",
+          "core/Cargo.toml",
+          "--locked",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit": 101,
+        "wall_ns": 4582262750
+      },
+      "files_sha256": {
+        "cargo.log": "2d552bbb249163c232b98e9147b6eae13fac4eeb28f7e8ff2541bc254eb60fe3",
+        "command.json": "2da81b35b02a9667653c65704df37116cabc6b80258a89d58feee4a083f6fe26"
+      },
+      "name": "issue287-r1-final-clippy-storage-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-final-clippy-storage-cover"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "core/Cargo.toml",
+          "--locked",
+          "--no-fail-fast",
+          "--",
+          "--show-output"
+        ],
+        "exit": 101,
+        "source_changes_during_command": [],
+        "source_inventory_sha256": "acb1b1ebe3b600a85a3d70725ce7086614bd4d90ed60aaba1ea5fadc77cb81be",
+        "wall_ns": 620207555208,
+        "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+      },
+      "files_sha256": {
+        "cargo.log": "27e13e9881acf6a77e83521f6acc3261cd9bedeeadbc089f051cd1c0aa685e22",
+        "command.json": "5a746885bab42fbf878e08c43d95250a0fb4b16bd98811a653c52a2cb4263f56",
+        "parsed-targets.json": "354360ccbeb875a36a985ff23432683ed757c1f7f66da4973e70df7893fbcd00",
+        "source.json": "acb1b1ebe3b600a85a3d70725ce7086614bd4d90ed60aaba1ea5fadc77cb81be",
+        "test-targets.json": "68c21fda12ad3c696bc57e83b64699ed3dd2165799aff1af160f8f16be868558"
+      },
+      "name": "issue287-r1-final-full-core",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-final-full-core"
+    },
+    {
+      "command_metadata": {
+        "commands": [
+          {
+            "command": [
+              "python3",
+              "core/tools/check_product_boundary.py"
+            ],
+            "exit": 0,
+            "output": "PASS: scanned 607 production Rust/SQL files; semantic review still required\n"
+          },
+          {
+            "command": [
+              "python3",
+              "-m",
+              "unittest",
+              "discover",
+              "-s",
+              "core/tools",
+              "-p",
+              "test_*.py"
+            ],
+            "exit": 0,
+            "output": "...........\nRan 11 tests in 0.016s\nOK\n"
+          },
+          {
+            "command": [
+              "cargo",
+              "+1.85.1",
+              "fmt",
+              "--manifest-path",
+              "core/Cargo.toml",
+              "--",
+              "--check"
+            ],
+            "exit": 1,
+            "output": "Failed to find targets; virtual workspace formatting requires --all. No source failure assessed."
+          }
+        ],
+        "custody": "Exact exits/output observations from root tool output; no rerun or original raw log claim"
+      },
+      "files_sha256": {
+        "command.json": "105aaf2b121cd666cdcbc38f6d7f328f330380ebf2b17e5617eac430f36f3b1d"
+      },
+      "name": "issue287-r1-final-source-policy-first",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-final-source-policy-first"
+    },
+    {
+      "command_metadata": {
+        "cause": "chunk-value8Bheader includedinactualcanonicalcap; explicitchargedknownIdle+drain; originalexactUnsupported32zeroReadback innerNOT_RUN notstrictPASS",
+        "commands": [
+          {
+            "command": [
+              "cargo",
+              "+1.85.1",
+              "test",
+              "--manifest-path",
+              "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+              "--locked",
+              "-p",
+              "layerfs-content",
+              "--test",
+              "file_read",
+              "the_payload_wave_enforces_both_its_object_and_its_byte_ceiling",
+              "--",
+              "--show-output"
+            ],
+            "exit": 0,
+            "wall_ns": 3271592250
+          },
+          {
+            "command": [
+              "cargo",
+              "+1.85.1",
+              "test",
+              "--manifest-path",
+              "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+              "--locked",
+              "-p",
+              "layerfs-server",
+              "--test",
+              "catalog_admission",
+              "--test",
+              "file_drafts",
+              "--",
+              "--show-output"
+            ],
+            "exit": 0,
+            "wall_ns": 14322920625
+          },
+          {
+            "command": [
+              "cargo",
+              "+1.85.1",
+              "test",
+              "--manifest-path",
+              "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+              "--locked",
+              "-p",
+              "layerfs-storage",
+              "--test",
+              "engine_bootstrap",
+              "--",
+              "--show-output"
+            ],
+            "exit": 101,
+            "wall_ns": 7216200792
+          }
+        ],
+        "source_change": {
+          "core/crates/layerfs-content/tests/file_read.rs": "1f855a5b513282d853bf0d6175308332bc75066b6798eef7bac50e8cb3d673ea",
+          "core/crates/layerfs-server/tests/catalog_admission.rs": "e0f3f8bebd7dc9cc4b078b1d32b5c72ee91ec29e47a0e758681cf6ffb7569c3b",
+          "core/crates/layerfs-server/tests/file_drafts.rs": "0d20e861a27f80392285d0efa87969e91c93e9523af6ae213d63a4aa39bfa433",
+          "core/crates/layerfs-storage/tests/engine_bootstrap.rs": "932a893526a4efa51a4a820cc56b9679aef83909d82926b7631f9696e79efffd"
+        }
+      },
+      "files_sha256": {
+        "1.json": "88b7effcf234bbb79f1c8050b8e7351519d9f947b29daf3cd546e341ae338758",
+        "1.log": "77dba2ce0a3791cd21b861f358807a268e69ec0d81cd681f0f027c42446a1fd7",
+        "2.json": "3854fde35e13fb6d2f4bc82859f820495828692fe72c3a5cede54d60da0546b3",
+        "2.log": "3d951eaadfd8de2de2864de97525ac61254359f147a3e4fa91cb2d5b405e6f36",
+        "3.json": "1f8ef91cd1e168b52fa77299365b0dcf4de21844ec2986441893e0ff1992f50a",
+        "3.log": "00a7c45d2a7d8bc27cd1f82ebd0830abc106b377f08847b0f7ff88de809ca00d",
+        "command.json": "b33a092dea5c8f62d2a669b63a9bebe46627a7c91695f079b2c6236c692ecc00"
+      },
+      "name": "issue287-r1-known-idle-capability-canonical-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-known-idle-capability-canonical-cover"
+    },
+    {
+      "command_metadata": {
+        "cause": "sameeligibleknownIdle stayscharged until publicexplicitdrain; strongerpreconsumer capacityrefusal; exacttypedproviderUnsupported recordsinnerNOT_RUN",
+        "commands": [
+          {
+            "command": [
+              "cargo",
+              "+1.85.1",
+              "test",
+              "--manifest-path",
+              "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+              "--locked",
+              "-p",
+              "layerfs-content",
+              "--test",
+              "file_read",
+              "the_payload_wave_enforces_both_its_object_and_its_byte_ceiling",
+              "--",
+              "--show-output"
+            ],
+            "exit": 101,
+            "wall_ns": 1074256958
+          }
+        ],
+        "source_change": {
+          "core/crates/layerfs-content/tests/file_read.rs": "7f0ac1a167b91c0879fdedf8a0315a22e9793c407fb8c47bad1fb045da4fe7a1",
+          "core/crates/layerfs-server/tests/catalog_admission.rs": "e0f3f8bebd7dc9cc4b078b1d32b5c72ee91ec29e47a0e758681cf6ffb7569c3b",
+          "core/crates/layerfs-server/tests/file_drafts.rs": "0d20e861a27f80392285d0efa87969e91c93e9523af6ae213d63a4aa39bfa433",
+          "core/crates/layerfs-storage/tests/engine_bootstrap.rs": "932a893526a4efa51a4a820cc56b9679aef83909d82926b7631f9696e79efffd"
+        }
+      },
+      "files_sha256": {
+        "1.json": "9658aab3dc9f0b876373fb6f22288392c76de5d3c90f8fdbe37b211a3fb3f314",
+        "1.log": "50fcd5462a33453b0caf031a33c71fe8ed2763f0103df47bef0070db6e87ae4f",
+        "command.json": "fae159c4237e8e938756ed127f3c989c3fe4fb40dda90ba9881e1239a84d74ce"
+      },
+      "name": "issue287-r1-known-idle-capability-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-known-idle-capability-cover"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "core/target/r1-nine-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "binding_claims",
+          "--",
+          "--show-output"
+        ],
+        "exit": 0,
+        "source_changes_during_command": [],
+        "source_inventory_sha256": "4499fe586fd03cd5747cdb4b432ad266aa466b36e61015bf8d4b615a3901c5a3",
+        "wall_ns": 28853167542,
+        "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+      },
+      "files_sha256": {
+        "cargo.log": "4bb8daf75158af328156abc6bcf74ccc749d244b1c654378f6defabfdb9e6b43",
+        "command.json": "43de3ec30d1a8ec7fa67e9227efc3b8d1a4b12e97d2dc3a84c8f4053e6cf53c9",
+        "source.json": "4499fe586fd03cd5747cdb4b432ad266aa466b36e61015bf8d4b615a3901c5a3"
+      },
+      "name": "issue287-r1-nine-binding-native-digest-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-nine-binding-native-digest-cover"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "core/target/r1-nine-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "binding_claims",
+          "--",
+          "--show-output"
+        ],
+        "exit": 101,
+        "source_changes_during_command": [],
+        "source_inventory_sha256": "c088d8bccc5f20fddae1ee6dfbeac889bc862bad5671f1dc73538ca5419b55f8",
+        "wall_ns": 5624606416,
+        "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+      },
+      "files_sha256": {
+        "cargo.log": "1bf59d32eb9477f548fb6226c462d07c56a85a770de8b93a0b4059f9586925cd",
+        "command.json": "33ed2f8f176acebf8d5399585e3fda05b637698fe1788415c0f07d2d9d73f707",
+        "source.json": "c088d8bccc5f20fddae1ee6dfbeac889bc862bad5671f1dc73538ca5419b55f8"
+      },
+      "name": "issue287-r1-nine-binding-suffix-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-nine-binding-suffix-cover"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "core/target/r1-nine-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-content",
+          "--no-fail-fast",
+          "--",
+          "--show-output"
+        ],
+        "exit": 101,
+        "source_changes_during_command": [],
+        "source_inventory_sha256": "63259c99799cb8efa73145b46d1339a8266480fbedf0e93fd819a96faf228019",
+        "wall_ns": 78538210833,
+        "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+      },
+      "files_sha256": {
+        "cargo.log": "0f68b5b261fa0ca2cf1d1fb757036eccbeef7f188ddc9235acc7f376e42cda85",
+        "command.json": "169f1f6990056f1d3453c62722efcd7de8be148c4a17325ad6777d800a8162e1",
+        "generator-source-copy.json": "7803ff242c0b45bdc9f0077f56560c095da31fb7b9161443211f0643ff56faff",
+        "parsed-targets.json": "7c2b13dc67ccb4fc1518f5ef086fd2324e2bfd0ba8232ce713a04d5f049097d9",
+        "source.json": "63259c99799cb8efa73145b46d1339a8266480fbedf0e93fd819a96faf228019"
+      },
+      "name": "issue287-r1-nine-c1-integration",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-nine-c1-integration"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "clippy",
+          "--manifest-path",
+          "core/target/r1-nine-source/core/Cargo.toml",
+          "--locked",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit": 101,
+        "source_changes_during_command": [],
+        "source_inventory_sha256": "a0639b184fd07382ae0673c3e84ac9b03ae9c88fcf4249fabdc6e960aee296ee",
+        "wall_ns": 1273771708,
+        "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+      },
+      "files_sha256": {
+        "cargo.log": "b073c97efe59522df51a5bb25b93003278243ec14bdf7c4239222c454ae9b6a7",
+        "command.json": "a939d3ff31a34800dadb503b1b0abb670e13045e7a73dc4c8cb990b47d1a8344",
+        "external-inode-correction.json": "6524665cf4ca7793ea809018aca78f376b1c543840396d6562523d18cd9a3693",
+        "source.json": "a0639b184fd07382ae0673c3e84ac9b03ae9c88fcf4249fabdc6e960aee296ee"
+      },
+      "name": "issue287-r1-nine-clippy-hex-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-nine-clippy-hex-cover"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "clippy",
+          "--manifest-path",
+          "core/target/r1-nine-source/core/Cargo.toml",
+          "--locked",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit": 0,
+        "source_changes_during_command": [],
+        "source_inventory_sha256": "d6db186e4e238ba96d6d158cd6d77489ac415c871b0a9ae4bf73c345b6e3771a",
+        "wall_ns": 1013947250,
+        "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+      },
+      "files_sha256": {
+        "cargo.log": "5e180bde626fa3b27fc435775cf373ec7d4839fdd4503b191acbba00bf4d724e",
+        "command.json": "91491c4a1a03d91926c1a2d89946cb7b94cd13f0af6a466b6f5e9e2c90bdf959",
+        "source.json": "d6db186e4e238ba96d6d158cd6d77489ac415c871b0a9ae4bf73c345b6e3771a"
+      },
+      "name": "issue287-r1-nine-clippy-inode-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-nine-clippy-inode-cover"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "core/target/r1-nine-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "direct",
+          "a_spooled_final_stream_replays_many_runs_with_exact_bytes",
+          "--",
+          "--show-output"
+        ],
+        "exit": 101,
+        "source_changes_during_command": [
+          "core/crates/layerfs-server/tests/binding_claims.rs"
+        ],
+        "source_inventory_sha256": "63259c99799cb8efa73145b46d1339a8266480fbedf0e93fd819a96faf228019",
+        "wall_ns": 87299023875,
+        "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+      },
+      "files_sha256": {
+        "cargo.log": "f309cc0bac2e0f3ecc03910745e9fd67d649e832ca14af80afe10b9e43b9a47d",
+        "command.json": "0abc30057ec48b111d69b4b9aa98ca5c45cdf4fe5bb6eaf4808b508ce2ebe17d",
+        "source.json": "63259c99799cb8efa73145b46d1339a8266480fbedf0e93fd819a96faf228019"
+      },
+      "name": "issue287-r1-nine-direct-2049-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-nine-direct-2049-cover"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "build",
+          "--manifest-path",
+          "core/target/r1-nine-source/core/Cargo.toml",
+          "--locked",
+          "--examples"
+        ],
+        "exit": 0,
+        "source_changes_during_command": [],
+        "source_inventory_sha256": "d6db186e4e238ba96d6d158cd6d77489ac415c871b0a9ae4bf73c345b6e3771a",
+        "wall_ns": 18257334125,
+        "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+      },
+      "files_sha256": {
+        "cargo.log": "aecae43f1b0e7a8c00fc41b819c02f6e3296dda00bc93bd3e450d2a0fb4f5154",
+        "command.json": "9269731bd3de12afa1211411cb55ec5819fe6941582ec8d5a46d11fde61007b4",
+        "source.json": "d6db186e4e238ba96d6d158cd6d77489ac415c871b0a9ae4bf73c345b6e3771a"
+      },
+      "name": "issue287-r1-nine-examples",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-nine-examples"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "clippy",
+          "--manifest-path",
+          "core/target/r1-nine-source/core/Cargo.toml",
+          "--locked",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit": 101,
+        "source_changes_during_command": [],
+        "source_inventory_sha256": "4499fe586fd03cd5747cdb4b432ad266aa466b36e61015bf8d4b615a3901c5a3",
+        "wall_ns": 10620951500,
+        "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+      },
+      "files_sha256": {
+        "cargo.log": "a09731169a0ab5a397fe9b20203a5cfbf1e81ec3ae18052ea5b409a058d29112",
+        "command.json": "100abf6229484f20854720fb6f3b5d0e8309e749b4e8898fc557b889d2e39268",
+        "external-hex-correction.json": "9824a35354f4087ebc137fe2fc3ab04f5d67e39750cfcc09f2f63f83d8e65a94",
+        "source.json": "4499fe586fd03cd5747cdb4b432ad266aa466b36e61015bf8d4b615a3901c5a3"
+      },
+      "name": "issue287-r1-nine-final-clippy",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-nine-final-clippy"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "core/target/r1-nine-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-content",
+          "--test",
+          "fixture_seal",
+          "--",
+          "--show-output"
+        ],
+        "exit": 0,
+        "source_changes_during_command": [],
+        "source_inventory_sha256": "63259c99799cb8efa73145b46d1339a8266480fbedf0e93fd819a96faf228019",
+        "wall_ns": 154712125,
+        "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+      },
+      "files_sha256": {
+        "cargo.log": "2261a7f7c9ef3d41a1d36bec5f79212c3b6594de306452350295d23bc54af030",
+        "command.json": "8ec9d06e3cbf1bdd4ec077cecf113b9d1c9222f683c381cb3c9a52aa99d0ad23",
+        "source.json": "63259c99799cb8efa73145b46d1339a8266480fbedf0e93fd819a96faf228019"
+      },
+      "name": "issue287-r1-nine-fixture-generator-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-nine-fixture-generator-cover"
+    },
+    {
+      "command_metadata": {
+        "commands": [
+          {
+            "command": [
+              "cargo",
+              "+1.85.1",
+              "fmt",
+              "--manifest-path",
+              "core/Cargo.toml",
+              "--all",
+              "--",
+              "--check"
+            ],
+            "exit": 0,
+            "wall_ns": 3377558958
+          },
+          {
+            "command": [
+              "python3",
+              "core/tools/check_product_boundary.py"
+            ],
+            "exit": 0,
+            "wall_ns": 213890334
+          }
+        ],
+        "self_tests_reuse": "First policy check ran all11 unchanged boundary self-tests, PASS; no guard/tool source edits since that proof."
+      },
+      "files_sha256": {
+        "boundary.log": "7774be896cef7b7259fe5b1befb60d8bdc50887c1f56d8c4a0ee5dbc11c2086d",
+        "command.json": "d4ce44bf7edf86b60b7c2c29d87ebbf9bb83fe4c4242bb44c6d40382993a1a4c",
+        "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "name": "issue287-r1-nine-format-boundary",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-nine-format-boundary"
+    },
+    {
+      "command_metadata": {
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "core/target/r1-nine-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-server",
+          "--test",
+          "binding_claims",
+          "--test",
+          "file_drafts",
+          "--test",
+          "no_draft_authority",
+          "--test",
+          "small_file_authority",
+          "--no-fail-fast",
+          "--",
+          "--show-output"
+        ],
+        "exit": 101,
+        "source_changes_during_command": [],
+        "source_inventory_sha256": "63259c99799cb8efa73145b46d1339a8266480fbedf0e93fd819a96faf228019",
+        "wall_ns": 34011010958,
+        "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+      },
+      "files_sha256": {
+        "cargo.log": "b4f0b6bdd6aa1e408a81fa32b5a0024c9730a07bbef67a50c240718b861eab59",
+        "command.json": "73b631a020c1085c22218a366aa8f22bed7680f64fd7194bc084f6b55854f684",
+        "native-digest-oracle-correction.json": "ba9be5dda6f0c7223be5a4cac55287b2d1ab65475a86828760026afb462de867",
+        "source.json": "63259c99799cb8efa73145b46d1339a8266480fbedf0e93fd819a96faf228019",
+        "suffix-oracle-correction.json": "e44a530f1a6373beec60894bb6f683b253c253493689fb11793ca0e0e1497b14"
+      },
+      "name": "issue287-r1-nine-server-composition",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-nine-server-composition"
+    },
+    {
+      "command_metadata": {
+        "cause": "actualprivate movedtemporarypins; targetedsupersede preserveschild/duplicate/selectedRoot/Unknown; unchangedoldfrontierbounds and v1oracles",
+        "commands": [
+          {
+            "command": [
+              "cargo",
+              "+1.85.1",
+              "test",
+              "--manifest-path",
+              "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+              "--locked",
+              "-p",
+              "layerfs-content",
+              "--test",
+              "edit_bounds",
+              "--test",
+              "draft_temporaries",
+              "--test",
+              "edit_model",
+              "--test",
+              "edit_reference",
+              "--test",
+              "edit_localized",
+              "--",
+              "--show-output"
+            ],
+            "exit": 101,
+            "wall_ns": 16486916666
+          }
+        ],
+        "source_change": {
+          "core/crates/layerfs-content/src/file/edit/apply.rs": "218877f819853f8c4a4cd7ba2e80c4491852f0bbd97f0d75defb50908412d474",
+          "core/crates/layerfs-content/src/file/edit/draft_port.rs": "b2f038138125f521ec9e38b77223b22bc0d7fd080e88b5a93c1b138858f75c08",
+          "core/crates/layerfs-content/src/file/edit/draft_resident.rs": "dd643e914e0ddfbcea9f0fc69e75f23a707550d61763f738eb3dd310ec724286",
+          "core/crates/layerfs-content/src/file/edit/mod.rs": "5ff62810693a19e28a729104a06a8b004bb082063757796498f19c80db2dabab",
+          "core/crates/layerfs-content/src/file/edit/no_draft.rs": "951d5d047ed0fd3cb6aba0f9ea9461269d61d03976196bdd9d76a6cbcbef7b66",
+          "core/crates/layerfs-content/src/file/edit/temporary.rs": "14a2961b456adf5cbe72552a07dc1d62d9c0434258bb62850d905dc5121c68a5",
+          "core/crates/layerfs-content/src/file/edit/tree.rs": "19a386addcb5ec886b1c2d30d3249cd5d2d86450179e26fcd4d1baca33d59e92",
+          "core/crates/layerfs-content/tests/draft_temporaries.rs": "6257e4cff630f2b8c8cfe96748e9e773312ce8e26942304c0f2bd993a8255b5b",
+          "core/crates/layerfs-storage/src/construction_state/draft_adapter.rs": "709a6be3fb969cf9a9740d08677035d3a69470695a5f78de93b30ddb680026fc",
+          "core/crates/layerfs-storage/src/construction_state/draft_retire.rs": "a5118f78449928ac7a818c15b98fdcf60149adb82471b019e11c339007ca6bf6",
+          "core/crates/layerfs-storage/src/construction_state/draft_state.rs": "a2185ed54fe030d739852841514366d98f290b3772653c525297df5d4250f381",
+          "core/crates/layerfs-storage/src/construction_state/draft_temporary.rs": "baf4d9f9396494b548486bbd87fcc8942d670ca8583ae84d064aad86c34d9b5c",
+          "core/crates/layerfs-storage/src/construction_state/mod.rs": "400cf1e4f57ed599eab1a4144e0c87bdc41fb0e57bfecd28729ab7c5cda733f6",
+          "core/crates/layerfs-storage/tests/draft_temporaries.rs": "2819d28c4ca877f9d2b1a508ed897f63e14dd806bb6f0d66c3d11c7c6ca30174"
+        }
+      },
+      "files_sha256": {
+        "1.json": "33cda711fb8d74fb226427694987a3f2ff54e99615c9cfb19247049f8d50959c",
+        "1.log": "7e5fadfe78641eaddc0ea24e644a327e277ba552a752bcecaf653b89fc4abb56",
+        "command.json": "73ba7e4ef5a649eb27b5e825d61783ad04491bea28596ee05c1efe4e00c2cc7e"
+      },
+      "name": "issue287-r1-temporary-draft-ownership-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-temporary-draft-ownership-cover"
+    },
+    {
+      "command_metadata": {
+        "cause": "actualexternalsupportmoduleexplicitpath asfilesystem_run_seek; no productchange",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-content",
+          "--test",
+          "filesystem_parent_lookup",
+          "--test",
+          "filesystem_tier_stream",
+          "--test",
+          "filesystem_reference",
+          "--test",
+          "filesystem_ordering",
+          "--",
+          "--show-output"
+        ],
+        "exit": 0,
+        "source_change": {
+          "core/crates/layerfs-content/tests/filesystem_tier_stream.rs": "665b1b6fb1400a80ac7ded67f77177ff13930792f1c2e556de9e87f1e4d71faa"
+        },
+        "wall_ns": 6752859875
+      },
+      "files_sha256": {
+        "cargo.log": "d991f714ce72f150afeb604a717b3d33ca89450b9003764978402655721c052c",
+        "command.json": "e16e146e6467bdecf895d2742c019a7dea02cacc04e147c2b07544d781058686"
+      },
+      "name": "issue287-r1-tier-stream-external-module-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-tier-stream-external-module-cover"
+    },
+    {
+      "command_metadata": {
+        "cause": "bounded32tierstream avoidsactualextraoutputrun preservingallinputbyteownership; original864quotacellsunchanged",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-content",
+          "--test",
+          "filesystem_parent_lookup",
+          "--test",
+          "filesystem_tier_stream",
+          "--test",
+          "filesystem_references",
+          "--",
+          "--show-output"
+        ],
+        "exit": 101,
+        "source_change": {
+          "core/crates/layerfs-content/src/filesystem/references/mod.rs": "83d95d4ec1fdfc47d0c49e568d0a48ea60ed56eaeca1fc3d874661976aa386b9",
+          "core/crates/layerfs-content/src/filesystem/references/reduce.rs": "3abb9813e98c7ba7c7c075fd2911efc733c8b2081c03794c67fef0ff41a33ff8",
+          "core/crates/layerfs-content/src/filesystem/references/runs.rs": "e1c240f635924176baabe467950efedf7f9c33ade4878265d2ca31cdd36ad413",
+          "core/crates/layerfs-content/src/filesystem/references/tier_stream.rs": "ad325fd2fd3b0c7256b52fc41e55d4967ad0bdddec71789318e96cdb6e437c6a",
+          "core/crates/layerfs-content/tests/filesystem_tier_stream.rs": "9d16dadff1bde9863f889347b07cd2c73e7e72b880094a193396633dcbeebdb6"
+        },
+        "wall_ns": 58765292
+      },
+      "files_sha256": {
+        "cargo.log": "4bda6610548f83dded920ae79d2984d9cf39d7e147fb07c5d6736f99e1cfb6b6",
+        "command.json": "fc15da9abc646c1ebf19381503b3a6c638d6c7fd71f6909045f402b79100fc07"
+      },
+      "name": "issue287-r1-tier-stream-legacy-quota-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-tier-stream-legacy-quota-cover"
+    },
+    {
+      "command_metadata": {
+        "cause": "correctactualfilesystem_reference singular target; no product/runtime from priorinvalidselection",
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "test",
+          "--manifest-path",
+          "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+          "--locked",
+          "-p",
+          "layerfs-content",
+          "--test",
+          "filesystem_parent_lookup",
+          "--test",
+          "filesystem_tier_stream",
+          "--test",
+          "filesystem_reference",
+          "--test",
+          "filesystem_ordering",
+          "--",
+          "--show-output"
+        ],
+        "exit": 101,
+        "source_change": {},
+        "source_overlay_reused": "issue287-r1-tier-stream-legacy-quota-cover/command.json",
+        "wall_ns": 7696231667
+      },
+      "files_sha256": {
+        "cargo.log": "9086bcbfa94060207f0ad33ab5161915b2ee52dda6cfd2c5fe03506938559567",
+        "command.json": "fb89e42e709e87799f4ac9b90e21f35a39e5a6a74b9637bfb7477ea32c3b10d7"
+      },
+      "name": "issue287-r1-tier-stream-target-name-cover",
+      "original_directory": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/benchmark-results/fs-bench-pro/issue287-r1-tier-stream-target-name-cover"
+    }
+  ],
+  "scope": "all retained owning8/final/9 command attempts including failed selections, compile/runtime failures, diagnostics and covering checks; raw bytes unchanged"
+}

@@ -65,6 +65,45 @@ pub fn read_objects(
     groups: &mut crate::encoding::GroupCache,
     pool: &mut PoolReader,
 ) -> StorageResult<(Vec<Vec<u8>>, ReadCounters)> {
+    read_objects_in_window(
+        connection,
+        ids,
+        ceiling,
+        capacities,
+        ReadResources {
+            workspace,
+            groups,
+            pool,
+        },
+        ReadOutputWindow {
+            capacity: crate::policy::READ_CANONICAL_BYTES_LIMIT,
+            kind: layerfs_content::object::CanonicalReadKind::Any,
+        },
+    )
+}
+
+pub(crate) struct ReadOutputWindow {
+    pub(crate) capacity: usize,
+    pub(crate) kind: layerfs_content::object::CanonicalReadKind,
+}
+struct ReadResources<'a> {
+    workspace: &'a mut DecompressionWorkspace,
+    groups: &'a mut crate::encoding::GroupCache,
+    pool: &'a mut PoolReader,
+}
+fn read_objects_in_window(
+    connection: &Connection,
+    ids: &[ObjectId],
+    ceiling: i64,
+    capacities: &StorageCapacities,
+    resources: ReadResources<'_>,
+    output: ReadOutputWindow,
+) -> StorageResult<(Vec<Vec<u8>>, ReadCounters)> {
+    let ReadResources {
+        workspace,
+        groups,
+        pool,
+    } = resources;
     // Locators are collected above the ceiling on purpose: a record that exists
     // but is not yet published must be reported as a visibility refusal, never
     // mistaken for a missing object. Dependency reads inside the resolver do use
@@ -98,11 +137,23 @@ pub fn read_objects(
                 StorageError::ObjectMissing(*id)
             }
         })?;
+        if !output.kind.accepts(location.role) {
+            return Err(StorageError::Content(
+                layerfs_content::ContentError::WrongLogicalRole,
+            ));
+        }
         total
             .checked_add(location.canonical_length)
             .ok_or(StorageError::Integrity("read byte accounting"))
     })?;
     check_read_bytes(bytes)?;
+    if bytes > output.capacity {
+        return Err(StorageError::CapacityExceeded {
+            what: "canonical owned output window",
+            limit: output.capacity as u64,
+            actual: bytes as u64,
+        });
+    }
     let mut packs: BTreeMap<i64, Vec<u8>> = BTreeMap::new();
     let mut chain = ChainCounters::default();
     let mut totals = ChainCounters::default();
@@ -193,6 +244,7 @@ pub(crate) fn check_read_bytes(bytes: usize) -> StorageResult<()> {
 /// would turn one operation's later waves into a snapshot of its first.
 pub struct ReadSession {
     connection: Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     arbitration: std::sync::Arc<std::sync::Mutex<()>>,
     workspace: DecompressionWorkspace,
     /// Decoded ordinary-lane group bodies this operation already materialised.
@@ -237,8 +289,20 @@ impl ReadSession {
     /// Opens one session over `path`: a connection with the declared profile and
     /// an empty decode arena, which materialises on the first decompression.
     pub fn open(path: &Path) -> StorageResult<Self> {
+        Self::open_participating(path, None)
+    }
+    pub(crate) fn open_participating(
+        path: &Path,
+        engine: Option<&'static crate::engine::EngineGuard>,
+    ) -> StorageResult<Self> {
         Ok(Self {
-            connection: connection::open(path, false)?,
+            connection: super::Store::open_selected(
+                path,
+                false,
+                engine,
+                crate::engine::ConnectionClass::ContentRead,
+            )?,
+            engine,
             arbitration: crate::sqlite::ownership::arbitration(path)?,
             workspace: DecompressionWorkspace::new()?,
             groups: crate::encoding::GroupCache::new(),
@@ -246,13 +310,21 @@ impl ReadSession {
         })
     }
 
-    /// Reads one wave under a ceiling captured for this wave alone.
-    pub fn read(
+    pub(crate) fn read_in_window(
         &mut self,
         ids: &[ObjectId],
         capacities: &StorageCapacities,
+        output_capacity: usize,
+        kind: layerfs_content::object::CanonicalReadKind,
     ) -> StorageResult<(Vec<Vec<u8>>, ReadCounters)> {
         check_read_demand(ids, capacities.read_objects)?;
+        if let Some(engine) = self.engine {
+            connection::verify_guarded(
+                &self.connection,
+                engine,
+                crate::engine::ConnectionClass::ContentRead,
+            )?;
+        }
         let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
         crate::sqlite::ownership::scope(
             &self.connection,
@@ -260,14 +332,20 @@ impl ReadSession {
             crate::sqlite::ownership::publication(&self.connection)?,
         )?;
         let ceiling = schema::retained_pack_ceiling(&self.connection)?;
-        read_objects(
+        read_objects_in_window(
             &self.connection,
             ids,
             ceiling,
             capacities,
-            &mut self.workspace,
-            &mut self.groups,
-            &mut self.pool,
+            ReadResources {
+                workspace: &mut self.workspace,
+                groups: &mut self.groups,
+                pool: &mut self.pool,
+            },
+            ReadOutputWindow {
+                capacity: output_capacity,
+                kind,
+            },
         )
     }
 }

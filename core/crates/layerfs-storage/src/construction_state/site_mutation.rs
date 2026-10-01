@@ -10,10 +10,14 @@ use super::{profile, site_index};
 
 pub(crate) fn insert(
     connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     state: &Sites,
     records: &[SiteRecord],
     local_duplicate: bool,
 ) -> StorageResult<ClaimAdmission> {
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         site_index::verify(connection, state)?;
@@ -93,15 +97,22 @@ pub(crate) fn insert(
     })();
     match result {
         Ok(ClaimAdmission::Fresh) => {
-            profile::finish_write(connection, Ok(()))?;
+            profile::finish_write_guarded(connection, Ok(()), engine)?;
             Ok(ClaimAdmission::Fresh)
         }
         Ok(ClaimAdmission::Duplicate) => {
+            if let Some(guard) = engine {
+                guard
+                    .validate()
+                    .map_err(|original| StorageError::UnknownOutcome {
+                        original: Box::new(original),
+                    })?;
+            }
             crate::sqlite::write::rollback(connection)?;
             Ok(ClaimAdmission::Duplicate)
         }
         Err(error) => {
-            profile::finish_write(connection, Err(error))?;
+            profile::finish_write_guarded(connection, Err(error), engine)?;
             unreachable!()
         }
     }
@@ -109,9 +120,13 @@ pub(crate) fn insert(
 
 pub(crate) fn observe(
     connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     state: &mut Sites,
     observations: &[SiteObservation],
 ) -> StorageResult<()> {
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         site_index::verify(connection, state)?;
@@ -158,5 +173,5 @@ pub(crate) fn observe(
         }
         Ok(())
     })();
-    profile::finish_write(connection, result)
+    profile::finish_write_guarded(connection, result, engine)
 }

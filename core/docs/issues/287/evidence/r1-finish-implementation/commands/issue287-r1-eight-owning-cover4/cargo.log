@@ -1,0 +1,262 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-storage)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-server)
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:210:54
+    |
+210 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `CountState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `CountState`:
+              ScratchAdapter<'_>
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:210:54
+    |
+210 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `ReleaseState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `ReleaseState`:
+              ScratchAdapter<'_>
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:210:54
+    |
+210 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `FactState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `FactState`:
+              ScratchAdapter<'_>
+              VerifiedEmptyState
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `NamespaceConstructionState`
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:210:54
+    |
+210 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `ParentEligibilityState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `ParentEligibilityState`:
+              ScratchAdapter<'_>
+              VerifiedEmptyState
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `NamespaceConstructionState`
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:210:54
+    |
+210 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `AliasFrontier` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `AliasFrontier`:
+              ResidentAliasFrontier
+              ScratchAdapter<'_>
+              VerifiedEmptyState
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `AliasGraphConstructionState`
+    = note: required for `ScratchSession` to implement `NamespaceConstructionState`
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:210:54
+    |
+210 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `layerfs_content::filesystem::state::IndexedState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `layerfs_content::filesystem::state::IndexedState`:
+              ResidentState
+              ScratchAdapter<'_>
+              VerifiedEmptyState
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `GraphConstructionState`
+    = note: required for `ScratchSession` to implement `AliasGraphConstructionState`
+    = note: required for `ScratchSession` to implement `NamespaceConstructionState`
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:210:54
+    |
+210 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `BindingSiteState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `BindingSiteState`:
+              ScratchAdapter<'_>
+              VerifiedEmptyState
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `GraphConstructionState`
+    = note: required for `ScratchSession` to implement `AliasGraphConstructionState`
+    = note: required for `ScratchSession` to implement `NamespaceConstructionState`
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:210:54
+    |
+210 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `EffectiveGraphState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `EffectiveGraphState`:
+              ScratchAdapter<'_>
+              VerifiedEmptyState
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `GraphConstructionState`
+    = note: required for `ScratchSession` to implement `AliasGraphConstructionState`
+    = note: required for `ScratchSession` to implement `NamespaceConstructionState`
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:214:54
+    |
+214 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `CountState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `CountState`:
+              ScratchAdapter<'_>
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:214:54
+    |
+214 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `ReleaseState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `ReleaseState`:
+              ScratchAdapter<'_>
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:214:54
+    |
+214 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `FactState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `FactState`:
+              ScratchAdapter<'_>
+              VerifiedEmptyState
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `NamespaceConstructionState`
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:214:54
+    |
+214 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `ParentEligibilityState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `ParentEligibilityState`:
+              ScratchAdapter<'_>
+              VerifiedEmptyState
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `NamespaceConstructionState`
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:214:54
+    |
+214 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `AliasFrontier` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `AliasFrontier`:
+              ResidentAliasFrontier
+              ScratchAdapter<'_>
+              VerifiedEmptyState
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `AliasGraphConstructionState`
+    = note: required for `ScratchSession` to implement `NamespaceConstructionState`
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:214:54
+    |
+214 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `layerfs_content::filesystem::state::IndexedState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `layerfs_content::filesystem::state::IndexedState`:
+              ResidentState
+              ScratchAdapter<'_>
+              VerifiedEmptyState
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `GraphConstructionState`
+    = note: required for `ScratchSession` to implement `AliasGraphConstructionState`
+    = note: required for `ScratchSession` to implement `NamespaceConstructionState`
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:214:54
+    |
+214 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `BindingSiteState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `BindingSiteState`:
+              ScratchAdapter<'_>
+              VerifiedEmptyState
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `GraphConstructionState`
+    = note: required for `ScratchSession` to implement `AliasGraphConstructionState`
+    = note: required for `ScratchSession` to implement `NamespaceConstructionState`
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0277]: the trait bound `ScratchSession: CanonicalConstructionState` is not satisfied
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:214:54
+    |
+214 |                         &mut objects, &source, None, &mut session, &scopes, &phases,
+    |                                                      ^^^^^^^^^^^^ the trait `EffectiveGraphState` is not implemented for `ScratchSession`
+    |
+    = help: the following other types implement trait `EffectiveGraphState`:
+              ScratchAdapter<'_>
+              VerifiedEmptyState
+              VerifiedSmallFileState
+    = note: required for `ScratchSession` to implement `GraphConstructionState`
+    = note: required for `ScratchSession` to implement `AliasGraphConstructionState`
+    = note: required for `ScratchSession` to implement `NamespaceConstructionState`
+    = note: required for `ScratchSession` to implement `CanonicalConstructionState`
+    = note: required for the cast from `&mut ScratchSession` to `&mut dyn CanonicalConstructionState`
+
+error[E0507]: cannot move out of `*name` which is behind a shared reference
+   --> crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:328:35
+    |
+328 |                 .map(|(name, _)| (*name, None))
+    |                                   ^^^^^ move occurs because `*name` has type `PathName`, which does not implement the `Copy` trait
+    |
+help: consider cloning the value if the performance cost is acceptable
+    |
+328 -                 .map(|(name, _)| (*name, None))
+328 +                 .map(|(name, _)| (name.clone(), None))
+    |
+
+Some errors have detailed explanations: E0277, E0507.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `layerfs-storage` (test "canonical_namespace_pipeline") due to 17 previous errors
+warning: build failed, waiting for other jobs to finish...
+warning: function `real_reader_commit_unknown_preserves_complete_old_proposed_context_and_S` should have a snake case name
+   --> crates/layerfs-storage/tests/scratch_pool.rs:207:8
+    |
+207 |     fn real_reader_commit_unknown_preserves_complete_old_proposed_context_and_S() {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case (notice the capitalization): `real_reader_commit_unknown_preserves_complete_old_proposed_context_and_s`
+    |
+    = note: `#[warn(non_snake_case)]` on by default
+
+warning: `layerfs-storage` (test "scratch_pool") generated 1 warning

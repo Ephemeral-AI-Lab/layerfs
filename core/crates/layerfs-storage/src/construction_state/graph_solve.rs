@@ -219,7 +219,14 @@ pub(crate) fn prepare(
     }
     layerfs_content::filesystem::state::GraphMutationLimit::default()
         .check(&graph.scope, mutations)?;
-    let mut attempt = GraphAttempt::new(GraphAttemptKind::Mutation, graph, graph.stage);
+    let targets = mutations.iter().map(|mutation| mutation.affected()).sum();
+    let mut attempt = GraphAttempt::new_with_items(
+        GraphAttemptKind::Mutation,
+        graph,
+        graph.stage,
+        mutations.len(),
+        targets,
+    )?;
     let mut solver = graph.solver;
     for (index, mutation) in mutations.iter().enumerate() {
         let result = transition(connection, graph, solver, *mutation)?;
@@ -235,7 +242,7 @@ pub(crate) fn prepare(
                 {
                     return Err(error());
                 }
-                attempt.node(Some(before), Some(after));
+                attempt.node(Some(before), Some(after))?;
             }
         }
     }
@@ -246,10 +253,14 @@ pub(crate) fn prepare(
 
 pub(crate) fn commit(
     connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     graph: &Graph,
     attempt: &GraphAttempt,
     mutations: &[GraphMutation],
 ) -> StorageResult<()> {
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         graph_index::verify(connection, graph)?;
@@ -272,5 +283,5 @@ pub(crate) fn commit(
         graph_write::solver(connection, solver)?;
         Ok(())
     })();
-    profile::finish_write(connection, result)
+    profile::finish_write_guarded(connection, result, engine)
 }

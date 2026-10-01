@@ -1,0 +1,27 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "filesystem_parent_lookup",
+    "--test",
+    "filesystem_tier_stream",
+    "--test",
+    "filesystem_reference",
+    "--test",
+    "filesystem_ordering",
+    "--",
+    "--show-output"
+  ],
+  "exit": 101,
+  "wall_ns": 7696231667,
+  "source_change": {},
+  "source_overlay_reused": "issue287-r1-tier-stream-legacy-quota-cover/command.json",
+  "cause": "correctactualfilesystem_reference singular target; no product/runtime from priorinvalidselection"
+}

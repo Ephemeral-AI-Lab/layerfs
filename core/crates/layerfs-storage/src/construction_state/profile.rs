@@ -38,6 +38,8 @@ pub(crate) fn open(path: &std::path::Path) -> StorageResult<Connection> {
     )?)
 }
 
+// Each optional scope is an independent frozen profile grammar and the guard is explicit.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn initialize(
     connection: &Connection,
     header: &[u8],
@@ -45,7 +47,12 @@ pub(crate) fn initialize(
     claim_scope: Option<&[u8; 81]>,
     site_scope: Option<&[u8; 89]>,
     graph_scope: Option<&[u8; 188]>,
+    draft_scope: Option<&layerfs_content::file::edit::DraftScope>,
+    engine: Option<&'static crate::engine::EngineGuard>,
 ) -> StorageResult<ScratchProfile> {
+    if let Some(engine) = engine {
+        engine.validate()?;
+    }
     let journal: String =
         connection.query_row("PRAGMA journal_mode = MEMORY", [], |row| row.get(0))?;
     if !journal.eq_ignore_ascii_case("memory") {
@@ -110,12 +117,80 @@ pub(crate) fn initialize(
                 bindings,
                 capacity,
                 ..
+            }
+            | Plan::AliasesSitesGraphThenRoots {
+                directories,
+                bindings,
+                capacity,
+                ..
+            }
+            | Plan::NamespaceSitesGraphThenRoots {
+                directories,
+                bindings,
+                capacity,
+                ..
+            }
+            | Plan::CanonicalSitesGraphThenRoots {
+                directories,
+                bindings,
+                capacity,
+                ..
             } => {
                 let sites = site_scope
                     .ok_or(StorageError::Integrity("construction scratch graph sites"))?;
                 let graph = graph_scope
                     .ok_or(StorageError::Integrity("construction scratch graph scope"))?;
-                connection.execute_batch(GRAPH_SCHEMA)?;
+                if matches!(
+                    plan,
+                    Plan::AliasesSitesGraphThenRoots { .. }
+                        | Plan::NamespaceSitesGraphThenRoots { .. }
+                        | Plan::CanonicalSitesGraphThenRoots { .. }
+                ) {
+                    let schema = GRAPH_SCHEMA
+                        .replace(
+                            "PRAGMA user_version = 4;",
+                            if matches!(plan, Plan::CanonicalSitesGraphThenRoots { .. }) {
+                                "PRAGMA user_version = 8;"
+                            } else if matches!(plan, Plan::NamespaceSitesGraphThenRoots { .. }) {
+                                "PRAGMA user_version = 7;"
+                            } else {
+                                "PRAGMA user_version = 5;"
+                            },
+                        )
+                        .replace(
+                            "length(header) = 298",
+                            if matches!(plan, Plan::CanonicalSitesGraphThenRoots { .. }) {
+                                "length(header) = 386"
+                            } else if matches!(plan, Plan::NamespaceSitesGraphThenRoots { .. }) {
+                                "length(header) = 346"
+                            } else {
+                                "length(header) = 322"
+                            },
+                        );
+                    connection.execute_batch(&schema)?;
+                    connection.execute_batch(include_str!("../../sql/construction_aliases.sql"))?;
+                    if matches!(
+                        plan,
+                        Plan::NamespaceSitesGraphThenRoots { .. }
+                            | Plan::CanonicalSitesGraphThenRoots { .. }
+                    ) {
+                        connection
+                            .execute_batch(include_str!("../../sql/construction_facts.sql"))?;
+                    }
+                    if matches!(plan, Plan::CanonicalSitesGraphThenRoots { .. }) {
+                        connection
+                            .execute_batch(include_str!("../../sql/construction_counts.sql"))?;
+                    }
+                    if connection.execute(
+                        "INSERT INTO alias_owner VALUES(1,?1,NULL,0,0,0,0,0,NULL,NULL,?2,0,NULL)",
+                        rusqlite::params![sites.as_slice(), [0u8; 264].as_slice()],
+                    )? != 1
+                    {
+                        return Err(StorageError::Integrity("construction alias initial owner"));
+                    }
+                } else {
+                    connection.execute_batch(GRAPH_SCHEMA)?;
+                }
                 if connection.execute(
                     "INSERT INTO session_owner VALUES(1,?1,NULL,0,0,0,NULL,?2,?3,?4,?5,?6)",
                     rusqlite::params![header, directories as i64, bindings as i64,
@@ -133,6 +208,15 @@ pub(crate) fn initialize(
                     [graph.as_slice()],
                 )?
             }
+            Plan::Drafts { .. } => {
+                super::draft_index::initialize(
+                    connection,
+                    header,
+                    draft_scope
+                        .ok_or(StorageError::Integrity("construction draft initial scope"))?,
+                )?;
+                1
+            }
         };
         if affected != 1 {
             return Err(StorageError::Integrity(
@@ -141,7 +225,7 @@ pub(crate) fn initialize(
         }
         Ok(())
     })();
-    finish_write(connection, schema)?;
+    finish_write_guarded(connection, schema, engine)?;
     let maximum = plan.scratch_bytes() / 4096;
     let pages: i64 =
         connection.query_row(&format!("PRAGMA max_page_count={maximum}"), [], |row| {
@@ -155,10 +239,39 @@ pub(crate) fn initialize(
     readback(connection, plan)
 }
 
-pub(crate) fn finish_write(
+pub(crate) fn finish_write_guarded(
     connection: &Connection,
     result: StorageResult<()>,
+    engine: Option<&'static crate::engine::EngineGuard>,
 ) -> StorageResult<()> {
+    finish_transaction_guarded(connection, result, engine)
+}
+
+pub(crate) fn finish_transaction_guarded<T>(
+    connection: &Connection,
+    result: StorageResult<T>,
+    engine: Option<&'static crate::engine::EngineGuard>,
+) -> StorageResult<T> {
+    if let Some(engine) = engine {
+        if let Err(guard) = engine.validate() {
+            let original = match result {
+                Ok(_) => guard,
+                Err(original) => StorageError::CleanupFailed {
+                    original: Box::new(original),
+                    cleanup: Box::new(guard),
+                },
+            };
+            // Foreign guard state in an open transaction denies COMMIT and
+            // rollback alike. Keep exact engine/pending custody for the owner.
+            return if connection.is_autocommit() {
+                Err(original)
+            } else {
+                Err(StorageError::UnknownOutcome {
+                    original: Box::new(original),
+                })
+            };
+        }
+    }
     finish_transaction(connection, result)
 }
 

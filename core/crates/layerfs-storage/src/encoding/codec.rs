@@ -200,6 +200,16 @@ pub struct CompressionWorkspace {
     context: *mut ZSTD_CCtx,
 }
 
+// SAFETY: this owner uniquely holds a static Zstd context inside its private
+// aligned Vec arena. Moving Vec does not move/reallocate its backing region;
+// it is never resized after context initialization. No raw pointer escapes and
+// every context operation requires &mut self. Calls are synchronous, use no
+// native workers, and borrowed prefixes are scoped/cleared before return.
+// Locked Zstd1.5.7 zstd.h requires separate contexts for parallel execution,
+// not a fixed OS thread for serial ownership. This permits transfer, not shared
+// concurrent access; Sync remains absent. See R1B-SAVE-WORKING-FREEZE custody audit.
+unsafe impl Send for CompressionWorkspace {}
+
 impl CompressionWorkspace {
     /// Allocates the bounded encode workspace and its static context.
     pub fn new() -> StorageResult<Self> {
@@ -464,6 +474,16 @@ pub struct DecompressionWorkspace {
     memory: Vec<u64>,
     context: *mut ZSTD_DCtx,
 }
+
+// SAFETY: this owner uniquely holds a static Zstd context inside its private
+// aligned Vec arena. Moving Vec does not move/reallocate its backing region;
+// it is never resized after context initialization. No raw pointer escapes and
+// every context operation requires &mut self. Calls are synchronous, use no
+// native workers, and borrowed prefixes are scoped/cleared before return.
+// Locked Zstd1.5.7 zstd.h requires separate contexts for parallel execution,
+// not a fixed OS thread for serial ownership. This permits transfer, not shared
+// concurrent access; Sync remains absent. See R1B-SAVE-WORKING-FREEZE custody audit.
+unsafe impl Send for DecompressionWorkspace {}
 
 impl DecompressionWorkspace {
     /// A decode workspace whose bounded arena is allocated on first use.

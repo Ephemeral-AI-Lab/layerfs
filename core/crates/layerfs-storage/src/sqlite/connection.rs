@@ -28,6 +28,41 @@ pub fn open(path: &Path, create: bool) -> StorageResult<Connection> {
     Ok(connection)
 }
 
+/// Established actual provider participation before first connection/SQL effects.
+pub fn open_guarded(
+    path: &Path,
+    create: bool,
+    engine: &'static crate::engine::EngineGuard,
+    class: crate::engine::ConnectionClass,
+) -> StorageResult<Connection> {
+    engine.validate()?;
+    let flags = if create {
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE
+    } else {
+        OpenFlags::SQLITE_OPEN_READ_WRITE
+    };
+    let connection = Connection::open_with_flags(path, flags)?;
+    engine.validate()?;
+    let arbitration = super::ownership::arbitration(path)?;
+    let _guard = super::ownership::lock(&arbitration)?;
+    configure(&connection)?;
+    crate::engine::connection_configure(&connection, class)?;
+    engine.validate()?;
+    super::ownership::initialize_scope(&connection)?;
+    verify_guarded(&connection, engine, class)?;
+    Ok(connection)
+}
+/// Same captured guard and actual profile at each relevant operation boundary.
+pub fn verify_guarded(
+    connection: &Connection,
+    engine: &'static crate::engine::EngineGuard,
+    class: crate::engine::ConnectionClass,
+) -> StorageResult<()> {
+    engine.validate()?;
+    verify_profile(connection)?;
+    crate::engine::connection_verify(connection, class)
+}
+
 /// Applies the declared pragma profile to an already open connection.
 pub fn configure(connection: &Connection) -> StorageResult<()> {
     // `journal_mode` returns the resulting mode; MEMORY keeps rollback atomicity
@@ -61,6 +96,9 @@ pub fn verify_profile(connection: &Connection) -> StorageResult<()> {
     }
     if pragma_i64(connection, Pragma::Synchronous)? != 0 {
         return Err(StorageError::Integrity("synchronous mode"));
+    }
+    if pragma_i64(connection, Pragma::TempStore)? != 2 {
+        return Err(StorageError::Integrity("temporary storage profile"));
     }
     if pragma_i64(connection, Pragma::ForeignKeys)? != 1 {
         return Err(StorageError::Integrity("foreign key enforcement"));

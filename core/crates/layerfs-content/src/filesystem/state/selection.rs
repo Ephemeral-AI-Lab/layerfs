@@ -115,6 +115,40 @@ pub enum StateTable {
     GraphNodes = 4,
     /// Closed effective directory arcs and exact multiplicity.
     GraphEdges = 5,
+    /// Exact discovered alias facts in private profile5.
+    AliasFacts = 6,
+    /// Indexed pending alias traversal jobs in private profile5.
+    AliasJobs = 7,
+    /// Private edit draft headers in profile6.
+    DraftHeaders = 8,
+    /// Private bounded draft bodies.
+    DraftBodies = 9,
+    /// Draft direct references.
+    DraftReferences = 10,
+    /// Advisory draft predecessor order.
+    DraftPredecessors = 11,
+    /// Checked draft link counts.
+    DraftCounts = 12,
+    /// Advancing detached draft jobs.
+    DraftJobs = 13,
+    /// Known children-before-parent canonical resolutions.
+    DraftCommitted = 14,
+    /// Exactly once candidate emission custody.
+    DraftEmissions = 15,
+    /// Exact selected draft root ownership.
+    DraftSelection = 16,
+    /// Exact selected immutable inode presence/absence facts in profile7.
+    BaseFacts = 17,
+    /// Declared directory incoming-binding eligibility in profile7.
+    ParentEligibility = 18,
+    /// Actual mutable count/declaration/touched authority in private profile8.
+    Counts = 19,
+    /// Exact ordered zero-count candidates under an immutable effect epoch.
+    ZeroSeeds = 20,
+    /// External FIFO pending descendant-release jobs.
+    ReleaseJobs = 21,
+    /// External full-name LIFO directory cursor frames.
+    ReleaseFrames = 22,
 }
 
 impl StateTable {

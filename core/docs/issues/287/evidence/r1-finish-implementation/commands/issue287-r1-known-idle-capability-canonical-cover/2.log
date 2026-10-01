@@ -1,0 +1,116 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-history)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 9.50s
+     Running tests/catalog_admission.rs (core/target/r1-eight-owning/debug/deps/catalog_admission-ca6d7075056c0650)
+
+running 9 tests
+test server_scratch_unknown_child ... ok
+test catalog_grants_read_only_authority_and_wrong_prepared_scope_refuse_before_save ... ok
+test aliases_share_one_catalog_allowance_and_distinct_provider_cells_keep_their_own ... ok
+test scratch_parent_refusal_precedes_save_and_body_without_a_hidden_retry ... ok
+test real_catalog_contention_and_range_exhaustion_preserve_allocator_and_content ... ok
+test declared_directory_state_over_capacity_refuses_before_scratch_save_or_body ... ok
+test store_aliases_share_save_capacity_and_one_actual_scratch_domain ... ok
+test scratch_unknown_preserves_publication_and_reports_owned_save_cleanup ... ok
+test allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused ... ok
+
+successes:
+
+---- scratch_unknown_preserves_publication_and_reports_owned_save_cleanup stdout ----
+Server scratch proof selected SQLite: binary=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning/debug/deps/catalog_admission-ca6d7075056c0650 library=/usr/lib/libsqlite3.dylib
+Server provider lock acknowledged: {"access": "READ_ONLY|NOFOLLOW", "barrier": "BEGIN+SELECT records=0/sealed=0, SHARED held", "busy_ms": 0, "library": "/usr/lib/libsqlite3.dylib", "mode": "read", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+Server source gate proof: persistedSave=1, nativeScratch16MiB=1, BEGIN+SELECT scratchSHARED acknowledged, storeLocked=false; body not yet released
+Server independent fixture grammar: candidate_objects=3, candidate_canonical_bytes=486, one68-byte directory leaf before scratchappend; actual Store thresholds objects=512, canonical_bytes=4194303
+Server scratch failure proof: Provider unknown=true cleanup=None history=None; activeSave=0 before external lock release
+Server provider lock completion: {"access": "READ_ONLY|NOFOLLOW", "barrier": "BEGIN+SELECT records=0/sealed=0, SHARED held", "busy_ms": 0, "completion": "ROLLBACK acknowledged, exact selected connection closed", "library": "/usr/lib/libsqlite3.dylib", "mode": "read", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+Server publication proof: C5Stage absent, Branch unchanged, two independent finished-file roots/bytes intact, retained scratch identity=(16777230, 857084451, 501, 33152, 1, 16777216); no query-based Unknown adoption or speed/resource admission
+
+Server scratch proof selected SQLite: binary=/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning/debug/deps/catalog_admission-ca6d7075056c0650 library=/usr/lib/libsqlite3.dylib
+Server provider lock acknowledged: {"access": "READ_ONLY|NOFOLLOW", "barrier": "BEGIN+SELECT records=0/sealed=0, SHARED held", "busy_ms": 0, "library": "/usr/lib/libsqlite3.dylib", "mode": "read", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+Server provider lock acknowledged: {"access": "READ_WRITE|NOFOLLOW", "barrier": "BEGIN IMMEDIATE+SELECT activeSave=1, RESERVED held", "busy_ms": 0, "library": "/usr/lib/libsqlite3.dylib", "mode": "write", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+Server source gate proof: persistedSave=1, nativeScratch16MiB=1, BEGIN+SELECT scratchSHARED acknowledged, storeLocked=true; body not yet released
+Server independent fixture grammar: candidate_objects=3, candidate_canonical_bytes=486, one68-byte directory leaf before scratchappend; actual Store thresholds objects=512, canonical_bytes=4194303
+Server scratch failure proof: Provider unknown=true cleanup=Some(Ownership) history=None; activeSave=1 before external lock release
+Server provider lock completion: {"access": "READ_WRITE|NOFOLLOW", "barrier": "BEGIN IMMEDIATE+SELECT activeSave=1, RESERVED held", "busy_ms": 0, "completion": "ROLLBACK acknowledged, exact selected connection closed", "library": "/usr/lib/libsqlite3.dylib", "mode": "write", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+Server provider lock completion: {"access": "READ_ONLY|NOFOLLOW", "barrier": "BEGIN+SELECT records=0/sealed=0, SHARED held", "busy_ms": 0, "completion": "ROLLBACK acknowledged, exact selected connection closed", "library": "/usr/lib/libsqlite3.dylib", "mode": "read", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+Server publication proof: C5Stage absent, Branch unchanged, two independent finished-file roots/bytes intact, retained scratch identity=(16777230, 857084468, 501, 33152, 1, 16777216); no query-based Unknown adoption or speed/resource admission
+
+
+
+successes:
+    aliases_share_one_catalog_allowance_and_distinct_provider_cells_keep_their_own
+    allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused
+    catalog_grants_read_only_authority_and_wrong_prepared_scope_refuse_before_save
+    declared_directory_state_over_capacity_refuses_before_scratch_save_or_body
+    real_catalog_contention_and_range_exhaustion_preserve_allocator_and_content
+    scratch_parent_refusal_precedes_save_and_body_without_a_hidden_retry
+    scratch_unknown_preserves_publication_and_reports_owned_save_cleanup
+    server_scratch_unknown_child
+    store_aliases_share_save_capacity_and_one_actual_scratch_domain
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.68s
+
+     Running tests/file_drafts.rs (core/target/r1-eight-owning/debug/deps/file_drafts-9f3cdeb4b3767753)
+
+running 3 tests
+test no_op_and_malformed_actual_extent_body_do_not_bypass_draft_terminal_custody ... ok
+test actual_metadata_commit_unknown_retains_its_owner_and_aborts_separate_known_content_save ... ok
+test configured_16_and_48mib_real_edits_select_profile6_before_body_and_return_after_cleanup ... ok
+
+successes:
+
+---- no_op_and_malformed_actual_extent_body_do_not_bypass_draft_terminal_custody stdout ----
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+
+---- actual_metadata_commit_unknown_retains_its_owner_and_aborts_separate_known_content_save stdout ----
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC acknowledged actual selected read barrier: {"access": "READ_ONLY|NOFOLLOW", "barrier": "BEGIN+SELECT records=0/sealed=0, SHARED held", "busy_ms": 0, "library": "/usr/lib/libsqlite3.dylib", "mode": "read", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+DIAGNOSTIC read barrier completion: {"access": "READ_ONLY|NOFOLLOW", "barrier": "BEGIN+SELECT records=0/sealed=0, SHARED held", "busy_ms": 0, "completion": "ROLLBACK acknowledged, exact selected connection closed", "library": "/usr/lib/libsqlite3.dylib", "mode": "read", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC real profile6 metadata COMMIT Unknown retained and separate known content Save abort; no Saved root, automatic retry, native/global/physical or speed qualification
+
+---- configured_16_and_48mib_real_edits_select_profile6_before_body_and_return_after_cleanup stdout ----
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+
+
+successes:
+    actual_metadata_commit_unknown_retains_its_owner_and_aborts_separate_known_content_save
+    configured_16_and_48mib_real_edits_select_profile6_before_body_and_return_after_cleanup
+    no_op_and_malformed_actual_extent_body_do_not_bypass_draft_terminal_custody
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+

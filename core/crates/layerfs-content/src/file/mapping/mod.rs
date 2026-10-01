@@ -4,7 +4,9 @@
 
 mod build;
 mod cache;
+mod cache_table;
 mod codec;
+mod navigation;
 mod predecessor;
 mod read;
 mod types;
@@ -13,6 +15,7 @@ pub(crate) use build::build_streaming_with_predecessor;
 pub use build::{build_streaming, emit_empty_leaf, emit_file_state, ExtentBuilder, MappingBuild};
 pub(crate) use cache::CheckedPage;
 pub use cache::{PageCache, READ_NAVIGATION_CACHE_PAGES};
+pub use cache_table::{CacheTableLayout, CacheTableMemory, READ_NAVIGATION_CACHE_METADATA_BYTES};
 pub use codec::{
     chunk_canonical_len, decode_chunk_payload, decode_file_state, decode_node,
     decode_node_with_context, encode_chunk_object, encode_file_state, encode_node, profile_id,

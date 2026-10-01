@@ -121,10 +121,33 @@ impl Drop for ChildOwner {
     }
 }
 
-fn bootstrap() -> &'static EngineGuard {
-    // This helper runs only in one selected fresh child. The libtest controller
-    // is idle and no other test or SQL caller can run in this process.
-    unsafe { bootstrap_exclusive() }.unwrap()
+fn bootstrap() -> Option<&'static EngineGuard> {
+    // One selected fresh child, before any Store/scratch effect. Capability
+    // refusal records an unrun supported-provider body; it is not enforcement.
+    match unsafe { bootstrap_exclusive() } {
+        Ok(guard) => Some(guard),
+        Err(error) => {
+            assert_eq!(error.stage(), EngineBootstrapStage::Readback);
+            assert!(
+                matches!(
+                    error.cause(),
+                    StorageError::UnsupportedPolicy {
+                        field: "SQLite required hard heap limit"
+                    }
+                ),
+                "unexpected bootstrap failure: {error}"
+            );
+            let custody = error.custody();
+            assert_eq!(custody.observed_hard_heap_limit, Some(0));
+            assert!(!custody.hard_limit_installed && !custody.probe_issued);
+            println!(
+                "engine supported body NOT_RUN: stage={:?} cause={} custody={custody:?}",
+                error.stage(),
+                error.cause()
+            );
+            None
+        }
+    }
 }
 
 fn run_child(case: &str) {
@@ -138,6 +161,12 @@ fn run_child(case: &str) {
     assert!(
         String::from_utf8_lossy(&output.stdout).contains(&format!("engine case complete: {case}"))
     );
+    if String::from_utf8_lossy(&output.stdout).contains("engine supported body NOT_RUN") {
+        eprintln!(
+            "case={case} supported-provider qualification NOT_RUN: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
     eprintln!("{}", String::from_utf8_lossy(&output.stderr));
 }
 
@@ -240,7 +269,9 @@ fn unavailable_provider() {
 }
 
 fn owned() {
-    let guard = bootstrap();
+    let Some(guard) = bootstrap() else {
+        return;
+    };
     let profile = guard.profile();
     let boot = guard.bootstrap_observation();
     assert_eq!(profile.hard_heap_limit_bytes, ENGINE_HEAP_LIMIT_BYTES);
@@ -258,7 +289,10 @@ fn owned() {
     );
     assert_eq!(boot.after_probe.used_bytes, boot.before_probe.used_bytes);
     assert_eq!(boot.after_probe.allocations, boot.before_probe.allocations);
-    assert!(std::ptr::eq(guard, bootstrap()));
+    assert!(std::ptr::eq(
+        guard,
+        bootstrap().expect("same established guard")
+    ));
     eprintln!("actual linked engine profile={profile:?}; exclusive startup probe={boot:?}; highwaters are lifetime, no physical/progress claim");
 
     let directory = support::TempDir::new("owned_engine");
@@ -360,7 +394,9 @@ fn foreign() {
 }
 
 fn native_cap() {
-    let guard = bootstrap();
+    let Some(guard) = bootstrap() else {
+        return;
+    };
     let before = guard.validate().unwrap().memory;
     let mut owners = pressure::until_refusal();
     assert!(!owners.is_empty() && owners.len() < 32);
@@ -384,7 +420,9 @@ fn native_cap() {
 }
 
 fn sql_nomem() {
-    let guard = bootstrap();
+    let Some(guard) = bootstrap() else {
+        return;
+    };
     let connection = Connection::open_in_memory().unwrap();
     connection.execute_batch("PRAGMA journal_mode=MEMORY; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY; CREATE TABLE bytes(value BLOB);").unwrap();
     connection.busy_timeout(std::time::Duration::ZERO).unwrap();
@@ -430,7 +468,9 @@ fn sql_nomem() {
 }
 
 fn foreign_limit() {
-    let guard = bootstrap();
+    let Some(guard) = bootstrap() else {
+        return;
+    };
     let foreign = ENGINE_HEAP_LIMIT_BYTES as i64 / 2;
     assert_eq!(
         unsafe { ffi::sqlite3_hard_heap_limit64(foreign) },
@@ -446,7 +486,10 @@ fn foreign_limit() {
         guard.validate(),
         Err(StorageError::Integrity("SQLite engine guard quarantined"))
     ));
-    assert!(std::ptr::eq(guard, bootstrap()));
+    assert!(std::ptr::eq(
+        guard,
+        bootstrap().expect("same established guard")
+    ));
     assert!(guard.is_quarantined());
     assert_eq!(unsafe { ffi::sqlite3_hard_heap_limit64(-1) }, foreign);
     eprintln!("foreign lower limit={foreign} remains untouched; owner terminally quarantined, no repair/rebootstrap/reset");

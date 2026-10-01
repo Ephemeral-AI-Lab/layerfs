@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "scratch_reuse",
+    "--",
+    "--show-output"
+  ],
+  "exit": 101,
+  "wall_ns": 6881568708,
+  "source_change": {
+    "core/crates/layerfs-server/tests/support/scratch_reuse.rs": "bea05c2e49330a7c208b1f4b98660ce84e566d95d3153e367d45f73fb55f80da",
+    "core/crates/layerfs-server/tests/support/scratch_reuse_query.py": "5303772b38bef2c1cf21f7c5d39b56c33afc81a9da920732f8788a2906c9670b",
+    "core/crates/layerfs-server/tests/support/scratch_reuse_reader.py": "69d2bacf2985520c6a4dbc5eecb9cb22ee48f29f0429a9864bd99ae7e6d99823"
+  },
+  "cause": "readOnlyNOFOLLOW observer usescanonicalsameinode/devregularleaf, /var intermediaryalias verifiednotproviderfallback; originalNativepathstable"
+}

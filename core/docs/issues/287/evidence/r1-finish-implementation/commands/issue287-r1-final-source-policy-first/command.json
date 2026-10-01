@@ -1,0 +1,40 @@
+{
+  "commands": [
+    {
+      "command": [
+        "python3",
+        "core/tools/check_product_boundary.py"
+      ],
+      "exit": 0,
+      "output": "PASS: scanned 607 production Rust/SQL files; semantic review still required\n"
+    },
+    {
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "core/tools",
+        "-p",
+        "test_*.py"
+      ],
+      "exit": 0,
+      "output": "...........\nRan 11 tests in 0.016s\nOK\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "fmt",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--",
+        "--check"
+      ],
+      "exit": 1,
+      "output": "Failed to find targets; virtual workspace formatting requires --all. No source failure assessed."
+    }
+  ],
+  "custody": "Exact exits/output observations from root tool output; no rerun or original raw log claim"
+}

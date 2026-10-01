@@ -1,0 +1,27 @@
+{
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "fmt",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "wall_ns": 3377558958
+    },
+    {
+      "command": [
+        "python3",
+        "core/tools/check_product_boundary.py"
+      ],
+      "exit": 0,
+      "wall_ns": 213890334
+    }
+  ],
+  "self_tests_reuse": "First policy check ran all11 unchanged boundary self-tests, PASS; no guard/tool source edits since that proof."
+}

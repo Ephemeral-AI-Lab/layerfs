@@ -1,0 +1,67 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 13.16s
+     Running tests/construction_drafts.rs (core/target/r1-eight-owning/debug/deps/construction_drafts-958bc47d092a1a0c)
+
+running 9 tests
+test unix::draft_reader_child ... ok
+test unix::oversized_incoming_owner_is_refused_before_first_native_reservation ... ok
+test unix::corrupt_private_body_is_refused_and_known_native_cleanup_is_explicit ... ok
+test unix::checked_repeated_link_overflow_refuses_before_parent_creating_effects ... ok
+test unix::mixed_sixteen_and_forty_eight_classes_keep_fixed_metadata_and_captured_owners ... ok
+test unix::real_commit_unknown_retains_exact_attempt_and_denies_replay ... ok
+test unix::actual_shared_counts_and_revival_have_exact_cleanup ... ok
+test unix::known_mapping_acceptance_then_real_ack_commit_unknown_never_emits_file_root ... ok
+test unix::actual_apply_edits_uses_real_drafts_and_reproduces_independent_v1_root ... ok
+
+successes:
+
+successes:
+    unix::actual_apply_edits_uses_real_drafts_and_reproduces_independent_v1_root
+    unix::actual_shared_counts_and_revival_have_exact_cleanup
+    unix::checked_repeated_link_overflow_refuses_before_parent_creating_effects
+    unix::corrupt_private_body_is_refused_and_known_native_cleanup_is_explicit
+    unix::draft_reader_child
+    unix::known_mapping_acceptance_then_real_ack_commit_unknown_never_emits_file_root
+    unix::mixed_sixteen_and_forty_eight_classes_keep_fixed_metadata_and_captured_owners
+    unix::oversized_incoming_owner_is_refused_before_first_native_reservation
+    unix::real_commit_unknown_retains_exact_attempt_and_denies_replay
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/draft_reference_quanta.rs (core/target/r1-eight-owning/debug/deps/draft_reference_quanta-47e4ad03fe0918f6)
+
+running 4 tests
+test foreign_supplied_job_count_cannot_consume_real_reference_rows ... ok
+test malformed_stored_reference_is_refused_before_any_delete_preparation ... ok
+test real_reference_constraint_rollback_keeps_issued_work_and_removes_partial_run ... ok
+test native_maximum_and_partial_reference_waves_keep_rows_and_reduce_preparation ... ok
+
+successes:
+
+successes:
+    foreign_supplied_job_count_cannot_consume_real_reference_rows
+    malformed_stored_reference_is_refused_before_any_delete_preparation
+    native_maximum_and_partial_reference_waves_keep_rows_and_reduce_preparation
+    real_reference_constraint_rollback_keeps_issued_work_and_removes_partial_run
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/draft_temporaries.rs (core/target/r1-eight-owning/debug/deps/draft_temporaries-858d8c6f103f43b7)
+
+running 4 tests
+test unix::draft_reader_child ... ok
+test unix::native_target_supersession_preserves_shared_temporaries_and_unrelated_first_zero ... ok
+test unix::another_issued_owners_selected_root_refuses_before_mutation_and_cannot_poison_that_owner ... ok
+test unix::real_supersede_commit_unknown_retains_exact_selected_and_temporary_attempt_without_replay ... ok
+
+successes:
+
+successes:
+    unix::another_issued_owners_selected_root_refuses_before_mutation_and_cannot_poison_that_owner
+    unix::draft_reader_child
+    unix::native_target_supersession_preserves_shared_temporaries_and_unrelated_first_zero
+    unix::real_supersede_commit_unknown_retains_exact_selected_and_temporary_attempt_without_replay
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

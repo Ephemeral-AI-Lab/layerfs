@@ -8,7 +8,7 @@ use crate::Service;
 use layerfs_bridge::{
     adapters::native::{
         connection::{accept, Peer},
-        server::serve,
+        server::serve_admitted,
     },
     contract::*,
 };
@@ -44,11 +44,13 @@ pub(crate) enum Stop<'a> {
 struct Session {
     socket: TcpStream,
     worker: thread::JoinHandle<()>,
+    _slot: Arc<super::purpose_admission::SessionSlot>,
 }
 
 pub(crate) struct Acceptor {
     listener: TcpListener,
     capacity: usize,
+    purposes: super::purpose_admission::PurposeAdmission,
     private: [u8; 32],
     peers: Vec<Peer>,
     service: Arc<Service>,
@@ -59,16 +61,19 @@ impl Acceptor {
     pub(crate) fn bind(
         endpoint: SocketAddr,
         capacity: usize,
+        protected: bool,
         private: [u8; 32],
         peers: Vec<Peer>,
         service: Arc<Service>,
         runtime: Runtime,
     ) -> Result<Self, Failure> {
+        let purposes = super::purpose_admission::PurposeAdmission::new(capacity, protected)?;
         let listener = layerfs_bridge::adapters::native::listen(endpoint)?;
         listener.set_nonblocking(true)?;
         Ok(Self {
             listener,
             capacity,
+            purposes,
             private,
             peers,
             service,
@@ -83,7 +88,7 @@ impl Acceptor {
     /// Admit connections until `stop` reports that admission must end.
     pub(crate) fn serve(&self, stop: Stop<'_>) -> Result<(), Failure> {
         let stdin = io::stdin();
-        let mut sessions: Vec<Session> = Vec::with_capacity(self.capacity);
+        let mut sessions: Vec<Session> = Vec::with_capacity(self.purposes.slots());
         let started = Instant::now();
         let (mut accepted, mut admitted, mut reaped, mut capacity_dropped, mut peak_live) =
             (0u64, 0u64, 0u64, 0u64, 0usize);
@@ -129,7 +134,7 @@ impl Acceptor {
                     Err(_) => return Err(Code::Io.into()),
                 };
                 accepted = accepted.saturating_add(1);
-                if sessions.len() == self.capacity {
+                if sessions.len() == self.purposes.slots() {
                     capacity_dropped = capacity_dropped.saturating_add(1);
                     if capacity_dropped <= 8 {
                         layerfs_bridge::adapters::native::pipe::diagnostic(&format!(
@@ -140,6 +145,15 @@ impl Acceptor {
                     drop(stream);
                     continue;
                 }
+                let slot = match self.purposes.pending() {
+                    Ok(slot) => slot,
+                    Err(_) => {
+                        capacity_dropped = capacity_dropped.saturating_add(1);
+                        drop(stream);
+                        continue;
+                    }
+                };
+                let worker_slot = Arc::clone(&slot);
                 let runtime = self.runtime.clone();
                 let service = Arc::clone(&self.service);
                 let peers = Arc::clone(&Arc::new(self.peers.clone()));
@@ -150,17 +164,22 @@ impl Acceptor {
                     .stack_size(2 * 1024 * 1024)
                     .spawn(move || {
                         if let Ok(connection) = accept(stream, &private, &peers) {
-                            let _ = serve(connection, |peer, request, input, output, deadline| {
-                                let (result, diagnostic) =
-                                    service.handle_until(peer, request, input, output, deadline);
-                                runtime.publish(diagnostic);
-                                result
-                            });
+                            let _ = serve_admitted(
+                                connection,
+                                |hello, _| worker_slot.select(hello),
+                                |peer, request, input, output, deadline| {
+                                    let (result, diagnostic) = service
+                                        .handle_until(peer, request, input, output, deadline);
+                                    runtime.publish(diagnostic);
+                                    result
+                                },
+                            );
                         }
                     })?;
                 sessions.push(Session {
                     socket,
                     worker: handle,
+                    _slot: slot,
                 });
                 admitted = admitted.saturating_add(1);
                 peak_live = peak_live.max(sessions.len());
@@ -192,6 +211,15 @@ impl Acceptor {
             let _ = session.worker.join();
             reaped = reaped.saturating_add(1);
         }
+        let result = match (result, self.service.drain_construction_idle()) {
+            (result, Ok(_)) => result,
+            (Ok(()), Err(error)) => Err(error),
+            (Err(mut error), Err(cleanup)) => {
+                error.cleanup.get_or_insert(cleanup.code);
+                error.unknown |= cleanup.unknown;
+                Err(error)
+            }
+        };
         layerfs_bridge::adapters::native::pipe::diagnostic(&format!(
             "layerfs-server acceptor summary accepted={accepted} admitted={admitted} live_at_stop={live_at_stop} peak_live={peak_live} reaped={reaped} capacity_dropped={capacity_dropped} capacity={} elapsed_ms={} error={:?}\n",
             self.capacity,

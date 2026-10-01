@@ -1,0 +1,129 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.68s
+     Running tests/edit_reference.rs (core/target/r1-eight-owning/debug/deps/edit_reference-8670d2abe57506d1)
+
+running 3 tests
+test the_oracle_fixtures_are_the_sealed_reference_revision ... ok
+test an_interior_join_reads_its_boundary_child_once ... ok
+test the_candidate_reproduces_the_reference_root_and_partition ... ok
+
+successes:
+
+---- the_candidate_reproduces_the_reference_root_and_partition stdout ----
+=== join-80-100
+  base_partition: 2/99305740 89/37df5774 90/3a98cf7d
+  base_root: 42670567953f6fec19b076d8ce181b1362cda277cee7526dffe34f18f977e58b
+  candidate_survivors: 
+  edited_root: 333d54974516c788dc731ee2e7c7522d0ff56a6982889b66e3caef5d469c310b
+  length: 3556500 / 3556500
+  oracle_base_partition: 2/99305740 89/37df5774 90/3a98cf7d
+  oracle_base_root: 42670567953f6fec19b076d8ce181b1362cda277cee7526dffe34f18f977e58b
+  oracle_partition: 2/94f0c9bd 96/8940b161 97/414e45e5
+  oracle_root: 333d54974516c788dc731ee2e7c7522d0ff56a6982889b66e3caef5d469c310b
+  oracle_survivors: 
+  partition: 2/94f0c9bd 96/8940b161 97/414e45e5
+=== repartition-80-100
+  base_partition: 2/99305740 89/37df5774 90/3a98cf7d
+  base_root: 42670567953f6fec19b076d8ce181b1362cda277cee7526dffe34f18f977e58b
+  candidate_survivors: 3a98cf7d
+  edited_root: d70a88deb900a35951ddc84d394573b50782735f11ff321ec1cc0e1e7e94e9d2
+  length: 3356500 / 3356500
+  oracle_base_partition: 2/99305740 89/37df5774 90/3a98cf7d
+  oracle_base_root: 42670567953f6fec19b076d8ce181b1362cda277cee7526dffe34f18f977e58b
+  oracle_partition: 2/a1ff5278 90/73c20991 90/3a98cf7d
+  oracle_root: d70a88deb900a35951ddc84d394573b50782735f11ff321ec1cc0e1e7e94e9d2
+  oracle_survivors: 3a98cf7d
+  partition: 2/a1ff5278 90/73c20991 90/3a98cf7d
+=== half-partition-90-90
+  base_partition: 2/07b4ea68 90/6f8bcba4 90/a131fce5
+  base_root: 5e36f13772d549a49898d61c3304f9d06e2063f9c9f7e42ad092bbcccb438bbe
+  candidate_survivors: 
+  edited_root: 3b39c8676fbc98269be448e482b7598c780f4442fa6e1266fdec7a62cf6a732e
+  length: 3432068 / 3432068
+  oracle_base_partition: 2/07b4ea68 90/6f8bcba4 90/a131fce5
+  oracle_base_root: 5e36f13772d549a49898d61c3304f9d06e2063f9c9f7e42ad092bbcccb438bbe
+  oracle_partition: 2/93b2713d 90/927e853a 90/0ba12165
+  oracle_root: 3b39c8676fbc98269be448e482b7598c780f4442fa6e1266fdec7a62cf6a732e
+  oracle_survivors: 
+  partition: 2/93b2713d 90/927e853a 90/0ba12165
+=== unequal-height-join
+  base_partition: 2/66075b79 70/b2b26905 70/25ce99de
+  base_root: f26a228d28775eef492c4150b60acb338f737b93caf05c28e59725783f1fb2e2
+  candidate_survivors: b2b26905 25ce99de
+  edited_root: 7f9403bae1dff98c178b4ae392859c65862b8aca2ebabbc83b87fc593be1d280
+  length: 5151523 / 5151523
+  oracle_base_partition: 2/66075b79 70/b2b26905 70/25ce99de
+  oracle_base_root: f26a228d28775eef492c4150b60acb338f737b93caf05c28e59725783f1fb2e2
+  oracle_partition: 4/35f7d396 70/b2b26905 70/25ce99de 66/195e3b84 67/c5c03ada
+  oracle_root: 7f9403bae1dff98c178b4ae392859c65862b8aca2ebabbc83b87fc593be1d280
+  oracle_survivors: b2b26905 25ce99de
+  partition: 4/35f7d396 70/b2b26905 70/25ce99de 66/195e3b84 67/c5c03ada
+=== untouched-sibling
+  base_partition: 3/f3bb6234 128/fc8b3286 86/a7884b79 86/c5a59b6c
+  base_root: 43851dcb5272f804972c10d917f72d2a902168c0165ad4bbb48a1c0a52fa2458
+  candidate_survivors: c5a59b6c
+  edited_root: c60cf6588b3662ac6c2ef3ff18a240d6504a7f41270b46d6a8da033f0fd336b7
+  length: 5803494 / 5803494
+  oracle_base_partition: 3/f3bb6234 128/fc8b3286 86/a7884b79 86/c5a59b6c
+  oracle_base_root: 43851dcb5272f804972c10d917f72d2a902168c0165ad4bbb48a1c0a52fa2458
+  oracle_partition: 4/b9fbdfcc 73/4878e4e0 74/59ba6c20 69/1b68d681 86/c5a59b6c
+  oracle_root: c60cf6588b3662ac6c2ef3ff18a240d6504a7f41270b46d6a8da033f0fd336b7
+  oracle_survivors: c5a59b6c
+  partition: 4/b9fbdfcc 73/4878e4e0 74/59ba6c20 69/1b68d681 86/c5a59b6c
+=== interior-multi-level
+  base_partition: 4/24fd6728 128/fc8b3286 128/71672c0c 72/b090cf82 72/eece3708
+  base_root: b3b633149de68cfc55cd070fb929a7c44c92bbdb00f5dc574583ff19aac5162f
+  candidate_survivors: 
+  edited_root: 57e0a51cc3291c890ba1616d3e1669e19554c38ecaad34d89af5a0f6a25493f0
+  length: 7746133 / 7746133
+  oracle_base_partition: 4/24fd6728 128/fc8b3286 128/71672c0c 72/b090cf82 72/eece3708
+  oracle_base_root: b3b633149de68cfc55cd070fb929a7c44c92bbdb00f5dc574583ff19aac5162f
+  oracle_partition: 4/809b593d 102/425b01bf 103/eba4dae2 98/bef0eb1d 99/c9f09eab
+  oracle_root: 57e0a51cc3291c890ba1616d3e1669e19554c38ecaad34d89af5a0f6a25493f0
+  oracle_survivors: 
+  partition: 4/809b593d 102/425b01bf 103/eba4dae2 98/bef0eb1d 99/c9f09eab
+=== height-growth
+  base_partition: 2/8c423679 128/fc8b3286 72/e35519fe
+  base_root: d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9
+  candidate_survivors: fc8b3286 e35519fe
+  edited_root: ae823b681cb44d0531aa736257a31c2319ad610655effad8433fb524a09e894d
+  length: 6835286 / 6835286
+  oracle_base_partition: 2/8c423679 128/fc8b3286 72/e35519fe
+  oracle_base_root: d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9
+  oracle_partition: 4/ee7f3b17 128/fc8b3286 72/e35519fe 78/07c9a4d0 79/82cea9e1
+  oracle_root: ae823b681cb44d0531aa736257a31c2319ad610655effad8433fb524a09e894d
+  oracle_survivors: fc8b3286 e35519fe
+  partition: 4/ee7f3b17 128/fc8b3286 72/e35519fe 78/07c9a4d0 79/82cea9e1
+=== root-collapse
+  base_partition: 2/8c423679 128/fc8b3286 72/e35519fe
+  base_root: d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9
+  candidate_survivors: 
+  edited_root: ba1ba75742ba31f7dd4a33ffbb804a9c2bbfae19c5aee90b51974398e911520f
+  length: 400000 / 400000
+  oracle_base_partition: 2/8c423679 128/fc8b3286 72/e35519fe
+  oracle_base_root: d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9
+  oracle_partition: 21/00aab7eb
+  oracle_root: ba1ba75742ba31f7dd4a33ffbb804a9c2bbfae19c5aee90b51974398e911520f
+  oracle_survivors: 
+  partition: 21/00aab7eb
+=== batch-normalized
+  base_partition: 46/463bf292
+  base_root: d3106fca1384cd08cc4d6f73c2e8062fdb4804a0ac0924c96b6020650c8ae366
+  candidate_survivors: 
+  edited_root: 793895c55937b0ae4ab576cef28ccf7da79acce180c122640d5d56d0f127fcb1
+  length: 1495700 / 1495700
+  oracle_base_partition: 46/463bf292
+  oracle_base_root: d3106fca1384cd08cc4d6f73c2e8062fdb4804a0ac0924c96b6020650c8ae366
+  oracle_partition: 51/fd110d5b
+  oracle_root: 793895c55937b0ae4ab576cef28ccf7da79acce180c122640d5d56d0f127fcb1
+  oracle_survivors: 
+  partition: 51/fd110d5b
+
+
+successes:
+    an_interior_join_reads_its_boundary_child_once
+    the_candidate_reproduces_the_reference_root_and_partition
+    the_oracle_fixtures_are_the_sealed_reference_revision
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+

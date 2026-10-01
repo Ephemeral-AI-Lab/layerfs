@@ -1,0 +1,83 @@
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-server)
+warning: associated function `new` is never used
+  --> crates/layerfs-server/tests/support/native_saturation.rs:60:12
+   |
+59 | impl SourceGate {
+   | --------------- associated function in this implementation
+60 |     pub fn new(
+   |            ^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: associated function `new` is never used
+   --> crates/layerfs-server/tests/support/native_saturation.rs:127:12
+    |
+126 | impl CheckedGate {
+    | ---------------- associated function in this implementation
+127 |     pub fn new(ready: mpsc::Sender<usize>, release: mpsc::Receiver<()>, deadline: Instant) -> Self {
+    |            ^^^
+
+warning: `layerfs-server` (test "native_terminal_custody") generated 2 warnings
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.64s
+     Running tests/native_terminal_custody.rs (core/target/r1-eight-owning/debug/deps/native_terminal_custody-4805533f3a3398d4)
+
+running 1 test
+layerfs-server acceptor summary accepted=4 admitted=4 live_at_stop=3 peak_live=4 reaped=4 capacity_dropped=0 capacity=4 elapsed_ms=420 error=None
+test native_source_closure_cancel_and_slow_output_end_once_then_joined_read_credits_return ... ok
+
+successes:
+
+---- native_source_closure_cancel_and_slow_output_end_once_then_joined_read_credits_return stdout ----
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC one closed native Source terminal: Unknown unknown=true cleanup=None history=None
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC one fixed250ms slow-output terminal: Io unknown=false cleanup=None history=None
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC one cancelled native Source terminal: Unknown unknown=true cleanup=None history=None
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+NOT_RUN intermediate closing-before-join native slot-retention observation: public Server/Client APIs expose no barrier for that stage; actual joined shutdown/drain and complete read-credit refund are checked separately
+
+
+successes:
+    native_source_closure_cancel_and_slow_output_end_once_then_joined_read_credits_return
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+
+     Running tests/scratch_reuse.rs (core/target/r1-eight-owning/debug/deps/scratch_reuse-cae2d98418606ad8)
+
+running 2 tests
+test deduplicated_repeat_store_finish_unknown_preserves_idle_and_skips_c5_stage ... FAILED
+test same_service_two_real_stage_updates_reuse_profile8_full_binding_native_fds_and16_48_idle ... FAILED
+
+successes:
+
+successes:
+
+failures:
+
+---- deduplicated_repeat_store_finish_unknown_preserves_idle_and_skips_c5_stage stdout ----
+
+thread 'deduplicated_repeat_store_finish_unknown_preserves_idle_and_skips_c5_stage' panicked at crates/layerfs-server/tests/support/scratch_reuse.rs:39:5:
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-server/tests/support/scratch_reuse_query.py", line 18, in <module>
+    assert sqlite.sqlite3_open_v2(os.fsencode(database), ctypes.byref(db), 1 | 0x01000000, None) == 0
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- same_service_two_real_stage_updates_reuse_profile8_full_binding_native_fds_and16_48_idle stdout ----
+
+thread 'same_service_two_real_stage_updates_reuse_profile8_full_binding_native_fds_and16_48_idle' panicked at crates/layerfs-server/tests/scratch_reuse.rs:172:33:
+called `Result::unwrap()` on an `Err` value: PoisonError { .. }
+
+
+failures:
+    deduplicated_repeat_store_finish_unknown_preserves_idle_and_skips_c5_stage
+    same_service_two_real_stage_updates_reuse_profile8_full_binding_native_fds_and16_48_idle
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+error: test failed, to rerun pass `-p layerfs-server --test scratch_reuse`

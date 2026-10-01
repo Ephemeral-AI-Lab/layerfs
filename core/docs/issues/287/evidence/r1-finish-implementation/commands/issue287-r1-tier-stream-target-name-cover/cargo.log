@@ -1,0 +1,10 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+error[E0432]: unresolved import `support::ordering_observer`
+  --> crates/layerfs-content/tests/filesystem_tier_stream.rs:12:14
+   |
+12 | use support::ordering_observer::ObservedBacking;
+   |              ^^^^^^^^^^^^^^^^^ could not find `ordering_observer` in `support`
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `layerfs-content` (test "filesystem_tier_stream") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

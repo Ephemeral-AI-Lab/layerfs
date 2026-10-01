@@ -1,0 +1,68 @@
+{
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-content",
+        "--test",
+        "file_read",
+        "the_payload_wave_enforces_both_its_object_and_its_byte_ceiling",
+        "--",
+        "--show-output"
+      ],
+      "exit": 0,
+      "wall_ns": 3271592250
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-server",
+        "--test",
+        "catalog_admission",
+        "--test",
+        "file_drafts",
+        "--",
+        "--show-output"
+      ],
+      "exit": 0,
+      "wall_ns": 14322920625
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-storage",
+        "--test",
+        "engine_bootstrap",
+        "--",
+        "--show-output"
+      ],
+      "exit": 101,
+      "wall_ns": 7216200792
+    }
+  ],
+  "source_change": {
+    "core/crates/layerfs-content/tests/file_read.rs": "1f855a5b513282d853bf0d6175308332bc75066b6798eef7bac50e8cb3d673ea",
+    "core/crates/layerfs-server/tests/catalog_admission.rs": "e0f3f8bebd7dc9cc4b078b1d32b5c72ee91ec29e47a0e758681cf6ffb7569c3b",
+    "core/crates/layerfs-server/tests/file_drafts.rs": "0d20e861a27f80392285d0efa87969e91c93e9523af6ae213d63a4aa39bfa433",
+    "core/crates/layerfs-storage/tests/engine_bootstrap.rs": "932a893526a4efa51a4a820cc56b9679aef83909d82926b7631f9696e79efffd"
+  },
+  "cause": "chunk-value8Bheader includedinactualcanonicalcap; explicitchargedknownIdle+drain; originalexactUnsupported32zeroReadback innerNOT_RUN notstrictPASS"
+}

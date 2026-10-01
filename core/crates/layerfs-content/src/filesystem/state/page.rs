@@ -139,8 +139,12 @@ impl StatePage {
     pub fn records(&self) -> &[StateRecord] {
         &self.records
     }
-    /// Transfers the current page's actual record allocation to its consumer.
-    pub fn into_records(self) -> Vec<StateRecord> {
+    /// Actual record capacity checked against the caller's held page credit.
+    pub(crate) fn retained_capacity(&self) -> usize {
+        self.records.capacity()
+    }
+    /// Move the allocation while the canonical coordinator keeps its page credit.
+    pub(crate) fn into_records(self) -> Vec<StateRecord> {
         self.records
     }
     /// The provider's terminal-count assertion, checked by the consuming cursor.

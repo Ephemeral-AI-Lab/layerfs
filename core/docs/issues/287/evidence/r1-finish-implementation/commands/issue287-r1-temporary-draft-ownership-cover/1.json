@@ -1,0 +1,26 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "edit_bounds",
+    "--test",
+    "draft_temporaries",
+    "--test",
+    "edit_model",
+    "--test",
+    "edit_reference",
+    "--test",
+    "edit_localized",
+    "--",
+    "--show-output"
+  ],
+  "exit": 101,
+  "wall_ns": 16486916666
+}

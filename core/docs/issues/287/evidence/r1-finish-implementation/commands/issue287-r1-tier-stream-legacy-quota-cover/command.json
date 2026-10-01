@@ -1,0 +1,30 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "filesystem_parent_lookup",
+    "--test",
+    "filesystem_tier_stream",
+    "--test",
+    "filesystem_references",
+    "--",
+    "--show-output"
+  ],
+  "exit": 101,
+  "wall_ns": 58765292,
+  "source_change": {
+    "core/crates/layerfs-content/src/filesystem/references/runs.rs": "e1c240f635924176baabe467950efedf7f9c33ade4878265d2ca31cdd36ad413",
+    "core/crates/layerfs-content/src/filesystem/references/reduce.rs": "3abb9813e98c7ba7c7c075fd2911efc733c8b2081c03794c67fef0ff41a33ff8",
+    "core/crates/layerfs-content/src/filesystem/references/tier_stream.rs": "ad325fd2fd3b0c7256b52fc41e55d4967ad0bdddec71789318e96cdb6e437c6a",
+    "core/crates/layerfs-content/src/filesystem/references/mod.rs": "83d95d4ec1fdfc47d0c49e568d0a48ea60ed56eaeca1fc3d874661976aa386b9",
+    "core/crates/layerfs-content/tests/filesystem_tier_stream.rs": "9d16dadff1bde9863f889347b07cd2c73e7e72b880094a193396633dcbeebdb6"
+  },
+  "cause": "bounded32tierstream avoidsactualextraoutputrun preservingallinputbyteownership; original864quotacellsunchanged"
+}

@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "file_read",
+    "the_payload_wave_enforces_both_its_object_and_its_byte_ceiling",
+    "--",
+    "--show-output"
+  ],
+  "exit": 0,
+  "wall_ns": 3271592250
+}

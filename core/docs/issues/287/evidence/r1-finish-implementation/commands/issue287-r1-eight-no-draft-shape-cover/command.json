@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "no_draft_authority",
+    "inconsistent_empty_sequence_refuses_captured_shape_before_provider_or_emission",
+    "--",
+    "--show-output"
+  ],
+  "exit": 0,
+  "wall_ns": 13356206541,
+  "source_change": {
+    "core/crates/layerfs-content/src/file/edit/no_draft.rs": "95bc96a7a62b596d94477d1d1b988f3cec8d0c8491e91feba8a0122bff9e0526",
+    "core/crates/layerfs-content/tests/no_draft_authority.rs": "f3b121dbec1f6f2073dbe532b6eb687747d40a5eaa918cf7a2071e8798698aeb"
+  },
+  "cause": "reject malformed empty EditSequence final length before provider/emission"
+}

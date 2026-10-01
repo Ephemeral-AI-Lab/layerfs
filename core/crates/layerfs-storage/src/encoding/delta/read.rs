@@ -8,6 +8,7 @@
 //! is enforced by the locator order, so a cycle cannot be expressed: every base
 //! must be located strictly before its dependent.
 
+use crate::encoding::pack_cache::{self, CurrentPack};
 use std::collections::BTreeMap;
 
 use rusqlite::Connection;
@@ -96,6 +97,7 @@ pub struct Resolver<'a> {
     workspace: &'a mut DecompressionWorkspace,
     counters: &'a mut ChainCounters,
     packs_read: u64,
+    current_pack: Option<CurrentPack>,
 }
 
 impl<'a> Resolver<'a> {
@@ -118,6 +120,7 @@ impl<'a> Resolver<'a> {
             workspace,
             counters,
             packs_read: 0,
+            current_pack: None,
         }
     }
 
@@ -128,6 +131,11 @@ impl<'a> Resolver<'a> {
     /// length difference would be wrong exactly when the bound binds.
     pub const fn packs_read(&self) -> u64 {
         self.packs_read
+    }
+
+    /// Actual separate compatibility current-body capacity, outside cache4MiB.
+    pub fn current_pack_bytes(&self) -> usize {
+        self.current_pack.as_ref().map_or(0, CurrentPack::capacity)
     }
 
     /// Reconstructs and authenticates one stored canonical object.
@@ -257,13 +265,19 @@ impl<'a> Resolver<'a> {
         // The body is charged here, where it is fetched, and not inferred later
         // from the cache: the walk now reads it, so a decode that follows is a
         // cache hit and would otherwise report a read that never happened.
-        let (_, fetched) = pack_of(self.caches.packs, self.connection, location.pack_id)?;
+        let (_, fetched) = pack_of(
+            self.caches.packs,
+            &mut self.current_pack,
+            self.connection,
+            location.pack_id,
+        )?;
         if fetched {
             self.packs_read = self.packs_read.saturating_add(1);
         }
-        stored_base(
+        stored_base_on(
             self.connection,
             self.caches.packs,
+            &mut self.current_pack,
             self.groups,
             self.workspace,
             &mut self.counters.group_decodes,
@@ -303,7 +317,12 @@ impl<'a> Resolver<'a> {
             });
         }
         let record_bytes = {
-            let (pack, fetched) = pack_of(self.caches.packs, self.connection, location.pack_id)?;
+            let (pack, fetched) = pack_of(
+                self.caches.packs,
+                &mut self.current_pack,
+                self.connection,
+                location.pack_id,
+            )?;
             if fetched {
                 self.packs_read = self.packs_read.saturating_add(1);
             }
@@ -316,7 +335,12 @@ impl<'a> Resolver<'a> {
             }
             self.counters.encoded_bytes = encoded;
         }
-        let (pack, fetched) = pack_of(self.caches.packs, self.connection, location.pack_id)?;
+        let (pack, fetched) = pack_of(
+            self.caches.packs,
+            &mut self.current_pack,
+            self.connection,
+            location.pack_id,
+        )?;
         if fetched {
             self.packs_read = self.packs_read.saturating_add(1);
         }
@@ -343,6 +367,7 @@ pub struct ChainBases<'a> {
     packs: &'a mut BTreeMap<i64, Vec<u8>>,
     groups: GroupCache,
     group_decodes: u64,
+    current_pack: Option<CurrentPack>,
 }
 
 impl<'a> ChainBases<'a> {
@@ -352,7 +377,13 @@ impl<'a> ChainBases<'a> {
             packs,
             groups: GroupCache::new(),
             group_decodes: 0,
+            current_pack: None,
         }
+    }
+
+    /// Actual separate current body, destroyed when this walk ends/replaces it.
+    pub fn current_pack_bytes(&self) -> usize {
+        self.current_pack.as_ref().map_or(0, CurrentPack::capacity)
     }
 
     /// Ordinary-lane group bodies this walk decompressed.
@@ -370,9 +401,10 @@ impl<'a> ChainBases<'a> {
         workspace: &mut DecompressionWorkspace,
         location: &ObjectLocation,
     ) -> StorageResult<Option<ObjectId>> {
-        stored_base(
+        stored_base_on(
             connection,
             self.packs,
+            &mut self.current_pack,
             &mut self.groups,
             workspace,
             &mut self.group_decodes,
@@ -395,11 +427,29 @@ pub fn stored_base(
     group_decodes: &mut u64,
     location: &ObjectLocation,
 ) -> StorageResult<Option<ObjectId>> {
-    let header = {
-        let (pack, _) = pack_of(packs, connection, location.pack_id)?;
-        crate::pack::layout::parse_header(pack)?
-    };
-    let (pack, _) = pack_of(packs, connection, location.pack_id)?;
+    let mut current = None;
+    stored_base_on(
+        connection,
+        packs,
+        &mut current,
+        groups,
+        workspace,
+        group_decodes,
+        location,
+    )
+}
+
+fn stored_base_on(
+    connection: &Connection,
+    packs: &mut BTreeMap<i64, Vec<u8>>,
+    current: &mut Option<CurrentPack>,
+    groups: &mut GroupCache,
+    workspace: &mut DecompressionWorkspace,
+    group_decodes: &mut u64,
+    location: &ObjectLocation,
+) -> StorageResult<Option<ObjectId>> {
+    let (pack, _) = pack_of(packs, current, connection, location.pack_id)?;
+    let header = crate::pack::layout::parse_header(pack)?;
     let view = crate::pack::layout::group_view(pack, header, location.group_number)?;
     let selected = pack
         .get(view.start..view.end)
@@ -415,7 +465,7 @@ pub fn stored_base(
                             let decompressed =
                                 workspace.decompress_group(selected, view.decoded_length)?;
                             *group_decodes = group_decodes.saturating_add(1);
-                            groups.insert(location.pack_id, location.group_number, decompressed);
+                            groups.insert(location.pack_id, location.group_number, decompressed)?;
                             groups
                                 .get(location.pack_id, location.group_number)
                                 .ok_or(StorageError::Integrity("decoded group cache"))?
@@ -490,24 +540,11 @@ pub fn accumulate(total: &mut ChainCounters, chain: ChainCounters) {
 /// retain a body count that grows with the number of packs it touches.
 fn pack_of<'b>(
     packs: &'b mut BTreeMap<i64, Vec<u8>>,
+    current: &'b mut Option<CurrentPack>,
     connection: &Connection,
     pack_id: i64,
 ) -> StorageResult<(&'b [u8], bool)> {
-    let mut fetched = false;
-    if !packs.contains_key(&pack_id) {
-        let bytes = lookup::pack_bytes(connection, pack_id)?;
-        let retained: usize = packs.values().map(Vec::len).sum();
-        if retained.saturating_add(bytes.len()) > crate::policy::DEPENDENCY_PACK_CACHE_BYTES {
-            packs.clear();
-        }
-        packs.insert(pack_id, bytes);
-        fetched = true;
-    }
-    let bytes = packs
-        .get(&pack_id)
-        .map(Vec::as_slice)
-        .ok_or(StorageError::Integrity("pack cache"))?;
-    Ok((bytes, fetched))
+    pack_cache::body(packs, current, connection, pack_id)
 }
 
 /// Strict ordering key of one locator.

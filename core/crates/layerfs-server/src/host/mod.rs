@@ -2,8 +2,9 @@
 mod acceptor;
 mod assembly;
 mod config;
+mod purpose_admission;
 mod run;
 mod store;
 pub use assembly::{HistoryMode, Server, ServerConfig, PRIMARY_STORE};
 pub use config::{history, telemetry};
-pub use run::run;
+pub use run::{run, run_guarded};

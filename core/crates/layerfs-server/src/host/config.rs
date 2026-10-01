@@ -36,6 +36,18 @@ pub(crate) fn construction_scratch() -> Result<GraphCapacity, Failure> {
 /// continuity) or opens an existing one read-only; `LAYERFS_HISTORY_INCARNATION`
 /// is required when creating.
 pub fn history() -> Result<Option<std::sync::Arc<dyn HistoryCatalog>>, Failure> {
+    history_selected(None)
+}
+/// Required native participation; the actual established borrow is captured by C5.
+pub(crate) fn history_guarded(
+    engine: &'static layerfs_storage::engine::EngineGuard,
+) -> Result<Option<std::sync::Arc<dyn HistoryCatalog>>, Failure> {
+    engine.validate().map_err(crate::service::error::storage)?;
+    history_selected(Some(engine))
+}
+fn history_selected(
+    engine: Option<&'static layerfs_storage::engine::EngineGuard>,
+) -> Result<Option<std::sync::Arc<dyn HistoryCatalog>>, Failure> {
     let Ok(path) = std::env::var("LAYERFS_HISTORY_CATALOG") else {
         return Ok(None);
     };
@@ -58,20 +70,35 @@ pub fn history() -> Result<Option<std::sync::Arc<dyn HistoryCatalog>>, Failure> 
                 .filter(|value| *value >= 1)
                 .ok_or(Code::InvalidInput)?;
             std::sync::Arc::new(
-                create(
-                    std::path::Path::new(&path),
-                    &HistoryCatalogConfig {
+                {
+                    let config = HistoryCatalogConfig {
                         cursor_key,
                         binding_key: binding.into_bytes(),
                         incarnation,
-                    },
-                )
+                    };
+                    match engine {
+                        Some(guard) => layerfs_history::sqlite::create_participating(
+                            std::path::Path::new(&path),
+                            &config,
+                            super::store::participation(guard),
+                        ),
+                        None => create(std::path::Path::new(&path), &config),
+                    }
+                }
                 .map_err(catalog_failure)?,
             )
         }
         "0" => std::sync::Arc::new(
-            open_read_only(std::path::Path::new(&path), binding.as_bytes(), cursor_key)
-                .map_err(catalog_failure)?,
+            match engine {
+                Some(guard) => layerfs_history::sqlite::open_read_only_participating(
+                    std::path::Path::new(&path),
+                    binding.as_bytes(),
+                    cursor_key,
+                    super::store::participation(guard),
+                ),
+                None => open_read_only(std::path::Path::new(&path), binding.as_bytes(), cursor_key),
+            }
+            .map_err(catalog_failure)?,
         ),
         _ => return Err(Code::Unsupported.into()),
     };
@@ -153,5 +180,15 @@ pub fn telemetry(role: u8) -> Runtime {
             );
             Runtime::disabled()
         }
+    }
+}
+
+/// Explicit native topology selection; absence preserves the v1 assembly.
+pub(crate) fn native_purposes() -> Result<bool, Failure> {
+    match std::env::var("LAYERFS_NATIVE_PURPOSES") {
+        Ok(value) if value == "2" => Ok(true),
+        Ok(value) if value == "1" => Ok(false),
+        Err(std::env::VarError::NotPresent) => Ok(false),
+        _ => Err(Code::Unsupported.into()),
     }
 }

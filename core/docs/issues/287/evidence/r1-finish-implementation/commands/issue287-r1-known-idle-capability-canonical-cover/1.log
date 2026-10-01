@@ -1,0 +1,14 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.78s
+     Running tests/file_read.rs (core/target/r1-eight-owning/debug/deps/file_read-6076eeb8874e5100)
+
+running 1 test
+test the_payload_wave_enforces_both_its_object_and_its_byte_ceiling ... ok
+
+successes:
+
+successes:
+    the_payload_wave_enforces_both_its_object_and_its_byte_ceiling
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+

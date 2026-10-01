@@ -6,6 +6,7 @@
 //! the rebuilt leaf against the identity that was requested - and both charge a
 //! per-chain work allowance so a long history cannot hide behind a shallow read.
 
+use crate::encoding::pack_cache::{self, CurrentPack};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
@@ -29,6 +30,7 @@ use crate::sqlite::pool;
 #[derive(Debug, Default)]
 pub struct PoolReader {
     packs: BTreeMap<i64, Vec<u8>>,
+    current_pack: Option<CurrentPack>,
     groups: BTreeMap<u32, Vec<[u8; INODE_VALUE_BYTES]>>,
     retained_bytes: usize,
     decoded_work: u64,
@@ -63,9 +65,20 @@ impl PoolReader {
     /// an ordinal's value is written once and never moves.
     pub fn release_packs(&mut self) {
         self.packs.clear();
+        self.current_pack = None;
     }
 
-    /// Decoded value bytes currently retained.
+    /// Actual retained pack allocation, excluding the separate current body.
+    pub fn pack_retained_bytes(&self) -> usize {
+        self.packs.values().map(Vec::capacity).sum()
+    }
+
+    /// Actual separate current-body capacity, not charged as cache4MiB.
+    pub fn current_pack_bytes(&self) -> usize {
+        self.current_pack.as_ref().map_or(0, CurrentPack::capacity)
+    }
+
+    /// Actual Vec value-cell capacity currently retained, in bytes.
     pub fn retained_bytes(&self) -> usize {
         self.retained_bytes
     }
@@ -163,7 +176,17 @@ impl PoolReader {
         for value in canonical {
             values.push(layerfs_content::inode_leaf::decode_pooled_value(&value)?);
         }
-        let charged = values.len() * INODE_VALUE_BYTES;
+        let charged = values
+            .capacity()
+            .checked_mul(INODE_VALUE_BYTES)
+            .ok_or(StorageError::Integrity("pooled value capacity"))?;
+        if charged > crate::policy::POOLED_VALUE_CACHE_BYTES {
+            return Err(StorageError::CapacityExceeded {
+                what: "pooled value cache capacity",
+                limit: crate::policy::POOLED_VALUE_CACHE_BYTES as u64,
+                actual: charged as u64,
+            });
+        }
         if self.retained_bytes + charged > crate::policy::POOLED_VALUE_CACHE_BYTES {
             self.groups.clear();
             self.retained_bytes = 0;
@@ -203,20 +226,13 @@ impl PoolReader {
     /// the declared bound, so a wave's retained pack bytes are a constant rather
     /// than a function of how many packs it reads.
     fn pack(&mut self, connection: &Connection, pack_id: i64) -> StorageResult<&[u8]> {
-        if !self.packs.contains_key(&pack_id) {
-            let bytes = lookup::pack_bytes(connection, pack_id)?;
+        let (bytes, fetched) =
+            pack_cache::body(&mut self.packs, &mut self.current_pack, connection, pack_id)?;
+        if fetched {
             self.counters.pack_fetches = self.counters.pack_fetches.saturating_add(1);
             self.counters.pack_bytes = self.counters.pack_bytes.saturating_add(bytes.len() as u64);
-            let retained: usize = self.packs.values().map(Vec::len).sum();
-            if retained.saturating_add(bytes.len()) > crate::policy::DEPENDENCY_PACK_CACHE_BYTES {
-                self.packs.clear();
-            }
-            self.packs.insert(pack_id, bytes);
         }
-        self.packs
-            .get(&pack_id)
-            .map(Vec::as_slice)
-            .ok_or(StorageError::Integrity("pack cache"))
+        Ok(bytes)
     }
 
     /// Rebuilds the physical body of one pooled leaf from its delta chain.
@@ -369,7 +385,7 @@ impl PoolReader {
                                 workspace.decompress_group(selected, view.decoded_length)?;
                             work.physical_group_decodes = 1;
                             work.physical_group_decoded_bytes = decoded.len() as u64;
-                            groups.insert(location.pack_id, location.group_number, decoded);
+                            groups.insert(location.pack_id, location.group_number, decoded)?;
                         }
                         Cow::Borrowed(
                             groups

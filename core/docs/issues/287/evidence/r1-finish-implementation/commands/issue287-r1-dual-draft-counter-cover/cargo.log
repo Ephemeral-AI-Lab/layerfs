@@ -1,0 +1,70 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.66s
+     Running tests/edit_bounds.rs (core/target/r1-eight-owning/debug/deps/edit_bounds-171a21beb2eb1d79)
+
+running 12 tests
+test a_consumer_that_rejects_stops_the_edit_once ... ok
+test a_missing_base_root_is_reported_as_missing ... ok
+test a_bounded_sink_that_fills_during_emission_fails_the_edit_once ... ok
+test a_source_that_ends_early_fails_without_emitting_a_root ... ok
+test the_retained_frontier_does_not_grow_with_the_edit_count ... FAILED
+test many_files_and_many_edits_stay_bounded ... ok
+test a_join_of_two_full_pages_stays_canonical ... ok
+test streaming_flush_boundaries_and_height_growth ... ok
+test a_thousand_separated_edits_keep_bounded_state ... ok
+test join_occupancy_at_every_boundary ... ok
+test the_frontier_does_not_grow_with_repeated_in_place_edits ... FAILED
+test the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound ... ok
+
+successes:
+
+---- a_thousand_separated_edits_keep_bounded_state stdout ----
+MEASURED ceiling-run counters: EditCounters { nodes_read: 17708, nodes_created: 21, payloads_created: 1024, payload_bytes: 25600, peak_deferred_bytes: 120436, peak_draft_metadata_bytes: 381284 }
+
+---- the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound stdout ----
+DIAGNOSTIC full metadata shape: EditCounters { nodes_read: 90971, nodes_created: 122, payloads_created: 4096, payload_bytes: 102400, peak_deferred_bytes: 440340, peak_draft_metadata_bytes: 1383301 }
+DIAGNOSTIC full metadata: peak=1383301 bytes; accepted mapping nodes=122;          independent final framed lower bound=1186535;          aggregate-quota refusal and allocator/native/physical containment are not this body
+
+
+successes:
+    a_bounded_sink_that_fills_during_emission_fails_the_edit_once
+    a_consumer_that_rejects_stops_the_edit_once
+    a_join_of_two_full_pages_stays_canonical
+    a_missing_base_root_is_reported_as_missing
+    a_source_that_ends_early_fails_without_emitting_a_root
+    a_thousand_separated_edits_keep_bounded_state
+    join_occupancy_at_every_boundary
+    many_files_and_many_edits_stay_bounded
+    streaming_flush_boundaries_and_height_growth
+    the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound
+
+failures:
+
+---- the_retained_frontier_does_not_grow_with_the_edit_count stdout ----
+DIAGNOSTIC current draft peaks: unfinished_body=6308 aggregate_metadata=19823
+DIAGNOSTIC current draft peaks: unfinished_body=8404 aggregate_metadata=26503
+DIAGNOSTIC current draft peaks: unfinished_body=9044 aggregate_metadata=28567
+DIAGNOSTIC current draft peaks: unfinished_body=10324 aggregate_metadata=32695
+DIAGNOSTIC current draft peaks: unfinished_body=12884 aggregate_metadata=40951
+
+thread 'the_retained_frontier_does_not_grow_with_the_edit_count' panicked at crates/layerfs-content/tests/edit_bounds.rs:317:9:
+doubling the edit count doubled the frontier: [6308, 8404, 9044, 10324, 12884]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- the_frontier_does_not_grow_with_repeated_in_place_edits stdout ----
+DIAGNOSTIC current draft peaks: unfinished_body=55900 aggregate_metadata=178101
+DIAGNOSTIC current draft peaks: unfinished_body=55900 aggregate_metadata=178101
+DIAGNOSTIC current draft peaks: unfinished_body=72476 aggregate_metadata=229543
+DIAGNOSTIC current draft peaks: unfinished_body=120596 aggregate_metadata=381800
+
+thread 'the_frontier_does_not_grow_with_repeated_in_place_edits' panicked at crates/layerfs-content/tests/edit_bounds.rs:714:9:
+the frontier exceeds the tree it ends up with: 55900 bytes for 278 extents
+
+
+failures:
+    the_frontier_does_not_grow_with_repeated_in_place_edits
+    the_retained_frontier_does_not_grow_with_the_edit_count
+
+test result: FAILED. 10 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+
+error: test failed, to rerun pass `-p layerfs-content --test edit_bounds`

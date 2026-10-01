@@ -1951,3 +1951,10 @@ production totals153673/reference65417/Core88256 unchanged by this commit.
 Current next action: owning coherentprivate8/Small/NoDraft/pool/engine/native
 proofs, source publication and mandatedfinalCore checks, then sixcandidate arms
 once/separateproof. No candidate sample, R2-R7 work or #288 edit.
+
+
+## Coherent R1 implementation and final owning checks — 2026-10-01
+
+R1-FINISH-IMPLEMENTATION-20261001.md and evidence/r1-finish-implementation retain the final625 runtime/build input inventory and all45 owning command directories, including original failures and source-pinned covers. Real-route supplied authorities, native draft temporary ownership, fixed tier stream, local same-effect statement preparations, actual capacity owners, reset/reuse and captured engine/native purposes are delivered with their stated finite scopes. Mandated full-Core remains exit101,246 targets/1129 PASS/19 FAIL/4 ignored,620.207555208s. Fourteen functional failures have scoped corrected covers; four actual engine inner bodies remain NOT_RUN on required32MiB Apple readback0; unchanged2049 direct gate remains Deadline FAIL (10s request,83.17s filtered body,87.299023875s command). No full-suite PASS is inferred.
+
+Final all-target Clippy PASS1.013947250s; examples PASS18.257334125s; fmt PASS3.377558958s; product boundary PASS610 files/.213890334s. Source9 runtime/build inputs exactly match the implementation product. Existing locked blake31.8.5 supplies the external native-digest oracle through a new Server dev edge; package versions/sources/checksums unchanged, lock edge disclosed. Global176/native32/strict8/physical/cache/all-C1 overlap/closing-before-join and R3 early composite custody remain unqualified; #288 stays read-only, R2–R7 unstarted. Exact parent/staged production LOC is recorded in this checkpoint's PRODUCTION-LOC.json and commit; source publication precedes the six once-only candidate observations/separate9s proofs. All numeric latencies remain INELIGIBLE/performance_claim=false.

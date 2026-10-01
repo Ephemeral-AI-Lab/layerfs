@@ -243,10 +243,10 @@ fn scratch_files(parent: &Path) -> Vec<PathBuf> {
                 sql_number(&path, "PRAGMA application_id", None),
                 0x4c46_4353
             );
-            assert_eq!(sql_number(&path, "PRAGMA user_version", None), 4);
+            assert_eq!(sql_number(&path, "PRAGMA user_version", None), 8);
             assert_eq!(
                 sql_number(&path, "SELECT length(header) FROM session_owner", None),
-                298
+                386
             );
             assert_eq!(
                 sql_number(&path, "SELECT count(*) FROM directory_roots", None),
@@ -680,10 +680,15 @@ fn allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refu
     };
     assert_eq!(observed.effective_root, f.snapshot.effective_root);
     let first = stage(first.finish());
-    let remaining_scratch = scratch_files(&f.temp.0);
-    assert_eq!(remaining_scratch.len(), 1);
-    assert!(occupied_scratch.contains(&remaining_scratch[0]));
+    assert_eq!(
+        scratch_files(&f.temp.0),
+        occupied_scratch,
+        "first known scratch stays charged Idle while the second is active"
+    );
     let second = stage(second.finish());
+    assert_eq!(scratch_files(&f.temp.0), occupied_scratch);
+    assert_eq!(f.service.drain_construction_idle().unwrap(), 2);
+    assert_eq!(f.service.drain_construction_idle().unwrap(), 0);
     assert!(scratch_files(&f.temp.0).is_empty());
     for (stage, expected, workspace) in [
         (&first, expected_first, [81; 32]),
@@ -735,6 +740,98 @@ fn allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refu
         8194,
         "discard cannot refund exposed serials"
     );
+}
+
+#[test]
+fn store_aliases_share_save_capacity_and_one_actual_scratch_domain() {
+    let f = fixture("store-aliases");
+    let changed = saved_file(&f.service, 120, b"known-alias-bytes");
+    let opened = Timing::disabled("open", |scope| {
+        Store::open(&f.store_path, scope.child("open"))
+    })
+    .0
+    .unwrap();
+    let linked_path = f.temp.0.join("store-hardlink.sqlite");
+    std::fs::hard_link(&f.store_path, &linked_path).unwrap();
+    let linked = Timing::disabled("link", |scope| {
+        Store::open(&linked_path, scope.child("open"))
+    })
+    .0
+    .unwrap();
+    assert!(opened.same_authority(&opened.clone()));
+    assert!(opened.same_authority(&linked));
+    let other = store(&f.temp.0.join("other.sqlite"));
+    assert!(!opened.same_authority(&other));
+    let service = Arc::new(
+        Service::new(
+            vec![
+                access(1, opened.clone(), Arc::clone(&f.catalog), ALL),
+                access(2, linked, Arc::clone(&f.catalog), ALL),
+                access(3, opened, Arc::clone(&f.catalog), ALL),
+            ],
+            OperationRecorder::disabled(),
+        )
+        .unwrap(),
+    );
+    let (first, body) = prepared(&f, [121; 32], &[(2, changed, false)], &[]);
+    let first = hold(&service, first, body);
+    let (mut second, body) = prepared(&f, [122; 32], &[(2, changed, false)], &[]);
+    second.store = 2;
+    let second = hold(&service, second, body);
+    assert_eq!(active(&f.store_path), 2);
+    let scratch = scratch_files(&f.temp.0);
+    assert_eq!(scratch.len(), 2);
+    assert_eq!(
+        scratch[0].parent(),
+        scratch[1].parent(),
+        "same actual scratch authority"
+    );
+    let (mut third, _) = prepared(&f, [123; 32], &[(2, changed, false)], &[]);
+    third.store = 3;
+    let error = service
+        .handle(&peer(), &third, &mut Unread, &mut io::sink())
+        .0
+        .unwrap_err();
+    assert_eq!(error, Failure::from(Code::Capacity));
+    assert_eq!(scratch_files(&f.temp.0), scratch);
+    assert_eq!(active(&f.store_path), 2);
+    let expected = oracle::namespace(
+        f.snapshot.scope,
+        f.root_metadata,
+        &[oracle::File {
+            name: b"a",
+            serial: 2,
+            content: changed,
+            metadata: f.file_metadata,
+        }],
+    );
+    for (result, workspace) in [(first.finish(), [121; 32]), (second.finish(), [122; 32])] {
+        let value = stage(result);
+        assert_eq!(value.workspace, workspace);
+        assert_eq!(value.candidate_root, expected);
+        assert_eq!(value.expected_root, f.snapshot.effective_root);
+        assert_eq!(
+            history(
+                call(
+                    &service,
+                    124,
+                    1,
+                    Operation::HistoryCommand(HistoryCommand::DiscardStage {
+                        workspace: value.workspace,
+                        token: value.token,
+                    })
+                )
+                .unwrap()
+            ),
+            HistoryResult::Discarded { removed: true }
+        );
+    }
+    assert_eq!(active(&f.store_path), 0);
+    assert_eq!(scratch_files(&f.temp.0), scratch);
+    assert_eq!(service.drain_construction_idle().unwrap(), 2);
+    assert_eq!(service.drain_construction_idle().unwrap(), 0);
+    assert!(scratch_files(&f.temp.0).is_empty());
+    read_bytes(&service, changed, b"known-alias-bytes");
 }
 
 #[test]
@@ -1052,6 +1149,9 @@ fn declared_directory_state_over_capacity_refuses_before_scratch_save_or_body() 
         .0
         .unwrap();
     assert_eq!(stage(accepted).candidate_root, f.snapshot.effective_root);
+    assert_eq!(scratch_files(&f.temp.0).len(), 1);
+    assert_eq!(f.service.drain_construction_idle().unwrap(), 1);
+    assert_eq!(f.service.drain_construction_idle().unwrap(), 0);
     assert!(scratch_files(&f.temp.0).is_empty());
 }
 

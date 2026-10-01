@@ -1,0 +1,36 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-history)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.36s
+     Running tests/scratch_reuse.rs (core/target/r1-eight-owning/debug/deps/scratch_reuse-cae2d98418606ad8)
+
+running 2 tests
+test deduplicated_repeat_store_finish_unknown_preserves_idle_and_skips_c5_stage ... FAILED
+test same_service_two_real_stage_updates_reuse_profile8_full_binding_native_fds_and16_48_idle ... FAILED
+
+successes:
+
+successes:
+
+failures:
+
+---- deduplicated_repeat_store_finish_unknown_preserves_idle_and_skips_c5_stage stdout ----
+
+thread 'deduplicated_repeat_store_finish_unknown_preserves_idle_and_skips_c5_stage' panicked at crates/layerfs-server/tests/support/scratch_reuse.rs:224:38:
+called `Result::unwrap()` on an `Err` value: Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- same_service_two_real_stage_updates_reuse_profile8_full_binding_native_fds_and16_48_idle stdout ----
+
+thread 'same_service_two_real_stage_updates_reuse_profile8_full_binding_native_fds_and16_48_idle' panicked at crates/layerfs-server/tests/scratch_reuse.rs:172:33:
+called `Result::unwrap()` on an `Err` value: PoisonError { .. }
+
+
+failures:
+    deduplicated_repeat_store_finish_unknown_preserves_idle_and_skips_c5_stage
+    same_service_two_real_stage_updates_reuse_profile8_full_binding_native_fds_and16_48_idle
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+error: test failed, to rerun pass `-p layerfs-server --test scratch_reuse`

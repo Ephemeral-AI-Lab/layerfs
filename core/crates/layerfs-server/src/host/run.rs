@@ -47,11 +47,26 @@ fn configured_peers() -> Result<(Vec<Peer>, Vec<Grant>), Failure> {
     Ok((peers, grants))
 }
 
+/// Explicit compatibility entry; native process main uses run_guarded.
 pub fn run() -> Result<(), Failure> {
+    run_selected(None)
+}
+/// Actual established same-provider participation before Store/history SQL.
+pub fn run_guarded(engine: &'static layerfs_storage::engine::EngineGuard) -> Result<(), Failure> {
+    engine.validate().map_err(crate::service::error::storage)?;
+    run_selected(Some(engine))
+}
+fn run_selected(
+    engine: Option<&'static layerfs_storage::engine::EngineGuard>,
+) -> Result<(), Failure> {
     let construction_scratch = config::construction_scratch()?;
     let private = key(&env("LAYERFS_PRIVATE_KEY")?)?;
     let (peers, grants) = configured_peers()?;
-    let store = store::open(std::path::Path::new(&env("LAYERFS_STORE")?))?;
+    let store_path = env("LAYERFS_STORE")?;
+    let store = match engine {
+        Some(guard) => store::open_guarded(std::path::Path::new(&store_path), guard)?,
+        None => store::open(std::path::Path::new(&store_path))?,
+    };
     let capacity = store::capacity(&store)?;
     let runtime = config::telemetry(1);
     let mut service = Service::with_construction_scratch(
@@ -59,7 +74,10 @@ pub fn run() -> Result<(), Failure> {
             id: 1,
             store,
             grants,
-            history: config::history()?,
+            history: match engine {
+                Some(guard) => config::history_guarded(guard)?,
+                None => config::history()?,
+            },
         }],
         runtime.recorder(),
         construction_scratch.scratch_bytes(),
@@ -73,6 +91,7 @@ pub fn run() -> Result<(), Failure> {
     let acceptor = Acceptor::bind(
         endpoint,
         capacity,
+        config::native_purposes()?,
         private,
         peers,
         Arc::new(service),

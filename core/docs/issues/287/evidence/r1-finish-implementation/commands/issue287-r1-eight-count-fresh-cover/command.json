@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "construction_counts",
+    "--",
+    "--skip",
+    "unix::update_seed_transcript_fifo_current_retention_external_depth_and_full_names"
+  ],
+  "exit": 101,
+  "wall_ns": 5381097583,
+  "source_change": {
+    "core/crates/layerfs-storage/tests/construction_counts.rs": "2b9e1c6d614c3580d8d3367c6ed36ed8e6bf8879fca66292e012af7164c7bdb9",
+    "core/crates/layerfs-storage/tests/scratch_pool.rs": "77390d269583d6112d8a8ef59c912825ffe8748c24f4ae0eb95de68b49300a91"
+  },
+  "cause": "Freshhasrealroot1 enrolled/expandedbyactualroottransition evenD0B0; UpdateemptyGraphkept; noFreshseedorweakenedgate"
+}

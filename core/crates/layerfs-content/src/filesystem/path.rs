@@ -31,6 +31,10 @@ impl PathName {
         })
     }
 
+    pub(crate) fn retained_capacity(&self) -> usize {
+        self.bytes.capacity()
+    }
+
     /// Raw bytes of the name.
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
@@ -175,7 +179,7 @@ fn validate_path(bytes: &[u8]) -> ContentResult<()> {
     Ok(())
 }
 
-fn validate_name(bytes: &[u8]) -> ContentResult<()> {
+pub(crate) fn validate_name(bytes: &[u8]) -> ContentResult<()> {
     if bytes.is_empty() {
         return Err(ContentError::InvalidPath);
     }

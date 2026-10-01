@@ -214,24 +214,50 @@ pub struct Store {
     /// reads the table back; a save appends to it inside the transaction that
     /// publishes the objects the entries name; a failed save invalidates it whole.
     content_index: Arc<Mutex<Candidates>>,
+    engine: Option<&'static crate::engine::EngineGuard>,
+    working: super::working::WorkingAuthority,
+    // Last field: actual shared index Arcs drop before their last credit.
+    index_credit: Arc<super::working::IndexLease>,
 }
 
 impl Store {
+    /// Equality of the continuing native Store arbitration authority.
+    /// Constructors establish this association; paths and public IDs do not.
+    /// Independently opened handles still use persisted Save-slot admission.
+    pub fn same_authority(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.arbitration, &other.arbitration)
+    }
+
     /// Creates a fresh Store with `policy`; an existing Store is never migrated.
     pub fn create(
         path: impl AsRef<Path>,
         policy: StoragePolicy,
         scope: TimingScope<'_>,
     ) -> StorageResult<Self> {
+        Self::create_participating(path, policy, None, scope)
+    }
+    pub(super) fn create_participating(
+        path: impl AsRef<Path>,
+        policy: StoragePolicy,
+        engine: Option<&'static crate::engine::EngineGuard>,
+        scope: TimingScope<'_>,
+    ) -> StorageResult<Self> {
         scope.run(|_create| {
             let path = path.as_ref().to_path_buf();
             // An unsupported policy is rejected before the database file exists.
             let policy = policy.validated()?;
-            let connection = connection::open(&path, true)?;
+            let connection = Self::open_selected(
+                &path,
+                true,
+                engine,
+                crate::engine::ConnectionClass::ContentWrite,
+            )?;
             let arbitration = crate::sqlite::ownership::arbitration(&path)?;
             let guard = crate::sqlite::ownership::lock(&arbitration)?;
             let stored = schema::create(&connection, policy)?;
             let capacities = StorageCapacities::from_policy(stored)?;
+            let working = super::working::WorkingAuthority::associate(&arbitration)?;
+            let index_credit = working.reserve_indexes()?;
             // A Store this call just created has an empty index; the read is the
             // same one `open` performs and is bounded by the table, which is empty.
             let content_index = Candidates::load(&connection)?;
@@ -244,19 +270,36 @@ impl Store {
                 arbitration,
                 pool_index: Arc::new(Mutex::new(PoolIndex::new())),
                 content_index: Arc::new(Mutex::new(content_index)),
+                engine,
+                working,
+                index_credit,
             })
         })
     }
 
     /// Opens an existing Store and validates its identity and policy.
     pub fn open(path: impl AsRef<Path>, scope: TimingScope<'_>) -> StorageResult<Self> {
+        Self::open_participating(path, None, scope)
+    }
+    pub(super) fn open_participating(
+        path: impl AsRef<Path>,
+        engine: Option<&'static crate::engine::EngineGuard>,
+        scope: TimingScope<'_>,
+    ) -> StorageResult<Self> {
         scope.run(|_open| {
             let path = path.as_ref().to_path_buf();
-            let connection = connection::open(&path, false)?;
+            let connection = Self::open_selected(
+                &path,
+                false,
+                engine,
+                crate::engine::ConnectionClass::ContentWrite,
+            )?;
             let arbitration = crate::sqlite::ownership::arbitration(&path)?;
             let guard = crate::sqlite::ownership::lock(&arbitration)?;
             let stored = schema::validate(&connection, None)?;
             let capacities = StorageCapacities::from_policy(stored)?;
+            let working = super::working::WorkingAuthority::associate(&arbitration)?;
+            let index_credit = working.reserve_indexes()?;
             // The bounded load: at most `candidates::SLOTS` rows of 32-byte
             // identity and 32-byte folded signature, read once for the lifetime of
             // this handle rather than once per save.
@@ -270,8 +313,16 @@ impl Store {
                 arbitration,
                 pool_index: Arc::new(Mutex::new(PoolIndex::new())),
                 content_index: Arc::new(Mutex::new(content_index)),
+                engine,
+                working,
+                index_credit,
             })
         })
+    }
+
+    /// Actual established native participation; compatibility handles return None.
+    pub fn engine_guard(&self) -> Option<&'static crate::engine::EngineGuard> {
+        self.engine
     }
 
     /// The default policy this slice creates and opens.
@@ -294,7 +345,12 @@ impl Store {
     /// sandbox and process sharing this Store sees one number and a change is
     /// visible to the next [`Store::begin_save`] without reopening anything.
     pub fn max_concurrent_writes(&self) -> StorageResult<u8> {
-        let connection = connection::open(&self.path, false)?;
+        let connection = Self::open_selected(
+            &self.path,
+            false,
+            self.engine,
+            crate::engine::ConnectionClass::ContentRead,
+        )?;
         let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
         schema::max_concurrent_writes(&connection)
     }
@@ -306,14 +362,25 @@ impl Store {
     /// save that is already recorded keeps its slot and still counts against the
     /// new budget, so lowering the setting cannot make unresolved ownership
     /// reusable. A value outside `1..=MAX_CONCURRENT_WRITES_LIMIT` is refused
-    /// rather than clamped.
+    /// rather than clamped. Participating handles refuse before SQL until this
+    /// local transaction has a retained guard-failure owner; compatibility is unchanged.
     pub fn set_max_concurrent_writes(
         &self,
         writes: u8,
         scope: TimingScope<'_>,
     ) -> StorageResult<u8> {
+        if self.engine.is_some() {
+            return Err(StorageError::UnsupportedPolicy {
+                field: "guarded writer-budget transaction owner",
+            });
+        }
         scope.run(|_configure| {
-            let connection = connection::open(&self.path, false)?;
+            let connection = Self::open_selected(
+                &self.path,
+                false,
+                self.engine,
+                crate::engine::ConnectionClass::ContentWrite,
+            )?;
             let guard = crate::sqlite::ownership::lock(&self.arbitration)?;
             crate::sqlite::write::begin_immediate(&connection)?;
             match schema::set_max_concurrent_writes(&connection, writes) {
@@ -380,14 +447,33 @@ impl Store {
     /// Reserves private ownership for one save under the Store's writer budget;
     /// database transactions arbitrate separately.
     pub fn begin_save(&self, scope: TimingScope<'_>) -> StorageResult<SaveOperation> {
+        self.begin_save_with_class(super::working::SaveWorkingClass::Standard, scope)
+    }
+
+    /// Select a prospective Save reservation before native connection/SQL effects.
+    /// This scoped foundation does not qualify raw returned consumer memory.
+    pub fn begin_save_with_class(
+        &self,
+        class: super::working::SaveWorkingClass,
+        scope: TimingScope<'_>,
+    ) -> StorageResult<SaveOperation> {
         scope.run(|_acquire| {
-            let connection = connection::open(&self.path, false)?;
+            let working = self.working.reserve(class)?;
+            let connection = Self::open_selected(
+                &self.path,
+                false,
+                self.engine,
+                crate::engine::ConnectionClass::ContentWrite,
+            )?;
             let owner = MutationOwner::acquire(
                 connection,
+                self.engine,
                 self.capacities,
                 Arc::clone(&self.arbitration),
                 Arc::clone(&self.pool_index),
                 Arc::clone(&self.content_index),
+                Arc::clone(&self.index_credit),
+                working,
             )?;
             Ok(SaveOperation {
                 owner: Some(owner),
@@ -400,6 +486,12 @@ impl Store {
         })
     }
 
+    /// Scoped active/retained Save and actual shared-index reservation telemetry.
+    /// Other Stores, raw readers/consumers and whole-process memory remain open.
+    pub fn save_working_status(&self) -> StorageResult<super::working::SaveWorkingStatus> {
+        self.working.status()
+    }
+
     /// Reads objects as one independent wave under a captured pack ceiling.
     pub fn read_batch(
         &self,
@@ -408,7 +500,12 @@ impl Store {
     ) -> StorageResult<(Vec<Vec<u8>>, StoreReadCounters)> {
         check_read_demand(ids, self.capacities.read_objects)?;
         scope.run(|read_scope| {
-            let connection = connection::open(&self.path, false)?;
+            let connection = Self::open_selected(
+                &self.path,
+                false,
+                self.engine,
+                crate::engine::ConnectionClass::ContentRead,
+            )?;
             // Publication scope excludes every private save. The retained-pack
             // ceiling is an additional range check, never visibility authority.
             let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
@@ -467,7 +564,12 @@ impl Store {
             // opened, so a caller cannot turn one question into unbounded query
             // work by passing a longer slice.
             check_read_demand(ids, self.capacities.read_objects)?;
-            let connection = connection::open(&self.path, false)?;
+            let connection = Self::open_selected(
+                &self.path,
+                false,
+                self.engine,
+                crate::engine::ConnectionClass::ContentRead,
+            )?;
             let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
             crate::sqlite::ownership::scope(
                 &connection,
@@ -593,6 +695,8 @@ impl SaveOperation {
                         pool_index,
                         groups,
                         placement,
+                        published_index_credit,
+                        working,
                         ..
                     } = owner;
                     macro_rules! charged {
@@ -611,6 +715,8 @@ impl SaveOperation {
                     charged!(release_pool_index_ns, pool_index);
                     charged!(release_tails_ns, groups);
                     charged!(release_tails_ns, placement);
+                    drop(published_index_credit);
+                    drop(working);
                     // Every other field drops here, at the end of this block: the
                     // residual is `finish_drop_ns` minus the named steps.
                 }
@@ -793,8 +899,19 @@ impl SaveOperation {
                 None => Ok(()),
             }
         });
+        drop(self.batch.drain());
+        if let Some(mut owner) = self.owner.take() {
+            if let Err(error) = &result {
+                if error.is_unknown_outcome() {
+                    owner.quarantine();
+                }
+                owner.working.note(error, owner.quarantined);
+            }
+            if owner.quarantined || owner.cleanup_attempted && !owner.cleanup_completed {
+                super::working::retain(super::working::RetainedSave::Acquired(owner));
+            }
+        }
         self.finished = true;
-        self.owner = None;
         result
     }
 
@@ -803,7 +920,12 @@ impl SaveOperation {
         let Some(owner) = self.owner.as_mut() else {
             return error;
         };
-        finish::terminate(owner, error)
+        let error = finish::terminate(owner, error);
+        if error.is_unknown_outcome() {
+            owner.quarantine();
+        }
+        owner.working.note(&error, error.is_unknown_outcome());
+        error
     }
 }
 
@@ -812,10 +934,19 @@ impl Drop for SaveOperation {
         if self.finished {
             return;
         }
-        if let Some(owner) = self.owner.as_mut() {
+        drop(self.batch.drain());
+        if let Some(mut owner) = self.owner.take() {
             // One best-effort attempt; a previously attempted cleanup is never
             // repeated and a quarantined save is left untouched.
-            let _ = owner.abandon();
+            if let Err(error) = owner.abandon() {
+                if error.is_unknown_outcome() {
+                    owner.quarantine();
+                }
+                owner.working.note(&error, owner.quarantined);
+            }
+            if owner.quarantined || owner.cleanup_attempted && !owner.cleanup_completed {
+                super::working::retain(super::working::RetainedSave::Acquired(owner));
+            }
         }
     }
 }

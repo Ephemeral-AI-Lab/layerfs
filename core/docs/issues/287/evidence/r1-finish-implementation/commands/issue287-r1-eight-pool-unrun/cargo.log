@@ -1,0 +1,51 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.91s
+     Running tests/scratch_pool.rs (core/target/r1-eight-owning/debug/deps/scratch_pool-2765a7d2144a6920)
+
+running 6 tests
+test unix::actual_metadata_observer_withholds_idle_but_scope_copy_is_stale_after_rebind ... FAILED
+test unix::corrupt_idle_projection_is_retained_and_cannot_fall_back_to_empty_second_slot ... FAILED
+test unix::real_reader_commit_unknown_preserves_complete_old_proposed_context_and_s ... FAILED
+test unix::actual_finished_draft6_resets_before_idle_and_rebinds_full_scope_without_new_birth ... ok
+test unix::same_live_authority_fresh_token_source_full_header_and_stable_native_birth ... FAILED
+test unix::exact16_48_classes_occupy_fixed_slots_and_refuse_different_class_before_birth ... FAILED
+
+failures:
+
+---- unix::actual_metadata_observer_withholds_idle_but_scope_copy_is_stale_after_rebind stdout ----
+
+thread 'unix::actual_metadata_observer_withholds_idle_but_scope_copy_is_stale_after_rebind' panicked at crates/layerfs-storage/tests/scratch_pool.rs:141:38:
+called `Result::unwrap()` on an `Err` value: Integrity("scratch pool successful reset required")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- unix::corrupt_idle_projection_is_retained_and_cannot_fall_back_to_empty_second_slot stdout ----
+
+thread 'unix::corrupt_idle_projection_is_retained_and_cannot_fall_back_to_empty_second_slot' panicked at crates/layerfs-storage/tests/scratch_pool.rs:192:38:
+called `Result::unwrap()` on an `Err` value: Integrity("scratch pool successful reset required")
+
+---- unix::real_reader_commit_unknown_preserves_complete_old_proposed_context_and_s stdout ----
+
+thread 'unix::real_reader_commit_unknown_preserves_complete_old_proposed_context_and_s' panicked at crates/layerfs-storage/tests/scratch_pool.rs:227:38:
+called `Result::unwrap()` on an `Err` value: Integrity("scratch pool successful reset required")
+
+---- unix::same_live_authority_fresh_token_source_full_header_and_stable_native_birth stdout ----
+
+thread 'unix::same_live_authority_fresh_token_source_full_header_and_stable_native_birth' panicked at crates/layerfs-storage/tests/scratch_pool.rs:83:36:
+called `Result::unwrap()` on an `Err` value: Integrity("scratch pool successful reset required")
+
+---- unix::exact16_48_classes_occupy_fixed_slots_and_refuse_different_class_before_birth stdout ----
+
+thread 'unix::exact16_48_classes_occupy_fixed_slots_and_refuse_different_class_before_birth' panicked at crates/layerfs-storage/tests/scratch_pool.rs:155:32:
+called `Result::unwrap()` on an `Err` value: Integrity("scratch pool successful reset required")
+
+
+failures:
+    unix::actual_metadata_observer_withholds_idle_but_scope_copy_is_stale_after_rebind
+    unix::corrupt_idle_projection_is_retained_and_cannot_fall_back_to_empty_second_slot
+    unix::exact16_48_classes_occupy_fixed_slots_and_refuse_different_class_before_birth
+    unix::real_reader_commit_unknown_preserves_complete_old_proposed_context_and_s
+    unix::same_live_authority_fresh_token_source_full_header_and_stable_native_birth
+
+test result: FAILED. 1 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+error: test failed, to rerun pass `-p layerfs-storage --test scratch_pool`

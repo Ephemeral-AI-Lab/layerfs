@@ -11,8 +11,12 @@ use super::profile;
 
 pub(crate) fn seal(
     connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     state: &mut Phased,
 ) -> StorageResult<(ClaimSeal, Option<ClaimKey>)> {
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         claim_index::verify(connection, state)?;
@@ -46,7 +50,7 @@ pub(crate) fn seal(
         }
         Ok((seal, maximum))
     })();
-    profile::finish_transaction(connection, result)
+    profile::finish_transaction_guarded(connection, result, engine)
 }
 
 pub(crate) struct Retirement {
@@ -57,8 +61,12 @@ pub(crate) struct Retirement {
 
 pub(crate) fn retire_window(
     connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     state: &mut Phased,
 ) -> StorageResult<Retirement> {
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         claim_index::verify(connection, state)?;
@@ -119,5 +127,5 @@ pub(crate) fn retire_window(
             phase,
         })
     })();
-    profile::finish_transaction(connection, result)
+    profile::finish_transaction_guarded(connection, result, engine)
 }

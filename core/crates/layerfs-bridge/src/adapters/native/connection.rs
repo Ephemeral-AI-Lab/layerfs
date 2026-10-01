@@ -86,6 +86,7 @@ pub struct Receiver {
     nonce: u64,
     sealed: Vec<u8>,
     plain: Vec<u8>,
+    payload_limit: usize,
 }
 pub struct Sender {
     io: Socket,
@@ -94,6 +95,7 @@ pub struct Sender {
     plain: Vec<u8>,
     sealed: Vec<u8>,
     batch: Vec<u8>,
+    payload_limit: usize,
 }
 struct Socket {
     stream: TcpStream,
@@ -168,6 +170,9 @@ impl Write for Socket {
     }
 }
 impl Receiver {
+    pub(super) fn select_limit(&mut self, limit: usize) {
+        self.payload_limit = limit;
+    }
     pub fn deadline(&mut self, d: Instant) {
         self.io.deadline = d;
     }
@@ -179,7 +184,17 @@ impl Receiver {
     }
     /// One record, decrypted into this receiver's reused scratch buffers.
     pub fn read(&mut self) -> Result<Frame, Failure> {
-        read_record_into(&mut self.io, CIPHER_MAX, &mut self.sealed)?;
+        self.read_bounded(self.payload_limit)
+    }
+    /// Bounded first HELLO acquisition before purpose selection or allocation.
+    pub(super) fn read_bounded(&mut self, payload_limit: usize) -> Result<Frame, Failure> {
+        let limit = payload_limit
+            .checked_add(HEADER + 16)
+            .ok_or(Code::Capacity)?;
+        if limit > CIPHER_MAX {
+            return Err(Code::Capacity.into());
+        }
+        read_record_into(&mut self.io, limit, &mut self.sealed)?;
         if self.sealed.len() < 16 {
             return Err(Code::InvalidInput.into());
         }
@@ -192,13 +207,16 @@ impl Receiver {
         self.nonce = self.nonce.checked_add(1).ok_or(Code::Capacity)?;
         let mut cursor = io::Cursor::new(&self.plain[..n]);
         let frame = Frame::read(&mut cursor)?;
-        if cursor.position() != n as u64 {
+        if cursor.position() != n as u64 || frame.bytes.len() > payload_limit {
             return Err(Code::InvalidInput.into());
         }
         Ok(frame)
     }
 }
 impl Sender {
+    pub(super) fn select_limit(&mut self, limit: usize) {
+        self.payload_limit = limit;
+    }
     pub fn deadline(&mut self, d: Instant) {
         self.io.deadline = d;
     }
@@ -211,6 +229,9 @@ impl Sender {
     }
     /// Encrypts one record into the open batch, reusing this sender's scratch.
     fn append_record(&mut self, frame: &Frame) -> Result<(), Failure> {
+        if frame.bytes.len() > self.payload_limit {
+            return Err(Code::Capacity.into());
+        }
         frame.encode_into(&mut self.plain)?;
         self.sealed.clear();
         self.sealed.resize(self.plain.len() + 16, 0);
@@ -459,6 +480,7 @@ fn handshake(
         plain: Vec::new(),
         sealed: Vec::new(),
         batch: Vec::new(),
+        payload_limit: METADATA_BYTES,
     };
     Ok(Connection {
         receive: Receiver {
@@ -467,6 +489,7 @@ fn handshake(
             nonce: 0,
             sealed: Vec::new(),
             plain: Vec::new(),
+            payload_limit: METADATA_BYTES,
         },
         send,
         peer: VerifiedPeer::authenticated(public),

@@ -6,12 +6,16 @@ pub mod codec;
 pub mod inode_leaf;
 
 mod access;
+mod canonical_budget;
 mod id;
 mod output;
+mod owned_batch;
 mod predecessor;
+mod read_permit;
 
 pub use crate::policy::{MAX_CANONICAL_OBJECT_BYTES, MAX_OBJECT_FIELD_BYTES};
 pub use access::AuthenticatedObjects;
+pub use canonical_budget::{CanonicalBudget, CanonicalLease, CANONICAL_COMPATIBILITY_BYTES};
 pub use codec::{
     canonical_len, decode_bytes_object, encode_bytes_object, encode_bytes_object_to, BYTES_KIND,
     HEADER_LEN, MAX_PAYLOAD_BYTES, OBJECT_MAGIC, VALUE_LEN_BYTES,
@@ -24,6 +28,8 @@ pub use inode_leaf::{
     POOLED_PREFIX_BYTES, POOLED_ROW_BYTES, POOLED_VALUE_CANONICAL_BYTES,
 };
 pub use output::{DiscardingConsumer, FinalizedConsumer, FinalizedObject, ObjectParts, ObjectRole};
+pub use owned_batch::{CanonicalBuffer, OwnedCanonicalBatch};
 pub use predecessor::{
     AdvisoryPredecessor, AdvisoryPredecessors, PredecessorProvenance, MAXIMUM_ADVISORY_PREDECESSORS,
 };
+pub use read_permit::{CanonicalOwnership, CanonicalReadKind, CanonicalReadPermit};

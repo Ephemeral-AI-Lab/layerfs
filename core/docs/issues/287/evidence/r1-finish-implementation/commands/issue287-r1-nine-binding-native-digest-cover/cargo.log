@@ -1,0 +1,94 @@
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-nine-source/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.22s
+     Running tests/binding_claims.rs (core/target/r1-eight-owning/debug/deps/binding_claims-c1a5dfbaf2cb6332)
+
+running 5 tests
+test stored_site_permutation_and_retained_parent_refusal_preserve_real_stage_and_cleanup ... ok
+test duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cleanup ... ok
+test configured_48mib_state_budget_is_bound_before_body_and_retires_before_roots ... ok
+test overlapping_257_directory_chain_restatement_preserves_root_and_cycle_preserves_stage ... ok
+test stage_with_257_exclusive_directories_retires_claims_before_first_root_insert ... ok
+
+successes:
+
+---- stored_site_permutation_and_retained_parent_refusal_preserve_real_stage_and_cleanup stdout ----
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC direct-library profile8:129 existing sites cross128, actual source-bound birth/parent/final/retire->Stage with site4/graph7 FKs; old/new serial restatement permutation preserved; surviving old parent refuses and priorStage/base/known Save-scratch cleanup remain exact. No speed/global/physical qualification.
+
+---- duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cleanup stdout ----
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC direct-legacy selected-provider Stage: duplicate257 repeatsite1 across two128-key windows; InvalidInput known, priorStage/base preserved and unfinishedSave/scratch/spool removed; no fallback/retry/performance admission.
+
+---- configured_48mib_state_budget_is_bound_before_body_and_retires_before_roots stdout ----
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC configured48MiB actual native reservation/header/selectedS-R-L before body; one owner, sites4/graph7 root fences and known reset/Idle drain/spool/Save cleanup. RAM/work/request limits unchanged; no larger input or speed/physical admission.
+
+---- overlapping_257_directory_chain_restatement_preserves_root_and_cycle_preserves_stage stdout ----
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC real Service imported257-directory chain/all256 restated edges; independent unchangedBase root and phase fences. Final-batch ancestor move forms selected cycle: known InvalidInput, priorStage/base/Save-scratch-spool cleanup exact. C1 owns actual expansion/SCC count proof; no timing or speed admission.
+
+---- stage_with_257_exclusive_directories_retires_claims_before_first_root_insert stdout ----
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC direct-legacy selected-provider Stage: sites257 directories258, one native16MiB owner/source-bound profile8; external required-site4/graph7 FKs held at every actual rootinsert, triggerdepth0 unchanged; known reset/Idle drain/spool/Save cleanup. Provider proof separately owns exactemptystage4; no heap/physical/progress/speed admission.
+
+
+successes:
+    configured_48mib_state_budget_is_bound_before_body_and_retires_before_roots
+    duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cleanup
+    overlapping_257_directory_chain_restatement_preserves_root_and_cycle_preserves_stage
+    stage_with_257_exclusive_directories_retires_claims_before_first_root_insert
+    stored_site_permutation_and_retained_parent_refusal_preserve_real_stage_and_cleanup
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 25.10s
+

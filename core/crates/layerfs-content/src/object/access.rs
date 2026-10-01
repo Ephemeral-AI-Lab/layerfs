@@ -17,6 +17,7 @@
 
 use layerfs_telemetry::timer::TimingScope;
 
+use super::{CanonicalOwnership, CanonicalReadPermit, OwnedCanonicalBatch};
 use crate::error::{ContentError, ContentResult};
 use crate::object::ObjectId;
 
@@ -31,6 +32,18 @@ use crate::object::ObjectId;
 /// record outside this reader's visibility, a capacity refusal - reports
 /// [`ContentError::ProviderFailure`] so the two classes stay distinguishable.
 pub trait AuthenticatedObjects {
+    /// Supply last-owner canonical output selected before invoking this method.
+    /// Default raw adaptation preserves explicitly unqualified upstream allocation.
+    fn read_canonical_owned(
+        &self,
+        ids: &[ObjectId],
+        permit: CanonicalReadPermit,
+        scope: TimingScope<'_>,
+    ) -> ContentResult<OwnedCanonicalBatch> {
+        permit.check_count(ids.len())?;
+        let values = self.read_canonical_batch_scoped(ids, scope)?;
+        OwnedCanonicalBatch::from_vectors(permit, values, CanonicalOwnership::Compatibility)
+    }
     /// Reads every requested object as one bounded grouped demand.
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>>;
 

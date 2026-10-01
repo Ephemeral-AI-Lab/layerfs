@@ -1,7 +1,7 @@
 //! One bounded source-order birth producer and independent final verifier.
 use super::{
-    BindingSiteState, ClaimAdmission, SiteBirthLedger, SiteCursor, SiteKey, SiteMembership,
-    SitePageLimit, SiteRecord, SiteScope, STATE_MAX_PAGE_RECORDS,
+    BindingSiteState, ClaimAdmission, EligibilityView, ParentCalls, SiteBirthLedger, SiteCursor,
+    SiteKey, SiteMembership, SitePageLimit, SiteRecord, SiteScope, STATE_MAX_PAGE_RECORDS,
 };
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::rows::{BindingPoint, DirectoryHeader, PreparedBindingRows};
@@ -38,6 +38,9 @@ impl<'a, S: BindingSiteState + ?Sized> BindingSites<'a, S> {
             declared: u64::try_from(declared).map_err(|_| ContentError::LengthOverflow)?,
             active_stored: 0,
         })
+    }
+    pub(crate) fn state(&mut self) -> &mut S {
+        self.state
     }
     pub(crate) fn claim(
         &mut self,
@@ -146,6 +149,20 @@ impl<S: BindingSiteState + ?Sized> ClosedSites<'_, S> {
         unreachable: &BTreeMap<u64, ()>,
         members: &SiteMembership,
     ) -> ContentResult<()> {
+        self.finish_with(
+            input,
+            EligibilityView::Legacy(unreachable),
+            members,
+            ParentCalls::compatibility(),
+        )
+    }
+    pub(crate) fn finish_with(
+        self,
+        input: &dyn PreparedBindingRows,
+        unreachable: EligibilityView<'_>,
+        members: &SiteMembership,
+        parents: ParentCalls<S>,
+    ) -> ContentResult<()> {
         if members != &self.members {
             return Err(ContentError::InvalidOrderingRecord(
                 "site selected membership",
@@ -163,7 +180,9 @@ impl<S: BindingSiteState + ?Sized> ClosedSites<'_, S> {
         let mut cursor = SiteCursor::new(self.state, seal.clone())?;
         while let Some(page) = cursor.next_page(SitePageLimit::default())? {
             for record in page.records() {
-                if !record.has_base() || unreachable.contains_key(&record.point().parent()) {
+                if !record.has_base()
+                    || unreachable.contains(cursor.state(), record.point().parent(), parents)?
+                {
                     continue;
                 }
                 let (_, child) = input.binding_at(&record.point())?;

@@ -93,6 +93,17 @@ impl SqliteCatalog {
         if writable && !provider.writable {
             return Err(HistoryError::ContinuityUnavailable);
         }
+        let engine = provider.engine.clone();
+        if engine.is_some() {
+            let boundary = super::engine::validate(engine.as_deref())
+                .and_then(|_| super::engine::verify(&provider.connection, false));
+            if let Err(error) = boundary {
+                provider.participation_failure = Some(error.clone());
+                provider.quarantined = true;
+                return Err(error); // No transaction began: the exact refusal is known.
+            }
+        }
+        let mut participation_failure = None;
         let behavior = if writable {
             TransactionBehavior::Immediate
         } else {
@@ -107,6 +118,10 @@ impl SqliteCatalog {
             transaction.set_drop_behavior(DropBehavior::Ignore);
             let result = body(&transaction).and_then(|value| {
                 if writable {
+                    if let Err(error) = super::engine::validate(engine.as_deref()) {
+                        participation_failure = Some(error);
+                        return Err(HistoryError::UnknownOutcome);
+                    }
                     transaction.execute_batch("COMMIT").map_err(sql)?;
                 }
                 Ok(value)
@@ -114,19 +129,37 @@ impl SqliteCatalog {
             match result {
                 Err(error) if error.unknown() => Err(error),
                 result => {
-                    if !transaction.is_autocommit() && transaction.rollback().is_err() {
-                        return Err(HistoryError::UnknownOutcome);
+                    if !transaction.is_autocommit() {
+                        if let Err(error) = super::engine::validate(engine.as_deref()) {
+                            participation_failure = Some(error);
+                            return Err(HistoryError::UnknownOutcome);
+                        }
+                        if transaction.rollback().is_err() {
+                            return Err(HistoryError::UnknownOutcome);
+                        }
                     }
                     result
                 }
             }
         })();
+        if let Some(error) = participation_failure {
+            provider.participation_failure = Some(error);
+        }
         if result.as_ref().is_err_and(|error| error.unknown()) {
             // Retain one bounded connection until this catalog is dropped. It
             // cannot publish more work or expose pending rows as committed.
             provider.quarantined = true;
         }
         result
+    }
+
+    /// Pure retained typed participation refusal; no SQL, retry or ownership repair.
+    pub fn participation_failure(&self) -> HistoryResult<Option<HistoryError>> {
+        match self.state.try_lock() {
+            Ok(provider) => Ok(provider.participation_failure.clone()),
+            Err(TryLockError::WouldBlock) => Err(HistoryError::Busy),
+            Err(TryLockError::Poisoned(_)) => Err(HistoryError::UnknownOutcome),
+        }
     }
 
     /// Runs one coherent read-only metadata transaction.

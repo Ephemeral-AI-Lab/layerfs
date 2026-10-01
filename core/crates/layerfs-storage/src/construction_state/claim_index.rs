@@ -95,9 +95,13 @@ fn present_prepared(statement: &mut Statement<'_>, key: ClaimKey) -> StorageResu
 
 pub(crate) fn batch(
     connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     state: &Phased,
     keys: &[ClaimKey],
 ) -> StorageResult<ClaimAdmission> {
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         verify(connection, state)?;
@@ -143,15 +147,22 @@ pub(crate) fn batch(
     })();
     match result {
         Ok(ClaimAdmission::Fresh) => {
-            profile::finish_write(connection, Ok(()))?;
+            profile::finish_write_guarded(connection, Ok(()), engine)?;
             Ok(ClaimAdmission::Fresh)
         }
         Ok(ClaimAdmission::Duplicate) => {
+            if let Some(guard) = engine {
+                guard
+                    .validate()
+                    .map_err(|original| StorageError::UnknownOutcome {
+                        original: Box::new(original),
+                    })?;
+            }
             crate::sqlite::write::rollback(connection)?;
             Ok(ClaimAdmission::Duplicate)
         }
         Err(error) => {
-            profile::finish_write(connection, Err(error))?;
+            profile::finish_write_guarded(connection, Err(error), engine)?;
             unreachable!()
         }
     }

@@ -1,0 +1,5 @@
+{
+  "path": "core/crates/layerfs-server/tests/binding_claims.rs",
+  "sha256": "b0c89523777a1362a68695e0b5ea276d797bca45d8b7a0239532580215d82073",
+  "cause": "Alias capacity stores bindings*60 encoded Sites bytes, not bare count; entire88-byte suffix and89-byte SiteScope assertions retained"
+}

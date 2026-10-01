@@ -20,7 +20,7 @@ struct CatalogBudget(AtomicUsize);
 
 /// Admission state assembled once for the service's bounded Store list.
 pub(crate) struct Admission {
-    saves: Vec<SaveBudget>,
+    saves: Vec<Arc<SaveBudget>>,
     catalogs: Vec<Option<Arc<CatalogBudget>>>,
     readers: AtomicUsize,
 }
@@ -66,12 +66,18 @@ fn admit(counter: &AtomicUsize, limit: usize) -> Result<Permit<'_>, Failure> {
 
 impl Admission {
     pub(crate) fn new(stores: &[StoreAccess]) -> Result<Self, Failure> {
-        let mut saves = Vec::with_capacity(stores.len());
+        let mut saves: Vec<Arc<SaveBudget>> = Vec::with_capacity(stores.len());
         let mut catalogs: Vec<Option<Arc<CatalogBudget>>> = Vec::with_capacity(stores.len());
         for (index, access) in stores.iter().enumerate() {
-            saves.push(SaveBudget {
-                live: AtomicUsize::new(0),
-                limit: access.store.max_concurrent_writes().map_err(storage)?,
+            let shared = stores[..index]
+                .iter()
+                .position(|prior| prior.store.same_authority(&access.store));
+            saves.push(match shared {
+                Some(prior) => Arc::clone(&saves[prior]),
+                None => Arc::new(SaveBudget {
+                    live: AtomicUsize::new(0),
+                    limit: access.store.max_concurrent_writes().map_err(storage)?,
+                }),
             });
             let budget = access.history.as_ref().map(|catalog| {
                 // StoreAccess aliases of the same live trait object share one

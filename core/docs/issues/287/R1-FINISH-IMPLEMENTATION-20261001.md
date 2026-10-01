@@ -1,0 +1,55 @@
+# R1 infrastructure implementation checkpoint — 2026-10-01
+
+Disposition: real-route R1 infrastructure implemented with scoped owning evidence; **aggregate R1 remains PARTIAL, and no release admission or eligible speed claim is made**. Parent publication is `50a4f3a1934bc2e0d53cee69272b2c95b826278b`. The resulting commit URL is recorded externally after publication. The six unchanged control observations and targets are already published; candidate observations remain the next authorized action.
+
+The [closure matrix](R1-FINISH-CLOSURE.md) preserves every original requirement, including the unchecked R3-dependent early composite content release and the unsupported required Apple SQLite heap profile. [Complete command evidence](evidence/r1-finish-implementation/COMMANDS.json) retains all45 owning8/final/9 directories and their original raw bytes, including every failure, diagnostic and covering correction. [Final product inventory](evidence/r1-finish-implementation/FINAL-PRODUCT-SOURCE.json) compares625 runtime/build input files with the coherent owning snapshot. Tests are external; production remains610 Rust/SQL files under the prescribed physical limits.
+
+## Actual delivered route
+
+Prepared StageChanges/Commit now uses supplied Canonical8 state: paged aliases, authenticated immutable BaseFacts and ParentEligibility, Count/ZeroSeed/FIFO job/LIFO frame state, bounded directory roots and checked retirement before root emission. Broad width385/depth180 native pipeline proofs preserve independent v1 roots, surviving outside aliases, exact final EOF and reuse of previously established immutable facts. Old public C1 APIs and legacy Init/import retain explicitly selected compatibility reducers; their populations are not claimed globally retired.
+
+Mapping reads use32-level continuation frames and32-leaf waves. Drafts use native6 through the real Server edit route, while a typed, captured Empty/Whole final shape selects NoDraft before effects. Verified empty and ordinary existing-file classes of1..8 rows use the same canonical producer, with explicit zero or bounded authority and no native file or error fallback. They are selected from the complete declaration and checked actual body, not a workload name.
+
+Temporary draft summaries now have moved ownership. Branch children acquire exact temporary multiplicities before a consumed parent is superseded; a replacement parent acquires its outgoing links before child pins end. Selected-root and temporary decrements share a captured transition, and only the superseded zero target retires. Unrelated temporary jobs remain live. Native and resident EOF reject escaped pins. Original body-frontier bounds pass unchanged; full metadata admission still includes associated counts/jobs/references/resolution/emission facts. `peak_deferred_bytes` keeps its original logical body meaning; `peak_draft_metadata_bytes` exposes the full framed authority peak.
+
+Native reference effects retain the same order, complete expected fields, individual cardinality-one acknowledgements, windows and before/proposed capsules. One statement is prepared per contiguous insert/delete run inside its original transaction and ends before owner CAS and COMMIT. The128-reference witness observes4 insert plus6 delete preparations for the same256 acknowledged row effects; partial33/49, foreign, corruption, real constraint rollback and COMMIT-Unknown custody are covered. Work telemetry records issued preparations and acknowledged rows even when later rollback or Unknown occurs. These are owner work counts, not published records or latency.
+
+The explicit compatibility reference reducer now streams at most32 immutable tiers for both touched discovery and final rows. It creates no final consolidation output, preserves newest-row precedence and validates hidden older duplicates. All input files remain charged until checked release. The original eight small parent quota cells pass, including864 bytes, without reversing the earlier custody correction. This is a fixed-control compatibility stream, not a Native8 or global-memory proof.
+
+Same continuing Store authority shares Service Save/scratch admission. Working/index/codec/publication and returned-data foundations retain last-owner leases; the32MiB returned-canonical compatibility class remains explicit and strict8 is refused. Pack data copies only the used BLOB range, with actual retained cache/group/current-pack capacities checked. Native terminal reset and a fixed charged idle pool preserve the actual path, inode, descriptor and connection, while checkout takes fresh token, source and full scope. Known scratch completion can return Idle independently of later Store/C5 uncertainty; Unknown metadata cannot rebind, retry, close or refund. Public drain and joined shutdown close known Idle owners once. Real Service repeated construction16/48 and Store-finish Unknown after known scratch Idle pass.
+
+The native startup chain captures the actual unforgeable engine guard into Store/history/scratch factories and relevant SQL boundaries. The selected Apple3.51.0 provider still reads back0 for the required32MiB hard limit, so native main refuses before Store/history/workers. Compatibility native purpose v2 implements General4/Catalog1/Control1/pending1 plus acceptor within its frozen vector; a real authorized refill progresses with two read owners, two persisted Saves and active scratch held. Strict/protected capability enablement remains false until the full required qualification passes.
+
+## Verification, including all nonpassing scopes
+
+The mandated full-Core command ran once, with locked Rust1.85.1, repository ARMv8 flags and the worktree-owned target:
+
+`cargo +1.85.1 test --manifest-path core/Cargo.toml --locked --no-fail-fast -- --show-output`
+
+It retains **exit101**,246 targets,1129 passing bodies,19 failures and4 ignored bodies, complete wall620.207555208s. Later corrections do not relabel it. Fourteen functional failures were covered by source or exact external-oracle corrections. Four original engine failures are now explicit supported-provider inner NOT_RUN on actual typed Readback/Unsupported/0; the outer capability-aware harness is not enforcement qualification. One original direct deadline failure remains.
+
+The coherent source9 C1 package covers482 unique bodies cumulatively: its package command retains one missing read-only generator-source inspection failure; copying the original ignored generator source for inspection, never executing it, passes the two fixture-seal bodies. Sealed edit reference3, native construction9/temporary4/quanta4, independent tier28, original two frontier bounds, full write-admission11 and real Service reuse2 all have their scoped evidence. Source9 Server FileDraft3/NoDraft2/Small2 and BindingClaims5 pass. BindingClaims required independent correction of encoded Sites bytes and raw native Blake3 domain; the full386/194/89/188/capacity/digest/reset comparisons remain intact. Its body25.10s and complete28.853167542s are owning-check walls, not speed measurements.
+
+The failed-only direct vector still has2,049 runs,4,098 extents,131,136 replacement bytes and262,272 base bytes under its original10,000ms request deadline. On the corrected source it returns known Deadline: target83.17s, complete87.299023875s. Those figures cover a functional target/command, not individual phases. Its source explains repeated port verification, fixed-row queries, native path/reservation/observation and bounded transactions; the preparation reduction does not prove which term dominates or restore deadline fit. No timeout, input, quota, worker, cache contract or unchecked owner was relaxed. This gate stays **FAIL**.
+
+Final covering checks pass:
+
+| Check | Exact disposition |
+| --- | --- |
+| `cargo +1.85.1 clippy --manifest-path core/target/r1-nine-source/core/Cargo.toml --locked --all-targets -- -D warnings` | PASS after recorded equivalent external hex/inode lint corrections; complete1.013947250s |
+| `cargo +1.85.1 build --manifest-path core/target/r1-nine-source/core/Cargo.toml --locked --examples` | PASS; complete18.257334125s |
+| `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check` | PASS; complete3.377558958s |
+| `python3 core/tools/check_product_boundary.py` | PASS610 production Rust/SQL files; complete0.213890334s; semantic review remains separate |
+| `python3 -m unittest discover -s core/tools -p 'test_*.py'` | Earlier unchanged guard self-tests11 PASS reused; no tool/guard edit since that proof |
+
+No CI or retired preflight was run or claimed. The Server external raw-hash oracle reuses the already locked blake3=1.8.5 crate through a dev dependency; only Server's dependency edge changes in the lockfile. Third-party package versions, sources and checksums are unchanged. This test-only edge is visible in the candidate compilation/dependency identity, rather than hidden as an identical lockfile.
+
+## Resource and rollout limits
+
+Framed nativeS occupancy, scoped64KiB graph/canonical controls, provider1MiB draft shape, logical body/metadata counters, actual allocated Vec capacity and particular last-owner proofs are distinct statements. The draft provider check does not jointly admit all C1 decoded bodies, temporary/descriptor vectors, recursive continuations, cache and provider/native overlaps. Global176MiB, the32MiB engine/30MiB scheduled healthy shapes, MEMORY journals/dirty pages, physical/cgroup/cache attribution, NOMEM headroom and intermediate closing-before-join remain unqualified. Formal maxima are not inferred from finite16/48 proofs. Unsupported Linux component/provider qualification remains unrun and separate from the macOS benchmark topology.
+
+R3a versioned result/candidate custody is still required for early legacy composite content release, particularly multi-root import. FileSet/canonicalv2/schema11/live Workspace and R2–R7 work remain unstarted. #288 was read only and remains delegated. The next action is the authorized six-row candidate checkpoint, one observation per row with separate9s proof, exact published identities and preserved numeric INELIGIBLE/performance_claim=false. The assignment stops at its final R1/speed report.
+
+## Production source size
+
+The exact first-parent/final-staged comparison is recorded in [PRODUCTION-LOC.json](evidence/r1-finish-implementation/PRODUCTION-LOC.json). Approved counter: tools/production_loc.py SHA2560d798f53263c0f18636d96ccdfdc3728f501f53b066e90577d251859f1f117b2, same Rust/runtimeSQL scope and inline-test/comment/tool/docs/generated exclusions. Exact staged source comparison: combined153673→174796(delta+21123), reference65417→65417(delta+0), Core88256→109379(delta+21123). Both operands are archived exact snapshots. The final staged production tree is compared again after documentation staging; committed-tree confirmation precedes publication. Growth implements the additional native authorities, ownership/custody and real callers. Legacy and replacement coexist; common code relocation and explicit compatibility coexistence are not described as algorithmic LOC simplification.

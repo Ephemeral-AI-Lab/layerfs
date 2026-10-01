@@ -72,7 +72,7 @@ fn run(
         let validated = ValidatedInput {
             topology: checked.topology,
             validation,
-            unreachable,
+            unreachable: super::EligibilityAuthority::Legacy(unreachable),
         };
         // The provider acknowledges complete retirement before this constructor
         // acquires its first root window or checks root-phase capacity.
@@ -90,9 +90,11 @@ fn run(
             &mut cleanup_attempted,
             &mut contents,
             validated,
+            state.indexed(),
+            super::ParentCalls::compatibility(),
         );
         if result.is_err() {
-            let _ = contents.release();
+            let _ = contents.release(state.indexed());
         }
         result
     })();

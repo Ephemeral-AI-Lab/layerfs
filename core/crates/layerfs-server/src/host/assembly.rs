@@ -75,6 +75,7 @@ pub struct Server {
 #[derive(Default)]
 struct Listening {
     endpoint: Option<SocketAddr>,
+    purposes: Option<bool>,
     acceptor: Option<JoinHandle<()>>,
 }
 
@@ -194,8 +195,19 @@ impl Server {
 
     /// Bind the loopback endpoint sandboxes call back on, and serve it.
     pub fn listen(&self) -> Result<SocketAddr, Failure> {
+        self.listen_topology(false)
+    }
+    /// Select the bounded authenticated-purpose topology before listener effects.
+    /// This logical library profile does not issue a strict engine/physical capability.
+    pub fn listen_with_purposes(&self) -> Result<SocketAddr, Failure> {
+        self.listen_topology(true)
+    }
+    fn listen_topology(&self, protected: bool) -> Result<SocketAddr, Failure> {
         let mut listener = self.listener.lock().map_err(|_| Code::Io)?;
         if let Some(endpoint) = listener.endpoint {
+            if listener.purposes != Some(protected) {
+                return Err(Code::Ownership.into());
+            }
             return Ok(endpoint);
         }
         let daemon_public = VerifiedPeer::from_private(&self.daemon_private)?
@@ -204,12 +216,20 @@ impl Server {
         let acceptor = Acceptor::bind(
             SocketAddr::from(([127, 0, 0, 1], 0)),
             store::capacity(&self.store)?,
+            protected,
             self.service_private,
-            vec![Peer {
-                selector: SELECTOR,
-                public: daemon_public,
-                expires_unix: u64::MAX,
-            }],
+            vec![
+                Peer {
+                    selector: SELECTOR,
+                    public: daemon_public,
+                    expires_unix: u64::MAX,
+                },
+                Peer {
+                    selector: 2,
+                    public: *self.peer()?.public_key(),
+                    expires_unix: u64::MAX,
+                },
+            ],
             Arc::clone(&self.service),
             self.runtime.clone(),
         )?;
@@ -222,8 +242,21 @@ impl Server {
                 let _ = acceptor.serve(crate::host::acceptor::Stop::Flag(&stop));
             })?;
         listener.endpoint = Some(endpoint);
+        listener.purposes = Some(protected);
         listener.acceptor = Some(worker);
         Ok(endpoint)
+    }
+
+    /// Connect an authenticated host caller to one selected native operation class.
+    /// Construction callers still retain their own request/Save/C5 authority.
+    pub fn connect_purpose(
+        &self,
+        purpose: layerfs_bridge::adapters::native::purpose::Purpose,
+    ) -> Result<layerfs_bridge::adapters::native::client::Client, Failure> {
+        use layerfs_bridge::adapters::native::{client::Client, connection::connect};
+        let public = *VerifiedPeer::from_private(&self.service_private)?.public_key();
+        let connection = connect(self.endpoint()?, 2, &self.host_private, &public)?;
+        Client::for_purpose(connection, purpose)
     }
 
     /// The bound endpoint, when the listener is running.

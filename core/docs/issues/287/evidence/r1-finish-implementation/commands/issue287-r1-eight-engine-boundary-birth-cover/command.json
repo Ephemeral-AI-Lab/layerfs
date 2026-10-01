@@ -1,0 +1,36 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "birth_scope",
+    "--test",
+    "write_admission",
+    "--test",
+    "multi_writer",
+    "--test",
+    "persistence_failure",
+    "--test",
+    "save_working",
+    "--test",
+    "engine_participation",
+    "--",
+    "--show-output"
+  ],
+  "exit": 101,
+  "wall_ns": 12422189500,
+  "source_change": {
+    "core/crates/layerfs-storage/src/sqlite/ownership.rs": "a2aae43f4481c65f5243bdfdd0d7b9acd40d6b5c61a520579a75de4b326fce43",
+    "core/crates/layerfs-storage/src/sqlite/cleanup.rs": "588194826a49c913b83b0d1f197be5f8bcdaaceee405a8e7099d4eb30ca2b82a",
+    "core/crates/layerfs-storage/src/cas/lifecycle.rs": "cb3eb1c2e9d546c07b917d517ac0fca6ed6dde08cac9167803309e0ad05fa2a9",
+    "core/crates/layerfs-storage/tests/birth_scope.rs": "c7f3724ed3b668cb911ff0edc1fc00ab8e6719ce00b4f756a98a7121393590eb",
+    "core/crates/layerfs-storage/tests/engine_participation.rs": "7f0905b443d1041492750e327d9ce7b5e4224a149a1153880080de4d4529be7b"
+  },
+  "cause": "guardedbirth/cleanup eachnativeSQLboundary +atomicTEMPscopebirth acceptance; realprivate/publictwoownerscopeproof, actualsupportedguardUnsupportedNOT_RUN scoped"
+}

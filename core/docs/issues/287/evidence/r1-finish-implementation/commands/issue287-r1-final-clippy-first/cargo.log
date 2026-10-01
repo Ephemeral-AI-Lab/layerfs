@@ -1,0 +1,150 @@
+   Compiling libc v0.2.189
+    Checking cfg-if v1.0.4
+    Checking bitflags v2.13.1
+   Compiling nix v0.31.3
+   Compiling memoffset v0.9.1
+    Checking constant_time_eq v0.4.2
+    Checking arrayvec v0.7.8
+    Checking arrayref v0.3.9
+    Checking typenum v1.20.1
+    Checking subtle v2.6.1
+    Checking zeroize v1.9.0
+   Compiling blake3 v1.8.5
+   Compiling generic-array v0.14.7
+   Compiling libproc v0.14.11
+    Checking opaque-debug v0.3.1
+   Compiling curve25519-dalek v4.1.3
+   Compiling snow v0.9.6
+    Checking foldhash v0.2.0
+   Compiling libsqlite3-sys v0.38.2
+    Checking smallvec v1.16.0
+    Checking fallible-streaming-iterator v0.1.9
+    Checking fallible-iterator v0.3.0
+    Checking hashbrown v0.17.1
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+    Checking hashlink v0.12.2
+    Checking errno v0.3.14
+    Checking getrandom v0.2.17
+    Checking cpufeatures v0.2.17
+    Checking rand_core v0.6.4
+    Checking crypto-common v0.1.7
+    Checking inout v0.1.4
+    Checking block-buffer v0.10.4
+    Checking universal-hash v0.5.1
+    Checking aead v0.5.2
+    Checking cipher v0.4.4
+    Checking digest v0.10.7
+    Checking polyval v0.6.2
+    Checking poly1305 v0.8.0
+    Checking blake2 v0.10.6
+    Checking sha2 v0.10.9
+    Checking aes v0.8.4
+    Checking ctr v0.9.2
+    Checking chacha20 v0.9.1
+    Checking ghash v0.5.1
+    Checking chacha20poly1305 v0.10.1
+    Checking aes-gcm v0.10.3
+    Checking rusqlite v0.40.2
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-telemetry)
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+error: unnecessary `>= y + 1` or `x - 1 >=`
+   --> crates/layerfs-content/src/file/mapping/navigation.rs:156:42
+    |
+156 |             if node.level > MAX_LEVEL || self.frames.len() >= usize::from(MAX_LEVEL) + 1 {
+    |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: change it to: `self.frames.len() > usize::from(MAX_LEVEL)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#int_plus_one
+    = note: `-D clippy::int-plus-one` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::int_plus_one)]`
+
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-api-core v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-api/core)
+    Checking layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-sandbox)
+error: large size difference between variants
+ --> crates/layerfs-content/src/filesystem/state/parent_access.rs:6:1
+  |
+6 | / pub(crate) enum EligibilityAuthority {
+7 | |     Legacy(BTreeMap<u64, ()>),
+  | |     ------------------------- the second-largest variant contains at least 0 bytes
+8 | |     Supplied(ParentSeal),
+  | |     -------------------- the largest variant contains at least 296 bytes
+9 | | }
+  | |_^ the entire enum is at least 0 bytes
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#large_enum_variant
+  = note: `-D clippy::large-enum-variant` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(clippy::large_enum_variant)]`
+help: consider boxing the large fields to reduce the total size of the enum
+  |
+8 |     Supplied(Box<ParentSeal>),
+  |              ~~~~~~~~~~~~~~~
+
+error: this function has too many arguments (9/7)
+   --> crates/layerfs-content/src/filesystem/update.rs:297:1
+    |
+297 | / fn zero_count_serials<S: ?Sized>(
+298 | |     reader: &dyn AuthenticatedObjects,
+299 | |     table: InodeTable,
+300 | |     reducer: &mut ReferenceReducer<'_, '_>,
+...   |
+306 | |     parents: ParentCalls<S>,
+307 | | ) -> ContentResult<(Vec<u64>, u64)> {
+    | |___________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+    = note: `-D clippy::too-many-arguments` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::too_many_arguments)]`
+
+error: very complex type used. Consider factoring parts into `type` definitions
+  --> crates/layerfs-content/src/filesystem/validate/fact_access.rs:15:13
+   |
+15 |       lookup: fn(
+   |  _____________^
+16 | |         &mut ValidationState,
+17 | |         &mut S,
+18 | |         &dyn AuthenticatedObjects,
+...  |
+21 | |         &mut ValidationWork,
+22 | |     ) -> ContentResult<Option<InodeValue>>,
+   | |__________________________________________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#type_complexity
+   = note: `-D clippy::type-complexity` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::type_complexity)]`
+
+error: very complex type used. Consider factoring parts into `type` definitions
+  --> crates/layerfs-content/src/filesystem/validate/fact_access.rs:24:15
+   |
+24 |       prefetch: fn(
+   |  _______________^
+25 | |         &mut ValidationState,
+26 | |         &mut S,
+27 | |         &dyn AuthenticatedObjects,
+...  |
+30 | |         &mut ValidationWork,
+31 | |     ) -> ContentResult<()>,
+   | |__________________________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#type_complexity
+
+error: the following explicit lifetimes could be elided: 'a
+   --> crates/layerfs-content/src/filesystem/validate/fact_access.rs:120:6
+    |
+120 | impl<'a, S: FactState + crate::filesystem::state::BindingSiteState + ?Sized>
+    |      ^^
+121 |     FactAccess<crate::filesystem::state::BindingSites<'a, S>>
+    |                                                       ^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_lifetimes
+    = note: `-D clippy::needless-lifetimes` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_lifetimes)]`
+help: elide the lifetimes
+    |
+120 ~ impl<S: FactState + crate::filesystem::state::BindingSiteState + ?Sized>
+121 ~     FactAccess<crate::filesystem::state::BindingSites<'_, S>>
+    |
+
+error: could not compile `layerfs-content` (lib) due to 6 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-content` (lib test) due to 6 previous errors

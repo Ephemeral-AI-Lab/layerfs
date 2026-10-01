@@ -1,5 +1,5 @@
 //! Exact bounded old/new acknowledgements; no population-sized result.
-use super::{GraphEdge, GraphNode, GraphNodeKey, GraphScope, GraphTotals};
+use super::{GraphEdge, GraphMemoryLease, GraphNode, GraphNodeKey, GraphScope, GraphTotals};
 use crate::error::{ContentError, ContentResult};
 /// One exact native node change, including births.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -72,6 +72,7 @@ pub struct GraphBuildAck {
     nodes: Vec<GraphNodeChange>,
     edges: Vec<GraphEdgeChange>,
     parent: Option<GraphNode>,
+    memory: Option<GraphMemoryLease>,
 }
 impl GraphBuildAck {
     /// Checks selected scope, ordered unique targets, full old/new windows and totals.
@@ -129,7 +130,22 @@ impl GraphBuildAck {
             nodes,
             edges,
             parent,
+            memory: None,
         })
+    }
+    /// Transfer pre-admitted capacity with the completed real result.
+    pub fn with_memory(mut self, memory: GraphMemoryLease) -> ContentResult<Self> {
+        memory.check(
+            std::mem::size_of::<Self>()
+                + self.nodes.capacity() * std::mem::size_of::<GraphNodeChange>()
+                + self.edges.capacity() * std::mem::size_of::<GraphEdgeChange>(),
+        )?;
+        self.memory = Some(memory);
+        Ok(self)
+    }
+    /// Scoped live result credit, absent for independent compatibility constructors.
+    pub fn reserved_memory_bytes(&self) -> Option<usize> {
+        self.memory.as_ref().map(GraphMemoryLease::bytes)
     }
     /// Selected graph context.
     pub fn scope(&self) -> &GraphScope {
@@ -169,8 +185,14 @@ impl GraphBuildAck {
 pub struct GraphMutationAck {
     scope: GraphScope,
     nodes: Vec<GraphNodeChange>,
+    memory: Option<GraphMemoryLease>,
 }
 impl GraphMutationAck {
+    /// Scoped live result credit, absent for independent compatibility constructors.
+    pub fn reserved_memory_bytes(&self) -> Option<usize> {
+        self.memory.as_ref().map(GraphMemoryLease::bytes)
+    }
+
     /// Checks one bounded unique selected target window.
     pub fn new(scope: GraphScope, nodes: Vec<GraphNodeChange>) -> ContentResult<Self> {
         check_window(nodes.len(), nodes.capacity(), 317 + nodes.len() * 120)?;
@@ -182,7 +204,20 @@ impl GraphMutationAck {
             }
             last = Some(row.after().key());
         }
-        Ok(Self { scope, nodes })
+        Ok(Self {
+            scope,
+            nodes,
+            memory: None,
+        })
+    }
+    /// Transfer pre-admitted capacity with the completed real result.
+    pub fn with_memory(mut self, memory: GraphMemoryLease) -> ContentResult<Self> {
+        memory.check(
+            std::mem::size_of::<Self>()
+                + self.nodes.capacity() * std::mem::size_of::<GraphNodeChange>(),
+        )?;
+        self.memory = Some(memory);
+        Ok(self)
     }
     /// Selected graph.
     pub fn scope(&self) -> &GraphScope {
@@ -246,8 +281,14 @@ pub struct GraphPopAck {
     any_seed: bool,
     singleton_self_loop: bool,
     disposition: GraphPopDisposition,
+    memory: Option<GraphMemoryLease>,
 }
 impl GraphPopAck {
+    /// Scoped live result credit, absent for independent compatibility constructors.
+    pub fn reserved_memory_bytes(&self) -> Option<usize> {
+        self.memory.as_ref().map(GraphMemoryLease::bytes)
+    }
+
     /// Checks completed records, descending discovery and terminal root membership.
     pub fn new(
         scope: GraphScope,
@@ -302,7 +343,17 @@ impl GraphPopAck {
             any_seed,
             singleton_self_loop,
             disposition,
+            memory: None,
         })
+    }
+    /// Transfer pre-admitted capacity with the completed real result.
+    pub fn with_memory(mut self, memory: GraphMemoryLease) -> ContentResult<Self> {
+        memory.check(
+            std::mem::size_of::<Self>()
+                + self.members.capacity() * std::mem::size_of::<GraphNode>(),
+        )?;
+        self.memory = Some(memory);
+        Ok(self)
     }
     /// Selected graph.
     pub fn scope(&self) -> &GraphScope {

@@ -1,0 +1,25 @@
+# Verified ALL-ZERO construction authority delivery draft
+
+Status: source-ready,2026-10-01; parent53b6bf741. The worker ran direct rustfmt only. All external tests below are NOT_RUN; no resource/correctness/speed PASS is claimed.
+
+## Actual source and scopes
+
+NEW C1 rows/verified_empty.rs consumes the already issued SpoolPreparation, checks all five declarations0 and actual supplied EOF, and retains its original opaque BindingSourceId. The concrete immutable source owns no file and returns exact0 cursors; selected header/point/ordinal operations refuse. No arbitrary Boolean or raw-token adoption constructor exists.
+
+NEW C1 state/empty_owner,empty_sites,empty_graph,empty_facts,empty_roots implement the real typed Sites/Alias/EffectiveGraph/Fact/Parent/DirectoryRoots interfaces. The owner requires UpdateBase, captures SourceId/base/namespace/root/logicalS, issues and binds one logical StateSelection, admits its fixed boxed data before allocation in GraphMemory, and confirms that original concrete source once. Physical native binding isNone; nativefiles,reservedbytes,allocatedbytes and cleanup events are0. Logical transcript/seal/retirement is distinct from native cleanup. Foreign scopes and all nonempty effects refuse before mutation.
+
+The real coordinator must authenticate the actual Topology/InodeTable, close and verify empty parent declarations/seal/EOF, finish and retire empty Sites/Alias, run the same Update selective graph adjacency/SCC/proof/EOF/retirement, seal/page/retire exact empty Facts, finish DirectoryRoots seal/EOF and final inode consumer, retire Parents, then release Roots before normal filesystem-root emission. Parent retirement precedes Roots release because the shared native owner terminalizes at Roots release. The owner checks these phase dependencies, selected seals and immutable zero EOF; completed() requires logical completion of all phases. It cannot serve the historical graph-only route.
+
+NEW Server service/empty_admission and empty_receive are pure selection and actual body validation helpers. is_empty(&PreparedChanges) checks changes.check() and ALL7 PreparedTotals default; admit(changes,&SpoolPreparation,GraphCapacity) captures a real logical owner without native acquisition. receive(changes,&mut dynRead,SpoolPreparation,&mut VerifiedEmptyState,deadline) validates exact SourceId/base/scope/root, existing v1 tag and EOF through read_prepared_bindings, original-source remainingEOF, deadline, and confirmation. Any row callback refuses. D0/B0 with I1 is native, regardless of apparent unchanged canonical result.
+
+## Exact shared integration for root
+
+Declare rows::verified_empty and export VerifiedEmptyRows. Declare state::empty_{owner,sites,graph,facts,roots} and export VerifiedEmptyState/EmptyPhysical. NamespaceConstructionState applies through its blanket trait once namespace exports land. Declare service::empty_admission/empty_receive. Construction::Empty must retain this typed owner and its original preparation/source; scopes are state.scopes().clone(). Its receive branch calls empty_receive before constructing PreparedBindingUpdate. Its build branch calls update_filesystem_binding_rows_with_namespace_state with that state and scopes, then checks completed() before catalog publication. Logical source cleanup is pure; native ScratchSession/RowSpool close/remove is absent. Existing C2Save/C5/deadline/catalog failure custody stays owned by the existing outer Server. Root owns these shared files and caller wiring; this worker did not edit them.
+
+## Prospective proofs and remaining qualification
+
+content/tests/verified_empty checks real originalSourceId+actualEOF, malformed/nonzero declarations, immutable repeated sourceEOF, once confirmation, another issued source refusal, exact independent empty graph transcript hashes, all selected phase/EOF/retirement order, retained FactPage lease, zero physical fields and nonempty growth refusal. Its scoped table IDs are pure interface proofs, not authenticated-provider composition.
+
+server/tests/verified_empty uses the real Service fixture at configured48MiB, unchanged independent v1 wire[1], actual directory observation while bodyRead runs, full Stage root/base/scope identity, C5 wrong-token refusal and exact UpToDate outcome/unchanged Branch head/base/root, old file bytes/list. Malformedtag,missingtag,trailingbytes and wrongscope preserve the prior Stage and never create a native metadata directory. A real existing-file identity row with D0/B0/I1 opens native authority during body consumption and preserves the canonicalroot; this guards the nonempty boundary.
+
+All owning bodies require root's coherent source freeze and serialized locked C1/Server checks. Native/allocator/physical qualification, aggregate processor caps and speed remain separate; no test source or zero telemetry alone establishes them. No commit,staging,LOC estimate,publication or measured receipt was created by this worker. Root records the exact production LOC snapshots including required SQL and publishes only verified results.

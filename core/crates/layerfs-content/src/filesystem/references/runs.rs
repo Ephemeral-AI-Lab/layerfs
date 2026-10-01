@@ -33,6 +33,7 @@ use crate::filesystem::references::backing::OrderingBacking;
 use crate::filesystem::references::merge::{merge_runs, MergeWork, Run, RunReader, RunScan};
 use crate::filesystem::references::record::{Row, ROW_BYTES};
 use crate::filesystem::references::seek::find_run;
+use crate::filesystem::references::tier_stream::TierHeads;
 
 /// Default bytes of one merge buffer.
 pub const DEFAULT_MERGE_BUFFER_BYTES: usize = 16 * 1024;
@@ -524,42 +525,52 @@ impl<'r, 'b> RunStore<'r, 'b> {
         &self,
         mut visitor: impl FnMut(Row) -> ContentResult<bool>,
     ) -> ContentResult<()> {
-        let mut readers = self
-            .levels
-            .iter()
-            .flatten()
-            .map(|run| RunReader::new(run, self.merge_buffer))
-            .collect::<Vec<_>>();
-        let mut current = readers
-            .iter_mut()
-            .map(|reader| reader.next())
-            .collect::<ContentResult<Vec<_>>>()?;
-        let mut last: Option<u64> = None;
-        loop {
-            let mut best: Option<(usize, u64)> = None;
-            for (index, row) in current.iter().enumerate() {
-                if let Some(row) = row {
-                    let serial = row.serial();
-                    match best {
-                        None => best = Some((index, serial)),
-                        Some((_, previous)) if serial < previous => best = Some((index, serial)),
-                        _ => {}
-                    }
-                }
-            }
-            let Some((index, serial)) = best else {
-                return Ok(());
-            };
-            let row = current[index].take().ok_or(ContentError::UnexpectedEof)?;
-            current[index] = readers[index].next()?;
-            if last == Some(serial) {
-                continue;
-            }
-            last = Some(serial);
+        let mut work = MergeWork::default();
+        let mut heads = TierHeads::new(&self.levels, &mut work)?;
+        while let Some(row) = heads.next(&self.levels, &mut work)? {
             if !visitor(row)? {
                 return Ok(());
             }
         }
+        Ok(())
+    }
+
+    /// Ends lookup buffers before an independently advancing full stream.
+    pub(crate) fn end_lookup_scans(&mut self) {
+        self.scans = Vec::new();
+    }
+
+    /// Moves exact immutable inputs without creating a consolidation output.
+    /// Their logical charge remains until checked backing completion.
+    pub(crate) fn take_stream_runs(&mut self) -> ContentResult<[Option<Run>; MAXIMUM_LEVELS]> {
+        self.reserve(0)?;
+        if self.levels.len() > MAXIMUM_LEVELS {
+            return Err(ContentError::InvalidOrderingRecord("stream tier count"));
+        }
+        let transferred = self.levels.iter().flatten().try_fold(0_u64, |bytes, run| {
+            run.check()?;
+            bytes
+                .checked_add(
+                    run.count
+                        .checked_mul(ROW_BYTES as u64)
+                        .ok_or(ContentError::LengthOverflow)?,
+                )
+                .ok_or(ContentError::LengthOverflow)
+        })?;
+        let input_bytes = self
+            .merge_input_bytes
+            .checked_add(transferred)
+            .ok_or(ContentError::LengthOverflow)?;
+        self.end_lookup_scans();
+        let mut runs = std::array::from_fn(|_| None);
+        for (index, slot) in self.levels.iter_mut().enumerate() {
+            if let Some(run) = slot.take() {
+                runs[index] = Some(run);
+            }
+        }
+        self.merge_input_bytes = input_bytes;
+        self.levels = Vec::new();
+        Ok(runs)
     }
 
     /// Moves the single live run's storage out of the store.
@@ -624,6 +635,23 @@ impl LookupScan {
         })
     }
 }
+
+// Compatibility resident controls stay within the replaced maximum32 tier
+// controls and their minimum96-byte buffers. These are actual Rust layouts,
+// separate from the unchanged encoded-run/pending ordering_bytes ceiling.
+const _: () = {
+    assert!(
+        std::mem::size_of::<TierHeads>()
+            <= MAXIMUM_LEVELS * (std::mem::size_of::<RunReader<'static>>() + ROW_BYTES)
+    );
+    assert!(
+        std::mem::size_of::<[Option<Run>; MAXIMUM_LEVELS]>() + std::mem::size_of::<TierHeads>()
+            <= MAXIMUM_LEVELS
+                * (std::mem::size_of::<Option<Run>>()
+                    + std::mem::size_of::<Option<LookupScan>>()
+                    + ROW_BYTES)
+    );
+};
 
 /// Reads every row of one run in serial order.
 pub fn visit_run(

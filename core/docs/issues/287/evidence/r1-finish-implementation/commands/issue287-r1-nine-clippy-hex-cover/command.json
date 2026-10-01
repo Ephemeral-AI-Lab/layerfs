@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "clippy",
+    "--manifest-path",
+    "core/target/r1-nine-source/core/Cargo.toml",
+    "--locked",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "exit": 101,
+  "wall_ns": 1273771708,
+  "source_inventory_sha256": "a0639b184fd07382ae0673c3e84ac9b03ae9c88fcf4249fabdc6e960aee296ee",
+  "source_changes_during_command": [],
+  "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+}

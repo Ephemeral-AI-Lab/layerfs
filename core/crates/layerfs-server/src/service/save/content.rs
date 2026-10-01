@@ -2,74 +2,98 @@
 use super::file_stream;
 use super::metadata;
 use crate::service::{
+    construction::Construction,
+    construction_file,
     error::{content, storage},
     handler::end_input,
     read::content::id,
 };
 use layerfs_bridge::contract::*;
+use layerfs_content::file::edit::{apply_edits_with_state, apply_edits_without_drafts};
 use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
 use layerfs_content::filesystem::FilesystemObjects;
-use layerfs_content::{apply_edits, construct_stream, EditRequest};
+use layerfs_content::{construct_stream, EditRequest};
+use layerfs_storage::construction_state::DraftAdapter;
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, TimingScope};
 use std::{io::Read, time::Instant};
-pub fn mutate(
+pub(crate) fn mutate(
     store: &Store,
+    construction: &Construction,
     r: &Request,
     input: &mut dyn Read,
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
-    // Validate and spool the frozen final state before acquiring save ownership.
-    let mut file_input = None;
-    if let Operation::SaveFile {
-        base,
-        base_length,
-        length,
-        extents,
-        replacement,
-    }
-    | Operation::SaveFileV2 {
-        base,
-        base_length,
-        length,
-        extents,
-        replacement,
-    } = &r.operation
-    {
-        file_input = Some(scope.child("service.pre_save_input").run(|_| {
-            let file = file_stream::read(
-                input,
-                r.id,
-                base.is_some(),
-                *base_length,
-                *length,
-                *extents,
-                *replacement,
-                deadline,
-                matches!(r.operation, Operation::SaveFileV2 { .. }),
-            )?;
+    // Capture the real metadata owner before body or canonical Save effects.
+    let policy = store.policy().construction();
+    let mut drafts = construction_file::begin(construction, r, policy)?;
+    let prepared = (|| {
+        // Validate and spool the frozen final state before acquiring save ownership.
+        let mut file_input = None;
+        if let Operation::SaveFile {
+            base,
+            base_length,
+            length,
+            extents,
+            replacement,
+        }
+        | Operation::SaveFileV2 {
+            base,
+            base_length,
+            length,
+            extents,
+            replacement,
+        } = &r.operation
+        {
+            file_input = Some(scope.child("service.pre_save_input").run(|_| {
+                let file = file_stream::read(
+                    input,
+                    r.id,
+                    base.is_some(),
+                    *base_length,
+                    *length,
+                    *extents,
+                    *replacement,
+                    deadline,
+                    matches!(r.operation, Operation::SaveFileV2 { .. }),
+                )?;
+                end_input(input)?;
+                Ok::<_, Failure>(file)
+            })?);
+        }
+        if matches!(
+            r.operation,
+            Operation::ConstructSymlink { .. }
+                | Operation::UpdatePortableMetadata { .. }
+                | Operation::ConstructPortableMetadata { .. }
+        ) {
             end_input(input)?;
-            Ok::<_, Failure>(file)
-        })?);
-    }
-    if matches!(
-        r.operation,
-        Operation::ConstructSymlink { .. }
-            | Operation::UpdatePortableMetadata { .. }
-            | Operation::ConstructPortableMetadata { .. }
-    ) {
-        end_input(input)?;
-    }
-    if Instant::now() >= deadline {
-        return Err(Code::Deadline.into());
-    }
-    let mut save = store
-        .begin_save(scope.child("service.begin_save"))
-        .map_err(storage)?;
+        }
+        if Instant::now() >= deadline {
+            return Err(Code::Deadline.into());
+        }
+        Ok::<_, Failure>(file_input)
+    })();
+    let mut file_input = match prepared {
+        Ok(input) => input,
+        Err(error) => return construction_file::close(&mut drafts, Err(error)),
+    };
+    let mut save = match store.begin_save(scope.child("service.begin_save")) {
+        Ok(save) => save,
+        Err(error) => {
+            let mut error = storage(error);
+            if let Some(input) = file_input.as_mut() {
+                if let Err(cleanup) = input.cleanup() {
+                    error.cleanup.get_or_insert(cleanup.code);
+                    error.unknown |= cleanup.unknown;
+                }
+            }
+            return construction_file::close(&mut drafts, Err(error));
+        }
+    };
     let provider = StoreProvider::new(store);
     let mut handoff = SaveHandoff::new(&mut save);
-    let policy = store.policy().construction();
     let capacities = policy.capacities();
     let built = match &r.operation {
         Operation::ConstructSymlink { target } => scope.child("service.symlink").run(|_| {
@@ -87,37 +111,60 @@ pub fn mutate(
                 .run(|_| metadata::save(&provider, r, &mut handoff, deadline))
         }
         Operation::SaveFile { base, length, .. } | Operation::SaveFileV2 { base, length, .. } => {
-            let file_input = file_input.as_ref().ok_or(Code::InvalidInput)?;
-            let built = if let Some(root) = base {
-                let source = file_stream::ResolvedSource {
-                    input: file_input,
-                    provider: &provider,
-                    base: id(root),
-                    deadline,
-                    scope,
-                };
-                apply_edits(
-                    policy,
-                    &capacities,
-                    &provider,
-                    EditRequest {
+            (|| {
+                let file_input = file_input.as_ref().ok_or(Code::InvalidInput)?;
+                let built = if let Some(root) = base {
+                    let source = file_stream::ResolvedSource {
+                        input: file_input,
+                        provider: &provider,
+                        base: id(root),
+                        deadline,
+                        scope,
+                    };
+                    let request = EditRequest {
                         root: id(root),
                         edits: file_input,
                         source: &source,
-                    },
-                    &mut handoff,
-                    scope.child("service.save_file"),
-                )
-            } else {
-                construct_stream(
-                    policy,
-                    &capacities,
-                    &mut file_input.reader(),
-                    &mut handoff,
-                    scope.child("service.save_file"),
-                )
-            };
-            built.map_err(content).and_then(|f| {
+                    };
+                    match &mut drafts {
+                        construction_file::FileAuthority::NoDraft(authority) => {
+                            apply_edits_without_drafts(
+                                policy,
+                                &capacities,
+                                &provider,
+                                request,
+                                &mut handoff,
+                                authority,
+                                scope.child("service.save_file"),
+                            )
+                            .map_err(content)
+                        }
+                        construction_file::FileAuthority::Native(state) => {
+                            let mut authority = DraftAdapter::new(state).map_err(storage)?;
+                            apply_edits_with_state(
+                                policy,
+                                &capacities,
+                                &provider,
+                                request,
+                                &mut handoff,
+                                &mut authority,
+                                scope.child("service.save_file"),
+                            )
+                            .map_err(content)
+                        }
+                        construction_file::FileAuthority::None => Err(Code::Ownership.into()),
+                    }
+                } else {
+                    construct_stream(
+                        policy,
+                        &capacities,
+                        &mut file_input.reader(),
+                        &mut handoff,
+                        scope.child("service.save_file"),
+                    )
+                    .map_err(content)
+                };
+                let f = built?;
                 if f.logical_len != *length {
                     return Err(Code::InvalidInput.into());
                 }
@@ -134,20 +181,33 @@ pub fn mutate(
                     );
                 }
                 Ok((*f.root.as_bytes(), f.logical_len))
-            })
+            })()
         }
         _ => Err(Code::Unsupported.into()),
     };
     let retained = handoff.take_failure();
     drop(handoff);
+    let retained = retained.or_else(|| drafts.take_failure());
     let result = match retained {
         Some(error) => Err(storage(error)),
         None => built,
     };
-    let result = result.and_then(|v| {
-        if let Some(input) = file_input.as_mut() {
-            input.cleanup()?;
+    let result = match (
+        result,
+        file_input.as_mut().map(|input| input.cleanup()).transpose(),
+    ) {
+        (Ok(value), Ok(_)) => Ok(value),
+        (Ok(_), Err(cleanup)) => Err(cleanup),
+        (Err(error), Ok(_)) => Err(error),
+        (Err(mut error), Err(cleanup)) => {
+            error.cleanup.get_or_insert(cleanup.code);
+            error.unknown |= cleanup.unknown;
+            Err(error)
         }
+    };
+    let result = construction_file::close(&mut drafts, result);
+    drop(drafts);
+    let result = result.and_then(|v| {
         if Instant::now() >= deadline {
             Err(Code::Deadline.into())
         } else {
@@ -254,12 +314,11 @@ pub fn mutate(
             })
         }
         Err(mut error) => {
-            if !error.unknown {
-                if let Err(cleanup) = save.abort(scope.child("service.abort")) {
-                    let cleanup = storage(cleanup);
-                    error.cleanup = Some(cleanup.code);
-                    error.unknown |= cleanup.unknown;
-                }
+            // Save decides its own custody; metadata Unknown cannot hide a known abort.
+            if let Err(cleanup) = save.abort(scope.child("service.abort")) {
+                let cleanup = storage(cleanup);
+                error.cleanup.get_or_insert(cleanup.code);
+                error.unknown |= cleanup.unknown;
             }
             Err(error)
         }

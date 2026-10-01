@@ -1,0 +1,228 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.88s
+     Running tests/birth_scope.rs (core/target/r1-eight-owning/debug/deps/birth_scope-a4f7a476225baf87)
+
+running 1 test
+test known_birth_binds_actual_private_read_scope_before_two_owners_can_read ... ok
+
+successes:
+
+successes:
+    known_birth_binds_actual_private_read_scope_before_two_owners_can_read
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/engine_participation.rs (core/target/r1-eight-owning/debug/deps/engine_participation-f3cdda7bff5edb2e)
+
+running 4 tests
+test engine_participation_child ... ok
+test supporting_provider_guarded_store_save_read_and_exact_connection_shapes ... ok
+test supporting_provider_foreign_limit_refuses_new_factory_before_file_effects ... ok
+test supporting_provider_boundaries_preserve_known_prebegin_and_open_transaction_unknown ... ok
+
+successes:
+
+---- supporting_provider_guarded_store_save_read_and_exact_connection_shapes stdout ----
+
+running 1 test
+test engine_participation_child ... engine participation NOT_RUN unsupported provider: stage=Readback cause=unsupported storage policy: SQLite required hard heap limit custody=EngineBootstrapCustody { memstatus_acknowledged: true, initialize_attempted: true, initialized_by_bootstrap: true, previous_hard_heap_limit: Some(0), hard_limit_set_attempted: true, setter_previous_hard_heap_limit: Some(0), hard_limit_installed: false, observed_hard_heap_limit: Some(0), probe_issued: false, probe_free_attempted: false, probe_allocated_bytes: None }
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+ 
+
+---- supporting_provider_foreign_limit_refuses_new_factory_before_file_effects stdout ----
+
+running 1 test
+test engine_participation_child ... engine participation NOT_RUN unsupported provider: stage=Readback cause=unsupported storage policy: SQLite required hard heap limit custody=EngineBootstrapCustody { memstatus_acknowledged: true, initialize_attempted: true, initialized_by_bootstrap: true, previous_hard_heap_limit: Some(0), hard_limit_set_attempted: true, setter_previous_hard_heap_limit: Some(0), hard_limit_installed: false, observed_hard_heap_limit: Some(0), probe_issued: false, probe_free_attempted: false, probe_allocated_bytes: None }
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+ 
+
+---- supporting_provider_boundaries_preserve_known_prebegin_and_open_transaction_unknown stdout ----
+
+running 1 test
+test engine_participation_child ... engine participation NOT_RUN unsupported provider: stage=Readback cause=unsupported storage policy: SQLite required hard heap limit custody=EngineBootstrapCustody { memstatus_acknowledged: true, initialize_attempted: true, initialized_by_bootstrap: true, previous_hard_heap_limit: Some(0), hard_limit_set_attempted: true, setter_previous_hard_heap_limit: Some(0), hard_limit_installed: false, observed_hard_heap_limit: Some(0), probe_issued: false, probe_free_attempted: false, probe_allocated_bytes: None }
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+ 
+
+running 1 test
+test engine_participation_child ... engine participation NOT_RUN unsupported provider: stage=Readback cause=unsupported storage policy: SQLite required hard heap limit custody=EngineBootstrapCustody { memstatus_acknowledged: true, initialize_attempted: true, initialized_by_bootstrap: true, previous_hard_heap_limit: Some(0), hard_limit_set_attempted: true, setter_previous_hard_heap_limit: Some(0), hard_limit_installed: false, observed_hard_heap_limit: Some(0), probe_issued: false, probe_free_attempted: false, probe_allocated_bytes: None }
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+ 
+
+
+successes:
+    engine_participation_child
+    supporting_provider_boundaries_preserve_known_prebegin_and_open_transaction_unknown
+    supporting_provider_foreign_limit_refuses_new_factory_before_file_effects
+    supporting_provider_guarded_store_save_read_and_exact_connection_shapes
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/multi_writer.rs (core/target/r1-eight-owning/debug/deps/multi_writer-ed72526c63265f74)
+
+running 5 tests
+test an_older_schema_is_refused_without_promotion ... ok
+test abort_removes_only_its_save_and_never_lends_a_foreign_dependency ... ok
+test unpublished_foreign_content_cannot_satisfy_a_dependency ... ok
+test separate_threads_prepare_and_finish_the_same_content_successfully ... ok
+test private_saves_overlap_and_publish_in_reverse_order_with_identical_bytes ... ok
+
+successes:
+
+successes:
+    abort_removes_only_its_save_and_never_lends_a_foreign_dependency
+    an_older_schema_is_refused_without_promotion
+    private_saves_overlap_and_publish_in_reverse_order_with_identical_bytes
+    separate_threads_prepare_and_finish_the_same_content_successfully
+    unpublished_foreign_content_cannot_satisfy_a_dependency
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/persistence_failure.rs (core/target/r1-eight-owning/debug/deps/persistence_failure-4b3489fb6621d78b)
+
+running 8 tests
+test an_unknown_write_acknowledgement_cannot_be_induced_without_a_fault_hook ... ok
+test a_missing_direct_dependency_fails_without_writing_a_parent ... ok
+test reading_a_store_that_was_removed_underneath_fails_cleanly ... ok
+test two_private_saves_are_admitted_and_the_third_is_refused ... ok
+test a_terminal_operation_refuses_further_work ... ok
+test a_real_constraint_failure_is_reported_once_and_preserves_retained_objects ... ok
+test cleanup_pages_the_pack_rows_instead_of_deleting_them_in_one_statement ... ok
+test a_late_input_failure_after_an_early_commit_cleans_up_once_and_keeps_earlier_objects ... ok
+
+successes:
+
+successes:
+    a_late_input_failure_after_an_early_commit_cleans_up_once_and_keeps_earlier_objects
+    a_missing_direct_dependency_fails_without_writing_a_parent
+    a_real_constraint_failure_is_reported_once_and_preserves_retained_objects
+    a_terminal_operation_refuses_further_work
+    an_unknown_write_acknowledgement_cannot_be_induced_without_a_fault_hook
+    cleanup_pages_the_pack_rows_instead_of_deleting_them_in_one_statement
+    reading_a_store_that_was_removed_underneath_fails_cleanly
+    two_private_saves_are_admitted_and_the_third_is_refused
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/save_working.rs (core/target/r1-eight-owning/debug/deps/save_working-7804e058b283605b)
+
+running 9 tests
+test actual_shared_reader_unknown_save_birth_retains_prepared_connection_codec_and_credit ... ok
+test real_final_publication_unknown_retains_acquired_owner_and_acknowledged_save_id ... ok
+test actual_unknown_cleanup_retains_connection_owner_and_original_class ... ok
+test selected_singleton_and_standard_use_exact_captured_classes ... ok
+test actual_hardlink_aliases_share_capacity_before_save_birth_and_known_drop_refunds ... ok
+test actual_full_pooled_btree_three_copies_fit_prospective_pair_classes ... ok
+test real_codec_and_index_copy_requested_allocations_release_before_credit ... ok
+test configured_four_sql_slots_do_not_bypass_two_standard_working_grants ... ok
+test real_save_publication_transfers_actual_index_ownership_after_known_commit ... ok
+
+successes:
+
+---- actual_shared_reader_unknown_save_birth_retains_prepared_connection_codec_and_credit stdout ----
+real birthCOMMIT Unknown retained at /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-stage02-save_working_unknown_birth-50433-3/unknown.sqlite; actual native connection/prepared indices/codec and bytecredit kept; no query/rollback/retry/refund
+
+---- real_final_publication_unknown_retains_acquired_owner_and_acknowledged_save_id stdout ----
+real finalCOMMIT Unknown at /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-stage02-save_working_unknown_publication-50433-2/unknown.sqlite; acquired nativeSaveID=Some(1), actual connection/privateindex/codec credit retained; no retry/query/cleanup/refund
+
+---- actual_unknown_cleanup_retains_connection_owner_and_original_class stdout ----
+real cleanupCOMMIT Unknown at /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-stage02-save_working_unknown_cleanup-50433-1/cleanup.sqlite; native connection and class retained after consuming abort; no retry/refund
+
+---- actual_full_pooled_btree_three_copies_fit_prospective_pair_classes stdout ----
+finite full131072 genuine PoolIndex requested Btree allocation: Snapshot { live: [0, 0, 3566592], peak: [0, 0, 3566592], peak_total: 3566592, requested_total: 3566592, allocation_events: 17544, reallocations: 0, largest_request: 288, overflow: false }; triple=Snapshot { live: [0, 0, 10699776], peak: [0, 0, 10699776], peak_total: 10699776, requested_total: 10699776, allocation_events: 52632, reallocations: 0, largest_request: 288, overflow: false }; nominalreported3MiB is not this allocation; private/publication clone values are genuine and exact; arbitrary allocator/global/native/RSS qualification remains open
+
+---- real_codec_and_index_copy_requested_allocations_release_before_credit stdout ----
+actual C2 acquire/known cleanup System requested: Snapshot { live: [16780176, 0, 688464], peak: [16780176, 0, 688464], peak_total: 17468640, requested_total: 17468764, allocation_events: 12, reallocations: 0, largest_request: 16777216, overflow: false }; after-Save=Snapshot { live: [0, 0, 128], peak: [16780176, 0, 688464], peak_total: 17468640, requested_total: 17468764, allocation_events: 12, reallocations: 0, largest_request: 16777216, overflow: false }; retained-request-sizes=[(64, 2)]; after-Store=Snapshot { live: [0, 0, 0], peak: [16780176, 0, 688464], peak_total: 17468640, requested_total: 17468764, allocation_events: 12, reallocations: 0, largest_request: 16777216, overflow: false }; this is requested Rust layouts, not native allocator metadata/RSS/raw consumers/global fit
+
+---- real_save_publication_transfers_actual_index_ownership_after_known_commit stdout ----
+real Save/native publication requested allocation peak=Snapshot { live: [0, 0, 688256], peak: [0, 0, 18158452], peak_total: 18158452, requested_total: 18198999, allocation_events: 69, reallocations: 3, largest_request: 16777216, overflow: false }; actual Store-last-owner released=Snapshot { live: [0, 0, 0], peak: [0, 0, 18158452], peak_total: 18158452, requested_total: 18198999, allocation_events: 69, reallocations: 3, largest_request: 16777216, overflow: false }; ordinary v1 roots preserved; no rawconsumer/native/RSS/global qualification
+
+
+successes:
+    actual_full_pooled_btree_three_copies_fit_prospective_pair_classes
+    actual_hardlink_aliases_share_capacity_before_save_birth_and_known_drop_refunds
+    actual_shared_reader_unknown_save_birth_retains_prepared_connection_codec_and_credit
+    actual_unknown_cleanup_retains_connection_owner_and_original_class
+    configured_four_sql_slots_do_not_bypass_two_standard_working_grants
+    real_codec_and_index_copy_requested_allocations_release_before_credit
+    real_final_publication_unknown_retains_acquired_owner_and_acknowledged_save_id
+    real_save_publication_transfers_actual_index_ownership_after_known_commit
+    selected_singleton_and_standard_use_exact_captured_classes
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/write_admission.rs (core/target/r1-eight-owning/debug/deps/write_admission-1370c08f7c26d6be)
+
+running 11 tests
+test a_schema_seven_store_is_refused_without_promotion ... ok
+test the_shipped_schema_constrains_the_persisted_budget ... ok
+test a_retained_owner_above_the_budget_is_never_bypassed ... ok
+test a_definite_failure_at_a_higher_budget_releases_only_its_own_slot ... FAILED
+test a_raised_budget_admits_that_many_writers_and_refuses_the_next ... FAILED
+test a_fresh_store_admits_its_default_budget_and_refuses_the_next_writer ... ok
+test an_unsupported_budget_is_refused_without_changing_the_store ... FAILED
+test eight_concurrent_writers_publish_duplicate_ownership_and_read_back ... FAILED
+test a_lowered_budget_keeps_retained_ownership_and_counts_it ... ok
+test content_written_under_a_higher_budget_is_readable_after_it_is_lowered ... ok
+test every_supported_setting_admits_its_budget_and_publishes_correctly ... FAILED
+
+successes:
+
+successes:
+    a_fresh_store_admits_its_default_budget_and_refuses_the_next_writer
+    a_lowered_budget_keeps_retained_ownership_and_counts_it
+    a_retained_owner_above_the_budget_is_never_bypassed
+    a_schema_seven_store_is_refused_without_promotion
+    content_written_under_a_higher_budget_is_readable_after_it_is_lowered
+    the_shipped_schema_constrains_the_persisted_budget
+
+failures:
+
+---- a_definite_failure_at_a_higher_budget_releases_only_its_own_slot stdout ----
+
+thread 'a_definite_failure_at_a_higher_budget_releases_only_its_own_slot' panicked at crates/layerfs-storage/tests/write_admission.rs:208:68:
+called `Result::unwrap()` on an `Err` value: OwnershipUnavailable
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- a_raised_budget_admits_that_many_writers_and_refuses_the_next stdout ----
+
+thread 'a_raised_budget_admits_that_many_writers_and_refuses_the_next' panicked at crates/layerfs-storage/tests/write_admission.rs:75:41:
+writer 2 is admitted: save ownership unavailable
+
+---- an_unsupported_budget_is_refused_without_changing_the_store stdout ----
+
+thread 'an_unsupported_budget_is_refused_without_changing_the_store' panicked at crates/layerfs-storage/tests/write_admission.rs:269:68:
+called `Result::unwrap()` on an `Err` value: OwnershipUnavailable
+
+---- eight_concurrent_writers_publish_duplicate_ownership_and_read_back stdout ----
+
+thread 'eight_concurrent_writers_publish_duplicate_ownership_and_read_back' panicked at crates/layerfs-storage/tests/write_admission.rs:104:68:
+called `Result::unwrap()` on an `Err` value: OwnershipUnavailable
+
+---- every_supported_setting_admits_its_budget_and_publishes_correctly stdout ----
+
+thread 'every_supported_setting_admits_its_budget_and_publishes_correctly' panicked at crates/layerfs-storage/tests/write_admission.rs:300:45:
+budget 3: writer 2: save ownership unavailable
+
+
+failures:
+    a_definite_failure_at_a_higher_budget_releases_only_its_own_slot
+    a_raised_budget_admits_that_many_writers_and_refuses_the_next
+    an_unsupported_budget_is_refused_without_changing_the_store
+    eight_concurrent_writers_publish_duplicate_ownership_and_read_back
+    every_supported_setting_admits_its_budget_and_publishes_correctly
+
+test result: FAILED. 6 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+error: test failed, to rerun pass `-p layerfs-storage --test write_admission`

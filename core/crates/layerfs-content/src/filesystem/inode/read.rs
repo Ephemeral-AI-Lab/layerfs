@@ -12,7 +12,9 @@ use crate::error::{ContentError, ContentResult};
 use crate::filesystem::limits::MAXIMUM_PAGE_BYTES;
 use crate::filesystem::sorted::format::{CompactInodes, Format};
 use crate::object::inode_leaf::InodeValue;
-use crate::object::{AuthenticatedObjects, ObjectId};
+use crate::object::{
+    AuthenticatedObjects, CanonicalBudget, CanonicalReadKind, CanonicalReadPermit, ObjectId,
+};
 
 /// Work one inode read performed.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -88,6 +90,39 @@ pub fn lookup_many(
     serials: &[u64],
     work: &mut InodeReadWork,
 ) -> ContentResult<Vec<Option<InodeValue>>> {
+    lookup_many_with(table, serials, work, |ids| {
+        Ok(reader.read_canonical_batch(ids)?.into_iter())
+    })
+}
+
+/// Same inode descent with admitted canonical output whose credit follows data.
+/// This is a returned-data profile, separate from provider/cache/native qualification.
+pub fn lookup_many_owned(
+    reader: &dyn AuthenticatedObjects,
+    table: InodeTable,
+    serials: &[u64],
+    work: &mut InodeReadWork,
+    budget: &CanonicalBudget,
+) -> ContentResult<Vec<Option<InodeValue>>> {
+    lookup_many_with(table, serials, work, |ids| {
+        let capacity = ids
+            .len()
+            .checked_mul(MAXIMUM_PAGE_BYTES)
+            .ok_or(ContentError::LengthOverflow)?;
+        let permit = CanonicalReadPermit::new(budget, ids.len(), capacity, CanonicalReadKind::Any)?;
+        let (result, _) = layerfs_telemetry::timer::Timing::disabled("inode.acquire", |scope| {
+            reader.read_canonical_owned(ids, permit, scope.child("inode.acquire"))
+        });
+        Ok(result?.into_iter())
+    })
+}
+
+fn lookup_many_with<T: std::ops::Deref<Target = [u8]>>(
+    table: InodeTable,
+    serials: &[u64],
+    work: &mut InodeReadWork,
+    mut acquire: impl FnMut(&[ObjectId]) -> ContentResult<std::vec::IntoIter<T>>,
+) -> ContentResult<Vec<Option<InodeValue>>> {
     let mut answers = vec![None; serials.len()];
     if serials.is_empty() {
         return Ok(answers);
@@ -105,7 +140,7 @@ pub fn lookup_many(
             return Err(ContentError::MappingDepthExceeded);
         }
         let ids = level.iter().map(|(id, ..)| *id).collect::<Vec<_>>();
-        let pages = reader.read_canonical_batch(&ids)?;
+        let pages = acquire(&ids)?;
         if pages.len() != ids.len() {
             return Err(ContentError::BatchCardinality {
                 requested: ids.len(),

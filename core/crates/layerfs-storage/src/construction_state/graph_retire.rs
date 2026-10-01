@@ -12,7 +12,7 @@ pub(crate) fn prepare(connection: &Connection, graph: &Graph) -> StorageResult<G
             "construction scratch graph retirement phase",
         ));
     }
-    let mut attempt = GraphAttempt::new(GraphAttemptKind::Retire, graph, GraphStage::Retiring);
+    let mut attempt = GraphAttempt::new(GraphAttemptKind::Retire, graph, GraphStage::Retiring)?;
     let node_count = graph.remaining_nodes.min(128) as usize;
     let rows = graph_index::read_nodes(connection, &graph.scope, graph.after_node, node_count)?;
     if rows.len() != node_count {
@@ -22,7 +22,7 @@ pub(crate) fn prepare(connection: &Connection, graph: &Graph) -> StorageResult<G
     }
     for value in rows {
         attempt.proposed_node = Some(value.key());
-        attempt.node(Some(value), None);
+        attempt.node(Some(value), None)?;
     }
     let edge_count = graph.remaining_edges.min((128 - node_count) as u64) as usize;
     let rows = graph_index::read_edges(connection, &graph.scope, graph.after_edge, edge_count)?;
@@ -33,7 +33,7 @@ pub(crate) fn prepare(connection: &Connection, graph: &Graph) -> StorageResult<G
     }
     for value in rows {
         attempt.proposed_edge = Some(value.key());
-        attempt.edge(Some(value), None);
+        attempt.edge(Some(value), None)?;
     }
     attempt.remaining_nodes.1 -= node_count as u64;
     attempt.remaining_edges.1 -= edge_count as u64;
@@ -52,9 +52,13 @@ pub(crate) fn prepare(connection: &Connection, graph: &Graph) -> StorageResult<G
 
 pub(crate) fn commit(
     connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     graph: &Graph,
     attempt: &GraphAttempt,
 ) -> StorageResult<()> {
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         graph_index::verify(connection, graph)?;
@@ -72,5 +76,5 @@ pub(crate) fn commit(
         { return Err(StorageError::Integrity("construction scratch graph retirement acknowledgement")); }
         Ok(())
     })();
-    profile::finish_write(connection, result)
+    profile::finish_write_guarded(connection, result, engine)
 }

@@ -1,0 +1,11 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.65s
+     Running tests/scratch_pool.rs (core/target/r1-eight-owning/debug/deps/scratch_pool-2765a7d2144a6920)
+
+running 3 tests
+test unix::real_reader_commit_unknown_preserves_complete_old_proposed_context_and_s ... ok
+test unix::same_live_authority_fresh_token_source_full_header_and_stable_native_birth ... ok
+test unix::exact16_48_classes_occupy_fixed_slots_and_refuse_different_class_before_birth ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.02s
+

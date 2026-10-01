@@ -24,10 +24,19 @@ pub fn abandon(
     save_id: i64,
     arbitration: &Mutex<()>,
 ) -> StorageResult<CleanupReport> {
+    abandon_participating(connection, save_id, arbitration, None)
+}
+pub(crate) fn abandon_participating(
+    connection: &Connection,
+    save_id: i64,
+    arbitration: &Mutex<()>,
+    engine: Option<&'static crate::engine::EngineGuard>,
+) -> StorageResult<CleanupReport> {
     let mut report = CleanupReport::default();
     for kind in ["objects", "content_signatures", "object_packs"] {
         loop {
             let _guard = ownership::lock(arbitration)?;
+            ownership::engine_boundary(connection, engine)?;
             write::begin_immediate(connection)?;
             let private: bool = connection.query_row(
                 "SELECT EXISTS(SELECT 1 FROM saves WHERE save_id=?1 AND active_slot IS NOT NULL)",
@@ -53,9 +62,11 @@ pub fn abandon(
                 )?,
             };
             if removed == 0 {
+                ownership::engine_boundary(connection, engine)?;
                 write::rollback(connection)?;
                 break;
             }
+            ownership::engine_boundary(connection, engine)?;
             write::commit(connection)?;
             report.pages += 1;
             match kind {
@@ -66,6 +77,7 @@ pub fn abandon(
         }
     }
     let _guard = ownership::lock(arbitration)?;
+    ownership::engine_boundary(connection, engine)?;
     write::begin_immediate(connection)?;
     if connection.execute(
         "DELETE FROM saves WHERE save_id=?1 AND active_slot IS NOT NULL",
@@ -74,6 +86,7 @@ pub fn abandon(
     {
         return Err(StorageError::Integrity("cleanup save cardinality"));
     }
+    ownership::engine_boundary(connection, engine)?;
     write::commit(connection)?;
     Ok(report)
 }

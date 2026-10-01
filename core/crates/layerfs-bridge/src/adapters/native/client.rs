@@ -13,23 +13,44 @@ pub struct Client {
     connection: Connection,
     previous: u64,
     closed: bool,
+    purpose: super::purpose::Purpose,
 }
 impl Client {
-    pub fn new(mut connection: Connection) -> Result<Self, Failure> {
+    pub fn new(connection: Connection) -> Result<Self, Failure> {
+        Self::negotiate(connection, super::purpose::Hello::legacy())
+    }
+    /// Select one authenticated v2 purpose for this whole connection.
+    pub fn for_purpose(
+        connection: Connection,
+        purpose: super::purpose::Purpose,
+    ) -> Result<Self, Failure> {
+        Self::negotiate(connection, super::purpose::Hello::selected(purpose))
+    }
+    fn negotiate(
+        mut connection: Connection,
+        selected: super::purpose::Hello,
+    ) -> Result<Self, Failure> {
         let hello = Frame {
             kind: Kind::Hello,
             id: 0,
-            bytes: 1u16.to_be_bytes().to_vec(),
+            bytes: selected.encode(),
         };
         connection.send.write(&hello)?;
-        let response = connection.receive.read()?;
+        let response = connection.receive.read_bounded(4)?;
         if response.kind != Kind::Hello || response.id != 0 || response.bytes != hello.bytes {
             return Err(Code::Unsupported.into());
         }
+        connection
+            .receive
+            .select_limit(selected.purpose().frame_limit());
+        connection
+            .send
+            .select_limit(selected.purpose().frame_limit());
         Ok(Self {
             connection,
             previous: 0,
             closed: false,
+            purpose: selected.purpose(),
         })
     }
     pub fn call(
@@ -52,6 +73,7 @@ impl Client {
         deadline: Instant,
     ) -> Result<Response, Failure> {
         r.validate()?;
+        self.purpose.check(r)?;
         if self.closed || r.id <= self.previous {
             return Err(Code::InvalidInput.into());
         }

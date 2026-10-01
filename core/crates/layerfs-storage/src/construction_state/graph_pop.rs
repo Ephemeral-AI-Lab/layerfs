@@ -35,6 +35,10 @@ pub(crate) fn prepare(
             actual: 410,
         });
     }
+    let mut attempt = GraphAttempt::new(GraphAttemptKind::Pop, graph, graph.stage)?;
+    let memory = graph
+        .memory
+        .reserve(std::mem::size_of::<GraphPopAck>() + count * std::mem::size_of::<GraphNode>())?;
     let mut records = graph_index::window(count)?;
     let mut statement = connection.prepare(graph_index::STACK)?;
     let mut rows = statement.query(rusqlite::params![i64::from(root.discovery()), count as i64])?;
@@ -43,7 +47,6 @@ pub(crate) fn prepare(
     } else {
         u64::from(graph.solver.last_stack)
     };
-    let mut attempt = GraphAttempt::new(GraphAttemptKind::Pop, graph, graph.stage);
     attempt.selected_children[0] = Some(root);
     attempt.logical_items = 1;
     let mut solver = graph.solver;
@@ -74,7 +77,7 @@ pub(crate) fn prepare(
         }
         previous = u64::from(old.discovery());
         let new = old.complete(&graph.scope, solver.boundary)?;
-        attempt.node(Some(old), Some(new));
+        attempt.node(Some(old), Some(new))?;
         records.push(new);
         solver.popped = solver.popped.checked_add(1).ok_or(StorageError::Integrity(
             "construction scratch graph pop count",
@@ -112,7 +115,8 @@ pub(crate) fn prepare(
             solver.singleton_loop,
         )?,
         disposition,
-    )?;
+    )?
+    .with_memory(memory)?;
     if complete {
         solver.scc_root = 0;
         solver.boundary = 0;
@@ -127,9 +131,13 @@ pub(crate) fn prepare(
 
 pub(crate) fn commit(
     connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     graph: &Graph,
     attempt: &GraphAttempt,
 ) -> StorageResult<()> {
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         graph_index::verify(connection, graph)?;
@@ -179,5 +187,5 @@ pub(crate) fn commit(
         }
         Ok(())
     })();
-    profile::finish_write(connection, result)
+    profile::finish_write_guarded(connection, result, engine)
 }

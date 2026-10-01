@@ -38,7 +38,7 @@ pub struct Service {
     stores: Vec<StoreAccess>,
     import_root: Option<PathBuf>,
     admission: Admission,
-    construction: Vec<Construction>,
+    pub(super) construction: Vec<Arc<Construction>>,
     recorder: OperationRecorder,
 }
 impl Service {
@@ -69,13 +69,20 @@ impl Service {
             }
         }
         let admission = Admission::new(&stores)?;
-        let construction = stores
-            .iter()
-            .enumerate()
-            .map(|(index, store)| {
-                Construction::new(&store.store, admission.content_limit(index), capacity)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut construction: Vec<Arc<Construction>> = Vec::with_capacity(stores.len());
+        for (index, store) in stores.iter().enumerate() {
+            let shared = stores[..index]
+                .iter()
+                .position(|prior| prior.store.same_authority(&store.store));
+            construction.push(match shared {
+                Some(prior) => Arc::clone(&construction[prior]),
+                None => Arc::new(Construction::new(
+                    &store.store,
+                    admission.content_limit(index),
+                    capacity,
+                )?),
+            });
+        }
         Ok(Self {
             stores,
             import_root: None,
@@ -259,7 +266,7 @@ pub(crate) fn dispatch(
         | Operation::ConstructSymlink { .. }
         | Operation::UpdatePortableMetadata { .. }
         | Operation::ConstructPortableMetadata { .. } => {
-            save::content::mutate(store, r, input, deadline, scope)
+            save::content::mutate(store, construction, r, input, deadline, scope)
         }
         Operation::ReadFile { .. } | Operation::Inspect { .. } => {
             end_input(input)?;

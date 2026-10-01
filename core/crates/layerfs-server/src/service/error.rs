@@ -3,6 +3,9 @@ use layerfs_bridge::contract::{Code, Failure};
 use layerfs_content::ContentError as C;
 use layerfs_storage::StorageError as S;
 pub fn content(e: C) -> Failure {
+    if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+        eprintln!("LFS_CONTENT_REFUSAL original={e:?}");
+    }
     match e {
         C::MissingObject => Code::MissingObject,
         C::PathNotFound => Code::PathNotFound,
@@ -19,6 +22,9 @@ pub fn content(e: C) -> Failure {
     .into()
 }
 pub fn storage(e: S) -> Failure {
+    if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+        eprintln!("LFS_STORAGE_REFUSAL original={e:?}");
+    }
     match e {
         S::Content(e) => content(e),
         S::ObjectMissing(_) | S::MissingDependency { .. } => Code::MissingObject.into(),

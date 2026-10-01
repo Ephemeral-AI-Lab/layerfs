@@ -10,7 +10,10 @@
 
 use std::cell::{Cell, RefCell};
 
-use layerfs_content::object::{AuthenticatedObjects, ObjectId};
+use layerfs_content::object::{
+    AuthenticatedObjects, CanonicalOwnership, CanonicalReadKind, CanonicalReadPermit, ObjectId,
+    OwnedCanonicalBatch,
+};
 use layerfs_content::{ContentError, ContentResult};
 use layerfs_telemetry::timer::{Timing, TimingScope};
 
@@ -80,17 +83,34 @@ pub struct StoreProvider<'a> {
     /// the figure a decoded-group cache is measured against.
     group_decodes: Cell<u64>,
     pooled: Cell<crate::encoding::pool::PoolReadCounters>,
+    owned_profile: OwnedReadProfile,
+}
+
+/// Prospectively chosen provider ownership profile; never an error fallback.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OwnedReadProfile {
+    /// Returned/copy capacity ownership under the larger32MiB compatibility API.
+    /// Provider cache/work/native/whole-process qualification remains open.
+    Compatibility32,
+    /// Required8MiB whole-reader profile is unsupported before native effects.
+    Strict8,
 }
 
 impl<'a> StoreProvider<'a> {
     /// Wraps one Store as a provider with no session yet.
     pub const fn new(store: &'a Store) -> Self {
+        Self::with_owned_profile(store, OwnedReadProfile::Compatibility32)
+    }
+
+    /// Choose the profile before its first provider effect.
+    pub const fn with_owned_profile(store: &'a Store, owned_profile: OwnedReadProfile) -> Self {
         Self {
             store,
             session: RefCell::new(None),
             opens: Cell::new(0),
             group_decodes: Cell::new(0),
             pooled: Cell::new(crate::encoding::pool::PoolReadCounters::new()),
+            owned_profile,
         }
     }
 
@@ -120,6 +140,26 @@ impl<'a> StoreProvider<'a> {
         ids: &[ObjectId],
         scope: TimingScope<'_>,
     ) -> StorageResult<(Vec<Vec<u8>>, StoreReadCounters)> {
+        self.read_wave_in_window(
+            ids,
+            crate::policy::READ_CANONICAL_BYTES_LIMIT,
+            CanonicalReadKind::Any,
+            scope,
+        )
+    }
+
+    fn read_wave_in_window(
+        &self,
+        ids: &[ObjectId],
+        output_capacity: usize,
+        kind: CanonicalReadKind,
+        scope: TimingScope<'_>,
+    ) -> StorageResult<(Vec<Vec<u8>>, StoreReadCounters)> {
+        if self.owned_profile == OwnedReadProfile::Strict8 {
+            return Err(StorageError::UnsupportedPolicy {
+                field: "strict8 C2 read working profile",
+            });
+        }
         scope.run(|read_scope| {
             // The wave's declared bound is checked before the session exists, so a
             // refused demand opens nothing.
@@ -127,12 +167,17 @@ impl<'a> StoreProvider<'a> {
             let mut slot = self.session.borrow_mut();
             let opened = slot.is_none();
             if opened {
-                *slot = Some(ReadSession::open(self.store.path())?);
+                *slot = Some(match self.store.engine_guard() {
+                    Some(engine) => {
+                        ReadSession::open_participating(self.store.path(), Some(engine))?
+                    }
+                    None => ReadSession::open(self.store.path())?,
+                });
             }
             let session = slot.as_mut().expect("the session was just opened");
-            let (values, counters) = read_scope
-                .child("storage.read")
-                .run(|_| session.read(ids, &self.store.capacities()))?;
+            let (values, counters) = read_scope.child("storage.read").run(|_| {
+                session.read_in_window(ids, &self.store.capacities(), output_capacity, kind)
+            })?;
             if opened {
                 self.opens.set(self.opens.get() + 1);
             }
@@ -161,6 +206,18 @@ impl<'a> StoreProvider<'a> {
 }
 
 impl AuthenticatedObjects for StoreProvider<'_> {
+    fn read_canonical_owned(
+        &self,
+        ids: &[ObjectId],
+        permit: CanonicalReadPermit,
+        scope: TimingScope<'_>,
+    ) -> ContentResult<OwnedCanonicalBatch> {
+        permit.check_count(ids.len())?;
+        let (values, _) = self
+            .read_wave_in_window(ids, permit.maximum_capacity(), permit.kind(), scope)
+            .map_err(provider_error)?;
+        OwnedCanonicalBatch::from_vectors(permit, values, CanonicalOwnership::AdmittedOutput)
+    }
     /// Reads a wave under a disabled node.
     ///
     /// A provider call reached without an operation tree still performs the real

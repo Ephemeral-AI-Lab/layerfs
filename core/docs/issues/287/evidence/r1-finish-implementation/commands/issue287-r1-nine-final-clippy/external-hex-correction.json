@@ -1,0 +1,5 @@
+{
+  "path": "core/crates/layerfs-server/tests/engine_participation.rs",
+  "sha256": "cc0d399b5a4cca1d5eb1b6ad6fd61dc75736715edc599a4b6fbc29709d950826",
+  "cause": "equivalent bounded external hex helper uses one String rather than formatting temporary Strings"
+}

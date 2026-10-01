@@ -6,7 +6,9 @@ use super::{
 };
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::rows::PreparedBindingRows;
-use crate::filesystem::state::{GraphConstructionScopes, GraphConstructionState, GraphMode};
+use crate::filesystem::state::{
+    AliasGraphConstructionState, GraphConstructionScopes, GraphConstructionState, GraphMode,
+};
 use crate::object::AuthenticatedObjects;
 use std::collections::BTreeMap;
 /// Actual construction/solver work; records and attempts are separate from physical memory.
@@ -86,15 +88,62 @@ pub(crate) fn check_graph_selected<'a, S: GraphConstructionState + ?Sized>(
     state: &mut S,
     scopes: &GraphConstructionScopes,
 ) -> ContentResult<CheckedTopologyInput<'a>> {
+    check_graph_selected_by(
+        reader,
+        input,
+        unreachable,
+        work,
+        state,
+        scopes,
+        site_aliases::check::<S>,
+    )
+}
+
+pub(crate) fn check_alias_graph_selected<'a, S: AliasGraphConstructionState + ?Sized>(
+    reader: &dyn AuthenticatedObjects,
+    input: &'a dyn PreparedBindingRows,
+    unreachable: &BTreeMap<u64, ()>,
+    work: &mut ValidationWork,
+    state: &mut S,
+    scopes: &GraphConstructionScopes,
+) -> ContentResult<CheckedTopologyInput<'a>> {
+    check_graph_selected_by(
+        reader,
+        input,
+        unreachable,
+        work,
+        state,
+        scopes,
+        site_aliases::check_frontier::<S>,
+    )
+}
+
+type AliasChecker<S> = for<'a> fn(
+    site_aliases::SiteAliasInput<'a>,
+    &mut ValidationWork,
+    &mut ValidationState,
+    &mut S,
+) -> ContentResult<()>;
+
+fn check_graph_selected_by<'a, S: GraphConstructionState + ?Sized>(
+    reader: &dyn AuthenticatedObjects,
+    input: &'a dyn PreparedBindingRows,
+    unreachable: &BTreeMap<u64, ()>,
+    work: &mut ValidationWork,
+    state: &mut S,
+    scopes: &GraphConstructionScopes,
+    aliases: AliasChecker<S>,
+) -> ContentResult<CheckedTopologyInput<'a>> {
     let outcome = (|| {
-        let (topology, mut facts) = site_facts(reader, input, unreachable, work, state, scopes)?;
+        let (topology, mut facts) =
+            site_facts(reader, input, unreachable, work, state, scopes, aliases)?;
         check_root_checks(input)?;
         effective(
             super::graph_build::GraphInput {
                 reader,
                 input,
                 topology,
-                unreachable,
+                unreachable: crate::filesystem::state::EligibilityView::Legacy(unreachable),
             },
             work,
             &mut facts,
@@ -116,6 +165,7 @@ fn site_facts<S: GraphConstructionState + ?Sized>(
     work: &mut ValidationWork,
     state: &mut S,
     scopes: &GraphConstructionScopes,
+    aliases: AliasChecker<S>,
 ) -> ContentResult<(FilesystemTopology, ValidationState)> {
     check_binding_input(input)?;
     let declared = claim_shape(input)?;
@@ -137,14 +187,14 @@ fn site_facts<S: GraphConstructionState + ?Sized>(
     let mut sites = sites.close_membership()?;
     let members = sites.members().clone();
     let before = work.inode_pages_read;
-    let outcome = site_aliases::check(
+    let outcome = aliases(
         site_aliases::SiteAliasInput {
             reader,
             input,
             topology: &topology,
             members: &members,
             active_stored: sites.active_stored(),
-            unreachable,
+            unreachable: crate::filesystem::state::EligibilityView::Legacy(unreachable),
         },
         work,
         &mut facts,
@@ -162,14 +212,42 @@ fn effective<S: GraphConstructionState + ?Sized>(
     state: &mut S,
     scopes: &GraphConstructionScopes,
 ) -> ContentResult<()> {
+    effective_with(
+        context,
+        work,
+        facts,
+        state,
+        scopes,
+        super::fact_access::FactAccess::compatibility(),
+        crate::filesystem::state::ParentCalls::compatibility(),
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) fn effective_with<S: GraphConstructionState + ?Sized>(
+    context: super::graph_build::GraphInput<'_>,
+    work: &mut ValidationWork,
+    facts: &mut ValidationState,
+    state: &mut S,
+    scopes: &GraphConstructionScopes,
+    access: super::fact_access::FactAccess<S>,
+    parents: crate::filesystem::state::ParentCalls<S>,
+) -> ContentResult<()> {
     let before = work.inode_pages_read;
     let outcome = (|| {
         let input = context.input;
         let unreachable = context.unreachable;
-        let seal = super::graph_build::build(context, work, facts, state, scopes.graph())?;
+        let seal = super::graph_build::build_with(
+            context,
+            work,
+            facts,
+            state,
+            scopes.graph(),
+            access,
+            parents,
+        )?;
         super::graph_verify::adjacency(state, &seal, work)?;
         if scopes.graph().subject().mode() == GraphMode::Fresh {
-            super::graph_verify::fresh(input, unreachable, state, &seal)?;
+            super::graph_verify::fresh_with(input, unreachable, state, &seal, parents)?;
         } else {
             super::graph_solve::solve_selected(state, &seal, &mut work.graph)?;
         }

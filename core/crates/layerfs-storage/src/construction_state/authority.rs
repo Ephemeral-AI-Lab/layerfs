@@ -3,8 +3,11 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use layerfs_content::file::edit::DraftCapacity;
 use layerfs_content::filesystem::rows::BindingSourceId;
-use layerfs_content::filesystem::state::{GraphSubject, StateSelection};
+use layerfs_content::filesystem::state::{
+    AliasCapacity, CanonicalCapacity, FactCapacity, GraphSubject, StateSelection,
+};
 
 use crate::error::{StorageError, StorageResult};
 
@@ -16,6 +19,10 @@ use super::status::{ScratchDisposition, ScratchOwnerStatus};
 pub(crate) enum Slot {
     Empty,
     Active(ScratchOwnerStatus),
+    Idle {
+        resource: Resource,
+        status: ScratchOwnerStatus,
+    },
     Retained {
         resource: Box<Resource>,
         status: ScratchOwnerStatus,
@@ -25,8 +32,9 @@ pub(crate) enum Slot {
 
 pub(crate) struct Shared {
     pub(crate) directory: Arc<Mutex<NativeDirectory>>,
-    pub(crate) slots: Mutex<Vec<Slot>>,
+    pub(crate) slots: Mutex<super::pool_state::Slots>,
     pub(crate) limit: usize,
+    pub(crate) engine: Option<&'static crate::engine::EngineGuard>,
 }
 
 /// Admits exact private DirectoryRoots owners before file creation or SQL.
@@ -44,6 +52,27 @@ impl ScratchAuthority {
     /// Opens/checks the owned base and prepares a fresh private directory name.
     /// No scratch directory/file or SQL effects occur until admitted `begin`.
     pub fn new(parent: &Path, maximum_owners: usize) -> StorageResult<Self> {
+        Self::new_internal(parent, maximum_owners, None)
+    }
+
+    /// Explicit participation in the established actual process engine owner.
+    /// Scratch keeps its own512KiB connection profile and claims no whole-shape fit.
+    pub fn new_guarded(
+        parent: &Path,
+        maximum_owners: usize,
+        guard: &'static crate::engine::EngineGuard,
+    ) -> StorageResult<Self> {
+        Self::new_internal(parent, maximum_owners, Some(guard))
+    }
+
+    fn new_internal(
+        parent: &Path,
+        maximum_owners: usize,
+        engine: Option<&'static crate::engine::EngineGuard>,
+    ) -> StorageResult<Self> {
+        if let Some(guard) = engine {
+            guard.validate()?;
+        }
         if maximum_owners == 0
             || maximum_owners > crate::policy::MAX_CONCURRENT_WRITES_LIMIT as usize
         {
@@ -61,13 +90,22 @@ impl ScratchAuthority {
                 limit: maximum_owners as u64,
                 actual: maximum_owners as u64,
             })?;
+        if slots.capacity() != maximum_owners {
+            return Err(StorageError::Integrity(
+                "construction scratch owner table actual capacity",
+            ));
+        }
         slots.resize_with(maximum_owners, || Slot::Empty);
         let directory = NativeDirectory::prepare(parent)?;
         Ok(Self {
             shared: Arc::new(Shared {
                 directory: Arc::new(Mutex::new(directory)),
-                slots: Mutex::new(slots),
+                slots: Mutex::new(super::pool_state::Slots {
+                    entries: slots,
+                    counters: super::pool_state::PoolCounters::default(),
+                }),
                 limit: maximum_owners,
+                engine,
             }),
         })
     }
@@ -138,15 +176,80 @@ impl ScratchAuthority {
         self.admit(selector, plan, Some(subject))
     }
 
+    /// Capture aliases and graph in the same admitted native/working owner.
+    pub fn begin_alias_graph(
+        &self,
+        selector: [u8; 32],
+        directories: u64,
+        bindings: u64,
+        subject: GraphSubject,
+        aliases: AliasCapacity,
+    ) -> StorageResult<ScratchSession> {
+        let plan = Plan::alias_graph(directories, bindings, &subject, aliases)?;
+        self.admit(selector, plan, Some(subject))
+    }
+    /// Capture independent facts and all simultaneous namespace tables in one S.
+    pub fn begin_namespace(
+        &self,
+        selector: [u8; 32],
+        directories: u64,
+        bindings: u64,
+        subject: GraphSubject,
+        aliases: AliasCapacity,
+        facts: FactCapacity,
+    ) -> StorageResult<ScratchSession> {
+        let plan = Plan::namespace_graph(directories, bindings, &subject, aliases, facts)?;
+        self.admit(selector, plan, Some(subject))
+    }
+
+    /// Capture namespace, canonical counts and release in one admitted native S.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "captured independent private profile classes"
+    )]
+    pub fn begin_canonical(
+        &self,
+        selector: [u8; 32],
+        directories: u64,
+        bindings: u64,
+        subject: GraphSubject,
+        aliases: AliasCapacity,
+        facts: FactCapacity,
+        canonical: CanonicalCapacity,
+    ) -> StorageResult<ScratchSession> {
+        let plan = Plan::canonical(directories, bindings, &subject, aliases, facts, canonical)?;
+        self.admit(selector, plan, Some(subject))
+    }
+
+    /// Capture the dedicated metadata draft profile before native/SQL effects.
+    pub fn begin_drafts(
+        &self,
+        selector: [u8; 32],
+        capacity: DraftCapacity,
+    ) -> StorageResult<ScratchSession> {
+        let capacity = capacity.validated()?;
+        self.admit(selector, Plan::Drafts { capacity }, None)
+    }
+
     fn admit(
         &self,
         selector: [u8; 32],
         plan: Plan,
         subject: Option<GraphSubject>,
     ) -> StorageResult<ScratchSession> {
+        if let Some(guard) = self.shared.engine {
+            guard.validate()?;
+        }
         let budget = plan.scratch_bytes();
         super::native::validate_budget(budget)?;
         let selection = StateSelection::issue(selector)?;
+        if let Some((slot, resource)) = self.pick_idle(&selection, plan)? {
+            let mut session = ScratchSession::new(self.shared.clone(), slot, resource);
+            let result = session.rebind(selection, plan, subject);
+            self.complete_pool_action(super::pool_state::Action::Rebind, result.is_ok())?;
+            result?;
+            return Ok(session);
+        }
         let status = {
             let directory = self
                 .shared
@@ -154,6 +257,9 @@ impl ScratchAuthority {
                 .lock()
                 .map_err(|_| StorageError::Integrity("construction scratch directory lock"))?;
             ScratchOwnerStatus {
+                root_retirement: None,
+                known_clean: false,
+                graph_working: None,
                 token: selection.token(),
                 selector: *selection.selector(),
                 disposition: ScratchDisposition::Admitted,
@@ -178,10 +284,11 @@ impl ScratchAuthority {
                 .slots
                 .lock()
                 .map_err(|_| StorageError::Integrity("construction scratch owner lock"))?;
-            let index = slots
-                .iter()
-                .position(|slot| matches!(slot, Slot::Empty))
-                .ok_or(StorageError::OwnershipUnavailable)?;
+            let Some(index) = slots.iter().position(|slot| matches!(slot, Slot::Empty)) else {
+                slots.refusal()?;
+                return Err(StorageError::OwnershipUnavailable);
+            };
+            slots.counters.fresh.begin()?;
             slots[index] = Slot::Active(status);
             index
         };
@@ -193,6 +300,7 @@ impl ScratchAuthority {
                     // can be refunded; bootstrap never enters this path.
                     match self.shared.slots.lock() {
                         Ok(mut slots) => {
+                            slots.counters.fresh.finish(false)?;
                             slots[slot] = Slot::Empty;
                             return Err(original);
                         }
@@ -207,9 +315,28 @@ impl ScratchAuthority {
                     }
                 }
             };
-        let resource = Resource::new(selection, native, plan, subject);
+        let resource = match Resource::new(selection, native, plan, subject, self.shared.engine) {
+            Ok(resource) => resource,
+            Err(error) => {
+                // Native preparation has no effects; return this unused slot once.
+                let mut slots = self
+                    .shared
+                    .slots
+                    .lock()
+                    .map_err(|_| StorageError::Integrity("construction scratch owner lock"))?;
+                slots.counters.fresh.finish(false)?;
+                slots[slot] = Slot::Empty;
+                return Err(error);
+            }
+        };
         let mut session = ScratchSession::new(self.shared.clone(), slot, resource);
-        session.initialize()?;
+        let result = session.initialize();
+        let born = session
+            .resource
+            .as_ref()
+            .is_some_and(|r| r.native.has_file_effects() && r.native.identity.is_some());
+        self.complete_pool_action(super::pool_state::Action::Fresh, born)?;
+        result?;
         Ok(session)
     }
 
@@ -227,7 +354,9 @@ impl ScratchAuthority {
         for slot in slots.iter() {
             match slot {
                 Slot::Empty => {}
-                Slot::Active(status) | Slot::Retained { status, .. } => output.push(status.clone()),
+                Slot::Active(status)
+                | Slot::Idle { status, .. }
+                | Slot::Retained { status, .. } => output.push(status.clone()),
             }
         }
         Ok(output)
@@ -243,7 +372,9 @@ impl ScratchAuthority {
         slots.iter().try_fold(0u64, |total, slot| {
             let bytes = match slot {
                 Slot::Empty => 0,
-                Slot::Active(status) | Slot::Retained { status, .. } => status.reserved_bytes,
+                Slot::Active(status)
+                | Slot::Idle { status, .. }
+                | Slot::Retained { status, .. } => status.reserved_bytes,
             };
             total.checked_add(bytes).ok_or(StorageError::Integrity(
                 "construction scratch aggregate reservation overflow",

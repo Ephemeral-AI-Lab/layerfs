@@ -149,12 +149,16 @@ fn streams(connection: &Connection, graph: &Graph, proof: bool) -> StorageResult
 
 pub(crate) fn adjacency(
     connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     graph: &mut Graph,
 ) -> StorageResult<GraphAdjacencySeal> {
     if graph.stage != GraphStage::Expanding {
         return Err(StorageError::Integrity(
             "construction scratch graph seal phase",
         ));
+    }
+    if let Some(guard) = engine {
+        guard.validate()?;
     }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
@@ -166,11 +170,18 @@ pub(crate) fn adjacency(
         { return Err(StorageError::Integrity("construction scratch graph adjacency acknowledgement")); }
         Ok(seal)
     })();
-    profile::finish_transaction(connection, result)
+    profile::finish_transaction_guarded(connection, result, engine)
 }
 
-pub(crate) fn proof(connection: &Connection, graph: &mut Graph) -> StorageResult<GraphProofSeal> {
+pub(crate) fn proof(
+    connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
+    graph: &mut Graph,
+) -> StorageResult<GraphProofSeal> {
     graph.check_terminal_solver()?;
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         graph_index::verify(connection, graph)?;
@@ -191,5 +202,5 @@ pub(crate) fn proof(connection: &Connection, graph: &mut Graph) -> StorageResult
         { return Err(StorageError::Integrity("construction scratch graph proof acknowledgement")); }
         Ok(seal)
     })();
-    profile::finish_transaction(connection, result)
+    profile::finish_transaction_guarded(connection, result, engine)
 }

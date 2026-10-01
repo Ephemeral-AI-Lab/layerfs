@@ -1,0 +1,28 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "edit_bounds",
+    "--",
+    "--show-output"
+  ],
+  "exit": 101,
+  "wall_ns": 9767016917,
+  "source_change": {
+    "core/crates/layerfs-content/src/file/edit/draft_record.rs": "2cc9812973b97da3940700a6d0f1de576fae201fb8c2da0d9b6350c8c617e679",
+    "core/crates/layerfs-content/src/file/edit/draft_resident.rs": "bf51337ba7fc310671bc77bd90288d392b57c21f28dcc240b6692880e59dc46b",
+    "core/crates/layerfs-content/src/file/edit/draft_port.rs": "33df7b410d30d9814d003ac21e213023c36fcd77b092c01822eac0b0a287c844",
+    "core/crates/layerfs-content/src/file/edit/tree.rs": "bdcf7419e5053ca94676e9bde31617f0be4807853428bf592a5d21302ae23f92",
+    "core/crates/layerfs-storage/src/construction_state/draft_create.rs": "a661ded3ac5f2e7fdcc174d6424d1291b1b1daf12cbcc8621d424726eb1e2b3f",
+    "core/crates/layerfs-storage/src/construction_state/draft_retire.rs": "3601589b62f123fc4cc5512eab2301e2b5094061945f4f2457007aee89229339",
+    "core/crates/layerfs-content/tests/edit_bounds.rs": "974bdacc42e98c056ddf3b86b92c83c1def72753c8223749e974f3c1c8ceb5d8"
+  },
+  "cause": "restoreoldlogicalbodycounteroveractualretention; NEWaggregatepeak retainsalladmission; originalfrontierassertsunchanged dualcountdiagnostics"
+}

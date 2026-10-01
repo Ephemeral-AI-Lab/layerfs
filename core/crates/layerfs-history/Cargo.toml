@@ -9,7 +9,7 @@ license.workspace = true
 [dependencies]
 blake3 = { version = "=1.8.5", default-features = false }
 layerfs-content = { path = "../layerfs-content" }
-rusqlite = { version = "=0.40.2", optional = true }
+rusqlite = { version = "=0.40.2", optional = true, features = ["limits"] }
 
 [features]
 default = ["native"]

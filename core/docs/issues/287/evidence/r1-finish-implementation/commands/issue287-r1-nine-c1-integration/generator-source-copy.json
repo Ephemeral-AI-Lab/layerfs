@@ -1,0 +1,5 @@
+{
+  "path": "crates/layerfs-content/tests/stage5_reference_fixtures.rs",
+  "sha256": "9dc8dd61a3de376417048403baacd8d9f59483c6ec6be4016dbaef59a46eec8d",
+  "scope": "read-only ignored-generator source inspected by fixture_seal; never compiled or executed"
+}

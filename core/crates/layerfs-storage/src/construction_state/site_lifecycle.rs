@@ -55,9 +55,13 @@ fn birth_projection(
 
 pub(crate) fn close(
     connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     state: &mut Sites,
     expected: &SiteBirthSeal,
 ) -> StorageResult<SiteMembership> {
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         site_index::verify(connection, state)?;
@@ -75,10 +79,17 @@ pub(crate) fn close(
         }
         Ok(members)
     })();
-    profile::finish_transaction(connection, result)
+    profile::finish_transaction_guarded(connection, result, engine)
 }
 
-pub(crate) fn seal(connection: &Connection, state: &mut Sites) -> StorageResult<SiteSeal> {
+pub(crate) fn seal(
+    connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
+    state: &mut Sites,
+) -> StorageResult<SiteSeal> {
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         site_index::verify(connection, state)?;
@@ -115,7 +126,7 @@ pub(crate) fn seal(connection: &Connection, state: &mut Sites) -> StorageResult<
         }
         Ok(seal)
     })();
-    profile::finish_transaction(connection, result)
+    profile::finish_transaction_guarded(connection, result, engine)
 }
 
 pub(crate) struct Retirement {
@@ -126,6 +137,7 @@ pub(crate) struct Retirement {
 
 pub(crate) fn retire_window(
     connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     state: &mut Sites,
 ) -> StorageResult<Retirement> {
     state.attempt = Some(SiteAttempt::new(
@@ -134,6 +146,9 @@ pub(crate) fn retire_window(
         state.remaining,
     ));
     state.attempt.as_mut().unwrap().prior_after = state.after;
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         site_index::verify(connection, state)?;
@@ -196,5 +211,5 @@ pub(crate) fn retire_window(
             stage,
         })
     })();
-    profile::finish_transaction(connection, result)
+    profile::finish_transaction_guarded(connection, result, engine)
 }

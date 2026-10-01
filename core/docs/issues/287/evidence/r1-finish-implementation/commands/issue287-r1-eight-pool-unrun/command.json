@@ -1,0 +1,17 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "scratch_pool"
+  ],
+  "exit": 101,
+  "wall_ns": 3473637875,
+  "source": "eight original+retained corrective overlays; all6pool first runtime"
+}

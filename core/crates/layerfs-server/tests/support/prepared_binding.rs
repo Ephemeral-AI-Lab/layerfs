@@ -393,7 +393,19 @@ fn dispatch(
             1
         },
         deadline_ms: 30_000,
-        response_bytes: MAX_FILE,
+        response_bytes: if matches!(
+            operation,
+            Operation::SaveFile { .. }
+                | Operation::SaveFileV2 { .. }
+                | Operation::ConstructSymlink { .. }
+                | Operation::ConstructPortableMetadata { .. }
+                | Operation::UpdatePortableMetadata { .. }
+                | Operation::FileSaveCapabilities
+        ) {
+            0
+        } else {
+            MAX_FILE
+        },
         operation,
     };
     service.handle(peer, &request, body, &mut io::sink()).0

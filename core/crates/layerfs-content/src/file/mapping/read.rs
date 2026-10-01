@@ -1,20 +1,9 @@
 //! Bounded extent traversal and ordered payload demand.
 //!
-//! Navigation is batched by level: every mapping page the requested range can
-//! reach at one level is demanded in one provider call, so a read issues one
-//! navigation call per bounded level wave instead of one point call per visited
-//! page. Payload reads are grouped the same way: every distinct payload demanded
-//! inside a bounded wave is acquired by one call, then each demand is served from
-//! the wave in logical order. A payload demanded more than once is read once and
-//! borrowed; it is never cloned per demand. The wave is released before the next
-//! one, so a long read never holds the whole file payload.
-//!
-//! A caller that reads several ascending ranges of the same file - the retained
-//! runs of one known edit are the case this exists for - uses [`RangeCursor`]
-//! instead of calling [`read_range`] once per range. The cursor keeps the mapping
-//! pages it has retained, so later ranges reuse those pages while they remain
-//! cached. Eviction may require a later grouped demand; current navigation owns
-//! its pages independently of that disposable retained cache.
+//! A depth-bounded structural cursor discovers only range-reachable branches,
+//! then acquires leaves in grouped waves of at most32 pages. Ascending ranges
+//! retain the advancing branch path and one partially served leaf independently
+//! of the disposable64-page cache. Payload waves preserve logical demand order.
 
 use std::io::Write;
 use std::ops::Range;
@@ -25,9 +14,12 @@ use crate::error::{ContentError, ContentResult};
 use crate::file::cdc;
 use crate::file::mapping::codec::{decode_chunk_payload, decode_node_with_context};
 use crate::file::mapping::types::{ExtentNode, ExtentSlice, FileState};
-use crate::object::{AuthenticatedObjects, ObjectId};
+use crate::object::{AuthenticatedObjects, CanonicalReadKind, CanonicalReadPermit, ObjectId};
 
-use super::{CheckedPage, PageCache};
+use super::{
+    navigation::{Leaf, Navigation},
+    CheckedPage, PageCache,
+};
 
 /// Distinct payloads a single wave may hold.
 pub const READ_WAVE_OBJECTS: usize = 32;
@@ -40,12 +32,9 @@ pub const READ_WAVE_OBJECTS: usize = 32;
 /// is therefore refused at the wave boundary instead of being copied through,
 /// which is what makes the object bound and the byte bound the same claim.
 pub const READ_WAVE_BYTES: usize = READ_WAVE_OBJECTS * cdc::MAXIMUM_CHUNK_BYTES;
-/// Navigation pages one level wave may hold at once.
-///
-/// A level is demanded in waves of this many pages, so the pages themselves are
-/// capped at READ_NAVIGATION_WAVE * MAX_NODE_OBJECT_BYTES. The frontier retains
-/// one 56-byte entry per mapping node the range still has to reach at the next
-/// level; the same read visits those nodes and pays for them either way.
+/// Leaf navigation pages one independently owned wave may hold at once.
+/// Branch discovery retains at most32 bounded descriptor frames, not a wide
+/// level frontier. Canonical current pages and cache owners remain separate.
 pub const READ_NAVIGATION_WAVE: usize = 32;
 
 /// Work performed by a logical read.
@@ -75,12 +64,13 @@ struct Demand {
 }
 
 /// One mapping node the traversal has still to reach.
-struct Frontier {
-    id: ObjectId,
-    root: bool,
-    level: u8,
-    origin: u64,
-    expected_root: Option<(u64, u64)>,
+#[derive(Clone, Copy)]
+pub(super) struct Frontier {
+    pub id: ObjectId,
+    pub root: bool,
+    pub level: u8,
+    pub origin: u64,
+    pub expected_root: Option<(u64, u64)>,
 }
 
 struct Wave<'a, 'r, 's> {
@@ -111,13 +101,13 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
         }
     }
 
-    /// Acquires one level's pages, serving what the cache already holds.
+    /// Acquires one bounded discovery/leaf wave, serving retained cache hits.
     ///
     /// All hits gain a batch owner before retained-cache eviction. Each missing
     /// identity is acquired once, even when it is demanded under two contexts.
     /// Provider vectors move into their first demand; only duplicate demands
     /// need another owned copy. Complete validation precedes any retention.
-    fn pages(&mut self, nodes: &[&Frontier]) -> ContentResult<Vec<CheckedPage>> {
+    fn pages(&mut self, nodes: &[Frontier]) -> ContentResult<Vec<CheckedPage>> {
         if nodes.len() > READ_NAVIGATION_WAVE {
             return Err(ContentError::BoundedCapacityExceeded {
                 what: "mapping.navigation_pages",
@@ -125,6 +115,7 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
                 actual: nodes.len() as u64,
             });
         }
+        self.cache.prepare()?;
         let mut pages: Vec<Option<CheckedPage>> = Vec::new();
         pages
             .try_reserve_exact(nodes.len())
@@ -132,9 +123,9 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
                 what: "mapping.navigation_owners",
             })?;
         for node in nodes {
-            pages.push(match self.cache.get(node.id, node.root) {
+            pages.push(match self.cache.get_owned(node.id, node.root) {
                 Some(canonical) => {
-                    Some(PageCache::decode_owned(PageCache::copy_page(canonical)?, node.root)?.0)
+                    Some(PageCache::decode_buffer(canonical.try_clone()?, node.root)?.0)
                 }
                 None => None,
             });
@@ -168,9 +159,17 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
             }
         }
         if !ids.is_empty() {
-            let values = self
-                .reader
-                .read_canonical_batch_scoped(&ids, self.scope.child("mapping.navigate"))?;
+            let permit = CanonicalReadPermit::new(
+                self.cache.budget(),
+                ids.len(),
+                ids.len() * super::MAX_NODE_OBJECT_BYTES,
+                CanonicalReadKind::MappingNodes,
+            )?;
+            let values = self.reader.read_canonical_owned(
+                &ids,
+                permit,
+                self.scope.child("mapping.navigate"),
+            )?;
             if values.len() != ids.len() {
                 return Err(ContentError::BatchCardinality {
                     requested: ids.len(),
@@ -184,7 +183,7 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
                     .ok_or(ContentError::InvalidRecord("navigation identity"))?;
                 // The original supplied owner is checked before any duplicate
                 // copy. A copy preserves facts or checks its different context.
-                pages[first] = Some(PageCache::decode_owned(canonical, nodes[first].root)?.0);
+                pages[first] = Some(PageCache::decode_buffer(canonical, nodes[first].root)?.0);
                 for index in first + 1..nodes.len() {
                     if nodes[index].id == id {
                         pages[index] = Some(
@@ -246,9 +245,16 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
         if self.demands.is_empty() {
             return Ok(());
         }
-        let values = self
-            .reader
-            .read_canonical_batch_scoped(&self.distinct, self.scope.child("mapping.payload"))?;
+        let values = self.reader.read_canonical_owned(
+            &self.distinct,
+            CanonicalReadPermit::new(
+                self.cache.budget(),
+                self.distinct.len(),
+                self.distinct.len() * super::chunk_canonical_len(cdc::MAXIMUM_CHUNK_BYTES),
+                CanonicalReadKind::ChunkPayloads,
+            )?,
+            self.scope.child("mapping.payload"),
+        )?;
         if values.len() != self.distinct.len() {
             return Err(ContentError::BatchCardinality {
                 requested: self.distinct.len(),
@@ -261,7 +267,7 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
         // read actually acquired.
         let mut payloads: Vec<&[u8]> = Vec::with_capacity(values.len());
         let mut wave_bytes = 0_usize;
-        for value in &values {
+        for value in values.buffers() {
             let inner = crate::object::decode_bytes_object(value)?;
             let payload = decode_chunk_payload(inner)?;
             if payload.len() > cdc::MAXIMUM_CHUNK_BYTES {
@@ -341,7 +347,8 @@ pub fn read_range(
     let requested = range.end - range.start;
     let mut cache = PageCache::new();
     let mut wave = Wave::new(reader, sink, scope, &mut cache);
-    traverse(state, &range, &mut wave)?;
+    let mut navigation = Navigation::new(state)?;
+    traverse(&mut navigation, &range, &mut wave)?;
     wave.flush()?;
     if wave.counters.payload_bytes_read != requested {
         return Err(ContentError::InvalidRecord("mapping coverage"));
@@ -351,9 +358,9 @@ pub fn read_range(
 
 /// Ordered reader of ascending ranges of one chunked file.
 ///
-/// Each range is served by the same bounded traversal [`read_range`] uses, but the
-/// pages that traversal acquires may be retained: a page shared by several ranges
-/// is reused while cached, and eviction may cause later grouped reacquisition.
+/// Each range advances the same depth-bounded continuation without descending
+/// again from the root. Its path and partially served leaf own decoded state
+/// independently of the caller's disposable retained page cache.
 /// Ranges must be ascending and inside the file, and each one is served exactly or
 /// refused - never partly served under an `Ok`.
 pub struct RangeCursor<'a, 'r, 's> {
@@ -363,6 +370,8 @@ pub struct RangeCursor<'a, 'r, 's> {
     counters: ReadCounters,
     /// Position the range before the active one ended at.
     segment_start: u64,
+    navigation: Navigation,
+    failed: bool,
 }
 
 impl<'a, 'r, 's> RangeCursor<'a, 'r, 's> {
@@ -384,6 +393,8 @@ impl<'a, 'r, 's> RangeCursor<'a, 'r, 's> {
             scope,
             counters: ReadCounters::default(),
             segment_start: 0,
+            navigation: Navigation::new(state)?,
+            failed: false,
         })
     }
 
@@ -398,6 +409,9 @@ impl<'a, 'r, 's> RangeCursor<'a, 'r, 's> {
         sink: &mut dyn Write,
         pages: &mut PageCache,
     ) -> ContentResult<ReadCounters> {
+        if self.failed {
+            return Err(ContentError::InvalidRecord("mapping cursor terminal"));
+        }
         if range.start > range.end
             || range.end > self.state.logical_len
             || range.start < self.segment_start
@@ -408,18 +422,23 @@ impl<'a, 'r, 's> RangeCursor<'a, 'r, 's> {
                 length: self.state.logical_len,
             });
         }
-        self.segment_start = range.end;
         if range.start == range.end {
+            self.segment_start = range.end;
             return Ok(self.counters);
         }
         let requested = range.end - range.start;
         let mut wave = Wave::new(self.reader, sink, self.scope, pages);
-        traverse(self.state, &range, &mut wave)?;
-        wave.flush()?;
+        let result = traverse(&mut self.navigation, &range, &mut wave).and_then(|_| wave.flush());
+        if let Err(error) = result {
+            self.failed = true;
+            return Err(error);
+        }
         let segment = wave.counters;
         if segment.payload_bytes_read != requested {
+            self.failed = true;
             return Err(ContentError::InvalidRecord("mapping coverage"));
         }
+        self.segment_start = range.end;
         merge(&mut self.counters, segment);
         Ok(self.counters)
     }
@@ -442,112 +461,62 @@ fn merge(total: &mut ReadCounters, wave: ReadCounters) {
         .saturating_add(wave.payload_bytes_read);
 }
 
-/// Walks the mapping tree one level per bounded navigation wave.
-///
-/// The recursion the previous form used is unrolled into a frontier so that one
-/// level's demands become one grouped call: the frontier holds the nodes still to
-/// reach, in logical order, and each wave of at most READ_NAVIGATION_WAVE pages is
-/// acquired, decoded and released before the next. A child whose subtree starts
-/// at or after range.end is never demanded - that is where the recursive form
-/// stopped descending - and neither is any node after it, because the frontier is
-/// in logical order. Every comparison is in absolute file offsets: a page's child
-/// summaries are cumulative from the page's own start, so each is rebased on the
-/// frontier's origin before it is compared with the range.
+/// Advances one structural path and bounded leaf waves without root restart.
 fn traverse(
-    state: FileState,
+    navigation: &mut Navigation,
     range: &Range<u64>,
     wave: &mut Wave<'_, '_, '_>,
 ) -> ContentResult<()> {
-    let mut level = vec![Frontier {
-        id: state.mapping_root,
-        root: true,
-        level: state.tree_level,
-        origin: 0,
-        expected_root: Some((state.logical_len, state.extent_count)),
-    }];
-    let mut depth = 0_u8;
-    while !level.is_empty() {
-        if depth > crate::file::mapping::types::MAX_LEVEL {
-            return Err(ContentError::MappingDepthExceeded);
-        }
-        depth = depth.saturating_add(1);
-        let mut next: Vec<Frontier> = Vec::new();
-        let mut finished = false;
-        for chunk in level.chunks(READ_NAVIGATION_WAVE) {
-            let nodes: Vec<&Frontier> = chunk.iter().collect();
-            let pages = wave.pages(&nodes)?;
-            for (node, canonical) in chunk.iter().zip(pages.iter()) {
-                let page = decode_node_with_context(canonical.canonical(), node.root)?;
-                if page.level() != node.level {
-                    return Err(ContentError::InvalidRecord("mapping level"));
-                }
-                if let Some((logical_len, extent_count)) = node.expected_root {
-                    if page.logical_len() != logical_len || page.extent_count() != extent_count {
-                        return Err(ContentError::InvalidRecord("mapping coverage"));
-                    }
-                }
-                match page {
-                    ExtentNode::Leaf { extents, .. } => {
-                        let mut position = node.origin;
-                        for extent in extents {
-                            position = push_extent(extent, position, range, wave)?;
-                        }
-                    }
-                    ExtentNode::Branch { children, .. } => {
-                        let child_level = node
-                            .level
-                            .checked_sub(1)
-                            .ok_or(ContentError::MappingDepthExceeded)?;
-                        let mut previous = node.origin;
-                        let mut previous_extents = 0;
-                        for child in children {
-                            // A child's cumulative end is cumulative within *this*
-                            // page, so it is relative to the page's own origin while
-                            // the range and the frontier carry absolute offsets. A
-                            // page whose origin is zero - the root, and every page of
-                            // a one-level tree - hides the difference; a non-root
-                            // branch of a deeper tree does not, and reading it through
-                            // the relative value prunes children the range covers.
-                            let end = node
-                                .origin
-                                .checked_add(child.cumulative_logical_end)
-                                .ok_or(ContentError::LengthOverflow)?;
-                            let expected_bytes = end
-                                .checked_sub(previous)
-                                .ok_or(ContentError::NonCanonicalOrdering)?;
-                            let expected_extents = child
-                                .cumulative_extent_end
-                                .checked_sub(previous_extents)
-                                .ok_or(ContentError::NonCanonicalOrdering)?;
-                            previous_extents = child.cumulative_extent_end;
-                            if end <= range.start {
-                                previous = end;
-                                continue;
-                            }
-                            if previous >= range.end {
-                                finished = true;
-                                break;
-                            }
-                            next.push(Frontier {
-                                id: child.child_object_id,
-                                root: false,
-                                level: child_level,
-                                origin: previous,
-                                expected_root: Some((expected_bytes, expected_extents)),
-                            });
-                            previous = end;
-                        }
-                    }
-                }
-                if finished {
-                    break;
-                }
-            }
-            if finished {
-                break;
+    if let Some(mut leaf) = navigation.leaf.take() {
+        if leaf.end > range.start {
+            serve_leaf(&mut leaf, range, wave)?;
+            if leaf.end > range.end {
+                navigation.leaf = Some(leaf);
+                return Ok(());
             }
         }
-        level = next;
+    }
+    loop {
+        let nodes = navigation.next_wave(range, |node| {
+            let pages = wave.pages(std::slice::from_ref(&node))?;
+            decode_node_with_context(pages[0].canonical(), node.root)
+        })?;
+        if nodes.len == 0 {
+            break;
+        }
+        let nodes = &nodes.nodes[..nodes.len];
+        let pages = wave.pages(nodes)?;
+        for (node, canonical) in nodes.iter().zip(pages) {
+            let ExtentNode::Leaf {
+                extents,
+                subtree_logical_bytes,
+            } = decode_node_with_context(canonical.canonical(), node.root)?
+            else {
+                return Err(ContentError::WrongLogicalRole);
+            };
+            let mut leaf = Leaf::new(node.origin, subtree_logical_bytes, extents)?;
+            serve_leaf(&mut leaf, range, wave)?;
+            if leaf.end > range.end {
+                navigation.leaf = Some(leaf);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Keeps the next extent and its absolute start across partial segments.
+fn serve_leaf(
+    leaf: &mut Leaf,
+    range: &Range<u64>,
+    wave: &mut Wave<'_, '_, '_>,
+) -> ContentResult<()> {
+    while leaf.next < leaf.extents.len() && leaf.position < range.end {
+        let end = push_extent(leaf.extents[leaf.next], leaf.position, range, wave)?;
+        if end > range.end {
+            break;
+        }
+        leaf.next += 1;
+        leaf.position = end;
     }
     Ok(())
 }

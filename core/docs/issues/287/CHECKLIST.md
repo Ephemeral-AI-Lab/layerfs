@@ -1,29 +1,13 @@
 # Issue287 current implementation checklist
 
-> **Status: Active assigned R1 finish implementation; no release candidate exists.**
-> Current published product checkpoint: `7a3a9b34c7c976ee8e63ba0db07833ffeda02a10`
-> (R1d-effective-graph scoped exits PASS; full R1 remains PARTIAL/open).
+> **Status: assigned R1 finish; aggregate R1 remains PARTIAL, no release candidate.**
+> Published parent `50a4f3a1934bc2e0d53cee69272b2c95b826278b`; final source publication follows this checkpoint.
 
-Assignment: the owner assigned [R1 finish/speed](HANDOFF_R1_FINISH_AND_SPEED_20261001.md)
-on2026-10-01, authorizing remaining R1 implementation and the six existing cases.
-The earlier pause is superseded for this scope. Broader qualification remains
-under #288, unchanged. [Current closure matrix](R1-FINISH-CLOSURE.md) distinguishes
-source work from tested delivery. [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md)
-remains append-only; no release candidate or aggregate R1 completion is claimed.
+Assignment: [R1 finish/speed](HANDOFF_R1_FINISH_AND_SPEED_20261001.md) authorizes the remaining R1 infrastructure and six existing observations. The [implementation checkpoint](R1-FINISH-IMPLEMENTATION-20261001.md) and [closure matrix](R1-FINISH-CLOSURE.md) record the actual source, cumulative owning proofs and every unresolved original gate. [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) remains append-only.
 
-Current rollout stage: **R1, construction-state integration and resource foundations**.
-The R1d-effective-graph slice is committed, recounted, normally pushed and linked
-in #287 comment5923757156. [Current delivery](R1D-EFFECTIVE-GRAPH-DELIVERY.md)
-records297 scoped primary tests and the separate work/resource/platform outcomes.
-R0 is complete. Full R1 still needs alias/memo/frontier/reference/final-row/release
-authority and engine/protected/physical gates. R2–R7 implementation has not begun;
-existing Phase4.5 product behavior remains the base for their replacement.
+All six untouched control observations and separate proofs are published. Real-route navigation, drafts, alias/fact/count/release authority, ordinary Empty/Small routes, working owners, native reset/reuse, captured engine factories and native purpose dispatch now have scoped evidence. Final fmt, all-target Clippy, examples and product boundary pass. The mandated full-Core command remains exit101 (1129 passing,19 failing,4 ignored); corrections retain that original result. The unchanged direct2049 deadline gate remains FAIL. Four required engine inner bodies remain NOT_RUN on the selected unsupported Apple provider. Strict8/global176/native32/physical and intermediate closing-before-join qualification remain open, as does R3-dependent early composite content release.
 
-Current next action: collect the published untouched six-case control and separate
-proofs, commit its targets, then finish coherent real-route R1 source and owning
-checks. Alias/draft/navigation/working/reset source is developing and unverified.
-The selected Apple provider still refuses32MiB readback; strict native/global/
-physical/protected enablement stays gated. R2–R7 remain unstarted.
+Current next action: publish the exact staged product/LOC and collect the six candidate arms once against the frozen control targets, with separate9s proofs. Every numeric latency remains INELIGIBLE/performance_claim=false. #288 stays read-only/delegated, and R2–R7 remain unstarted. No aggregate R1 completion or release admission is claimed.
 
 - [x] Inspect actual primary/published/research source, ancestry, origin and artifacts.
 - [x] Create clean owned managed worktree and `codex/issue287-implementation` branch.

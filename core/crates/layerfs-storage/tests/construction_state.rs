@@ -259,9 +259,10 @@ mod unix {
                 )
             );
             after = page.last();
-            let values = page.into_records();
-            assert!(values.capacity() <= 128);
-            drop(values);
+            // Public bounds validation checks actual retained Vec capacity while
+            // the page still owns its data and any last-owner working credit.
+            page.check_limit(PageLimit::default()).unwrap();
+            drop(page);
             pages += 1;
             if eof {
                 break;

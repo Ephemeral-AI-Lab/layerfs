@@ -17,6 +17,36 @@ pub(crate) fn open(path: &Path) -> Result<Store, Failure> {
         .map_err(crate::service::error::storage)
 }
 
+pub(crate) fn open_guarded(
+    path: &Path,
+    engine: &'static layerfs_storage::engine::EngineGuard,
+) -> Result<Store, Failure> {
+    Timing::disabled("open", |scope| {
+        Store::open_guarded(path, engine, scope.child("open"))
+    })
+    .0
+    .map_err(crate::service::error::storage)
+}
+struct CatalogEngine(&'static layerfs_storage::engine::EngineGuard);
+impl sqlite::EngineParticipation for CatalogEngine {
+    fn validate(&self) -> layerfs_history::HistoryResult<()> {
+        self.0.validate().map(|_| ()).map_err(|error| match error {
+            layerfs_storage::StorageError::UnsupportedPolicy { .. } => {
+                layerfs_history::HistoryError::Unsupported("established SQLite engine")
+            }
+            _ => {
+                layerfs_history::HistoryError::Integrity("established SQLite engine participation")
+            }
+        })
+    }
+}
+/// Private composition of the real established borrow; no C2 Store meaning enters C5.
+pub(crate) fn participation(
+    engine: &'static layerfs_storage::engine::EngineGuard,
+) -> Arc<dyn sqlite::EngineParticipation> {
+    Arc::new(CatalogEngine(engine))
+}
+
 /// The acceptor's session bound: the Store's own persisted write budget plus
 /// the service read bound.
 pub(crate) fn capacity(store: &Store) -> Result<usize, Failure> {

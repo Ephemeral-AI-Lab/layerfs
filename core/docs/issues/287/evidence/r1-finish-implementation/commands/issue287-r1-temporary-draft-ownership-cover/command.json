@@ -1,0 +1,47 @@
+{
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-content",
+        "--test",
+        "edit_bounds",
+        "--test",
+        "draft_temporaries",
+        "--test",
+        "edit_model",
+        "--test",
+        "edit_reference",
+        "--test",
+        "edit_localized",
+        "--",
+        "--show-output"
+      ],
+      "exit": 101,
+      "wall_ns": 16486916666
+    }
+  ],
+  "source_change": {
+    "core/crates/layerfs-content/src/file/edit/apply.rs": "218877f819853f8c4a4cd7ba2e80c4491852f0bbd97f0d75defb50908412d474",
+    "core/crates/layerfs-content/src/file/edit/tree.rs": "19a386addcb5ec886b1c2d30d3249cd5d2d86450179e26fcd4d1baca33d59e92",
+    "core/crates/layerfs-content/src/file/edit/temporary.rs": "14a2961b456adf5cbe72552a07dc1d62d9c0434258bb62850d905dc5121c68a5",
+    "core/crates/layerfs-content/src/file/edit/draft_port.rs": "b2f038138125f521ec9e38b77223b22bc0d7fd080e88b5a93c1b138858f75c08",
+    "core/crates/layerfs-content/src/file/edit/draft_resident.rs": "dd643e914e0ddfbcea9f0fc69e75f23a707550d61763f738eb3dd310ec724286",
+    "core/crates/layerfs-content/src/file/edit/no_draft.rs": "951d5d047ed0fd3cb6aba0f9ea9461269d61d03976196bdd9d76a6cbcbef7b66",
+    "core/crates/layerfs-content/src/file/edit/mod.rs": "5ff62810693a19e28a729104a06a8b004bb082063757796498f19c80db2dabab",
+    "core/crates/layerfs-storage/src/construction_state/draft_temporary.rs": "baf4d9f9396494b548486bbd87fcc8942d670ca8583ae84d064aad86c34d9b5c",
+    "core/crates/layerfs-storage/src/construction_state/draft_adapter.rs": "709a6be3fb969cf9a9740d08677035d3a69470695a5f78de93b30ddb680026fc",
+    "core/crates/layerfs-storage/src/construction_state/draft_retire.rs": "a5118f78449928ac7a818c15b98fdcf60149adb82471b019e11c339007ca6bf6",
+    "core/crates/layerfs-storage/src/construction_state/draft_state.rs": "a2185ed54fe030d739852841514366d98f290b3772653c525297df5d4250f381",
+    "core/crates/layerfs-storage/src/construction_state/mod.rs": "400cf1e4f57ed599eab1a4144e0c87bdc41fb0e57bfecd28729ab7c5cda733f6",
+    "core/crates/layerfs-content/tests/draft_temporaries.rs": "6257e4cff630f2b8c8cfe96748e9e773312ce8e26942304c0f2bd993a8255b5b",
+    "core/crates/layerfs-storage/tests/draft_temporaries.rs": "2819d28c4ca877f9d2b1a508ed897f63e14dd806bb6f0d66c3d11c7c6ca30174"
+  },
+  "cause": "actualprivate movedtemporarypins; targetedsupersede preserveschild/duplicate/selectedRoot/Unknown; unchangedoldfrontierbounds and v1oracles"
+}

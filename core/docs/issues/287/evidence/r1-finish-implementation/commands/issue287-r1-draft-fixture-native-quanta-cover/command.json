@@ -1,0 +1,61 @@
+{
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-content",
+        "--test",
+        "edit_reference",
+        "--",
+        "--show-output"
+      ],
+      "exit": 0,
+      "wall_ns": 8152135792
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-storage",
+        "--test",
+        "draft_temporaries",
+        "--test",
+        "construction_drafts",
+        "--test",
+        "draft_reference_quanta",
+        "--",
+        "--show-output"
+      ],
+      "exit": 0,
+      "wall_ns": 14016297000
+    }
+  ],
+  "source_change": {
+    "core/crates/layerfs-content/src/file/edit/draft_port.rs": "f4c6e89307d9b1e37f8dbfc9355b84922a693f06f7439e205e15f965e2f1d2a3",
+    "core/crates/layerfs-storage/src/construction_state/draft_write.rs": "7874262fd018df944e8439093250e98e6fb7c7cd98a784cf01a1ab45959b8ac8",
+    "core/crates/layerfs-storage/tests/draft_reference_quanta.rs": "4816550cf2c139d3f9d71e868fbf52fd247779372badaf81e9c513cfef1e23f7"
+  },
+  "immutable_oracle_copy": {
+    "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/batch-normalized.json": "f85b9480daac41a0fe70ca495db44fd0635660dbdd580f8c20edc08d9ed427ed",
+    "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/root-collapse.json": "5bab3b12b1f5a73aa27d930118749f44080ae25e40f94aff9e0fff2ea00be102",
+    "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/interior-multi-level.json": "da90244c57d71b932b78c381954131e48045275121ebbcba895b10aaf77c705e",
+    "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/untouched-sibling.json": "d4adb1be743edbe23053c16716a6f7573f4dce12cb7eb95c0a91c8deaa400b56",
+    "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/height-growth.json": "ccd588365a7e093b52971d9c6c1012f4fc7aed1fc5827f6ba7652b1807089196",
+    "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/unequal-height-join.json": "742f0cf46c373d4553e1528e3aa41cd0f9689851dbbc153b77d3623f308322af",
+    "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/half-partition-90-90.json": "44f71d7986e0779f4e9b1d46716fe14bae29995263e7b5bbb9291e3b7d877427",
+    "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/join-80-100.json": "21fc57e86955ceb84cbee4699a7170e5a92e46747f82d08a8f9062c329d425b2",
+    "docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260917T034500Z/repartition-80-100.json": "9912ff5a4a73d4bb2f1ff75e666d685c0781506c511dec7a2d848bc89582c8be"
+  },
+  "cause": "originalsealedRootfixturesexternalrootdocsneededbyrelativepublicoracle; locallypreparedsameeffectruns actualcountwitness/Unknown/fullrowchecks"
+}

@@ -17,8 +17,13 @@ impl ScratchSession {
     pub fn graph_select(&self, scope: &GraphScope) -> StorageResult<()> {
         self.ensure_graph_scope(scope)?;
         let resource = self.resource.as_ref().unwrap();
+        resource.check_live()?;
         let graph = resource.graph.as_ref().unwrap();
-        if resource.release_attempted
+        if resource
+            .aliases
+            .as_ref()
+            .is_some_and(|aliases| aliases.failed.get())
+            || resource.release_attempted
             || resource.unknown.get()
             || resource.native.quarantined
             || graph.failed.get()
@@ -41,6 +46,7 @@ impl ScratchSession {
         if self
             .resource
             .as_ref()
+            .filter(|resource| !resource.logical_released)
             .and_then(|resource| resource.graph.as_ref())
             .is_none_or(|graph| &graph.scope != scope)
         {
@@ -54,7 +60,28 @@ impl ScratchSession {
     pub(crate) fn graph_resource(&self, scope: &GraphScope) -> StorageResult<&Resource> {
         self.ensure_graph_scope(scope)?;
         let resource = self.resource.as_ref().unwrap();
+        resource.check_live()?;
         resource.graph.as_ref().unwrap().check_scope(scope)?;
+        if let Some(aliases) = &resource.aliases {
+            if aliases.stage != 4
+                || aliases.failed.get()
+                || aliases.attempt.is_some()
+                || aliases.current.is_some()
+                || aliases.totals.remaining != 0
+            {
+                return Err(StorageError::Integrity(
+                    "construction graph alias retirement required",
+                ));
+            }
+            let connection = resource.verify()?;
+            if !super::alias_index::empty(connection, "alias_facts")?
+                || !super::alias_index::empty(connection, "alias_jobs")?
+            {
+                return Err(StorageError::Integrity(
+                    "construction graph alias retirement EOF",
+                ));
+            }
+        }
         if resource.release_attempted
             || resource.unknown.get()
             || resource.native.quarantined
@@ -149,7 +176,7 @@ impl ScratchSession {
                     ));
                 }
                 let attempt =
-                    GraphAttempt::new(GraphAttemptKind::CloseSeeds, graph, GraphStage::Expanding);
+                    GraphAttempt::new(GraphAttemptKind::CloseSeeds, graph, GraphStage::Expanding)?;
                 self.apply_graph_build(scope, attempt, None)?;
             }
             let resource = self.graph_resource(scope)?;
@@ -225,6 +252,8 @@ impl ScratchSession {
         attempt: GraphAttempt,
         parent: Option<GraphNodeKey>,
     ) -> StorageResult<GraphBuildAck> {
+        self.graph_resource(scope)?
+            .namespace_graph_growth(attempt.proposed.nodes(), attempt.proposed.edges())?;
         let ack = build_ack(scope, &attempt, parent)?;
         let resource = self.graph_resource_mut(scope)?;
         resource.verify()?;
@@ -233,6 +262,7 @@ impl ScratchSession {
         let graph = resource.graph.as_ref().unwrap();
         graph_build::commit(
             resource.connection.as_ref().unwrap(),
+            resource.engine,
             graph,
             graph.attempt.as_ref().unwrap(),
         )?;
@@ -253,6 +283,11 @@ pub(crate) fn build_ack(
     attempt: &GraphAttempt,
     parent: Option<GraphNodeKey>,
 ) -> StorageResult<GraphBuildAck> {
+    let memory = attempt.memory.memory().reserve(
+        std::mem::size_of::<GraphBuildAck>()
+            + attempt.nodes * std::mem::size_of::<GraphNodeChange>()
+            + attempt.edges * std::mem::size_of::<GraphEdgeChange>(),
+    )?;
     let mut nodes = graph_index::window(attempt.nodes)?;
     let mut edges = graph_index::window(attempt.edges)?;
     for index in 0..attempt.nodes {
@@ -284,5 +319,6 @@ pub(crate) fn build_ack(
         nodes,
         edges,
         parent,
-    )?)
+    )?
+    .with_memory(memory)?)
 }

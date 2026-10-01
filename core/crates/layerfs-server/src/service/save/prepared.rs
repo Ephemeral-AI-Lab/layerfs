@@ -88,7 +88,9 @@ pub(crate) fn receive<'a>(
 ) -> Result<Received, Failure> {
     // This preparation owns the source issuer already bound before native/Save
     // effects. Consuming it gives the receive spool that exact authority.
-    let mut spool = RowSpool::create_prepared(spool_path(), update.preparation).map_err(content)?;
+    let mut spool =
+        RowSpool::create_prepared(spool_path(), update.preparation.ok_or(Code::Ownership)?)
+            .map_err(content)?;
     let received = {
         let mut sink = SpoolSink {
             objects,

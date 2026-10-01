@@ -11,7 +11,9 @@ use layerfs_content::filesystem::inode::codec::{decode_inode_page, InodePage};
 use layerfs_content::filesystem::rows::{BindingRows, SliceBindingRows};
 use layerfs_content::filesystem::state::{GraphCapacity, GraphStage};
 use layerfs_content::filesystem::{
+    build_filesystem_binding_rows_with_alias_graph_state,
     build_filesystem_binding_rows_with_graph_state, scope_for_seed,
+    update_filesystem_binding_rows_with_alias_graph_state,
     update_filesystem_binding_rows_with_graph_state, DirectoryUpdate, FilesystemInput,
     FilesystemPhases, FilesystemRoot, FilesystemRootId, InodeUpdate, PathName,
 };
@@ -21,7 +23,14 @@ use oracle::{scopes, ObservedGraph};
 use std::collections::{BTreeMap, BTreeSet};
 use support::filesystem::{resources, synthetic, value, with_objects, TreeStore};
 
-fn run(case: &manifest::FixtureCase, store: &mut TreeStore, base: Option<&manifest::FixtureCase>) {
+fn run(
+    case: &manifest::FixtureCase,
+    store: &mut TreeStore,
+    base: Option<&manifest::FixtureCase>,
+    supplied_aliases: bool,
+    supplied_facts: bool,
+    supplied_counts: bool,
+) {
     let mut rows: BTreeMap<u64, Vec<(PathName, Option<u64>)>> = BTreeMap::new();
     for change in case.changes {
         rows.entry(change.parent).or_default().push((
@@ -91,7 +100,23 @@ fn run(case: &manifest::FixtureCase, store: &mut TreeStore, base: Option<&manife
     );
     let phases = FilesystemPhases::disabled();
     let result = with_objects(store, |objects| {
-        if base.is_none() {
+        if supplied_counts && base.is_none() {
+            layerfs_content::filesystem::update::build_filesystem_binding_rows_with_canonical_state(objects,&source,None,&mut state,&selected,&phases)
+        } else if supplied_counts {
+            layerfs_content::filesystem::update::update_filesystem_binding_rows_with_canonical_state(objects,&source,None,&mut state,&selected,&phases)
+        } else if supplied_facts && base.is_none() {
+            layerfs_content::filesystem::update::build_filesystem_binding_rows_with_namespace_state(objects, &source, None, &mut state, &selected, &phases)
+        } else if supplied_facts {
+            layerfs_content::filesystem::update::update_filesystem_binding_rows_with_namespace_state(objects, &source, None, &mut state, &selected, &phases)
+        } else if supplied_aliases && base.is_none() {
+            build_filesystem_binding_rows_with_alias_graph_state(
+                objects, &source, None, &mut state, &selected, &phases,
+            )
+        } else if supplied_aliases {
+            update_filesystem_binding_rows_with_alias_graph_state(
+                objects, &source, None, &mut state, &selected, &phases,
+            )
+        } else if base.is_none() {
             build_filesystem_binding_rows_with_graph_state(
                 objects, &source, None, &mut state, &selected, &phases,
             )
@@ -167,7 +192,7 @@ fn reachable(store: &TreeStore, root: ObjectId) -> BTreeSet<ObjectId> {
 #[test]
 fn new_graph_caller_preserves_every_sealed_v1_construction_root_and_object_set() {
     for case in manifest::CASES.iter().filter(|case| case.base.is_empty()) {
-        run(case, &mut TreeStore::new(), None);
+        run(case, &mut TreeStore::new(), None, false, false, false);
     }
 }
 #[test]
@@ -178,7 +203,43 @@ fn new_graph_caller_preserves_every_sealed_v1_update_root_and_object_set() {
             .find(|candidate| candidate.name == case.base)
             .unwrap();
         let mut store = TreeStore::new();
-        run(base, &mut store, None);
-        run(case, &mut store, Some(base));
+        run(base, &mut store, None, false, false, false);
+        run(case, &mut store, Some(base), false, false, false);
+    }
+}
+
+#[test]
+fn supplied_alias_graph_route_preserves_all_independent_v1_roots_and_object_sets() {
+    for case in manifest::CASES {
+        let base = manifest::CASES.iter().find(|old| old.name == case.base);
+        let mut store = TreeStore::new();
+        if let Some(base) = base {
+            run(base, &mut store, None, true, false, false);
+        }
+        run(case, &mut store, base, true, false, false);
+    }
+}
+
+#[test]
+fn supplied_namespace_route_preserves_all_independent_v1_roots_and_object_sets() {
+    for case in manifest::CASES {
+        let base = manifest::CASES.iter().find(|old| old.name == case.base);
+        let mut store = TreeStore::new();
+        if let Some(base) = base {
+            run(base, &mut store, None, true, true, false);
+        }
+        run(case, &mut store, base, true, true, false);
+    }
+}
+
+#[test]
+fn supplied_canonical_counts_release_route_preserves_all_independent_v1_roots_and_object_sets() {
+    for case in manifest::CASES {
+        let base = manifest::CASES.iter().find(|old| old.name == case.base);
+        let mut store = TreeStore::new();
+        if let Some(base) = base {
+            run(base, &mut store, None, true, true, true);
+        }
+        run(case, &mut store, base, true, true, true);
     }
 }

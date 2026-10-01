@@ -1,0 +1,5 @@
+{
+  "path": "core/crates/layerfs-server/tests/support/scratch_reuse.rs",
+  "sha256": "6182e94aa124c91442f305304fd9837e8f07b7052a8e064cc5fabffdb0b132cd",
+  "cause": "native inode and MetadataExt::ino already u64; keep checked signed-device conversion and actual existing-fd fstat"
+}

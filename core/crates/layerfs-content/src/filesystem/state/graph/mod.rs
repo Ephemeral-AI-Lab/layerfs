@@ -6,6 +6,7 @@ mod cursor;
 mod edge;
 mod keys;
 mod ledger;
+mod memory;
 mod mutation;
 mod node;
 mod page;
@@ -31,6 +32,7 @@ pub use ack::{
     GraphPopDisposition, GraphPopTotals,
 };
 pub use ledger::{GraphEdgeLedger, GraphNodeLedger};
+pub use memory::{GraphMemory, GraphMemoryLease, GRAPH_WORKING_BYTES};
 pub use mutation::{GraphMutation, GraphMutationLimit};
 pub use page::{
     GraphEdgePage, GraphNodePage, GraphPageLimit, GraphProofPage, GRAPH_EDGE_PAGE_HEADER_BYTES,

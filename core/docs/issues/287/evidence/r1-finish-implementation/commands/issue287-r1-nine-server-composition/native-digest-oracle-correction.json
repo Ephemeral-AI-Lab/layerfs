@@ -1,0 +1,8 @@
+{
+  "files": {
+    "core/crates/layerfs-server/tests/binding_claims.rs": "80639888ee782044cc580b1417b9d8f3e2fc99509105b273f7a1f0c596d0e3aa",
+    "core/crates/layerfs-server/Cargo.toml": "dfb33acb31b45aa17cff6849fa6b6f5dd5cfcfa2c3e57320fafae9f42b1a717a",
+    "core/Cargo.lock": "4ab8fc39ba6b2dd3fb3edd87fc0c5b4e0e2543e2624430e9f2972c90ae1a2fde"
+  },
+  "cause": "raw native Blake3 domain rather than ObjectId object domain; existing locked blake3 dev edge only, package versions/checksums/features unchanged"
+}

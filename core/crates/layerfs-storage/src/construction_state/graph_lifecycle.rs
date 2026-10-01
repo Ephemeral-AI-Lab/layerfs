@@ -28,10 +28,11 @@ impl ScratchSession {
                 GraphAttemptKind::AdjacencySeal,
                 graph,
                 GraphStage::AdjacencySealed,
-            ));
+            )?);
             resource.native.reserve()?;
             let seal = graph_scan::adjacency(
                 resource.connection.as_ref().unwrap(),
+                resource.engine,
                 resource.graph.as_mut().unwrap(),
             )?;
             resource.native.observe_allocation()?;
@@ -65,9 +66,10 @@ impl ScratchSession {
                 GraphAttemptKind::BeginScc,
                 graph,
                 GraphStage::Solving,
-            ));
+            )?);
             resource.native.reserve()?;
             let connection = resource.connection.as_ref().unwrap();
+            resource.check_engine()?;
             crate::sqlite::write::begin_immediate(connection)?;
             let result = (|| {
                 graph_index::verify(connection, resource.graph.as_ref().unwrap())?;
@@ -76,7 +78,7 @@ impl ScratchSession {
                 { return Err(StorageError::Integrity("construction scratch graph SCC acknowledgement")); }
                 Ok(())
             })();
-            profile::finish_write(connection, result)?;
+            profile::finish_write_guarded(connection, result, resource.engine)?;
             resource.native.observe_allocation()?;
             let graph = resource.graph.as_mut().unwrap();
             graph.stage = GraphStage::Solving;
@@ -104,6 +106,10 @@ impl ScratchSession {
             }
             GraphMutationLimit::default().check(seal.scope(), mutations)?;
             let attempt = graph_solve::prepare(resource.verify()?, graph, mutations)?;
+            let memory = graph.memory.reserve(
+                std::mem::size_of::<GraphMutationAck>()
+                    + attempt.nodes * std::mem::size_of::<GraphNodeChange>(),
+            )?;
             let mut changes = graph_index::window(attempt.nodes)?;
             for index in 0..attempt.nodes {
                 changes.push(GraphNodeChange::new(
@@ -113,13 +119,14 @@ impl ScratchSession {
                 )?);
             }
             changes.sort_unstable_by_key(|row| row.after().key());
-            let ack = GraphMutationAck::new(seal.scope().clone(), changes)?;
+            let ack = GraphMutationAck::new(seal.scope().clone(), changes)?.with_memory(memory)?;
             let resource = self.graph_resource_mut(seal.scope())?;
             resource.graph.as_mut().unwrap().attempt = Some(attempt);
             resource.native.reserve()?;
             let graph = resource.graph.as_ref().unwrap();
             graph_solve::commit(
                 resource.connection.as_ref().unwrap(),
+                resource.engine,
                 graph,
                 graph.attempt.as_ref().unwrap(),
                 mutations,
@@ -171,6 +178,7 @@ impl ScratchSession {
             let graph = resource.graph.as_ref().unwrap();
             graph_pop::commit(
                 resource.connection.as_ref().unwrap(),
+                resource.engine,
                 graph,
                 graph.attempt.as_ref().unwrap(),
             )?;
@@ -198,10 +206,11 @@ impl ScratchSession {
                 GraphAttemptKind::Proof,
                 graph,
                 GraphStage::Proved,
-            ));
+            )?);
             resource.native.reserve()?;
             let proof = graph_scan::proof(
                 resource.connection.as_ref().unwrap(),
+                resource.engine,
                 resource.graph.as_mut().unwrap(),
             )?;
             resource.native.observe_allocation()?;
@@ -237,6 +246,7 @@ impl ScratchSession {
                 let graph = resource.graph.as_ref().unwrap();
                 graph_retire::commit(
                     resource.connection.as_ref().unwrap(),
+                    resource.engine,
                     graph,
                     graph.attempt.as_ref().unwrap(),
                 )?;

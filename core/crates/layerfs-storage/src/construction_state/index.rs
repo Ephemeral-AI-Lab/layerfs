@@ -87,10 +87,14 @@ fn verify_writable(
 
 pub(crate) fn append(
     connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     scope: &StateScope,
     records: &[StateRecord],
     previous: u64,
 ) -> StorageResult<()> {
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         // The admitted batch has already passed its widths/order/capacity checks.
@@ -121,10 +125,17 @@ pub(crate) fn append(
         }
         Ok(())
     })();
-    profile::finish_write(connection, result)
+    profile::finish_write_guarded(connection, result, engine)
 }
 
-pub(crate) fn seal(connection: &Connection, seal: &StateSeal) -> StorageResult<()> {
+pub(crate) fn seal(
+    connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
+    seal: &StateSeal,
+) -> StorageResult<()> {
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         verify_writable(connection, seal.scope(), seal.records())?;
@@ -136,7 +147,7 @@ pub(crate) fn seal(connection: &Connection, seal: &StateSeal) -> StorageResult<(
         }
         Ok(())
     })();
-    profile::finish_write(connection, result)
+    profile::finish_write_guarded(connection, result, engine)
 }
 
 pub(crate) fn get(

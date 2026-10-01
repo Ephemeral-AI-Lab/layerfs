@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "scratch_reuse",
+    "--",
+    "--show-output"
+  ],
+  "exit": 101,
+  "wall_ns": 7084315583,
+  "source_change": {
+    "core/crates/layerfs-server/tests/support/scratch_reuse.rs": "44f1a096fc30c5bd46692becee0afb0eb0fa49db356fc3028ba0f1efd00d373d"
+  },
+  "cause": "Darwin fdescfs path stat differs from actualdescriptor fstat; observeexistingFD only noopen/dup"
+}

@@ -31,6 +31,7 @@ impl ScratchSession {
             .resource
             .as_ref()
             .ok_or(StorageError::Integrity("construction scratch released"))?;
+        resource.check_live()?;
         if resource.sites.is_none() || resource.release_attempted || resource.unknown.get() {
             return Err(StorageError::Integrity(
                 "construction scratch site owner unavailable",
@@ -154,6 +155,7 @@ impl ScratchSession {
                     actual: bytes,
                 });
             }
+            resource.namespace_sites_growth(count)?;
             keys[..records.len()].sort_unstable();
             points[..records.len()].sort_unstable();
             resource.verify()?;
@@ -172,6 +174,7 @@ impl ScratchSession {
             resource.native.reserve()?;
             let outcome = site_mutation::insert(
                 resource.connection.as_ref().unwrap(),
+                resource.engine,
                 resource.sites.as_ref().unwrap(),
                 records,
                 local_duplicate,
@@ -218,6 +221,7 @@ impl ScratchSession {
             resource.native.reserve()?;
             let members = site_lifecycle::close(
                 resource.connection.as_ref().unwrap(),
+                resource.engine,
                 resource.sites.as_mut().unwrap(),
                 expected,
             )?;
@@ -261,6 +265,7 @@ impl ScratchSession {
             resource.native.reserve()?;
             site_mutation::observe(
                 resource.connection.as_ref().unwrap(),
+                resource.engine,
                 resource.sites.as_mut().unwrap(),
                 observations,
             )?;
@@ -288,6 +293,7 @@ impl ScratchSession {
             resource.native.reserve()?;
             let seal = site_lifecycle::seal(
                 resource.connection.as_ref().unwrap(),
+                resource.engine,
                 resource.sites.as_mut().unwrap(),
             )?;
             resource.native.observe_allocation()?;
@@ -313,6 +319,7 @@ impl ScratchSession {
                 resource.native.reserve()?;
                 let outcome = site_lifecycle::retire_window(
                     resource.connection.as_ref().unwrap(),
+                    resource.engine,
                     resource.sites.as_mut().unwrap(),
                 )?;
                 resource.native.observe_allocation()?;

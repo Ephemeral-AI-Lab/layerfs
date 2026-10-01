@@ -1,0 +1,30 @@
+{
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-content",
+        "--test",
+        "file_read",
+        "the_payload_wave_enforces_both_its_object_and_its_byte_ceiling",
+        "--",
+        "--show-output"
+      ],
+      "exit": 101,
+      "wall_ns": 1074256958
+    }
+  ],
+  "source_change": {
+    "core/crates/layerfs-content/tests/file_read.rs": "7f0ac1a167b91c0879fdedf8a0315a22e9793c407fb8c47bad1fb045da4fe7a1",
+    "core/crates/layerfs-server/tests/catalog_admission.rs": "e0f3f8bebd7dc9cc4b078b1d32b5c72ee91ec29e47a0e758681cf6ffb7569c3b",
+    "core/crates/layerfs-server/tests/file_drafts.rs": "0d20e861a27f80392285d0efa87969e91c93e9523af6ae213d63a4aa39bfa433",
+    "core/crates/layerfs-storage/tests/engine_bootstrap.rs": "932a893526a4efa51a4a820cc56b9679aef83909d82926b7631f9696e79efffd"
+  },
+  "cause": "sameeligibleknownIdle stayscharged until publicexplicitdrain; strongerpreconsumer capacityrefusal; exacttypedproviderUnsupported recordsinnerNOT_RUN"
+}

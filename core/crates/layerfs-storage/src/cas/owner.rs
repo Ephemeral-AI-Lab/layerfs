@@ -445,6 +445,7 @@ pub struct OutcomeCounters {
 /// Private writer state for one save operation.
 pub struct MutationOwner {
     pub(super) connection: Connection,
+    pub(super) engine: Option<&'static crate::engine::EngineGuard>,
     pub(crate) arbitration: std::sync::Arc<std::sync::Mutex<()>>,
     pub(super) save_id: i64,
     pub(super) published_pool: std::sync::Arc<std::sync::Mutex<crate::encoding::pool::PoolIndex>>,
@@ -497,6 +498,7 @@ pub struct MutationOwner {
     pub(super) decompression: DecompressionWorkspace,
     pub(super) terminal: bool,
     pub(super) cleanup_attempted: bool,
+    pub(super) cleanup_completed: bool,
     pub(super) quarantined: bool,
     pub(super) counters: OutcomeCounters,
     /// Nanosecond cost split of this operation's accept path.
@@ -561,6 +563,10 @@ pub struct MutationOwner {
     pub(super) pool_synced: bool,
     /// Pooled representation outcomes of this save.
     pub(super) pool: PoolCounters,
+    // Shared index credit follows every published Arc's actual last owner.
+    pub(super) published_index_credit: std::sync::Arc<super::working::IndexLease>,
+    // Last field: native/private index/codec destruction precedes byte refund.
+    pub(super) working: super::working::SaveLease,
 }
 
 impl MutationOwner {
@@ -588,6 +594,7 @@ impl MutationOwner {
         &mut self,
         body: impl FnOnce(&mut Self) -> StorageResult<T>,
     ) -> StorageResult<T> {
+        self.validate_engine()?;
         let arbitration = std::sync::Arc::clone(&self.arbitration);
         let _guard = crate::sqlite::ownership::lock(&arbitration)?;
         self.wave_held = true;
@@ -609,6 +616,7 @@ impl MutationOwner {
     /// demands is not copied again. Its pack cache is released on every pack write
     /// (`write_pack`), which is what makes that lifetime sound while the save runs.
     pub fn read_batch(&mut self, ids: &[ObjectId]) -> StorageResult<Vec<Vec<u8>>> {
+        self.validate_engine()?;
         let arbitration = std::sync::Arc::clone(&self.arbitration);
         let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
         let mut groups = crate::encoding::GroupCache::new();
@@ -633,6 +641,7 @@ impl MutationOwner {
     /// pooled reader's pack cache is released on every pack write, so no body it
     /// retains can predate a write to the pack it came from.
     pub fn resolve_location(&mut self, location: lookup::ObjectLocation) -> StorageResult<Vec<u8>> {
+        self.validate_engine()?;
         let arbitration = std::sync::Arc::clone(&self.arbitration);
         let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
         let value = {

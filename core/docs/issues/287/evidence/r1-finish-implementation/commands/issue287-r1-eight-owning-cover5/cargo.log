@@ -1,0 +1,105 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-storage)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-server)
+warning: function `real_reader_commit_unknown_preserves_complete_old_proposed_context_and_S` should have a snake case name
+   --> crates/layerfs-storage/tests/scratch_pool.rs:207:8
+    |
+207 |     fn real_reader_commit_unknown_preserves_complete_old_proposed_context_and_S() {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case (notice the capitalization): `real_reader_commit_unknown_preserves_complete_old_proposed_context_and_s`
+    |
+    = note: `#[warn(non_snake_case)]` on by default
+
+warning: function `existing` is never used
+  --> crates/layerfs-server/tests/support/file_save.rs:32:8
+   |
+32 | pub fn existing(
+   |        ^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: `layerfs-storage` (test "scratch_pool") generated 1 warning
+warning: `layerfs-server` (test "small_file_authority") generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.95s
+     Running tests/canonical_state_population.rs (core/target/r1-eight-owning/debug/deps/canonical_state_population-42b883e845a8775e)
+
+running 2 tests
+test fresh_count_membership_and_final_output_cross128_without_a_full_c1_result_owner ... ok
+test descendant_release_depth180_uses_external_frames_and_preserves_a_surviving_file_alias ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/canonical_state_records.rs (core/target/r1-eight-owning/debug/deps/canonical_state_records-83edc4872f471038)
+
+running 4 tests
+test facts_counts_roots_seeds_jobs_and_frames_share_the_exact_same_byte_ceiling ... ok
+test count_record_uses_literal_original_row_and_monotone_touched_byte ... ok
+test independent_count_transcript_includes_untouched_declaration_and_separate_epoch ... ok
+test release_full_name255_utf8_and_absent_eof_have_literal_width322 ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/no_draft_authority.rs (core/target/r1-eight-owning/debug/deps/no_draft_authority-8051a188161a1a31)
+
+running 2 tests
+test excluded_chunked_shape_foreign_final_policy_and_consumer_failure_cannot_complete ... ok
+test opaque_whole_shape_uses_same_canonical_producer_and_refuses_replay_before_reads ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/small_file_authority.rs (core/target/r1-eight-owning/debug/deps/small_file_authority-7acaea3c3dc5d162)
+
+running 5 tests
+test prospective_pending_credit_transfers_once_and_checked_split_keeps_exact_live_total ... ok
+test cardinality_actual_kind_foreign_table_and_trailing_eof_refuse_without_native_effects ... ok
+test authenticated_zero_reference_regular_file_uses_real_job_and_is_removed_like_original ... ok
+test expected_proposed_eight_counts_and_slow_held_pages_refuse_growth_without_losing_credit ... ok
+test eight_existing_files_reproduce_frozen_legacy_root_through_real_canonical_coordinator ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/no_draft_authority.rs (core/target/r1-eight-owning/debug/deps/no_draft_authority-45da49e40f3d7e26)
+
+running 2 tests
+test final_cutoff_keeps_native6_while_base_kind_length_and_eof_errors_cannot_fallback ... ok
+test declared_whole_changed_noop_and_chunked_base_shrink_use_no_native_draft_and_exact_output ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/small_file_authority.rs (core/target/r1-eight-owning/debug/deps/small_file_authority-ccb561b5b2c67b52)
+
+running 2 tests
+test wrong_body_kind_serial_count_and_eof_preserve_prior_stage_without_native_fallback ... ok
+test genuine_changed_and_unchanged_existing_file_updates_complete_normal_c5_without_native_files ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/canonical_namespace_pipeline.rs (core/target/r1-eight-owning/debug/deps/canonical_namespace_pipeline-c9656d93b083efa2)
+
+running 2 tests
+test unix::actual_deep180_release_matches_independent_chain_interpreter_and_preserves_outside_alias ... FAILED
+test unix::actual_broad385_count_zero_final_population_saves_after_native9row_reset_and_reuses_facts ... FAILED
+
+failures:
+
+---- unix::actual_deep180_release_matches_independent_chain_interpreter_and_preserves_outside_alias stdout ----
+
+thread 'unix::actual_deep180_release_matches_independent_chain_interpreter_and_preserves_outside_alias' panicked at crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:454:9:
+assertion `left == right` failed
+  left: 1
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- unix::actual_broad385_count_zero_final_population_saves_after_native9row_reset_and_reuses_facts stdout ----
+
+thread 'unix::actual_broad385_count_zero_final_population_saves_after_native9row_reset_and_reuses_facts' panicked at crates/layerfs-storage/tests/canonical_namespace_pipeline.rs:343:9:
+assertion `left == right` failed: final consumers reuse established immutable facts
+  left: 1
+ right: 0
+
+
+failures:
+    unix::actual_broad385_count_zero_final_population_saves_after_native9row_reset_and_reuses_facts
+    unix::actual_deep180_release_matches_independent_chain_interpreter_and_preserves_outside_alias
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.45s
+
+error: test failed, to rerun pass `-p layerfs-storage --test canonical_namespace_pipeline`

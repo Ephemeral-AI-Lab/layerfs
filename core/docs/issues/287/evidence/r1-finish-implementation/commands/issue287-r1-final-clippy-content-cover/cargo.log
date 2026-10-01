@@ -1,0 +1,235 @@
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Checking layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-daemon)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-history)
+error: this `if` statement can be collapsed
+  --> crates/layerfs-storage/src/construction_state/root_reset.rs:73:9
+   |
+73 | / ...   if resource.aliases.is_some() {
+74 | | ...       if connection.execute("UPDATE alias_owner SET members=NULL,stage=0,sequence=0,facts=0,jobs=0,expanded=0,current_serial=NULL,cur...
+75 | | ...           return Err(StorageError::Integrity("construction reset alias fixed-row acknowledgement"));
+76 | | ...       }
+77 | | ...   }
+   | |_______^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_if
+   = note: `-D clippy::collapsible-if` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::collapsible_if)]`
+help: collapse nested if block
+   |
+73 ~         if resource.aliases.is_some() && connection.execute("UPDATE alias_owner SET members=NULL,stage=0,sequence=0,facts=0,jobs=0,expanded=0,current_serial=NULL,current_sequence=NULL,progress=?1,remaining=0,after_serial=NULL WHERE id=1 AND stage=4 AND remaining=0",[[0u8;264].as_slice()])? != 1 {
+74 +             return Err(StorageError::Integrity("construction reset alias fixed-row acknowledgement"));
+75 +         }
+   |
+
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> crates/layerfs-content/tests/small_file_authority.rs:123:65
+    |
+123 |             &layerfs_content::filesystem::FilesystemPhases::new(&scope),
+    |                                                                 ^^^^^^ help: change this to: `scope`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_borrow
+    = note: `-D clippy::needless-borrow` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_borrow)]`
+
+error[E0624]: method `into_records` is private
+   --> crates/layerfs-content/tests/indexed_state.rs:285:29
+    |
+285 |         let mut rows = page.into_records();
+    |                             ^^^^^^^^^^^^ private method
+    |
+   ::: /Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content/src/filesystem/state/page.rs:147:5
+    |
+147 |     pub(crate) fn into_records(self) -> Vec<StateRecord> {
+    |     ---------------------------------------------------- private method defined here
+
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> crates/layerfs-content/tests/small_file_authority.rs:297:65
+    |
+297 |             &layerfs_content::filesystem::FilesystemPhases::new(&scope),
+    |                                                                 ^^^^^^ help: change this to: `scope`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_borrow
+
+error: could not compile `layerfs-content` (test "small_file_authority") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+For more information about this error, try `rustc --explain E0624`.
+error: could not compile `layerfs-content` (test "indexed_state") due to 1 previous error
+error: this function has too many arguments (8/7)
+  --> crates/layerfs-storage/src/cas/lifecycle.rs:29:5
+   |
+29 | /     pub(super) fn acquire(
+30 | |         connection: Connection,
+31 | |         engine: Option<&'static crate::engine::EngineGuard>,
+32 | |         capacities: StorageCapacities,
+...  |
+37 | |         working: super::working::SaveLease,
+38 | |     ) -> StorageResult<Self> {
+   | |____________________________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+   = note: `-D clippy::too-many-arguments` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::too_many_arguments)]`
+
+error: this function has too many arguments (9/7)
+   --> crates/layerfs-storage/src/construction_state/fact_read.rs:101:1
+    |
+101 | / fn read_page<T>(
+102 | |     connection: &rusqlite::Connection,
+103 | |     scope: &FactScope,
+104 | |     seal: &FactSeal,
+...   |
+110 | |     decode: impl Fn(&rusqlite::Row<'_>, &FactScope) -> StorageResult<T>,
+111 | | ) -> StorageResult<FactPage<T>> {
+    | |_______________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+error: manual `!RangeInclusive::contains` implementation
+   --> crates/layerfs-storage/src/construction_state/fact_read.rs:112:37
+    |
+112 |     if count == 0 || count > 128 || bytes > 65536 || bytes < FACT_PAGE_HEADER_BYTES {
+    |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `!(FACT_PAGE_HEADER_BYTES..=65536).contains(&bytes)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+    = note: `-D clippy::manual-range-contains` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_range_contains)]`
+
+error: methods called `new` usually return `Self`
+   --> crates/layerfs-storage/src/construction_state/fact_state.rs:122:5
+    |
+122 | /     pub(crate) fn new(
+123 | |         subject: GraphSubject,
+124 | |         capacity: FactCapacity,
+125 | |         memory: GraphMemory,
+...   |
+142 | |         })
+143 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_ret_no_self
+    = note: `-D clippy::new-ret-no-self` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::new_ret_no_self)]`
+
+error: methods called `new` usually return `Self`
+  --> crates/layerfs-storage/src/construction_state/alias_state.rs:69:5
+   |
+69 | /     pub(crate) fn new(
+70 | |         scope: SiteScope,
+71 | |         capacity: AliasCapacity,
+72 | |         memory: GraphMemory,
+...  |
+91 | |         })
+92 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_ret_no_self
+
+error: very complex type used. Consider factoring parts into `type` definitions
+  --> crates/layerfs-storage/src/construction_state/draft_index.rs:57:14
+   |
+57 |     let row: Option<(i64,i64,i64,i64,i64,i64,i64,Option<i64>,Vec<u8>)> = connection.query_row("SELECT form,role,stage,refs,preds,cursor,c...
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#type_complexity
+   = note: `-D clippy::type-complexity` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::type_complexity)]`
+
+error: methods called `new` usually return `Self`
+   --> crates/layerfs-storage/src/construction_state/graph_state.rs:260:5
+    |
+260 | /     pub(crate) fn new(
+261 | |         selection: &StateSelection,
+262 | |         subject: GraphSubject,
+263 | |         declared_seeds: u64,
+...   |
+291 | |         })
+292 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_ret_no_self
+
+error: this function has too many arguments (8/7)
+  --> crates/layerfs-storage/src/construction_state/profile.rs:41:1
+   |
+41 | / pub(crate) fn initialize(
+42 | |     connection: &Connection,
+43 | |     header: &[u8],
+44 | |     plan: Plan,
+...  |
+49 | |     engine: Option<&'static crate::engine::EngineGuard>,
+50 | | ) -> StorageResult<ScratchProfile> {
+   | |__________________________________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+error: methods called `new` usually return `Self`
+   --> crates/layerfs-storage/src/construction_state/root_retire.rs:89:5
+    |
+89  | /     pub(crate) fn new(
+90  | |         memory: &GraphMemory,
+91  | |         seal: StateSeal,
+92  | |         maximum: Option<StateKey>,
+...   |
+104 | |         })
+105 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_ret_no_self
+
+error: this OR pattern can be rewritten using a range
+   --> crates/layerfs-storage/src/construction_state/count_lifecycle.rs:234:52
+    |
+234 |                 || !matches!(state.snapshot.stage, 4 | 5 | 6)
+    |                                                    ^^^^^^^^^ help: try: `4..=6`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_patterns
+    = note: `-D clippy::manual-range-patterns` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_range_patterns)]`
+
+error: this function has too many arguments (8/7)
+  --> crates/layerfs-storage/src/construction_state/count_read.rs:26:1
+   |
+26 | / pub(crate) fn visit<T>(
+27 | |     connection: &Connection,
+28 | |     table: &str,
+29 | |     scope: &CanonicalScope,
+...  |
+34 | |     mut consume: impl FnMut(T) -> StorageResult<()>,
+35 | | ) -> StorageResult<(usize, Option<u64>, bool)> {
+   | |______________________________________________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+error: methods called `new` usually return `Self`
+   --> crates/layerfs-storage/src/construction_state/count_state.rs:172:5
+    |
+172 | /     pub(crate) fn new(
+173 | |         scope: CanonicalScope,
+174 | |         capacity: CanonicalCapacity,
+175 | |         memory: GraphMemory,
+...   |
+190 | |         })
+191 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_ret_no_self
+
+error: methods called `new` usually return `Self`
+   --> crates/layerfs-storage/src/construction_state/release_state.rs:153:5
+    |
+153 | /     pub(crate) fn new(
+154 | |         scope: CanonicalScope,
+155 | |         capacity: CanonicalCapacity,
+156 | |         memory: GraphMemory,
+...   |
+173 | |         })
+174 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_ret_no_self
+
+error: could not compile `layerfs-storage` (lib) due to 14 previous errors
+error: could not compile `layerfs-storage` (lib test) due to 14 previous errors

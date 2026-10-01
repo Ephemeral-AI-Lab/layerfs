@@ -1,5 +1,54 @@
 # Storage (C2, `layerfs-storage`)
 
+> **#287 scoped graph working layout:** Against published parent
+> `53b6bf741a5693f4d00ec98b914ce34645ee9ab3`, graph owners use one fixed
+> 65,536-byte logical state/attempt/acknowledgement class. This is separate from
+> native S and encoded page limits. Resource stores a small boxed graph owner;
+> Graph stores a small optional admitted attempt owner. Full expected/proposed
+> arrays allocate only for a real attempt. Both wrappers drop their actual Box
+> before returning credit. Returned Build/Mutation/Pop acknowledgements own
+> pre-admitted layout/vector credit through consumer drop, including after native
+> scratch release. Status exposes actual compiled layouts and current reserved
+> credit. Compile-time arithmetic admits a normal maximum128-record transition;
+> consumer-held results can explicitly refuse further admission before SQL.
+> [Scoped freeze](../issues/287/R1B-WORKING-LAYOUT-FREEZE.md) records the exact
+> formula, owning proof gates and bounded roots-reset design. No aggregate
+> first-party/SQLite/allocator/RSS/physical qualification follows from this class.
+
+
+
+> **#287 known roots reset:** The same parent/source adds successful profile4
+> terminal roots retirement before current C1 state.complete returns and root.encode
+> begins. Every exact row/ordinal/root deletion is in a <=128-record,
+> header-inclusive64KiB window, with originalseal/maximum and acknowledged/proposed
+> transcript preserved. Full replay digest and empty root/ordinal/Sites/Graph
+> projections precede a four-fixed-owner-row reset. Known clean verifies those
+> exact reset rows and retains the original terminal seal; it is separate from
+> native close/unlink/refund. Root metadata/attempt allocations share the graph
+> working class, and Unknown retains rows/continuations/credit with no retry.
+> LFCS1-4 field grammar stays unchanged, profiles1-3 keep logical completion, and
+> known-clean pooling and same-descriptor rebind are now implemented separately
+> through the explicit pool API below; these source changes await owning verification. [Root reset freeze](../issues/287/R1D-ROOT-RESET-FREEZE.md)
+> records the exact APIs, ordinary caller and pending proof gates.
+
+
+> **#287 scoped Save/index/codec ownership:** The current root-coordinated
+> source adds a per-actual-arbitration-Arc176MiB ledger for Save reservations
+> and real shared-index copies only. Each real shared pair reserves8MiB before
+> load; standard72MiB or explicit96MiB Save classes precede connection effects.
+> Codec/private index preparation precedes persistent Save birth. An already
+> allocated retention capsule keeps birth/acquired/cleanup Unknown connections,
+> index/codec owners and credit. Prospective publication clones precede final
+> COMMIT and move to funded shared owners only after its known result. Actual
+> owner destruction precedes credit return. The unchanged72MiB arithmetic now
+> assigns16MiB to private/publication copies and6MiB to remaining margin;
+> actual System allocation proof is required. Persisted writer2/default/full64
+> slot grammar stays; configured4/64 does not bypass this finite byte grant.
+> Byte refusal telemetry records that cause without claiming SQL-slot exhaustion.
+> [Save working freeze](../issues/287/R1B-SAVE-WORKING-FREEZE.md) retains raw
+> Vec/consumer/read/cache/other-Store/global/native/physical gates as mandatory
+> open scope. This ledger cannot enable StrictServerMemory or protected progress.
+
 > **#287 configurable graph scratch working source:** Against published parent
 > `79639cc6f58ae78eeb1fb638996b1d6948767215`, selected private profile4 binds
 > Subject106/Header298/GraphScope188, sites1 -> graph2 -> roots3 and an explicitly
@@ -79,6 +128,42 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 [index](README.md).
 
 ---
+
+> **#287 canonical8 and pool source:** Private profile8 binds the complete194-byte
+> Graph/Alias/Fact/Canonical subject in a386-byte header. Deferred Counts and
+> Release begin only after known Graph retirement, with the same bound BaseFacts
+> still Open. Declared/touched/count rows, zero seeds, FIFO jobs and external LIFO
+> frames share one capturedS with all namespace populations. Complete Effects,
+> Zero and Final transcripts, consumer EOF, bounded retirement and nine exact
+> reset owner rows precede successful terminal roots completion. Native working
+> owners and consumer pages use the unchanged scoped64KiB controller; this proves
+> no complete provider/SQLite/native/global physical fit.
+>
+> `ScratchSession::return_to_idle` is distinct from `release`: only known successful
+> empty/reset state with no held data or controller observer becomes Idle. Draft6
+> first resets its actual Finished and empty eight data relations. Idle files keep
+> their entireS charge in the existing fixed owner table (idle maximum2); matching
+> exact version+S operations receive fresh token, selector, full subject/header and
+> scopes on the same descriptor/path/controller. One fixed-row transaction retains
+> complete old/proposed context through Unknown and swaps Rust phase owners only
+> after COMMIT/native/new-row acknowledgement. Selected reuse failure never creates
+> a fresh fallback. `ScratchAuthority::drain_idle` explicitly closes/unlinks known
+> Idle only and refunds after removal; failed/Unknown/active owners remain retained.
+> `pool_status` reports actual checked attempts/success/failure/pending counters and
+> retained idle bytes. Fresh success counts native births with captured identity,
+> including a birth whose later SQL initialization fails. The source and external
+> tests are not measured acceptance. [Pool freeze](../issues/287/R1B-POOL-REBIND-FREEZE.md)
+> and [Canonical freeze](../issues/287/R1D-COUNTS-RELEASE-FREEZE.md) capture scope.
+>
+> `ScratchAuthority::new_guarded` explicitly captures the actual static engine
+> guard; `new` remains the explicit compatibility constructor. Validation precedes
+> native creation/open, participating SQLite mutation and COMMIT/rebind. Scratch's
+> actual512KiB connection cache and all existing limits remain unchanged. A foreign
+> guard observed inside a transaction retains Unknown custody without COMMIT or
+> rollback. This adds no per-owner native engine credit or protected/global fit.
+> [Engine participation delivery](../issues/287/R1E-ENGINE-PARTICIPATION-DELIVERY.md)
+> records actual constructor/read/owner/C5 hooks and the remaining native extent,
+> protected catalog and complete physical-profile gates.
 
 ## 6. Storage (C2 — `layerfs-storage`)
 
@@ -658,3 +743,17 @@ The source at `6fd7fce46` requested SQLite `auto_vacuum=INCREMENTAL` on new C2 S
 ### #286 bounded physical headroom before pack insertion (2026-09-30)
 
 The [r030 diagnostic](../issues/286/experiments/20260930-history-preallocation-diagnostic-r030.md) kept C2/C5 bytes identical to r021 but avoided its16-MiB APFS allocation step by reserving small physical increments on the original Store. The current source moves that work into C2's `insert_pack` path **before** each new bounded pack row, inside the save's existing write transaction and measured child. It asks the host for physical headroom through the next pack's declared capacity plus2 MiB, rounded to1 MiB, with one request capped by the singleton-pack bound plus3 MiB. On Darwin the already-locked `nix` crate's safe `F_PREALLOCATE` wrapper reserves from physical EOF; on Linux its safe `fallocate(FALLOC_FL_KEEP_SIZE)` wrapper reserves without changing logical length. The earlier unverified Linux `posix_fallocate` branch at `aed28dda1` would extend logical EOF, so it was corrected before any Linux execution or release claim. No product `unsafe` boundary, new third-party package, extra worker, preconstructed Store, file-sized spool, `fsync` or fallback is introduced. A missing path, unsupported platform, short reservation, I/O error or logical-length change fails explicitly before pack insertion; ordinary save cleanup handles the failure. This is physical placement work, not a new canonical or SQLite schema format. R030 is causal evidence only: fresh original-owner selected and stride1 receipts must decide storage, command/verifier bounds, semantics and cleanup.
+
+
+`StoreProvider::with_owned_profile` chooses returned-data compatibility32 or an
+explicit unsupported strict8 before read effects. The C1 owned method receives a
+prospective count/role/capacity permit; C2 checks locator role/length before pack
+and decode and transfers authenticated canonical Vecs into last-owner buffers.
+Their actual capacities remain charged through mapping/cache copies and slow
+consumers after provider destruction. This is a32MiB returned/copied data authority,
+with caller-selectable smaller limits; it does not admit provider working caches,
+decode/native/OS memory or compose with the scoped176MiB Save/index authority.
+Raw Vec methods remain the explicit larger compatibility path. The pack loader's
+full-BLOB spare-capacity and len-only cache accounting defect remains an open
+working-memory gate pending the frozen control-before-treatment repair plan in
+`issues/287/R1B-OWNED-CANONICAL-FREEZE.md`.

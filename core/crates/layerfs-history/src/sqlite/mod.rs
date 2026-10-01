@@ -9,10 +9,15 @@
 mod allocation;
 mod branch;
 mod commit;
+mod engine;
 mod layerstack;
 mod open;
 mod query;
 mod rows;
 mod staging;
 
-pub use open::{create, open_read_only, open_writable, SqliteCatalog};
+pub use engine::EngineParticipation;
+pub use open::{
+    create, create_participating, open_read_only, open_read_only_participating, open_writable,
+    open_writable_participating, SqliteCatalog,
+};

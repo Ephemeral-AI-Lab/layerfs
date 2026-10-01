@@ -27,6 +27,7 @@ mod spool_point;
 mod spool_slots;
 mod spool_writer;
 mod update;
+mod verified_empty;
 
 pub use binding::{
     BindingAuthority, BindingLookup, BindingRowSource, BindingRows, DirectoryCompletion,
@@ -47,3 +48,11 @@ pub use source::{
 };
 pub use spool::{RowSpool, SpoolReadWork, SPOOL_SLOT_BYTES};
 pub use update::{PreparedBindingUpdate, PreparedUpdate};
+
+pub use verified_empty::VerifiedEmptyRows;
+
+mod small_file_pending;
+mod small_file_rows;
+mod small_file_source;
+pub use small_file_pending::PendingSmallFiles;
+pub use small_file_source::{SmallFileBuilder, VerifiedSmallFileRows, SMALL_FILE_ROWS};

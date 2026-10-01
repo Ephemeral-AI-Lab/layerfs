@@ -1,0 +1,29 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "scratch_reuse",
+    "--test",
+    "native_terminal_custody",
+    "--",
+    "--show-output"
+  ],
+  "exit": 101,
+  "wall_ns": 6641066042,
+  "source_change": {
+    "core/crates/layerfs-server/tests/scratch_reuse.rs": "3d1c98363a00aa6fd432dc23e89f151ea00593f8f325844168e296730fd4bcf1",
+    "core/crates/layerfs-server/tests/support/scratch_reuse.rs": "58c82bf459499504e7439c21a9f9b3c33b10c725f12e6ab3c61d2c266aa66d5d",
+    "core/crates/layerfs-server/tests/support/scratch_reuse_query.py": "3565f59973448a2ce2a59b2a83a33df52998fe75d0acb2331409fb2c64c53db5",
+    "core/crates/layerfs-server/tests/support/scratch_reuse_reader.py": "bb16771bd794a2516a20126b55aafe934416c4b488b4ad73d2914e31874293a1",
+    "core/crates/layerfs-server/tests/native_terminal_custody.rs": "ced12b55ca26de1a6651a2067f1e4953d51e4abcb66308c6bd7a4fe531fd5e07",
+    "core/crates/layerfs-server/tests/support/native_saturation.rs": "f33e4fec64b465e18ddc8966cabe442201eb111a2b4df29963ec8727784febae"
+  },
+  "scope": "firstactualServiceprofile8reuse/StoreUnknownseparation andclosedSource/slowOutput/joinedcancel compatibilityproof; noStrictphysical"
+}

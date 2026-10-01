@@ -1,0 +1,28 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "filesystem_parent_lookup",
+    "--test",
+    "filesystem_tier_stream",
+    "--test",
+    "filesystem_reference",
+    "--test",
+    "filesystem_ordering",
+    "--",
+    "--show-output"
+  ],
+  "exit": 0,
+  "wall_ns": 6752859875,
+  "source_change": {
+    "core/crates/layerfs-content/tests/filesystem_tier_stream.rs": "665b1b6fb1400a80ac7ded67f77177ff13930792f1c2e556de9e87f1e4d71faa"
+  },
+  "cause": "actualexternalsupportmoduleexplicitpath asfilesystem_run_seek; no productchange"
+}

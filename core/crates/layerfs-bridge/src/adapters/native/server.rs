@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 pub fn serve(
-    mut connection: Connection,
+    connection: Connection,
     handler: impl Fn(
         &VerifiedPeer,
         &Request,
@@ -19,10 +19,32 @@ pub fn serve(
         Instant,
     ) -> Result<Response, Failure>,
 ) -> Result<(), Failure> {
-    let hello = connection.receive.read()?;
-    if hello.kind != Kind::Hello || hello.id != 0 || hello.bytes != 1u16.to_be_bytes() {
+    serve_admitted(connection, |_, _| Ok(()), handler)
+}
+/// Class admission runs after authenticated HELLO and before acknowledgement/requests.
+pub fn serve_admitted(
+    mut connection: Connection,
+    admit: impl FnOnce(super::purpose::Hello, &VerifiedPeer) -> Result<(), Failure>,
+    handler: impl Fn(
+        &VerifiedPeer,
+        &Request,
+        &mut dyn Read,
+        &mut Output<'_>,
+        Instant,
+    ) -> Result<Response, Failure>,
+) -> Result<(), Failure> {
+    let hello = connection.receive.read_bounded(4)?;
+    if hello.kind != Kind::Hello || hello.id != 0 {
         return Err(Code::Unsupported.into());
     }
+    let selected = super::purpose::Hello::decode(&hello.bytes)?;
+    admit(selected, &connection.peer)?;
+    connection
+        .receive
+        .select_limit(selected.purpose().frame_limit());
+    connection
+        .send
+        .select_limit(selected.purpose().frame_limit());
     connection.send.write(&hello)?;
     let mut previous = 0;
     loop {
@@ -34,7 +56,10 @@ pub fn serve(
             return Err(Code::InvalidInput.into());
         }
         previous = begin.id;
-        let request = match decode_request(begin.id, &begin.bytes) {
+        let request = match decode_request(begin.id, &begin.bytes).and_then(|r| {
+            selected.purpose().check(&r)?;
+            Ok(r)
+        }) {
             Ok(r) => r,
             Err(e) => {
                 let _ = connection.send.write(&Frame {

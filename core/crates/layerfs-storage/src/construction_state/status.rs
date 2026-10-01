@@ -46,6 +46,12 @@ pub enum ScratchDisposition {
 /// Bounded operator snapshot of one live or retained operation slot.
 #[derive(Clone, Debug)]
 pub struct ScratchOwnerStatus {
+    /// Exact known/proposed successful profile4/5 roots retirement progress.
+    pub root_retirement: Option<super::root_retire::RootRetirementProgress>,
+    /// True only after exact empty fixed-row reset and native observation.
+    pub known_clean: bool,
+    /// Actual scoped graph working reservations/layouts, absent for old profiles.
+    pub graph_working: Option<super::graph_layout::GraphWorkingLayout>,
     /// Issued compact token, unique in the live C1 issuer.
     pub token: u64,
     /// Complete operation selector, never truncated into the token.

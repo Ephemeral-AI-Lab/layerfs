@@ -1,0 +1,48 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-history)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.99s
+     Running tests/engine_participation.rs (core/target/r1-eight-owning/debug/deps/engine_participation-216a2c8ad8b7779e)
+
+running 2 tests
+test required_factory_callback_refuses_before_sqlite_path_creation ... ok
+test known_prebegin_refusal_and_midtransaction_unknown_retain_exact_callback_cause ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/engine_participation.rs (core/target/r1-eight-owning/debug/deps/engine_participation-26bf3a10307aad9b)
+
+running 2 tests
+test native_engine_participation_child ... ok
+test native_run_uses_guarded_store_and_configured_history_on_supported_provider ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/native_purposes.rs (core/target/r1-eight-owning/debug/deps/native_purposes-935c9be9f345e984)
+
+running 2 tests
+layerfs-server acceptor summary accepted=2 admitted=2 live_at_stop=1 peak_live=1 reaped=2 capacity_dropped=0 capacity=4 elapsed_ms=203 error=None
+test selected_native_control_has_closed_surface_and_default_v1_listener_stays_unprotected ... ok
+layerfs-server acceptor summary accepted=9 admitted=9 live_at_stop=4 peak_live=7 reaped=9 capacity_dropped=0 capacity=4 elapsed_ms=709 error=None
+test authenticated_catalog_refill_crosses_general_saturation_and_two_actual_held_saves ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+
+     Running tests/native_read_saturation.rs (core/target/r1-eight-owning/debug/deps/native_read_saturation-dea228a5b4126516)
+
+running 1 test
+layerfs-server acceptor drop at_ms=195 live=7 capacity=4 dropped=1
+layerfs-server acceptor summary accepted=9 admitted=8 live_at_stop=2 peak_live=7 reaped=8 capacity_dropped=1 capacity=4 elapsed_ms=702 error=None
+test catalog_refill_completes_with_two_native_read_owners_and_two_persisted_saves_held ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.94s
+
+     Running tests/engine_participation.rs (core/target/r1-eight-owning/debug/deps/engine_participation-374c70711d428eab)
+
+running 3 tests
+test engine_participation_child ... ok
+test supporting_provider_guarded_store_save_read_and_exact_connection_shapes ... ok
+test supporting_provider_foreign_limit_refuses_new_factory_before_file_effects ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

@@ -84,7 +84,7 @@ fn check(kind: Kind, n: usize) -> Result<(), Failure> {
     let valid = match kind {
         Kind::Body | Kind::ResultData => n > 0 && n <= FRAME_BYTES,
         Kind::EndInput => n == 8,
-        Kind::Hello => n == 2,
+        Kind::Hello => n == 2 || n == 4,
         Kind::Failure => n == 3 || (6..=HISTORY_FAILURE_BYTES).contains(&n),
         _ => n <= METADATA_BYTES,
     };

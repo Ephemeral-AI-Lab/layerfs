@@ -1,0 +1,16 @@
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-nine-source/core/crates/layerfs-storage)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-nine-source/core/crates/layerfs-server)
+error: useless conversion to the same type: `u64`
+   --> crates/layerfs-server/tests/support/scratch_reuse.rs:100:20
+    |
+100 |                 && u64::try_from(metadata.st_ino).ok() == Some(expected.ino())
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider removing `u64::try_from()`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#useless_conversion
+    = note: `-D clippy::useless-conversion` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::useless_conversion)]`
+
+error: could not compile `layerfs-server` (test "scratch_reuse") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-server` (test "binding_claims") due to 1 previous error

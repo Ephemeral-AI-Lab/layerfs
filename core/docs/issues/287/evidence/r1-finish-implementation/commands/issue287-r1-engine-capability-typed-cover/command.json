@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "engine_bootstrap",
+    "--",
+    "--show-output"
+  ],
+  "exit": 0,
+  "wall_ns": 4585635708,
+  "source_change": {
+    "core/crates/layerfs-storage/tests/engine_bootstrap.rs": "213851d566dc4cbd72a7527c4426e3a894c6676631bef844d284770a9444b28e"
+  },
+  "cause": "exactexistingStorageErrorUnsupportedPolicy fieldname, providerzero-readback bodies explicitlyNOT_RUN"
+}

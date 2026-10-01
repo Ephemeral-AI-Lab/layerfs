@@ -3,11 +3,10 @@ use super::ValidationWork;
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::rows::PreparedBindingRows;
 use crate::filesystem::state::{
-    EffectiveGraphState, GraphAdjacencySeal, GraphEdgeCursor, GraphEdgeLedger, GraphNodeCursor,
-    GraphNodeKey, GraphPageLimit, GraphProofCursor, GraphProofSeal,
+    EffectiveGraphState, EligibilityView, GraphAdjacencySeal, GraphEdgeCursor, GraphEdgeLedger,
+    GraphNodeCursor, GraphNodeKey, GraphPageLimit, GraphProofCursor, GraphProofSeal, ParentCalls,
 };
 use crate::object::inode_leaf::InodeKind;
-use std::collections::BTreeMap;
 pub(super) fn adjacency<S: EffectiveGraphState + ?Sized>(
     state: &mut S,
     seal: &GraphAdjacencySeal,
@@ -46,17 +45,18 @@ pub(super) fn adjacency<S: EffectiveGraphState + ?Sized>(
     }
     Ok(())
 }
-pub(super) fn fresh<S: EffectiveGraphState + ?Sized>(
+pub(super) fn fresh_with<S: EffectiveGraphState + ?Sized>(
     input: &dyn PreparedBindingRows,
-    unreachable: &BTreeMap<u64, ()>,
+    unreachable: EligibilityView<'_>,
     state: &mut S,
     seal: &GraphAdjacencySeal,
+    parents: ParentCalls<S>,
 ) -> ContentResult<()> {
     for presence in [false, true] {
         let mut serials = input.new_inodes()?;
         while let Some(serial) = serials.next_row()? {
             if serial == input.root_serial()
-                || unreachable.contains_key(&serial)
+                || unreachable.contains(state, serial, parents)?
                 || !input
                     .value_for(serial)?
                     .is_some_and(|value| value.kind == InodeKind::Directory)

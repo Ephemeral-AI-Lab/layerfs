@@ -20,6 +20,89 @@ the same commit as this note, audited against parent
 algorithm change. Canonical formats and partition rules remain at their existing
 versions; global supplied-I/O and physical memory qualification remain separate.
 
+The #287 R1b navigation cursor change is described in the same commit as this
+note against parent `53b6bf741`. `mapping/navigation.rs` replaces width-sized
+level vectors with at most32 branch descriptor frames and one partially served
+leaf. Branch discovery uses singleton page calls; leaves remain grouped32.
+The cursor's compiled frame/descriptor capacities are checked separately from
+cache ownership. Native and physical memory qualification and speed remain separate
+from the cursor algorithm; the supplied draft authority below has its own owner.
+
+The #287 R1d draft authority implementation replaces EditObjects' draft,
+parent, detached, committed and publication maps with one closed supplied
+metadata authority. `apply_edits_with_state` retains the v1 split/join rules.
+The actual Server SaveFile/V2 caller chooses its file authority from the actual
+Store policy and declared final shape before body or Save effects: existing-file
+Empty/WholeFile results use typed `NoDraft`; existing-file Chunked results use
+LFCS profile6 through the same Store authority; fresh files use the ordinary
+streaming producer. A later no-op verdict does not change a Chunked selection.
+Known logical completion precedes output and Save completion; successful native
+metadata returns to its owned idle pool, known failure explicitly releases it,
+and Unknown retains its exact capsule without suppressing a separately known
+content Save abort.
+
+Public compatibility `apply_edits` explicitly supplies `ResidentDrafts` to the
+same algorithm. Bodies, ordered references/predecessors, checked parent/root/
+temporary counts, detached jobs and Pending/Accepted facts share the8MiB-1
+logical metadata ceiling and65536-record limit. Native backing captures each
+owner's configuredS (default16MiB, finite48MiB owning proof); metadata limits stay
+fixed. The provider compiled working check is1MiB; no payload enters scratch.
+That check covers provider controls/effects/encoding and bounded pin windows,
+not joint admission of C1 decoded nodes, summary/temporary/descriptor vectors,
+recursive continuations, canonical cache or native SQLite allocations. Whole
+heap, engine and physical containment remain separately unqualified.
+
+The same read route's pack loader now borrows the SQLite BLOB and copies only
+its validated used region; truncating a full row no longer hides retained Rust
+capacity. Ordinary and pooled4MiB pack caches count actual Vec capacity. Legal
+used bodies above4MiB live in a separate current-body slot bounded by the existing
+16MiB+4KiB format ceiling; decoded-group/value caches keep512KiB and charge actual
+capacity. The [pack freeze](../issues/287/R1B-PACK-ACTUAL-CAPACITY-FREEZE.md) states
+current/cache/decoder/result overlap and outstanding engine/physical qualification.
+No32MiB returned-data credit or global working fit follows from these cache bounds.
+
+Creation and retirement use bounded acknowledged steps. Internal non-Copy
+`TemporarySummary` values own checked temporary pins. Loaded branch children,
+including repeated identities, acquire pins before the consumed parent retires;
+new parents acquire outgoing links before child pins are released. Supersession
+checks the exact selected root and combines matching root plus temporary debits
+in one captured transition. Only that target's exact queued zero body retires;
+unrelated temporary zero jobs are not globally drained. Ordinary detached-job
+consumption retains its FIRST rule. Both resident and native finish refuse body
+EOF while a temporary pin remains. The wrappers and their producing/consuming
+helpers are crate-private, preventing public cross-actor transfer of private
+operation-local draft keys; public `EditObjects::new/load_node` remain available.
+
+Children resolve before parent encoding. An emission reserves Pending before
+consumer acceptance; lost acknowledgement retains the captured attempt and denies
+resend. Required logical retirement precedes file-state output. Local native
+statements prepare each consecutive reference insert/delete run once, while
+preserving every original row/predicate/cardinality acknowledgement and the
+same32/24-reference windows. Their four SQL-work counters include issued
+preparations and acknowledged rows even if a later rollback or COMMIT is Unknown.
+They do not count published rows or establish a deadline PASS.
+
+`EditCounters.peak_deferred_bytes` preserves the historical logical unfinished
+body convention: canonical length+128 for Page, or decoded node size plus entry
+length times its type size+128 for Node. `peak_draft_metadata_bytes` separately
+reports full associated metadata. Neither is a whole-memory measurement.
+The root's focused cover passed both original unchanged frontier bounds,
+independent localized/model/reference v1 checks and real native selected/shared/
+Unknown vectors. The [draft delivery](../issues/287/R1D-DRAFT-AUTHORITY-DELIVERY.md)
+records exact numbers, source hashes, command exits, the initial missing-oracle
+fixture failure and its sealed-fixture cover. Historical failed receipts retain
+their original scope; the final coherent whole-Core verdict remains root-owned.
+
+The genuine ALL-ZERO prepared update has a separate concrete nonnative source
+and phase owner, described by the [verified-empty freeze](../issues/287/R1C-VERIFIED-EMPTY-FREEZE.md).
+All seven header populations must be zero. Any positive population disqualifies
+that authority; the separately verified file-only class below may admit at most
+eight existing regular-file rows, and other shapes select native metadata. The ordinary wire tag/EOF, namespace validator, selective graph proof,
+DirectoryRoots EOF, canonical filesystem-root output and C5 stage/commit path
+remain required. Native binding/files/reservation/allocation/cleanup report
+None/zero for that owner; captured GraphSubject S is logical context. Its new
+public-composition proofs are prospective until the shared source passes checks.
+
 ---
 
 ## 3. File construction (C1)
@@ -307,7 +390,7 @@ The reuse is by identity: an untouched range is **not re-chunked, not re-read**
 and its objects keep their identities, so an edit costs the changed path plus the
 boundary pages that prove the partition — not the file length.
 
-Two builders exist — `file/edit/tree.rs` (the localized frontier, 895 lines) and
+Two builders exist — `file/edit/tree.rs` (the localized frontier) and
 `file/mapping/build.rs` (streaming construction) — and the source states why that
 is safe rather than a divergence risk:
 
@@ -317,7 +400,11 @@ is safe rather than a divergence risk:
 `EditCounters` reports what the frontier actually did. Complete construction and a
 whole-file result report **all zeros**, which is the honest answer — no unfinished
 mapping node exists on those paths. A chunked edit reports the nodes it actually
-published and the largest frontier it held.
+published and both its historical unfinished-body peak and full authority
+metadata peak. These are different logical scopes: reference/count/job/resolution/
+emission ownership belongs to `peak_draft_metadata_bytes`, not the body statistic.
+Transient decoded/vector/cache/native overlap is not jointly admitted by either
+counter.
 
 ### 4.3 Logical reads
 
@@ -343,12 +430,16 @@ published and the largest frontier it held.
 - Bytes reach the sink **in logical order**, whether a range crosses extents or
   mapping pages.
 - `read_range` reads a logical sub-range under the same discipline.
-- `RangeCursor` (`mapping/read.rs`) serves a sequence of ascending sub-ranges of
-  one chunked file through the same traversal, retaining canonical pages in a
-  caller-owned `PageCache`. A later demand reuses a page while it remains
-  retained; eviction can require another grouped acquisition. Both `new()` and
-  `Default` select64 pages (2 × `READ_NAVIGATION_WAVE`); `bounded(limit)` selects
-  that caller's count, with zero retaining its existing one-page meaning.
+- `RangeCursor` (`mapping/read.rs`) serves ascending sub-ranges of one chunked
+  file using a monotone depth-bounded path plus one partially served decoded
+  leaf. A later segment resumes the path without restarting the root, even
+  when its cache holds one page. Discovery prunes by absolute ranges, acquires
+  selected branches individually and collects up to32 leaf demands across
+  branch boundaries. Payload demands remain grouped32 and ordered. A failure
+  terminalizes the cursor; partial sink bytes remain owned and no call retries.
+  The caller-owned `PageCache` separately retains canonical pages. Its `new()`
+  and `Default` select64 pages (2 × `READ_NAVIGATION_WAVE`); `bounded(limit)`
+  selects the caller's count, with zero retaining its one-page meaning.
   Insertion checks mapping context, canonical width and actual Vec capacity and
   enforces that count itself, including localized-edit insertion. Wholesale
   eviction cannot remove an in-progress batch's only page owner: the bounded
@@ -361,3 +452,28 @@ published and the largest frontier it held.
 the unbounded convenience wrapper. A caller that must bound its work uses the
 former, which fails closed with `BoundedCapacityExceeded` rather than reading a
 file it was not prepared to hold.
+
+Ordinary prepared updates containing1..8 existing regular files have a separate
+concrete source proof and fixed authority. `PendingSmallFiles` holds actual
+source, future actor and helper/page credits before Stage Save or body effects.
+The unchanged v1 parser and authenticated base inode table prove each existing
+kind and exact EOF before the one-time authority transfer. The ordinary
+Canonical8 coordinator owns Counts8, Zero8 and regular Jobs8; directory frames
+and all other namespace populations are checked zero. Consumer-held Count,
+Zero and Fact pages retain real working credits. The same open Facts scope
+retires once after final inode EOF, followed by Counts, Parents and Roots before
+root publication. Logical bindings report truthful zero native effects. See
+[R1C-SMALL-FILE-AUTHORITY-FREEZE.md](../issues/287/R1C-SMALL-FILE-AUTHORITY-FREEZE.md)
+and [the source delivery](../issues/287/R1C-SMALL-FILE-AUTHORITY-DELIVERY.md).
+Compiled working fit and external owning proofs remain pending; this source
+contract supplies no process or physical memory qualification.
+
+For known edits whose declared final representation is Empty or WholeFile,
+`NoDraft` captures the exact policy/base/final shape before input or Save effects.
+Its dedicated wrapper uses the same canonical edit algorithm with a private
+zero-growth authority; successful finish and root delivery still follow normal
+base, body and output validation. Chunked final shape retains the native draft
+provider even when a later comparison proves a no-op. Actual Server selection is
+an explicit FileAuthority enum, so an absent native session cannot substitute
+for an edit authority. See the [prospective no-draft freeze](../issues/287/R1D-NO-DRAFT-AUTHORITY-FREEZE.md)
+and [source delivery](../issues/287/R1D-NO-DRAFT-AUTHORITY-DELIVERY.md).

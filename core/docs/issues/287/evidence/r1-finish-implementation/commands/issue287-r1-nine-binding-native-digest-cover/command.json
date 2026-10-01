@@ -1,0 +1,21 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/target/r1-nine-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "binding_claims",
+    "--",
+    "--show-output"
+  ],
+  "exit": 0,
+  "wall_ns": 28853167542,
+  "source_inventory_sha256": "4499fe586fd03cd5747cdb4b432ad266aa466b36e61015bf8d4b615a3901c5a3",
+  "source_changes_during_command": [],
+  "worktree_owned_target": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-owning"
+}

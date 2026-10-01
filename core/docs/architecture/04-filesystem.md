@@ -1,5 +1,40 @@
 # Filesystem trees
 
+> **#287 compatibility tier-stream working correction:** Against published
+> parent `50a4f3a19`, the old public C1 ReferenceReducer touched/final consumers
+> stream at most32 original immutable tiers with fixed scalar/complete-row
+> heads and newest-tier precedence. Pending rows retain precedence and move
+> through the original BTreeMap into-values cursor. No final consolidation
+> output or second pending-row Vec is created. The unchanged ordering ceiling
+> still charges every input owner through checked backing release; the R1d
+> live-input custody correction is preserved. Actual Rust layout assertions
+> compare fixed stream controls with the replaced maximum tier controls and
+> declared minimum merge buffers, without a native8/64KiB/global/physical claim.
+> Unchanged-tier point cursors remain intact during touched scanning; known
+> final ownership transfer ends their lookup controls before creating owned
+> stream heads. Full row/order/count/bounds checks include superseded duplicates,
+> and final errors stay terminal. This repairs the actual960-byte consolidation
+> conflict with the retained864-byte quota gate by removing storage work.
+> The [prospective correction freeze](../issues/287/R1D-TIER-STREAM-FREEZE.md)
+> records scopes, failure/refund rules and independent vectors. Source and
+> external tests are ready for root's owning check, currently unrun. Supplied
+> Canonical8/native Count/Release and larger R1 qualification are unchanged.
+
+> **#287 supplied alias-frontier working source:** Developed against published
+> parent `53b6bf741a5693f4d00ec98b914ce34645ee9ab3`, the new explicitly supplied
+> alias/graph API replaces the prepared alias walk's complete pending/seen
+> populations with source-bound exact AliasFacts6 and AliasJobs7. Pending
+> rediscovery burns/replaces priority so duplicate LIFO behavior remains exact;
+> one current directory retains fixed264-byte base-name/site-ordinal progress.
+> Facts40/jobs39 coexist with Sites under one independently captured logical
+> aggregate class; profile5 holds the same native file/connection and uses the
+> shared64KiB GraphMemory owner/attempt class. Known bounded alias retirement
+> precedes Site finalization and Graph mutation. Historical graph APIs explicitly
+> select resident compatibility before effects. [Freeze](../issues/287/R1D-ALIAS-FRONTIER-FREEZE.md)
+> records resource/failure semantics; owning proofs are unrun at this working
+> checkpoint. Positive/absence facts, unreachable/count/reference/release
+> populations, physical fit, strict native scope and full R1 remain open.
+
 > **#287 effective graph working source:** Against published parent
 > `79639cc6f58ae78eeb1fb638996b1d6948767215`, the selected graph path builds
 > one compact effective adjacency and uses external selective SCC state after
@@ -535,3 +570,42 @@ The Workspace's keyed namespace pages now use the common level-7 physical page
 limit for all key kinds. This lifts the former level-3 tombstone and level-2
 inode/directory ceilings without changing an encoded page. The physical page
 slot format and other representation ceilings remain separate constraints.
+
+The supplied namespace lane additionally binds `FactSubject` to the actual inode table
+obtained from the authenticated base filesystem root. Native BaseFacts distinguish an
+unknown key from established absence; the C1 hot memo retains eight answers while the
+paged authority preserves all known answers across eviction. ParentEligibility records
+only declared new nonroot directory headers and their incoming-binding facts, replacing
+the full unreachable-parent map on this lane. Both tables use the same captured logical
+scratch ceiling and scoped working-memory admission as Sites, aliases, graph and Roots.
+BaseFacts retire after the final validation graph consumer; ParentEligibility retires
+after canonical inode-stream completion and before the Roots operation closes. The
+legacy public entry points retain their explicitly chosen resident authorities. These
+source contracts do not establish whole-operation or physical SQLite fit.
+
+Profile8 composes named CountState and ReleaseState roles with that namespace owner.
+The Counts table itself supplies declared-new and touched membership, exact signed
+reference effects and final typed values; its immutable Effects and Final epochs
+stream through bounded independently verified pages. Zero candidates carry their
+already established base answers. Native FIFO job ranks and LIFO cursor depths carry
+pending descendant work and full255-byte listing continuations, so admitted width
+and depth do not grow C1 queues, stacks or seed-prefetch maps. The canonical directory,
+reference and inode algorithm is shared by explicit compatibility and supplied routes.
+
+On profile8 the same BaseFacts authority remains open after Graph retirement and
+through canonical base demands. Each bounded wave asks the fact authority first and
+acquires only unknown values, retaining each established answer without restarting
+immutable inode-prefix descent. After final inode consumer EOF, BaseFacts are sealed,
+independently paged and retired, then Counts/ZeroSeeds, Parents and Roots complete
+before filesystem-root emission. Old profile7 retains its earlier post-Graph facts
+retirement. Every simultaneously live namespace/count/zero/job/frame population is
+admitted against one capturedS; fixed C1/native working owners and held pages retain
+credits in the same scoped64KiB class. Neither source grammar nor that scoped class
+establishes process-wide/native-provider memory fit.
+
+ReleaseFrame continuations are complete checked ReleaseName values with inline255
+bytes and an exact length. Their native291-byte payload and byte-order semantics
+are unchanged. Known/proposed frames therefore carry no name Vec clones through
+Unknown. The C1 list_after caller separately credits and checks one temporary
+at-most255-capacity PathName before allocation; directory page decoding remains
+outside that scoped credit qualification.

@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "construction_counts",
+    "--",
+    "--skip",
+    "unix::update_seed_transcript_fifo_current_retention_external_depth_and_full_names"
+  ],
+  "exit": 0,
+  "wall_ns": 3734994708,
+  "source_change": {
+    "core/crates/layerfs-storage/tests/construction_counts.rs": "94513c0eb93bafe4aa91d56ada301e9661bd90ef14dbaad639bceb629e4fb755",
+    "core/crates/layerfs-storage/tests/scratch_pool.rs": "5397a6c296f969c12eccc5da63a415bf3b770897f492c9a4d443ffb21c23b853"
+  },
+  "cause": "existingFreshproofreachable-root finish; selectiveSCCisUpdate-only; actualfreshRoot/expanded/sealstillrequired"
+}

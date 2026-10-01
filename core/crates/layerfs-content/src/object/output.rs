@@ -140,6 +140,16 @@ impl FinalizedObject {
         self.canonical.len()
     }
 
+    /// Actual retained canonical allocation used by metadata-owner admission.
+    pub fn canonical_capacity(&self) -> usize {
+        self.canonical.capacity()
+    }
+
+    /// Actual retained direct-reference allocation used before owner cloning.
+    pub fn reference_capacity(&self) -> usize {
+        self.references.capacity()
+    }
+
     /// Direct logical child identities, in canonical order.
     pub fn references(&self) -> &[ObjectId] {
         &self.references

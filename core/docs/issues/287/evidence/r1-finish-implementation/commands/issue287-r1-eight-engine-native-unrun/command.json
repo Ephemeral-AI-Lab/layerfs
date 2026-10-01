@@ -1,0 +1,37 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "engine_participation",
+    "-p",
+    "layerfs-history",
+    "--test",
+    "engine_participation",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "engine_participation",
+    "--test",
+    "native_read_saturation",
+    "--test",
+    "native_purposes"
+  ],
+  "exit": 0,
+  "wall_ns": 8928733375,
+  "source_change": {
+    "core/crates/layerfs-storage/tests/engine_participation.rs": "daa279be00315abf30a6a99d7b29c4651b0f2735fcec4ee42484099cbaafcd1b",
+    "core/crates/layerfs-history/tests/engine_participation.rs": "4922317174c3efb89062adebfee848d8a4b42fd522068a34785da61be08ff007",
+    "core/crates/layerfs-server/tests/engine_participation.rs": "7b3311ebf6a4a83e5c72261b151f79cb6f99c5a0d2e754568bb82ac6e5869fef",
+    "core/crates/layerfs-server/tests/native_read_saturation.rs": "9d95af11a59ec4a4522b01f4c4480c02f513838e6f13fbe15446c7ef3d607dc5",
+    "core/crates/layerfs-server/tests/support/native_saturation.rs": "865fd2131bcfec1f4712de0e17b5d8d3c0c32dde90e230381e6af016ef8b6f66",
+    "core/crates/layerfs-server/tests/native_purposes.rs": "45422bf10940cb0ef95cbeadd29b492968a3eed0819f306d35ebf58db10c7de0"
+  },
+  "scope": "engineparticipation actualproviderUnsupported becomesexplicitcomponentNOT_RUN; nativecompatpurpose/saturatedread/drain notstrict/global/physical"
+}

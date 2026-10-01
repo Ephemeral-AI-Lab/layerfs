@@ -94,7 +94,7 @@ pub(crate) fn seeds(
         ));
     }
     known_growth(graph, keys, None)?;
-    let mut attempt = GraphAttempt::new(GraphAttemptKind::Seeds, graph, GraphStage::Seeding);
+    let mut attempt = GraphAttempt::new(GraphAttemptKind::Seeds, graph, GraphStage::Seeding)?;
     let mut groups = [None; 128];
     let count = unique(keys, &mut groups);
     let mut added = 0;
@@ -119,7 +119,7 @@ pub(crate) fn seeds(
             attempt.seed_count += 1;
         }
         attempt.maximum_node = Some(attempt.maximum_node.map_or(key, |maximum| maximum.max(key)));
-        attempt.node(old, Some(value));
+        attempt.node(old, Some(value))?;
     }
     if attempt.seed_count > graph.declared_seeds {
         return Err(StorageError::CapacityExceeded {
@@ -151,8 +151,8 @@ pub(crate) fn root(graph: &Graph) -> StorageResult<GraphAttempt> {
     }
     graph.scope.capacity().check_growth(0, 0, 1, 0)?;
     let value = GraphNode::birth(&graph.scope, graph.scope.subject().root_serial(), false)?;
-    let mut attempt = GraphAttempt::new(GraphAttemptKind::Root, graph, GraphStage::Expanding);
-    attempt.node(None, Some(value));
+    let mut attempt = GraphAttempt::new(GraphAttemptKind::Root, graph, GraphStage::Expanding)?;
+    attempt.node(None, Some(value))?;
     attempt.maximum_node = Some(value.key());
     attempt.proposed = GraphTotals::new(1, 0, 0)?;
     Ok(attempt)
@@ -175,8 +175,8 @@ pub(crate) fn append(
             "construction scratch graph parent snapshot",
         ));
     }
-    let mut attempt = GraphAttempt::new(GraphAttemptKind::Append, graph, graph.stage);
-    attempt.node(Some(parent), Some(parent));
+    let mut attempt = GraphAttempt::new(GraphAttemptKind::Append, graph, graph.stage)?;
+    attempt.node(Some(parent), Some(parent))?;
     let mut groups = [None; 128];
     let count = unique(keys, &mut groups);
     let mut added_nodes = 0;
@@ -194,7 +194,7 @@ pub(crate) fn append(
         if key == parent.key() {
             attempt.new_nodes[0] = Some(new);
         } else {
-            attempt.node(old, Some(new));
+            attempt.node(old, Some(new))?;
         }
         if old.is_none() {
             added_nodes += 1;
@@ -209,7 +209,7 @@ pub(crate) fn append(
                 GraphEdge::new(&graph.scope, parent.key().serial(), key.serial(), increment)?
             }
         };
-        attempt.edge(old_edge, Some(new_edge));
+        attempt.edge(old_edge, Some(new_edge))?;
         attempt.maximum_edge = Some(
             attempt
                 .maximum_edge
@@ -258,8 +258,8 @@ pub(crate) fn expanded(
     let edge = GraphEdgeKey::new(&graph.scope, parent.key().serial(), parent.key().serial())?;
     let loop_present = graph_index::get_edge(connection, &graph.scope, edge)?.is_some();
     let value = parent.finish_expansion(&graph.scope, loop_present)?;
-    let mut attempt = GraphAttempt::new(GraphAttemptKind::Expanded, graph, graph.stage);
-    attempt.node(Some(parent), Some(value));
+    let mut attempt = GraphAttempt::new(GraphAttemptKind::Expanded, graph, graph.stage)?;
+    attempt.node(Some(parent), Some(value))?;
     Ok(attempt)
 }
 
@@ -299,9 +299,13 @@ pub(crate) fn validate_rows(
 
 pub(crate) fn commit(
     connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
     graph: &Graph,
     attempt: &GraphAttempt,
 ) -> StorageResult<()> {
+    if let Some(guard) = engine {
+        guard.validate()?;
+    }
     crate::sqlite::write::begin_immediate(connection)?;
     let result = (|| {
         graph_index::verify(connection, graph)?;
@@ -310,5 +314,5 @@ pub(crate) fn commit(
         graph_write::totals(connection, attempt, attempt.seed_count)?;
         Ok(())
     })();
-    profile::finish_write(connection, result)
+    profile::finish_write_guarded(connection, result, engine)
 }

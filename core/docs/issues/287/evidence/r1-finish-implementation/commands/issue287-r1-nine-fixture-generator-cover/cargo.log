@@ -1,0 +1,15 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running tests/fixture_seal.rs (core/target/r1-eight-owning/debug/deps/fixture_seal-689429751718164b)
+
+running 2 tests
+test the_generator_cannot_reseal_during_an_ordinary_test_run ... ok
+test the_sealed_fixtures_are_exactly_the_frozen_ones ... ok
+
+successes:
+
+successes:
+    the_generator_cannot_reseal_during_an_ordinary_test_run
+    the_sealed_fixtures_are_exactly_the_frozen_ones
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

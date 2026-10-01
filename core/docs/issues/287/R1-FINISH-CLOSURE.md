@@ -1,26 +1,98 @@
 # Current R1 finish closure matrix
 
-Status: active assigned work, no aggregate R1 PASS. The exact published tooling
-checkpoints and control source are in the append-only log. Developing product
-source is not a tested or published checkpoint.
+Status: active infrastructure source and scoped owning proofs; **no aggregate R1
+PASS or COMPLETE**. This matrix supplements the [original checklist](CHECKLIST.md)
+and [append-only log](IMPLEMENTATION-LOG.md), and does not close their required
+engine, physical, progress, composite-release or final acceptance gates. Root owns
+source publication, the final report and exact commit/production-LOC identities.
 
-| Delivery | Current source/proof state | Remaining required exit |
+The [first/private7 checkpoint](R1-FINISH-OWNING-CHECKPOINT-20261001.md) retains
+its original scope. Later private8 and coherent source9 results below belong to
+the retained immutable sources plus recorded covering overlays; final publication
+and its commit/source identity remain root-owned. Original compile/runtime
+failures remain evidence. A mixed
+command that later fails does not erase earlier passing bodies; a libtest body
+that reports an unsupported inner provider does not turn that inner gate into PASS.
+
+The mandated full-Core command ran once against unchanged inventory
+`acb1b1ebe3b600a85a3d70725ce7086614bd4d90ed60aaba1ea5fadc77cb81be`:
+246 targets,1129 passing bodies,19 failed bodies and4 ignored; exit101,
+complete wall620.207555208s. Subsequent source and covering corrections retain
+every failure and do not relabel that command. Source9 C1 package inspection
+records481 passing bodies and one failure caused by a missing original ignored
+generator-source file. Copying that original read-only source for inspection,
+without executing the generator or changing sealed fixture bytes, covers both
+fixture-seal bodies. There are therefore482 unique C1 bodies covered cumulatively;
+the original package command remains exit101 rather than an invented single
+aggregate PASS. Final Clippy/examples/fmt/publication remain pending at this
+matrix's source9 update. All six candidate performance arms remain NOT_RUN.
+
+| Delivery | Implemented source and actual scoped evidence | Remaining required exit or qualification |
 | --- | --- | --- |
-| Store association/Save working | Same continuing Store authority deduplicates Service domains; pre-effect index/codec/private/publication leases authored | Owning overlap/allocation/Unknown tests, cache/consumer composition and strict aggregate proof |
-| Mapping navigation | Fixed DFS frames and32-leaf waves authored | Independent cursor/read/error tests and real caller checks |
-| Draft authority | Profile6 typed paged state and native factory authored | Server edit route integration, owning v1/retirement/Unknown/allocation tests |
-| Alias frontier | Profile5 indexed facts/jobs and common C1 caller authored | Server route, exact work/retirement/Unknown tests |
-| Base facts/parent eligibility | Profile7 ports and native tables developing | Real coordinator/factory, occupancy sum, authenticated subject and EOF/retirement proofs |
-| Counts/reference/release | Existing growing owners remain | Paged authority and independent broad/deep/mixed event proofs |
-| Root retirement/reset | Bounded128/64KiB retirement and fixed reset authored | Maximum/partial/realCOMMIT Unknown/stale tests |
-| Scratch reuse/rebind | Concrete design only | New tokens/source/classes, retained pool accounting, known terminal eligibility, real failure/drain proofs |
-| Verified empty | Typed nonnative all-zero source/state authored | Public Service/SDK route and lying-count/EOF/context/terminal proofs; file-only extension remains unimplemented |
-| Graph quanta | Existing selective SCC semantics preserved | Measured count/query cause and safe reduced transition proof; no invented speed PASS |
-| Owned canonical | Leased32MiB compatibility outputs authored; strict8MiB explicitly refused | Full read/cache/encoded/decoded/consumer overlap, pack capacity repair and actual allocator proof |
-| Engine/protected native | ActualApple3.51.0 returns hard-limit0; native refuses before effects | Selected topology CAPABILITY-LIMITED; independent eligible Linux and protected native proofs unrun |
-| Early composite content release | Legacy custody preserved | R3a versioned result/candidate custody dependency, original R1a gate remains unchecked |
-| Focused speed | Spec/common harness published; host masters qualified; control observations underway | Six control targets, final published candidate observations/proofs; numeric cacheINELIGIBLE independent of target outcome |
-| R2–R7/#288 | Unstarted/unmodified | Separate owner assignment |
+| Continuing Store association / Save working | Same continuing Store authority shares Service admission and pre-effect private/index/codec/publication owners. The private8 `birth_scope` body passes actual private-scope birth before two Saves read; all nine `save_working` bodies pass, including actual birth, final-publication and cleanup Unknown custody. The mandated full-Core command records all11 write-admission bodies passing; the earlier mixed command's five failures remain retained. | The full-Core command remains nonpassing overall. Cache/native/consumer/allocator overlap and global176MiB fit remain unproved. Final source/lint/publication and broader qualification remain open. |
+| Mapping navigation | The real fixed DFS cursor, partial-leaf continuation and32-leaf waves replace whole-frontier owners. The earlier immutable checkpoint records navigation4/mapping9, real Store/cache crossing and allocation-layout covers. | Final-source/Core integration and strict8MiB/global/physical composition remain pending; these functional/count proofs are not speed evidence. |
+| Draft authority / typed NoDraft | Native private6 owns paged draft counts/jobs/resolution/emission and the real Server edit route. Real temporary pins preserve duplicate child multiplicity before parent supersession and transfer to emitted-parent/root ownership before release. Supersession clears the exact selected root in the same captured transaction and retires only its exact zero job; final EOF rejects escaped pins. Both original frontier assertions pass unchanged after this actual lifetime correction. Sealed edit reference3, native construction9, temporary4 and reference-quanta4 pass; the256-row witness requires exactly4 creation and6 retirement preparations. Source9 Server FileDraft3/NoDraft2 pass. The real Empty/Whole final-shape route uses opaque NoDraft and the same canonical algorithm; chunked final shapes select native6. | The compiled1MiB provider expression does not qualify all simultaneous C1 decoded nodes, vectors,32 continuations, returned body copies, mapping cache and provider work. Historical body-byte counters exclude that composition. Final format/lint/publication, strict/physical and formal maximum/native disk fit remain open. |
+| Alias frontier | Native private5 facts/jobs drive the real C1 alias traversal; private8 composes the same caller while Sites are live. Earlier C1 alias4/C2 alias3 scoped proofs remain. | Actual classes and runtime growth checks do not prove all theoretical shapes fit. Final provider/global/physical composition remains open. |
+| Base facts / ParentEligibility | Native private7 introduces authenticated immutable-table facts and parent ports; private8 retains the same full SourceId/base/table subject through canonical EOF. Earlier C1 fact5/C2 fact4/namespace overlap4 proofs remain. The native broad/deep private8 trace now passes with actual memo rows, phase-specific first acquisitions and the full228-byte scope unchanged at final inode consumers. | No aggregate memory/physical qualification. Formal maximum and all-consumer/global overlap remain open; old7 retains its earlier post-Graph fact retirement semantics. |
+| Counts / reference / descendant release | Real private8 Count/Zero/Job/Frame authorities replace growing C1 count, touched, seed, queue and stack owners on the supplied route. Native count membership/quota/real-COMMIT-Unknown covers pass cumulatively; the update FIFO/current/depth/full-name body passes. The actual C1→native C2→SaveHandoff width385/depth180 pipeline passes, preserving an outside alias, exact final output and memo reuse. Full255-byte inline ReleaseName retains the291-byte payload and complete before/proposed names. The separate compatibility32-tier stream removes actual final consolidation output while retaining every input charge; its28-test cover preserves all eight original quota cells and sealed v1 roots. | Scoped64KiB compiled owner/attempt/page expressions pass; they do not qualify the whole process or SQL provider. Old compatibility touched collections remain explicit. Full-Core aggregate admission is nonpassing; physical/max-class and mixed workload qualification remain open. |
+| Root retirement / reset | Exact bounded128/64KiB retirement and known fixed reset are real. The native private8 pipeline observes all12 growing tables empty and all9 fixed owner rows reset before filesystem-root acceptance; earlier root-reset6/private5/6 headers2/private7 reset proofs remain. | Default/tested finite classes are not formal maximum fit. No physical/global or R3 composite-content early-release gate is closed by metadata retirement. |
+| Scratch idle reuse / rebind | The real same-authority pool retains full nativeS, descriptor/path/device/inode/private connection and the same working controller. Six native `scratch_pool` bodies pass cumulatively: actual rebind, held observer, exact16/48 classes, corrupt-selected-owner refusal, real shared-reader COMMIT Unknown and Finished Draft6 reset/rebind. Unknown retains complete old/proposed context; no cold fallback or guessed refund. Both real Service `scratch_reuse` bodies pass in the mandated full-Core command, including actual same-Service reuse and Store-finish-Unknown custody; the earlier observer/path/descriptor failures remain evidence. | Component and real Service passes establish their finite logical custody, not engine/physical/global qualification. Final source/lint/publication remain pending, and the full-Core command is nonpassing overall. |
+| Verified empty / ordinary Small | Real public Service routing selects verified all-zero source/state or, separately,1..8 authenticated existing RegularFile rows with exact pending-credit transfer and Counts8/Zero8/Jobs8/Frames0. The same Canonical8 coordinator validates actual base/table/kind/EOF and retires facts/counts/parents/roots. Earlier zero C1 three/Server three proofs remain; Small C1 five pass, including real zero-reference removal and held-page exhaustion. Source9 Server Small2/NoDraft2 pass. | Only declared typed classes are supplied; other shapes stay on their explicit authority. No guessed zero-row declaration, error fallback, whole-process or physical claim. Final all-target Clippy/examples/fmt/boundary pass; source publication remains pending and aggregate full-Core is nonpassing. |
+| Graph quanta / allocation | Selective SCC/root semantics and original quanta remain. Closed attempt kinds replace unused worst-case arrays; actual compiled working/held-ACK checks pass without increasing64KiB or shrinking128-record native windows. | Query/transaction reduction remains unresolved, as do the measured count/query cause, safe reduced transitions and final candidate speed. Allocation reduction alone is not a speed PASS or proof that V/E equal D/B. |
+| Owned canonical / pack-cache capacities | Real returned/copied canonical data uses last-owner leases under the explicit32MiB compatibility class; Strict8 refuses. Used-region pack copying checks borrowed native BLOBs before first-party allocation; actual cache/current/group/value capacities are bounded. Earlier owned-canonical2, pack-capacity4 and real cache crossing/layout proofs remain. | SQLite BLOB materialization, cache targets, tree/allocator metadata, dirty journals, decoded/consumer overlaps, global176MiB/native32MiB/physical containment and strict8 remain unproved. Per-owner/cache assertions do not establish aggregate fit. |
+| Established engine participation | Guarded native main→Store/history/Scratch factories and SQL/cleanup boundaries capture the same established guard; known pre-BEGIN and open-transaction Unknown custody are explicit. Generic C5 participation callbacks pass two bodies. The eight-body engine harness preserves four supported-provider inner bodies as explicit NOT_RUN on this actual host. | **CAPABILITY-LIMITED:** Apple3.51.0 required hard32MiB readback remains0: bootstrap is typed Unsupported and issues no guard before native Store/history/workers. Outer harness completion cannot count those inner gates as PASS. Eligible Linux/actual native32MiB/NOMEM/native30MiB schedule/protected-progress/physical proofs remain unrun or unproved. No substitute provider or late reconfiguration closes these gates. |
+| Protected native logical progress / terminal custody | The real selected-v2 topology preserves default-v1 isolation. Catalog refill passes with two persisted held Saves/two scratch owners **and two genuinely active ordinary native ReadFile owners**, established by third-read Capacity before and after refill. The separate terminal vector passes real kernel Source EOF, actual transport cancellation, fixed250ms slow output, one failure per call, joined shutdown/drain and two public held read outputs plus third-read refusal to prove read-credit return. | These are logical compatible-reader proofs, not strict8/global176/native32/physical or a protected-flag admission PASS. Intermediate closing-before-join slot-retention observation is explicitly NOT_RUN: public APIs expose no stage barrier. Full hostile/NOMEM/provider composition remains open. |
+| Early composite content release | Existing content/Save custody is preserved. Metadata/root/NoDraft completion and known scratch Idle occur before their stated consumers. | The original R1a early composite-content release gate remains unchecked. It depends on R3a versioned result/candidate custody; metadata reset or scratch reuse is not that delivery. |
+| Source9 real Server namespace composition | BindingClaims5 now pass after independent expected units and raw BLAKE3-domain corrections: actual257-directory/claim boundaries,128-record windows, stored-site permutation, retained-parent refusal, overlapping/restated chain and cycle preserve prior Stage and known Save/scratch cleanup. Final cover complete command28.853167542s; libtest body25.10s. All earlier five-body failures and the intervening suffix-only failure remain retained. | This is a functional owning cover, not a per-phase timer or speed arm. The failed-only unchanged2049-run direct vector still fails with Deadline at its original10s request deadline; filtered target83.17s, complete command87.299023875s. Whole-target wall is not attributed to any one phase, and no deadline/input/quota relaxation converts it into PASS. |
+| Focused speed | All six untouched control commands and separate9s canonical proofs were observed once and targets are published in [the control table](R1-FINISH-CONTROL-TARGETS.md). Literal workloads, command bounds, cleanup, identities and cache status remain frozen. | Final candidate publication and all six candidate arms/proofs are pending. Full Core remains nonpassing; scoped correction covers and final Clippy/examples/fmt/boundary are recorded in the implementation checkpoint. Every numeric control latency remains INELIGIBLE/performance_claim=false; old receipts retain their original status. No resampling or candidate speed PASS is implied. |
+| R2–R7 / #288 | R2–R7 product work is unstarted. #288 was read only; its remaining qualification stays delegated and unrun. | Separate owner assignment; no work or acceptance is imported into this R1 matrix. |
 
-No correctness/count result establishes physical or speed qualification. Captured
-S16/48 support is only the actual tested class; theoretical maximum is unqualified.
+## Actual route boundary
+
+Retirement here applies to the new prepared StageChanges/Commit Canonical8 route
+and its explicitly selected verified Empty/Small and typed NoDraft/native6 paths.
+The old public C1 filesystem APIs retain their declared resident/ordering
+compatibility reducers and providers. Legacy Init/import also retains its explicit
+compatibility resource path. Their growing compatibility populations are not
+claimed globally retired by the new supplied-route proofs. R3 deferred content
+custody remains a separate unresolved dependency, and no metadata terminalization
+or same-root fast path substitutes for it.
+
+## Retained private8/source9 evidence and limits
+
+The native pipeline's first memo assertion expected zero total reference base
+reads. Its cause cover established one genuine first root1 acquisition during
+canonical directory processing, followed by Effects2..386 in the broad case or
+Effects2 and Release3..182 in the deep case. Final BASE acquisition is empty;
+all counted BASE demands equal unique first native memo insertions. Required
+canonical inode-table merge reads are separately reported. The complete memo
+subject remains open and unchanged through final consumers before known retirement.
+This corrects the oracle, not the production memo lifetime.
+
+The authoritative command metadata/raw logs remain under these owned directories:
+
+- `benchmark-results/fs-bench-pro/issue287-r1-eight-owning-cover5/`: original C1 canonical/Small/NoDraft and Server Small/NoDraft passing bodies, plus the retained native memo assertion failures.
+- `benchmark-results/fs-bench-pro/issue287-r1-eight-native-memo-cause-cover/`: native broad/deep pipeline2 PASS; bodies2.55s, complete command4.5082835s. These are owning-check walls, not speed samples.
+- `benchmark-results/fs-bench-pro/issue287-r1-eight-count-pool-unrun/` and `issue287-r1-eight-count-fresh-mode-cover/`: update count body and the three fresh membership/quota/Unknown covering passes; original failures retained.
+- `benchmark-results/fs-bench-pro/issue287-r1-eight-pool-unrun/`, `issue287-r1-eight-pool-root-seal-cover/` and `issue287-r1-eight-pool-solver-scope-cover/`: six cumulative native pool passes and every preceding failure; complete graph/solver scope CAS correction retains exact verification.
+- `benchmark-results/fs-bench-pro/issue287-r1-eight-engine-native-unrun/`: logical native purposes2/read-saturation1 pass; read-saturation body0.94s. Supporting actual engine bodies remain NOT_RUN on the selected unsupported Apple provider.
+- `benchmark-results/fs-bench-pro/issue287-r1-eight-service-reuse-terminal-unrun/`: terminal body1 PASS0.78s and the subsequent two Service reuse failures. Its command exits101; the terminal result is not a claim that the whole command passed.
+- `benchmark-results/fs-bench-pro/issue287-r1-eight-service-canonical-path-cover/` and `issue287-r1-eight-service-fstat-cover/`: retained nonpassing Service reuse observer covers; no successful Service reuse verdict is inferred here.
+- `benchmark-results/fs-bench-pro/issue287-r1-eight-engine-boundary-birth-cover/`: birth/private visibility1, multi-writer5, persistence8 and Save-working9 passing bodies; actual supported guard bodies are NOT_RUN, and write-admission retains6 passes/5 failures. The mixed command is nonpassing.
+- `benchmark-results/fs-bench-pro/issue287-r1-eight-no-draft-shape-cover/`: one new malformed sequence pre-effect refusal pass; original two passing C1 NoDraft bodies are reused.
+- `benchmark-results/fs-bench-pro/issue287-r1-final-full-core/`: the mandated one full command;246 targets,1129 passing/19 failing/4 ignored bodies, exit101,620.207555208s and no source changes during the command. Real Service reuse2 and write-admission11 pass inside this nonpassing command.
+- `benchmark-results/fs-bench-pro/issue287-r1-tier-stream-legacy-quota-cover/`, `issue287-r1-tier-stream-target-name-cover/` and `issue287-r1-tier-stream-external-module-cover/`: retained target-name/externalsupport import failures, then28 scoped passes in6.752859875s; [delivery](R1D-TIER-STREAM-DELIVERY.md) records exact source hashes, custody and original quota gates.
+- `benchmark-results/fs-bench-pro/issue287-r1-draft-fixture-native-quanta-cover/`: sealed edit reference3 and native construction9/temporary4/quanta4 PASS with untouched canonical fixtures and locally prepared same-effect count/Unknown witnesses; no generator execution or performance claim.
+- `benchmark-results/fs-bench-pro/issue287-r1-nine-c1-integration/`: source9 inventory`63259c99799cb8efa73145b46d1339a8266480fbedf0e93fd819a96faf228019`,481 passing C1 bodies plus missing read-only generator-source inspection; exit101,78.538210833s, no source changes. `issue287-r1-nine-fixture-generator-cover/` records the original source inspection's2 PASS in0.154712125s after copying the ignored generator source without executing it; unique C1 covered total482.
+- `benchmark-results/fs-bench-pro/issue287-r1-nine-server-composition/`: FileDraft3/NoDraft2/Small2 PASS and five BindingClaims failures; mixed command exit101,34.011010958s. `issue287-r1-nine-binding-suffix-cover/` retains the next failed cover. `issue287-r1-nine-binding-native-digest-cover/` then records all5 BindingClaims PASS, inventory`4499fe586fd03cd5747cdb4b432ad266aa466b36e61015bf8d4b615a3901c5a3`, body25.10s, complete command28.853167542s, no changes during that command.
+- `benchmark-results/fs-bench-pro/issue287-r1-nine-direct-2049-cover/`: failed-only unchanged direct vector remains FAIL with known Deadline; body83.17s, command87.299023875s. The command metadata declares an unrelated `binding_claims.rs` external test edit during the command; this is not an unchanged whole-source identity or benchmark/per-phase receipt.
+
+These results qualify only their actual finite routes, source inventories and
+retained overlays. The captured16/48MiB native classes, scoped64KiB graph/canonical
+working owner expressions,1MiB draft class and32MiB returned-data compatibility
+class are distinct statements. None proves all formal maximum shapes, actual
+SQLite/global scheduling, allocator metadata, cgroup page cache, physical memory
+or exclusive phase attribution. All-C1 decoded/vector/continuation/cache/provider
+overlap remains unqualified. The mandated full-Core command has run and remains
+nonpassing; source9 cumulative covers do not relabel it. The unchanged direct2049
+deadline failure and publication/all six NOT_RUN candidate arms remain root-owned work. Final Clippy/examples/fmt/boundary pass on the coherent source9 product; the implementation checkpoint records their exact commands. No unchecked original gate is removed by this matrix.

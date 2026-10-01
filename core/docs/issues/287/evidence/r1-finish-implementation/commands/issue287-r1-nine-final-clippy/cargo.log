@@ -1,0 +1,28 @@
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-nine-source/core/crates/layerfs-content)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-nine-source/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-nine-source/core/crates/layerfs-history)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-nine-source/core/crates/layerfs-server)
+    Checking layerfs-sdk v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-nine-source/core/crates/layerfs-api/sdk)
+error: use of `format!` to build up a string from an iterator
+  --> crates/layerfs-server/tests/engine_participation.rs:66:5
+   |
+66 |     bytes.iter().map(|b| format!("{b:02x}")).collect()
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+help: call `fold` instead
+  --> crates/layerfs-server/tests/engine_participation.rs:66:18
+   |
+66 |     bytes.iter().map(|b| format!("{b:02x}")).collect()
+   |                  ^^^
+help: ... and use the `write!` macro here
+  --> crates/layerfs-server/tests/engine_participation.rs:66:26
+   |
+66 |     bytes.iter().map(|b| format!("{b:02x}")).collect()
+   |                          ^^^^^^^^^^^^^^^^^^
+   = note: this can be written more efficiently by appending to a `String` directly
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#format_collect
+   = note: `-D clippy::format-collect` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::format_collect)]`
+
+error: could not compile `layerfs-server` (test "engine_participation") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

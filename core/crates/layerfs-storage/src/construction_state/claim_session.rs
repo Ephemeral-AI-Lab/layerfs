@@ -93,6 +93,7 @@ impl ScratchSession {
             resource.native.reserve()?;
             let outcome = claim_index::batch(
                 resource.connection.as_ref().unwrap(),
+                resource.engine,
                 resource.phased.as_ref().unwrap(),
                 keys,
             )?;
@@ -123,8 +124,11 @@ impl ScratchSession {
             resource.native.reserve()?;
             let state = resource.phased.as_mut().unwrap();
             state.record_attempt(AttemptKind::Seal, &[], state.records);
-            let (seal, maximum) =
-                claim_lifecycle::seal(resource.connection.as_ref().unwrap(), state)?;
+            let (seal, maximum) = claim_lifecycle::seal(
+                resource.connection.as_ref().unwrap(),
+                resource.engine,
+                state,
+            )?;
             resource.native.observe_allocation()?;
             let state = resource.phased.as_mut().unwrap();
             state.phase = ClaimPhase::Sealed;
@@ -197,6 +201,7 @@ impl ScratchSession {
                 resource.native.reserve()?;
                 let outcome = claim_lifecycle::retire_window(
                     resource.connection.as_ref().unwrap(),
+                    resource.engine,
                     resource.phased.as_mut().unwrap(),
                 )?;
                 // No in-memory Retired permission is issued before both the SQL

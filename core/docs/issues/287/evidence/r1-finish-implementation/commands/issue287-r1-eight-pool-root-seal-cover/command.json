@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "scratch_pool",
+    "--",
+    "--skip",
+    "unix::actual_finished_draft6_resets_before_idle_and_rebinds_full_scope_without_new_birth"
+  ],
+  "exit": 101,
+  "wall_ns": 4671150292,
+  "source_change": {
+    "core/crates/layerfs-storage/tests/scratch_pool.rs": "a323a931ebab6ec34e279309d892b9679e1e7a257b7fef4e43c6a0ce893d1859"
+  },
+  "cause": "seal exactemptyRootphase beforecomplete, logicalabandon alone is not knownreset or reuseeligibility"
+}

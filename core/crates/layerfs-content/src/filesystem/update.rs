@@ -12,26 +12,18 @@
 use std::collections::BTreeMap;
 
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::directory::update::apply_bindings;
 use crate::filesystem::inode::read::{lookup_many, InodeReadWork, InodeTable};
-use crate::filesystem::inode::update::apply_inode_values;
-use crate::filesystem::objects::{
-    FilesystemObjects, FilesystemPhases, ObjectWork, MAXIMUM_READ_DEMANDS,
-};
+use crate::filesystem::objects::{FilesystemObjects, FilesystemPhases, ObjectWork};
 use crate::filesystem::references::backing::OrderingBacking;
 use crate::filesystem::references::reduce::{PendingState, ReferenceReducer, ReferenceWork};
-use crate::filesystem::references::release::{release_zero_count, ReleaseWork};
-use crate::filesystem::root::{profile_id, FilesystemRoot, FilesystemRootId};
+use crate::filesystem::references::release::ReleaseWork;
+use crate::filesystem::root::{FilesystemRoot, FilesystemRootId};
 use crate::filesystem::rows::PreparedBindingRows;
-use crate::filesystem::sorted::finish::DirectoryRoot;
 use crate::filesystem::sorted::SortedWork;
-use crate::filesystem::state::{
-    DirectoryRoots, IndexedState, PageLimit, StateScope, STATE_MAX_PAGE_BYTES,
-    STATE_MAX_PAGE_RECORDS,
-};
+use crate::filesystem::state::{DirectoryRoots, IndexedState, StateScope};
 use crate::filesystem::validate::{self, FilesystemTopology, ValidationWork};
-use crate::object::inode_leaf::{InodeKind, InodeValue};
-use crate::object::{AuthenticatedObjects, FinalizedObject, ObjectRole};
+use crate::object::inode_leaf::InodeValue;
+use crate::object::AuthenticatedObjects;
 
 /// Work one complete filesystem operation performed.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -69,11 +61,21 @@ pub struct FilesystemResult {
     pub counters: FilesystemUpdateCounters,
 }
 
+mod canonical;
+mod canonical_body;
 mod compatibility;
 mod construction;
 mod graph;
+mod namespace;
+mod reduction;
 mod sites;
+use crate::filesystem::state::{EligibilityAuthority, ParentCalls};
 
+pub use canonical::{
+    build_filesystem_binding_rows_with_canonical_state,
+    update_filesystem_binding_rows_with_canonical_state,
+};
+pub use canonical_body::canonical_directory_working_bytes;
 pub use compatibility::{
     build_filesystem, build_filesystem_binding_rows_with_state, build_filesystem_timed,
     build_filesystem_with_state, build_filesystem_with_state_timed, update_filesystem,
@@ -85,8 +87,16 @@ pub use construction::{
     update_filesystem_binding_rows_with_construction_state,
 };
 pub use graph::{
-    build_filesystem_binding_rows_with_graph_state, update_filesystem_binding_rows_with_graph_state,
+    build_filesystem_binding_rows_with_alias_graph_state,
+    build_filesystem_binding_rows_with_graph_state,
+    update_filesystem_binding_rows_with_alias_graph_state,
+    update_filesystem_binding_rows_with_graph_state,
 };
+pub use namespace::{
+    build_filesystem_binding_rows_with_namespace_state,
+    update_filesystem_binding_rows_with_namespace_state,
+};
+pub use reduction::canonical_reduction_working_bytes;
 pub use sites::{
     build_filesystem_binding_rows_with_site_state, update_filesystem_binding_rows_with_site_state,
 };
@@ -115,6 +125,7 @@ fn run_binding_state<'b>(
             phases,
             &mut cleanup_attempted,
             &mut contents,
+            state,
         )
     };
     match outcome {
@@ -129,7 +140,7 @@ fn run_binding_state<'b>(
                     let _ = backing.release();
                 }
             }
-            let _ = contents.release();
+            let _ = contents.release(state);
             Err(error)
         }
     }
@@ -141,7 +152,8 @@ fn run_body<'b>(
     backing: Option<&mut (dyn OrderingBacking + 'b)>,
     phases: &FilesystemPhases<'_>,
     cleanup_attempted: &mut bool,
-    contents: &mut DirectoryRoots<'_>,
+    contents: &mut DirectoryRoots,
+    state: &mut dyn IndexedState,
 ) -> ContentResult<FilesystemResult> {
     // A directory this batch leaves with no binding is dead on arrival: its
     // parent already accounted the binding it lost, so there is no final count to
@@ -154,7 +166,7 @@ fn run_body<'b>(
     let validated = ValidatedInput {
         topology: checked.topology,
         validation,
-        unreachable,
+        unreachable: EligibilityAuthority::Legacy(unreachable),
     };
     run_canonical_body(
         objects,
@@ -164,410 +176,47 @@ fn run_body<'b>(
         cleanup_attempted,
         contents,
         validated,
+        state,
+        ParentCalls::compatibility(),
     )
 }
 
 struct ValidatedInput {
     topology: FilesystemTopology,
     validation: ValidationWork,
-    unreachable: BTreeMap<u64, ()>,
+    unreachable: EligibilityAuthority,
 }
 
-fn run_canonical_body<'b>(
+#[allow(clippy::too_many_arguments)]
+fn run_canonical_body<'b, S: IndexedState + ?Sized>(
     objects: &mut FilesystemObjects<'_>,
     input: &dyn PreparedBindingRows,
     backing: Option<&mut (dyn OrderingBacking + 'b)>,
     phases: &FilesystemPhases<'_>,
     cleanup_attempted: &mut bool,
-    contents: &mut DirectoryRoots<'_>,
+    contents: &mut DirectoryRoots,
     validated: ValidatedInput,
+    state: &mut S,
+    parents: ParentCalls<S>,
 ) -> ContentResult<FilesystemResult> {
-    let ValidatedInput {
-        topology,
-        validation,
-        unreachable,
-    } = validated;
-    let reader = objects.reader();
-    let mut counters = FilesystemUpdateCounters {
-        validation,
-        ..FilesystemUpdateCounters::default()
-    };
-    let table = topology.table();
-    let base_table = topology.base.map(|root| root.inode_table());
-    // A build already supplies sorted new serials and every final typed value.
-    // One count per declared serial avoids ordering runs and their lookups.
     let resources = input.resources();
-    let mut initial_counts = if base_table.is_none() {
-        if input.new_rows() > resources.maximum_touched_serials() {
-            return Err(ContentError::ObjectLimitExceeded {
-                limit: resources.maximum_touched_serials(),
-                actual: input.new_rows(),
-            });
-        }
-        Some(vec![0_u64; input.new_rows()])
-    } else {
-        None
-    };
     let mut reducer = ReferenceReducer::new(
         resources.maximum_pending_records,
         backing,
         resources.merge_buffer_bytes,
         resources.ordering_bytes,
     );
-    if initial_counts.is_none() {
-        reducer.check_backing_capacity()?;
-        register_values(&mut reducer, input, &unreachable)?;
-    }
-    let batch = resources.base_read_batch.min(MAXIMUM_READ_DEMANDS);
-    let mut retained_parents = Vec::new();
-    let mut retained_bases = Vec::new();
-    phases.phase("directories", || -> ContentResult<()> {
-        // Validation already proved parent ordering and uniqueness. Only one
-        // final batch is retained for reuse after every binding effect is known.
-        // Retain only one admitted batch of scalar headers. Each directory's
-        // names are consumed separately through its exact selected cursor.
-        let mut waves = input.directory_headers()?;
-        loop {
-            let mut updates = Vec::with_capacity(batch);
-            while updates.len() < batch {
-                match waves.next_header()? {
-                    Some(row) => updates.push(row),
-                    None => break,
-                }
-            }
-            if updates.is_empty() {
-                break;
-            }
-            let mut parents = Vec::with_capacity(updates.len());
-            for update in &updates {
-                if topology.table.is_some()
-                    && !unreachable.contains_key(&update.parent())
-                    && !input.is_new(update.parent())?
-                {
-                    parents.push(update.parent());
-                }
-            }
-            let bases = lookup_many(reader, table, &parents, &mut InodeReadWork::default())?;
-            for update in &updates {
-                if unreachable.contains_key(&update.parent()) {
-                    // Nothing binds this directory in the result, so no page of it
-                    // is worth building. Its bindings are still this operation's
-                    // edges and stay accounted: every final binding of a directory
-                    // this operation allocates is an addition.
-                    let mut bindings = input.bindings(update)?;
-                    while let Some((_, binding)) = bindings.next_binding()? {
-                        let Some(child) = binding else {
-                            continue;
-                        };
-                        note_retained_binding(
-                            &mut reducer,
-                            initial_counts.as_deref_mut(),
-                            input,
-                            child,
-                        )?;
-                        counters.bindings_added = counters.bindings_added.saturating_add(1);
-                    }
-                    if !bindings.finish()?.matches(update) {
-                        return Err(ContentError::InvalidRecord("directory completion"));
-                    }
-                    continue;
-                }
-                let base = parents
-                    .binary_search(&update.parent())
-                    .ok()
-                    .and_then(|index| bases[index]);
-                let mut bindings = input.bindings(update)?;
-                let content_root = if update.binding_count() == 0 {
-                    if bindings.next_binding()?.is_some() {
-                        return Err(ContentError::InvalidRecord("directory binding count"));
-                    }
-                    // An unchanged directory retains its root; a new directory
-                    // needs one actual empty page.
-                    if input.is_new(update.parent())? || topology.table.is_none() {
-                        crate::filesystem::directory::update::empty_directory(objects)?.0
-                    } else {
-                        base.ok_or(ContentError::InvalidRecord("directory parent record"))?
-                            .content_root
-                    }
-                } else {
-                    let base_directory = if input.is_new(update.parent())? {
-                        None
-                    } else if topology.table.is_some() {
-                        let record =
-                            base.ok_or(ContentError::InvalidRecord("directory parent record"))?;
-                        if record.kind != InodeKind::Directory {
-                            return Err(ContentError::InvalidRecord("directory parent kind"));
-                        }
-                        Some(DirectoryRoot(record.content_root))
-                    } else {
-                        None
-                    };
-                    let mut observe = |before: Option<u64>,
-                                       after: Option<u64>|
-                     -> ContentResult<()> {
-                        if before == after {
-                            return Ok(());
-                        }
-                        // Additions precede removals, so a move never drops an
-                        // inode to a spurious zero between its two bindings.
-                        if let Some(next) = after {
-                            note_retained_binding(
-                                &mut reducer,
-                                initial_counts.as_deref_mut(),
-                                input,
-                                next,
-                            )?;
-                            counters.bindings_added = counters.bindings_added.saturating_add(1);
-                        }
-                        if let Some(previous) = before {
-                            reducer.note_removed_binding(previous)?;
-                            counters.bindings_removed = counters.bindings_removed.saturating_add(1);
-                        }
-                        Ok(())
-                    };
-                    let (root, work) = apply_bindings(
-                        objects,
-                        base_directory,
-                        std::iter::from_fn(|| bindings.next_binding().transpose()),
-                        resources.scratch_bytes,
-                        &mut observe,
-                    )?;
-                    counters.directories.pages_read = counters
-                        .directories
-                        .pages_read
-                        .saturating_add(work.pages_read);
-                    counters.directories.pages_created = counters
-                        .directories
-                        .pages_created
-                        .saturating_add(work.pages_created);
-                    counters.directories.pages_reused = counters
-                        .directories
-                        .pages_reused
-                        .saturating_add(work.pages_reused);
-                    counters.directories.change_keys = counters
-                        .directories
-                        .change_keys
-                        .saturating_add(work.change_keys);
-                    counters.directories.untouched_subtrees = counters
-                        .directories
-                        .untouched_subtrees
-                        .saturating_add(work.untouched_subtrees);
-                    counters.directories.peak_scratch_bytes = counters
-                        .directories
-                        .peak_scratch_bytes
-                        .max(work.peak_scratch_bytes);
-                    counters.directory_updates = counters.directory_updates.saturating_add(1);
-                    root.0
-                };
-                if !bindings.finish()?.matches(update) {
-                    return Err(ContentError::InvalidRecord("directory completion"));
-                }
-                contents.append(update.parent(), content_root)?;
-            }
-            if !parents.is_empty() {
-                retained_parents = parents;
-                retained_bases = bases;
-            }
-        }
-        Ok(())
-    })?;
-    contents.seal()?;
-    if initial_counts.is_some() {
-        // Fresh construction consumes roots by exact serial. First establish the
-        // complete selected page/EOF transcript without retaining its population.
-        phases.phase("state.verify", || {
-            let mut cursor = contents.cursor()?;
-            let limit = PageLimit::new(batch.min(STATE_MAX_PAGE_RECORDS), STATE_MAX_PAGE_BYTES)?;
-            while cursor.next_page(limit)?.is_some() {}
-            Ok(())
-        })?;
-    }
-    // Keep the reducer's original all-effects-before-values insertion order:
-    // interleaving values with later effects can increase spill quota demands.
-    // Reuse the final parent batch; earlier omitted values are read in bounded
-    // groups rather than retaining a record for every directory in the input.
-    if initial_counts.is_none() {
-        let mut cursor = contents.cursor()?;
-        let limit = PageLimit::new(batch.min(STATE_MAX_PAGE_RECORDS), STATE_MAX_PAGE_BYTES)?;
-        while let Some(page) = cursor.next_page(limit)? {
-            let wave = page.into_records();
-            if wave.is_empty() {
-                break;
-            }
-            let mut missing = Vec::with_capacity(wave.len());
-            for record in &wave {
-                let serial = record.key().serial();
-                if input.value_for(serial)?.is_none()
-                    && retained_parents.binary_search(&serial).is_err()
-                {
-                    missing.push(serial);
-                }
-            }
-            let bases = lookup_many(reader, table, &missing, &mut InodeReadWork::default())?;
-            for record in wave {
-                let serial = record.key().serial();
-                let value = match input.value_for(serial)? {
-                    Some(value) => Some(value),
-                    None => retained_parents
-                        .binary_search(&serial)
-                        .ok()
-                        .and_then(|index| retained_bases[index])
-                        .or_else(|| {
-                            missing
-                                .binary_search(&serial)
-                                .ok()
-                                .and_then(|index| bases[index])
-                        }),
-                };
-                let value = value.ok_or(ContentError::InvalidRecord("directory value missing"))?;
-                reducer.note_value(
-                    serial,
-                    InodeValue {
-                        content_root: record.root(),
-                        ..value
-                    },
-                )?;
-            }
-        }
-    }
-    // Every other supplied value keeps the content root the caller named, unless
-    // this operation rebuilt that inode's own directory.
-    if initial_counts.is_none() {
-        let mut values = input.inodes()?;
-        while let Some(update) = values.next_row()? {
-            if contents.get(update.serial)?.is_some() || unreachable.contains_key(&update.serial) {
-                // A directory this batch drops is not part of the result at all: its
-                // value is never a final row, so it must not enter the reduction.
-                continue;
-            }
-            reducer.note_value(update.serial, update.value)?;
-        }
-    }
-    if topology.table.is_some() {
-        // Only an update can release descendants: a new filesystem has no base
-        // binding to lose, and its root is never released.
-        let zero = zero_count_serials(
-            reader,
-            table,
-            &mut reducer,
-            resources.base_read_batch,
-            input.root_serial(),
-            &unreachable,
-            resources.maximum_touched_serials(),
-        )?;
-        counters.base_records_read = counters.base_records_read.saturating_add(zero.1);
-        counters.release = release_zero_count(
-            reader,
-            table,
-            &mut reducer,
-            &zero.0,
-            resources.base_read_batch,
-            64,
-            crate::filesystem::limits::MAXIMUM_PAGE_BYTES,
-            |reader, serial| {
-                lookup_base(reader, table, serial)?
-                    .ok_or(ContentError::InvalidRecord("released inode record"))
-            },
-        )?;
-    }
-    let (inode_table, inode_work) = if let Some(counts) = initial_counts {
-        let mut values = input.inodes()?;
-        while let Some(update) = values.next_row()? {
-            if input.new_position(update.serial)?.is_none() {
-                return Err(ContentError::InvalidRecord("effect inode record"));
-            }
-        }
-        drop(values);
-        let root_serial = input.root_serial();
-        let new_count = input.new_rows();
-        let mut serials = input.new_inodes()?;
-        let mut rows: Vec<(u64, Option<InodeValue>)> = Vec::with_capacity(new_count);
-        for count in counts {
-            let Some(serial) = serials.next_row()? else {
-                return Err(ContentError::InvalidRecord("new inode row count"));
-            };
-            if unreachable.contains_key(&serial) {
-                continue;
-            }
-            if count == 0 && serial != root_serial {
-                return Err(ContentError::InvalidRecord("new inode without binding"));
-            }
-            let value = input
-                .value_for(serial)?
-                .ok_or(ContentError::InvalidRecord("new inode value"))?;
-            rows.push((
-                serial,
-                Some(InodeValue {
-                    namespace_ref_count: count,
-                    content_root: contents.get(serial)?.unwrap_or(value.content_root),
-                    ..value
-                }),
-            ));
-        }
-        drop(serials);
-        let changes = rows.into_iter().map(Ok);
-        let built = phases.phase("inodes", || {
-            apply_inode_values(objects, None, changes, resources.scratch_bytes)
-        })?;
-        counters.references.final_values = (new_count - unreachable.len()) as u64;
-        built
-    } else {
-        let mut rows = phases.phase("references", || {
-            reducer.finish(
-                reader,
-                table,
-                resources.base_read_batch.max(1),
-                input.root_serial(),
-            )
-        })?;
-        let mut source_error: Option<ContentError> = None;
-        let changes = std::iter::from_fn(|| match rows.next_change() {
-            Ok(Some(change)) => Some(Ok((change.serial, change.value))),
-            Ok(None) => None,
-            Err(error) => {
-                source_error = Some(error);
-                None
-            }
-        });
-        let built = phases.phase("inodes", || {
-            apply_inode_values(objects, base_table, changes, resources.scratch_bytes)
-        });
-        if let Some(error) = source_error {
-            return Err(error);
-        }
-        let built = built?;
-        counters.references = rows.work();
-        drop(rows);
-        built
-    };
-    counters.inodes = inode_work;
-    // The final stream is done with: its counters are snapshotted, its reader
-    // handle is closed, and only then is the backing's completion checked. A
-    // cleanup failure fails the operation before any root object exists, so a
-    // successful result always means the ordering resources were released.
-    *cleanup_attempted = true;
-    phases.phase("cleanup", || reducer.release())?;
-    phases.phase("state.complete", || contents.release())?;
-    let root = match topology.base {
-        Some(root) => root.with_inode_table(inode_table),
-        None => FilesystemRoot::new(
-            profile_id(),
-            input.scope(),
-            input.root_serial(),
-            inode_table,
-        )?,
-    };
-    let id = phases.phase("root.encode", || {
-        let object = FinalizedObject::new(ObjectRole::FilesystemRoot, root.encode()?)?
-            .with_references(vec![inode_table]);
-        objects.emit(object)
-    })?;
-    counters.objects = objects.work();
-    Ok(FilesystemResult {
-        root: FilesystemRootId(id),
-        value: root,
-        counters,
-    })
+    canonical_body::run_selected_body(
+        objects,
+        input,
+        phases,
+        cleanup_attempted,
+        contents,
+        validated,
+        state,
+        parents,
+        &mut reducer,
+    )
 }
 
 /// Directory parents this operation leaves with no binding at all.
@@ -631,50 +280,6 @@ fn unreachable_parents(input: &dyn PreparedBindingRows) -> ContentResult<BTreeMa
         .collect())
 }
 
-fn register_values(
-    reducer: &mut ReferenceReducer<'_, '_>,
-    input: &dyn PreparedBindingRows,
-    unreachable: &BTreeMap<u64, ()>,
-) -> ContentResult<()> {
-    let mut serials = input.new_inodes()?;
-    while let Some(serial) = serials.next_row()? {
-        if unreachable.contains_key(&serial) {
-            // The serial is not part of the result, so it is not a final row:
-            // registering it would ask the stream for a value it cannot have.
-            continue;
-        }
-        reducer.declare_new(serial)?;
-    }
-    drop(serials);
-    let mut values = input.inodes()?;
-    while let Some(update) = values.next_row()? {
-        if unreachable.contains_key(&update.serial) {
-            continue;
-        }
-        reducer.note_value(update.serial, update.value)?;
-    }
-    Ok(())
-}
-
-fn note_retained_binding(
-    reducer: &mut ReferenceReducer<'_, '_>,
-    initial_counts: Option<&mut [u64]>,
-    input: &dyn PreparedBindingRows,
-    serial: u64,
-) -> ContentResult<()> {
-    if let Some(counts) = initial_counts {
-        let index = input
-            .new_position(serial)?
-            .ok_or(ContentError::InvalidRecord("effect inode record"))?;
-        counts[index] = counts[index]
-            .checked_add(1)
-            .ok_or(ContentError::LengthOverflow)?;
-        Ok(())
-    } else {
-        reducer.note_retained_binding(serial)
-    }
-}
-
 fn lookup_base(
     reader: &dyn AuthenticatedObjects,
     table: InodeTable,
@@ -689,14 +294,17 @@ fn lookup_base(
 }
 
 /// Serials whose derived final count is zero, with the base records read.
-fn zero_count_serials(
+#[allow(clippy::too_many_arguments)]
+fn zero_count_serials<S: ?Sized>(
     reader: &dyn AuthenticatedObjects,
     table: InodeTable,
     reducer: &mut ReferenceReducer<'_, '_>,
     base_batch: usize,
     root_serial: u64,
-    unreachable: &BTreeMap<u64, ()>,
+    unreachable: &EligibilityAuthority,
     maximum_serials: usize,
+    state: &mut S,
+    parents: ParentCalls<S>,
 ) -> ContentResult<(Vec<u64>, u64)> {
     let touched = reducer.touched_serials(base_batch)?;
     if touched.len() > maximum_serials {
@@ -728,7 +336,10 @@ fn zero_count_serials(
             };
             // A directory this batch drops is not a released inode: it was never
             // part of the result, so there is nothing to traverse.
-            if count == 0 && *serial != root_serial && !unreachable.contains_key(serial) {
+            if count == 0
+                && *serial != root_serial
+                && !unreachable.contains(state, *serial, parents)?
+            {
                 zero.push(*serial);
             }
         }

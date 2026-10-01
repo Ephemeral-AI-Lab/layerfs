@@ -1,29 +1,32 @@
 //! One selected effective adjacency construction; no resident node frontier.
 use super::binding::{Bindings, Headers};
 use super::effective::EffectiveEntries;
+use super::fact_access::FactAccess;
 use super::facts::ValidationState;
 use super::{walk_limit, FilesystemTopology, ValidationWork};
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::rows::PreparedBindingRows;
 use crate::filesystem::state::{
-    EffectiveGraphState, GraphAdjacencySeal, GraphBuildAck, GraphMode, GraphNode, GraphNodeKey,
-    GraphScope, GraphTotals,
+    EffectiveGraphState, EligibilityView, GraphAdjacencySeal, GraphBuildAck, GraphMode, GraphNode,
+    GraphNodeKey, GraphScope, GraphTotals, ParentCalls,
 };
 use crate::object::{inode_leaf::InodeKind, AuthenticatedObjects};
-use std::collections::BTreeMap;
 
 pub(super) struct GraphInput<'a> {
     pub(super) reader: &'a dyn AuthenticatedObjects,
     pub(super) input: &'a dyn PreparedBindingRows,
     pub(super) topology: FilesystemTopology,
-    pub(super) unreachable: &'a BTreeMap<u64, ()>,
+    pub(super) unreachable: EligibilityView<'a>,
 }
-pub(super) fn build<S: EffectiveGraphState + ?Sized>(
+#[allow(clippy::too_many_arguments)]
+pub(super) fn build_with<S: EffectiveGraphState + ?Sized>(
     context: GraphInput<'_>,
     work: &mut ValidationWork,
     facts: &mut ValidationState,
     state: &mut S,
     scope: &GraphScope,
+    access: FactAccess<S>,
+    parents: ParentCalls<S>,
 ) -> ContentResult<GraphAdjacencySeal> {
     let GraphInput {
         reader,
@@ -63,7 +66,7 @@ pub(super) fn build<S: EffectiveGraphState + ?Sized>(
                 let Some(child) = child else {
                     continue;
                 };
-                if directory(reader, input, topology, facts, child, work)? {
+                if directory(reader, input, topology, facts, child, work, state, access)? {
                     work.graph.seed_occurrences = work.graph.seed_occurrences.saturating_add(1);
                     pending.push(GraphNodeKey::new(scope, child)?);
                     if pending.len() == 128 {
@@ -87,9 +90,11 @@ pub(super) fn build<S: EffectiveGraphState + ?Sized>(
         }
         let serial = parent.key().serial();
         let mut self_loop = false;
-        if !(scope.subject().mode() == GraphMode::Fresh && unreachable.contains_key(&serial)) {
+        if !(scope.subject().mode() == GraphMode::Fresh
+            && unreachable.contains(state, serial, parents)?)
+        {
             let base = match topology.table {
-                Some(table) => facts.lookup_optional(reader, table, serial, work)?,
+                Some(table) => access.lookup(facts, state, reader, table, serial, work)?,
                 None => None,
             };
             if base.is_some_and(|value| value.kind != InodeKind::Directory) {
@@ -111,7 +116,7 @@ pub(super) fn build<S: EffectiveGraphState + ?Sized>(
                 if scope.subject().mode() == GraphMode::Fresh {
                     work.entries_examined = work.entries_examined.saturating_add(1);
                 }
-                if directory(reader, input, topology, facts, child, work)? {
+                if directory(reader, input, topology, facts, child, work, state, access)? {
                     self_loop |= child == serial;
                     work.graph.raw_directory_edges =
                         work.graph.raw_directory_edges.saturating_add(1);
@@ -150,16 +155,19 @@ pub(super) fn build<S: EffectiveGraphState + ?Sized>(
     work.graph.multiplicity = totals.multiplicity();
     Ok(seal)
 }
-fn directory(
+#[allow(clippy::too_many_arguments)]
+fn directory<S: ?Sized>(
     reader: &dyn AuthenticatedObjects,
     input: &dyn PreparedBindingRows,
     topology: FilesystemTopology,
     facts: &mut ValidationState,
     serial: u64,
     work: &mut ValidationWork,
+    state: &mut S,
+    access: FactAccess<S>,
 ) -> ContentResult<bool> {
     let stored = match topology.table {
-        Some(table) => facts.lookup_optional(reader, table, serial, work)?,
+        Some(table) => access.lookup(facts, state, reader, table, serial, work)?,
         None => None,
     };
     let value = match stored {

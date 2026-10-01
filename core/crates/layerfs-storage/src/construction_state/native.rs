@@ -306,6 +306,21 @@ impl NativeFile {
         self.created
     }
 
+    pub(crate) fn descriptor_observation(&self) -> StorageResult<i32> {
+        self.verify()?;
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            use std::os::fd::AsRawFd;
+            Ok(self.file.as_ref().unwrap().as_raw_fd())
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            Err(StorageError::UnsupportedPolicy {
+                field: "construction scratch native platform",
+            })
+        }
+    }
+
     pub(crate) fn failed_close_descriptor(&self) -> Option<i32> {
         self.failed_close_fd
     }
@@ -628,6 +643,90 @@ impl NativeFile {
         header[..8].copy_from_slice(b"LFCSOWN4");
         header[8..10].copy_from_slice(&4u16.to_be_bytes());
         header[192..].copy_from_slice(&subject.encode());
+        Ok(header)
+    }
+
+    pub(crate) fn profile_binding(
+        &self,
+        selector: &[u8; 32],
+        token: u64,
+        version: u16,
+        subject: &[u8],
+    ) -> StorageResult<[u8; 32]> {
+        let (domain, length): (&[u8], usize) = match version {
+            5 => (b"layerfs/construction-state/native/v5\0", 130),
+            6 => (b"layerfs/construction-state/native/v6\0", 24),
+            7 => (b"layerfs/construction-state/native/v7\0", 154),
+            8 => (b"layerfs/construction-state/native/v8\0", 194),
+            _ => {
+                return Err(StorageError::Integrity(
+                    "construction profile binding version",
+                ))
+            }
+        };
+        if subject.len() != length {
+            return Err(StorageError::Integrity(
+                "construction profile binding subject",
+            ));
+        }
+        let directory = self
+            .directory
+            .lock()
+            .map_err(|_| StorageError::Integrity("construction scratch directory lock"))?;
+        let mut digest = blake3::Hasher::new();
+        digest.update(domain);
+        digest.update(&directory.nonce);
+        digest.update(&directory.parent.encode());
+        digest.update(
+            &directory
+                .identity
+                .ok_or(StorageError::Integrity(
+                    "construction scratch directory binding",
+                ))?
+                .encode(),
+        );
+        digest.update(
+            &self
+                .identity
+                .ok_or(StorageError::Integrity("construction scratch file binding"))?
+                .encode(),
+        );
+        digest.update(selector);
+        digest.update(&token.to_be_bytes());
+        digest.update(subject);
+        Ok(*digest.finalize().as_bytes())
+    }
+
+    pub(crate) fn profile_header<const N: usize>(
+        &self,
+        selector: &[u8; 32],
+        token: u64,
+        binding: &[u8; 32],
+        version: u16,
+        subject: &[u8],
+    ) -> StorageResult<[u8; N]> {
+        let (magic, length): (&[u8; 8], usize) = match version {
+            5 => (b"LFCSOWN5", 130),
+            6 => (b"LFCSOWN6", 24),
+            7 => (b"LFCSOWN7", 154),
+            8 => (b"LFCSOWN8", 194),
+            _ => {
+                return Err(StorageError::Integrity(
+                    "construction profile header version",
+                ))
+            }
+        };
+        if N != 192 + length || subject.len() != length {
+            return Err(StorageError::Integrity(
+                "construction profile header length",
+            ));
+        }
+        let prefix = self.header(selector, token, binding, 2)?;
+        let mut header = [0; N];
+        header[..192].copy_from_slice(&prefix);
+        header[..8].copy_from_slice(magic);
+        header[8..10].copy_from_slice(&version.to_be_bytes());
+        header[192..].copy_from_slice(subject);
         Ok(header)
     }
 

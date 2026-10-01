@@ -3,6 +3,7 @@ pub mod connection;
 pub mod payload;
 pub mod pipe;
 pub mod protocol;
+pub mod purpose;
 pub mod server;
 pub use connection::listen;
 

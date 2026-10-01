@@ -1,0 +1,27 @@
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-nine-source/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.49s
+     Running tests/direct.rs (core/target/r1-eight-owning/debug/deps/direct-8f79dd7ea7bb4783)
+
+running 1 test
+test a_spooled_final_stream_replays_many_runs_with_exact_bytes has been running for over 60 seconds
+test a_spooled_final_stream_replays_many_runs_with_exact_bytes ... FAILED
+
+successes:
+
+successes:
+
+failures:
+
+---- a_spooled_final_stream_replays_many_runs_with_exact_bytes stdout ----
+
+thread 'a_spooled_final_stream_replays_many_runs_with_exact_bytes' panicked at crates/layerfs-server/tests/direct.rs:607:10:
+called `Result::unwrap()` on an `Err` value: Failure { code: Deadline, unknown: false, cleanup: None, history: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_spooled_final_stream_replays_many_runs_with_exact_bytes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 83.17s
+
+error: test failed, to rerun pass `-p layerfs-server --test direct`

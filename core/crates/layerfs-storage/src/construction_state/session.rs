@@ -4,8 +4,8 @@ use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 
 use layerfs_content::filesystem::state::{
-    GraphSubject, PageLimit, StateCapacity, StateKey, StateLedger, StatePage, StateRecord,
-    StateScope, StateSeal, StateSelection, StateTable,
+    GraphMemory, GraphMemoryLease, GraphSubject, PageLimit, StateCapacity, StateKey, StateLedger,
+    StatePage, StateRecord, StateScope, StateSeal, StateSelection, StateTable,
 };
 use layerfs_content::ContentError;
 use rusqlite::Connection;
@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use crate::error::{StorageError, StorageResult};
 
 use super::authority::{Shared, Slot};
-use super::graph_state::Graph;
+use super::graph_state::{Graph, GraphOwner};
 use super::header::Header;
 use super::native::NativeFile;
 use super::phased::Phased;
@@ -23,20 +23,32 @@ use super::status::{ScratchDisposition, ScratchOwnerStatus, ScratchProfile};
 use super::{index, profile};
 
 pub(crate) struct Resource {
+    pub(crate) engine: Option<&'static crate::engine::EngineGuard>,
     pub(crate) selection: StateSelection,
     pub(crate) native: NativeFile,
     pub(crate) connection: Option<Connection>,
-    header: Option<Header>,
-    ledger: Option<StateLedger>,
-    seal: Option<StateSeal>,
-    logical_released: bool,
-    plan: Plan,
+    pub(crate) header: Option<Header>,
+    pub(crate) ledger: Option<StateLedger>,
+    pub(crate) seal: Option<StateSeal>,
+    pub(crate) logical_released: bool,
+    pub(crate) plan: Plan,
     pub(crate) phased: Option<Phased>,
     pub(crate) sites: Option<Sites>,
-    pub(crate) graph: Option<Graph>,
+    pub(crate) graph: Option<GraphOwner>,
+    pub(crate) graph_memory: Option<GraphMemory>,
+    pub(crate) graph_memory_lease: Option<GraphMemoryLease>,
+    pub(crate) aliases: Option<super::alias_state::AliasesOwner>,
+    pub(crate) draft: Option<Box<super::draft_state::Drafts>>,
+    pub(crate) facts: Option<super::fact_state::FactsOwner>,
+    pub(crate) canonical_capacity: Option<layerfs_content::filesystem::state::CanonicalCapacity>,
+    pub(crate) counts: Option<super::count_state::CountsOwner>,
+    pub(crate) releasing: Option<super::release_state::ReleaseOwner>,
+    pub(crate) pool_attempt: Option<super::rebind_state::Attempt>,
     pub(crate) graph_subject: Option<GraphSubject>,
     pub(crate) release_attempted: bool,
     pub(crate) unknown: Cell<bool>,
+    pub(crate) root_retirement: Option<super::root_retire::RootOwner>,
+    pub(crate) known_clean: bool,
 }
 
 impl Resource {
@@ -45,8 +57,22 @@ impl Resource {
         native: NativeFile,
         plan: Plan,
         subject: Option<GraphSubject>,
-    ) -> Self {
-        Self {
+        engine: Option<&'static crate::engine::EngineGuard>,
+    ) -> StorageResult<Self> {
+        let graph_memory = matches!(
+            plan,
+            Plan::SitesGraphThenRoots { .. }
+                | Plan::AliasesSitesGraphThenRoots { .. }
+                | Plan::NamespaceSitesGraphThenRoots { .. }
+                | Plan::CanonicalSitesGraphThenRoots { .. }
+        )
+        .then(GraphMemory::new);
+        let graph_memory_lease = graph_memory
+            .as_ref()
+            .map(|memory| memory.reserve(std::mem::size_of::<Graph>()))
+            .transpose()?;
+        Ok(Self {
+            engine,
             selection,
             native,
             connection: None,
@@ -58,10 +84,21 @@ impl Resource {
             phased: None,
             sites: None,
             graph: None,
+            graph_memory,
+            graph_memory_lease,
+            aliases: None,
+            draft: None,
+            facts: None,
+            canonical_capacity: plan.canonical_capacity(),
+            counts: None,
+            releasing: None,
+            pool_attempt: None,
             graph_subject: subject,
             release_attempted: false,
             unknown: Cell::new(false),
-        }
+            root_retirement: None,
+            known_clean: false,
+        })
     }
 
     pub(crate) fn status(
@@ -126,7 +163,70 @@ impl Resource {
         } else {
             failure
         };
+        let failure = if let Some(aliases) = &self.aliases {
+            if failure.is_some() || aliases.failed.get() {
+                Some(format!(
+                    "{}; {}",
+                    failure.unwrap_or_default(),
+                    aliases.description()
+                ))
+            } else {
+                failure
+            }
+        } else {
+            failure
+        };
+        let failure = if let Some(drafts) = &self.draft {
+            if failure.is_some() || drafts.failed.get() {
+                Some(format!(
+                    "{}; {}",
+                    failure.unwrap_or_default(),
+                    drafts.description()
+                ))
+            } else {
+                failure
+            }
+        } else {
+            failure
+        };
+        let failure = if let Some(facts) = &self.facts {
+            if failure.is_some() || facts.failed.get() {
+                Some(format!(
+                    "{}; {}",
+                    failure.unwrap_or_default(),
+                    facts.description()
+                ))
+            } else {
+                failure
+            }
+        } else {
+            failure
+        };
+        let failure = if let Some(roots) = &self.root_retirement {
+            if failure.is_some() {
+                Some(format!(
+                    "{}; root retirement {:?}; pending exact rows={:?}",
+                    failure.unwrap_or_default(),
+                    roots.progress(),
+                    roots
+                        .attempt
+                        .as_ref()
+                        .map(|attempt| attempt.rows.as_slice())
+                ))
+            } else {
+                failure
+            }
+        } else {
+            failure
+        };
+        let failure = self.canonical_failure(failure);
         ScratchOwnerStatus {
+            root_retirement: self.root_retirement.as_ref().map(|state| state.progress()),
+            known_clean: self.known_clean,
+            graph_working: self
+                .graph_memory
+                .as_ref()
+                .map(super::graph_layout::GraphWorkingLayout::observe),
             token: self.selection.token(),
             selector: *self.selection.selector(),
             disposition,
@@ -145,6 +245,7 @@ impl Resource {
     }
 
     pub(crate) fn verify(&self) -> StorageResult<&Connection> {
+        self.check_engine()?;
         if self.unknown.get() || self.native.quarantined || self.release_attempted {
             return Err(StorageError::Integrity(
                 "construction scratch quarantined/ended owner",
@@ -154,6 +255,14 @@ impl Resource {
         let connection = self.connection.as_ref().ok_or(StorageError::Integrity(
             "construction scratch connection unavailable",
         ))?;
+        if self.known_clean {
+            if self.plan.version() == 6 {
+                super::pool_draft::verify(connection, self)?;
+            } else {
+                super::root_reset::verify(connection, self)?;
+            }
+            return Ok(connection);
+        }
         index::verify_header(
             connection,
             self.header
@@ -173,7 +282,32 @@ impl Resource {
         if let Some(graph) = &self.graph {
             super::graph_index::verify(connection, graph)?;
         }
+        if let Some(aliases) = &self.aliases {
+            super::alias_index::verify(connection, aliases)?;
+        }
+        if let Some(drafts) = &self.draft {
+            super::draft_index::verify(connection, drafts)?;
+        }
+        if let Some(facts) = &self.facts {
+            super::fact_index::verify(connection, facts)?;
+        }
+        self.verify_canonical(connection)?;
         Ok(connection)
+    }
+
+    pub(crate) fn check_live(&self) -> StorageResult<()> {
+        self.check_engine()?;
+        if self.logical_released
+            || self.known_clean
+            || self.unknown.get()
+            || self.release_attempted
+            || self.native.quarantined
+        {
+            return Err(StorageError::Integrity(
+                "construction scratch logical owner ended",
+            ));
+        }
+        Ok(())
     }
 
     fn check_scope(&self, scope: &StateScope) -> StorageResult<()> {
@@ -206,7 +340,7 @@ impl Resource {
         Ok(())
     }
 
-    fn check_seal(&self, seal: &StateSeal) -> StorageResult<()> {
+    pub(crate) fn check_seal(&self, seal: &StateSeal) -> StorageResult<()> {
         self.check_scope(seal.scope())?;
         if self.seal.as_ref() != Some(seal) {
             return Err(StorageError::Integrity("construction scratch exact seal"));
@@ -215,6 +349,7 @@ impl Resource {
     }
 
     fn close(&mut self) -> StorageResult<()> {
+        self.check_engine()?;
         if self.unknown.get() || self.native.quarantined || self.release_attempted {
             return Err(StorageError::Integrity(
                 "construction scratch native release denied",
@@ -290,6 +425,31 @@ impl ScratchSession {
         }
     }
 
+    pub(crate) fn pool_destination(&self) -> (Arc<Shared>, usize) {
+        (self.shared.clone(), self.slot)
+    }
+    pub(crate) fn pool_take_resource(&mut self) -> Option<Resource> {
+        self.resource.take()
+    }
+    pub(crate) fn pool_check_success(&self) -> StorageResult<()> {
+        if self.failed.get()
+            || self.quarantined.get()
+            || self.failure.borrow().is_some()
+            || self.description.borrow().is_some()
+        {
+            return Err(StorageError::Integrity("construction pool failed session"));
+        }
+        let resource = self.resource.as_ref().ok_or(StorageError::Integrity(
+            "construction pool released session",
+        ))?;
+        if resource.unknown.get() || resource.native.quarantined || resource.release_attempted {
+            return Err(StorageError::Integrity(
+                "construction pool uncertain session",
+            ));
+        }
+        Ok(())
+    }
+
     pub(crate) fn restore_failure(&mut self, failure: Option<StorageError>) {
         if let Some(error) = failure {
             self.note(&error);
@@ -314,6 +474,16 @@ impl ScratchSession {
             if let Some(graph) = &resource.graph {
                 graph.failed.set(true);
             }
+            if let Some(aliases) = &resource.aliases {
+                aliases.failed.set(true);
+            }
+            if let Some(drafts) = &resource.draft {
+                drafts.failed.set(true);
+            }
+            if let Some(facts) = &resource.facts {
+                facts.failed.set(true);
+            }
+            resource.fail_canonical();
         }
         if self.description.borrow().is_none() {
             *self.description.borrow_mut() = Some(error.to_string());
@@ -352,6 +522,19 @@ impl ScratchSession {
                     state.failed.get()
                         || state.stage == layerfs_content::filesystem::state::GraphStage::Rejected
                 })
+                || resource
+                    .aliases
+                    .as_ref()
+                    .is_some_and(|state| state.failed.get())
+                || resource
+                    .draft
+                    .as_ref()
+                    .is_some_and(|state| state.failed.get())
+                || resource
+                    .facts
+                    .as_ref()
+                    .is_some_and(|facts| facts.failed.get())
+                || resource.canonical_failed()
             {
                 ScratchDisposition::Failed
             } else if resource.seal.is_some()
@@ -400,138 +583,6 @@ impl ScratchSession {
                 }
             }
         }
-    }
-
-    pub(crate) fn initialize(&mut self) -> StorageResult<()> {
-        let result = (|| {
-            let resource = self.resource.as_mut().unwrap();
-            if let Err(error) = resource.native.initialize() {
-                if resource.native.quarantined {
-                    resource.unknown.set(true);
-                    return Err(StorageError::UnknownOutcome {
-                        original: Box::new(error),
-                    });
-                }
-                return Err(error);
-            }
-            let binding = match resource.plan {
-                Plan::SitesGraphThenRoots { .. } => resource.native.graph_binding(
-                    resource.selection.selector(),
-                    resource.selection.token(),
-                    resource
-                        .graph_subject
-                        .as_ref()
-                        .ok_or(StorageError::Integrity(
-                            "construction scratch graph subject",
-                        ))?,
-                )?,
-                Plan::SitesThenRoots { source, .. } => resource.native.sites_binding(
-                    resource.selection.selector(),
-                    resource.selection.token(),
-                    source,
-                )?,
-                _ => resource
-                    .native
-                    .binding(resource.selection.selector(), resource.selection.token())?,
-            };
-            resource.selection.bind_owner(binding)?;
-            let header = match resource.plan {
-                Plan::SitesGraphThenRoots { .. } => Header::Graph(
-                    resource.native.graph_header(
-                        resource.selection.selector(),
-                        resource.selection.token(),
-                        &binding,
-                        resource
-                            .graph_subject
-                            .as_ref()
-                            .ok_or(StorageError::Integrity(
-                                "construction scratch graph subject",
-                            ))?,
-                    )?,
-                ),
-                Plan::SitesThenRoots { source, .. } => {
-                    Header::Sites(resource.native.sites_header(
-                        resource.selection.selector(),
-                        resource.selection.token(),
-                        &binding,
-                        source,
-                    )?)
-                }
-                _ => Header::Earlier(resource.native.header(
-                    resource.selection.selector(),
-                    resource.selection.token(),
-                    &binding,
-                    resource.plan.version(),
-                )?),
-            };
-            resource.header = Some(header);
-            if let Plan::ClaimsThenRoots {
-                directories,
-                bindings,
-            } = resource.plan
-            {
-                resource.phased = Some(Phased::new(&resource.selection, directories, bindings)?);
-            }
-            if let Plan::SitesThenRoots {
-                directories,
-                bindings,
-                source,
-            } = resource.plan
-            {
-                resource.sites = Some(Sites::new(
-                    &resource.selection,
-                    directories,
-                    bindings,
-                    source,
-                )?);
-            }
-            if let Plan::SitesGraphThenRoots {
-                directories,
-                bindings,
-                source,
-                ..
-            } = resource.plan
-            {
-                resource.sites = Some(Sites::with_roots_phase(
-                    &resource.selection,
-                    directories,
-                    bindings,
-                    source,
-                    3,
-                )?);
-                resource.graph = Some(Graph::new(
-                    &resource.selection,
-                    resource
-                        .graph_subject
-                        .as_ref()
-                        .ok_or(StorageError::Integrity(
-                            "construction scratch graph subject",
-                        ))?
-                        .clone(),
-                    bindings,
-                )?);
-            }
-            let connection = profile::open(&resource.native.path)?;
-            resource.connection = Some(connection);
-            resource.native.verify()?;
-            let claims = resource
-                .phased
-                .as_ref()
-                .map(|state| state.claims.as_bytes());
-            let sites = resource.sites.as_ref().map(|state| state.scope.as_bytes());
-            let graph = resource.graph.as_ref().map(|state| state.scope.as_bytes());
-            profile::initialize(
-                resource.connection.as_ref().unwrap(),
-                resource.header.as_ref().unwrap().as_bytes(),
-                resource.plan,
-                claims.as_ref(),
-                sites.as_ref(),
-                graph.as_ref(),
-            )?;
-            resource.native.verify()?;
-            Ok(())
-        })();
-        self.finish(result)
     }
 
     /// Exact live issued selection after native binding; callers may clone it.
@@ -623,10 +674,12 @@ impl ScratchSession {
                 });
             }
             let previous = ledger.records();
+            resource.namespace_roots_growth(count)?;
             resource.verify()?;
             resource.native.reserve()?;
             index::append(
                 resource.connection.as_ref().unwrap(),
+                resource.engine,
                 scope,
                 records,
                 previous,
@@ -664,7 +717,11 @@ impl ScratchSession {
             let seal = resource.ledger.as_ref().unwrap().seal();
             resource.verify()?;
             resource.native.reserve()?;
-            index::seal(resource.connection.as_ref().unwrap(), &seal)?;
+            index::seal(
+                resource.connection.as_ref().unwrap(),
+                resource.engine,
+                &seal,
+            )?;
             resource.seal = Some(seal.clone());
             resource.native.observe_allocation()?;
             Ok(seal)
@@ -705,6 +762,32 @@ impl ScratchSession {
 
     /// End only the logical selected phase; retain every native byte/credit.
     pub fn complete_phase(&mut self, scope: &StateScope) -> StorageResult<()> {
+        let selected = self.resource.as_ref().and_then(|resource| {
+            if matches!(
+                resource.plan,
+                Plan::SitesGraphThenRoots { .. }
+                    | Plan::AliasesSitesGraphThenRoots { .. }
+                    | Plan::NamespaceSitesGraphThenRoots { .. }
+                    | Plan::CanonicalSitesGraphThenRoots { .. }
+            ) {
+                resource
+                    .seal
+                    .as_ref()
+                    .filter(|seal| seal.scope() == scope)
+                    .cloned()
+            } else {
+                None
+            }
+        });
+        if let Some(seal) = selected {
+            loop {
+                let progress = self.retire_roots_window(&seal)?;
+                if progress.remaining_records == 0 {
+                    break;
+                }
+            }
+            return self.reset_completed_roots(&seal);
+        }
         let result = (|| {
             let resource = self
                 .resource

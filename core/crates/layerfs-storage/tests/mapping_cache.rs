@@ -19,6 +19,7 @@ use std::mem::size_of;
 use layerfs_content::file::mapping::{
     ChildDescriptor, ExtentSlice, PageCache, RangeCursor, ReadCounters,
 };
+use layerfs_content::object::{CanonicalOwnership, CanonicalReadPermit, OwnedCanonicalBatch};
 use layerfs_content::{
     AuthenticatedObjects, ContentError, ContentResult, FinalizedObject, ObjectId, ObjectRole,
 };
@@ -85,6 +86,38 @@ impl<'a> ObservedProvider<'a> {
 }
 
 impl AuthenticatedObjects for ObservedProvider<'_> {
+    fn read_canonical_owned(
+        &self,
+        ids: &[ObjectId],
+        permit: CanonicalReadPermit,
+        scope: TimingScope<'_>,
+    ) -> ContentResult<OwnedCanonicalBatch> {
+        let batch = self.inner.read_canonical_owned(ids, permit, scope)?;
+        let _pause = Pause::new();
+        assert_eq!(batch.ownership(), CanonicalOwnership::AdmittedOutput);
+        assert_eq!(batch.len(), ids.len());
+        for (id, value) in ids.iter().zip(batch.buffers()) {
+            assert_eq!(value.as_slice(), self.fixture.canonical(*id));
+            assert_eq!(value.budget().used_bytes() > 0, !value.is_empty());
+        }
+        if ids.iter().all(|id| {
+            matches!(
+                self.fixture.role(*id),
+                ObjectRole::ExtentLeaf | ObjectRole::ExtentBranch
+            )
+        }) {
+            self.navigation.borrow_mut().push(ids.to_vec());
+            for (id, value) in ids.iter().zip(batch.buffers()) {
+                assert!(value.capacity() <= 8192);
+                self.capacities.borrow_mut().push(Capacity {
+                    id: *id,
+                    length: value.len(),
+                    capacity: value.capacity(),
+                });
+            }
+        }
+        Ok(batch)
+    }
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
         self.observe(ids, self.inner.read_canonical_batch(ids)?)
     }
@@ -169,7 +202,17 @@ fn cache_resource_observation(fixture: &Fixture) {
             .insert(id, root, fixture.canonical(id).to_vec())
             .expect("each real requested owner fits the cache");
     }
+    let metadata = cache.table_memory().clone();
+    let layout = cache.table_layout().unwrap();
     let held = observation.stop();
+    assert_eq!(
+        held.largest_request, layout.allocation_bytes,
+        "exact compiled/pinned table request"
+    );
+    assert_eq!(
+        metadata.reserved_bytes(),
+        layout.allocation_bytes + layerfs_content::file::mapping::CacheTableMemory::control_bytes()
+    );
     let expected_encoded: usize = fixture
         .mixed_prefill()
         .map(|(id, _)| fixture.canonical(id).len())
@@ -186,6 +229,16 @@ fn cache_resource_observation(fixture: &Fixture) {
     );
     assert!(held.peak_total <= 64 * 8192 + 16 * 1024 + decoded.into_iter().max().unwrap());
     drop(cache);
+    assert_eq!(
+        metadata.reserved_bytes(),
+        layerfs_content::file::mapping::CacheTableMemory::control_bytes(),
+        "actual table drop precedes refund"
+    );
+    assert_eq!(
+        observation.stop().live_total(),
+        layerfs_content::file::mapping::CacheTableMemory::control_bytes()
+    );
+    drop(metadata);
     let released = observation.released();
     assert_eq!(
         released.live_total(),
@@ -263,7 +316,7 @@ fn provider_requested_allocation_observation(store: &Store, fixture: &Fixture) {
         "R1b diagnostic real-provider-read: requested={during_read:?}; \
          after-provider-drop={after_provider:?}; released={released:?}; \
          includes provider Rust session/decoded/batch/cache overlap; \
-         fixtures/preallocated output/observer excluded; no upfront permit/native heap/RSS claim"
+         fixtures/preallocated output/observer excluded; returned-data permits only; native/cache-working/metadata/RSS unqualified"
     );
 }
 
@@ -287,7 +340,49 @@ fn real_store_cache_crossing_preserves_independent_bytes_and_requested_owners() 
         assert_eq!(counters.max_node_batch, 32);
         assert!(calls.iter().all(|ids| ids.len() <= 32));
         assert_eq!(provider.inner.connection_opens(), 1);
+        let retained_capacity: usize = fixture
+            .mapping_keys()
+            .filter_map(|(id, root)| cache.get_owned(id, root))
+            .map(|buffer| buffer.capacity())
+            .sum();
+        assert_eq!(
+            cache.budget().used_bytes(),
+            retained_capacity,
+            "cursor dropped; exact retained last owners"
+        );
+        let authority = cache.budget().clone();
+        drop(cache);
+        assert_eq!(authority.used_bytes(), 0);
     }
+
+    let provider = StoreProvider::new(&store);
+    let mut oversized = PageCache::bounded(128);
+    let mut output = Vec::new();
+    let refused = disabled(|scope| {
+        let mut cursor = RangeCursor::new(&provider, fixture.state, &mut oversized, scope)?;
+        cursor
+            .read_segment(0..32, &mut output, &mut oversized)
+            .map(|_| ())
+    });
+    assert!(matches!(
+        refused,
+        Err(ContentError::BoundedCapacityExceeded {
+            what: "mapping.cache_metadata",
+            ..
+        })
+    ));
+    assert_eq!(
+        provider.connection_opens(),
+        0,
+        "metadata refusal before provider/open effect"
+    );
+    assert!(oversized.is_empty());
+    assert!(
+        output.is_empty(),
+        "no payload served before metadata refusal"
+    );
+    drop(oversized);
+    drop(provider);
 
     let mut cache = PageCache::bounded(1);
     let root = fixture.state.mapping_root;

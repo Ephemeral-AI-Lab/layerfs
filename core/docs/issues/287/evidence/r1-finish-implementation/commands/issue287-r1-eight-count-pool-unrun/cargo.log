@@ -1,0 +1,49 @@
+   Compiling nix v0.31.3
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-telemetry)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-storage)
+warning: function `real_reader_commit_unknown_preserves_complete_old_proposed_context_and_S` should have a snake case name
+   --> crates/layerfs-storage/tests/scratch_pool.rs:207:8
+    |
+207 |     fn real_reader_commit_unknown_preserves_complete_old_proposed_context_and_S() {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case (notice the capitalization): `real_reader_commit_unknown_preserves_complete_old_proposed_context_and_s`
+    |
+    = note: `#[warn(non_snake_case)]` on by default
+
+warning: `layerfs-storage` (test "scratch_pool") generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 13.77s
+     Running tests/construction_counts.rs (core/target/r1-eight-owning/debug/deps/construction_counts-dd05beb8b69b0024)
+
+running 4 tests
+test unix::count_record_limit_refuses_before_sql_and_keeps_original_capsule ... FAILED
+test unix::real_count_commit_unknown_retains_before_proposed_and_refuses_cleanup ... FAILED
+test unix::fresh_declared_membership_exact_rows_pages_lastowner_and_bounded_retirement ... FAILED
+test unix::update_seed_transcript_fifo_current_retention_external_depth_and_full_names ... ok
+
+failures:
+
+---- unix::count_record_limit_refuses_before_sql_and_keeps_original_capsule stdout ----
+
+thread 'unix::count_record_limit_refuses_before_sql_and_keeps_original_capsule' panicked at crates/layerfs-storage/tests/construction_counts.rs:80:14:
+called `Result::unwrap()` on an `Err` value: Integrity("construction scratch fresh root not enrolled")
+
+---- unix::real_count_commit_unknown_retains_before_proposed_and_refuses_cleanup stdout ----
+
+thread 'unix::real_count_commit_unknown_retains_before_proposed_and_refuses_cleanup' panicked at crates/layerfs-storage/tests/construction_counts.rs:80:14:
+called `Result::unwrap()` on an `Err` value: Integrity("construction scratch fresh root not enrolled")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- unix::fresh_declared_membership_exact_rows_pages_lastowner_and_bounded_retirement stdout ----
+
+thread 'unix::fresh_declared_membership_exact_rows_pages_lastowner_and_bounded_retirement' panicked at crates/layerfs-storage/tests/construction_counts.rs:80:14:
+called `Result::unwrap()` on an `Err` value: Integrity("construction scratch fresh root not enrolled")
+
+
+failures:
+    unix::count_record_limit_refuses_before_sql_and_keeps_original_capsule
+    unix::fresh_declared_membership_exact_rows_pages_lastowner_and_bounded_retirement
+    unix::real_count_commit_unknown_retains_before_proposed_and_refuses_cleanup
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+
+error: test failed, to rerun pass `-p layerfs-storage --test construction_counts`

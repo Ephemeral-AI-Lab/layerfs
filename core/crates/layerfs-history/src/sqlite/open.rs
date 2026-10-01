@@ -49,6 +49,8 @@ pub(crate) struct Provider {
     pub(crate) connection: Connection,
     pub(crate) writable: bool,
     pub(crate) quarantined: bool,
+    pub(crate) engine: super::engine::Participation,
+    pub(crate) participation_failure: Option<HistoryError>,
 }
 
 /// Application identity of the C5 catalog; distinct from C2's schema identity.
@@ -70,11 +72,31 @@ pub const SCHEMA: &str = include_str!("../../sql/schema-v1.sql");
 
 /// Creates one fresh writable catalog inside this process.
 pub fn create(path: &Path, config: &HistoryCatalogConfig) -> HistoryResult<SqliteCatalog> {
+    create_selected(path, config, None)
+}
+/// Host callback participates before first connection/SQL; no C2 dependency is introduced.
+pub fn create_participating(
+    path: &Path,
+    config: &HistoryCatalogConfig,
+    engine: std::sync::Arc<dyn super::EngineParticipation>,
+) -> HistoryResult<SqliteCatalog> {
+    create_selected(path, config, Some(engine))
+}
+fn create_selected(
+    path: &Path,
+    config: &HistoryCatalogConfig,
+    engine: super::engine::Participation,
+) -> HistoryResult<SqliteCatalog> {
     config.check()?;
+    super::engine::validate(engine.as_deref())?;
     let catalog_id = CatalogId::derive(&config.binding_key)?;
     let flags = OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE;
     let connection = Connection::open_with_flags(path, flags).map_err(super::rows::sql)?;
+    super::engine::validate(engine.as_deref())?;
     configure(&connection, true)?;
+    if engine.is_some() {
+        super::engine::configure(&connection, false)?;
+    }
     if application_id(&connection)? != 0 || application_tables(&connection)?.next().is_some() {
         return Err(HistoryError::InvalidInput("catalog already exists"));
     }
@@ -93,12 +115,14 @@ pub fn create(path: &Path, config: &HistoryCatalogConfig) -> HistoryResult<Sqlit
             ],
         )
         .map_err(super::rows::sql)?;
-    let stored = read_meta(&connection, &catalog_id)?;
+    let stored = read_meta(&connection, &catalog_id, engine.as_deref())?;
     Ok(SqliteCatalog {
         state: std::sync::Mutex::new(Provider {
             connection,
             writable: true,
             quarantined: false,
+            engine,
+            participation_failure: None,
         }),
         catalog_id,
         incarnation: stored,
@@ -120,25 +144,49 @@ pub fn open_writable(
     binding_key: &[u8],
     cursor_key: [u8; 32],
 ) -> HistoryResult<SqliteCatalog> {
+    open_writable_selected(path, binding_key, cursor_key, None)
+}
+/// Explicit host participation; compatibility constructors remain separate.
+pub fn open_writable_participating(
+    path: &Path,
+    binding_key: &[u8],
+    cursor_key: [u8; 32],
+    engine: std::sync::Arc<dyn super::EngineParticipation>,
+) -> HistoryResult<SqliteCatalog> {
+    open_writable_selected(path, binding_key, cursor_key, Some(engine))
+}
+fn open_writable_selected(
+    path: &Path,
+    binding_key: &[u8],
+    cursor_key: [u8; 32],
+    engine: super::engine::Participation,
+) -> HistoryResult<SqliteCatalog> {
+    super::engine::validate(engine.as_deref())?;
     if cursor_key == [0; 32] {
         return Err(HistoryError::InvalidInput("cursor capability"));
     }
     let catalog_id = CatalogId::derive(binding_key)?;
     let flags = OpenFlags::SQLITE_OPEN_READ_WRITE;
     let connection = Connection::open_with_flags(path, flags).map_err(super::rows::sql)?;
+    super::engine::validate(engine.as_deref())?;
     configure(&connection, true)?;
+    if engine.is_some() {
+        super::engine::configure(&connection, false)?;
+    }
     if application_id(&connection)? != APPLICATION_ID {
         return Err(HistoryError::Integrity("catalog application identity"));
     }
     if user_version(&connection)? != USER_VERSION {
         return Err(HistoryError::Unsupported("catalog schema version"));
     }
-    let stored = read_meta(&connection, &catalog_id)?;
+    let stored = read_meta(&connection, &catalog_id, engine.as_deref())?;
     Ok(SqliteCatalog {
         state: std::sync::Mutex::new(Provider {
             connection,
             writable: true,
             quarantined: false,
+            engine,
+            participation_failure: None,
         }),
         catalog_id,
         incarnation: stored,
@@ -152,25 +200,49 @@ pub fn open_read_only(
     binding_key: &[u8],
     cursor_key: [u8; 32],
 ) -> HistoryResult<SqliteCatalog> {
+    open_read_only_selected(path, binding_key, cursor_key, None)
+}
+/// Explicit host participation; compatibility constructors remain separate.
+pub fn open_read_only_participating(
+    path: &Path,
+    binding_key: &[u8],
+    cursor_key: [u8; 32],
+    engine: std::sync::Arc<dyn super::EngineParticipation>,
+) -> HistoryResult<SqliteCatalog> {
+    open_read_only_selected(path, binding_key, cursor_key, Some(engine))
+}
+fn open_read_only_selected(
+    path: &Path,
+    binding_key: &[u8],
+    cursor_key: [u8; 32],
+    engine: super::engine::Participation,
+) -> HistoryResult<SqliteCatalog> {
+    super::engine::validate(engine.as_deref())?;
     if cursor_key == [0; 32] {
         return Err(HistoryError::InvalidInput("cursor capability"));
     }
     let catalog_id = CatalogId::derive(binding_key)?;
     let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(super::rows::sql)?;
+    super::engine::validate(engine.as_deref())?;
     configure(&connection, false)?;
+    if engine.is_some() {
+        super::engine::configure(&connection, false)?;
+    }
     if application_id(&connection)? != APPLICATION_ID {
         return Err(HistoryError::Integrity("catalog application identity"));
     }
     if user_version(&connection)? != USER_VERSION {
         return Err(HistoryError::Unsupported("catalog schema version"));
     }
-    let stored = read_meta(&connection, &catalog_id)?;
+    let stored = read_meta(&connection, &catalog_id, engine.as_deref())?;
     Ok(SqliteCatalog {
         state: std::sync::Mutex::new(Provider {
             connection,
             writable: false,
             quarantined: false,
+            engine,
+            participation_failure: None,
         }),
         catalog_id,
         incarnation: stored,
@@ -236,7 +308,12 @@ fn application_tables(connection: &Connection) -> HistoryResult<impl Iterator<It
 }
 
 /// Validates the singleton metadata row and returns the catalog incarnation.
-fn read_meta(connection: &Connection, expected: &CatalogId) -> HistoryResult<u64> {
+fn read_meta(
+    connection: &Connection,
+    expected: &CatalogId,
+    engine: Option<&dyn super::EngineParticipation>,
+) -> HistoryResult<u64> {
+    super::engine::validate(engine)?;
     if application_id(connection)? != APPLICATION_ID {
         return Err(HistoryError::Integrity("catalog application identity"));
     }
@@ -253,7 +330,7 @@ fn read_meta(connection: &Connection, expected: &CatalogId) -> HistoryResult<u64
     if tables.next().is_some() {
         return Err(HistoryError::Integrity("catalog table set"));
     }
-    validate_schema(connection)?;
+    validate_schema(connection, engine)?;
     let rows: i64 = connection
         .query_row("SELECT count(*) FROM history_meta", [], |row| row.get(0))
         .map_err(super::rows::sql)?;
@@ -437,7 +514,10 @@ impl HistoryCatalog for SqliteCatalog {
     }
 }
 
-fn validate_schema(connection: &Connection) -> HistoryResult<()> {
+fn validate_schema(
+    connection: &Connection,
+    engine: Option<&dyn super::EngineParticipation>,
+) -> HistoryResult<()> {
     type Definition = (String, String, String, Option<String>);
     fn definitions(connection: &Connection) -> HistoryResult<Vec<Definition>> {
         let mut statement = connection.prepare(
@@ -451,8 +531,13 @@ fn validate_schema(connection: &Connection) -> HistoryResult<()> {
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(super::rows::sql)
     }
+    super::engine::validate(engine)?;
     let expected = Connection::open_in_memory().map_err(super::rows::sql)?;
+    super::engine::validate(engine)?;
     configure(&expected, true)?;
+    if engine.is_some() {
+        super::engine::configure(&expected, true)?;
+    }
     expected.execute_batch(SCHEMA).map_err(super::rows::sql)?;
     if definitions(connection)? != definitions(&expected)? {
         return Err(HistoryError::Integrity("catalog schema definition"));

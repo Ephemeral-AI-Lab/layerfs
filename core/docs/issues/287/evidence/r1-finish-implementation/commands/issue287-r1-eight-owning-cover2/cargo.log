@@ -1,0 +1,203 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-history)
+error: missing documentation for a method
+  --> crates/layerfs-storage/src/construction_state/count_lifecycle.rs:13:5
+   |
+13 | /     pub fn count_seal(
+14 | |         &mut self,
+15 | |         scope: &CanonicalScope,
+16 | |         epoch: CountEpoch,
+17 | |     ) -> StorageResult<CountSeal> {
+   | |_________________________________^
+   |
+note: the lint level is defined here
+  --> crates/layerfs-storage/src/lib.rs:18:9
+   |
+18 | #![deny(missing_docs)]
+   |         ^^^^^^^^^^^^
+
+error: missing documentation for a method
+  --> crates/layerfs-storage/src/construction_state/count_lifecycle.rs:80:5
+   |
+80 |     pub fn zero_append(&mut self, counts: &CountSeal, records: &[BaseFact]) -> StorageResult<()> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/count_lifecycle.rs:144:5
+    |
+144 |     pub fn zero_seal(&mut self, counts: &CountSeal) -> StorageResult<ZeroSeal> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/count_lifecycle.rs:188:5
+    |
+188 |     pub fn count_resume(&mut self, seeds: &ZeroSeal) -> StorageResult<()> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/count_lifecycle.rs:208:5
+    |
+208 | /     pub fn count_retire(
+209 | |         &mut self,
+210 | |         seal: &CountSeal,
+211 | |         seeds: Option<&ZeroSeal>,
+212 | |     ) -> StorageResult<()> {
+    | |__________________________^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/count_read.rs:114:5
+    |
+114 | /     pub fn count_page(
+115 | |         &mut self,
+116 | |         seal: &CountSeal,
+117 | |         after: Option<u64>,
+118 | |         records: usize,
+119 | |         bytes: usize,
+120 | |     ) -> StorageResult<CountPage> {
+    | |_________________________________^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/count_read.rs:153:5
+    |
+153 | /     pub fn zero_page(
+154 | |         &mut self,
+155 | |         seal: &ZeroSeal,
+156 | |         after: Option<u64>,
+157 | |         records: usize,
+158 | |         bytes: usize,
+159 | |     ) -> StorageResult<ZeroPage> {
+    | |________________________________^
+
+error: missing documentation for a method
+  --> crates/layerfs-storage/src/construction_state/count_session.rs:58:5
+   |
+58 |     pub fn count_capacity(&self, scope: &CanonicalScope) -> StorageResult<CanonicalCapacity> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+  --> crates/layerfs-storage/src/construction_state/count_session.rs:67:5
+   |
+67 |     pub fn count_memory(&self, scope: &CanonicalScope) -> StorageResult<GraphMemory> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+  --> crates/layerfs-storage/src/construction_state/count_session.rs:86:5
+   |
+86 |     pub fn count_begin(&mut self, scope: &CanonicalScope) -> StorageResult<()> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/count_session.rs:161:5
+    |
+161 | /     pub fn count_get(
+162 | |         &mut self,
+163 | |         scope: &CanonicalScope,
+164 | |         serial: u64,
+165 | |     ) -> StorageResult<Option<CountRecord>> {
+    | |___________________________________________^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/count_session.rs:179:5
+    |
+179 | /     pub fn count_cas(
+180 | |         &mut self,
+181 | |         scope: &CanonicalScope,
+182 | |         before: Option<CountRecord>,
+183 | |         after: &CountRecord,
+184 | |     ) -> StorageResult<CountRecord> {
+    | |___________________________________^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/count_session.rs:236:5
+    |
+236 |     pub fn count_abandon(&mut self, scope: &CanonicalScope) -> StorageResult<()> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+ --> crates/layerfs-storage/src/construction_state/release_lifecycle.rs:9:5
+  |
+9 |     pub fn release_take(&mut self, scope: &CanonicalScope) -> StorageResult<Option<ReleaseJob>> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+  --> crates/layerfs-storage/src/construction_state/release_lifecycle.rs:39:5
+   |
+39 | /     pub fn release_complete_job(
+40 | |         &mut self,
+41 | |         scope: &CanonicalScope,
+42 | |         job: &ReleaseJob,
+43 | |         directory: Option<ObjectId>,
+44 | |     ) -> StorageResult<()> {
+   | |__________________________^
+
+error: missing documentation for a method
+  --> crates/layerfs-storage/src/construction_state/release_lifecycle.rs:89:5
+   |
+89 |     pub fn release_frame(&mut self, scope: &CanonicalScope) -> StorageResult<Option<ReleaseFrame>> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/release_lifecycle.rs:109:5
+    |
+109 | /     pub fn release_advance(
+110 | |         &mut self,
+111 | |         scope: &CanonicalScope,
+112 | |         before: &ReleaseFrame,
+113 | |         after: &ReleaseFrame,
+114 | |         children: &[BaseFact],
+115 | |     ) -> StorageResult<ReleaseFrame> {
+    | |____________________________________^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/release_lifecycle.rs:151:5
+    |
+151 | /     pub fn release_pop(
+152 | |         &mut self,
+153 | |         scope: &CanonicalScope,
+154 | |         frame: &ReleaseFrame,
+155 | |     ) -> StorageResult<()> {
+    | |__________________________^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/release_lifecycle.rs:176:5
+    |
+176 |     pub fn release_seal(&mut self, scope: &CanonicalScope) -> StorageResult<ReleaseSeal> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/release_lifecycle.rs:198:5
+    |
+198 |     pub fn release_retire(&mut self, seal: &ReleaseSeal) -> StorageResult<()> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+  --> crates/layerfs-storage/src/construction_state/release_session.rs:44:5
+   |
+44 |     pub fn release_begin(&mut self, scope: &CanonicalScope, seeds: &ZeroSeal) -> StorageResult<()> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/release_session.rs:107:5
+    |
+107 | /     pub fn release_seed(
+108 | |         &mut self,
+109 | |         scope: &CanonicalScope,
+110 | |         records: &[BaseFact],
+111 | |     ) -> StorageResult<()> {
+    | |__________________________^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/release_session.rs:153:5
+    |
+153 |     pub fn release_close_seeds(&mut self, scope: &CanonicalScope) -> StorageResult<()> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+   --> crates/layerfs-storage/src/construction_state/release_session.rs:172:5
+    |
+172 |     pub fn release_abandon(&mut self, scope: &CanonicalScope) -> StorageResult<()> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: could not compile `layerfs-storage` (lib) due to 24 previous errors
+warning: build failed, waiting for other jobs to finish...

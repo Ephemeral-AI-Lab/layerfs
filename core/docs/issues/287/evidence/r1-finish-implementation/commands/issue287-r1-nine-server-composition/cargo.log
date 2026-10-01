@@ -1,0 +1,156 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-nine-source/core/crates/layerfs-content)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-nine-source/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-nine-source/core/crates/layerfs-storage)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-nine-source/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 18.63s
+     Running tests/binding_claims.rs (core/target/r1-eight-owning/debug/deps/binding_claims-a9d7111de02db813)
+
+running 5 tests
+test overlapping_257_directory_chain_restatement_preserves_root_and_cycle_preserves_stage ... FAILED
+test stored_site_permutation_and_retained_parent_refusal_preserve_real_stage_and_cleanup ... FAILED
+test configured_48mib_state_budget_is_bound_before_body_and_retires_before_roots ... FAILED
+test stage_with_257_exclusive_directories_retires_claims_before_first_root_insert ... FAILED
+test duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cleanup ... FAILED
+
+successes:
+
+successes:
+
+failures:
+
+---- overlapping_257_directory_chain_restatement_preserves_root_and_cycle_preserves_stage stdout ----
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+
+thread 'overlapping_257_directory_chain_restatement_preserves_root_and_cycle_preserves_stage' panicked at crates/layerfs-server/tests/binding_claims.rs:332:13:
+assertion `left == right` failed
+  left: [0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 60, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0]
+ right: [0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- stored_site_permutation_and_retained_parent_refusal_preserve_real_stage_and_cleanup stdout ----
+
+thread 'stored_site_permutation_and_retained_parent_refusal_preserve_real_stage_and_cleanup' panicked at crates/layerfs-server/tests/binding_claims.rs:498:33:
+called `Result::unwrap()` on an `Err` value: PoisonError { .. }
+
+---- configured_48mib_state_budget_is_bound_before_body_and_retires_before_roots stdout ----
+
+thread 'configured_48mib_state_budget_is_bound_before_body_and_retires_before_roots' panicked at crates/layerfs-server/tests/binding_claims.rs:584:33:
+called `Result::unwrap()` on an `Err` value: PoisonError { .. }
+
+---- stage_with_257_exclusive_directories_retires_claims_before_first_root_insert stdout ----
+
+thread 'stage_with_257_exclusive_directories_retires_claims_before_first_root_insert' panicked at crates/layerfs-server/tests/binding_claims.rs:384:33:
+called `Result::unwrap()` on an `Err` value: PoisonError { .. }
+
+---- duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cleanup stdout ----
+
+thread 'duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cleanup' panicked at crates/layerfs-server/tests/binding_claims.rs:445:33:
+called `Result::unwrap()` on an `Err` value: PoisonError { .. }
+
+
+failures:
+    configured_48mib_state_budget_is_bound_before_body_and_retires_before_roots
+    duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cleanup
+    overlapping_257_directory_chain_restatement_preserves_root_and_cycle_preserves_stage
+    stage_with_257_exclusive_directories_retires_claims_before_first_root_insert
+    stored_site_permutation_and_retained_parent_refusal_preserve_real_stage_and_cleanup
+
+test result: FAILED. 0 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.39s
+
+error: test failed, to rerun pass `-p layerfs-server --test binding_claims`
+     Running tests/file_drafts.rs (core/target/r1-eight-owning/debug/deps/file_drafts-9f3cdeb4b3767753)
+
+running 3 tests
+test configured_16_and_48mib_real_edits_select_profile6_before_body_and_return_after_cleanup ... ok
+test actual_metadata_commit_unknown_retains_its_owner_and_aborts_separate_known_content_save ... ok
+test no_op_and_malformed_actual_extent_body_do_not_bypass_draft_terminal_custody ... ok
+
+successes:
+
+---- configured_16_and_48mib_real_edits_select_profile6_before_body_and_return_after_cleanup stdout ----
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+
+---- actual_metadata_commit_unknown_retains_its_owner_and_aborts_separate_known_content_save stdout ----
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC acknowledged actual selected read barrier: {"access": "READ_ONLY|NOFOLLOW", "barrier": "BEGIN+SELECT records=0/sealed=0, SHARED held", "busy_ms": 0, "library": "/usr/lib/libsqlite3.dylib", "mode": "read", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+DIAGNOSTIC read barrier completion: {"access": "READ_ONLY|NOFOLLOW", "barrier": "BEGIN+SELECT records=0/sealed=0, SHARED held", "busy_ms": 0, "completion": "ROLLBACK acknowledged, exact selected connection closed", "library": "/usr/lib/libsqlite3.dylib", "mode": "read", "source": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl", "version": "3.51.0"}
+
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+DIAGNOSTIC real profile6 metadata COMMIT Unknown retained and separate known content Save abort; no Saved root, automatic retry, native/global/physical or speed qualification
+
+---- no_op_and_malformed_actual_extent_body_do_not_bypass_draft_terminal_custody stdout ----
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+
+
+successes:
+    actual_metadata_commit_unknown_retains_its_owner_and_aborts_separate_known_content_save
+    configured_16_and_48mib_real_edits_select_profile6_before_body_and_return_after_cleanup
+    no_op_and_malformed_actual_extent_body_do_not_bypass_draft_terminal_custody
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.63s
+
+     Running tests/no_draft_authority.rs (core/target/r1-eight-owning/debug/deps/no_draft_authority-45da49e40f3d7e26)
+
+running 2 tests
+test final_cutoff_keeps_native6_while_base_kind_length_and_eof_errors_cannot_fallback ... ok
+test declared_whole_changed_noop_and_chunked_base_shrink_use_no_native_draft_and_exact_output ... ok
+
+successes:
+
+successes:
+    declared_whole_changed_noop_and_chunked_base_shrink_use_no_native_draft_and_exact_output
+    final_cutoff_keeps_native6_while_base_kind_length_and_eof_errors_cannot_fallback
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/small_file_authority.rs (core/target/r1-eight-owning/debug/deps/small_file_authority-ccb561b5b2c67b52)
+
+running 2 tests
+test wrong_body_kind_serial_count_and_eof_preserve_prior_stage_without_native_fallback ... ok
+test genuine_changed_and_unchanged_existing_file_updates_complete_normal_c5_without_native_files ... ok
+
+successes:
+
+successes:
+    genuine_changed_and_unchanged_existing_file_updates_complete_normal_c5_without_native_files
+    wrong_body_kind_serial_count_and_eof_preserve_prior_stage_without_native_fallback
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+error: 1 target failed:
+    `-p layerfs-server --test binding_claims`

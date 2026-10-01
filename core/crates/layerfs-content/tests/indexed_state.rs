@@ -282,13 +282,18 @@ impl IndexedState for ChangedPage {
     ) -> ContentResult<StatePage> {
         self.calls += 1;
         let page = self.inner.page(seal, after, limit)?;
-        let mut rows = page.into_records();
+        // Consume the bounded public view while the original page retains its
+        // data and any associated last-owner credit. This compatibility fixture
+        // owns a separate bounded copy to simulate a corrupt provider response.
+        let mut rows = page.records().to_vec();
         if self.early_eof {
             rows.truncate(1);
         } else {
             rows[0] = StateRecord::new(rows[0].key(), ObjectId::for_bytes(b"changed-after-seal"));
         }
-        StatePage::after(seal.clone(), after, rows, true)
+        let response = StatePage::after(seal.clone(), after, rows, true);
+        drop(page);
+        response
     }
     fn release(&mut self, scope: &StateScope) -> ContentResult<()> {
         self.inner.release(scope)

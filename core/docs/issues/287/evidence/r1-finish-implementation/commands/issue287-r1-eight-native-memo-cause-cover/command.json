@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "canonical_namespace_pipeline",
+    "--",
+    "--nocapture"
+  ],
+  "exit": 0,
+  "wall_ns": 4508283500,
+  "source_change": {
+    "core/crates/layerfs-storage/tests/canonical_namespace_pipeline.rs": "d26e282eb294e2f90404b0c74930645cc6e590c2093eeae6fe0cf81507fb00a4"
+  },
+  "cause": "independentnativeBASEscope/serial/phase acquisitions provegenuinefirstroot1 andnofinalBASEprefixreread; diagnosticactualtablemergereads separated"
+}

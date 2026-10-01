@@ -43,8 +43,26 @@ pub fn apply_edits(
     consumer: &mut dyn FinalizedConsumer,
     scope: TimingScope<'_>,
 ) -> ContentResult<ConstructedFile> {
+    let mut state = super::draft_resident::ResidentDrafts::new();
+    apply_edits_with_state(
+        policy, capacities, reader, request, consumer, &mut state, scope,
+    )
+}
+
+/// Applies the same canonical edit algorithm using the selected supplied authority.
+#[allow(clippy::too_many_arguments)]
+pub fn apply_edits_with_state(
+    policy: ConstructionPolicy,
+    capacities: &ConstructionCapacities,
+    reader: &dyn AuthenticatedObjects,
+    request: EditRequest<'_>,
+    consumer: &mut dyn FinalizedConsumer,
+    authority: &mut dyn super::draft_port::DraftState,
+    scope: TimingScope<'_>,
+) -> ContentResult<ConstructedFile> {
+    authority.capacity()?.validated()?;
     policy.validated()?;
-    scope.run(|edit| {
+    let result = scope.run(|edit| {
         let view = FileView::open(reader, request.root, edit.child("edit.base"))?;
         if view.logical_len() != request.edits.base_len() {
             return Err(ContentError::InvalidEdit {
@@ -53,6 +71,7 @@ pub fn apply_edits(
         }
         if request.edits.is_empty() {
             // Nothing was declared: the base root is the exact result.
+            authority.finish()?;
             return Ok(ConstructedFile {
                 root: view.root(),
                 logical_len: view.logical_len(),
@@ -74,6 +93,7 @@ pub fn apply_edits(
             edit.child("edit.compare"),
         )? {
             // Every replacement was byte-identical, so the result is the base.
+            authority.finish()?;
             return Ok(ConstructedFile {
                 root: view.root(),
                 logical_len: view.logical_len(),
@@ -82,6 +102,7 @@ pub fn apply_edits(
         }
         match representation {
             crate::policy::Representation::Empty => {
+                authority.finish()?;
                 let emitted = emit_empty_representation(consumer)?;
                 Ok(ConstructedFile {
                     root: emitted.root,
@@ -121,6 +142,7 @@ pub fn apply_edits(
                     object = object.with_predecessors(AdvisoryPredecessors::explicit(view.root())?);
                 }
                 let root = object.id();
+                authority.finish()?;
                 edit.child("content.emit")
                     .run(|_| consumer.accept(object))?;
                 Ok(ConstructedFile {
@@ -134,12 +156,16 @@ pub fn apply_edits(
                 // chunked route is handed that decoded state instead of reading
                 // and decoding the same object a second time.
                 Some(state) => replace_chunked(
-                    capacities, state, reader, &request, consumer, &mut pages, edit,
+                    capacities, state, reader, &request, consumer, &mut pages, authority, edit,
                 ),
-                None => stream_combined(capacities, &view, &request, consumer, edit),
+                None => stream_combined(capacities, &view, &request, consumer, authority, edit),
             },
         }
-    })
+    });
+    if result.is_err() {
+        authority.abandon();
+    }
+    result
 }
 
 /// Assembles the whole result into `out`, from retained ranges and replacements,
@@ -177,18 +203,14 @@ fn assemble_inner(
     // base then assembles through one cursor, so retained mapping pages can be
     // reused across runs while they remain in the operation's bounded cache.
     let mut plan = Plan::new(stream);
-    let mut segments: Vec<Segment> = Vec::new();
-    while let Some(segment) = plan.advance()? {
-        segments.push(segment);
-    }
     let mut cursor = match view.file_state()? {
         Some(state) => Some(crate::file::mapping::RangeCursor::new(
             reader, state, pages, scope,
         )?),
         None => None,
     };
-    for segment in &segments {
-        match *segment {
+    while let Some(segment) = plan.advance()? {
+        match segment {
             Segment::Retain { base } => {
                 if base.1 > base.0 {
                     match &mut cursor {
@@ -256,11 +278,12 @@ fn replace_chunked(
     request: &EditRequest<'_>,
     consumer: &mut dyn FinalizedConsumer,
     pages: &mut crate::file::mapping::PageCache,
+    authority: &mut dyn super::draft_port::DraftState,
     edit: &TimingScope<'_, Active>,
 ) -> ContentResult<ConstructedFile> {
     // One read of the base root per edit, not two: the state the view decoded is
     // the state this route starts from, and the summary is derived from it.
-    let mut summary = crate::file::mapping::NodeSummary {
+    let summary = crate::file::mapping::NodeSummary {
         id: state.mapping_root,
         bytes: state.logical_len,
         extents: state.extent_count,
@@ -270,7 +293,9 @@ fn replace_chunked(
     // mapping root lives in `summary` and every other field of the file state is
     // derived once, at emission.
     let mut result_len = state.logical_len;
-    let mut objects = crate::file::edit::tree::EditObjects::new(reader, consumer, pages);
+    let mut objects =
+        crate::file::edit::tree::EditObjects::supplied(reader, consumer, pages, authority)?;
+    let mut summary = objects.temporary(summary)?;
     for index in 0..request.edits.len() {
         let declared = request.edits.edit_at(index)?;
         let replacement_len = declared.replacement_len();
@@ -290,7 +315,7 @@ fn replace_chunked(
         })?;
         // The replaced range is dropped from the result, so the unfinished node
         // the split built for it is released here and never encoded.
-        crate::file::edit::tree::discard(&mut objects, removed);
+        crate::file::edit::tree::discard(&mut objects, removed)?;
         // The declared replacement length is checked against the source before any
         // work: a source that cannot serve the declared bytes is a caller error, not
         // an I/O failure to be interpreted.
@@ -307,13 +332,13 @@ fn replace_chunked(
             // continue the retained payload immediately before the insert position,
             // which is a physical hint only — and only the scan consumes it, so a
             // pure deletion never pays the rightmost walk that computes it.
-            let predecessor = match left {
+            let predecessor = match &left {
                 Some(left) => edit
                     .child("edit.split")
-                    .run(|_| rightmost_payload(&mut objects, left))?,
+                    .run(|_| rightmost_payload(&mut objects, left.summary()))?,
                 None => None,
             };
-            edit.child("content.chunk").run(|_| {
+            let built = edit.child("content.chunk").run(|_| {
                 let mut builder = crate::file::mapping::ExtentBuilder::new(capacities);
                 let mut sink = crate::file::edit::tree::DeferredSink::new(&mut objects);
                 let source = crate::file::edit::input::ReplacementReader::new(
@@ -332,7 +357,8 @@ fn replace_chunked(
                     });
                 }
                 builder.finish(&mut sink).map(|build| build.root)
-            })?
+            })?;
+            built.map(|root| objects.temporary(root)).transpose()?
         };
         let prefix = crate::file::edit::tree::concat_optional(&mut objects, left, middle)?;
         let joined = crate::file::edit::tree::concat_optional(&mut objects, prefix, right)?;
@@ -340,12 +366,12 @@ fn replace_chunked(
             Some(mapping) => mapping,
             None => crate::file::edit::tree::emit_leaf(&mut objects, Vec::new())?,
         };
-        summary = mapping;
         result_len = mapping.bytes;
         // The result of this edit is known: drafts the boundary work
         // disconnected are released here, so the retained frontier is the tree
         // the operation ends up with rather than the edits that produced it.
-        objects.settle(mapping);
+        objects.settle(&mapping)?;
+        summary = mapping;
     }
     if result_len != request.edits.final_len() {
         return Err(ContentError::LengthMismatch {
@@ -400,12 +426,14 @@ fn stream_combined(
     view: &FileView,
     request: &EditRequest<'_>,
     consumer: &mut dyn FinalizedConsumer,
+    authority: &mut dyn super::draft_port::DraftState,
     edit: &TimingScope<'_, Active>,
 ) -> ContentResult<ConstructedFile> {
     let source = PlanReader::new(view, request.edits, request.source)?;
     let build = edit
         .child("content.chunk")
         .run(|_| crate::file::mapping::build_streaming(capacities, source, consumer))?;
+    authority.finish()?;
     let emitted = edit
         .child("edit.finish")
         .run(|_| emit_file_state(consumer, build))?;

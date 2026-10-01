@@ -1368,3 +1368,13 @@ Four product surfaces complete that route:
   after `cb1bdb70e97628c2c38055ff2600e070e742010e`.
 * `WorkspaceApi::status` exposes the bounded projection and upstream counts
   described above after the acknowledgement, never between Edit and Commit.
+
+
+## R1 actual Store association
+
+Source inputd43ebe556; R1B-STORE-AUTHORITY-FREEZE owns this current source change.
+The Service compares the continuing C2 native arbitration authority, then shares
+one SaveBudget and Construction across its StoreAccess aliases. Catalog identity
+remains separate. Persisted writer slots remain authoritative across processes.
+Alias equality is not inferred from a path, StoreAccess ID or catalog scalar.
+This logical composition adds no global byte/engine/physical qualification.

@@ -1,0 +1,35 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-storage)
+error[E0026]: variant `layerfs_storage::StorageError::UnsupportedPolicy` does not have a field named `what`
+   --> crates/layerfs-storage/tests/engine_bootstrap.rs:135:25
+    |
+135 |                         what: "SQLite required hard heap limit"
+    |                         ^^^^
+    |                         |
+    |                         variant `layerfs_storage::StorageError::UnsupportedPolicy` does not have this field
+    |                         help: `layerfs_storage::StorageError::UnsupportedPolicy` has a field named `field`
+
+error[E0027]: pattern does not mention field `field`
+   --> crates/layerfs-storage/tests/engine_bootstrap.rs:134:21
+    |
+134 | /                     StorageError::UnsupportedPolicy {
+135 | |                         what: "SQLite required hard heap limit"
+136 | |                     }
+    | |_____________________^ missing field `field`
+    |
+help: include the missing field in the pattern
+    |
+135 |                         what: "SQLite required hard heap limit", field }
+    |                                                                ~~~~~~~~~
+help: if you don't care about this missing field, you can explicitly ignore it
+    |
+135 |                         what: "SQLite required hard heap limit", field: _ }
+    |                                                                ~~~~~~~~~~~~
+help: or always ignore missing fields here
+    |
+135 |                         what: "SQLite required hard heap limit", .. }
+    |                                                                ~~~~~~
+
+Some errors have detailed explanations: E0026, E0027.
+For more information about an error, try `rustc --explain E0026`.
+error: could not compile `layerfs-storage` (test "engine_bootstrap") due to 2 previous errors

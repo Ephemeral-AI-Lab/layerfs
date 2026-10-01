@@ -6,7 +6,7 @@ fn main() -> std::process::ExitCode {
     // SAFETY: this is the process entry, before host configuration can open
     // Store/history or initialize workers. This binary makes no earlier SQLite
     // calls and owns its linked provider's startup/configuration exclusively.
-    let _engine_guard = match unsafe { layerfs_storage::engine::bootstrap_exclusive() } {
+    let engine_guard = match unsafe { layerfs_storage::engine::bootstrap_exclusive() } {
         Ok(guard) => guard,
         Err(error) => {
             let custody = error.custody();
@@ -18,7 +18,7 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::FAILURE;
         }
     };
-    match layerfs_server::host::run() {
+    match layerfs_server::host::run_guarded(engine_guard) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
             layerfs_bridge::adapters::native::pipe::diagnostic(&format!("Error: {error}\n"));

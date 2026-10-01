@@ -46,16 +46,40 @@ impl GroupCache {
     }
 
     /// Retains one decoded body, releasing the whole cache first if it would not fit.
-    pub fn insert(&mut self, pack_id: i64, group_number: usize, body: Vec<u8>) {
-        if self.retained.saturating_add(body.len()) > crate::policy::DECODED_GROUP_CACHE_BYTES {
+    pub fn insert(
+        &mut self,
+        pack_id: i64,
+        group_number: usize,
+        body: Vec<u8>,
+    ) -> StorageResult<()> {
+        let capacity = body.capacity();
+        if capacity > crate::policy::DECODED_GROUP_CACHE_BYTES {
+            return Err(StorageError::CapacityExceeded {
+                what: "decoded group cache capacity",
+                limit: crate::policy::DECODED_GROUP_CACHE_BYTES as u64,
+                actual: capacity as u64,
+            });
+        }
+        let prior = self
+            .bodies
+            .get(&(pack_id, group_number))
+            .map_or(0, Vec::capacity);
+        let retained = self
+            .retained
+            .checked_sub(prior)
+            .ok_or(StorageError::Integrity("group capacity charge"))?;
+        if retained.saturating_add(capacity) > crate::policy::DECODED_GROUP_CACHE_BYTES {
             self.bodies.clear();
             self.retained = 0;
+        } else {
+            self.retained = retained;
         }
-        self.retained = self.retained.saturating_add(body.len());
         self.bodies.insert((pack_id, group_number), body);
+        self.retained += capacity;
+        Ok(())
     }
 
-    /// Bytes of decoded bodies this cache currently retains.
+    /// Actual Vec data capacity this decoded-body cache currently owns.
     pub fn retained_bytes(&self) -> usize {
         self.retained
     }
@@ -107,7 +131,7 @@ pub fn decode_canonical(
                             let decompressed =
                                 workspace.decompress_group(selected, view.decoded_length)?;
                             *group_decodes = group_decodes.saturating_add(1);
-                            groups.insert(location.pack_id, location.group_number, decompressed);
+                            groups.insert(location.pack_id, location.group_number, decompressed)?;
                             groups
                                 .get(location.pack_id, location.group_number)
                                 .ok_or(StorageError::Integrity("decoded group cache"))?

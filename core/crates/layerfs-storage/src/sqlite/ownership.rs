@@ -108,6 +108,30 @@ pub(crate) fn publication(connection: &Connection) -> StorageResult<i64> {
     )?)
 }
 
+/// Validate a captured actual guard without SQL or ownership admission.
+/// Real autocommit distinguishes a known pre-BEGIN refusal from retained uncertainty.
+pub fn validate_engine_boundary(
+    connection: &Connection,
+    engine: &'static crate::engine::EngineGuard,
+) -> StorageResult<()> {
+    match engine.validate() {
+        Ok(_) => Ok(()),
+        Err(original) if !connection.is_autocommit() => Err(StorageError::UnknownOutcome {
+            original: Box::new(original),
+        }),
+        Err(original) => Err(original),
+    }
+}
+pub(crate) fn engine_boundary(
+    connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
+) -> StorageResult<()> {
+    match engine {
+        Some(guard) => validate_engine_boundary(connection, guard),
+        None => Ok(()),
+    }
+}
+
 /// Reserves one private save under the Store's persisted writer budget.
 ///
 /// The budget is read inside this transaction, so two processes cannot admit
@@ -118,6 +142,13 @@ pub(crate) fn publication(connection: &Connection) -> StorageResult<i64> {
 /// inside `1..=budget`; the upper bound is the budget and the shipped CHECK still
 /// constrains the whole supported space.
 pub(crate) fn acquire(connection: &Connection) -> StorageResult<(i64, i64)> {
+    acquire_participating(connection, None)
+}
+pub(crate) fn acquire_participating(
+    connection: &Connection,
+    engine: Option<&'static crate::engine::EngineGuard>,
+) -> StorageResult<(i64, i64)> {
+    engine_boundary(connection, engine)?;
     write::begin_immediate(connection)?;
     let budget = i64::from(schema::max_concurrent_writes(connection)?);
     let live: i64 = connection.query_row(
@@ -126,6 +157,7 @@ pub(crate) fn acquire(connection: &Connection) -> StorageResult<(i64, i64)> {
         |row| row.get(0),
     )?;
     if live >= budget {
+        engine_boundary(connection, engine)?;
         write::rollback(connection)?;
         return Err(StorageError::OwnershipUnavailable);
     }
@@ -141,14 +173,30 @@ pub(crate) fn acquire(connection: &Connection) -> StorageResult<(i64, i64)> {
     // `live < budget` distinct slots exist in a space of `budget` values, so a
     // free slot inside it always remains; a NULL here means the invariant broke.
     let Some(slot) = slot else {
+        engine_boundary(connection, engine)?;
         write::rollback(connection)?;
         return Err(StorageError::Integrity("save slot allocation"));
     };
     let visible = publication(connection)?;
     connection.execute("INSERT INTO saves (active_slot) VALUES (?1)", [slot])?;
     let save = connection.last_insert_rowid();
+    // Private scope and persistent birth are accepted by the same known COMMIT.
+    if let Err(original) = scope(connection, save, visible) {
+        if original.is_unknown_outcome() || connection.is_autocommit() {
+            return Err(original);
+        }
+        return match engine_boundary(connection, engine).and_then(|_| write::rollback(connection)) {
+            Ok(()) => Err(original),
+            Err(cleanup) => Err(StorageError::UnknownOutcome {
+                original: Box::new(StorageError::CleanupFailed {
+                    original: Box::new(original),
+                    cleanup: Box::new(cleanup),
+                }),
+            }),
+        };
+    }
+    engine_boundary(connection, engine)?;
     write::commit(connection)?;
-    scope(connection, save, visible)?;
     Ok((save, visible))
 }
 

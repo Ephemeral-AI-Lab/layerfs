@@ -17,7 +17,8 @@ use crate::error::{ContentError, ContentResult};
 use crate::filesystem::inode::read::{lookup_many, InodeReadWork, InodeTable};
 use crate::filesystem::references::backing::OrderingBacking;
 use crate::filesystem::references::record::{Row, ROW_BYTES};
-use crate::filesystem::references::runs::{RunStore, DEFAULT_MERGE_BUFFER_BYTES};
+use crate::filesystem::references::runs::{RunStore, DEFAULT_MERGE_BUFFER_BYTES, MAXIMUM_LEVELS};
+use crate::filesystem::references::tier_stream::TierHeads;
 use crate::object::inode_leaf::InodeValue;
 use crate::object::AuthenticatedObjects;
 
@@ -171,11 +172,10 @@ impl<'r, 'b> ReferenceReducer<'r, 'b> {
     /// The state is **carried out of the visit** that already reads every row, so
     /// a caller that needs both the serial set and its states pays one pass
     /// instead of a pass plus one `state` lookup per serial (each of which is a
-    /// run read once the reducer has consolidated). The collection is therefore
+    /// run read). The collection is therefore
     /// `(u64, PendingState)` per touched inode rather than one `u64`, which is
     /// what [`FilesystemResources::maximum_touched_serials`] charges for.
     pub fn touched_serials(&mut self, _batch: usize) -> ContentResult<Vec<(u64, PendingState)>> {
-        self.runs.consolidate()?;
         let mut serials = Vec::new();
         let mut pending = self.pending.iter().peekable();
         let mut last: Option<u64> = None;
@@ -266,7 +266,8 @@ impl<'r, 'b> ReferenceReducer<'r, 'b> {
     ///
     /// The pending map is merged with the spilled runs (pending is newest) and
     /// each effect row's base record is read in a bounded wave. The returned
-    /// stream owns the final run and must be consumed before the operation ends.
+    /// stream owns every immutable input tier and must be consumed before the
+    /// operation ends. No final consolidation output is materialized.
     pub fn finish<'a>(
         &mut self,
         reader: &'a dyn AuthenticatedObjects,
@@ -274,17 +275,14 @@ impl<'r, 'b> ReferenceReducer<'r, 'b> {
         base_batch: usize,
         root_serial: u64,
     ) -> ContentResult<FinalRows<'a>> {
-        self.runs.consolidate()?;
         let work = self.work();
+        let runs = self.runs.take_stream_runs()?;
         let pending = std::mem::take(&mut self.pending);
-        let run_count = self.runs.single_run().map_or(0, |run| run.count);
-        let handle = self.runs.take_single_handle();
         FinalRows::new(
             reader,
             table,
             pending,
-            handle,
-            run_count,
+            runs,
             base_batch.max(1),
             root_serial,
             work,
@@ -324,20 +322,17 @@ pub struct FinalChange {
 pub struct FinalRows<'r> {
     reader: &'r dyn AuthenticatedObjects,
     table: InodeTable,
-    memory: std::vec::IntoIter<Row>,
+    memory: std::collections::btree_map::IntoValues<u64, Row>,
     memory_next: Option<Row>,
-    run: Option<Box<dyn crate::filesystem::references::backing::OrderingRun>>,
-    run_remaining: u64,
-    run_offset: u64,
-    run_buffer: Vec<u8>,
-    run_filled: usize,
-    run_consumed: usize,
+    runs: [Option<crate::filesystem::references::merge::Run>; MAXIMUM_LEVELS],
+    heads: TierHeads,
     run_next: Option<Row>,
     lookahead: VecDeque<Row>,
     base_batch: usize,
     root_serial: u64,
     work: ReferenceWork,
     finished: bool,
+    failure: Option<ContentError>,
 }
 
 impl<'r> FinalRows<'r> {
@@ -346,35 +341,27 @@ impl<'r> FinalRows<'r> {
         reader: &'r dyn AuthenticatedObjects,
         table: InodeTable,
         pending: BTreeMap<u64, Row>,
-        run: Option<Box<dyn crate::filesystem::references::backing::OrderingRun>>,
-        run_rows: u64,
+        runs: [Option<crate::filesystem::references::merge::Run>; MAXIMUM_LEVELS],
         base_batch: usize,
         root_serial: u64,
-        work: ReferenceWork,
+        mut work: ReferenceWork,
     ) -> ContentResult<Self> {
+        let heads = TierHeads::new(&runs, &mut work.runs)?;
         let mut rows = Self {
             reader,
             table,
-            memory: pending.into_values().collect::<Vec<_>>().into_iter(),
+            memory: pending.into_values(),
             memory_next: None,
-            run: None,
-            run_remaining: 0,
-            run_offset: 0,
-            run_buffer: Vec::new(),
-            run_filled: 0,
-            run_consumed: 0,
+            runs,
+            heads,
             run_next: None,
             lookahead: VecDeque::new(),
             base_batch,
             root_serial,
             work,
             finished: false,
+            failure: None,
         };
-        if let Some(handle) = run {
-            rows.run_remaining = run_rows;
-            rows.run_buffer = vec![0; base_batch.max(1) * ROW_BYTES * 4];
-            rows.run = Some(handle);
-        }
         rows.memory_next = rows.memory.next();
         rows.run_next = rows.read_run_row()?;
         Ok(rows)
@@ -387,6 +374,17 @@ impl<'r> FinalRows<'r> {
 
     /// Next final change in serial order, or `None` at the end.
     pub fn next_change(&mut self) -> ContentResult<Option<FinalChange>> {
+        if let Some(error) = &self.failure {
+            return Err(error.clone());
+        }
+        let result = self.next_selected_change();
+        if let Err(error) = &result {
+            self.failure = Some(error.clone());
+        }
+        result
+    }
+
+    fn next_selected_change(&mut self) -> ContentResult<Option<FinalChange>> {
         if self.finished {
             return Ok(None);
         }
@@ -560,31 +558,13 @@ impl<'r> FinalRows<'r> {
     }
 
     fn read_run_row(&mut self) -> ContentResult<Option<Row>> {
-        if self.run_remaining == 0 {
-            return Ok(None);
+        let row = self.heads.next(&self.runs, &mut self.work.runs)?;
+        for (index, run) in self.runs.iter_mut().enumerate() {
+            if self.heads.exhausted(index) {
+                *run = None;
+            }
         }
-        if self.run_consumed == self.run_filled {
-            let rows = self
-                .run_remaining
-                .min((self.run_buffer.len() / ROW_BYTES) as u64) as usize;
-            let filled = rows * ROW_BYTES;
-            let handle = self
-                .run
-                .as_ref()
-                .ok_or(ContentError::InvalidOrderingRecord("run handle"))?;
-            handle.read_at(self.run_offset, &mut self.run_buffer[..filled])?;
-            self.run_consumed = 0;
-            self.run_filled = filled;
-        }
-        let bytes: &[u8; ROW_BYTES] = self.run_buffer
-            [self.run_consumed..self.run_consumed + ROW_BYTES]
-            .try_into()
-            .map_err(|_| ContentError::UnexpectedEof)?;
-        let row = Row::decode(bytes)?;
-        self.run_consumed += ROW_BYTES;
-        self.run_offset += ROW_BYTES as u64;
-        self.run_remaining -= 1;
-        Ok(Some(row))
+        Ok(row)
     }
 }
 

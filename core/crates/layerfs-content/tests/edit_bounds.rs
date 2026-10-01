@@ -294,6 +294,11 @@ fn the_retained_frontier_does_not_grow_with_the_edit_count() {
             extent_count(&merged, constructed.root) > base_extents,
             "the mapping did not change, so the frontier was never exercised"
         );
+        println!(
+            "DIAGNOSTIC current draft peaks: unfinished_body={} aggregate_metadata={}",
+            constructed.counters.peak_deferred_bytes,
+            constructed.counters.peak_draft_metadata_bytes
+        );
         peaks.push(constructed.counters.peak_deferred_bytes);
     }
     // One boundary path, one replacement scan and the final page fit far inside
@@ -688,6 +693,11 @@ fn the_frontier_does_not_grow_with_repeated_in_place_edits() {
             constructed.counters.payloads_created, count as u64,
             "every edit created a payload"
         );
+        println!(
+            "DIAGNOSTIC current draft peaks: unfinished_body={} aggregate_metadata={}",
+            constructed.counters.peak_deferred_bytes,
+            constructed.counters.peak_draft_metadata_bytes
+        );
         peaks.push(constructed.counters.peak_deferred_bytes);
         // The result's own extent count: the frontier is what the tree the
         // operation ends up with needs, so the two are compared directly.
@@ -715,24 +725,17 @@ fn the_frontier_does_not_grow_with_repeated_in_place_edits() {
     );
 }
 
-/// The deferred-state ceiling is proved out of reach, not induced.
+/// Prospective full-metadata accounting for the unchanged4096-edit fixture.
 ///
-/// The charge is live, so crossing `EDIT_DEFERRED_LIMIT` needs ~1 000 drafts alive
-/// at once, and a draft charges at most one mapping node plus the fixed overhead.
-/// A non-root page holds at least [`MIN_ENTRIES`] entries, so a frontier of P pages
-/// spans at least `64(P - 1)` extents, and an edit operation can only create
-/// `length / MINIMUM_CHUNK_BYTES + 3 * edits` extents (three boundary pieces per
-/// edit at most, one of them a sub-minimum replacement tail). Reachability
-/// therefore costs a base of roughly
-/// `(64 * EDIT_DEFERRED_LIMIT / (MAX_NODE_OBJECT_BYTES + 128) - 3 * 4 096) * 8 192`
-/// bytes - some hundreds of MiB - which is far outside this packet's fixture
-/// budget, so the refusal in `tree.rs` is recorded as unrun and this case instead
-/// checks the premise the derivation rests on: on the largest in-budget shape the
-/// measured charge per live draft stays within the maximum a draft may charge.
+/// The historical body-plus128 derivation excluded references, counts, jobs,
+/// resolutions and publication membership. It cannot determine this profile's
+/// resource ceiling or a workload floor. This body retains its historical name,
+/// verifies the same finite workload, and independently observes accepted mapping
+/// framing to require that telemetry includes associated final-state metadata.
+/// Aggregate quota refusal and physical containment remain separate proofs.
 #[test]
 fn the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound() {
-    use layerfs_content::file::cdc::MINIMUM_CHUNK_BYTES;
-    use layerfs_content::file::mapping::{MAX_NODE_OBJECT_BYTES, MIN_ENTRIES};
+    use layerfs_content::file::mapping::MAX_NODE_OBJECT_BYTES;
     use layerfs_content::file::EDIT_DEFERRED_LIMIT;
     const RUNS: usize = 4_096;
 
@@ -754,6 +757,7 @@ fn the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound() {
     }
     let stream = Edits::new(base.len() as u64, edits).expect("valid stream");
     let mut consumer = store.merged_clone();
+    let prior_emissions = consumer.order().len();
     let constructed = disabled_scope(|scope| {
         apply_edits(
             policy(),
@@ -770,34 +774,40 @@ fn the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound() {
     })
     .expect("bounded-frontier edit");
     let counters = constructed.counters;
-    println!("MEASURED deferred shape: {counters:?}");
+    println!("DIAGNOSTIC full metadata shape: {counters:?}");
     assert_eq!(counters.payloads_created, RUNS as u64, "every edit landed");
     assert!(
-        counters.peak_deferred_bytes < EDIT_DEFERRED_LIMIT,
+        counters.peak_draft_metadata_bytes < EDIT_DEFERRED_LIMIT,
         "the ceiling held without refusing: {counters:?}"
     );
     assert!(counters.nodes_created > 0, "a frontier was built");
-    let per_draft = counters.peak_deferred_bytes / counters.nodes_created as usize;
+    // Independent fixed v1 header offsets: envelope13 + mapping header31;
+    // entries occupy bytes26..28, and each entry owns one reference record.
+    // A private decoded body uses20 bytes instead of canonical44; the body,
+    // header+checksum, count, resolution and canonical membership add fixed
+    // framed classes55/151/63/87/95. This is a lower bound: jobs, predecessor
+    // rows and resident container allowances can add ownership.
+    let mut accepted_mapping_nodes = 0;
+    let mut final_metadata_lower_bound = 0;
+    for (id, role) in &consumer.order()[prior_emissions..] {
+        if !matches!(role, ObjectRole::ExtentLeaf | ObjectRole::ExtentBranch) {
+            continue;
+        }
+        let canonical = consumer.canonical(*id).expect("accepted canonical mapping");
+        assert!(canonical.len() <= MAX_NODE_OBJECT_BYTES);
+        let entries = u16::from_be_bytes(canonical[26..28].try_into().unwrap()) as usize;
+        assert!(entries <= 128);
+        final_metadata_lower_bound += canonical.len() - 24 + entries * 89 + 55 + 151 + 63 + 87 + 95;
+        accepted_mapping_nodes += 1;
+    }
+    assert_eq!(accepted_mapping_nodes, counters.nodes_created as usize);
     assert!(
-        per_draft <= MAX_NODE_OBJECT_BYTES + 128,
-        "a live draft charged more than one node plus overhead: {per_draft} bytes"
+        counters.peak_draft_metadata_bytes >= final_metadata_lower_bound,
+        "telemetry must charge final associated metadata, not just body bytes:          peak={}, final lower bound={final_metadata_lower_bound}",
+        counters.peak_draft_metadata_bytes
     );
-
-    // The derivation, from the measured charge bound rather than from a number
-    // chosen here: pages the ceiling needs, extents those pages span at the
-    // occupancy floor, and the base bytes those extents imply at the chunk minimum
-    // once the whole edit budget has been spent on boundary pieces.
-    let drafts_needed = EDIT_DEFERRED_LIMIT.div_ceil(MAX_NODE_OBJECT_BYTES + 128);
-    let extents_needed = MIN_ENTRIES * (drafts_needed - 1);
-    let boundary_extents = 3 * RUNS;
-    let base_floor = extents_needed.saturating_sub(boundary_extents) * MINIMUM_CHUNK_BYTES;
     println!(
-        "DERIVED ceiling floor: {per_draft} B/draft measured (bound {}), \
-         {drafts_needed} live pages, {extents_needed} extents, {base_floor} base bytes",
-        MAX_NODE_OBJECT_BYTES + 128
-    );
-    assert!(
-        base_floor > 256 * 1024 * 1024,
-        "the deferred ceiling is out of reach for a bounded fixture: {base_floor} bytes"
+        "DIAGNOSTIC full metadata: peak={} bytes; accepted mapping nodes={accepted_mapping_nodes};          independent final framed lower bound={final_metadata_lower_bound};          aggregate-quota refusal and allocator/native/physical containment are not this body",
+        counters.peak_draft_metadata_bytes
     );
 }

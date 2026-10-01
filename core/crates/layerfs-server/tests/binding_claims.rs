@@ -3,7 +3,9 @@
 //! physical progress, release qualification, or performance claim.
 //!
 //! The phase test explicitly alters the owned external test scratch schema:
-//! fixed root columns require site_owner.stage4 and graph_owner.stage7. It keeps production triggerdepth0
+//! fixed root columns require site_owner.stage4 and graph_owner.stage7. Profile8
+//! captures the full194-byte subject; success verifies all12 empty tables/9 reset
+//! owner rows before explicit Idle drain. It keeps production triggerdepth0
 //! and foreign_keys1. The assertion proves first-root ordering; the owning C2
 //! provider tests separately prove exact empty Sites/Graph retirement.
 
@@ -11,6 +13,9 @@
 
 #[path = "support/prepared_binding.rs"]
 mod fixture;
+#[allow(dead_code)]
+#[path = "support/scratch_reuse.rs"]
+mod reset_oracle;
 
 use fixture::{Directory, Fixture, ORIGINAL};
 use layerfs_bridge::contract::*;
@@ -136,6 +141,7 @@ fn spools() -> BTreeSet<PathBuf> {
 
 struct ObservedBody<'a> {
     input: Cursor<&'a [u8]>,
+    fixture: &'a Fixture,
     parent: &'a Path,
     library: &'a Path,
     enforce_phase: bool,
@@ -144,13 +150,18 @@ struct ObservedBody<'a> {
     eof: bool,
     bytes: u64,
     scratch_bytes: u64,
+    initial: Option<reset_oracle::Image>,
 }
 
 impl<'a> ObservedBody<'a> {
-    fn new(parent: &'a Path, library: &'a Path, bytes: &'a [u8], enforce_phase: bool) -> Self {
+    fn new(fixture: &'a Fixture, library: &'a Path, bytes: &'a [u8], enforce_phase: bool) -> Self {
+        // Fixture preparation may itself leave an acknowledged Idle owner.
+        fixture.service.drain_construction_idle().unwrap();
+        let parent = fixture.path();
         assert!(scratch_files(parent).is_empty());
         Self {
             input: Cursor::new(bytes),
+            fixture,
             parent,
             library,
             enforce_phase,
@@ -159,7 +170,22 @@ impl<'a> ObservedBody<'a> {
             eof: false,
             bytes: 0,
             scratch_bytes: 16 * 1024 * 1024,
+            initial: None,
         }
+    }
+
+    fn known_success(&self, fixture: &Fixture) {
+        let path = self.scratch.as_ref().unwrap();
+        let reset = reset_oracle::image(self.library, path);
+        let initial = self.initial.as_ref().unwrap();
+        assert_eq!(reset.header, initial.header);
+        assert_eq!(reset.site, initial.site);
+        assert_eq!(reset.graph, initial.graph);
+        assert_eq!(reset.solver, initial.solver);
+        assert_eq!(reset.scalars, initial.scalars);
+        assert_eq!(fixture.service.drain_construction_idle().unwrap(), 1);
+        self.known_cleanup();
+        assert_eq!(fixture.service.drain_construction_idle().unwrap(), 0);
     }
 
     fn known_cleanup(&self) {
@@ -197,7 +223,7 @@ impl Read for ObservedBody<'_> {
                 assert_eq!(metadata.nlink(), 1);
                 assert_eq!(metadata.blocks() * 512, self.scratch_bytes);
             }
-            assert_eq!(number(self.library, &path, "PRAGMA user_version"), 4);
+            assert_eq!(number(self.library, &path, "PRAGMA user_version"), 8);
             // max_page_count belongs to the production connection's Pager.
             // This separate reader observes persisted identity/budget only;
             // owning C2 tests require exact live connection readback.
@@ -225,6 +251,99 @@ impl Read for ObservedBody<'_> {
                 ),
                 (self.scratch_bytes / 256) * 63
             );
+            let initial = reset_oracle::image(self.library, &path);
+            assert_eq!(initial.header.len(), 386);
+            assert_eq!(&initial.header[..8], b"LFCSOWN8");
+            assert_eq!(&initial.header[8..10], &8u16.to_be_bytes());
+            assert_eq!(&initial.header[10..16], &[0; 6]);
+            // The independent immutable prerequisite supplies the namespace/base/root.
+            assert_eq!(&initial.header[200..232], &self.fixture.scope);
+            assert_eq!(&initial.header[232..234], &[2, 1]);
+            assert_eq!(&initial.header[234..266], &self.fixture.root);
+            assert_eq!(
+                &initial.header[266..274],
+                &self.fixture.root_serial.to_be_bytes()
+            );
+            assert_eq!(&initial.header[274..282], &self.scratch_bytes.to_be_bytes());
+            assert_eq!(
+                &initial.header[282..290],
+                &(self.scratch_bytes / 256).to_be_bytes()
+            );
+            assert_eq!(
+                &initial.header[290..298],
+                &((self.scratch_bytes / 256) * 63).to_be_bytes()
+            );
+            assert_eq!(initial.graph, initial.solver);
+            assert_eq!(initial.graph.len(), 188);
+            assert_eq!(initial.site.len(), 89);
+            assert_eq!(&initial.graph[82..], &initial.header[192..298]);
+            let mut context = initial.header[24..56].to_vec();
+            context.extend_from_slice(&initial.header[16..24]);
+            context.extend_from_slice(&initial.header[56..88]);
+            let mut site = context.clone();
+            site.extend_from_slice(&1u64.to_be_bytes());
+            site.push(3);
+            site.extend_from_slice(&initial.header[192..200]);
+            assert_eq!(initial.site, site);
+            context.extend_from_slice(&2u64.to_be_bytes());
+            context.extend_from_slice(&[4, 5]);
+            context.extend_from_slice(&initial.header[192..298]);
+            assert_eq!(initial.graph, context);
+            assert!(initial.header[16..24].iter().any(|b| *b != 0));
+            assert!(initial.header[192..200].iter().any(|b| *b != 0));
+            let roots = initial.scalars[0];
+            let bindings = initial.scalars[1];
+            assert_eq!(
+                initial.scalars,
+                vec![
+                    roots,
+                    bindings,
+                    self.scratch_bytes,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    9,
+                    9
+                ]
+            );
+            let records = 64 * 1024 * 1024u64 / 1024 + 1;
+            let mut capacities = Vec::new();
+            for value in [
+                records,
+                self.scratch_bytes,
+                // Alias capacity captures framed declared Sites bytes (60 each).
+                bindings.checked_mul(60).unwrap(),
+                records,
+                roots,
+                self.scratch_bytes,
+                64 * 1024 * 1024 / 16,
+                64 * 1024 * 1024 / 16,
+                records,
+                records,
+                self.scratch_bytes,
+            ] {
+                capacities.extend_from_slice(&value.to_be_bytes());
+            }
+            assert_eq!(&initial.header[298..], capacities);
+            // Native binding digest is independently assembled from its literal v8 grammar.
+            let mut native = b"layerfs/construction-state/native/v8\0".to_vec();
+            native.extend_from_slice(&initial.header[88..192]);
+            native.extend_from_slice(&initial.header[24..56]);
+            native.extend_from_slice(&initial.header[16..24]);
+            native.extend_from_slice(&initial.header[192..]);
+            assert_eq!(
+                &initial.header[56..88],
+                // This private binding uses raw Blake3 over the native domain;
+                // ObjectId::for_bytes would add the unrelated object/v2 domain.
+                blake3::hash(&native).as_bytes()
+            );
+            self.initial = Some(initial);
             self.scratch = Some(path);
         }
         let bytes = self.input.read(output)?;
@@ -271,9 +390,9 @@ fn stage_with_257_exclusive_directories_retires_claims_before_first_root_insert(
     let (rows, declarations) = directories(&f, 257, false);
     let (header, raw) = f.prepared([121; 32], 1, &rows, &declarations);
     assert_eq!((header.totals.directories, header.totals.names), (258, 257));
-    let mut body = ObservedBody::new(f.path(), &library, &raw, true);
+    let mut body = ObservedBody::new(&f, &library, &raw, true);
     let stage = f.stage(header.clone(), &mut body).unwrap();
-    body.known_cleanup();
+    body.known_success(&f);
     assert_eq!(body.bytes, raw.len() as u64);
     assert_ne!(stage.candidate_root, f.root);
     assert_eq!(f.current_stage(header.workspace), stage);
@@ -321,7 +440,7 @@ fn stage_with_257_exclusive_directories_retires_claims_before_first_root_insert(
         ),
         0
     );
-    eprintln!("DIAGNOSTIC direct-legacy selected-provider Stage: sites257 directories258, one native16MiB owner/source-bound profile4; external required-site4/graph7 FKs held at every actual rootinsert, triggerdepth0 unchanged; known scratch/spool/Save cleanup. Provider proof separately owns exactemptystage4; no heap/physical/progress/speed admission.");
+    eprintln!("DIAGNOSTIC direct-legacy selected-provider Stage: sites257 directories258, one native16MiB owner/source-bound profile8; external required-site4/graph7 FKs held at every actual rootinsert, triggerdepth0 unchanged; known reset/Idle drain/spool/Save cleanup. Provider proof separately owns exactemptystage4; no heap/physical/progress/speed admission.");
 }
 
 #[test]
@@ -336,16 +455,16 @@ fn duplicate_after_256_exclusive_claims_preserves_prior_stage_and_known_save_cle
         &[(f.root_serial, vec![(b"b".to_vec(), Some(f.file_serial))])],
         &[],
     );
-    let mut body = ObservedBody::new(f.path(), &library, &raw, false);
+    let mut body = ObservedBody::new(&f, &library, &raw, false);
     let prior = f.stage(header, &mut body).unwrap();
-    body.known_cleanup();
+    body.known_success(&f);
     let store = f.path().join("store.sqlite");
     let saves = number(&library, &store, "SELECT count(*) FROM saves");
     let (rows, declarations) = directories(&f, 256, true);
     let (header, raw) = f.prepared(workspace, 2, &rows, &declarations);
     assert_eq!(header.totals.names, 257);
     assert_eq!(rows[0].1[0].1, rows[0].1[256].1);
-    let mut body = ObservedBody::new(f.path(), &library, &raw, true);
+    let mut body = ObservedBody::new(&f, &library, &raw, true);
     let failure = f.stage(header, &mut body).unwrap_err();
     body.known_cleanup();
     assert_eq!(body.bytes, raw.len() as u64);
@@ -410,9 +529,9 @@ fn stored_site_permutation_and_retained_parent_refusal_preserve_real_stage_and_c
         .collect();
     let (header, raw) = f.prepared(workspace, 1, &[(f.root_serial, changes.clone())], &[]);
     assert_eq!((header.totals.names, header.totals.fresh), (129, 0));
-    let mut body = ObservedBody::new(f.path(), &library, &raw, true);
+    let mut body = ObservedBody::new(&f, &library, &raw, true);
     let prior = f.stage(header, &mut body).unwrap();
-    body.known_cleanup();
+    body.known_success(&f);
     assert_eq!(body.bytes, raw.len() as u64);
     let mut expected = vec![(b"a".to_vec(), f.file_serial)];
     expected.extend(
@@ -439,7 +558,7 @@ fn stored_site_permutation_and_retained_parent_refusal_preserve_real_stage_and_c
         &[(f.root_serial, vec![(b"x".to_vec(), Some(directories[0].1))])],
         &[],
     );
-    let mut body = ObservedBody::new(f.path(), &library, &raw, true);
+    let mut body = ObservedBody::new(&f, &library, &raw, true);
     let failure = f.stage(header, &mut body).unwrap_err();
     body.known_cleanup();
     assert_eq!(failure.code, Code::InvalidInput);
@@ -460,7 +579,7 @@ fn stored_site_permutation_and_retained_parent_refusal_preserve_real_stage_and_c
     );
     assert_eq!(f.list(f.root, b""), before);
     assert_eq!(f.original_bytes(), ORIGINAL);
-    eprintln!("DIAGNOSTIC direct-library profile4:129 existing sites cross128, actual source-bound birth/parent/final/retire->Stage with site4/graph7 FKs; old/new serial restatement permutation preserved; surviving old parent refuses and priorStage/base/known Save-scratch cleanup remain exact. No speed/global/physical qualification.");
+    eprintln!("DIAGNOSTIC direct-library profile8:129 existing sites cross128, actual source-bound birth/parent/final/retire->Stage with site4/graph7 FKs; old/new serial restatement permutation preserved; surviving old parent refuses and priorStage/base/known Save-scratch cleanup remain exact. No speed/global/physical qualification.");
 }
 
 #[test]
@@ -471,10 +590,10 @@ fn configured_48mib_state_budget_is_bound_before_body_and_retires_before_roots()
     let library = selected_library();
     let (rows, declarations) = directories(&f, 129, false);
     let (header, raw) = f.prepared([124; 32], 1, &rows, &declarations);
-    let mut body = ObservedBody::new(f.path(), &library, &raw, true);
+    let mut body = ObservedBody::new(&f, &library, &raw, true);
     body.scratch_bytes = budget;
     let stage = f.stage(header.clone(), &mut body).unwrap();
-    body.known_cleanup();
+    body.known_success(&f);
     assert_eq!(body.bytes, raw.len() as u64);
     assert_eq!(f.current_stage(header.workspace), stage);
     assert_eq!(f.list(stage.candidate_root, b"").len(), 130);
@@ -488,7 +607,7 @@ fn configured_48mib_state_budget_is_bound_before_body_and_retires_before_roots()
         ),
         0
     );
-    eprintln!("DIAGNOSTIC configured48MiB actual native reservation/header/selectedS-R-L before body; one owner, sites4/graph7 root fences and known scratch/spool/Save cleanup. RAM/work/request limits unchanged; no larger input or speed/physical admission.");
+    eprintln!("DIAGNOSTIC configured48MiB actual native reservation/header/selectedS-R-L before body; one owner, sites4/graph7 root fences and known reset/Idle drain/spool/Save cleanup. RAM/work/request limits unchanged; no larger input or speed/physical admission.");
 }
 
 #[test]
@@ -526,9 +645,9 @@ fn overlapping_257_directory_chain_restatement_preserves_root_and_cycle_preserve
     let workspace = [125; 32];
     let (header, raw) = f.prepared(workspace, 1, &rows, &[]);
     assert_eq!((header.totals.directories, header.totals.names), (257, 256));
-    let mut body = ObservedBody::new(f.path(), &library, &raw, true);
+    let mut body = ObservedBody::new(&f, &library, &raw, true);
     let prior = f.stage(header, &mut body).unwrap();
-    body.known_cleanup();
+    body.known_success(&f);
     // The expected identity is the immutable pre-operation root, not candidate output.
     assert_eq!(prior.candidate_root, f.root);
     assert_eq!(f.current_stage(workspace), prior);
@@ -541,7 +660,7 @@ fn overlapping_257_directory_chain_restatement_preserves_root_and_cycle_preserve
     ];
     cycle.sort_by_key(|row| row.0);
     let (header, raw) = f.prepared(workspace, 2, &cycle, &[]);
-    let mut body = ObservedBody::new(f.path(), &library, &raw, true);
+    let mut body = ObservedBody::new(&f, &library, &raw, true);
     let error = f.stage(header, &mut body).unwrap_err();
     body.known_cleanup();
     assert_eq!(error.code, Code::InvalidInput);

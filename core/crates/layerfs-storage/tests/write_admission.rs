@@ -1,4 +1,12 @@
-//! The configured per-Store writer budget (#216): admission, retention, reuse.
+//! Persisted writer budget and actual scoped Save/index byte admission.
+//!
+//! Prospective R1 correction: SQL budgets1..64 remain persisted format/admission
+//! settings, while the176MiB actual-Store pool supports two72MiB Standard Saves
+//! plus each live handle's8MiB index pair. Tests distinguish exact byte refusal
+//! before SQL from budget1 SQL-slot refusal, then verify release/readmission,
+//! duplicate publication, content/policy compatibility and unchanged real rows.
+//! The five old high-concurrency expectations are renamed for this behavior;
+//! their historical failures remain unchanged evidence. No byte pool is enlarged.
 //!
 //! Every assertion here is about persisted state and returned values. Nothing
 //! measures time, and no case primes a page cache: each test creates its own
@@ -43,6 +51,98 @@ fn live_slots(path: &std::path::Path) -> Vec<i64> {
         .unwrap()
 }
 
+/// Exact pre-effect byte refusal, independent of the still-available SQL budget.
+fn byte_refusal(store: &Store, path: &std::path::Path) {
+    let before = store.save_working_status().unwrap();
+    let slots = live_slots(path);
+    let count: i64 = rows(path)
+        .query_row("SELECT count(*) FROM saves", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(before.limit_bytes, 176 * 1024 * 1024);
+    assert_eq!(before.owners.len(), 2);
+    assert!(before.owners.iter().all(|owner| owner.save_id.is_some()
+        && owner.reserved_bytes == 72 * 1024 * 1024
+        && !owner.retained
+        && !owner.quarantined));
+    assert_eq!(
+        before.reserved_bytes,
+        before.shared_index_bytes + 2 * 72 * 1024 * 1024
+    );
+    assert!(matches!(
+        disabled(|scope| store.begin_save(scope.child("third-byte-refused"))),
+        Err(StorageError::OwnershipUnavailable)
+    ));
+    let after = store.save_working_status().unwrap();
+    assert_eq!(after.byte_refusals, before.byte_refusals + 1);
+    assert_eq!(after.last_refused_bytes, Some(72 * 1024 * 1024));
+    assert_eq!(
+        (
+            after.reserved_bytes,
+            after.shared_index_bytes,
+            after.owners.len()
+        ),
+        (
+            before.reserved_bytes,
+            before.shared_index_bytes,
+            before.owners.len()
+        )
+    );
+    assert_eq!(
+        after
+            .owners
+            .iter()
+            .map(|owner| (owner.slot, owner.save_id, owner.reserved_bytes))
+            .collect::<Vec<_>>(),
+        before
+            .owners
+            .iter()
+            .map(|owner| (owner.slot, owner.save_id, owner.reserved_bytes))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(live_slots(path), slots);
+    assert_eq!(
+        rows(path)
+            .query_row("SELECT count(*) FROM saves", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        count,
+        "byte refusal created no native Save row"
+    );
+}
+/// SQL budget1 refuses its second owner and returns the tentative byte lease.
+fn single_sql_refusal(store: &Store, path: &std::path::Path) {
+    let before = store.save_working_status().unwrap();
+    let slots = live_slots(path);
+    let count: i64 = rows(path)
+        .query_row("SELECT count(*) FROM saves", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(store.max_concurrent_writes().unwrap(), 1);
+    assert_eq!(before.owners.len(), 1);
+    assert!(matches!(
+        disabled(|scope| store.begin_save(scope.child("second-sql-refused"))),
+        Err(StorageError::OwnershipUnavailable)
+    ));
+    let after = store.save_working_status().unwrap();
+    assert_eq!(
+        (
+            after.byte_refusals,
+            after.reserved_bytes,
+            after.owners.len()
+        ),
+        (
+            before.byte_refusals,
+            before.reserved_bytes,
+            before.owners.len()
+        )
+    );
+    assert_eq!(live_slots(path), slots);
+    assert_eq!(
+        rows(path)
+            .query_row("SELECT count(*) FROM saves", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        count
+    );
+}
+
 #[test]
 fn a_fresh_store_admits_its_default_budget_and_refuses_the_next_writer() {
     let temp = TempDir::new("admission-default");
@@ -61,38 +161,43 @@ fn a_fresh_store_admits_its_default_budget_and_refuses_the_next_writer() {
 }
 
 #[test]
-fn a_raised_budget_admits_that_many_writers_and_refuses_the_next() {
+fn raised_sql_budget_keeps_alias_visibility_and_two_owner_byte_admission() {
     let temp = TempDir::new("admission-raised");
     let path = temp.store_path("shared");
     let store = create_store(&path);
     assert_eq!(configure(&store, 8), 8);
-    // A second handle to the same file sees the same persisted budget.
     let opened = open_store(&path);
     assert_eq!(opened.max_concurrent_writes().unwrap(), 8);
-    let held: Vec<_> = (0..8)
-        .map(|n| {
-            disabled(|s| opened.begin_save(s.child("writer")))
-                .unwrap_or_else(|error| panic!("writer {n} is admitted: {error}"))
-        })
+    assert!(store.same_authority(&opened));
+    let baseline = store.save_working_status().unwrap();
+    assert_eq!(baseline.shared_index_bytes, 2 * 8 * 1024 * 1024);
+    let held: Vec<_> = (0..2)
+        .map(|_| disabled(|s| opened.begin_save(s.child("writer"))).unwrap())
         .collect();
-    assert_eq!(live_slots(&path), (1..=8).collect::<Vec<i64>>());
-    assert!(matches!(
-        disabled(|s| store.begin_save(s.child("ninth"))),
-        Err(StorageError::OwnershipUnavailable)
-    ));
+    assert_eq!(live_slots(&path), vec![1, 2]);
+    byte_refusal(&store, &path);
+    assert_eq!(
+        opened.save_working_status().unwrap().byte_refusals,
+        baseline.byte_refusals + 1
+    );
     drop(held);
-    // Released owners return their slots to the same budget.
-    let again: Vec<_> = (0..8)
+    assert_eq!(
+        store.save_working_status().unwrap().reserved_bytes,
+        baseline.reserved_bytes
+    );
+    let again: Vec<_> = (0..2)
         .map(|_| disabled(|s| store.begin_save(s.child("again"))).unwrap())
         .collect();
-    assert_eq!(live_slots(&path), (1..=8).collect::<Vec<i64>>());
+    assert_eq!(live_slots(&path), vec![1, 2]);
+    byte_refusal(&opened, &path);
     drop(again);
     assert_eq!(live_owners(&path), 0);
+    assert_eq!(store.max_concurrent_writes().unwrap(), 8);
 }
 
 #[test]
-fn eight_concurrent_writers_publish_duplicate_ownership_and_read_back() {
-    let temp = TempDir::new("admission-eight");
+fn raised_sql_budget_two_admitted_writers_publish_duplicate_ownership_and_read_back() {
+    let temp = TempDir::new("admission-two-at-eight-budget");
     let path = temp.store_path("shared");
     let store = create_store(&path);
     configure(&store, 8);
@@ -100,9 +205,11 @@ fn eight_concurrent_writers_publish_duplicate_ownership_and_read_back() {
     let (objects, root, _) = construct_file(&bytes);
     // Every writer holds its own private copy of the same identities at once;
     // none of them can see another's row until it publishes.
-    let mut saves: Vec<_> = (0..8)
+    let mut saves: Vec<_> = (0..2)
         .map(|_| disabled(|s| store.begin_save(s.child("writer"))).unwrap())
         .collect();
+    assert_eq!(live_slots(&path), vec![1, 2]);
+    byte_refusal(&store, &path);
     for save in &mut saves {
         for object in objects.finalized() {
             save.accept(object).unwrap();
@@ -119,10 +226,10 @@ fn eight_concurrent_writers_publish_duplicate_ownership_and_read_back() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(duplicated, 8, "one locator row per simultaneous owner");
+    assert_eq!(duplicated, 2, "one locator row per simultaneous owner");
     assert_eq!(live_owners(&path), 0, "publication released every slot");
     assert_eq!(read_logical(&store, root), bytes);
-    // A later save reuses the published identity instead of adding a ninth copy.
+    // A later save reuses the published identity instead of adding a third copy.
     let outcome = save_all(&store, &objects).unwrap();
     assert_eq!(outcome.inserted, 0);
     assert!(outcome.reused > 0);
@@ -199,28 +306,36 @@ fn a_retained_owner_above_the_budget_is_never_bypassed() {
 }
 
 #[test]
-fn a_definite_failure_at_a_higher_budget_releases_only_its_own_slot() {
+fn raised_budget_definite_failure_returns_only_its_byte_credit_and_sql_slot() {
     let temp = TempDir::new("admission-failure");
     let path = temp.store_path("shared");
     let store = create_store(&path);
     configure(&store, 4);
-    let mut saves: Vec<_> = (0..4)
-        .map(|_| disabled(|s| store.begin_save(s.child("writer"))).unwrap())
-        .collect();
-    assert_eq!(live_slots(&path), vec![1, 2, 3, 4]);
-    // One writer ends definitely; only its own slot and rows are released.
-    let failed = saves.remove(2);
+    let baseline = store.save_working_status().unwrap().reserved_bytes;
+    let first = disabled(|s| store.begin_save(s.child("first"))).unwrap();
+    let failed = disabled(|s| store.begin_save(s.child("second"))).unwrap();
+    assert_eq!(live_slots(&path), vec![1, 2]);
+    byte_refusal(&store, &path);
     disabled(|s| failed.abort(s.child("abort"))).unwrap();
-    assert_eq!(live_slots(&path), vec![1, 2, 4]);
+    assert_eq!(live_slots(&path), vec![1]);
+    assert_eq!(
+        store.save_working_status().unwrap().reserved_bytes,
+        baseline + 72 * 1024 * 1024
+    );
     let replacement = disabled(|s| store.begin_save(s.child("replacement"))).unwrap();
-    assert_eq!(live_slots(&path), vec![1, 2, 3, 4]);
-    assert!(matches!(
-        disabled(|s| store.begin_save(s.child("over"))),
-        Err(StorageError::OwnershipUnavailable)
-    ));
-    drop(saves);
-    drop(replacement);
+    assert_eq!(live_slots(&path), vec![1, 2]);
+    byte_refusal(&store, &path);
+    drop(first);
+    assert_eq!(live_slots(&path), vec![2]);
+    let refill = disabled(|s| store.begin_save(s.child("refill"))).unwrap();
+    assert_eq!(live_slots(&path), vec![1, 2]);
+    drop((replacement, refill));
     assert_eq!(live_owners(&path), 0);
+    assert_eq!(
+        store.save_working_status().unwrap().reserved_bytes,
+        baseline
+    );
+    assert_eq!(store.max_concurrent_writes().unwrap(), 4);
 }
 
 #[test]
@@ -250,7 +365,7 @@ fn content_written_under_a_higher_budget_is_readable_after_it_is_lowered() {
 }
 
 #[test]
-fn an_unsupported_budget_is_refused_without_changing_the_store() {
+fn invalid_sql_budgets_preserve_state_and_supported_ceiling_obeys_byte_gate() {
     let temp = TempDir::new("admission-unsupported");
     let path = temp.store_path("shared");
     let store = create_store(&path);
@@ -265,36 +380,39 @@ fn an_unsupported_budget_is_refused_without_changing_the_store() {
         assert_eq!(live_owners(&path), 0);
     }
     assert_eq!(configure(&store, 64), 64);
-    let held: Vec<_> = (0..64)
+    let held: Vec<_> = (0..2)
         .map(|_| disabled(|s| store.begin_save(s.child("writer"))).unwrap())
         .collect();
     assert_eq!(
         live_owners(&path),
-        64,
-        "the whole supported space is usable"
+        2,
+        "the persisted64 budget does not enlarge the actual byte pool"
     );
-    assert!(matches!(
-        disabled(|s| store.begin_save(s.child("over"))),
-        Err(StorageError::OwnershipUnavailable)
-    ));
+    assert_eq!(live_slots(&path), vec![1, 2]);
+    byte_refusal(&store, &path);
+    assert_eq!(store.max_concurrent_writes().unwrap(), 64);
     drop(held);
+    assert_eq!(live_owners(&path), 0);
+    assert_eq!(store.policy(), Store::default_policy());
 }
 
-/// Every supported setting, one fresh Store each: the whole ladder in one case.
+/// Persisted ladder with the independently fixed two-owner working class.
 ///
 /// The matrix is deliberately end-to-end per setting - admission, slot layout,
 /// duplicate ownership, publication, read-back, reuse and a later lowering - so a
-/// setting that only works in isolation cannot pass by skipping a step.
+/// persisted setting cannot be confused with a larger process-local byte pool.
 #[test]
-fn every_supported_setting_admits_its_budget_and_publishes_correctly() {
+fn persisted_writer_ladder_preserves_content_with_two_owner_byte_gate() {
     let bytes = noise(8_192);
     let (objects, root, _) = construct_file(&bytes);
-    for writers in [1usize, 2, 3, 5, 8, 16, 64] {
+    for writers in (1usize..=16).chain(std::iter::once(64)) {
         let temp = TempDir::new("admission-matrix");
         let path = temp.store_path("shared");
         let store = create_store(&path);
         assert_eq!(configure(&store, writers as u8), writers as u8);
-        let mut saves: Vec<_> = (0..writers)
+        assert_eq!(store.max_concurrent_writes().unwrap(), writers as u8);
+        let admitted = writers.min(2);
+        let mut saves: Vec<_> = (0..admitted)
             .map(|index| {
                 disabled(|s| store.begin_save(s.child("writer")))
                     .unwrap_or_else(|error| panic!("budget {writers}: writer {index}: {error}"))
@@ -302,16 +420,14 @@ fn every_supported_setting_admits_its_budget_and_publishes_correctly() {
             .collect();
         assert_eq!(
             live_slots(&path),
-            (1..=writers as i64).collect::<Vec<i64>>(),
+            (1..=admitted as i64).collect::<Vec<i64>>(),
             "budget {writers} uses exactly its own slot space"
         );
-        assert!(
-            matches!(
-                disabled(|s| store.begin_save(s.child("over"))),
-                Err(StorageError::OwnershipUnavailable)
-            ),
-            "budget {writers} refuses the next writer"
-        );
+        if writers == 1 {
+            single_sql_refusal(&store, &path);
+        } else {
+            byte_refusal(&store, &path);
+        }
         // Every writer holds its own private copy of the same identity, then
         // publishes; publication releases every slot and leaves the copies.
         for save in &mut saves {
@@ -335,7 +451,7 @@ fn every_supported_setting_admits_its_budget_and_publishes_correctly() {
             )
             .unwrap();
         assert_eq!(
-            duplicated, writers as i64,
+            duplicated, admitted as i64,
             "budget {writers} kept one locator per simultaneous owner"
         );
         assert_eq!(
@@ -352,12 +468,10 @@ fn every_supported_setting_admits_its_budget_and_publishes_correctly() {
         // Lowering to one is an admission change: retained rows stay readable.
         assert_eq!(configure(&store, 1), 1);
         let only = disabled(|s| store.begin_save(s.child("only"))).unwrap();
-        assert!(matches!(
-            disabled(|s| store.begin_save(s.child("second"))),
-            Err(StorageError::OwnershipUnavailable)
-        ));
+        single_sql_refusal(&store, &path);
         drop(only);
         assert_eq!(read_logical(&store, root), bytes);
+        assert_eq!(store.policy(), Store::default_policy());
     }
 }
 

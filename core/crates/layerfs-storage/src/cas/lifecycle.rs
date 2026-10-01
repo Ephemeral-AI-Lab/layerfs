@@ -9,7 +9,6 @@ use crate::cas::dependencies::Availability;
 use crate::cas::owner::{MutationOwner, OutcomeCounters, SaveProfile};
 use crate::cas::placement::PendingGroup;
 use crate::cas::pool_lane::PoolCounters;
-use crate::encoding::codec::{CompressionWorkspace, DecompressionWorkspace};
 use crate::encoding::delta::candidates::Candidates;
 use crate::encoding::delta::read::ChainCounters;
 use crate::encoding::delta::select::{DeltaCounters, DepthCache};
@@ -27,53 +26,89 @@ use std::time::Instant;
 
 impl MutationOwner {
     /// Reserves one save slot, without retaining database write ownership.
-    pub fn acquire(
+    // The captured connection, guard, indexes and credits have distinct custody roles.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn acquire(
         connection: Connection,
+        engine: Option<&'static crate::engine::EngineGuard>,
         capacities: StorageCapacities,
         arbitration: Arc<Mutex<()>>,
         published_pool: Arc<Mutex<PoolIndex>>,
         published_candidates: Arc<Mutex<Candidates>>,
+        published_index_credit: Arc<super::working::IndexLease>,
+        working: super::working::SaveLease,
     ) -> StorageResult<Self> {
+        if let Some(guard) = engine {
+            crate::sqlite::connection::verify_guarded(
+                &connection,
+                guard,
+                crate::engine::ConnectionClass::ContentWrite,
+            )?;
+        }
+        let mut prepared = super::working_prepared::PreparedSave::new(
+            connection,
+            engine,
+            published_pool,
+            published_candidates,
+            published_index_credit,
+            working,
+        );
+        // The reservation already exists. No Save row is born before these
+        // fallible codec preparations and actual index copies are ready.
+        prepared.codecs()?;
         let guard = ownership::lock(&arbitration)?;
-        crate::sqlite::connection::verify_profile(&connection)?;
-        let baseline_pack_id = lookup::highest_pack_id(&connection)?;
-        let (save_id, _) = ownership::acquire(&connection)?;
-        // Reserve before allocating writer workspaces. Capture published cache
-        // state under the same arbitration as the publication snapshot.
-        let indexes = (|| {
-            let pool = published_pool
-                .lock()
-                .map_err(|_| StorageError::Integrity("pool index lock"))?
-                .clone();
-            let content = published_candidates
-                .lock()
-                .map_err(|_| StorageError::Integrity("candidate index lock"))?
-                .clone();
-            Ok((Arc::new(Mutex::new(pool)), Arc::new(Mutex::new(content))))
-        })();
-        drop(guard);
-        let prepared = indexes.and_then(|(pool, content)| {
-            Ok((
-                pool,
-                content,
-                CompressionWorkspace::new()?,
-                DecompressionWorkspace::new()?,
-            ))
-        });
-        let (pool_index, candidates, compression, decompression) = match prepared {
-            Ok(values) => values,
+        crate::sqlite::connection::verify_profile(&prepared.connection)?;
+        let pool = prepared
+            .published_pool
+            .lock()
+            .map_err(|_| StorageError::Integrity("pool index lock"))?
+            .clone();
+        let content = prepared
+            .published_candidates
+            .lock()
+            .map_err(|_| StorageError::Integrity("candidate index lock"))?
+            .clone();
+        prepared.pool_index = Some(Arc::new(Mutex::new(pool)));
+        prepared.candidates = Some(Arc::new(Mutex::new(content)));
+        let baseline_pack_id = lookup::highest_pack_id(&prepared.connection)?;
+        let (save_id, _) = match if let Some(engine) = prepared.engine {
+            ownership::acquire_participating(&prepared.connection, Some(engine))
+        } else {
+            ownership::acquire(&prepared.connection)
+        } {
+            Ok(identity) => identity,
             Err(original) => {
-                return match crate::sqlite::cleanup::abandon(&connection, save_id, &arbitration) {
-                    Ok(_) => Err(original),
-                    Err(cleanup) => Err(StorageError::CleanupFailed {
-                        original: Box::new(original),
-                        cleanup: Box::new(cleanup),
-                    }),
+                prepared
+                    .working
+                    .note(&original, original.is_unknown_outcome());
+                drop(guard);
+                if original.is_unknown_outcome() {
+                    super::working::retain(super::working::RetainedSave::Prepared(prepared));
                 }
+                return Err(original);
             }
         };
+        prepared.working.acknowledged(save_id);
+        drop(guard);
+        let super::working_prepared::PreparedSave {
+            connection,
+            engine,
+            compression,
+            decompression,
+            pool_index,
+            candidates,
+            published_index_credit,
+            working,
+            published_pool,
+            published_candidates,
+        } = prepared;
+        let compression = compression.unwrap();
+        let decompression = decompression.unwrap();
+        let pool_index = pool_index.unwrap();
+        let candidates = candidates.unwrap();
         Ok(Self {
             connection,
+            engine,
             capacities,
             arbitration,
             save_id,
@@ -94,6 +129,7 @@ impl MutationOwner {
             decompression,
             terminal: false,
             cleanup_attempted: false,
+            cleanup_completed: false,
             quarantined: false,
             counters: OutcomeCounters {
                 transactions: 1,
@@ -119,6 +155,8 @@ impl MutationOwner {
             ordinal_reservations: 0,
             pool_synced: false,
             pool: PoolCounters::default(),
+            published_index_credit,
+            working,
         })
     }
 
@@ -133,6 +171,7 @@ impl MutationOwner {
     }
 
     pub(super) fn begin_write(&mut self) -> StorageResult<()> {
+        self.validate_engine()?;
         let started = Instant::now();
         write::begin_immediate(&self.connection)?;
         self.transaction_open = true;
@@ -170,6 +209,7 @@ impl MutationOwner {
         // a wave must not close the transaction the wave opened, or the step
         // becomes a seal again.
         if self.transaction_open && !self.wave_held {
+            self.validate_engine()?;
             let whole = Instant::now();
             let started = Instant::now();
             // Multi-writer: SQLite admits one writer per store file, and the other
@@ -178,6 +218,7 @@ impl MutationOwner {
             // arbitration lock, so every step commits before that lock is released.
             // Batching stays inside a step; it cannot span steps.
             self.advance_pack_if_moved()?;
+            self.validate_engine()?;
             write::commit(&self.connection)?;
             SaveProfile::charge(&mut self.profile.commit_ns, started);
             // Clear the flag before the next step re-acquires: if the lock is lost
@@ -207,6 +248,7 @@ impl MutationOwner {
             .map_err(|_| StorageError::Integrity("candidate index lock"))?
             .flush(&self.connection)?;
         if written == 0 && opened {
+            self.validate_engine()?;
             write::rollback(&self.connection)?;
             self.transaction_open = false;
             return Ok(());
@@ -237,6 +279,7 @@ impl MutationOwner {
     }
 
     fn finish_inner(&mut self, scope: &TimingScope<'_, Active>) -> StorageResult<OutcomeCounters> {
+        self.validate_engine()?;
         let whole = Instant::now();
         let mut availability = Availability::default();
         scope.child("storage.finish.pack_seal").run(|_| {
@@ -300,56 +343,78 @@ impl MutationOwner {
             }
             self.advance_pack_if_moved()
         })?;
+        // Both possible publication copies are funded by the original Save
+        // reservation. Complete them before final COMMIT, then only move values.
+        let ready_pool = scope.child("storage.finish.pool_clone").run(|_| {
+            let private = self
+                .pool_index
+                .lock()
+                .map_err(|_| StorageError::Integrity("pool index lock"))?;
+            self.profile.diag.finish_pool_entries = private.len() as u64;
+            self.profile.diag.finish_pool_bytes = private.live_bytes() as u64;
+            Ok::<_, StorageError>(private.clone())
+        })?;
+        let ready_candidates = scope.child("storage.finish.candidates_clone").run(|_| {
+            let private = self
+                .candidates
+                .lock()
+                .map_err(|_| StorageError::Integrity("candidate index lock"))?;
+            self.profile.diag.finish_candidate_entries = private.entries() as u64;
+            self.profile.diag.finish_candidate_bytes = private.live_bytes() as u64;
+            Ok::<_, StorageError>(private.clone())
+        })?;
+        let published_pool = Arc::clone(&self.published_pool);
+        let published_candidates = Arc::clone(&self.published_candidates);
+        let mut shared_pool = published_pool
+            .lock()
+            .map_err(|_| StorageError::Integrity("pool index lock"))?;
+        let mut shared_candidates = published_candidates
+            .lock()
+            .map_err(|_| StorageError::Integrity("candidate index lock"))?;
         let started = Instant::now();
+        self.validate_engine()?;
         scope
             .child("storage.finish.sqlite_commit")
             .run(|_| write::commit(&self.connection))?;
         SaveProfile::charge(&mut self.profile.commit_ns, started);
         self.counters.commits += 1;
         self.transaction_open = false;
-        // Only completed saves can seed the shared disposable candidate indexes.
-        // Concurrent publications can omit useful candidates, never expose private ones.
-        scope.child("storage.finish.pool_clone").run(|_| {
-            if let (Ok(mut shared), Ok(private)) =
-                (self.published_pool.lock(), self.pool_index.lock())
-            {
-                self.profile.diag.finish_pool_entries = private.len() as u64;
-                self.profile.diag.finish_pool_bytes = private.live_bytes() as u64;
-                *shared = private.clone();
-            } else {
-                self.profile.diag.finish_pool_clone_skipped = 1;
-            }
-            Ok::<(), StorageError>(())
-        })?;
-        scope.child("storage.finish.candidates_clone").run(|_| {
-            if let (Ok(mut shared), Ok(private)) =
-                (self.published_candidates.lock(), self.candidates.lock())
-            {
-                self.profile.diag.finish_candidate_entries = private.entries() as u64;
-                self.profile.diag.finish_candidate_bytes = private.live_bytes() as u64;
-                *shared = private.clone();
-            } else {
-                self.profile.diag.finish_candidate_clone_skipped = 1;
-            }
-            Ok::<(), StorageError>(())
-        })?;
+        // Known publication transfers ready allocations into already funded
+        // shared owners; replacing them actually releases the old index values.
+        *shared_pool = ready_pool;
+        *shared_candidates = ready_candidates;
+        drop(shared_pool);
+        drop(shared_candidates);
         SaveProfile::charge(&mut self.profile.diag.finish_total_ns, whole);
         Ok(self.counters)
     }
 
     /// One definite-failure cleanup, exclusively scoped to this save.
     pub fn abandon(&mut self) -> StorageResult<()> {
-        if self.cleanup_attempted || self.quarantined {
+        self.validate_engine()?;
+        if self.quarantined || self.cleanup_attempted && !self.cleanup_completed {
+            return Err(StorageError::Integrity(
+                "uncertain/failed Save cleanup denied",
+            ));
+        }
+        if self.cleanup_completed {
             return Ok(());
         }
         self.cleanup_attempted = true;
         self.terminal = true;
         if self.transaction_open {
             let _guard = ownership::lock(&self.arbitration)?;
+            ownership::engine_boundary(&self.connection, self.engine)?;
             write::rollback(&self.connection)?;
             self.transaction_open = false;
         }
-        crate::sqlite::cleanup::abandon(&self.connection, self.save_id, &self.arbitration)?;
+        crate::sqlite::cleanup::abandon_participating(
+            &self.connection,
+            self.save_id,
+            &self.arbitration,
+            self.engine,
+        )?;
+        self.cleanup_completed = true;
         Ok(())
     }
 

@@ -1,0 +1,162 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 8.38s
+     Running tests/draft_temporaries.rs (core/target/r1-eight-owning/debug/deps/draft_temporaries-98485909279f45fd)
+
+running 4 tests
+test shared_temporary_occurrences_survive_selected_parent_supersession_and_leave_unrelated_zero ... ok
+test rehosted_parent_links_outlive_consumed_child_pins_and_stale_selected_refuses_before_change ... ok
+test escaped_temporary_pin_refuses_finish_without_erasing_its_body ... ok
+test actual_edit_late_consumer_failure_keeps_authority_terminal_without_file_root_or_replay ... ok
+
+successes:
+
+successes:
+    actual_edit_late_consumer_failure_keeps_authority_terminal_without_file_root_or_replay
+    escaped_temporary_pin_refuses_finish_without_erasing_its_body
+    rehosted_parent_links_outlive_consumed_child_pins_and_stale_selected_refuses_before_change
+    shared_temporary_occurrences_survive_selected_parent_supersession_and_leave_unrelated_zero
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/edit_bounds.rs (core/target/r1-eight-owning/debug/deps/edit_bounds-171a21beb2eb1d79)
+
+running 12 tests
+test a_missing_base_root_is_reported_as_missing ... ok
+test a_consumer_that_rejects_stops_the_edit_once ... ok
+test a_source_that_ends_early_fails_without_emitting_a_root ... ok
+test a_bounded_sink_that_fills_during_emission_fails_the_edit_once ... ok
+test the_retained_frontier_does_not_grow_with_the_edit_count ... ok
+test many_files_and_many_edits_stay_bounded ... ok
+test a_join_of_two_full_pages_stays_canonical ... ok
+test streaming_flush_boundaries_and_height_growth ... ok
+test a_thousand_separated_edits_keep_bounded_state ... ok
+test join_occupancy_at_every_boundary ... ok
+test the_frontier_does_not_grow_with_repeated_in_place_edits ... ok
+test the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound ... ok
+
+successes:
+
+---- the_retained_frontier_does_not_grow_with_the_edit_count stdout ----
+DIAGNOSTIC current draft peaks: unfinished_body=2208 aggregate_metadata=6906
+DIAGNOSTIC current draft peaks: unfinished_body=2288 aggregate_metadata=7164
+DIAGNOSTIC current draft peaks: unfinished_body=2448 aggregate_metadata=7680
+DIAGNOSTIC current draft peaks: unfinished_body=2768 aggregate_metadata=8712
+DIAGNOSTIC current draft peaks: unfinished_body=3408 aggregate_metadata=10776
+MEASURED frontier peaks (bytes), 1/2/4/8/16 edits: [2208, 2288, 2448, 2768, 3408]
+
+---- a_thousand_separated_edits_keep_bounded_state stdout ----
+MEASURED ceiling-run counters: EditCounters { nodes_read: 17708, nodes_created: 21, payloads_created: 1024, payload_bytes: 25600, peak_deferred_bytes: 87632, peak_draft_metadata_bytes: 282420 }
+
+---- the_frontier_does_not_grow_with_repeated_in_place_edits stdout ----
+DIAGNOSTIC current draft peaks: unfinished_body=12144 aggregate_metadata=38740
+DIAGNOSTIC current draft peaks: unfinished_body=23008 aggregate_metadata=73286
+DIAGNOSTIC current draft peaks: unfinished_body=44608 aggregate_metadata=142964
+DIAGNOSTIC current draft peaks: unfinished_body=87592 aggregate_metadata=282291
+
+---- the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound stdout ----
+DIAGNOSTIC full metadata shape: EditCounters { nodes_read: 90971, nodes_created: 122, payloads_created: 4096, payload_bytes: 102400, peak_deferred_bytes: 372592, peak_draft_metadata_bytes: 1202222 }
+DIAGNOSTIC full metadata: peak=1202222 bytes; accepted mapping nodes=122;          independent final framed lower bound=1186535;          aggregate-quota refusal and allocator/native/physical containment are not this body
+
+
+successes:
+    a_bounded_sink_that_fills_during_emission_fails_the_edit_once
+    a_consumer_that_rejects_stops_the_edit_once
+    a_join_of_two_full_pages_stays_canonical
+    a_missing_base_root_is_reported_as_missing
+    a_source_that_ends_early_fails_without_emitting_a_root
+    a_thousand_separated_edits_keep_bounded_state
+    join_occupancy_at_every_boundary
+    many_files_and_many_edits_stay_bounded
+    streaming_flush_boundaries_and_height_growth
+    the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound
+    the_frontier_does_not_grow_with_repeated_in_place_edits
+    the_retained_frontier_does_not_grow_with_the_edit_count
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.15s
+
+     Running tests/edit_localized.rs (core/target/r1-eight-owning/debug/deps/edit_localized-6b3e672532146568)
+
+running 8 tests
+test a_page_two_passes_reach_is_demanded_once_for_the_operation ... ok
+test a_pure_deletion_never_walks_the_rightmost_path ... ok
+test an_overwrite_still_demands_the_predecessor_path ... ok
+test a_mid_extent_overwrite_reads_only_the_straddling_extents ... ok
+test an_append_at_end_of_file_touches_only_the_right_boundary ... ok
+test many_localized_edits_keep_each_edit_on_its_own_path ... ok
+test localized_work_is_independent_of_file_size ... ok
+test an_extent_aligned_overwrite_reads_only_its_path_and_the_replaced_extents ... ok
+
+successes:
+
+successes:
+    a_mid_extent_overwrite_reads_only_the_straddling_extents
+    a_page_two_passes_reach_is_demanded_once_for_the_operation
+    a_pure_deletion_never_walks_the_rightmost_path
+    an_append_at_end_of_file_touches_only_the_right_boundary
+    an_extent_aligned_overwrite_reads_only_its_path_and_the_replaced_extents
+    an_overwrite_still_demands_the_predecessor_path
+    localized_work_is_independent_of_file_size
+    many_localized_edits_keep_each_edit_on_its_own_path
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/edit_model.rs (core/target/r1-eight-owning/debug/deps/edit_model-be02524d95b5a417)
+
+running 6 tests
+test the_model_and_the_candidate_agree_on_degenerate_streams ... ok
+test a_small_file_matches_the_model_and_a_fresh_construction ... ok
+test an_append_at_end_of_file_matches_the_model ... ok
+test a_deletion_that_merges_two_slices_stays_canonical ... ok
+test a_chunked_update_matches_the_model ... ok
+test conversions_match_the_model_and_their_fresh_construction ... ok
+
+successes:
+
+successes:
+    a_chunked_update_matches_the_model
+    a_deletion_that_merges_two_slices_stays_canonical
+    a_small_file_matches_the_model_and_a_fresh_construction
+    an_append_at_end_of_file_matches_the_model
+    conversions_match_the_model_and_their_fresh_construction
+    the_model_and_the_candidate_agree_on_degenerate_streams
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/edit_reference.rs (core/target/r1-eight-owning/debug/deps/edit_reference-8670d2abe57506d1)
+
+running 3 tests
+test the_oracle_fixtures_are_the_sealed_reference_revision ... FAILED
+test an_interior_join_reads_its_boundary_child_once ... FAILED
+test the_candidate_reproduces_the_reference_root_and_partition ... FAILED
+
+successes:
+
+successes:
+
+failures:
+
+---- the_oracle_fixtures_are_the_sealed_reference_revision stdout ----
+
+thread 'the_oracle_fixtures_are_the_sealed_reference_revision' panicked at crates/layerfs-content/tests/edit_reference.rs:620:51:
+fixture: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+---- an_interior_join_reads_its_boundary_child_once stdout ----
+
+thread 'an_interior_join_reads_its_boundary_child_once' panicked at crates/layerfs-content/tests/edit_reference.rs:359:33:
+oracle fixture /Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content/../../../docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/interior-multi-level.json: No such file or directory (os error 2)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- the_candidate_reproduces_the_reference_root_and_partition stdout ----
+
+thread 'the_candidate_reproduces_the_reference_root_and_partition' panicked at crates/layerfs-content/tests/edit_reference.rs:359:33:
+oracle fixture /Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content/../../../docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected/join-80-100.json: No such file or directory (os error 2)
+
+
+failures:
+    an_interior_join_reads_its_boundary_child_once
+    the_candidate_reproduces_the_reference_root_and_partition
+    the_oracle_fixtures_are_the_sealed_reference_revision
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p layerfs-content --test edit_reference`

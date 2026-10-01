@@ -1,0 +1,14 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-eight-source/core/crates/layerfs-content)
+error: missing documentation for a method
+   --> crates/layerfs-content/src/filesystem/state/page.rs:146:5
+    |
+146 |     pub fn into_records(self) -> Vec<StateRecord> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: the lint level is defined here
+   --> crates/layerfs-content/src/lib.rs:17:9
+    |
+17  | #![deny(missing_docs)]
+    |         ^^^^^^^^^^^^
+
+error: could not compile `layerfs-content` (lib) due to 1 previous error

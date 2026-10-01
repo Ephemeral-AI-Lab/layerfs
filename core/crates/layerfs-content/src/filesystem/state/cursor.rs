@@ -4,8 +4,8 @@ use crate::error::{ContentError, ContentResult};
 use super::{IndexedState, PageLimit, StateKey, StateLedger, StatePage, StateSeal};
 
 /// One advancing selected scan with an independently accumulated exact seal.
-pub struct StateCursor<'a> {
-    state: &'a mut dyn IndexedState,
+pub struct StateCursor<'a, S: IndexedState + ?Sized = dyn IndexedState> {
+    state: &'a mut S,
     seal: StateSeal,
     ledger: StateLedger,
     after: Option<StateKey>,
@@ -13,9 +13,9 @@ pub struct StateCursor<'a> {
     failure: Option<ContentError>,
 }
 
-impl<'a> StateCursor<'a> {
+impl<'a, S: IndexedState + ?Sized> StateCursor<'a, S> {
     /// Borrows the owning provider for one complete scan from the start.
-    pub fn new(state: &'a mut dyn IndexedState, seal: StateSeal) -> Self {
+    pub fn new(state: &'a mut S, seal: StateSeal) -> Self {
         let ledger = StateLedger::new(seal.scope().clone());
         Self {
             state,

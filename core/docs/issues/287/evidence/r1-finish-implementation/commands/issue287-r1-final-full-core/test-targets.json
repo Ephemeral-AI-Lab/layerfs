@@ -1,0 +1,2043 @@
+{
+  "targets": 246,
+  "passed": 1129,
+  "failed": 19,
+  "ignored": 4,
+  "failed_targets": [
+    {
+      "target": "Running tests/edit_bounds.rs (core/target/r1-eight-owning/debug/deps/edit_bounds-1f3d511c433f69d0)",
+      "verdict": "FAILED",
+      "passed": 10,
+      "failed": 2,
+      "ignored": 0,
+      "body_seconds": "0.83"
+    },
+    {
+      "target": "Running tests/file_read.rs (core/target/r1-eight-owning/debug/deps/file_read-a9442d7c5e2c63e6)",
+      "verdict": "FAILED",
+      "passed": 15,
+      "failed": 1,
+      "ignored": 0,
+      "body_seconds": "0.21"
+    },
+    {
+      "target": "Running tests/filesystem_parent_lookup.rs (core/target/r1-eight-owning/debug/deps/filesystem_parent_lookup-ff32b0c82db488be)",
+      "verdict": "FAILED",
+      "passed": 4,
+      "failed": 1,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/binding_claims.rs (core/target/r1-eight-owning/debug/deps/binding_claims-e88910be1dad77e0)",
+      "verdict": "FAILED",
+      "passed": 0,
+      "failed": 5,
+      "ignored": 0,
+      "body_seconds": "9.16"
+    },
+    {
+      "target": "Running tests/catalog_admission.rs (core/target/r1-eight-owning/debug/deps/catalog_admission-943df1bd5359c45b)",
+      "verdict": "FAILED",
+      "passed": 6,
+      "failed": 3,
+      "ignored": 0,
+      "body_seconds": "1.29"
+    },
+    {
+      "target": "Running tests/direct.rs (core/target/r1-eight-owning/debug/deps/direct-45778ef876d5cd01)",
+      "verdict": "FAILED",
+      "passed": 9,
+      "failed": 1,
+      "ignored": 1,
+      "body_seconds": "66.69"
+    },
+    {
+      "target": "Running tests/file_drafts.rs (core/target/r1-eight-owning/debug/deps/file_drafts-6cff348339720b08)",
+      "verdict": "FAILED",
+      "passed": 1,
+      "failed": 2,
+      "ignored": 0,
+      "body_seconds": "0.66"
+    },
+    {
+      "target": "Running tests/engine_bootstrap.rs (core/target/r1-eight-owning/debug/deps/engine_bootstrap-58b72081090f1788)",
+      "verdict": "FAILED",
+      "passed": 4,
+      "failed": 4,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    }
+  ],
+  "rows": [
+    {
+      "target": "Running unittests src/lib.rs (core/target/r1-eight-owning/debug/deps/layerfs_api_core-aad94106ca5e6e4e)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running unittests src/lib.rs (core/target/r1-eight-owning/debug/deps/layerfs_bridge-d960767a25bf9d55)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/aead_profile.rs (core/target/r1-eight-owning/debug/deps/aead_profile-236bdfbd46bf6d00)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/agent_control.rs (core/target/r1-eight-owning/debug/deps/agent_control-81d5cfde55c804aa)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/attributes.rs (core/target/r1-eight-owning/debug/deps/attributes-f78e92825df2a455)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/construct_metadata.rs (core/target/r1-eight-owning/debug/deps/construct_metadata-947c058c9badcf51)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/construct_symlink.rs (core/target/r1-eight-owning/debug/deps/construct_symlink-7324257f117e9766)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/early_refusal.rs (core/target/r1-eight-owning/debug/deps/early_refusal-65b9fc2c46178251)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.06"
+    },
+    {
+      "target": "Running tests/file_save_v2.rs (core/target/r1-eight-owning/debug/deps/file_save_v2-d3a6f3ca82aaacd5)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/history_delivery.rs (core/target/r1-eight-owning/debug/deps/history_delivery-c35025757068a93b)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/history_protocol.rs (core/target/r1-eight-owning/debug/deps/history_protocol-d312e61e5b085fa4)",
+      "verdict": "ok",
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/native_connections.rs (core/target/r1-eight-owning/debug/deps/native_connections-2e46bf0270ead640)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "6.02"
+    },
+    {
+      "target": "Running tests/native_purposes.rs (core/target/r1-eight-owning/debug/deps/native_purposes-972e1144b79ae57a)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/pipe_cancel.rs (core/target/r1-eight-owning/debug/deps/pipe_cancel-4f9567fc61fa864d)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/pipe_deadline.rs (core/target/r1-eight-owning/debug/deps/pipe_deadline-8d2b7091a3e792cb)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.20"
+    },
+    {
+      "target": "Running tests/portable_metadata.rs (core/target/r1-eight-owning/debug/deps/portable_metadata-003b67ed1d72d48a)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/prepared_bindings.rs (core/target/r1-eight-owning/debug/deps/prepared_bindings-da2237748e28a1d7)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/prepared_stream.rs (core/target/r1-eight-owning/debug/deps/prepared_stream-e0fb9cd0203a9fdd)",
+      "verdict": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/protocol.rs (core/target/r1-eight-owning/debug/deps/protocol-c5037c235e346a13)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/relay_write.rs (core/target/r1-eight-owning/debug/deps/relay_write-28acd00227792643)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.19"
+    },
+    {
+      "target": "Running tests/source.rs (core/target/r1-eight-owning/debug/deps/source-fb114ccf8480d2ea)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/stream_fragmentation.rs (core/target/r1-eight-owning/debug/deps/stream_fragmentation-c181e98197cfc2a3)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.20"
+    },
+    {
+      "target": "Running tests/upload_batch.rs (core/target/r1-eight-owning/debug/deps/upload_batch-94aaf8e5aba1ebe3)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.48"
+    },
+    {
+      "target": "Running tests/workspace_attach.rs (core/target/r1-eight-owning/debug/deps/workspace_attach-0de1ea276b6e4424)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/workspace_close_clean.rs (core/target/r1-eight-owning/debug/deps/workspace_close_clean-70a5338dd41eec1a)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.04"
+    },
+    {
+      "target": "Running tests/workspace_commit.rs (core/target/r1-eight-owning/debug/deps/workspace_commit-870bba7b1604203c)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.04"
+    },
+    {
+      "target": "Running tests/workspace_status.rs (core/target/r1-eight-owning/debug/deps/workspace_status-2eedfed56e033d80)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/workspace_unmount.rs (core/target/r1-eight-owning/debug/deps/workspace_unmount-9204984cfbf7beb2)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.02"
+    },
+    {
+      "target": "Running tests/workspace_view.rs (core/target/r1-eight-owning/debug/deps/workspace_view-9749ccf63d921a54)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running unittests src/lib.rs (core/target/r1-eight-owning/debug/deps/layerfs_content-db89995d181e4b3f)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/alias_frontier.rs (core/target/r1-eight-owning/debug/deps/alias_frontier-64f89b792ac55ef9)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/binding_claim_codecs.rs (core/target/r1-eight-owning/debug/deps/binding_claim_codecs-4e88f36ff2292b88)",
+      "verdict": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/binding_claim_validation.rs (core/target/r1-eight-owning/debug/deps/binding_claim_validation-ff2bf4e4d284d13b)",
+      "verdict": "ok",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.02"
+    },
+    {
+      "target": "Running tests/binding_points.rs (core/target/r1-eight-owning/debug/deps/binding_points-00d4e4280561ddb4)",
+      "verdict": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.02"
+    },
+    {
+      "target": "Running tests/binding_site_codecs.rs (core/target/r1-eight-owning/debug/deps/binding_site_codecs-040d753fdacc9ac4)",
+      "verdict": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/binding_site_reference.rs (core/target/r1-eight-owning/debug/deps/binding_site_reference-390667db450e83bc)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/binding_site_validation.rs (core/target/r1-eight-owning/debug/deps/binding_site_validation-8d133e16de16659f)",
+      "verdict": "ok",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/canonical_state_population.rs (core/target/r1-eight-owning/debug/deps/canonical_state_population-f98db2a25d8033f3)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/canonical_state_records.rs (core/target/r1-eight-owning/debug/deps/canonical_state_records-6ea6346e525e3737)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/chunk_predecessor.rs (core/target/r1-eight-owning/debug/deps/chunk_predecessor-32296ce38d1f58a2)",
+      "verdict": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/draft_authority.rs (core/target/r1-eight-owning/debug/deps/draft_authority-5d61f2df43146f6d)",
+      "verdict": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/edit_batch.rs (core/target/r1-eight-owning/debug/deps/edit_batch-3204d8e49e47724d)",
+      "verdict": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/edit_bounds.rs (core/target/r1-eight-owning/debug/deps/edit_bounds-1f3d511c433f69d0)",
+      "verdict": "FAILED",
+      "passed": 10,
+      "failed": 2,
+      "ignored": 0,
+      "body_seconds": "0.83"
+    },
+    {
+      "target": "Running tests/edit_localized.rs (core/target/r1-eight-owning/debug/deps/edit_localized-18f8e5a920ddb78f)",
+      "verdict": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.17"
+    },
+    {
+      "target": "Running tests/edit_model.rs (core/target/r1-eight-owning/debug/deps/edit_model-d4de2ce9e8de755e)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/edit_noop.rs (core/target/r1-eight-owning/debug/deps/edit_noop-34896fb94410ec70)",
+      "verdict": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.02"
+    },
+    {
+      "target": "Running tests/edit_reference.rs (core/target/r1-eight-owning/debug/deps/edit_reference-a05afd029babb5fa)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.21"
+    },
+    {
+      "target": "Running tests/edit_single.rs (core/target/r1-eight-owning/debug/deps/edit_single-5ecafc250389e989)",
+      "verdict": "ok",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/edit_timing.rs (core/target/r1-eight-owning/debug/deps/edit_timing-534f50ee08a190fc)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/edit_transitions.rs (core/target/r1-eight-owning/debug/deps/edit_transitions-0982f097a5c917a5)",
+      "verdict": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.12"
+    },
+    {
+      "target": "Running tests/effective_graph_codecs.rs (core/target/r1-eight-owning/debug/deps/effective_graph_codecs-959b8ef64969baaa)",
+      "verdict": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/effective_graph_reference.rs (core/target/r1-eight-owning/debug/deps/effective_graph_reference-25b3575af53efbc6)",
+      "verdict": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.02"
+    },
+    {
+      "target": "Running tests/effective_graph_semantics.rs (core/target/r1-eight-owning/debug/deps/effective_graph_semantics-932fe0052d0f4d23)",
+      "verdict": "ok",
+      "passed": 25,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/effective_graph_validation.rs (core/target/r1-eight-owning/debug/deps/effective_graph_validation-abaad2d0a0a8f4ad)",
+      "verdict": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "8.73"
+    },
+    {
+      "target": "Running tests/file_complete.rs (core/target/r1-eight-owning/debug/deps/file_complete-4ce8ea3f1566db10)",
+      "verdict": "ok",
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/file_read.rs (core/target/r1-eight-owning/debug/deps/file_read-a9442d7c5e2c63e6)",
+      "verdict": "FAILED",
+      "passed": 15,
+      "failed": 1,
+      "ignored": 0,
+      "body_seconds": "0.21"
+    },
+    {
+      "target": "Running tests/filesystem_attributes.rs (core/target/r1-eight-owning/debug/deps/filesystem_attributes-e583f53c4df57ebd)",
+      "verdict": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/filesystem_binding_rows.rs (core/target/r1-eight-owning/debug/deps/filesystem_binding_rows-3115f11af83383fa)",
+      "verdict": "ok",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.23"
+    },
+    {
+      "target": "Running tests/filesystem_binding_validation.rs (core/target/r1-eight-owning/debug/deps/filesystem_binding_validation-12d155257c99dbf9)",
+      "verdict": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/filesystem_bounds.rs (core/target/r1-eight-owning/debug/deps/filesystem_bounds-93aafa905237b17b)",
+      "verdict": "ok",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.41"
+    },
+    {
+      "target": "Running tests/filesystem_codec.rs (core/target/r1-eight-owning/debug/deps/filesystem_codec-d79aa6843f762257)",
+      "verdict": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/filesystem_failure.rs (core/target/r1-eight-owning/debug/deps/filesystem_failure-cb18ce613777ce26)",
+      "verdict": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/filesystem_hardlinks.rs (core/target/r1-eight-owning/debug/deps/filesystem_hardlinks-12a674d4e925b1e9)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/filesystem_limits.rs (core/target/r1-eight-owning/debug/deps/filesystem_limits-ff1065eb32c66b57)",
+      "verdict": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/filesystem_ordering.rs (core/target/r1-eight-owning/debug/deps/filesystem_ordering-7a5c99602cf606fc)",
+      "verdict": "ok",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.09"
+    },
+    {
+      "target": "Running tests/filesystem_ordering_consolidate.rs (core/target/r1-eight-owning/debug/deps/filesystem_ordering_consolidate-1e0b68e41f7e185d)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/filesystem_ordering_scan.rs (core/target/r1-eight-owning/debug/deps/filesystem_ordering_scan-bd469720742602da)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/filesystem_parent_lookup.rs (core/target/r1-eight-owning/debug/deps/filesystem_parent_lookup-ff32b0c82db488be)",
+      "verdict": "FAILED",
+      "passed": 4,
+      "failed": 1,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/filesystem_profile.rs (core/target/r1-eight-owning/debug/deps/filesystem_profile-b3c5dd9189dcb166)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/filesystem_read.rs (core/target/r1-eight-owning/debug/deps/filesystem_read-165329ba09e102f3)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/filesystem_reference.rs (core/target/r1-eight-owning/debug/deps/filesystem_reference-b879c88985bd72f7)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.33"
+    },
+    {
+      "target": "Running tests/filesystem_rows.rs (core/target/r1-eight-owning/debug/deps/filesystem_rows-535523d47f087faa)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.06"
+    },
+    {
+      "target": "Running tests/filesystem_run_seek.rs (core/target/r1-eight-owning/debug/deps/filesystem_run_seek-ee99af370049d97d)",
+      "verdict": "ok",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.07"
+    },
+    {
+      "target": "Running tests/filesystem_sorted.rs (core/target/r1-eight-owning/debug/deps/filesystem_sorted-55a3e210506fa16c)",
+      "verdict": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/filesystem_timing.rs (core/target/r1-eight-owning/debug/deps/filesystem_timing-c5b828f926dcdb04)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/filesystem_topology.rs (core/target/r1-eight-owning/debug/deps/filesystem_topology-b27f23add58ebb01)",
+      "verdict": "ok",
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/filesystem_updates.rs (core/target/r1-eight-owning/debug/deps/filesystem_updates-f4ca25244e2a02ee)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/fixture_seal.rs (core/target/r1-eight-owning/debug/deps/fixture_seal-7f006ecf3d16dd5a)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/indexed_state.rs (core/target/r1-eight-owning/debug/deps/indexed_state-3c0dc9dd055cc0ed)",
+      "verdict": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/inode_leaf.rs (core/target/r1-eight-owning/debug/deps/inode_leaf-ee5579aef51bb61a)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/mapping_cache.rs (core/target/r1-eight-owning/debug/deps/mapping_cache-23f66db4422c8ab3)",
+      "verdict": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/namespace_fact_records.rs (core/target/r1-eight-owning/debug/deps/namespace_fact_records-953f7394d6669b94)",
+      "verdict": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/navigation_cursor.rs (core/target/r1-eight-owning/debug/deps/navigation_cursor-416e67bd41ae0b24)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/no_draft_authority.rs (core/target/r1-eight-owning/debug/deps/no_draft_authority-8929401ccf430a33)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/object_identity.rs (core/target/r1-eight-owning/debug/deps/object_identity-04756f61041fdcc3)",
+      "verdict": "ok",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/small_file_authority.rs (core/target/r1-eight-owning/debug/deps/small_file_authority-0e8e9915e6adcc7c)",
+      "verdict": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/streaming.rs (core/target/r1-eight-owning/debug/deps/streaming-59ac8214ae37dcad)",
+      "verdict": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.14"
+    },
+    {
+      "target": "Running tests/timing.rs (core/target/r1-eight-owning/debug/deps/timing-bbc292d081f0b746)",
+      "verdict": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/validation_prefetch.rs (core/target/r1-eight-owning/debug/deps/validation_prefetch-6395ed2c9e67fe21)",
+      "verdict": "ok",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/verified_empty.rs (core/target/r1-eight-owning/debug/deps/verified_empty-b849dc07167bacdc)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running unittests src/lib.rs (core/target/r1-eight-owning/debug/deps/layerfs_daemon-cd341aeb4fd84cc6)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running unittests src/main.rs (core/target/r1-eight-owning/debug/deps/layerfs_daemon-fa897deadc53163f)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/configuration.rs (core/target/r1-eight-owning/debug/deps/configuration-d12f17557da2d223)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.76"
+    },
+    {
+      "target": "Running unittests src/lib.rs (core/target/r1-eight-owning/debug/deps/layerfs_fuse-ba4fec1378f4dd3b)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/kernel_resize.rs (core/target/r1-eight-owning/debug/deps/kernel_resize-758f8cdfce7480a9)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/kernel_write.rs (core/target/r1-eight-owning/debug/deps/kernel_write-36a5e80e34609523)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/mount_failure.rs (core/target/r1-eight-owning/debug/deps/mount_failure-54782574209f09e7)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running unittests src/lib.rs (core/target/r1-eight-owning/debug/deps/layerfs_history-d2323c3de9b2440e)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/allocation.rs (core/target/r1-eight-owning/debug/deps/allocation-f1523f50b85c37bd)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/conditional_updates.rs (core/target/r1-eight-owning/debug/deps/conditional_updates-40db8c59a2a4c072)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/engine_participation.rs (core/target/r1-eight-owning/debug/deps/engine_participation-d67535858b7a5215)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/history_pages.rs (core/target/r1-eight-owning/debug/deps/history_pages-6420aec44e6db292)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/lifecycle.rs (core/target/r1-eight-owning/debug/deps/lifecycle-7e6c8a1cdc42dd96)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/remediation.rs (core/target/r1-eight-owning/debug/deps/remediation-2412a25526d6c40a)",
+      "verdict": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.93"
+    },
+    {
+      "target": "Running tests/reopen.rs (core/target/r1-eight-owning/debug/deps/reopen-7f3face3345742e7)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running unittests src/lib.rs (core/target/r1-eight-owning/debug/deps/layerfs_sandbox-e92500ad3047b7a7)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/docker_port_pending.rs (core/target/r1-eight-owning/debug/deps/docker_port_pending-bf69037c0e56937b)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.68"
+    },
+    {
+      "target": "Running unittests src/lib.rs (core/target/r1-eight-owning/debug/deps/layerfs_sdk-dc007d4694b4ab79)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/agent_route.rs (core/target/r1-eight-owning/debug/deps/agent_route-474253733679e8eb)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/exec_liveness_control.rs (core/target/r1-eight-owning/debug/deps/exec_liveness_control-5aa8f4e660f8e63b)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/inherited_workspace.rs (core/target/r1-eight-owning/debug/deps/inherited_workspace-1c596c1903151f03)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/init_project.rs (core/target/r1-eight-owning/debug/deps/init_project-6787fbf702d9eb36)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "2.70"
+    },
+    {
+      "target": "Running tests/sandbox_log_capture.rs (core/target/r1-eight-owning/debug/deps/sandbox_log_capture-1af8d300b83068ce)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.79"
+    },
+    {
+      "target": "Running unittests src/lib.rs (core/target/r1-eight-owning/debug/deps/layerfs_server-1f01491c913d9496)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running unittests src/bin/layerfs-server.rs (core/target/r1-eight-owning/debug/deps/layerfs_server-db6fef2e91fb9fb7)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/acceptor_idle.rs (core/target/r1-eight-owning/debug/deps/acceptor_idle-d9a81ef9554ea89e)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "1.13"
+    },
+    {
+      "target": "Running tests/admission.rs (core/target/r1-eight-owning/debug/deps/admission-67e281ebee3ea516)",
+      "verdict": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.07"
+    },
+    {
+      "target": "Running tests/binding_claims.rs (core/target/r1-eight-owning/debug/deps/binding_claims-e88910be1dad77e0)",
+      "verdict": "FAILED",
+      "passed": 0,
+      "failed": 5,
+      "ignored": 0,
+      "body_seconds": "9.16"
+    },
+    {
+      "target": "Running tests/catalog_admission.rs (core/target/r1-eight-owning/debug/deps/catalog_admission-943df1bd5359c45b)",
+      "verdict": "FAILED",
+      "passed": 6,
+      "failed": 3,
+      "ignored": 0,
+      "body_seconds": "1.29"
+    },
+    {
+      "target": "Running tests/construct_metadata.rs (core/target/r1-eight-owning/debug/deps/construct_metadata-2b4483e756dd3f39)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.05"
+    },
+    {
+      "target": "Running tests/construct_symlink.rs (core/target/r1-eight-owning/debug/deps/construct_symlink-52655d1c46d04ded)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.07"
+    },
+    {
+      "target": "Running tests/construction_config.rs (core/target/r1-eight-owning/debug/deps/construction_config-57909742305d6921)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/direct.rs (core/target/r1-eight-owning/debug/deps/direct-45778ef876d5cd01)",
+      "verdict": "FAILED",
+      "passed": 9,
+      "failed": 1,
+      "ignored": 1,
+      "body_seconds": "66.69"
+    },
+    {
+      "target": "Running tests/engine_participation.rs (core/target/r1-eight-owning/debug/deps/engine_participation-21988af6502fa6b9)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/engine_startup.rs (core/target/r1-eight-owning/debug/deps/engine_startup-53427add22dfb425)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.80"
+    },
+    {
+      "target": "Running tests/file_drafts.rs (core/target/r1-eight-owning/debug/deps/file_drafts-6cff348339720b08)",
+      "verdict": "FAILED",
+      "passed": 1,
+      "failed": 2,
+      "ignored": 0,
+      "body_seconds": "0.66"
+    },
+    {
+      "target": "Running tests/history.rs (core/target/r1-eight-owning/debug/deps/history-32fae52299b4285b)",
+      "verdict": "ok",
+      "passed": 28,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "1.20"
+    },
+    {
+      "target": "Running tests/native_purposes.rs (core/target/r1-eight-owning/debug/deps/native_purposes-c6011d44715067b3)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.71"
+    },
+    {
+      "target": "Running tests/native_read_saturation.rs (core/target/r1-eight-owning/debug/deps/native_read_saturation-27d020b442c20e7c)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.94"
+    },
+    {
+      "target": "Running tests/native_terminal_custody.rs (core/target/r1-eight-owning/debug/deps/native_terminal_custody-51bf00023a60be50)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.76"
+    },
+    {
+      "target": "Running tests/no_draft_authority.rs (core/target/r1-eight-owning/debug/deps/no_draft_authority-e8fcdde7ca2ad7d4)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.08"
+    },
+    {
+      "target": "Running tests/owned_load.rs (core/target/r1-eight-owning/debug/deps/owned_load-60cbff9be98a584a)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.69"
+    },
+    {
+      "target": "Running tests/prepared_bindings.rs (core/target/r1-eight-owning/debug/deps/prepared_bindings-312776735e260922)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "10.59"
+    },
+    {
+      "target": "Running tests/scratch_reuse.rs (core/target/r1-eight-owning/debug/deps/scratch_reuse-3ac130d6262cc40f)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.88"
+    },
+    {
+      "target": "Running tests/small_file_authority.rs (core/target/r1-eight-owning/debug/deps/small_file_authority-701c09a74577e12b)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.05"
+    },
+    {
+      "target": "Running tests/verified_empty.rs (core/target/r1-eight-owning/debug/deps/verified_empty-2422648f78a24006)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.04"
+    },
+    {
+      "target": "Running unittests src/lib.rs (core/target/r1-eight-owning/debug/deps/layerfs_storage-ac7a206fde4156ec)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/birth_scope.rs (core/target/r1-eight-owning/debug/deps/birth_scope-faae482b4fc1f83b)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/c2_bulk_admission.rs (core/target/r1-eight-owning/debug/deps/c2_bulk_admission-77a90858594133c2)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.05"
+    },
+    {
+      "target": "Running tests/canonical_namespace_pipeline.rs (core/target/r1-eight-owning/debug/deps/canonical_namespace_pipeline-f1d5151f610220df)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "2.46"
+    },
+    {
+      "target": "Running tests/cas_reuse.rs (core/target/r1-eight-owning/debug/deps/cas_reuse-21e195c78fafb04a)",
+      "verdict": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/cas_roundtrip.rs (core/target/r1-eight-owning/debug/deps/cas_roundtrip-8f37761d02cc9d79)",
+      "verdict": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/catalogue_statement_reuse.rs (core/target/r1-eight-owning/debug/deps/catalogue_statement_reuse-e5ca7c61f0ded33a)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.02"
+    },
+    {
+      "target": "Running tests/codec_custody.rs (core/target/r1-eight-owning/debug/deps/codec_custody-a2bbf6beba03c26a)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/codec_frames.rs (core/target/r1-eight-owning/debug/deps/codec_frames-8a8aaa74a0709f33)",
+      "verdict": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/connection_profile.rs (core/target/r1-eight-owning/debug/deps/connection_profile-6c597de70910b0fc)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.02"
+    },
+    {
+      "target": "Running tests/construction_aliases.rs (core/target/r1-eight-owning/debug/deps/construction_aliases-89141e7e719a8d3a)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.23"
+    },
+    {
+      "target": "Running tests/construction_claims.rs (core/target/r1-eight-owning/debug/deps/construction_claims-0d626834bac8d08a)",
+      "verdict": "ok",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.54"
+    },
+    {
+      "target": "Running tests/construction_counts.rs (core/target/r1-eight-owning/debug/deps/construction_counts-45097f8a082ddb69)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.76"
+    },
+    {
+      "target": "Running tests/construction_drafts.rs (core/target/r1-eight-owning/debug/deps/construction_drafts-2d9dd34864e4e921)",
+      "verdict": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.08"
+    },
+    {
+      "target": "Running tests/construction_facts.rs (core/target/r1-eight-owning/debug/deps/construction_facts-53a3c759ad72d654)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/construction_graph.rs (core/target/r1-eight-owning/debug/deps/construction_graph-0af6bc6b805d057d)",
+      "verdict": "ok",
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "211.59"
+    },
+    {
+      "target": "Running tests/construction_layout.rs (core/target/r1-eight-owning/debug/deps/construction_layout-316c3e93b68c20fd)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/construction_reset.rs (core/target/r1-eight-owning/debug/deps/construction_reset-8064468c3eeef78e)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.39"
+    },
+    {
+      "target": "Running tests/construction_sites.rs (core/target/r1-eight-owning/debug/deps/construction_sites-1b8b0c9ebbf125d3)",
+      "verdict": "ok",
+      "passed": 21,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "2.70"
+    },
+    {
+      "target": "Running tests/construction_state.rs (core/target/r1-eight-owning/debug/deps/construction_state-f176dd892a7783a4)",
+      "verdict": "ok",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.22"
+    },
+    {
+      "target": "Running tests/content_index.rs (core/target/r1-eight-owning/debug/deps/content_index-a864a283bc47e014)",
+      "verdict": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.02"
+    },
+    {
+      "target": "Running tests/core_pipeline.rs (core/target/r1-eight-owning/debug/deps/core_pipeline-049dc0ad70a91900)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.10"
+    },
+    {
+      "target": "Running tests/delta_chains.rs (core/target/r1-eight-owning/debug/deps/delta_chains-eb46ed62d8c9aa04)",
+      "verdict": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.06"
+    },
+    {
+      "target": "Running tests/delta_payload.rs (core/target/r1-eight-owning/debug/deps/delta_payload-ede3945ac4fbc61d)",
+      "verdict": "ok",
+      "passed": 15,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.19"
+    },
+    {
+      "target": "Running tests/edit_pipeline.rs (core/target/r1-eight-owning/debug/deps/edit_pipeline-10816528c9e7490e)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.04"
+    },
+    {
+      "target": "Running tests/engine_bootstrap.rs (core/target/r1-eight-owning/debug/deps/engine_bootstrap-58b72081090f1788)",
+      "verdict": "FAILED",
+      "passed": 4,
+      "failed": 4,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/engine_participation.rs (core/target/r1-eight-owning/debug/deps/engine_participation-9fa48c082097e681)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/factory_profiles.rs (core/target/r1-eight-owning/debug/deps/factory_profiles-09be4b5ad7098086)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.02"
+    },
+    {
+      "target": "Running tests/filesystem_failure.rs (core/target/r1-eight-owning/debug/deps/filesystem_failure-6ef3ca9ff61fd09d)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.04"
+    },
+    {
+      "target": "Running tests/filesystem_pipeline.rs (core/target/r1-eight-owning/debug/deps/filesystem_pipeline-bc9b671c4b198e63)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.04"
+    },
+    {
+      "target": "Running tests/group_decodes.rs (core/target/r1-eight-owning/debug/deps/group_decodes-336bd36bad79f8b9)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.02"
+    },
+    {
+      "target": "Running tests/mapping_cache.rs (core/target/r1-eight-owning/debug/deps/mapping_cache-8fdfc67c2c6d1098)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.06"
+    },
+    {
+      "target": "Running tests/memory_bounds.rs (core/target/r1-eight-owning/debug/deps/memory_bounds-42a1ac018c438afd)",
+      "verdict": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.08"
+    },
+    {
+      "target": "Running tests/metadata_chain.rs (core/target/r1-eight-owning/debug/deps/metadata_chain-df6fe43a1e8150e7)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.04"
+    },
+    {
+      "target": "Running tests/metadata_fingerprint_collision.rs (core/target/r1-eight-owning/debug/deps/metadata_fingerprint_collision-c2084f74263c0d53)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.02"
+    },
+    {
+      "target": "Running tests/metadata_pool.rs (core/target/r1-eight-owning/debug/deps/metadata_pool-f3303b07b8cad307)",
+      "verdict": "ok",
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.56"
+    },
+    {
+      "target": "Running tests/metadata_pool_index.rs (core/target/r1-eight-owning/debug/deps/metadata_pool_index-4bfb94d5e7baf2c7)",
+      "verdict": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.04"
+    },
+    {
+      "target": "Running tests/metadata_window.rs (core/target/r1-eight-owning/debug/deps/metadata_window-34ca93e1327f77ac)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.68"
+    },
+    {
+      "target": "Running tests/multi_writer.rs (core/target/r1-eight-owning/debug/deps/multi_writer-c3fc6357c5273be9)",
+      "verdict": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.05"
+    },
+    {
+      "target": "Running tests/namespace_occupation.rs (core/target/r1-eight-owning/debug/deps/namespace_occupation-b38cec6ce82d8c03)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.02"
+    },
+    {
+      "target": "Running tests/owned_canonical.rs (core/target/r1-eight-owning/debug/deps/owned_canonical-b36cd9aabccd30a5)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/pack_capacity.rs (core/target/r1-eight-owning/debug/deps/pack_capacity-c6d62e068a21b920)",
+      "verdict": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.28"
+    },
+    {
+      "target": "Running tests/pack_locator.rs (core/target/r1-eight-owning/debug/deps/pack_locator-88d3c807ab9bbfba)",
+      "verdict": "ok",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.10"
+    },
+    {
+      "target": "Running tests/pack_watermark.rs (core/target/r1-eight-owning/debug/deps/pack_watermark-459a0138694636e3)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.04"
+    },
+    {
+      "target": "Running tests/persistence_failure.rs (core/target/r1-eight-owning/debug/deps/persistence_failure-44e5690f68d571f7)",
+      "verdict": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/physical_formats.rs (core/target/r1-eight-owning/debug/deps/physical_formats-e557f5ac1133798d)",
+      "verdict": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/physical_reservation.rs (core/target/r1-eight-owning/debug/deps/physical_reservation-627cb7377c37230f)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.01"
+    },
+    {
+      "target": "Running tests/policy_capacity.rs (core/target/r1-eight-owning/debug/deps/policy_capacity-37890be422f7b5f8)",
+      "verdict": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.04"
+    },
+    {
+      "target": "Running tests/provider_errors.rs (core/target/r1-eight-owning/debug/deps/provider_errors-66bfc8a2d5885197)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/save_working.rs (core/target/r1-eight-owning/debug/deps/save_working-4f2bf2459a0aea76)",
+      "verdict": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.12"
+    },
+    {
+      "target": "Running tests/scratch_pool.rs (core/target/r1-eight-owning/debug/deps/scratch_pool-0c457f5e30d3a3b4)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.02"
+    },
+    {
+      "target": "Running tests/statement_batching.rs (core/target/r1-eight-owning/debug/deps/statement_batching-44ba38fa34b71f41)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.08"
+    },
+    {
+      "target": "Running tests/storage_limits.rs (core/target/r1-eight-owning/debug/deps/storage_limits-a3a0f41ef9c616a0)",
+      "verdict": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/stored_payloads.rs (core/target/r1-eight-owning/debug/deps/stored_payloads-c4c9a4dbff3fc05f)",
+      "verdict": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/timing.rs (core/target/r1-eight-owning/debug/deps/timing-f6094a4f691c354e)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.03"
+    },
+    {
+      "target": "Running tests/validation_prefetch.rs (core/target/r1-eight-owning/debug/deps/validation_prefetch-0b1136e65f422a83)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.58"
+    },
+    {
+      "target": "Running tests/visibility.rs (core/target/r1-eight-owning/debug/deps/visibility-a244abf01df5c9d5)",
+      "verdict": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.09"
+    },
+    {
+      "target": "Running tests/write_admission.rs (core/target/r1-eight-owning/debug/deps/write_admission-650536602d30ff98)",
+      "verdict": "ok",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.21"
+    },
+    {
+      "target": "Running unittests src/lib.rs (core/target/r1-eight-owning/debug/deps/layerfs_telemetry-19ae41109a465abc)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/full_disk.rs (core/target/r1-eight-owning/debug/deps/full_disk-c05737319a7b1dd3)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 1,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/native.rs (core/target/r1-eight-owning/debug/deps/native-4d9ee2dac6937b15)",
+      "verdict": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.06"
+    },
+    {
+      "target": "Running tests/observations.rs (core/target/r1-eight-owning/debug/deps/observations-0a6103139c9e2928)",
+      "verdict": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/off_allocations.rs (core/target/r1-eight-owning/debug/deps/off_allocations-56fbe28373f431ff)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/owned_allocations.rs (core/target/r1-eight-owning/debug/deps/owned_allocations-78bf2f4e5ebc82e0)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 1,
+      "body_seconds": "1.05"
+    },
+    {
+      "target": "Running tests/stalled_output.rs (core/target/r1-eight-owning/debug/deps/stalled_output-471b096d10c98bf3)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 1,
+      "body_seconds": "1.05"
+    },
+    {
+      "target": "Running tests/timer.rs (core/target/r1-eight-owning/debug/deps/timer-cb0a78712f9f2588)",
+      "verdict": "ok",
+      "passed": 21,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/timer_bounds.rs (core/target/r1-eight-owning/debug/deps/timer_bounds-c6f45e863fd88c87)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/timer_compile_fail.rs (core/target/r1-eight-owning/debug/deps/timer_compile_fail-efc6980ddc74a0b8)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.63"
+    },
+    {
+      "target": "Running tests/timer_format.rs (core/target/r1-eight-owning/debug/deps/timer_format-e4b6c19d60c3b911)",
+      "verdict": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/timer_json.rs (core/target/r1-eight-owning/debug/deps/timer_json-ea207e86e3168420)",
+      "verdict": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.06"
+    },
+    {
+      "target": "Running unittests src/lib.rs (core/target/r1-eight-owning/debug/deps/layerfs_workspace-52d67f1815407e89)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/attachment.rs (core/target/r1-eight-owning/debug/deps/attachment-9c7f3e1e9a60f7e8)",
+      "verdict": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/backing_ownership.rs (core/target/r1-eight-owning/debug/deps/backing_ownership-f067ec382ef71019)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/coherence.rs (core/target/r1-eight-owning/debug/deps/coherence-e42369579d2cd1dc)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/commit_overlap.rs (core/target/r1-eight-owning/debug/deps/commit_overlap-546eed8d5c1f7a2d)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/commit_progress.rs (core/target/r1-eight-owning/debug/deps/commit_progress-a7c395c27d670ce3)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/commit_staged.rs (core/target/r1-eight-owning/debug/deps/commit_staged-bbf785742ee9959a)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/composite.rs (core/target/r1-eight-owning/debug/deps/composite-d0f7646cf92415a2)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/create.rs (core/target/r1-eight-owning/debug/deps/create-1d07b0c8efa9140e)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/fresh_stream.rs (core/target/r1-eight-owning/debug/deps/fresh_stream-b73f3c9ef679bb08)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/keyed_tree.rs (core/target/r1-eight-owning/debug/deps/keyed_tree-2e8fbf1e50d5222d)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/maintenance.rs (core/target/r1-eight-owning/debug/deps/maintenance-678933e21a0999a1)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/mkdir.rs (core/target/r1-eight-owning/debug/deps/mkdir-ca6fcddaa5a2d2fc)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/mounted_create.rs (core/target/r1-eight-owning/debug/deps/mounted_create-e442b7db2456cdac)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/mounted_mkdir.rs (core/target/r1-eight-owning/debug/deps/mounted_mkdir-3390a8b76f2782e5)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/mounted_namespace.rs (core/target/r1-eight-owning/debug/deps/mounted_namespace-065561daaeff0e53)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/mounted_symlink.rs (core/target/r1-eight-owning/debug/deps/mounted_symlink-3ebc640bdf57116b)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/namespace.rs (core/target/r1-eight-owning/debug/deps/namespace-9890b9a75c28e3a4)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/open.rs (core/target/r1-eight-owning/debug/deps/open-166b13e1de5804aa)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/payload.rs (core/target/r1-eight-owning/debug/deps/payload-88ffc0f0212f5bb8)",
+      "verdict": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/pieces_sequence.rs (core/target/r1-eight-owning/debug/deps/pieces_sequence-c76fa99cceb1dc5d)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/prepared_namespace.rs (core/target/r1-eight-owning/debug/deps/prepared_namespace-5aff4d4f8f1e7e9a)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/readable.rs (core/target/r1-eight-owning/debug/deps/readable-f9f08dab3e01a407)",
+      "verdict": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.13"
+    },
+    {
+      "target": "Running tests/resize.rs (core/target/r1-eight-owning/debug/deps/resize-08868ab7e44d9d65)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/stage.rs (core/target/r1-eight-owning/debug/deps/stage-76a76d30a8232806)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/symlink.rs (core/target/r1-eight-owning/debug/deps/symlink-b20b8ecc32ce795f)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/wide_namespace.rs (core/target/r1-eight-owning/debug/deps/wide_namespace-1f3a4c438cb27e84)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Running tests/write.rs (core/target/r1-eight-owning/debug/deps/write-91c97bbfd366c4df)",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Doc-tests layerfs_api_core",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Doc-tests layerfs_bridge",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Doc-tests layerfs_content",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Doc-tests layerfs_daemon",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Doc-tests layerfs_fuse",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Doc-tests layerfs_history",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Doc-tests layerfs_sandbox",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Doc-tests layerfs_sdk",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Doc-tests layerfs_server",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Doc-tests layerfs_storage",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Doc-tests layerfs_telemetry",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    },
+    {
+      "target": "Doc-tests layerfs_workspace",
+      "verdict": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "body_seconds": "0.00"
+    }
+  ],
+  "method": "last top-level libtest result within each Running/Doc-tests block; nested captured child summaries excluded; supported-provider inner NOT_RUN separately retained in raw output"
+}

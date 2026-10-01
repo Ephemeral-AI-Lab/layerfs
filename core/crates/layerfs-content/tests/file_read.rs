@@ -650,9 +650,9 @@ fn the_payload_wave_enforces_both_its_object_and_its_byte_ceiling() {
     assert!(
         matches!(
             outcome,
-            Err(ContentError::ObjectLimitExceeded { limit, actual })
-                if limit == layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES
-                    && actual == oversize
+            Err(ContentError::BoundedCapacityExceeded { what: "canonical.returned_capacity", limit, actual })
+                if limit as usize == encode_chunk_object(&vec![0; layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES]).unwrap().len()
+                    && actual as usize == store.canonical.len()
         ),
         "an object above the chunk maximum is refused at the wave boundary: {outcome:?}"
     );

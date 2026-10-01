@@ -16,6 +16,7 @@ pub mod pool;
 
 mod decode;
 mod full;
+mod pack_cache;
 
 pub use codec::{
     CodecProfile, CompressionWorkspace, DecompressionWorkspace, DECODE_WORKSPACE_BYTES,

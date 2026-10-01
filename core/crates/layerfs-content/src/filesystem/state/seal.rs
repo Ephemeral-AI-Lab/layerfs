@@ -75,6 +75,7 @@ impl StateSeal {
 }
 
 /// Digest/totals advance only after one acknowledged ordered append.
+#[derive(Clone)]
 pub struct StateLedger {
     scope: StateScope,
     digest: blake3::Hasher,

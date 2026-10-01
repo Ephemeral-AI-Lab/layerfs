@@ -1,0 +1,39 @@
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-server)
+error[E0624]: method `into_records` is private
+   --> crates/layerfs-storage/tests/construction_state.rs:262:31
+    |
+262 |             let values = page.into_records();
+    |                               ^^^^^^^^^^^^ private method
+    |
+   ::: /Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content/src/filesystem/state/page.rs:147:5
+    |
+147 |     pub(crate) fn into_records(self) -> Vec<StateRecord> {
+    |     ---------------------------------------------------- private method defined here
+
+For more information about this error, try `rustc --explain E0624`.
+error: could not compile `layerfs-storage` (test "construction_state") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: large size difference between variants
+ --> crates/layerfs-server/src/service/construction_session.rs:5:1
+  |
+5 | / pub(crate) enum ConstructionSession {
+6 | |     Native(ScratchSession),
+7 | |     Empty(VerifiedEmptyState),
+  | |     ------------------------- the second-largest variant contains at least 32 bytes
+8 | |     Small(Option<layerfs_content::filesystem::rows::PendingSmallFiles>),
+  | |     ------------------------------------------------------------------- the largest variant contains at least 272 bytes
+9 | | }
+  | |_^ the entire enum is at least 0 bytes
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#large_enum_variant
+  = note: `-D clippy::large-enum-variant` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(clippy::large_enum_variant)]`
+help: consider boxing the large fields to reduce the total size of the enum
+  |
+8 |     Small(Box<Option<layerfs_content::filesystem::rows::PendingSmallFiles>>),
+  |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error: could not compile `layerfs-server` (lib test) due to 1 previous error
+error: could not compile `layerfs-server` (lib) due to 1 previous error

@@ -4,9 +4,10 @@
 //! import/prepared/composite surfaces keep their whole-request C2 allowance;
 //! completed content is retained through later catalog failure. Releasing that
 //! allowance between phases requires the versioned complete result owner.
+use crate::service::construction_session::ConstructionSession;
 use crate::service::{
     construction::Construction,
-    error::{catalog as failure, content, storage},
+    error::{catalog as failure, storage},
     read::content::id,
     records::*,
     save::{
@@ -16,7 +17,7 @@ use crate::service::{
 };
 use layerfs_bridge::contract::HistoryResult;
 use layerfs_bridge::contract::*;
-use layerfs_content::filesystem::{scope_for_seed, state::GraphConstructionScopes};
+use layerfs_content::filesystem::scope_for_seed;
 use layerfs_history::*;
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, TimingScope};
@@ -258,17 +259,10 @@ fn stage(
         return Err(Code::Deadline.into());
     }
     let (mut state, preparation) = construction.begin(changes)?;
-    let state_scope = match state
-        .graph_subject()
-        .cloned()
-        .ok_or(layerfs_content::ContentError::InvalidOrderingRecord(
-            "graph construction subject",
-        ))
-        .and_then(|subject| GraphConstructionScopes::new(state.selection().clone(), subject))
-    {
+    let state_scope = match state.scopes() {
         Ok(scope) => scope,
         Err(error) => {
-            let mut error = content(error);
+            let mut error = storage(error);
             if let Err(cleanup) = state.release().map_err(storage) {
                 error.cleanup = Some(cleanup.code);
                 error.unknown |= cleanup.unknown;
@@ -305,18 +299,37 @@ fn stage(
     };
     let built = {
         let mut handoff = SaveHandoff::new(&mut save);
-        let result = {
-            let mut adapter = state.adapter();
-            filesystem::update(
+        let result = (|| match &mut state {
+            ConstructionSession::Native(state) => {
+                let mut adapter = state.adapter();
+                filesystem::update(
+                    &provider,
+                    prepared,
+                    &mut handoff,
+                    &mut adapter,
+                    state_scope.as_ref().ok_or(Code::Ownership)?,
+                    deadline,
+                    timer,
+                )
+            }
+            ConstructionSession::Small(pending) => filesystem::update_small(
                 &provider,
                 prepared,
                 &mut handoff,
-                &mut adapter,
-                &state_scope,
+                pending.take().ok_or(Code::Ownership)?,
                 deadline,
                 timer,
-            )
-        };
+            ),
+            ConstructionSession::Empty(state) => filesystem::update_empty(
+                &provider,
+                prepared,
+                &mut handoff,
+                state,
+                state_scope.as_ref().ok_or(Code::Ownership)?,
+                deadline,
+                timer,
+            ),
+        })();
         let retained = handoff.take_failure();
         drop(handoff);
         match retained.or_else(|| state.take_failure()) {
@@ -325,7 +338,7 @@ fn stage(
         }
     };
     // Logical table completion does not refund native disk/FD/engine ownership.
-    // The exact session closes/unlinks once before a known Save is finished.
+    // Known scratch terminal state returns idle before independent Save/C5 finish.
     let built = if state.is_quarantined() {
         // Retention is this exact owner's required disposition, not a failed
         // cleanup attempt. Its capsule/credit survives without destructive I/O.
@@ -333,7 +346,13 @@ fn stage(
         error.unknown = true;
         Err(error)
     } else {
-        match (built, state.release().map_err(storage)) {
+        let disposition = if built.is_ok() {
+            state.return_to_idle()
+        } else {
+            state.release()
+        }
+        .map_err(storage);
+        match (built, disposition) {
             (Ok(value), Ok(())) => Ok(value),
             (Ok(_), Err(cleanup)) => Err(cleanup),
             (Err(error), Ok(())) => Err(error),

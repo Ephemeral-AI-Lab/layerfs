@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "clippy",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "exit": 101,
+  "wall_ns": 7592570209,
+  "source_change": {
+    "core/crates/layerfs-content/src/file/mapping/navigation.rs": "2d9e2f25e5390ebc3507842e4c3dd719db8efb97599bc35c14b86281ad04b917",
+    "core/crates/layerfs-content/src/filesystem/state/parent_access.rs": "073ca63e74577663a2a97fa1d98986a15ae8395da593d8c111bbadb3442794e1",
+    "core/crates/layerfs-content/src/filesystem/update.rs": "ef9af712c30b5887053523b63035a1f73224fc6a013df94ab1b8c31f80fed5a4",
+    "core/crates/layerfs-content/src/filesystem/validate/fact_access.rs": "21c3aad6c61e844d29de34c4721e2c2d6b116335d6248136ba0e1020290e89af"
+  },
+  "cause": "equivalent lint correction, inlineParentSeal remains charged/noBox, typealiases retain actual fn semantics"
+}

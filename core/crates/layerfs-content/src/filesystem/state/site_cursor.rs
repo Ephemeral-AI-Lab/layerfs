@@ -45,6 +45,10 @@ impl<'a, S: BindingSiteState + ?Sized> SiteCursor<'a, S> {
         }
     }
 
+    pub(crate) fn state(&mut self) -> &mut S {
+        self.state
+    }
+
     fn advance(&mut self, limit: SitePageLimit) -> ContentResult<SitePage> {
         let page = self.state.site_sealed_page(&self.seal, self.after, limit)?;
         page.check_limit(limit)?;

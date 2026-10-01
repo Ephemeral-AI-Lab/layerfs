@@ -1,4 +1,5 @@
 //! Indexed immutable site membership and monotone base facts without name history.
+use super::fact_access::FactAccess;
 use super::{charge_directory, walk_limit, FilesystemTopology, ValidationState, ValidationWork};
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::directory::read::{list_after, DirectoryReadWork};
@@ -6,12 +7,12 @@ use crate::filesystem::path::PathName;
 use crate::filesystem::rows::{BindingLookup, PreparedBindingRows};
 use crate::filesystem::sorted::finish::DirectoryRoot;
 use crate::filesystem::state::{
-    BindingSiteState, SiteKey, SiteMembership, SiteObservation, SiteParentCursor,
-    SiteParentPageLimit, SiteRecord, STATE_MAX_PAGE_RECORDS,
+    AliasCapacity, AliasFrontier, AliasProgress, BindingSiteState, ResidentAliasFrontier, SiteKey,
+    SiteMembership, SiteObservation, SiteParentPageLimit, SiteRecord, STATE_MAX_PAGE_RECORDS,
 };
+use crate::filesystem::state::{EligibilityView, NamespaceConstructionState, ParentCalls};
 use crate::object::inode_leaf::InodeKind;
 use crate::object::AuthenticatedObjects;
-use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) struct SiteAliasInput<'a> {
     pub(super) reader: &'a dyn AuthenticatedObjects,
@@ -19,7 +20,7 @@ pub(super) struct SiteAliasInput<'a> {
     pub(super) topology: &'a FilesystemTopology,
     pub(super) members: &'a SiteMembership,
     pub(super) active_stored: u64,
-    pub(super) unreachable: &'a BTreeMap<u64, ()>,
+    pub(super) unreachable: EligibilityView<'a>,
 }
 
 pub(super) fn check<S: BindingSiteState + ?Sized>(
@@ -27,6 +28,79 @@ pub(super) fn check<S: BindingSiteState + ?Sized>(
     work: &mut ValidationWork,
     facts: &mut ValidationState,
     sites: &mut S,
+) -> ContentResult<()> {
+    let records = (walk_limit(context.input) as u64)
+        .checked_add(1)
+        .ok_or(ContentError::LengthOverflow)?;
+    let site_bytes = context
+        .members
+        .birth()
+        .records()
+        .checked_mul(60)
+        .ok_or(ContentError::LengthOverflow)?;
+    let bytes = records
+        .checked_mul(79)
+        .and_then(|n| n.checked_add(site_bytes))
+        .and_then(|n| n.checked_add(crate::filesystem::state::ALIAS_FIXED_BYTES))
+        .ok_or(ContentError::LengthOverflow)?;
+    let aliases = ResidentAliasFrontier::new(AliasCapacity::new(
+        records,
+        bytes,
+        context.members.birth().records(),
+    )?);
+    let mut compatibility = crate::filesystem::state::CompatibilityAliases { sites, aliases };
+    check_frontier(context, work, facts, &mut compatibility)
+}
+
+pub(super) fn check_frontier<S: BindingSiteState + AliasFrontier + ?Sized>(
+    context: SiteAliasInput<'_>,
+    work: &mut ValidationWork,
+    facts: &mut ValidationState,
+    sites: &mut S,
+) -> ContentResult<()> {
+    let members = context.members;
+    let result = walk(
+        context,
+        work,
+        facts,
+        sites,
+        FactAccess::compatibility(),
+        ParentCalls::compatibility(),
+    );
+    if result.is_err() {
+        let _ = sites.alias_abandon(members);
+    }
+    result
+}
+
+pub(super) fn check_namespace<S: NamespaceConstructionState + ?Sized>(
+    context: SiteAliasInput<'_>,
+    work: &mut ValidationWork,
+    facts: &mut ValidationState,
+    sites: &mut S,
+) -> ContentResult<()> {
+    let members = context.members;
+    let result = walk(
+        context,
+        work,
+        facts,
+        sites,
+        FactAccess::supplied(),
+        ParentCalls::supplied(),
+    );
+    if result.is_err() {
+        let _ = sites.alias_abandon(members);
+    }
+    result
+}
+
+fn walk<S: BindingSiteState + AliasFrontier + ?Sized>(
+    context: SiteAliasInput<'_>,
+    work: &mut ValidationWork,
+    facts: &mut ValidationState,
+    sites: &mut S,
+    access: FactAccess<S>,
+    parents: ParentCalls<S>,
 ) -> ContentResult<()> {
     let SiteAliasInput {
         reader,
@@ -36,14 +110,19 @@ pub(super) fn check<S: BindingSiteState + ?Sized>(
         active_stored,
         unreachable,
     } = context;
-    if active_stored == 0 {
-        return Ok(());
-    }
-    let Some(table) = topology.table else {
-        return Ok(());
+    sites.alias_capacity(members)?;
+    let root_serial = if active_stored != 0 {
+        topology
+            .base
+            .filter(|_| topology.table.is_some())
+            .map(|root| root.root_inode().serial())
+    } else {
+        None
     };
-    let Some(root) = topology.base else {
-        return Ok(());
+    sites.alias_begin(members, root_serial)?;
+    let Some(table) = topology.table.filter(|_| root_serial.is_some()) else {
+        let seal = sites.alias_finish(members)?;
+        return sites.alias_retire(&seal);
     };
     let mut observations = Vec::new();
     observations
@@ -58,18 +137,15 @@ pub(super) fn check<S: BindingSiteState + ?Sized>(
             actual: observations.capacity() as u64,
         });
     }
-    // These existing graph owners retain their original work admission. Neither
-    // owns a site/name/target-parent or prior-base-binding population.
-    let mut pending = vec![root.root_inode().serial()];
-    let mut seen = BTreeSet::new();
     let mut visited = 0usize;
-    while let Some(parent) = pending.pop() {
-        if !seen.insert(parent) {
-            continue;
-        }
-        let record = facts.lookup_one(reader, table, parent, work)?;
-        let owns_sites =
-            !unreachable.contains_key(&parent) && sites.site_parent_present(members, parent)?;
+    while let Some(current) = sites.alias_take(members)? {
+        let parent = current.serial;
+        let mut progress = AliasProgress::initial();
+        let record = access
+            .lookup(facts, sites, reader, table, parent, work)?
+            .ok_or(ContentError::InvalidRecord("missing base inode"))?;
+        let owns_sites = !unreachable.contains(sites, parent, parents)?
+            && sites.site_parent_present(members, parent)?;
         let mut after = None;
         loop {
             let mut directory = DirectoryReadWork::default();
@@ -89,11 +165,13 @@ pub(super) fn check<S: BindingSiteState + ?Sized>(
             if visited > walk_limit(input) {
                 return Err(ContentError::InvalidRecord("cycle check work limit"));
             }
+            let mut children = [0_u64; STATE_MAX_PAGE_RECORDS];
+            let mut child_count = 0;
             for (name, serial) in page.entries {
                 let restated = if owns_sites {
                     match input.binding_for(parent, name.as_bytes())? {
                         BindingLookup::Present(child) => {
-                            match active_site(sites, members, child, unreachable)? {
+                            match active_site(sites, members, child, unreachable, parents)? {
                                 Some(site) if site.point().parent() == parent => {
                                     resolved(input, site)? == name
                                 }
@@ -110,13 +188,14 @@ pub(super) fn check<S: BindingSiteState + ?Sized>(
                 if restated {
                     continue;
                 }
-                if facts
-                    .lookup_optional(reader, table, serial, work)?
+                if access
+                    .lookup(facts, sites, reader, table, serial, work)?
                     .is_some_and(|value| value.kind == InodeKind::Directory)
                 {
-                    pending.push(serial);
+                    children[child_count] = serial;
+                    child_count += 1;
                 }
-                if let Some(site) = active_site(sites, members, serial, unreachable)? {
+                if let Some(site) = active_site(sites, members, serial, unreachable, parents)? {
                     let same = site.point().parent() == parent && resolved(input, site)? == name;
                     let legal = same || !survives(input, parent, name.as_bytes(), serial)?;
                     observations.push(SiteObservation::new(site.key(), legal));
@@ -126,45 +205,96 @@ pub(super) fn check<S: BindingSiteState + ?Sized>(
                     }
                 }
             }
+            sites.alias_enqueue(members, &children[..child_count])?;
+            let next = AliasProgress::base(page.continuation.clone());
+            sites.alias_advance(members, current, &progress, &next)?;
+            progress = next;
             match page.continuation {
                 Some(next) => after = Some(next),
                 None => break,
             }
         }
         if !owns_sites {
+            let next = AliasProgress::complete();
+            sites.alias_advance(members, current, &progress, &next)?;
+            sites.alias_complete(members, current)?;
             continue;
         }
         // The indexed projection visits each changed stored site once in its
         // immutable source order, including new names absent from the base.
-        let mut cursor = SiteParentCursor::new(sites, members.clone(), parent)?;
-        while let Some(page) = cursor.next_page(SiteParentPageLimit::default())? {
+        let mut maximum = None;
+        let mut seen = 0_u64;
+        loop {
+            let limit = SiteParentPageLimit::default();
+            let page = sites.site_parent_page(members, parent, progress.ordinal(), limit)?;
+            page.check_limit(limit)?;
+            if page.members() != members
+                || page.parent() != parent
+                || maximum.is_some_and(|max| max != page.maximum())
+            {
+                return Err(ContentError::InvalidOrderingRecord(
+                    "site parent selected page",
+                ));
+            }
+            maximum = Some(page.maximum());
+            let mut last = progress.ordinal();
+            let mut children = [0_u64; STATE_MAX_PAGE_RECORDS];
+            let mut child_count = 0;
             for site in page.records() {
+                if last.is_some_and(|prior| prior >= site.point().binding_ordinal()) {
+                    return Err(ContentError::InvalidOrderingRecord(
+                        "site parent cursor order",
+                    ));
+                }
+                last = Some(site.point().binding_ordinal());
                 resolved(input, *site)?;
                 visited = visited.saturating_add(1);
                 if visited > walk_limit(input) {
                     return Err(ContentError::InvalidRecord("cycle check work limit"));
                 }
                 work.entries_examined = work.entries_examined.saturating_add(1);
-                if facts
-                    .lookup_optional(reader, table, site.key().serial(), work)?
+                if access
+                    .lookup(facts, sites, reader, table, site.key().serial(), work)?
                     .is_some_and(|value| value.kind == InodeKind::Directory)
                 {
-                    pending.push(site.key().serial());
+                    children[child_count] = site.key().serial();
+                    child_count += 1;
                 }
             }
+            seen = seen
+                .checked_add(page.records().len() as u64)
+                .ok_or(ContentError::LengthOverflow)?;
+            if page.last() != last
+                || seen > members.birth().records()
+                || page.eof() != (last == page.maximum())
+            {
+                return Err(ContentError::InvalidOrderingRecord(
+                    "site parent cursor EOF",
+                ));
+            }
+            sites.alias_enqueue(members, &children[..child_count])?;
+            let next = AliasProgress::sites(page.last(), page.eof());
+            sites.alias_advance(members, current, &progress, &next)?;
+            progress = next;
+            if page.eof() {
+                break;
+            }
         }
+        sites.alias_complete(members, current)?;
     }
     if !observations.is_empty() {
         sites.site_observe_base_batch(members, &observations)?;
     }
-    Ok(())
+    let seal = sites.alias_finish(members)?;
+    sites.alias_retire(&seal)
 }
 
 fn active_site<S: BindingSiteState + ?Sized>(
     sites: &mut S,
     members: &SiteMembership,
     serial: u64,
-    unreachable: &BTreeMap<u64, ()>,
+    unreachable: EligibilityView<'_>,
+    parents: ParentCalls<S>,
 ) -> ContentResult<Option<SiteRecord>> {
     let scope = members.birth().scope();
     let key = SiteKey::new(scope, serial)?;
@@ -176,7 +306,7 @@ fn active_site<S: BindingSiteState + ?Sized>(
         return Err(ContentError::InvalidOrderingRecord("site selected key"));
     }
     Ok(
-        (record.has_base() && !unreachable.contains_key(&record.point().parent()))
+        (record.has_base() && !unreachable.contains(sites, record.point().parent(), parents)?)
             .then_some(record),
     )
 }

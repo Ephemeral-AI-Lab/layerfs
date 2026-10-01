@@ -1,5 +1,9 @@
 //! Finite external contract provider. Resident maps are explicitly not a RAM/SQL proof.
 #![allow(dead_code)]
+#[path = "canonical_state.rs"]
+mod canonical_state;
+#[path = "namespace_facts.rs"]
+mod namespace_facts;
 #[path = "site_state.rs"]
 mod sites;
 use layerfs_content::filesystem::rows::BindingSourceId;
@@ -23,6 +27,9 @@ pub fn scopes(
 pub struct ObservedGraph {
     pub scope: GraphScope,
     pub sites: sites::ObservedSites,
+    pub aliases: ResidentAliasFrontier,
+    pub facts: namespace_facts::FixtureFacts,
+    pub canonical: canonical_state::FixtureCanonical,
     pub roots: ResidentState,
     pub nodes: BTreeMap<GraphNodeKey, GraphNode>,
     pub edges: BTreeMap<GraphEdgeKey, GraphEdge>,
@@ -54,7 +61,12 @@ impl ObservedGraph {
         .unwrap();
         Self {
             scope: scopes.graph().clone(),
+            facts: namespace_facts::FixtureFacts::default(),
+            canonical: canonical_state::FixtureCanonical::default(),
             sites: sites::ObservedSites::new(&old, directories, bindings),
+            aliases: ResidentAliasFrontier::new(
+                AliasCapacity::new(100_000, 16 * 1024 * 1024, bindings as u64).unwrap(),
+            ),
             roots: ResidentState::new(scopes.roots().clone(), directories).unwrap(),
             nodes: BTreeMap::new(),
             edges: BTreeMap::new(),
@@ -791,5 +803,41 @@ impl IndexedState for ObservedGraph {
     fn release(&mut self, scope: &StateScope) -> ContentResult<()> {
         self.root_ready()?;
         self.roots.release(scope)
+    }
+}
+
+impl AliasFrontier for ObservedGraph {
+    fn alias_capacity(&self, m: &SiteMembership) -> ContentResult<AliasCapacity> {
+        self.aliases.alias_capacity(m)
+    }
+    fn alias_begin(&mut self, m: &SiteMembership, r: Option<u64>) -> ContentResult<()> {
+        self.aliases.alias_begin(m, r)
+    }
+    fn alias_enqueue(&mut self, m: &SiteMembership, c: &[u64]) -> ContentResult<()> {
+        self.aliases.alias_enqueue(m, c)
+    }
+    fn alias_take(&mut self, m: &SiteMembership) -> ContentResult<Option<AliasCurrent>> {
+        self.aliases.alias_take(m)
+    }
+    fn alias_advance(
+        &mut self,
+        m: &SiteMembership,
+        c: AliasCurrent,
+        b: &AliasProgress,
+        a: &AliasProgress,
+    ) -> ContentResult<()> {
+        self.aliases.alias_advance(m, c, b, a)
+    }
+    fn alias_complete(&mut self, m: &SiteMembership, c: AliasCurrent) -> ContentResult<()> {
+        self.aliases.alias_complete(m, c)
+    }
+    fn alias_finish(&mut self, m: &SiteMembership) -> ContentResult<AliasSeal> {
+        self.aliases.alias_finish(m)
+    }
+    fn alias_retire(&mut self, s: &AliasSeal) -> ContentResult<()> {
+        self.aliases.alias_retire(s)
+    }
+    fn alias_abandon(&mut self, m: &SiteMembership) -> ContentResult<()> {
+        self.aliases.alias_abandon(m)
     }
 }

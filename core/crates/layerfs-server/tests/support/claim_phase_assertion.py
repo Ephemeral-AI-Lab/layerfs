@@ -61,9 +61,9 @@ if mode == "number":
 else:
     assert len(sys.argv) == 4
     assert statement("PRAGMA application_id") == [["1279673171"]]
-    assert statement("PRAGMA user_version") == [["4"]]
+    assert statement("PRAGMA user_version") == [["8"]]
     assert statement("SELECT hex(substr(header,1,8)),length(header),records,sealed FROM session_owner WHERE id=1") == [
-        ["4C4643534F574E34", "298", "0", "0"]
+        ["4C4643534F574E38", "386", "0", "0"]
     ]
     assert statement("SELECT length(scope),stage,records,remaining FROM site_owner WHERE id=1") == [["89", "0", "0", "0"]]
     assert len(statement("PRAGMA table_info(session_owner)")) == 12
@@ -76,6 +76,13 @@ else:
     assert len(statement("PRAGMA table_info(directory_roots)")) == 3
     assert statement("SELECT count(*) FROM binding_sites") == [["0"]]
     assert statement("SELECT count(*) FROM directory_roots") == [["0"]]
+    assert statement("SELECT length(scope),stage,facts,jobs FROM alias_owner WHERE id=1") == [["89","0","0","0"]]
+    assert statement("SELECT table_id,scope,stage,records,bound FROM fact_owner ORDER BY table_id") == [["17",None,"0","0","0"],["18",None,"0","0","0"]]
+    assert statement("SELECT scope,stage,records,touched,zeros FROM count_owner WHERE id=1") == [[None,"0","0","0","0"]]
+    assert statement("SELECT scope,stage,pending,frames FROM release_owner WHERE id=1") == [[None,"0","0","0"]]
+    for table in ["alias_facts","alias_jobs","base_facts","parent_eligibility","canonical_counts","zero_seeds","release_jobs","release_frames"]:
+        assert statement("SELECT count(*) FROM " + table) == [["0"]]
+    assert statement("SELECT length(header)-192 FROM session_owner") == [["194"]]
     # These settings belong only to this acknowledged external test connection.
     # The production connection remains foreign_keys1/triggerdepth0 unchanged.
     assert statement("PRAGMA journal_mode=MEMORY") == [["memory"]]

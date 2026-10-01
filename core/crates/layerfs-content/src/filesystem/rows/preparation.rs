@@ -22,6 +22,10 @@ impl SpoolPreparation {
             authority: BindingAuthority::new()?,
         })
     }
+    /// Exact captured declaration count, without exposing or recreating its issuer.
+    pub const fn declared_inodes(&self) -> usize {
+        self.declaration.inodes
+    }
     /// Opaque existing source ID, available without native or body effects.
     pub fn source_id(&self) -> BindingSourceId {
         self.authority.source_id()
