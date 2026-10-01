@@ -213,3 +213,22 @@ All named cases, seven families and complete DeepSeek import/generic-locality wo
 remain open. Next: seal runtime/build identities, run one affected real-provider
 4KiB create/overwrite treatment within15s child/9.5s separate proof and publish
 exact source/counts/outcomes; cache unknown remains INELIGIBLE.
+
+## V4c1 real-provider gate COMPLETE; V4c/full goal remain incomplete
+
+Parent `1ca095a0e84167a7657445726067ca6f77169618`. One affected frozen treatment,
+real public WorkspaceApi/FUSE/SQLite/C1/C2/MinIO/C5 path, exit0 child6.869795792s,
+proof20.525584ms. Create Exec17.426792ms/Commit74.806042ms; overwrite Exec17.600875ms/
+Commit57.480875ms. Semantic/heads/parent/cleanup PASS, canonical/physical NOT_RUN,
+cache INELIGIBLE. Overwrite prepares1inode/0directories/0names,6final byte spans,
+7local source bytes; C1 reference touched/scanned1. No speed improvement claimed:
+previous packed small-case times were lower.11locator lookups remain in overwrite;
+host26GET interval still full-candidate validation. Full raw result and analysis
+committed in RESULTS-V4C1.md and v4c1-indexed-treatment/. No unchanged-arm rerun.
+
+V4c1 marked complete only for its declared dependency. Existing finite512 profile,
+full audit, cycle work, retirement, canonical/physical/Unknown, inherited import
+and all larger groups remain. Next: V4c2 certified incremental authority design,
+starting with exact role/graph facts at admitted registration and a namespace
+transition proof against a certified base; publish the concrete interface before
+replacing any validation. Root content authentication alone cannot certify names.

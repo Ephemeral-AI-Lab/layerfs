@@ -1,0 +1,14 @@
+{
+  "source": "1ca095a0e84167a7657445726067ca6f77169618",
+  "image": "sha256:0fe60544a3b770a8eac9243104e180986fe8587b314d2a844053d55f793f93c8",
+  "driver_sha256": "d797cea0f535e9933f3fd21ad48d34707cb25e6932a04a35d395fd6b54b46180",
+  "minio_sha256": "b107901fd1afe7b36165c6aa66bb027f96e2ec2b690eebe8c9376746d9a9b0df",
+  "harness_sha256": "be75c9b47f2b3d0d74d9b7f52b915e2c9119a95fb5bc459e12c3330830cd5daa",
+  "dependency_lock_sha256": "94ab50d4fe1c8a7ef1206770f17717020003c76a546c42a2b7c90d4285c9cdac",
+  "armv8_build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "workload_source_sha256": "55228f78dd679bf08fd1891bfd696c51527f0da933129f8a123158c373e4b2f5",
+  "cache": "INELIGIBLE: OS/page cache unknown",
+  "purpose": "V4c1 indexed dirty construction immediate-base treatment; one affected sample; cache INELIGIBLE; full authority audit retained",
+  "complete_child_limit_seconds": 15,
+  "separate_proof_limit_seconds": 9.5
+}

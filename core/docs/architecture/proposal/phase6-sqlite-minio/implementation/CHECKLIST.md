@@ -30,6 +30,9 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
   actual session counts and preserved full-path bytes/heads/cleanup.
 - [x] V4b: bounded multi-object packs, locator batches, admitted decode/locator
   windows, immutable object ACK/registration and exact CAS collision checking.
+- [x] V4c1 dependency: indexed dirty/name SQL rows, immediate-base file/namespace
+  construction and captured-row install; real two-head gate passed. See
+  [RESULTS-V4C1](RESULTS-V4C1.md). Speed/resource/canonical qualification unrun.
 - [ ] V4c: indexed changed catalogs, paged prepared rows, immediate-base C1 edits
   and filesystem COW; incremental certified publication validation, bounded source
   retirement, import/mount with inherited immutable data. No whole-workspace scan
@@ -54,6 +57,7 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 - [ ] Final owning locked checks, source/binary/image/provider seals, per-commit
   production LOC and checkpoint comments on #294; major results linked from #293.
 
-Current action: V4c indexed changed catalogs and immediate-base file/namespace
-construction with certified incremental publication and inherited reads. Every larger group remains incomplete. Use meaningful submilestones;
-retain failed attempts and keep one concrete next action across continuations.
+Current action: V4c2 certified incremental authority design, beginning with exact
+role/graph facts at admitted registration and a namespace transition proof against
+a certified base. Freeze concrete interfaces before replacing validation. Full
+V4c and every larger group remain incomplete; preserve one concrete next action.
