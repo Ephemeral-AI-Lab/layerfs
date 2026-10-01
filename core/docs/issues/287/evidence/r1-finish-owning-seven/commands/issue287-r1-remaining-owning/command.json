@@ -1,0 +1,26 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-first-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "construction_layout",
+    "--test",
+    "construction_reset",
+    "--test",
+    "factory_profiles",
+    "--test",
+    "owned_canonical",
+    "--test",
+    "save_working",
+    "--test",
+    "mapping_cache"
+  ],
+  "exit": 101,
+  "wall_ns": 4905510334
+}

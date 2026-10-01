@@ -1,0 +1,17 @@
+{
+  "label": "empty",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "verified_empty"
+  ],
+  "exit": 0,
+  "wall_ns": 1609411292
+}

@@ -1,0 +1,30 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running tests/pack_capacity.rs (core/target/r1-seven-owning/debug/deps/pack_capacity-ef01623f3ef25a4b)
+
+running 4 tests
+test decoded_group_spare_capacity_replacement_and_crossing_use_actual_owned_capacity ... ok
+test padded_16mib_row_copies_only_validated_used_bytes_and_held_vec_owns_that_allocation ... ok
+test real_resolver_crosses_4mib_by_capacity_and_large_current_body_is_a_separate_last_owner ... FAILED
+test invalid_used_width_and_hidden_publication_refuse_before_used_buffer_allocation ... FAILED
+
+failures:
+
+---- real_resolver_crosses_4mib_by_capacity_and_large_current_body_is_a_separate_last_owner stdout ----
+
+thread 'real_resolver_crosses_4mib_by_capacity_and_large_current_body_is_a_separate_last_owner' panicked at crates/layerfs-storage/tests/pack_capacity.rs:197:68:
+called `Result::unwrap()` on an `Err` value: Integrity("group extent")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- invalid_used_width_and_hidden_publication_refuse_before_used_buffer_allocation stdout ----
+
+thread 'invalid_used_width_and_hidden_publication_refuse_before_used_buffer_allocation' panicked at crates/layerfs-storage/tests/pack_capacity.rs:125:33:
+called `Result::unwrap()` on an `Err` value: PoisonError { .. }
+
+
+failures:
+    invalid_used_width_and_hidden_publication_refuse_before_used_buffer_allocation
+    real_resolver_crosses_4mib_by_capacity_and_large_current_body_is_a_separate_last_owner
+
+test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+error: test failed, to rerun pass `-p layerfs-storage --test pack_capacity`

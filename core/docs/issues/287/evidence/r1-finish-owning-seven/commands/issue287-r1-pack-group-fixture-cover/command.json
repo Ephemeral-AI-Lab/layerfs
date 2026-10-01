@@ -1,0 +1,25 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "pack_capacity",
+    "--",
+    "--skip",
+    "decoded_group_spare_capacity_replacement_and_crossing_use_actual_owned_capacity",
+    "--skip",
+    "padded_16mib_row_copies_only_validated_used_bytes_and_held_vec_owns_that_allocation"
+  ],
+  "exit": 0,
+  "wall_ns": 3501428042,
+  "source_change": {
+    "core/crates/layerfs-storage/tests/pack_capacity.rs": "4532358bad07ec83ec1f2e31f138c412a87250af78063f34bd938c44005aaa17"
+  },
+  "cause": "independentv16 directoryencodedlength isgroupbytesused-40, notabsoluteendused"
+}

@@ -1,0 +1,11 @@
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.81s
+     Running tests/file_drafts.rs (core/target/r1-seven-owning/debug/deps/file_drafts-9f3cdeb4b3767753)
+
+running 3 tests
+test actual_metadata_commit_unknown_retains_its_owner_and_aborts_separate_known_content_save ... ok
+test no_op_and_malformed_actual_extent_body_do_not_bypass_draft_terminal_custody ... ok
+test configured_16_and_48mib_real_edits_select_profile6_before_body_and_return_after_cleanup ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.62s
+

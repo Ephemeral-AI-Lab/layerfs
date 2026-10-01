@@ -1,0 +1,11 @@
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.79s
+     Running tests/verified_empty.rs (core/target/r1-seven-owning/debug/deps/verified_empty-ba1980bf70fc113d)
+
+running 3 tests
+test all_zero_stage_uses_exact_wire_eof_and_normal_c5_root_without_native_scratch ... ok
+test lying_tag_trailing_data_and_scope_preserve_prior_stage_and_create_no_native_owner ... ok
+test directory_and_binding_zero_do_not_classify_one_existing_file_row_as_all_zero ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "native_purposes",
+    "authenticated_catalog_refill_crosses_general_saturation_and_two_actual_held_saves",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit": 0,
+  "wall_ns": 4011931084,
+  "source_change": {
+    "core/crates/layerfs-server/tests/native_purposes.rs": "66c81e1dd97fb362bacde4e977b48c9dd76b6f46b9c319e7d3abf4de81be5d4b"
+  },
+  "cause": "explicit7release removesownedfiles; continuingactualAuthoritydirectory persistsuntilFactorydrop; live8frozenvectorwillassertchargedidlethenexplicitdrain"
+}

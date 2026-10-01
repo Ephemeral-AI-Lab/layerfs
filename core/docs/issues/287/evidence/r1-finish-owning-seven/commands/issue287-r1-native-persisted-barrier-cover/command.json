@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "native_purposes",
+    "authenticated_catalog_refill_crosses_general_saturation_and_two_actual_held_saves",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit": 101,
+  "wall_ns": 3341761791,
+  "source_change": {
+    "core/crates/layerfs-server/tests/native_purposes.rs": "fb866440b31398157e57756bffd46b8715b1c6c2e6b007cda25e45588953f081"
+  },
+  "cause": "clientSource readiness predatesServerSave; acknowledgedactualpersistedfirstSave beforesecondconstructor removesfixturebirthrace"
+}

@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-bridge",
+    "--test",
+    "native_purposes",
+    "--",
+    "--skip",
+    "literal_closed_hello_vectors_preserve_v1_and_bind_three_v2_purposes"
+  ],
+  "exit": 0,
+  "wall_ns": 6825764291,
+  "source_change": {
+    "core/crates/layerfs-bridge/src/adapters/native/protocol/frame.rs": "6272f16b68041ebc70de9247b39f1712c4f4e6a2394002610da6b7a2d94d4444",
+    "core/crates/layerfs-bridge/tests/native_purposes.rs": "7ebaf776e655e560a822f9520328aeb0c357b9a44c27a11e3f5c36a7d8c16e5a"
+  },
+  "cause": "frame length grammar must include exact4-byte purpose HELLO; oversize first Begin reaches bounded receiver"
+}

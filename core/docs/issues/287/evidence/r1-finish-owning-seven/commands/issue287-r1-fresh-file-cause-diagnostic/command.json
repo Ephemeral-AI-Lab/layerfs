@@ -1,0 +1,25 @@
+{
+  "kind": "DIAGNOSTIC",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "file_drafts",
+    "actual_metadata_commit_unknown_retains_its_owner_and_aborts_separate_known_content_save",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit": 101,
+  "wall_ns": 5336035958,
+  "source_change": {
+    "core/crates/layerfs-server/src/service/error.rs": "1c499950f60b2c531dda57936f0d31777fd1e1fdd044620fd25c3f68c1f084c7"
+  },
+  "purpose": "observeoriginaltypedfreshFileSavefailure; notspeed/stabilitysample"
+}

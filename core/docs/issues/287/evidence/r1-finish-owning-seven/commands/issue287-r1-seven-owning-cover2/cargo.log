@@ -1,0 +1,42 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-storage)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-content)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-bridge)
+warning: constant `NAMESPACE_PREFETCH` is never used
+   --> crates/layerfs-storage/src/construction_state/graph_layout.rs:134:7
+    |
+134 | const NAMESPACE_PREFETCH: usize = GraphMemory::control_bytes()
+    |       ^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: constant `NAMESPACE_ALIAS` is never used
+   --> crates/layerfs-storage/src/construction_state/graph_layout.rs:141:7
+    |
+141 | const NAMESPACE_ALIAS: usize = ALIAS_PHASE + FACT_PERSISTENT + HOT_FACTS + RAW_PRODUCER;
+    |       ^^^^^^^^^^^^^^^
+
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-server)
+warning: unused import: `content`
+  --> crates/layerfs-server/src/service/save/catalog.rs:10:33
+   |
+10 |     error::{catalog as failure, content, storage},
+   |                                 ^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `layerfs-server` (lib) generated 1 warning (run `cargo fix --lib -p layerfs-server` to apply 1 suggestion)
+warning: `layerfs-storage` (lib) generated 2 warnings
+error[E0308]: mismatched types
+   --> crates/layerfs-storage/tests/namespace_occupation.rs:224:17
+    |
+224 |                 parentseal.facts.records as i64
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `u64`, found `i64`
+    |
+help: you can convert an `i64` to a `u64` and panic if the converted value doesn't fit
+    |
+224 |                 (parentseal.facts.records as i64).try_into().unwrap()
+    |                 +                               +++++++++++++++++++++
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `layerfs-storage` (test "namespace_occupation") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

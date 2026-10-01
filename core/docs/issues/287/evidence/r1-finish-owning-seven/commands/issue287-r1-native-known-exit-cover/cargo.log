@@ -1,0 +1,27 @@
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.26s
+     Running tests/native_purposes.rs (core/target/r1-seven-owning/debug/deps/native_purposes-935c9be9f345e984)
+
+running 1 test
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+selected SQLite: library=/usr/lib/libsqlite3.dylib version=3.51.0 source=2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+
+thread 'authenticated_catalog_refill_crosses_general_saturation_and_two_actual_held_saves' panicked at crates/layerfs-server/tests/native_purposes.rs:274:5:
+assertion failed: !std::fs::read_dir(&temp.0).unwrap().any(|e|
+            e.unwrap().file_name().to_string_lossy().starts_with(".lfcs-"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+layerfs-server acceptor summary accepted=9 admitted=9 live_at_stop=7 peak_live=7 reaped=9 capacity_dropped=0 capacity=4 elapsed_ms=587 error=None
+test authenticated_catalog_refill_crosses_general_saturation_and_two_actual_held_saves ... FAILED
+
+failures:
+
+failures:
+    authenticated_catalog_refill_crosses_general_saturation_and_two_actual_held_saves
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.63s
+
+error: test failed, to rerun pass `-p layerfs-server --test native_purposes`

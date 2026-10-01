@@ -1,0 +1,28 @@
+   Compiling libproc v0.14.11
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-bridge)
+warning: unused import: `Read`
+  --> crates/layerfs-bridge/tests/native_purposes.rs:15:16
+   |
+15 |     io::{self, Read},
+   |                ^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `layerfs-bridge` (test "native_purposes") generated 1 warning
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-telemetry)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-content)
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-sandbox)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-history)
+error[E0080]: evaluation of constant value failed
+   --> crates/layerfs-storage/src/construction_state/graph_layout.rs:145:5
+    |
+145 |     assert!(NAMESPACE_GRAPH <= GRAPH_WORKING_BYTES);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the evaluated program panicked at 'assertion failed: NAMESPACE_GRAPH <= GRAPH_WORKING_BYTES', crates/layerfs-storage/src/construction_state/graph_layout.rs:145:5
+    |
+    = note: this error originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+For more information about this error, try `rustc --explain E0080`.
+error: could not compile `layerfs-storage` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

@@ -1,0 +1,20 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "file_drafts"
+  ],
+  "exit": 0,
+  "wall_ns": 2749693083,
+  "source_change": {
+    "core/crates/layerfs-server/tests/support/prepared_binding.rs": "580a685aaccadb38d27fceeff26cc13c15aaccaff60f1559f07ffa602ccc6025"
+  },
+  "cause": "fixturecontentSave requires actualcontract response_bytes0; history/read retainMAX_FILE"
+}

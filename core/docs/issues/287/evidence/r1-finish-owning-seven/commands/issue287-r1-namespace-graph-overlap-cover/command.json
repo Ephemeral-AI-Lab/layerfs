@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "namespace_occupation",
+    "unix::graph_growth_counts_live_parent_rows_before_graph_commit",
+    "--",
+    "--exact"
+  ],
+  "exit": 0,
+  "wall_ns": 2601772709,
+  "source_change": {
+    "core/crates/layerfs-storage/tests/namespace_occupation.rs": "a8f7e1392c6d914b68da4b598b54c835bf78b31f204f02b237cb533ee3f1fbbe"
+  },
+  "cause": "oneallowedgraphseed60 +liveparent32 exceeds91 beforeeffect; zeroallowedseeds fixture neverreachedoccupancy"
+}

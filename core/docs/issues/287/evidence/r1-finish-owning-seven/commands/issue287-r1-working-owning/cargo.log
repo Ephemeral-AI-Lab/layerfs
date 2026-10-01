@@ -1,0 +1,45 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running tests/owned_canonical.rs (core/target/r1-owning/debug/deps/owned_canonical-6ec44c9559621ae1)
+
+running 2 tests
+test actual_store_result_outlives_provider_and_strict8_refuses_before_open ... ok
+test output_permits_moves_copies_and_actual_data_release ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/save_working.rs (core/target/r1-owning/debug/deps/save_working-7804e058b283605b)
+
+running 9 tests
+test actual_shared_reader_unknown_save_birth_retains_prepared_connection_codec_and_credit ... ok
+test actual_unknown_cleanup_retains_connection_owner_and_original_class ... ok
+test real_final_publication_unknown_retains_acquired_owner_and_acknowledged_save_id ... ok
+test selected_singleton_and_standard_use_exact_captured_classes ... ok
+test actual_hardlink_aliases_share_capacity_before_save_birth_and_known_drop_refunds ... ok
+test actual_full_pooled_btree_three_copies_fit_prospective_pair_classes ... ok
+test real_save_publication_transfers_actual_index_ownership_after_known_commit ... ok
+test real_codec_and_index_copy_requested_allocations_release_before_credit ... FAILED
+test configured_four_sql_slots_do_not_bypass_two_standard_working_grants ... FAILED
+
+failures:
+
+---- real_codec_and_index_copy_requested_allocations_release_before_credit stdout ----
+
+thread 'real_codec_and_index_copy_requested_allocations_release_before_credit' panicked at crates/layerfs-storage/tests/save_working.rs:166:5:
+assertion `left == right` failed: real captured native-wrapper/index/codec Rust owners dropped
+  left: 128
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- configured_four_sql_slots_do_not_bypass_two_standard_working_grants stdout ----
+
+thread 'configured_four_sql_slots_do_not_bypass_two_standard_working_grants' panicked at crates/layerfs-storage/tests/save_working.rs:81:45:
+called `Result::unwrap()` on an `Err` value: PoisonError { .. }
+
+
+failures:
+    configured_four_sql_slots_do_not_bypass_two_standard_working_grants
+    real_codec_and_index_copy_requested_allocations_release_before_credit
+
+test result: FAILED. 7 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+error: test failed, to rerun pass `-p layerfs-storage --test save_working`

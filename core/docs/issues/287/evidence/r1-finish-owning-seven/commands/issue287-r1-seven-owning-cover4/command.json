@@ -1,0 +1,42 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "namespace_fact_records",
+    "--test",
+    "effective_graph_reference",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "construction_facts",
+    "--test",
+    "namespace_occupation",
+    "--test",
+    "pack_capacity",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "verified_empty",
+    "--test",
+    "file_drafts",
+    "--test",
+    "catalog_admission",
+    "-p",
+    "layerfs-bridge",
+    "--test",
+    "native_purposes"
+  ],
+  "exit": 101,
+  "wall_ns": 8672938750,
+  "source_change": {
+    "core/crates/layerfs-storage/src/construction_state/graph_layout.rs": "1cfc8a58aa6f951f1497fa90f796077477ce59d3fa5242519189996eb849790d"
+  },
+  "cause": "new public compiled phase field documentation"
+}

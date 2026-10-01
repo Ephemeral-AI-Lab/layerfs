@@ -1,0 +1,20 @@
+{
+  "label": "factory7",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "factory_profiles",
+    "unix::profile7_exact_capacity_suffix_and_seven_row_reset_after_final_consumers",
+    "--",
+    "--exact"
+  ],
+  "exit": 0,
+  "wall_ns": 1552943000
+}

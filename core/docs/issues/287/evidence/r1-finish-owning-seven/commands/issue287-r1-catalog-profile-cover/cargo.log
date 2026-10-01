@@ -1,0 +1,11 @@
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.44s
+     Running tests/catalog_admission.rs (core/target/r1-seven-owning/debug/deps/catalog_admission-ca6d7075056c0650)
+
+running 3 tests
+test store_aliases_share_save_capacity_and_one_actual_scratch_domain ... ok
+test scratch_unknown_preserves_publication_and_reports_owned_save_cleanup ... ok
+test allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 1.29s
+

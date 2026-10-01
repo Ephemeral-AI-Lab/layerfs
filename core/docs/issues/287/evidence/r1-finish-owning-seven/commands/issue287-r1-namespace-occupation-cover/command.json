@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "namespace_occupation",
+    "--",
+    "--skip",
+    "unix::alias_planning_checks_base_overlap_before_actual_fact_and_job_writes"
+  ],
+  "exit": 101,
+  "wall_ns": 3050330500,
+  "source_change": {
+    "core/crates/layerfs-storage/tests/namespace_occupation.rs": "f20e5c8b84392c254b4b7394a25f2d59636503348db0cda71186eb84dc704e53"
+  },
+  "cause": "bindactualBaseFactsubject beforeParent; aliascapturedthirdfield declaredsites notbytes"
+}

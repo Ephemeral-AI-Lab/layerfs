@@ -1,0 +1,28 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "construction_facts",
+    "--test",
+    "namespace_occupation",
+    "--test",
+    "pack_capacity",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "native_purposes"
+  ],
+  "exit": 101,
+  "wall_ns": 3420881416,
+  "source_change": {
+    "core/crates/layerfs-server/tests/native_purposes.rs": "02dccedc6238169cc01618e7d3e799a31ca1f0ffba5fe1d3a00cd47adaf1b886"
+  },
+  "cause": "useexistingactualproviderexternalobservation insteadundeclareddependency; currentStageChangesvalue"
+}

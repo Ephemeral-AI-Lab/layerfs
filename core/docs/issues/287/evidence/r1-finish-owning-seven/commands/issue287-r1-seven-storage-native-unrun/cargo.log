@@ -1,0 +1,46 @@
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-server)
+error[E0433]: failed to resolve: use of undeclared crate or module `rusqlite`
+  --> crates/layerfs-server/tests/native_purposes.rs:84:53
+   |
+84 |         rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+   |                                                     ^^^^^^^^ use of undeclared crate or module `rusqlite`
+
+error[E0433]: failed to resolve: use of undeclared crate or module `rusqlite`
+  --> crates/layerfs-server/tests/native_purposes.rs:84:9
+   |
+84 |         rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+   |         ^^^^^^^^ use of undeclared crate or module `rusqlite`
+   |
+help: consider importing this struct
+   |
+3  + use layerfs_bridge::adapters::native::connection::Connection;
+   |
+help: if you import `Connection`, refer to it directly
+   |
+84 -         rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+84 +         Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+   |
+
+error[E0308]: mismatched types
+   --> crates/layerfs-server/tests/native_purposes.rs:176:80
+    |
+176 |                         Operation::HistoryCommand(HistoryCommand::StageChanges(Box::new(header))),
+    |                                                   ---------------------------- ^^^^^^^^^^^^^^^^ expected `PreparedChanges`, found `Box<PreparedChanges>`
+    |                                                   |
+    |                                                   arguments to this enum variant are incorrect
+    |
+    = note: expected struct `layerfs_bridge::contract::PreparedChanges`
+               found struct `Box<layerfs_bridge::contract::PreparedChanges>`
+note: tuple variant defined here
+   --> /Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-bridge/src/contract/history.rs:237:5
+    |
+237 |     StageChanges(PreparedChanges),
+    |     ^^^^^^^^^^^^
+help: consider unboxing the value
+    |
+176 |                         Operation::HistoryCommand(HistoryCommand::StageChanges(*Box::new(header))),
+    |                                                                                +
+
+Some errors have detailed explanations: E0308, E0433.
+For more information about an error, try `rustc --explain E0308`.
+error: could not compile `layerfs-server` (test "native_purposes") due to 3 previous errors

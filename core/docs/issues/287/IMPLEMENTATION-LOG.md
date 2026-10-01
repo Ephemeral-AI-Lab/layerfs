@@ -1935,3 +1935,19 @@ Current active closure replaces stale pause text under assigned scope. All new
 product source remains developing/unverified and excluded from this docs commit.
 Current next action: publish targets then integrate/verify the coherent real-route
 R1 source; cache/pool/quanta changes require this publication first.
+
+
+## Cumulative immutable owning component proofs — 2026-10-01
+
+R1-FINISH-OWNING-CHECKPOINT-20261001.md and its append-only command/source
+evidence retain all component PASS/nonpass/diagnostic results and corrections.
+Private7 effective roots4/facts5, C2facts4/namespaceoverlap4, Serverdraft3/empty3,
+pack4/cache/closedgraphlayout/private7reset and actualnative2heldSave refill
+checks now have covering PASS. Existing earlier passing bodies are reused. The
+native proof's two other General sockets areidle, notoccupiedReaders; strictApple
+hardlimit0/provider/30MiBshape/physical/originalR1protected gates remain unqualified.
+No product source in this docs/evidence checkpoint is staged or published. Exact
+production totals153673/reference65417/Core88256 unchanged by this commit.
+Current next action: owning coherentprivate8/Small/NoDraft/pool/engine/native
+proofs, source publication and mandatedfinalCore checks, then sixcandidate arms
+once/separateproof. No candidate sample, R2-R7 work or #288 edit.

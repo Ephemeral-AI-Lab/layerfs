@@ -1,0 +1,33 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "catalog_admission",
+    "--",
+    "--skip",
+    "server_scratch_unknown_child",
+    "--skip",
+    "catalog_grants_read_only_authority_and_wrong_prepared_scope_refuse_before_save",
+    "--skip",
+    "aliases_share_one_catalog_allowance_and_distinct_provider_cells_keep_their_own",
+    "--skip",
+    "declared_directory_state_over_capacity_refuses_before_scratch_save_or_body",
+    "--skip",
+    "scratch_parent_refusal_precedes_save_and_body_without_a_hidden_retry",
+    "--skip",
+    "real_catalog_contention_and_range_exhaustion_preserve_allocator_and_content"
+  ],
+  "exit": 0,
+  "wall_ns": 6479095042,
+  "source_change": {
+    "core/crates/layerfs-server/tests/catalog_admission.rs": "5cd7af1685d96e89a020b7d99a5900454701a28e09670ba991b20dad269d5e0f"
+  },
+  "cause": "actual Server selection isprivate7 header346; old external expectedprofile4"
+}

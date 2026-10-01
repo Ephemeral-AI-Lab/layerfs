@@ -1,0 +1,27 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "construction_facts",
+    "--test",
+    "namespace_occupation",
+    "--test",
+    "pack_capacity",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "verified_empty",
+    "--test",
+    "file_drafts"
+  ],
+  "exit": 101,
+  "wall_ns": 3552697667,
+  "source": "seven retained immutable source afterearliercatalogexit; unrunbodies"
+}

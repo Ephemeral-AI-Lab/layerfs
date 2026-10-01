@@ -1,0 +1,11 @@
+   Compiling nix v0.31.3
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-bridge)
+    Finished `test` profile [optimized + debuginfo] target(s) in 6.59s
+     Running tests/native_purposes.rs (core/target/r1-seven-owning/debug/deps/native_purposes-d1497138f886d5f7)
+
+running 2 tests
+test malformed_and_oversized_first_hello_never_reach_class_admission ... ok
+test real_peer_selection_precedes_requests_and_client_refuses_wrong_surface_before_upload ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.01s
+

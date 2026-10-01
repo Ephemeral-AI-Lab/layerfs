@@ -1,0 +1,10 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.15s
+     Running tests/pack_capacity.rs (core/target/r1-seven-owning/debug/deps/pack_capacity-ef01623f3ef25a4b)
+
+running 2 tests
+test invalid_used_width_and_hidden_publication_refuse_before_used_buffer_allocation ... ok
+test real_resolver_crosses_4mib_by_capacity_and_large_current_body_is_a_separate_last_owner ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.16s
+

@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "native_purposes",
+    "authenticated_catalog_refill_crosses_general_saturation_and_two_actual_held_saves",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit": 101,
+  "wall_ns": 5286652500,
+  "source_change": {
+    "core/crates/layerfs-server/tests/native_purposes.rs": "28d7507ed073e082208a8a324680235f59333bbddc244e27dc13a33442ce8f34"
+  },
+  "cause": "refillalreadycompletedwith2heldSaves; releaseeachthroughknownresponseavoidsnewconcurrentSQL-wavefixtureownershiprace; noretry"
+}

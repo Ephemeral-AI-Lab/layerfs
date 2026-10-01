@@ -1,0 +1,35 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.13s
+     Running tests/file_drafts.rs (core/target/r1-seven-owning/debug/deps/file_drafts-9f3cdeb4b3767753)
+
+running 3 tests
+test actual_metadata_commit_unknown_retains_its_owner_and_aborts_separate_known_content_save ... FAILED
+test configured_16_and_48mib_real_edits_select_profile6_before_body_and_return_after_cleanup ... FAILED
+test no_op_and_malformed_actual_extent_body_do_not_bypass_draft_terminal_custody ... FAILED
+
+failures:
+
+---- actual_metadata_commit_unknown_retains_its_owner_and_aborts_separate_known_content_save stdout ----
+
+thread 'actual_metadata_commit_unknown_retains_its_owner_and_aborts_separate_known_content_save' panicked at crates/layerfs-server/tests/file_drafts.rs:111:10:
+called `Result::unwrap()` on an `Err` value: Failure { code: InvalidInput, unknown: false, cleanup: None, history: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- configured_16_and_48mib_real_edits_select_profile6_before_body_and_return_after_cleanup stdout ----
+
+thread 'configured_16_and_48mib_real_edits_select_profile6_before_body_and_return_after_cleanup' panicked at crates/layerfs-server/tests/file_drafts.rs:135:33:
+called `Result::unwrap()` on an `Err` value: PoisonError { .. }
+
+---- no_op_and_malformed_actual_extent_body_do_not_bypass_draft_terminal_custody stdout ----
+
+thread 'no_op_and_malformed_actual_extent_body_do_not_bypass_draft_terminal_custody' panicked at crates/layerfs-server/tests/file_drafts.rs:172:33:
+called `Result::unwrap()` on an `Err` value: PoisonError { .. }
+
+
+failures:
+    actual_metadata_commit_unknown_retains_its_owner_and_aborts_separate_known_content_save
+    configured_16_and_48mib_real_edits_select_profile6_before_body_and_return_after_cleanup
+    no_op_and_malformed_actual_extent_body_do_not_bypass_draft_terminal_custody
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+error: test failed, to rerun pass `-p layerfs-server --test file_drafts`

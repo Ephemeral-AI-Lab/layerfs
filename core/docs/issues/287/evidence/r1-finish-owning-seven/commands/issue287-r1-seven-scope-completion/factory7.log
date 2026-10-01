@@ -1,0 +1,9 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.82s
+     Running tests/factory_profiles.rs (core/target/r1-seven-owning/debug/deps/factory_profiles-0d5e69ffb6cb7066)
+
+running 1 test
+test unix::profile7_exact_capacity_suffix_and_seven_row_reset_after_final_consumers ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.02s
+

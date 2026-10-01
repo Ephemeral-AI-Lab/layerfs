@@ -1,0 +1,11 @@
+   Compiling cc v1.4.5
+   Compiling blake3 v1.8.5
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-first-source/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 11.87s
+     Running tests/mapping_cache.rs (core/target/r1-owning/debug/deps/mapping_cache-9c79d272277510ec)
+
+running 1 test
+test edit_node_loading_retains_at_most_the_requested_count_and_checks_summary_first ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.01s
+

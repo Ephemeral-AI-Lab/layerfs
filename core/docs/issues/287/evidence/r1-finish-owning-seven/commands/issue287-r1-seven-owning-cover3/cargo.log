@@ -1,0 +1,14 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-storage)
+error: missing documentation for a struct field
+  --> crates/layerfs-storage/src/construction_state/graph_layout.rs:68:5
+   |
+68 |     pub maximum_namespace_graph_bytes: usize,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+note: the lint level is defined here
+  --> crates/layerfs-storage/src/lib.rs:18:9
+   |
+18 | #![deny(missing_docs)]
+   |         ^^^^^^^^^^^^
+
+error: could not compile `layerfs-storage` (lib) due to 1 previous error

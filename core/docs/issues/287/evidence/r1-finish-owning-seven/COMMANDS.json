@@ -1,0 +1,304 @@
+{
+  "kind": "append-only owning andlabelleddiagnostic command ledger; notbenchmarkreceipts",
+  "product_published": false,
+  "final_source_verified": false,
+  "commands": [
+    {
+      "path": "commands/issue287-r1-bridge-hello-cover/command.json",
+      "command_sha256": "5f3411a32ab828035613f949b900e8020a6b4582424589e333b593ff661ec061",
+      "exit": 0,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 6825764291,
+      "raw_log": "commands/issue287-r1-bridge-hello-cover/cargo.log",
+      "log_sha256": "b545165e58d3149fa524b052c56a8d01eadc0f8b2cdfcf7efa03b3ec787a4685"
+    },
+    {
+      "path": "commands/issue287-r1-catalog-profile-cover/command.json",
+      "command_sha256": "02c4510d35f73569fdc85b589fb05b41c253d93a075ced25c115fbffcf56ef95",
+      "exit": 0,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 6479095042,
+      "raw_log": "commands/issue287-r1-catalog-profile-cover/cargo.log",
+      "log_sha256": "1e2c3a6d94016986621f6941c70b740df6d6dc1c3b3bf413f79e82ffd7de5601"
+    },
+    {
+      "path": "commands/issue287-r1-file-drafts-fixture-cover/command.json",
+      "command_sha256": "48ef76d6db4e1bc982a9f493acd417e644bd6f88387b3d433262d4a51a567e01",
+      "exit": 0,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 2749693083,
+      "raw_log": "commands/issue287-r1-file-drafts-fixture-cover/cargo.log",
+      "log_sha256": "52198bfc751ade4e96858d0b1c68806d38ab0f5cf0a249d162a92fb8249c966e"
+    },
+    {
+      "path": "commands/issue287-r1-first-owning/command.json",
+      "command_sha256": "5810eea0968d39912828049f361e99083f5acab939e00d7422de5a527313941f",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 10558278916,
+      "raw_log": "commands/issue287-r1-first-owning/cargo.log",
+      "log_sha256": "9b8c48010df8ac1a90e81ebd5e4fbff88184457842fe42bdeeff9db7713d1ed4"
+    },
+    {
+      "path": "commands/issue287-r1-first-owning-correction1/command.json",
+      "command_sha256": "399655da97204c7dc0cb0539def56ab1d76f56579ad6231d6c899682b3508481",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 7710671375,
+      "raw_log": "commands/issue287-r1-first-owning-correction1/cargo.log",
+      "log_sha256": "51faf2301ae926287d824e068b14b7fc8e2fe79e45ba8c7dc99824b3e6e45774"
+    },
+    {
+      "path": "commands/issue287-r1-first-owning-correction2/command.json",
+      "command_sha256": "21e678fe4eb18880ad51c3c43e0624cf0235a7f6edd749eece378d93513f72fe",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 10313985583,
+      "raw_log": "commands/issue287-r1-first-owning-correction2/cargo.log",
+      "log_sha256": "9b46f8ec704ea9344e56909ae3be91581c4f94e516f0ca3338dd062f55fc808b"
+    },
+    {
+      "path": "commands/issue287-r1-first-owning-correction3/command.json",
+      "command_sha256": "cc72f82cd25240c348ee91d390fc8cc37c80606aac68ea3c7cb411992a6f00ba",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 7851388333,
+      "raw_log": "commands/issue287-r1-first-owning-correction3/cargo.log",
+      "log_sha256": "de60f969ae44cfa874185f9ba33ef231200c52734692b15e93c49c3bd93bfe22"
+    },
+    {
+      "path": "commands/issue287-r1-fresh-file-cause-diagnostic/command.json",
+      "command_sha256": "7d4eeb9b6c015d609931a0b288ba7cbba266942b3967cf4b8f4d94777b18ddfb",
+      "exit": 101,
+      "kind": "DIAGNOSTIC",
+      "wall_ns": 5336035958,
+      "raw_log": "commands/issue287-r1-fresh-file-cause-diagnostic/cargo.log",
+      "log_sha256": "9e087d3700c0d58f7a4c0e0a9a0c27033ad97884cb8368fa05317457404d3db7"
+    },
+    {
+      "path": "commands/issue287-r1-mapping-cover/command.json",
+      "command_sha256": "80512b79a02f4a3a0d8009d97bfa79f2ecc5341b7550ca9153d0488ec936a19b",
+      "exit": 0,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 12575513167,
+      "raw_log": "commands/issue287-r1-mapping-cover/cargo.log",
+      "log_sha256": "da3094a04ef4ac07261e3984cab2390aa2d8c8e719dc6dfe7140ca3511fc2881"
+    },
+    {
+      "path": "commands/issue287-r1-namespace-graph-overlap-cover/command.json",
+      "command_sha256": "1fd04e3a0d3d48bff2bc5c0bc6ccabd91fddc63c2088ead11f048d1fd03f3549",
+      "exit": 0,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 2601772709,
+      "raw_log": "commands/issue287-r1-namespace-graph-overlap-cover/cargo.log",
+      "log_sha256": "1f48b24d5669d8bc06a10e3d5bd559451829ecd771ca390815e673323a7abd00"
+    },
+    {
+      "path": "commands/issue287-r1-namespace-occupation-cover/command.json",
+      "command_sha256": "e9f5e3fb4e1d7838340188a65674a0c3d9587a59efd4ad2d34fb33e90bb1098b",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 3050330500,
+      "raw_log": "commands/issue287-r1-namespace-occupation-cover/cargo.log",
+      "log_sha256": "3ae006aa199b99690f5e81c98dab74867fb1ed2e0bd3efc634ffc2edbcd0b7e5"
+    },
+    {
+      "path": "commands/issue287-r1-native-cleanup-scope-cover/command.json",
+      "command_sha256": "7fbcfa17e116f4ef814c69b0afb0c8a4d20eddbb8c5f019b41009baa1bbb3fc9",
+      "exit": 0,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 4011931084,
+      "raw_log": "commands/issue287-r1-native-cleanup-scope-cover/cargo.log",
+      "log_sha256": "bf9820640bacb038b750d2d2834ff79ebe871f2aa0651202540d438185d4525a"
+    },
+    {
+      "path": "commands/issue287-r1-native-file-identity-cover/command.json",
+      "command_sha256": "0fd7e495bf96081db0f1c12c5df8c9f2943ea38c92720b8c4b1d3b2f1edb559f",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 4859042583,
+      "raw_log": "commands/issue287-r1-native-file-identity-cover/cargo.log",
+      "log_sha256": "6b6fdc77090fe26b515929fecaf0786cc296ebfd5f8c2c754da85f5c4741efd2"
+    },
+    {
+      "path": "commands/issue287-r1-native-known-exit-cover/command.json",
+      "command_sha256": "b590544c2ff2ec05a5055d3ab9f8b79c595617bfad9bc563ca064458b4d95af1",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 5286652500,
+      "raw_log": "commands/issue287-r1-native-known-exit-cover/cargo.log",
+      "log_sha256": "3ec88a36e2b3573511138a74650d0eab4ccadc57532ea750db950021c0f51f8c"
+    },
+    {
+      "path": "commands/issue287-r1-native-persisted-barrier-cover/command.json",
+      "command_sha256": "f145570c319a52119c66e111fbcd48a46e75d0755f702f60a4252a4064df2582",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 3341761791,
+      "raw_log": "commands/issue287-r1-native-persisted-barrier-cover/cargo.log",
+      "log_sha256": "b78113b83b1b023bd7e45d4b0dd49b3ac1740e9c08b9212d48cf7c85adc76b3d"
+    },
+    {
+      "path": "commands/issue287-r1-pack-group-fixture-cover/command.json",
+      "command_sha256": "b4baa9027e63e11303ea6c9168dbb699c8ebc034415fdb4abdf41d22203eaaaf",
+      "exit": 0,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 3501428042,
+      "raw_log": "commands/issue287-r1-pack-group-fixture-cover/cargo.log",
+      "log_sha256": "04640054409ea0b239005d2f5c7a383f60ba7f2e0539812abbb984c9d95f689b"
+    },
+    {
+      "path": "commands/issue287-r1-remaining-owning/command.json",
+      "command_sha256": "f451937aed56364a17b4be4336c6c36a2d22c3584846c99e5b39f6495fc80692",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 4905510334,
+      "raw_log": "commands/issue287-r1-remaining-owning/cargo.log",
+      "log_sha256": "768b8a756faa45d1fe49a18a0924dbb2d9fb0297e4936aa585a3b5e34c096148"
+    },
+    {
+      "path": "commands/issue287-r1-seven-final-scoped-owners/pack.json",
+      "command_sha256": "b65c25ac292d2c8afdd0abe4b332eb95389ae618c884738268d6a3b9d2f148f9",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 918102833,
+      "raw_log": "commands/issue287-r1-seven-final-scoped-owners/pack.log",
+      "log_sha256": "fb64fffacb50ae2a8431888f70dd1d15bedfb493c8c55da2c2d808e89c5de7fb"
+    },
+    {
+      "path": "commands/issue287-r1-seven-other-unrun-owning/command.json",
+      "command_sha256": "356cce00aba2ae58525edb318d10e8aaf4c9c345d3c81129dafe911f62e2e6db",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 3552697667,
+      "raw_log": "commands/issue287-r1-seven-other-unrun-owning/cargo.log",
+      "log_sha256": "ecd200efed923415b79b722d05c823acde2b9e69ecfc4a8c85170de4821b799c"
+    },
+    {
+      "path": "commands/issue287-r1-seven-owning/command.json",
+      "command_sha256": "37a7daf3da8b35fcdc29cc527143011e61275ca9b894a46f7b74afbec191c8e2",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 15383264083,
+      "raw_log": "commands/issue287-r1-seven-owning/cargo.log",
+      "log_sha256": "532d213b6446fe7987aab9443cb11182e64cbf8589f0cf236bf33a3d65af3911"
+    },
+    {
+      "path": "commands/issue287-r1-seven-owning-cover1/command.json",
+      "command_sha256": "c314312a226e931b2073b8cb24a8a9a1ca9a06546cc4398090b8144f6aff4092",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 12353940584,
+      "raw_log": "commands/issue287-r1-seven-owning-cover1/cargo.log",
+      "log_sha256": "674cbff7caab8196fb933a34e51904fe17515bd13fdd61a7cbdab434e5fa845c"
+    },
+    {
+      "path": "commands/issue287-r1-seven-owning-cover2/command.json",
+      "command_sha256": "8bfda86f9d10525c82b2f26a6e3a6be8483672989fd81e791c9b9fdb01fda1f6",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 8745838208,
+      "raw_log": "commands/issue287-r1-seven-owning-cover2/cargo.log",
+      "log_sha256": "f6230868dc5166b372a3eff47978ee7e1c8ffa20bc13dc368d207054267debd0"
+    },
+    {
+      "path": "commands/issue287-r1-seven-owning-cover3/command.json",
+      "command_sha256": "135a5bed0783ebed0111f64bb6f129ae23cc9d4d1f6be1bfcb524b2e4483e05e",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 793537458,
+      "raw_log": "commands/issue287-r1-seven-owning-cover3/cargo.log",
+      "log_sha256": "a1cf37b4a99ca4004496182110264d9cc2b32ba9e1f1e4f7b95cc8984388bc81"
+    },
+    {
+      "path": "commands/issue287-r1-seven-owning-cover4/command.json",
+      "command_sha256": "b1d783a727a8b26bce37cd6e62b461d2ef21676f777b5a711b708524ce6c8758",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 8672938750,
+      "raw_log": "commands/issue287-r1-seven-owning-cover4/cargo.log",
+      "log_sha256": "d184baf214c45359694e1f322a88c2738230df1b8a7690f16c7e6b171a0013f9"
+    },
+    {
+      "path": "commands/issue287-r1-seven-scope-completion/cache.json",
+      "command_sha256": "9c6ec2df337d1940126b456fb40d85e0081f8815d1e94ac575e41133b5c5dbbb",
+      "exit": 0,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 4399757750,
+      "raw_log": "commands/issue287-r1-seven-scope-completion/cache.log",
+      "log_sha256": "c49246f546451bd91aa21da4998f417b873a7f32c0c7fad7e2e9707285a73b4f"
+    },
+    {
+      "path": "commands/issue287-r1-seven-scope-completion/empty.json",
+      "command_sha256": "532934f9ae3dfb6e535a385654b23ca644f061a7f6d0b90cde3f2e0021f359d3",
+      "exit": 0,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 1609411292,
+      "raw_log": "commands/issue287-r1-seven-scope-completion/empty.log",
+      "log_sha256": "c53bded646faf61f997422355339c720c629bf0424b27212574a2eece8175ea1"
+    },
+    {
+      "path": "commands/issue287-r1-seven-scope-completion/factory7.json",
+      "command_sha256": "e5b488b17fd73d2fa4b0d3e7cd14ade1199a31cf30d1342e3837acbf906abe77",
+      "exit": 0,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 1552943000,
+      "raw_log": "commands/issue287-r1-seven-scope-completion/factory7.log",
+      "log_sha256": "df6f36544270eb21e3dbed62adb875929c7a855914cf93e4dead9aaf0574a32a"
+    },
+    {
+      "path": "commands/issue287-r1-seven-scope-completion/layout.json",
+      "command_sha256": "dba7c86da4ae732a1581ca2cf0faafad386570316eaa04d72dce2bfdccf75e6e",
+      "exit": 0,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 1395654500,
+      "raw_log": "commands/issue287-r1-seven-scope-completion/layout.log",
+      "log_sha256": "ec2e450b4ece02b6cb633be6077641122032a814e0d75733d2de2ccef440ee4c"
+    },
+    {
+      "path": "commands/issue287-r1-seven-storage-native-cover1/command.json",
+      "command_sha256": "a40d575fb152b992d7d81a8f7c1f2891d40460cce9bf383c452e8e52784f4246",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 3420881416,
+      "raw_log": "commands/issue287-r1-seven-storage-native-cover1/cargo.log",
+      "log_sha256": "1d0731bfc20efbbf9f1ee3c234583862e764c54bfcdf01975d7226e778fcd0f7"
+    },
+    {
+      "path": "commands/issue287-r1-seven-storage-native-unrun/command.json",
+      "command_sha256": "95e1424c2a64611538015ec1c325f711852c0ac323837c38339744dcf7a28a2d",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 661791458,
+      "raw_log": "commands/issue287-r1-seven-storage-native-unrun/cargo.log",
+      "log_sha256": "6c2e426501fca8eee3aef745770c322479f94a844ed128bb56553612cc2009df"
+    },
+    {
+      "path": "commands/issue287-r1-seven-storage-unrun-only/command.json",
+      "command_sha256": "fcaf35aa716ed94248b0b832e3b33696e1dae58afb9e80a2df6834dac2f7d901",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 14069809000,
+      "raw_log": "commands/issue287-r1-seven-storage-unrun-only/cargo.log",
+      "log_sha256": "b4e8f920e757774aa84bb09a3cae90548c5b07aa803a9a4e0c94e5bf9e71e094"
+    },
+    {
+      "path": "commands/issue287-r1-seven-unrun-owning/command.json",
+      "command_sha256": "7422137a551f2ce7da08f5d9b74673843673c7c278d41b07bd22aee53acfa5ea",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 2868947916,
+      "raw_log": "commands/issue287-r1-seven-unrun-owning/cargo.log",
+      "log_sha256": "e239eafe44e8c83238e2f7c71a3378c4e2c4ac66bcf7e0a93a3c83c4ac491cbb"
+    },
+    {
+      "path": "commands/issue287-r1-working-owning/command.json",
+      "command_sha256": "65859581e1a83474a7478db986f3392df67931715832bb908d54c05d4a9b9f53",
+      "exit": 101,
+      "kind": "OWNING_CHECK",
+      "wall_ns": 3605524750,
+      "raw_log": "commands/issue287-r1-working-owning/cargo.log",
+      "log_sha256": "b8e6c6b1d86452005c8791ddcb7f780ce6675a33ec1c0d70d7ee25bf8500d6fd"
+    }
+  ]
+}

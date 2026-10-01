@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--test",
+    "native_purposes",
+    "authenticated_catalog_refill_crosses_general_saturation_and_two_actual_held_saves",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit": 101,
+  "wall_ns": 4859042583,
+  "source_change": {
+    "core/crates/layerfs-server/tests/native_purposes.rs": "8b54302979984ca161a1c62d66c154db8b0729416a3d52b9007c36be51c0d71e"
+  },
+  "cause": "oneactualStoreauthoritydirectory contains2independentnativefiles; countownedfiles, notparentdirectories"
+}

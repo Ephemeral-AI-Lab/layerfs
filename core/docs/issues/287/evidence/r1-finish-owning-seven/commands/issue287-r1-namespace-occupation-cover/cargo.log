@@ -1,0 +1,24 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.53s
+     Running tests/namespace_occupation.rs (core/target/r1-seven-owning/debug/deps/namespace_occupation-7165a44295af0695)
+
+running 3 tests
+test unix::sites_and_existing_base_share_single_aggregate_before_insert ... ok
+test unix::graph_growth_counts_live_parent_rows_before_graph_commit ... FAILED
+test unix::roots_growth_includes_live_sealed_parent_rows_before_root_insert ... ok
+
+failures:
+
+---- unix::graph_growth_counts_live_parent_rows_before_graph_commit stdout ----
+
+thread 'unix::graph_growth_counts_live_parent_rows_before_graph_commit' panicked at crates/layerfs-storage/tests/namespace_occupation.rs:168:74:
+called `Result::unwrap()` on an `Err` value: CapacityExceeded { what: "construction scratch graph seeds", limit: 0, actual: 1 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    unix::graph_growth_counts_live_parent_rows_before_graph_commit
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p layerfs-storage --test namespace_occupation`

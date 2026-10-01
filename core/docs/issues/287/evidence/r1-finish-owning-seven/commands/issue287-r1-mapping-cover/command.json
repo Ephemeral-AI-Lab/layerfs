@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-first-source/core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "mapping_cache",
+    "edit_node_loading_retains_at_most_the_requested_count_and_checks_summary_first",
+    "--",
+    "--exact"
+  ],
+  "exit": 0,
+  "wall_ns": 12575513167,
+  "source_change": {
+    "core/crates/layerfs-content/src/file/edit/tree.rs": "494ca1a08b014e6a3b3c5e6ca44ec05a954d84c260a19cebda3483c278d1cc6e"
+  },
+  "cause": "defer cache retention until exact supplied node summary validation"
+}

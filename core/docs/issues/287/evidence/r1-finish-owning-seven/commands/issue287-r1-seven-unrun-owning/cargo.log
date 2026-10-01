@@ -1,0 +1,96 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-bridge)
+   Compiling layerfs-api-core v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-api/core)
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-sandbox)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.75s
+     Running tests/effective_graph_reference.rs (core/target/r1-seven-owning/debug/deps/effective_graph_reference-737fcda3771e73a1)
+
+running 4 tests
+test new_graph_caller_preserves_every_sealed_v1_construction_root_and_object_set ... ok
+test new_graph_caller_preserves_every_sealed_v1_update_root_and_object_set ... ok
+test supplied_alias_graph_route_preserves_all_independent_v1_roots_and_object_sets ... ok
+test supplied_namespace_route_preserves_all_independent_v1_roots_and_object_sets ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/namespace_fact_records.rs (core/target/r1-seven-owning/debug/deps/namespace_fact_records-1c21e930ce0824ef)
+
+running 5 tests
+test actual_table_and_original_base_are_distinct_full_width_subject_fields ... ok
+test held_fact_page_credit_lasts_until_the_actual_records_owner_drops ... ok
+test absent_fact_value_and_scoped_scalar_key_have_literal_nontruncated_encoding ... ok
+test live_sites_facts_aliases_graph_and_roots_share_one_exact_byte_limit ... ok
+test independently_framed_ordered_absence_transcript_requires_exact_counts_and_last_key ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/verified_empty.rs (core/target/r1-seven-owning/debug/deps/verified_empty-3fcdb62b658edf74)
+
+running 3 tests
+test source_requires_declared_zero_and_actual_eof_without_issuing_another_id ... ok
+test another_issued_source_and_any_real_growth_refuse_without_native_effects ... ok
+test checked_empty_selective_scc_and_roots_finish_exact_transcripts ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/catalog_admission.rs (core/target/r1-seven-owning/debug/deps/catalog_admission-ca6d7075056c0650)
+
+running 9 tests
+test server_scratch_unknown_child ... ok
+test catalog_grants_read_only_authority_and_wrong_prepared_scope_refuse_before_save ... ok
+test aliases_share_one_catalog_allowance_and_distinct_provider_cells_keep_their_own ... ok
+test declared_directory_state_over_capacity_refuses_before_scratch_save_or_body ... ok
+test store_aliases_share_save_capacity_and_one_actual_scratch_domain ... FAILED
+test scratch_parent_refusal_precedes_save_and_body_without_a_hidden_retry ... ok
+test real_catalog_contention_and_range_exhaustion_preserve_allocator_and_content ... ok
+test allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused ... FAILED
+test scratch_unknown_preserves_publication_and_reports_owned_save_cleanup ... FAILED
+
+failures:
+
+---- store_aliases_share_save_capacity_and_one_actual_scratch_domain stdout ----
+
+thread 'store_aliases_share_save_capacity_and_one_actual_scratch_domain' panicked at crates/layerfs-server/tests/catalog_admission.rs:246:13:
+assertion `left == right` failed
+  left: 7
+ right: 4
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused stdout ----
+
+thread 'allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused' panicked at crates/layerfs-server/tests/catalog_admission.rs:246:13:
+assertion `left == right` failed
+  left: 7
+ right: 4
+
+---- scratch_unknown_preserves_publication_and_reports_owned_save_cleanup stdout ----
+
+thread 'scratch_unknown_preserves_publication_and_reports_owned_save_cleanup' panicked at crates/layerfs-server/tests/catalog_admission.rs:1431:9:
+child locked=false: stdout=
+running 1 test
+test server_scratch_unknown_child ... FAILED
+
+failures:
+
+failures:
+    server_scratch_unknown_child
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.23s
+
+ stderr=
+thread 'server_scratch_unknown_child' panicked at crates/layerfs-server/tests/catalog_admission.rs:246:13:
+assertion `left == right` failed
+  left: 7
+ right: 4
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+
+failures:
+    allocator_finishes_with_two_real_save_slots_occupied_and_a_third_save_is_refused
+    scratch_unknown_preserves_publication_and_reports_owned_save_cleanup
+    store_aliases_share_save_capacity_and_one_actual_scratch_domain
+
+test result: FAILED. 6 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+error: test failed, to rerun pass `-p layerfs-server --test catalog_admission`

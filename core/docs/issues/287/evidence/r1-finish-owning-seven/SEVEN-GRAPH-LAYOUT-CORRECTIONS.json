@@ -1,0 +1,11 @@
+{
+  "core/crates/layerfs-bridge/tests/native_purposes.rs": "ab16d83fac596285bedf5a69c256d1669ab15359c0f57479391ea8cc002cc987",
+  "core/crates/layerfs-storage/src/construction_state/graph_build.rs": "d914b133f97217f7d9567c816371e1596b3c151b8c3553677a014d3dfe9ddd6c",
+  "core/crates/layerfs-storage/src/construction_state/graph_layout.rs": "abead7f9ab3d36c3bf64ee7851c1142ca97331b86c589d1c228f4be1b4549e16",
+  "core/crates/layerfs-storage/src/construction_state/graph_pop.rs": "620e2de98f58c1808a56b52eda9e3b9eb555be6810eb47b60911e49dfe83a124",
+  "core/crates/layerfs-storage/src/construction_state/graph_retire.rs": "27dcdb28a3f911463ec90e6de4a83bdaea43b0daf47556da546914bdaf528b42",
+  "core/crates/layerfs-storage/src/construction_state/graph_solve.rs": "0a91acffa2673f149e5862e1d53b7b0a1b1f45df69e1ac4fb93e36358cb65cda",
+  "core/crates/layerfs-storage/src/construction_state/graph_state.rs": "12e2844bbe09ac0df0936c7d93c6599f92377325c633a1cc69d42f41a6fa5737",
+  "core/crates/layerfs-storage/tests/construction_layout.rs": "bdde00c8d4985fc34a28c31c5f014911399c2d4f765875c7da20798b37da05f8",
+  "core/crates/layerfs-storage/tests/mapping_cache.rs": "6b33f1188d9c6d82b0b7715350edc66733bf71f555643690b98311bc98ba1010"
+}

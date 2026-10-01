@@ -1,0 +1,49 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running tests/construction_layout.rs (core/target/r1-owning/debug/deps/construction_layout-b865a4db4599f1aa)
+
+running 2 tests
+test exact_scoped_credit_refuses_before_allocation_and_follows_last_owner ... ok
+test maximum_real_attempt_and_held_result_are_charged_before_sql_and_actual_drop ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/construction_reset.rs (core/target/r1-owning/debug/deps/construction_reset-127f4c58891f570c)
+
+running 6 tests
+test unix::original_profile_one_completion_retains_its_explicit_logical_semantics ... ok
+test unix::fixed_reset_commit_unknown_keeps_terminal_seal_and_original_native_credit ... ok
+test unix::real_shared_reader_commit_unknown_retains_exact_window_and_denies_reset_refund ... ok
+test unix::corrupted_terminal_row_preserves_partial_continuation_and_refuses_reset ... ok
+test unix::current_completion_route_performs_retirement_reset_before_return ... ok
+test unix::exact_boundary_and_maximum_windows_reset_all_fixed_rows_without_refund ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+     Running tests/factory_profiles.rs (core/target/r1-owning/debug/deps/factory_profiles-0d5e69ffb6cb7066)
+
+running 2 tests
+test unix::profile6_exact_captured_header_scope_and_version ... ok
+test unix::profile5_exact_header_and_fifth_known_clean_row ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/mapping_cache.rs (core/target/r1-owning/debug/deps/mapping_cache-cc39d86254f99fe1)
+
+running 1 test
+test real_store_cache_crossing_preserves_independent_bytes_and_requested_owners ... FAILED
+
+failures:
+
+---- real_store_cache_crossing_preserves_independent_bytes_and_requested_owners stdout ----
+
+thread 'real_store_cache_crossing_preserves_independent_bytes_and_requested_owners' panicked at crates/layerfs-storage/tests/mapping_cache.rs:216:5:
+cache table requested layouts: Snapshot { live: [328496, 0, 11432], peak: [328496, 5120, 17136], peak_total: 345048, requested_total: 676684, allocation_events: 135, reallocations: 0, largest_request: 11400, overflow: false }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    real_store_cache_crossing_preserves_independent_bytes_and_requested_owners
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-storage --test mapping_cache`

@@ -1,0 +1,73 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-first-source/core/crates/layerfs-storage)
+warning: methods `final_len`, `base_len`, `len`, and `edits` are never used
+  --> crates/layerfs-storage/tests/../../layerfs-content/tests/support/edits.rs:57:18
+   |
+19 | impl Edits {
+   | ---------- methods in this implementation
+...
+57 |     pub const fn final_len(&self) -> u64 {
+   |                  ^^^^^^^^^
+...
+62 |     pub const fn base_len(&self) -> u64 {
+   |                  ^^^^^^^^
+...
+67 |     pub fn len(&self) -> usize {
+   |            ^^^
+...
+72 |     pub fn edits(&self) -> &[Edit] {
+   |            ^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: `layerfs-storage` (test "construction_drafts") generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.87s
+     Running tests/alias_frontier.rs (core/target/r1-owning/debug/deps/alias_frontier-7ecc3e199fabdba3)
+
+running 4 tests
+test combined_sites_frontier_capacity_refuses_before_new_discovery_and_foreign_scope_does_not_consume_owner ... ok
+test repeated_discoveries_preserve_independent_legacy_stack_priority_and_follow_once ... ok
+test literal_name255_and_ordinal_zero_progress_oracle_and_closed_phase_refusals ... ok
+test wide_and_deep_discovery_and_retirement_are_independent_of_resident_stack_depth ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/draft_authority.rs (core/target/r1-owning/debug/deps/draft_authority-2d77e5376d9100e9)
+
+running 5 tests
+test pending_acceptance_cannot_be_reserved_or_replayed_twice ... ok
+test private_decoded_body_has_independent_framing_and_exact_reference_refusal ... ok
+test repeated_links_stale_jobs_and_selected_root_retire_exactly_once ... ok
+test complete_byte_quota_is_refused_before_the_offending_resident_creation ... ok
+test complete_record_quota_is_refused_before_the_offending_resident_creation ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/mapping_cache.rs (core/target/r1-owning/debug/deps/mapping_cache-d0efe63a87079c71)
+
+running 10 tests
+test parent_child_summary_mismatch_is_refused_before_current_batch_output_or_retention ... ok
+test public_insert_checks_actual_owner_width_context_and_replacement_before_retention ... ok
+test default_matches_new_and_zero_still_means_one_page ... ok
+test repeated_leaf_demands_keep_logical_order_but_acquire_one_immutable_id_once ... ok
+test mixed_hit_wave_keeps_its_evicted_hit_and_fetches_only_the_31_missing_pages ... ok
+test a_later_bad_batch_leaves_only_the_previously_validated_output_prefix ... ok
+test edit_node_loading_retains_at_most_the_requested_count_and_checks_summary_first ... FAILED
+test entire_navigation_batch_is_checked_before_any_leaf_retention_or_payload_output ... ok
+test requested_limits_smaller_than_a_wave_preserve_grouped_and_exact_ascending_reads ... ok
+test ordinary_65_page_edit_preserves_independent_new_bytes_and_selected_old_file ... ok
+
+failures:
+
+---- edit_node_loading_retains_at_most_the_requested_count_and_checks_summary_first stdout ----
+
+thread 'edit_node_loading_retains_at_most_the_requested_count_and_checks_summary_first' panicked at crates/layerfs-content/tests/mapping_cache.rs:448:5:
+assertion failed: cache.is_empty()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    edit_node_loading_retains_at_most_the_requested_count_and_checks_summary_first
+
+test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p layerfs-content --test mapping_cache`

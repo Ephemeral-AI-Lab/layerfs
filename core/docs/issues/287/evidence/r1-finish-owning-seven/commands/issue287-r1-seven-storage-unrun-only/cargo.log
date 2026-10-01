@@ -1,0 +1,50 @@
+   Compiling nix v0.31.3
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-telemetry)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 12.62s
+     Running tests/construction_facts.rs (core/target/r1-seven-owning/debug/deps/construction_facts-e79ef25d9ed9a8ff)
+
+running 4 tests
+test unix::real_sql_commit_unknown_retains_proposed_exact_base_facts_and_denies_cleanup ... ok
+test unix::combined_fact_parent_limit_refuses_before_second_insert_and_preserves_prior_metadata ... ok
+test unix::foreign_actual_table_refusal_does_not_consume_original_subject_and_empty_eof_is_header_only ... ok
+test unix::selected_presence_absence_parent_bound_counts_literal_keys_and_cross128_pages ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/namespace_occupation.rs (core/target/r1-seven-owning/debug/deps/namespace_occupation-7165a44295af0695)
+
+running 4 tests
+test unix::sites_and_existing_base_share_single_aggregate_before_insert ... FAILED
+test unix::graph_growth_counts_live_parent_rows_before_graph_commit ... FAILED
+test unix::roots_growth_includes_live_sealed_parent_rows_before_root_insert ... FAILED
+test unix::alias_planning_checks_base_overlap_before_actual_fact_and_job_writes ... ok
+
+failures:
+
+---- unix::sites_and_existing_base_share_single_aggregate_before_insert stdout ----
+
+thread 'unix::sites_and_existing_base_share_single_aggregate_before_insert' panicked at crates/layerfs-storage/tests/namespace_occupation.rs:65:18:
+called `Result::unwrap()` on an `Err` value: Integrity("alias captured aggregate class")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- unix::graph_growth_counts_live_parent_rows_before_graph_commit stdout ----
+
+thread 'unix::graph_growth_counts_live_parent_rows_before_graph_commit' panicked at crates/layerfs-storage/tests/namespace_occupation.rs:163:42:
+called `Result::unwrap()` on an `Err` value: Integrity("parent selected base subject")
+
+---- unix::roots_growth_includes_live_sealed_parent_rows_before_root_insert stdout ----
+
+thread 'unix::roots_growth_includes_live_sealed_parent_rows_before_root_insert' panicked at crates/layerfs-storage/tests/namespace_occupation.rs:198:42:
+called `Result::unwrap()` on an `Err` value: Integrity("parent selected base subject")
+
+
+failures:
+    unix::graph_growth_counts_live_parent_rows_before_graph_commit
+    unix::roots_growth_includes_live_sealed_parent_rows_before_root_insert
+    unix::sites_and_existing_base_share_single_aggregate_before_insert
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-storage --test namespace_occupation`

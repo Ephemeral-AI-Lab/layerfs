@@ -1,0 +1,407 @@
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-first-source/core/crates/layerfs-content)
+warning: method `view` is never used
+  --> crates/layerfs-content/src/filesystem/state/parent_access.rs:84:19
+   |
+83 | impl EligibilityAuthority {
+   | ------------------------- method in this implementation
+84 |     pub(crate) fn view(&self) -> EligibilityView<'_> {
+   |                   ^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-first-source/core/crates/layerfs-storage)
+error[E0277]: `*mut ZSTD_CCtx_s` cannot be sent between threads safely
+   --> crates/layerfs-storage/src/cas/working.rs:94:18
+    |
+94  | static REGISTRY: OnceLock<Mutex<Registry>> = OnceLock::new();
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^ `*mut ZSTD_CCtx_s` cannot be sent between threads safely
+    |
+    = help: within `Option<RetainedSave>`, the trait `Send` is not implemented for `*mut ZSTD_CCtx_s`
+note: required because it appears within the type `CompressionWorkspace`
+   --> crates/layerfs-storage/src/encoding/codec.rs:198:12
+    |
+198 | pub struct CompressionWorkspace {
+    |            ^^^^^^^^^^^^^^^^^^^^
+note: required because it appears within the type `MutationOwner`
+   --> crates/layerfs-storage/src/cas/owner.rs:446:12
+    |
+446 | pub struct MutationOwner {
+    |            ^^^^^^^^^^^^^
+note: required because it appears within the type `RetainedSave`
+   --> crates/layerfs-storage/src/cas/working.rs:96:17
+    |
+96  | pub(crate) enum RetainedSave {
+    |                 ^^^^^^^^^^^^
+note: required because it appears within the type `Option<RetainedSave>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/option.rs:572:10
+    = note: required for `Unique<Option<RetainedSave>>` to implement `Send`
+note: required because it appears within the type `Box<Option<RetainedSave>>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `working::Slot`
+   --> crates/layerfs-storage/src/cas/working.rs:72:6
+    |
+72  | enum Slot {
+    |      ^^^^
+note: required because it appears within the type `PhantomData<working::Slot>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/marker.rs:757:12
+note: required because it appears within the type `alloc::raw_vec::RawVec<working::Slot>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/raw_vec.rs:76:19
+note: required because it appears within the type `Vec<working::Slot>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/vec/mod.rs:397:12
+note: required because it appears within the type `State`
+   --> crates/layerfs-storage/src/cas/working.rs:80:8
+    |
+80  | struct State {
+    |        ^^^^^
+    = note: required for `Mutex<State>` to implement `Sync`
+note: required because it appears within the type `working::Shared`
+   --> crates/layerfs-storage/src/cas/working.rs:87:19
+    |
+87  | pub(crate) struct Shared {
+    |                   ^^^^^^
+    = note: required for `std::sync::Weak<working::Shared>` to implement `Send`
+    = note: required because it appears within the type `(std::sync::Weak<Mutex<()>>, std::sync::Weak<working::Shared>)`
+note: required because it appears within the type `PhantomData<(std::sync::Weak<Mutex<()>>, std::sync::Weak<working::Shared>)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/marker.rs:757:12
+note: required because it appears within the type `alloc::raw_vec::RawVec<(std::sync::Weak<Mutex<()>>, std::sync::Weak<working::Shared>)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/raw_vec.rs:76:19
+note: required because it appears within the type `Vec<(std::sync::Weak<Mutex<()>>, std::sync::Weak<working::Shared>)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/vec/mod.rs:397:12
+    = note: required for `Mutex<Vec<(std::sync::Weak<Mutex<()>>, std::sync::Weak<working::Shared>)>>` to implement `Sync`
+    = note: 1 redundant requirement hidden
+    = note: required for `OnceLock<Mutex<Vec<(std::sync::Weak<Mutex<()>>, std::sync::Weak<working::Shared>)>>>` to implement `Sync`
+    = note: shared static variables must have a type that implements `Sync`
+
+error[E0277]: `*mut ZSTD_DCtx_s` cannot be sent between threads safely
+   --> crates/layerfs-storage/src/cas/working.rs:94:18
+    |
+94  | static REGISTRY: OnceLock<Mutex<Registry>> = OnceLock::new();
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^ `*mut ZSTD_DCtx_s` cannot be sent between threads safely
+    |
+    = help: within `Option<RetainedSave>`, the trait `Send` is not implemented for `*mut ZSTD_DCtx_s`
+note: required because it appears within the type `DecompressionWorkspace`
+   --> crates/layerfs-storage/src/encoding/codec.rs:463:12
+    |
+463 | pub struct DecompressionWorkspace {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+note: required because it appears within the type `MutationOwner`
+   --> crates/layerfs-storage/src/cas/owner.rs:446:12
+    |
+446 | pub struct MutationOwner {
+    |            ^^^^^^^^^^^^^
+note: required because it appears within the type `RetainedSave`
+   --> crates/layerfs-storage/src/cas/working.rs:96:17
+    |
+96  | pub(crate) enum RetainedSave {
+    |                 ^^^^^^^^^^^^
+note: required because it appears within the type `Option<RetainedSave>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/option.rs:572:10
+    = note: required for `Unique<Option<RetainedSave>>` to implement `Send`
+note: required because it appears within the type `Box<Option<RetainedSave>>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs:231:12
+note: required because it appears within the type `working::Slot`
+   --> crates/layerfs-storage/src/cas/working.rs:72:6
+    |
+72  | enum Slot {
+    |      ^^^^
+note: required because it appears within the type `PhantomData<working::Slot>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/marker.rs:757:12
+note: required because it appears within the type `alloc::raw_vec::RawVec<working::Slot>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/raw_vec.rs:76:19
+note: required because it appears within the type `Vec<working::Slot>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/vec/mod.rs:397:12
+note: required because it appears within the type `State`
+   --> crates/layerfs-storage/src/cas/working.rs:80:8
+    |
+80  | struct State {
+    |        ^^^^^
+    = note: required for `Mutex<State>` to implement `Sync`
+note: required because it appears within the type `working::Shared`
+   --> crates/layerfs-storage/src/cas/working.rs:87:19
+    |
+87  | pub(crate) struct Shared {
+    |                   ^^^^^^
+    = note: required for `std::sync::Weak<working::Shared>` to implement `Send`
+    = note: required because it appears within the type `(std::sync::Weak<Mutex<()>>, std::sync::Weak<working::Shared>)`
+note: required because it appears within the type `PhantomData<(std::sync::Weak<Mutex<()>>, std::sync::Weak<working::Shared>)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/marker.rs:757:12
+note: required because it appears within the type `alloc::raw_vec::RawVec<(std::sync::Weak<Mutex<()>>, std::sync::Weak<working::Shared>)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/raw_vec.rs:76:19
+note: required because it appears within the type `Vec<(std::sync::Weak<Mutex<()>>, std::sync::Weak<working::Shared>)>`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/vec/mod.rs:397:12
+    = note: required for `Mutex<Vec<(std::sync::Weak<Mutex<()>>, std::sync::Weak<working::Shared>)>>` to implement `Sync`
+    = note: 1 redundant requirement hidden
+    = note: required for `OnceLock<Mutex<Vec<(std::sync::Weak<Mutex<()>>, std::sync::Weak<working::Shared>)>>>` to implement `Sync`
+    = note: shared static variables must have a type that implements `Sync`
+
+error[E0277]: `WorkingAuthority` doesn't implement `Debug`
+   --> crates/layerfs-storage/src/cas/store.rs:217:5
+    |
+196 | #[derive(Clone, Debug)]
+    |                 ----- in this derive macro expansion
+...
+217 |     working: super::working::WorkingAuthority,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `WorkingAuthority` cannot be formatted using `{:?}`
+    |
+    = help: the trait `Debug` is not implemented for `WorkingAuthority`
+    = note: add `#[derive(Debug)]` to `WorkingAuthority` or manually `impl Debug for WorkingAuthority`
+    = note: this error originates in the derive macro `Debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `IndexLease` doesn't implement `Debug`
+   --> crates/layerfs-storage/src/cas/store.rs:219:5
+    |
+196 | #[derive(Clone, Debug)]
+    |                 ----- in this derive macro expansion
+...
+219 |     index_credit: Arc<super::working::IndexLease>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `IndexLease` cannot be formatted using `{:?}`
+    |
+    = help: the trait `Debug` is not implemented for `IndexLease`
+    = note: add `#[derive(Debug)]` to `IndexLease` or manually `impl Debug for IndexLease`
+    = help: the trait `Debug` is implemented for `Arc<T, A>`
+    = note: this error originates in the derive macro `Debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/src/construction_state/alias_index.rs:71:39
+    |
+71  |     let current = match (row.get::<_, Option<u64>>(7)?, row.get::<_, Option<u64>>(8)?) {
+    |                              ---      ^^^^^^^^^^^ the trait `FromSql` is not implemented for `u64`
+    |                              |
+    |                              required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+    = note: required for `Option<u64>` to implement `FromSql`
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/src/construction_state/alias_index.rs:71:70
+    |
+71  |     let current = match (row.get::<_, Option<u64>>(7)?, row.get::<_, Option<u64>>(8)?) {
+    |                                                             ---      ^^^^^^^^^^^ the trait `FromSql` is not implemented for `u64`
+    |                                                             |
+    |                                                             required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+    = note: required for `Option<u64>` to implement `FromSql`
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/src/construction_state/alias_index.rs:81:25
+    |
+81  |         || row.get::<_, u64>(3)? != t.sequence
+    |                ---      ^^^ the trait `FromSql` is not implemented for `u64`
+    |                |
+    |                required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/src/construction_state/alias_index.rs:82:25
+    |
+82  |         || row.get::<_, u64>(4)? != t.facts
+    |                ---      ^^^ the trait `FromSql` is not implemented for `u64`
+    |                |
+    |                required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/src/construction_state/alias_index.rs:83:25
+    |
+83  |         || row.get::<_, u64>(5)? != t.jobs
+    |                ---      ^^^ the trait `FromSql` is not implemented for `u64`
+    |                |
+    |                required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/src/construction_state/alias_index.rs:84:25
+    |
+84  |         || row.get::<_, u64>(6)? != t.expanded
+    |                ---      ^^^ the trait `FromSql` is not implemented for `u64`
+    |                |
+    |                required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/src/construction_state/alias_index.rs:87:25
+    |
+87  |         || row.get::<_, u64>(10)? != t.remaining
+    |                ---      ^^^ the trait `FromSql` is not implemented for `u64`
+    |                |
+    |                required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/src/construction_state/alias_index.rs:88:25
+    |
+88  |         || row.get::<_, Option<u64>>(11)? != t.after
+    |                ---      ^^^^^^^^^^^ the trait `FromSql` is not implemented for `u64`
+    |                |
+    |                required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+    = note: required for `Option<u64>` to implement `FromSql`
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/src/construction_state/alias_session.rs:111:35
+    |
+111 |             let serial: u64 = row.get(1)?;
+    |                                   ^^^ the trait `FromSql` is not implemented for `u64`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-storage/src/construction_state/alias_session.rs:239:61
+    |
+239 |                     let fact=AliasFact {serial,sequence:row.get(1)?,status:row.get(2)?}; fact.check()?;
+    |                                                             ^^^ the trait `FromSql` is not implemented for `u64`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `layerfs-storage` (lib) due to 14 previous errors
+warning: build failed, waiting for other jobs to finish...
+warning: `layerfs-content` (lib) generated 1 warning

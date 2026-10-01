@@ -1,0 +1,31 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-storage)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-seven-source/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.87s
+     Running tests/native_purposes.rs (core/target/r1-seven-owning/debug/deps/native_purposes-230a64665ada7b2a)
+
+running 3 tests
+test literal_closed_hello_vectors_preserve_v1_and_bind_three_v2_purposes ... ok
+test real_peer_selection_precedes_requests_and_client_refuses_wrong_surface_before_upload ... FAILED
+test malformed_and_oversized_first_hello_never_reach_class_admission ... FAILED
+
+failures:
+
+---- real_peer_selection_precedes_requests_and_client_refuses_wrong_surface_before_upload stdout ----
+
+thread 'real_peer_selection_precedes_requests_and_client_refuses_wrong_surface_before_upload' panicked at crates/layerfs-bridge/tests/native_purposes.rs:132:22:
+called `Result::unwrap()` on an `Err` value: Failure { code: Capacity, unknown: false, cleanup: None, history: None }
+
+---- malformed_and_oversized_first_hello_never_reach_class_admission stdout ----
+
+thread 'malformed_and_oversized_first_hello_never_reach_class_admission' panicked at crates/layerfs-bridge/tests/native_purposes.rs:199:18:
+called `Result::unwrap()` on an `Err` value: Failure { code: Capacity, unknown: false, cleanup: None, history: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    malformed_and_oversized_first_hello_never_reach_class_admission
+    real_peer_selection_precedes_requests_and_client_refuses_wrong_surface_before_upload
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p layerfs-bridge --test native_purposes`

@@ -1,0 +1,67 @@
+   Compiling libc v0.2.189
+   Compiling find-msvc-tools v0.1.12
+   Compiling shlex v2.0.1
+   Compiling cfg-if v1.0.4
+   Compiling pkg-config v0.3.34
+   Compiling arrayvec v0.7.8
+   Compiling arrayref v0.3.9
+   Compiling constant_time_eq v0.4.2
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-first-source/core/crates/layerfs-telemetry)
+   Compiling vcpkg v0.2.15
+   Compiling cfg_aliases v0.2.2
+   Compiling foldhash v0.2.0
+   Compiling bitflags v2.13.1
+   Compiling nix v0.31.3
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling fallible-iterator v0.3.0
+   Compiling hashbrown v0.17.1
+   Compiling smallvec v1.16.0
+   Compiling libsqlite3-sys v0.38.2
+   Compiling hashlink v0.12.2
+   Compiling jobserver v0.1.35
+   Compiling cc v1.4.5
+   Compiling rusqlite v0.40.2
+   Compiling blake3 v1.8.5
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target/r1-first-source/core/crates/layerfs-content)
+error[E0308]: mismatched types
+   --> crates/layerfs-content/src/filesystem/update.rs:260:70
+    |
+260 |                     && !unreachable.contains(state, update.parent(), parents)?
+    |                                     --------                         ^^^^^^^ expected `ParentCalls<S>`, found `Vec<_>`
+    |                                     |
+    |                                     arguments to this method are incorrect
+    |
+    = note: expected struct `ParentCalls<S>`
+               found struct `Vec<_>`
+note: method defined here
+   --> crates/layerfs-content/src/filesystem/state/parent_access.rs:47:19
+    |
+47  |     pub(crate) fn contains<S: ?Sized>(
+    |                   ^^^^^^^^
+...
+51  |         calls: ParentCalls<S>,
+    |         ---------------------
+
+error[E0308]: mismatched types
+   --> crates/layerfs-content/src/filesystem/update.rs:268:65
+    |
+268 |                 if unreachable.contains(state, update.parent(), parents)? {
+    |                                --------                         ^^^^^^^ expected `ParentCalls<S>`, found `Vec<u64>`
+    |                                |
+    |                                arguments to this method are incorrect
+    |
+    = note: expected struct `ParentCalls<S>`
+               found struct `Vec<u64>`
+note: method defined here
+   --> crates/layerfs-content/src/filesystem/state/parent_access.rs:47:19
+    |
+47  |     pub(crate) fn contains<S: ?Sized>(
+    |                   ^^^^^^^^
+...
+51  |         calls: ParentCalls<S>,
+    |         ---------------------
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `layerfs-content` (lib) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
