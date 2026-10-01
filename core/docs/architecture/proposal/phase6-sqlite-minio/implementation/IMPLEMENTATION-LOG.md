@@ -72,3 +72,18 @@ contracts only. Host locked Clippy/fmt and locked Darwin/Linux ARMv8 release bui
 PASS. Existing engine tests unchanged/reused. Full-provider treatment NOT_RUN at
 this source checkpoint; next is the single sealed create/overwrite invocation.
 All full-goal workload/locality/resource gates remain required and incomplete.
+
+## 2026-10-02 — V4a full-provider treatment passed
+
+Source `776f0f879e52e401d03f4a69301d8c076f1b2a59`; one treatment, full child
+9.209285 s, proof19.785250 ms, byte/mode/head/parent/cleanup PASS. Both Commits
+use one metadata connection; overwrite has zero connects and unchanged
+29lookup+7register+1publish calls. Actual Commit observations82.707000/67.960125 ms;
+cache INELIGIBLE, not a qualified speedup. Native deadlines/packing/construction/
+validation are unchanged. V4a transport gate complete, broader goal incomplete.
+
+Next: freeze V4b packed locators (exact group/record), bounded private pending
+canonical state, batching/read windows and real ACK/collision custody; then
+V4c SQL changed catalogs/immediate-parent edits/incremental namespace certificates.
+All three named live shapes, all seven families and complete DeepSeek/locality
+proof remain required. Genuine public SDK MinIO Init binding remains a prerequisite.

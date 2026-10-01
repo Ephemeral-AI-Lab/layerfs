@@ -1,0 +1,4 @@
+{
+  "raw_sha256": "661ce7c1c5319b6fa83ba26355a6273c2c0afed1718faaa7f4edf9a0b9bbee85",
+  "raw_utf8": "\nrunning 4 tests\ntest oversized_input_refuses_before_connection_effect ... ok\ntest wrong_reply_identity_quarantines_without_resend ... ok\ntest two_requests_share_real_authenticated_connection ... ok\ntest known_idle_rotation_opens_new_session_without_replaying_request ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.07s\n\n"
+}

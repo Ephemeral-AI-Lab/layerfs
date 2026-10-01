@@ -1,0 +1,14 @@
+{
+  "source": "776f0f879e52e401d03f4a69301d8c076f1b2a59",
+  "image": "sha256:1e516ab158368b3d8132464bbdd416b7e1962b0ce87786983e963488a8bd5628",
+  "driver_sha256": "3acb5886745571a5b5770eb34ffd5623efbf5cbd99c6c8cf9eb247bfd0bfb158",
+  "minio_sha256": "b107901fd1afe7b36165c6aa66bb027f96e2ec2b690eebe8c9376746d9a9b0df",
+  "harness_sha256": "be75c9b47f2b3d0d74d9b7f52b915e2c9119a95fb5bc459e12c3330830cd5daa",
+  "dependency_lock_sha256": "94ab50d4fe1c8a7ef1206770f17717020003c76a546c42a2b7c90d4285c9cdac",
+  "armv8_build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "workload_source_sha256": "c7f14feed14b736ad5de89607975197f6a1d92bf752bb9926feaa572baf71727",
+  "cache": "INELIGIBLE: OS/page cache unknown",
+  "purpose": "v4a-persistent-session-single-treatment",
+  "complete_child_limit_seconds": 15,
+  "separate_proof_limit_seconds": 9.5
+}

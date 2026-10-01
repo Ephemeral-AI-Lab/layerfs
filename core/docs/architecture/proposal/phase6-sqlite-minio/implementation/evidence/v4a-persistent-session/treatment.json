@@ -1,0 +1,22 @@
+{
+  "source": "776f0f879e52e401d03f4a69301d8c076f1b2a59",
+  "metadata_connections_total": 1,
+  "overwrite_new_connections": 0,
+  "overwrite_connect_ns": 0,
+  "overwrite_calls": [
+    0,
+    29,
+    7,
+    0,
+    1
+  ],
+  "overwrite_request_ns": [
+    0,
+    7971290,
+    7181709,
+    0,
+    13065875
+  ],
+  "cache": "INELIGIBLE",
+  "broader_objective": "INCOMPLETE"
+}

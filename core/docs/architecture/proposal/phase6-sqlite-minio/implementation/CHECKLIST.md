@@ -25,7 +25,7 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 ## Delivery and gates
 
 - [x] V3: one full public-SDK/kernel-FUSE/SQL/C1/C2/MinIO/C5 two-head 4 KiB path.
-- [ ] V4a: count/timing diagnostics and persistent authenticated metadata session;
+- [x] V4a: count/timing diagnostics and persistent authenticated metadata session;
   exact request IDs, EOF/version checks, bounded rotation and no resend; prove
   actual session counts and preserved full-path bytes/heads/cleanup.
 - [ ] V4b: bounded multi-object packs, locator batches, admitted decode/locator
@@ -54,6 +54,6 @@ Numbers with unknown cache/resource observations remain ineligible/incomplete.
 - [ ] Final owning locked checks, source/binary/image/provider seals, per-commit
   production LOC and checkpoint comments on #294; major results linked from #293.
 
-Current action: V4a diagnostic instrumentation, then the single session-reuse
-change. Every larger group remains incomplete. Use meaningful submilestones;
+Current action: V4b bounded multi-object packing/locator batching with exact
+ACK/private-pending/collision/read-window custody. Every larger group remains incomplete. Use meaningful submilestones;
 retain failed attempts and keep one concrete next action across continuations.
