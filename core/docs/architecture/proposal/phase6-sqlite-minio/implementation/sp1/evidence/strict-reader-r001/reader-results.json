@@ -1,0 +1,38 @@
+{
+  "provider_identity_sha256": "38f9e4ad03c6aa8eb212bd67ec52eb620457361e229b08414068763c1bdd4627",
+  "results": [
+    {
+      "test": "real_provider_reader_payload_chains_and_sql_pools",
+      "exit_code": 0,
+      "bucket": "sp1-r001-reader-0",
+      "stdout_sha256": "b89bd8e20550c8b40621d06afdf0c4cf25590a7e63c79c71d2e8548d1b86effb",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "binary_sha256": "549cf5a3fd0f1426d96ef51ffc69924c99ac2b7661ffead8acab9ea74a1beb9d",
+      "command": "<sealed strict_reader binary> real_provider_reader_payload_chains_and_sql_pools --ignored --nocapture --exact",
+      "cache_contract": "functional count diagnostics; no numeric performance eligibility or memory peak claim",
+      "source_inventory_sha256": "22b7eab398990ab13446c0c06a27afc39d53ddd97bcee71124a131f81fa2ec9c"
+    },
+    {
+      "test": "real_provider_actual_cdc_dual_use_read_orders_and_missing_domain_refusal",
+      "exit_code": 0,
+      "bucket": "sp1-r001-reader-1",
+      "stdout_sha256": "e65ed0d93fe1d9658637054193c60ec340b83afcade42a8c1be9a81a7395aa3a",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "binary_sha256": "549cf5a3fd0f1426d96ef51ffc69924c99ac2b7661ffead8acab9ea74a1beb9d",
+      "command": "<sealed strict_reader binary> real_provider_actual_cdc_dual_use_read_orders_and_missing_domain_refusal --ignored --nocapture --exact",
+      "cache_contract": "functional count diagnostics; no numeric performance eligibility or memory peak claim",
+      "source_inventory_sha256": "22b7eab398990ab13446c0c06a27afc39d53ddd97bcee71124a131f81fa2ec9c"
+    },
+    {
+      "test": "real_provider_sql_metadata_graph_retains_all_independent_canonicals",
+      "exit_code": 0,
+      "bucket": "sp1-r001-reader-2",
+      "stdout_sha256": "4b78a55f99c3bd96dd132beea4823add97943f3ad855fc0d2c19fbbcf97c9ea2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "binary_sha256": "549cf5a3fd0f1426d96ef51ffc69924c99ac2b7661ffead8acab9ea74a1beb9d",
+      "command": "<sealed strict_reader binary> real_provider_sql_metadata_graph_retains_all_independent_canonicals --ignored --nocapture --exact",
+      "cache_contract": "functional count diagnostics; no numeric performance eligibility or memory peak claim",
+      "source_inventory_sha256": "22b7eab398990ab13446c0c06a27afc39d53ddd97bcee71124a131f81fa2ec9c"
+    }
+  ]
+}

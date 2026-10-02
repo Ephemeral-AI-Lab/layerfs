@@ -9,20 +9,20 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
-use rusqlite::Connection;
+use crate::access::PackAccess;
 
 use layerfs_content::inode_leaf::{
     decode_pooled_body, rebuild_leaf, INODE_VALUE_BYTES, MAXIMUM_LEAF_ROWS,
 };
 use layerfs_content::ObjectId;
 
+use crate::access::ObjectLocation;
 use crate::encoding::codec::DecompressionWorkspace;
 use crate::encoding::pool::{delta, leaf, value_group, PoolReadCounters};
 use crate::encoding::GroupCache;
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::{group_view, parse_header, GroupCodec, PackLane};
 use crate::policy::{StorageCapacities, METADATA_DECODED_WORK_LIMIT, METADATA_RECORD_LIMIT};
-use crate::sqlite::lookup::{self, ObjectLocation};
 use crate::sqlite::pool;
 
 /// One wave's pooled reader: pack and decoded-value caches plus work counters.
@@ -87,7 +87,7 @@ impl PoolReader {
     /// Every value of one authenticated group, in ordinal order.
     pub fn group_values(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         capacities: &StorageCapacities,
         ceiling: i64,
         workspace: &mut DecompressionWorkspace,
@@ -107,7 +107,7 @@ impl PoolReader {
     /// bytes, instead of materialising the whole group per row.
     pub fn group_value(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         capacities: &StorageCapacities,
         ceiling: i64,
         workspace: &mut DecompressionWorkspace,
@@ -130,13 +130,14 @@ impl PoolReader {
     /// Decodes one group into the wave's cache unless it is already there.
     fn load_group(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         capacities: &StorageCapacities,
         ceiling: i64,
         workspace: &mut DecompressionWorkspace,
         row: &pool::ValueGroupRow,
     ) -> StorageResult<()> {
         let _ = capacities;
+        connection.authorize_group(row, ceiling)?;
         // The ceiling is decided before the cache is consulted: a group retained
         // by an earlier read of the same wave is still only readable when its own
         // pack is at or below the wave's captured ceiling.
@@ -175,7 +176,7 @@ impl PoolReader {
 
     fn group_body(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         workspace: &mut DecompressionWorkspace,
         row: &pool::ValueGroupRow,
     ) -> StorageResult<Vec<u8>> {
@@ -202,9 +203,9 @@ impl PoolReader {
     /// cache is: the cache is released wholesale when the next body would cross
     /// the declared bound, so a wave's retained pack bytes are a constant rather
     /// than a function of how many packs it reads.
-    fn pack(&mut self, connection: &Connection, pack_id: i64) -> StorageResult<&[u8]> {
+    fn pack(&mut self, connection: &dyn PackAccess, pack_id: i64) -> StorageResult<&[u8]> {
         if !self.packs.contains_key(&pack_id) {
-            let bytes = lookup::pack_bytes(connection, pack_id)?;
+            let bytes = connection.pack_bytes(pack_id)?;
             self.counters.pack_fetches = self.counters.pack_fetches.saturating_add(1);
             self.counters.pack_bytes = self.counters.pack_bytes.saturating_add(bytes.len() as u64);
             let retained: usize = self.packs.values().map(Vec::len).sum();
@@ -222,7 +223,7 @@ impl PoolReader {
     /// Rebuilds the physical body of one pooled leaf from its delta chain.
     pub fn leaf_body(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         capacities: &StorageCapacities,
         ceiling: i64,
         workspace: &mut DecompressionWorkspace,
@@ -233,13 +234,14 @@ impl PoolReader {
 
     fn leaf_body_with_groups(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         capacities: &StorageCapacities,
         ceiling: i64,
         workspace: &mut DecompressionWorkspace,
         root: ObjectLocation,
         mut groups: Option<&mut GroupCache>,
     ) -> StorageResult<Vec<u8>> {
+        connection.authorize_location(&root, ceiling)?;
         if root.role != layerfs_content::ObjectRole::InodeLeaf {
             return Err(StorageError::Integrity("pooled record role"));
         }
@@ -249,6 +251,7 @@ impl PoolReader {
             Vec::with_capacity(usize::from(capacities.metadata_delta_max_depth) + 1);
         let mut current = root;
         loop {
+            connection.authorize_location(&current, ceiling)?;
             chain.push(current);
             let record = self.record(connection, workspace, &current, groups.as_deref_mut())?;
             let Some(base) = pooled_base(&record)? else {
@@ -257,7 +260,8 @@ impl PoolReader {
             if chain.len() > usize::from(capacities.metadata_delta_max_depth) {
                 return Err(StorageError::Integrity("pooled chain depth"));
             }
-            let location = lookup::location(connection, base, ceiling)?
+            let location = connection
+                .location(base, ceiling)?
                 .ok_or(StorageError::ObjectMissing(base))?;
             if location.role != root.role {
                 return Err(StorageError::Integrity("pooled chain role"));
@@ -282,6 +286,7 @@ impl PoolReader {
         let mut canonical_work = 0_u64;
         let mut encoded_work = 0_u64;
         for location in chain.iter().rev() {
+            connection.authorize_location(location, ceiling)?;
             let record = self.record(connection, workspace, location, groups.as_deref_mut())?;
             canonical_work = canonical_work.saturating_add(location.canonical_length as u64);
             encoded_work = encoded_work.saturating_add(record.len() as u64);
@@ -325,7 +330,7 @@ impl PoolReader {
     /// the acquisition that follows uses, so an edge costs no second fetch.
     pub fn stored_base(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         workspace: &mut DecompressionWorkspace,
         location: &ObjectLocation,
     ) -> StorageResult<Option<ObjectId>> {
@@ -335,11 +340,12 @@ impl PoolReader {
 
     fn record(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         workspace: &mut DecompressionWorkspace,
         location: &ObjectLocation,
         groups: Option<&mut GroupCache>,
     ) -> StorageResult<Vec<u8>> {
+        connection.authorize_location(location, i64::MAX)?;
         self.counters.physical_record_calls = self.counters.physical_record_calls.saturating_add(1);
         if location.canonical_length > crate::policy::INODE_LEAF_LIMIT {
             return Err(StorageError::Integrity("inode leaf length"));
@@ -401,7 +407,7 @@ impl PoolReader {
     /// Rebuilds the canonical leaf of one pooled locator.
     pub fn leaf_canonical(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         capacities: &StorageCapacities,
         ceiling: i64,
         workspace: &mut DecompressionWorkspace,
@@ -414,7 +420,7 @@ impl PoolReader {
     /// Save callers keep using the uncached entry point because their pack bodies mutate.
     pub(crate) fn leaf_canonical_with_groups(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         capacities: &StorageCapacities,
         ceiling: i64,
         workspace: &mut DecompressionWorkspace,
@@ -460,7 +466,8 @@ impl PoolReader {
                     group
                 }
                 _ => {
-                    let group = pool::group_for(connection, row.ordinal)?
+                    let group = connection
+                        .group_for(row.ordinal)?
                         .ok_or(StorageError::Integrity("metadata ordinal missing"))?;
                     covering = Some(group);
                     group

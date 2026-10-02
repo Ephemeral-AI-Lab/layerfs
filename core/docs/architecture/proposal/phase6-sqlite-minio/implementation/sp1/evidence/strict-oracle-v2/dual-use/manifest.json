@@ -1,0 +1,31 @@
+{
+  "status": "SEALED_INDEPENDENT_OLD_C2_FULL_RECORD",
+  "product_source": "285dd3f4a54a896344e389b51a8495300b98b4ca",
+  "canonical_source": "../vectors/a0210f01dd9a468b515cc918df5c77c5960bd47bfad53c4353e634c7e6bbd399.canonical",
+  "producer_test_sha256": "eafc3b4b104f201f09813bbbd126b0366cba6f42fa56aa14b3ed9c299d6d9a7e",
+  "producer_binary_sha256": "7a32e21813c9d5266b3577fd3de1d0135f2a9f3554095857edc3f5da1b5c7deb",
+  "command": "SP1_DUAL_CANONICAL=<independent sealed canonical> SP1_DUAL_OUT=<fresh output> LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test sp1_dual_fixture_seal -- --ignored --nocapture; run in unchanged owned archive",
+  "files": [
+    {
+      "path": "acquisition.rs",
+      "bytes": 1043,
+      "sha256": "eafc3b4b104f201f09813bbbd126b0366cba6f42fa56aa14b3ed9c299d6d9a7e"
+    },
+    {
+      "path": "dual-chunk.sqlite",
+      "bytes": 47104,
+      "sha256": "2054abb6f5ef169cc79c6c793bd7fd1cc77ce02ad444ea7f29c2f6e0633d3429"
+    },
+    {
+      "path": "outcome.txt",
+      "bytes": 2002,
+      "sha256": "f82e0be19368cf37a8c38be0560ed1dcfba6d29a037f4cda3903494270851d63"
+    },
+    {
+      "path": "pack-1.row",
+      "bytes": 16689,
+      "sha256": "24320b0d88f58f8292ae216dfa756f516944671f9f03789feb6f8d7c54ba12ef"
+    }
+  ],
+  "scope": "Physical FULL pack for actual first CDC chunk; no new canonical root oracle; same record can have both required explicit domain placements."
+}

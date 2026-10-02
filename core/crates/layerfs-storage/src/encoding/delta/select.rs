@@ -9,10 +9,11 @@
 
 use std::collections::BTreeMap;
 
-use rusqlite::Connection;
+use crate::access::PackAccess;
 
 use layerfs_content::{ObjectId, ObjectRole};
 
+use crate::access::ObjectLocation;
 use crate::cas::SaveProfile;
 use crate::encoding::codec::{CompressionWorkspace, DecompressionWorkspace};
 use crate::encoding::delta::candidates::{signature, Candidates};
@@ -21,12 +22,15 @@ use crate::encoding::full::{encode_full, encode_prefix, raw_payload, EncodedReco
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
 use crate::policy::StorageCapacities;
-use crate::sqlite::lookup::{self, ObjectLocation};
 use layerfs_content::MAXIMUM_DELTA_MAX_DEPTH;
 use std::time::Instant;
 
-/// Live entries of the per-save chain-depth cache.
-const DEPTH_CACHE_ENTRIES: usize = 4_096;
+/// Keeps the original key/value byte allowance after qualifying physical keys.
+/// Fewer entries also reduce B-tree node overhead; no cache allowance is raised.
+const DEPTH_CACHE_ENTRIES: usize = 4_096
+    * (std::mem::size_of::<ObjectId>() + std::mem::size_of::<ChainCost>())
+    / (std::mem::size_of::<DepthKey>() + std::mem::size_of::<ChainCost>());
+type DepthKey = (ObjectId, i64, usize, usize);
 
 /// What selection actually did for one object.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -65,7 +69,7 @@ pub struct ChainCost {
 /// Bounded per-save cache of dependency depths and chain costs.
 #[derive(Debug, Default)]
 pub struct DepthCache {
-    costs: BTreeMap<ObjectId, ChainCost>,
+    costs: BTreeMap<DepthKey, ChainCost>,
 }
 
 impl DepthCache {
@@ -87,14 +91,14 @@ impl DepthCache {
     /// Depth of `id` in its dependency chain, or `None` when it is not stored.
     pub fn depth_of<F>(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         workspace: &mut DecompressionWorkspace,
         id: ObjectId,
         base_of: F,
     ) -> StorageResult<Option<u8>>
     where
         F: FnMut(
-            &Connection,
+            &dyn PackAccess,
             &mut DecompressionWorkspace,
             &ObjectLocation,
         ) -> StorageResult<Option<ObjectId>>,
@@ -110,19 +114,19 @@ impl DepthCache {
     /// longer than that is corrupt and is reported rather than absorbed.
     pub fn cost_of<F>(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         workspace: &mut DecompressionWorkspace,
         id: ObjectId,
         mut base_of: F,
     ) -> StorageResult<Option<ChainCost>>
     where
         F: FnMut(
-            &Connection,
+            &dyn PackAccess,
             &mut DecompressionWorkspace,
             &ObjectLocation,
         ) -> StorageResult<Option<ObjectId>>,
     {
-        let mut path: Vec<(ObjectId, u64)> = Vec::new();
+        let mut path: Vec<(ObjectLocation, u64)> = Vec::new();
         let mut current = id;
         // Whether the walk stopped on an **already cached** cost rather than on
         // the chain root. The cached entry is not pushed onto `path`, but the
@@ -130,14 +134,16 @@ impl DepthCache {
         // below has to count it.
         let mut cached_edge = 0_u8;
         let cost = loop {
-            if let Some(cost) = self.costs.get(&current).copied() {
+            let Some(location) = connection.location(current, i64::MAX)? else {
+                return Ok(None);
+            };
+            connection.authorize_location(&location, i64::MAX)?;
+            let key = depth_key(&location);
+            if let Some(cost) = self.costs.get(&key).copied() {
                 cached_edge = 1;
                 break cost;
             }
-            let Some(location) = lookup::location(connection, current, i64::MAX)? else {
-                return Ok(None);
-            };
-            path.push((current, location.canonical_length as u64));
+            path.push((location, location.canonical_length as u64));
             // A chain of depth `d` has `d + 1` records, and the deepest supported
             // chain is exactly `MAXIMUM_DELTA_MAX_DEPTH` deep: the walk bound has to
             // admit that record, or the deepest chain a policy accepts could not be
@@ -171,7 +177,7 @@ impl DepthCache {
         // base deeper than 8. The bounds were consistent; the measurement was not.
         let mut level = cost;
         let mut result = cost;
-        for (position, (id, own)) in path.iter().rev().enumerate() {
+        for (position, (location, own)) in path.iter().rev().enumerate() {
             let depth = cost
                 .depth
                 .saturating_add(cached_edge)
@@ -180,26 +186,26 @@ impl DepthCache {
                 depth,
                 canonical: level.canonical.saturating_add(*own),
             };
-            self.record(*id, level);
+            self.record_at(*location, level);
             result = level;
         }
         Ok(Some(result))
     }
 
-    /// Records the depth and chain cost of one identity.
-    pub fn record(&mut self, id: ObjectId, cost: ChainCost) {
+    /// Records the depth and chain cost of one physically placed representation.
+    pub fn record_at(&mut self, location: ObjectLocation, cost: ChainCost) {
         if self.costs.len() >= DEPTH_CACHE_ENTRIES {
             // Bounded live capacity: the cache is dropped whole rather than grown.
             self.costs.clear();
         }
-        self.costs.insert(id, cost);
+        self.costs.insert(depth_key(&location), cost);
     }
 }
 
 /// Everything one selection needs besides the object itself.
 pub struct SelectInput<'a> {
     /// Open write connection: candidate lookups and base reads use it.
-    pub connection: &'a Connection,
+    pub connection: &'a dyn PackAccess,
     /// Serializes database work, without holding write ownership during encoding.
     pub arbitration: &'a std::sync::Mutex<()>,
     /// True when the caller's wave already holds `arbitration`.
@@ -403,8 +409,10 @@ pub fn select(
         // The walk reads each edge from its record through the selection's own
         // pack cache, which the acquisition of this same base already filled: the
         // bodies are fetched once, not once per walk and once per read.
-        let _guard =
-            crate::sqlite::ownership::lock_unless_held(input.arbitration, input.wave_held)?;
+        let _guard = crate::sqlite::ownership::lock_unless_held(
+            input.arbitration,
+            input.wave_held || !input.connection.requires_arbitration(),
+        )?;
         let mut bases = ChainBases::new(input.packs);
         let started = Instant::now();
         let base_cost = input.depths.cost_of(
@@ -415,13 +423,9 @@ pub fn select(
         );
         SaveProfile::charge(&mut input.profile.resolve.cost_ns, started);
         let base_cost = base_cost?.ok_or(StorageError::Integrity("selected base is not stored"))?;
-        input.depths.record(
-            id,
-            ChainCost {
-                depth: base_cost.depth.saturating_add(1),
-                canonical: base_cost.canonical.saturating_add(canonical.len() as u64),
-            },
-        );
+        // This output is not placed yet and has no cache-qualified body order.
+        // Its first eligible post-placement walk records its exact physical cost.
+        let _ = base_cost;
         input.counters.prefix_selected = input.counters.prefix_selected.saturating_add(1);
         Ok(prefix)
     } else {
@@ -483,8 +487,11 @@ fn eligible(
     role: ObjectRole,
     depth_cap: u8,
 ) -> StorageResult<bool> {
-    let _guard = crate::sqlite::ownership::lock_unless_held(input.arbitration, input.wave_held)?;
-    let Some(location) = lookup::location(input.connection, id, i64::MAX)? else {
+    let _guard = crate::sqlite::ownership::lock_unless_held(
+        input.arbitration,
+        input.wave_held || !input.connection.requires_arbitration(),
+    )?;
+    let Some(location) = input.connection.location(id, i64::MAX)? else {
         input.counters.absent_candidates = input.counters.absent_candidates.saturating_add(1);
         return Ok(false);
     };
@@ -509,7 +516,10 @@ fn eligible(
 }
 
 fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> {
-    let _guard = crate::sqlite::ownership::lock_unless_held(input.arbitration, input.wave_held)?;
+    let _guard = crate::sqlite::ownership::lock_unless_held(
+        input.arbitration,
+        input.wave_held || !input.connection.requires_arbitration(),
+    )?;
     let started = Instant::now();
     let value = {
         let mut groups = crate::encoding::GroupCache::new();
@@ -530,4 +540,13 @@ fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> 
     crate::encoding::delta::read::accumulate(input.chain_total, *input.chain);
     SaveProfile::charge(&mut input.profile.resolve.acquire_ns, started);
     Ok(value)
+}
+
+fn depth_key(location: &ObjectLocation) -> DepthKey {
+    (
+        location.object_id,
+        location.pack_id,
+        location.group_number,
+        location.record_number,
+    )
 }

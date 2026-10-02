@@ -9,7 +9,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use rusqlite::Connection;
+use crate::access::PackAccess;
 
 use layerfs_content::inode_leaf::{decode_pooled_value, INODE_VALUE_BYTES};
 use layerfs_content::ObjectId;
@@ -18,7 +18,6 @@ use crate::encoding::codec::DecompressionWorkspace;
 use crate::encoding::pool::read::PoolReader;
 use crate::error::{StorageError, StorageResult};
 use crate::policy::{StorageCapacities, METADATA_INDEX_VALUES, VALUES_PER_GROUP};
-use crate::sqlite::pool;
 
 /// Bounded ordered set of `(fingerprint, ordinal)` candidates.
 #[derive(Clone, Debug, Default)]
@@ -99,27 +98,33 @@ impl PoolIndex {
     /// Synchronizes the retained window with the persisted catalogue.
     pub fn sync(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         capacities: &StorageCapacities,
         ceiling: i64,
         reader: &mut PoolReader,
         workspace: &mut DecompressionWorkspace,
     ) -> StorageResult<()> {
-        let start = pool::window_start(connection)?;
+        let start = connection.metadata_window_start()?;
         self.advance_window(start);
-        let Ok(from) = u32::try_from(self.next) else {
-            return Ok(());
-        };
-        pool::for_each_group(connection, Some(from), |row| {
-            if u64::from(row.first_ordinal) < self.next
-                || row.count == 0
-                || row.count > VALUES_PER_GROUP
-            {
-                return Err(StorageError::Integrity("metadata catalogue overlap/range"));
+        while let Ok(from) = u32::try_from(self.next) {
+            // The catalog releases its statement and ownership before any group
+            // decoder or provider call. This page is a reused operation window.
+            let page = connection.group_page(from, crate::policy::LOOKUP_PAGE_IDS)?;
+            if page.is_empty() {
+                break;
             }
-            let values = reader.group_values(connection, capacities, ceiling, workspace, &row)?;
-            self.note_group(row.first_ordinal, &values)
-        })?;
+            for row in page {
+                if u64::from(row.first_ordinal) < self.next
+                    || row.count == 0
+                    || row.count > VALUES_PER_GROUP
+                {
+                    return Err(StorageError::Integrity("metadata catalogue overlap/range"));
+                }
+                let values =
+                    reader.group_values(connection, capacities, ceiling, workspace, &row)?;
+                self.note_group(row.first_ordinal, &values)?;
+            }
+        }
         Ok(())
     }
 
@@ -146,7 +151,7 @@ impl PoolIndex {
     /// the same value always resolves to the ordinal the reference would choose.
     pub fn find(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         capacities: &StorageCapacities,
         ceiling: i64,
         reader: &mut PoolReader,
@@ -177,7 +182,8 @@ impl PoolIndex {
                 u64::from(ordinal) >= u64::from(*first) + values.len() as u64
             });
             if needed {
-                let row = pool::group_for(connection, ordinal)?
+                let row = connection
+                    .group_for(ordinal)?
                     .ok_or(StorageError::Integrity("metadata ordinal missing"))?;
                 let raw = reader.group_values(connection, capacities, ceiling, workspace, &row)?;
                 ordinal_values = Some((row.first_ordinal, raw));

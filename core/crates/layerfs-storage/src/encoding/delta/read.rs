@@ -10,10 +10,11 @@
 
 use std::collections::BTreeMap;
 
-use rusqlite::Connection;
+use crate::access::PackAccess;
 
 use layerfs_content::ObjectId;
 
+use crate::access::ObjectLocation;
 use crate::encoding::codec::DecompressionWorkspace;
 use crate::encoding::decode::{decode_canonical, GroupCache};
 use crate::encoding::full::raw_payload;
@@ -21,7 +22,6 @@ use crate::encoding::pool::PoolReader;
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
 use crate::policy::StorageCapacities;
-use crate::sqlite::lookup::{self, ObjectLocation};
 
 /// Work performed while reconstructing dependency chains.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -82,7 +82,7 @@ pub struct BodyCaches<'a> {
 
 /// One read wave's chain resolver: shared body caches, ceiling and counters.
 pub struct Resolver<'a> {
-    connection: &'a Connection,
+    connection: &'a dyn PackAccess,
     ceiling: i64,
     capacities: &'a StorageCapacities,
     caches: BodyCaches<'a>,
@@ -101,7 +101,7 @@ pub struct Resolver<'a> {
 impl<'a> Resolver<'a> {
     /// Builds a resolver over one reading caller's caches.
     pub fn new(
-        connection: &'a Connection,
+        connection: &'a dyn PackAccess,
         ceiling: i64,
         capacities: &'a StorageCapacities,
         caches: BodyCaches<'a>,
@@ -136,7 +136,9 @@ impl<'a> Resolver<'a> {
     /// already computed and checked against the locator, so a caller comparing
     /// identities does not have to hash the same bytes again (P2-6).
     pub fn resolve(&mut self, id: ObjectId) -> StorageResult<(Vec<u8>, ObjectId)> {
-        let root = lookup::location(self.connection, id, self.ceiling)?
+        let root = self
+            .connection
+            .location(id, self.ceiling)?
             .ok_or(StorageError::ObjectMissing(id))?;
         self.resolve_at(root)
     }
@@ -147,7 +149,9 @@ impl<'a> Resolver<'a> {
     /// itself, so a selection can refuse to build a chain that a later read could
     /// not reconstruct.
     pub fn resolve_dependency(&mut self, id: ObjectId) -> StorageResult<(Vec<u8>, ObjectId)> {
-        let root = lookup::location(self.connection, id, self.ceiling)?
+        let root = self
+            .connection
+            .location(id, self.ceiling)?
             .ok_or(StorageError::ObjectMissing(id))?;
         self.resolve_charged(root, true)
     }
@@ -169,6 +173,7 @@ impl<'a> Resolver<'a> {
     ) -> StorageResult<(Vec<u8>, ObjectId)> {
         *self.counters = ChainCounters::default();
         self.packs_read = 0;
+        self.connection.authorize_location(&root, self.ceiling)?;
         let id = root.object_id;
         if root.role == layerfs_content::ObjectRole::InodeLeaf {
             // A pooled leaf owns its whole chain: the physical body is rebuilt
@@ -210,7 +215,9 @@ impl<'a> Resolver<'a> {
             if chain.len() > usize::from(role_depth) {
                 return Err(StorageError::Integrity("dependency chain depth"));
             }
-            let location = lookup::location(self.connection, base, self.ceiling)?
+            let location = self
+                .connection
+                .location(base, self.ceiling)?
                 .ok_or(StorageError::ObjectMissing(base))?;
             if location.role != current.role {
                 return Err(StorageError::Integrity("dependency role"));
@@ -254,6 +261,7 @@ impl<'a> Resolver<'a> {
     /// pass below then reuses: a chain is walked and decoded against one copy of
     /// each body, not two.
     fn base_of(&mut self, location: &ObjectLocation) -> StorageResult<Option<ObjectId>> {
+        self.connection.authorize_location(location, self.ceiling)?;
         // The body is charged here, where it is fetched, and not inferred later
         // from the cache: the walk now reads it, so a decode that follows is a
         // cache hit and would otherwise report a read that never happened.
@@ -277,6 +285,7 @@ impl<'a> Resolver<'a> {
         base: Option<&[u8]>,
         charged: bool,
     ) -> StorageResult<Vec<u8>> {
+        self.connection.authorize_location(location, self.ceiling)?;
         self.counters.objects = self.counters.objects.saturating_add(1);
         if charged {
             if location.canonical_length as u64 > self.capacities.chain_canonical_limit {
@@ -366,7 +375,7 @@ impl<'a> ChainBases<'a> {
     /// The direct base identity `location` names, or `None` when it is FULL.
     pub fn base_of(
         &mut self,
-        connection: &Connection,
+        connection: &dyn PackAccess,
         workspace: &mut DecompressionWorkspace,
         location: &ObjectLocation,
     ) -> StorageResult<Option<ObjectId>> {
@@ -388,13 +397,14 @@ impl<'a> ChainBases<'a> {
 /// same chain pays for each body once. An element whose record cannot be parsed is
 /// an integrity failure, never a chain that silently ends.
 pub fn stored_base(
-    connection: &Connection,
+    connection: &dyn PackAccess,
     packs: &mut BTreeMap<i64, Vec<u8>>,
     groups: &mut GroupCache,
     workspace: &mut DecompressionWorkspace,
     group_decodes: &mut u64,
     location: &ObjectLocation,
 ) -> StorageResult<Option<ObjectId>> {
+    connection.authorize_location(location, i64::MAX)?;
     let header = {
         let (pack, _) = pack_of(packs, connection, location.pack_id)?;
         crate::pack::layout::parse_header(pack)?
@@ -490,12 +500,12 @@ pub fn accumulate(total: &mut ChainCounters, chain: ChainCounters) {
 /// retain a body count that grows with the number of packs it touches.
 fn pack_of<'b>(
     packs: &'b mut BTreeMap<i64, Vec<u8>>,
-    connection: &Connection,
+    connection: &dyn PackAccess,
     pack_id: i64,
 ) -> StorageResult<(&'b [u8], bool)> {
     let mut fetched = false;
     if !packs.contains_key(&pack_id) {
-        let bytes = lookup::pack_bytes(connection, pack_id)?;
+        let bytes = connection.pack_bytes(pack_id)?;
         let retained: usize = packs.values().map(Vec::len).sum();
         if retained.saturating_add(bytes.len()) > crate::policy::DEPENDENCY_PACK_CACHE_BYTES {
             packs.clear();

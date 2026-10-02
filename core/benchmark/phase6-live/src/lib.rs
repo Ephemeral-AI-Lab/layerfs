@@ -51,3 +51,6 @@ pub mod command_identity;
 pub mod publication;
 
 pub mod publication_failure;
+
+pub mod strict_catalog;
+pub mod strict_read;

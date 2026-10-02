@@ -1,0 +1,54 @@
+{
+  "status": "COMPONENT_READER_FUNCTIONAL_COUNT_PASS",
+  "runtime_source_head": "285dd3f4a54a896344e389b51a8495300b98b4ca",
+  "runtime_source_state": "dirty owned candidate; exact reader source inventory recorded; not release/sealed performance profile",
+  "files": [
+    {
+      "path": "provider-identity.json",
+      "sha256": "38f9e4ad03c6aa8eb212bd67ec52eb620457361e229b08414068763c1bdd4627",
+      "bytes": 1685
+    },
+    {
+      "path": "reader-0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "reader-0.stdout",
+      "sha256": "b89bd8e20550c8b40621d06afdf0c4cf25590a7e63c79c71d2e8548d1b86effb",
+      "bytes": 675
+    },
+    {
+      "path": "reader-1.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "reader-1.stdout",
+      "sha256": "e65ed0d93fe1d9658637054193c60ec340b83afcade42a8c1be9a81a7395aa3a",
+      "bytes": 284
+    },
+    {
+      "path": "reader-2.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "reader-2.stdout",
+      "sha256": "4b78a55f99c3bd96dd132beea4823add97943f3ad855fc0d2c19fbbcf97c9ea2",
+      "bytes": 353
+    },
+    {
+      "path": "reader-results.json",
+      "sha256": "a81f631043e0d029fb38af30b3ca5f243e602c2171c889e020e40bc91dd8a650",
+      "bytes": 2467
+    },
+    {
+      "path": "reader-source.json",
+      "sha256": "22b7eab398990ab13446c0c06a27afc39d53ddd97bcee71124a131f81fa2ec9c",
+      "bytes": 15405
+    }
+  ],
+  "limits": "whole-owner allocations, FUSE/Exec/C5 retained full-byte history and writer/private eligibility remain separate gates; no memory or speed PASS",
+  "failures": "Initial reader compile failed usize FromSql and subsequent failed harness insertion left mapping_ids undefined; both corrected in external test only. No failed runtime reader attempt. Provider inspection initial format requested absent Config.Cmd field; sanitized JSON inspection/version then passed."
+}

@@ -1,0 +1,8 @@
+first_chunk_id	a0210f01dd9a468b515cc918df5c77c5960bd47bfad53c4353e634c7e6bbd399
+raw_start	0
+raw_end	16396
+canonical_length	16417
+regular_root	305406a42d5a606fe0824693d19d8f860284026320a02b9b97f84bea559f65a2
+attribute_root	6ef294c5525112b43a7edd91bfcd3cd2c85a1e85ef59e1bac2eb9e43ebeec2e7
+regular_use	FilePayload / RegularFileGraph
+attribute_use	Metadata / MetadataGraph

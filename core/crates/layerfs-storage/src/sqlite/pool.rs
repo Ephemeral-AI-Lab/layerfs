@@ -185,3 +185,27 @@ pub fn window_start(connection: &Connection) -> StorageResult<u32> {
         |row| row.get(0),
     )?)
 }
+
+/// Materializes a bounded eligible ordinal keyset page without retaining a cursor.
+pub fn group_page(
+    connection: &Connection,
+    from: u32,
+    limit: usize,
+) -> StorageResult<Vec<ValueGroupRow>> {
+    if from == 0 || limit == 0 || limit > crate::policy::LOOKUP_PAGE_IDS {
+        return Err(StorageError::Integrity("metadata group page admission"));
+    }
+    let mut statement = connection.prepare_cached(
+        "SELECT g.first_ordinal,g.count,g.pack_id,g.group_number,g.digest \
+         FROM metadata_value_groups g JOIN object_packs p USING(pack_id) \
+         JOIN saves s USING(save_id),temp.layerfs_read_scope r \
+         WHERE g.first_ordinal >= ?1 AND (p.save_id = r.save_id OR s.publication <= r.publication) \
+         ORDER BY g.first_ordinal LIMIT ?2",
+    )?;
+    let mut rows = statement.query(rusqlite::params![i64::from(from), limit as i64])?;
+    let mut page = Vec::with_capacity(limit);
+    while let Some(row) = rows.next()? {
+        page.push(checked_group_row(decode_group_row(row)?)?);
+    }
+    Ok(page)
+}

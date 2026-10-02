@@ -8,12 +8,11 @@
 //! reset per leaf, the index is synchronized once per save, and the reader it
 //! borrows is the owner's own.
 
-use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
+use layerfs_content::{FinalizedObject, ObjectId};
 
 use crate::cas::owner::{MutationOwner, SaveProfile};
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
-use crate::sqlite::lookup;
 use std::collections::BTreeMap;
 use std::time::Instant;
 
@@ -221,61 +220,24 @@ impl MutationOwner {
         // window's own eviction semantics already allow.
         self.pending_values.clear();
         let body = pooled_body(object.canonical(), &ordinals)?;
-        self.pool.leaves += 1;
-        let started = Instant::now();
-        let full = crate::encoding::pool::leaf::encode_full(&body);
-        SaveProfile::charge(&mut self.profile.full_ns, started);
-        let full = full?;
-        // One base acquisition, then one instruction trial. A missing or
-        // ineligible base, or a losing comparison, stores the leaf in full.
-        let started = Instant::now();
-        let base = self.pool_base(advisory, object.canonical_len() as u64, full.len() as u64);
-        SaveProfile::charge(&mut self.profile.resolve.pooled_ns, started);
-        let base = base?;
-        let Some((base_id, base_body)) = base else {
-            return Ok(self.pooled_full(full, object.canonical_len(), body.len()));
+        let arbitration = std::sync::Arc::clone(&self.arbitration);
+        let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
+        let mut input = crate::encoding::pool::select::PooledSelectInput {
+            access: &self.connection,
+            ceiling: self.ceiling,
+            capacities: &self.capacities,
+            depths: &mut self.depths,
+            reader: &mut self.pool_reader,
+            decode: &mut self.decompression,
+            counters: &mut self.pool,
+            profile: &mut self.profile,
         };
-        self.pool.trials += 1;
-        let mut budget = crate::policy::METADATA_MATCH_BUDGET_BYTES;
-        let started = Instant::now();
-        let program = crate::encoding::pool::delta::build(base_id, &base_body, &body, &mut budget);
-        SaveProfile::charge(&mut self.profile.delta_ns, started);
-        let program = program?;
-        let Some(program) = program else {
-            return Ok(self.pooled_full(full, object.canonical_len(), body.len()));
-        };
-        if program.len() >= full.len() {
-            return Ok(self.pooled_full(full, object.canonical_len(), body.len()));
-        }
-        self.pool.delta_leaves += 1;
-        Ok(crate::encoding::EncodedRecord {
-            lane: PackLane::Ordinary,
-            record: program,
-            canonical_length: object.canonical_len(),
-            raw_length: body.len(),
-            base: Some(base_id),
-        })
-    }
-
-    /// The pooled lane's FULL alternative, counted once.
-    ///
-    /// Every path that declines a COPY/INSERT program - no base, no program, a
-    /// program that is not smaller, or a refused chain - stores the same FULL
-    /// record, so the fallback exists once.
-    fn pooled_full(
-        &mut self,
-        full: Vec<u8>,
-        canonical_length: usize,
-        raw_length: usize,
-    ) -> crate::encoding::EncodedRecord {
-        self.pool.full_leaves += 1;
-        crate::encoding::EncodedRecord {
-            lane: PackLane::Ordinary,
-            record: full,
-            canonical_length,
-            raw_length,
-            base: None,
-        }
+        crate::encoding::pool::select::select_pooled(
+            &mut input,
+            object.canonical_len(),
+            &body,
+            advisory,
+        )
     }
 
     /// Synchronizes the Store-owned index with the catalogue once per save.
@@ -437,79 +399,6 @@ impl MutationOwner {
     /// full leaf by policy. A base whose chain plus the dependent leaf would exceed
     /// the chain budgets is refused for the same reason the payload lane refuses
     /// one: no stored object may depend on bytes a later read could not reconstruct.
-    fn pool_base(
-        &mut self,
-        advisory: &[ObjectId],
-        target_canonical: u64,
-        target_encoded: u64,
-    ) -> StorageResult<Option<(ObjectId, Vec<u8>)>> {
-        let arbitration = std::sync::Arc::clone(&self.arbitration);
-        let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
-        let depth_cap = self.capacities.metadata_delta_max_depth;
-        if depth_cap == 0 {
-            return Ok(None);
-        }
-        for id in advisory {
-            let Some(location) = lookup::location(&self.connection, *id, self.ceiling)? else {
-                continue;
-            };
-            if location.role != ObjectRole::InodeLeaf {
-                continue;
-            }
-            // The walk reads each edge from its record through the owner's own
-            // pooled reader, whose pack cache the acquisition below reuses.
-            let pool = &mut self.pool_reader;
-            let cost = self.depths.cost_of(
-                &self.connection,
-                &mut self.decompression,
-                *id,
-                |connection, workspace, location| pool.stored_base(connection, workspace, location),
-            )?;
-            let Some(cost) = cost else {
-                continue;
-            };
-            if cost.depth >= depth_cap {
-                continue;
-            }
-            // Both budgets are charged with what a read of the dependent would
-            // actually pay: the chain's canonical sum from the depth walk, and -
-            // because a record's width is what the reader charges - the base
-            // chain's encoded bytes as the reader measured them plus this leaf's
-            // own record width. Charging a worst-case per-record bound instead made
-            // every accepted depth above fifteen unusable.
-            let canonical = cost.canonical.saturating_add(target_canonical);
-            if canonical > self.capacities.metadata_chain_canonical_limit {
-                self.pool.work_exceeded = self.pool.work_exceeded.saturating_add(1);
-                continue;
-            }
-            // The owner's own reader, not a fresh one per trial: its pack and
-            // value caches are the point (a trial used to re-materialise the same
-            // base packs), and its `chain_encoded_bytes` is the same charge a read
-            // of the dependent will pay. What it must not do is serve a pack body
-            // this save has since appended to, so every pack write releases the
-            // reader's pack cache (see `write_pack`).
-            let connection = &self.connection;
-            let capacities = &self.capacities;
-            let body = self.pool_reader.leaf_body(
-                connection,
-                capacities,
-                self.ceiling,
-                &mut self.decompression,
-                location,
-            )?;
-            let encoded = self
-                .pool_reader
-                .chain_encoded_bytes()
-                .saturating_add(target_encoded);
-            if encoded > self.capacities.metadata_chain_encoded_limit {
-                self.pool.work_exceeded = self.pool.work_exceeded.saturating_add(1);
-                continue;
-            }
-            return Ok(Some((*id, body)));
-        }
-        Ok(None)
-    }
-
     /// Pooled lane outcomes of this operation.
     pub fn pool_counters(&self) -> PoolCounters {
         self.pool

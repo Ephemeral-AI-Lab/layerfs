@@ -7,10 +7,12 @@ pub mod delta;
 pub mod index;
 pub mod leaf;
 pub mod read;
+pub mod select;
 pub mod value_group;
 
 pub use counters::PoolReadCounters;
 pub use index::PoolIndex;
 pub use leaf::{PooledRecord, POOLED_DELTA_TAG, POOLED_FULL_TAG};
 pub use read::PoolReader;
+pub use select::{select_pooled, PooledSelectInput};
 pub use value_group::BuiltGroup;

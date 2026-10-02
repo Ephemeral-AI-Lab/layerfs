@@ -18,6 +18,48 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 
 ## 6. Storage (C2 — `layerfs-storage`)
 
+### #295 provider-neutral read access (2026-10-02)
+
+Source parent `285dd3f4a54a896344e389b51a8495300b98b4ca`; this addition
+accompanies the strict SP1 access implementation. `access::PackAccess` captures
+catalog eligibility and complete pack-body acquisition. The existing dependency
+resolver, selector/depth walk and pooled reader borrow it; `Connection` remains
+the concrete standalone Store adapter. No codec, canonical ID, lane, depth/work
+limit or pack/group cache capacity changes. A required domain/scope placement
+check precedes every passed locator, group and cached depth answer.
+
+Body orders must be globally unique across domains and immutable for the cache
+lifetime; private generation changes require fresh orders. Pooled ordinals name
+one immutable global group namespace. Metadata packs retain complete envelopes;
+bare encoded value-group bytes cannot be passed to a pack parser. The standalone
+SQLite adapter preserves eligible duplicate-locator reads for collision checks.
+Depth-cache keys now include the canonical ID and physical order/group/record.
+The entry ceiling is derived from the original 4096 key/value byte allowance
+and the larger qualified key (2730 entries on a 64-bit target), so additional
+key fields do not raise the fixed byte allowance. Metadata candidate sync uses
+128-descriptor keyset pages, releasing SQL cursors before group decoding; the
+same ordinal/window eviction recurrence remains. Unplaced selected outputs enter that cache only after a later
+physical walk establishes their locator. The public `encoding::pool::select_pooled` helper owns the existing pooled FULL,
+base eligibility/work checks, COPY/INSERT trial and complete-cost comparison.
+Standalone `MutationOwner` delegates to it after its original ordinal/group work;
+the strict adapter can call the same helper after SQL group staging. Neutral
+access returns `requires_arbitration=false`, so the payload selector does not
+hold the legacy SQLite mutex across provider reads; `Connection` retains its
+existing arbitration. This access/selection seam alone does not implement a
+strict SQL/MinIO writer or qualify resource/provider behavior.
+
+
+The neutral `CandidateCatalog` interface stages/reads `CandidateRow` descriptors
+in pages of at most128 rows. Each row retains slot, positive stamp, canonical ID
+and the existing32-byte folded signature. `Candidates::reload_catalog` reuses
+the same slot/reference restoration in stamp order, without rehashing payloads;
+`flush_catalog` stages only changed retained ring rows. Failed page hydration or
+staging invalidates the disposable derivation. One704KiB index is rehydrated on
+domain activation rather than replicated. The fixed candidate page is at most
+128 times80 bytes (10240 bytes plus the Vec header on a64-bit target); no8192-row
+population vector is created. These APIs retain the original FULL-winner lookup,
+signature fold, overlap/tie policy and ring/window behavior.
+
 ### #286 grouped whole-file dependency work (2026-09-30)
 
 This update describes the change against parent `8baf47e45` in the same

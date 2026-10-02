@@ -27,6 +27,7 @@
 // in `physical-encoding-and-packing.md`.
 #![deny(unsafe_code)]
 
+pub mod access;
 pub mod cas;
 pub mod encoding;
 pub mod error;
@@ -34,6 +35,7 @@ pub mod pack;
 pub mod policy;
 pub mod sqlite;
 
+pub use access::PackAccess;
 pub use cas::{SaveHandoff, SaveOperation, SaveOutcome, Store, StoreProvider, StoreReadCounters};
 pub use error::{StorageError, StorageResult};
 pub use policy::{SchemaIdentity, StorageCapacities, StoragePolicy, SCHEMA_IDENTITY};

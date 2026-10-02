@@ -72,6 +72,30 @@ const EMPTY32: u32 = u32::MAX;
 /// Persisted width of one signature: eight folded hashes.
 const SIGNATURE_BYTES: usize = 32;
 
+/// One persisted folded signature, retaining the original ring slot and stamp.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CandidateRow {
+    /// Ring slot, exactly `(stamp - 1) % 8192`.
+    pub slot: u16,
+    /// Positive insertion order.
+    pub stamp: u64,
+    /// Admitted canonical identity.
+    pub id: ObjectId,
+    /// Eight existing folded little-endian hashes, without rehashing payload bytes.
+    pub signature: [u8; SIGNATURE_BYTES],
+}
+
+/// Domain/scope-bound candidate persistence with a reused bounded row window.
+/// Implementations return only the latest eligible row of each ring slot, in
+/// stamp order, and release SQL statements before returning. One operation and
+/// one attempt own writes; an uncertain acknowledgement is a terminal failure.
+pub trait CandidateCatalog {
+    /// Inclusive storage population is paged strictly after `after_stamp`.
+    fn candidate_page(&self, after_stamp: u64, limit: usize) -> StorageResult<Vec<CandidateRow>>;
+    /// Stages at most 128 changed ring rows in the caller's captured save/domain.
+    fn write_candidates(&self, rows: &[CandidateRow]) -> StorageResult<()>;
+}
+
 #[derive(Clone, Copy)]
 struct Entry {
     id: ObjectId,
@@ -290,24 +314,122 @@ impl Candidates {
             }
             let stamp = u64::try_from(row.get::<_, i64>(0)?)
                 .map_err(|_| StorageError::Integrity("content index stamp range"))?;
-            // Stamps are one-based and the query is ordered, so a row that does
-            // not advance the running maximum is a table this index did not write.
-            if stamp <= self.stamp {
-                return Err(StorageError::Integrity("content index stamp order"));
+            if stamp == 0 {
+                return Err(StorageError::Integrity("content index stamp range"));
             }
             let id = ObjectId::from_bytes(&row.get::<_, Vec<u8>>(1)?)?;
-            let signature = decode(&row.get::<_, Vec<u8>>(2)?)?;
-            self.slots[slot_of(stamp)] = Some(Entry { id, signature });
-            for hash in signature.iter().copied().filter(|hash| *hash != EMPTY32) {
-                self.references[hash as usize & (REFERENCES - 1)] = slot_of(stamp) as u16;
-            }
-            self.stamp = stamp;
+            let signature: Vec<u8> = row.get(2)?;
+            self.restore(CandidateRow {
+                slot: u16::try_from(slot_of(stamp))
+                    .map_err(|_| StorageError::Integrity("candidate slot range"))?,
+                stamp,
+                id,
+                signature: signature
+                    .try_into()
+                    .map_err(|_| StorageError::Integrity("content index signature width"))?,
+            })?;
             retained += 1;
         }
         self.next = (self.stamp % SLOTS as u64) as usize;
         self.flushed = self.stamp;
         self.needs_load = false;
         Ok(())
+    }
+
+    fn restore(&mut self, row: CandidateRow) -> StorageResult<()> {
+        if row.stamp == 0 || row.stamp <= self.stamp || usize::from(row.slot) != slot_of(row.stamp)
+        {
+            return Err(StorageError::Integrity("content index stamp/slot order"));
+        }
+        let slot = usize::from(row.slot);
+        if self.slots[slot].is_some() {
+            return Err(StorageError::Integrity(
+                "content index duplicate selected slot",
+            ));
+        }
+        let signature = decode(&row.signature)?;
+        self.slots[slot] = Some(Entry {
+            id: row.id,
+            signature,
+        });
+        for hash in signature.iter().copied().filter(|hash| *hash != EMPTY32) {
+            self.references[hash as usize & (REFERENCES - 1)] = slot as u16;
+        }
+        self.stamp = row.stamp;
+        Ok(())
+    }
+
+    /// Rehydrates one existing fixed-size index from bounded captured-domain pages.
+    /// Call this on domain activation; do not allocate a second index per domain.
+    pub fn reload_catalog(&mut self, catalog: &dyn CandidateCatalog) -> StorageResult<()> {
+        self.clear();
+        self.needs_load = true;
+        let result = self.read_catalog(catalog);
+        if result.is_err() {
+            self.invalidate();
+        }
+        result
+    }
+
+    fn read_catalog(&mut self, catalog: &dyn CandidateCatalog) -> StorageResult<()> {
+        let mut retained = 0usize;
+        loop {
+            let rows = catalog.candidate_page(self.stamp, crate::policy::LOOKUP_PAGE_IDS)?;
+            if rows.len() > crate::policy::LOOKUP_PAGE_IDS {
+                return Err(StorageError::Integrity("candidate catalog page bound"));
+            }
+            if rows.is_empty() {
+                break;
+            }
+            for row in rows {
+                if retained >= SLOTS {
+                    return Err(StorageError::Integrity("content index over slot bound"));
+                }
+                self.restore(row)?;
+                retained += 1;
+            }
+        }
+        self.next = (self.stamp % SLOTS as u64) as usize;
+        self.flushed = self.stamp;
+        self.needs_load = false;
+        Ok(())
+    }
+
+    /// Stages changed ring rows in reused 128-row windows, never a population Vec.
+    pub fn flush_catalog(&mut self, catalog: &dyn CandidateCatalog) -> StorageResult<usize> {
+        let mut next = self
+            .flushed
+            .saturating_add(1)
+            .max(self.stamp.saturating_sub(SLOTS as u64 - 1));
+        let mut rows = Vec::with_capacity(crate::policy::LOOKUP_PAGE_IDS);
+        let mut written = 0usize;
+        while next <= self.stamp {
+            let slot = slot_of(next);
+            let entry =
+                self.slots[slot].ok_or(StorageError::Integrity("content index flush slot"))?;
+            rows.push(CandidateRow {
+                slot: slot as u16,
+                stamp: next,
+                id: entry.id,
+                signature: encode(&entry.signature),
+            });
+            next = next
+                .checked_add(1)
+                .ok_or(StorageError::Integrity("content index stamp exhaustion"))?;
+            if rows.len() == crate::policy::LOOKUP_PAGE_IDS || next > self.stamp {
+                if let Err(error) = catalog.write_candidates(&rows) {
+                    self.invalidate();
+                    return Err(error);
+                }
+                written += rows.len();
+                self.flushed = rows
+                    .last()
+                    .ok_or(StorageError::Integrity("candidate flush page"))?
+                    .stamp;
+                rows.clear();
+            }
+        }
+        Ok(written)
     }
 
     /// Records one admitted FULL winner.
