@@ -1,0 +1,26 @@
+{
+  "status": "Historical evidence copies; no new run or relabel",
+  "source_parent": "bfbf48ea7694e8450bd47a3bf2c297fdac36badc",
+  "files": {
+    "derived.json": {
+      "sha256": "0b48dd8037c750228024cd0d72a6e9e0859e8420d9b53d9eb1f214c70b9b82bd",
+      "bytes": 3710,
+      "kind": "read-only arithmetic derived from original receipts"
+    },
+    "stride3-receipt.json": {
+      "sha256": "00a408c4f1086c367d5331e8d20018d33e45ef7fbc6a1099511b38e38e5fb237",
+      "bytes": 220052,
+      "kind": "exact read-only original receipt copy"
+    },
+    "stride1-receipt.json": {
+      "sha256": "ba9e04c731bd166b2dea47ec86d906853d49a385a754b4124e1b6646e666c547",
+      "bytes": 623131,
+      "kind": "exact read-only original receipt copy"
+    },
+    "stride10-receipt.json": {
+      "sha256": "c5ece417804841ecc42c20473f8f0524706a4fc2e1afd99947515213e9fee33a",
+      "bytes": 82286,
+      "kind": "exact read-only original receipt copy"
+    }
+  }
+}
