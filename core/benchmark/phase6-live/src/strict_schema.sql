@@ -12,6 +12,7 @@ CREATE TABLE saves (
  pending INTEGER NOT NULL DEFAULT 0 CHECK(pending>=0),
  publication INTEGER UNIQUE CHECK(publication>0)
 );
+CREATE INDEX saves_unresolved ON saves(save_id) WHERE status IN(0,1,3);
 CREATE TABLE bodies (
  body_order INTEGER PRIMARY KEY AUTOINCREMENT,
  domain INTEGER NOT NULL CHECK(domain IN (0,1)),

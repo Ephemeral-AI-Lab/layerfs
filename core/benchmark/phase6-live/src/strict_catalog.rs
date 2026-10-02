@@ -4,6 +4,7 @@ use layerfs_storage::sqlite::{ObjectLocation, ValueGroupRow};
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 use std::{
+    io::Read,
     path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -42,7 +43,7 @@ fn next_cache_namespace() -> Result<u64, String> {
 }
 
 pub const APPLICATION_ID: u32 = u32::from_be_bytes(*b"P6S1");
-pub const USER_VERSION: u32 = 2;
+pub const USER_VERSION: u32 = 3;
 pub const PAGE: usize = layerfs_storage::policy::LOOKUP_PAGE_IDS;
 pub const BODY_LIMIT: usize = 1024 * 1024;
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -258,21 +259,55 @@ impl StrictCatalog {
         let db = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
             .map_err(err)?;
         configure(&db, false)?;
-        let app: u32 = db
-            .pragma_query_value(None, "application_id", |r| r.get(0))
-            .map_err(err)?;
-        let version: u32 = db
-            .pragma_query_value(None, "user_version", |r| r.get(0))
-            .map_err(err)?;
-        if app != APPLICATION_ID || version != USER_VERSION {
-            return Err("strict catalog schema/profile".into());
-        }
-        profile::validate(&db)?;
+        validate_existing(&db)?;
         Ok(Self {
             db: Mutex::new(db),
             writable: false,
             quarantined: AtomicBool::new(false),
             cache_namespace: next_cache_namespace()?,
+        })
+    }
+    /// Open a caller-qualified, exclusively owned, known-closed catalog.
+    /// This preserves committed and abandoned rows and does not recover or adopt
+    /// an earlier unknown outcome. The caller must exclude concurrent openers.
+    pub fn open_writable(path: &Path) -> Result<Self, String> {
+        refuse_sidecars(path)?;
+        if !std::fs::metadata(path)
+            .map_err(|cause| format!("closed catalog path: {cause}"))?
+            .is_file()
+        {
+            return Err("closed catalog path is not a regular file".into());
+        }
+        // WAL headers can cause SQLite to create sidecars even during a read.
+        // The current MEMORY journal profile leaves ordinary rollback headers.
+        let mut header = [0; 20];
+        std::fs::File::open(path)
+            .and_then(|mut file| file.read_exact(&mut header))
+            .map_err(|cause| format!("closed catalog header: {cause}"))?;
+        if &header[..16] != b"SQLite format 3\0" || header[18..20] != [1, 1] {
+            return Err("closed catalog journal profile refused".into());
+        }
+        let db = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE)
+            .map_err(err)?;
+        // These connection-local settings leave main immutable during admission.
+        configure(&db, false)?;
+        validate_existing(&db)?;
+        let unresolved: bool = db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM saves INDEXED BY saves_unresolved WHERE status IN(0,1,3) LIMIT 1) OR EXISTS(SELECT 1 FROM save_context INDEXED BY owned_pending_workspace WHERE owned_pending=1 LIMIT 1)",
+            [], |row| row.get(0),
+        ).map_err(err)?;
+        if unresolved {
+            return Err("closed catalog has unresolved save or publication custody".into());
+        }
+        refuse_sidecars(path)?;
+        let cache_namespace = next_cache_namespace()?;
+        db.execute_batch("PRAGMA query_only=OFF;").map_err(err)?;
+        configure(&db, true)?;
+        Ok(Self {
+            db: Mutex::new(db),
+            writable: true,
+            quarantined: AtomicBool::new(false),
+            cache_namespace,
         })
     }
     pub fn capture(&self, own_save: Option<i64>) -> Result<CatalogScope, String> {
@@ -479,6 +514,30 @@ impl StrictCatalog {
             Err("readonly catalog mutation refused".into())
         }
     }
+}
+fn validate_existing(db: &Connection) -> Result<(), String> {
+    let app: u32 = db
+        .pragma_query_value(None, "application_id", |row| row.get(0))
+        .map_err(err)?;
+    let version: u32 = db
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .map_err(err)?;
+    if app != APPLICATION_ID || version != USER_VERSION {
+        return Err("strict catalog schema/profile".into());
+    }
+    profile::validate(db)
+}
+fn refuse_sidecars(path: &Path) -> Result<(), String> {
+    for suffix in ["-journal", "-wal", "-shm"] {
+        let mut sidecar = path.as_os_str().to_os_string();
+        sidecar.push(suffix);
+        match std::fs::symlink_metadata(Path::new(&sidecar)) {
+            Ok(_) => return Err(format!("closed catalog sidecar refused: {suffix}")),
+            Err(cause) if cause.kind() == std::io::ErrorKind::NotFound => {}
+            Err(cause) => return Err(format!("closed catalog sidecar inspection: {cause}")),
+        }
+    }
+    Ok(())
 }
 fn configure(db: &Connection, writable: bool) -> Result<(), String> {
     db.set_prepared_statement_cache_capacity(16);

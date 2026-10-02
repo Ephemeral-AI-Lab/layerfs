@@ -793,3 +793,211 @@ fn actual_os_write_limit_commit_quarantines_engine() {
     };
     std::fs::write(out.join("outcome.txt"),format!("DIAGNOSTIC: actual OS write refusal at explicit COMMIT\nread refusal: {read}\nwrite refusal: {write}\nforensic previous/current DB observation: {forensic}\nNo durability, recovery, cleanup or speed PASS. Failed-abort physical proof remains NOT_RUN.\n")).unwrap();
 }
+
+struct ClosedDatabase {
+    path: PathBuf,
+}
+impl ClosedDatabase {
+    fn new() -> (Self, StrictCatalog) {
+        let path = std::env::temp_dir().join(format!(
+            "layerfs-strict-closed-{}-{}.db",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        let catalog = StrictCatalog::create(&path).unwrap();
+        (Self { path }, catalog)
+    }
+}
+impl Drop for ClosedDatabase {
+    fn drop(&mut self) {
+        std::fs::remove_file(&self.path).unwrap();
+    }
+}
+#[test]
+fn writable_reopen_of_closed_byte_copy_preserves_rows_and_starts_fresh_owner() {
+    use phase6_live_probe::strict_catalog::CandidateRow;
+    let (master, catalog) = ClosedDatabase::new();
+    let p = pack();
+    let save = catalog.begin_save().unwrap();
+    let (scope, order) = insert(
+        &catalog,
+        save,
+        &p,
+        PlacementDomain::Metadata,
+        LogicalUse::MetadataGraph,
+    );
+    catalog
+        .stage_candidates(
+            scope,
+            save,
+            PlacementDomain::Metadata,
+            &[CandidateRow {
+                slot: 0,
+                stamp: 1,
+                id: p.rows[0].id,
+                signature: [7; 32],
+            }],
+        )
+        .unwrap();
+    catalog.finish_storage(save).unwrap();
+    catalog.publish(save).unwrap();
+    let orphan = catalog.begin_save().unwrap();
+    let orphan_order = catalog
+        .reserve_body(PlacementDomain::FilePayload, orphan, [8; 32])
+        .unwrap();
+    catalog.abandon(orphan).unwrap();
+    let epoch = catalog.cache_namespace();
+    drop(catalog);
+    let master_bytes = std::fs::read(&master.path).unwrap();
+    let (copy, empty) = ClosedDatabase::new();
+    drop(empty);
+    std::fs::copy(&master.path, &copy.path).unwrap();
+    let reopened = StrictCatalog::open_writable(&copy.path).unwrap();
+    assert_ne!(reopened.cache_namespace(), epoch);
+    assert_eq!(reopened.candidate_snapshot_work().unwrap().builds, 0);
+    let scope = reopened.capture(None).unwrap();
+    assert_eq!(scope.publication, 1);
+    assert_eq!(scope.ceiling, orphan_order);
+    assert_eq!(
+        reopened
+            .body(scope, PlacementDomain::Metadata, order)
+            .unwrap()
+            .1
+            .unwrap(),
+        p.bytes
+    );
+    assert!(reopened
+        .body(scope, PlacementDomain::FilePayload, orphan_order)
+        .is_err());
+    assert_eq!(
+        reopened
+            .candidate_page(scope, PlacementDomain::Metadata, 0, 128)
+            .unwrap()[0]
+            .stamp,
+        1
+    );
+    let sql = rusqlite::Connection::open(&copy.path).unwrap();
+    let retained: (i64, i64, i64) = sql.query_row(
+        "SELECT status,pending,(SELECT COUNT(*) FROM bodies WHERE body_order=?2 AND ready=0) FROM saves WHERE save_id=?1",
+        rusqlite::params![orphan, orphan_order], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?)),
+    ).unwrap();
+    assert_eq!(retained, (4, 1, 1));
+    let next = reopened.begin_save().unwrap();
+    assert!(next > orphan);
+    let next_order = reopened
+        .reserve_body(PlacementDomain::FilePayload, next, [9; 32])
+        .unwrap();
+    assert!(next_order > orphan_order);
+    reopened.abandon(next).unwrap();
+    drop(sql);
+    drop(reopened);
+    let again = StrictCatalog::open_writable(&copy.path).unwrap();
+    assert_eq!(again.capture(None).unwrap().publication, 1);
+    assert_eq!(std::fs::read(&master.path).unwrap(), master_bytes);
+}
+#[test]
+fn writable_reopen_refuses_each_unresolved_save_without_changing_database() {
+    for status in [0, 1, 3] {
+        let (closed, catalog) = ClosedDatabase::new();
+        let save = catalog.begin_save().unwrap();
+        match status {
+            1 => catalog.finish_storage(save).unwrap(),
+            3 => catalog.quarantine(save).unwrap(),
+            _ => {}
+        }
+        drop(catalog);
+        let before = std::fs::read(&closed.path).unwrap();
+        let error = StrictCatalog::open_writable(&closed.path).err().unwrap();
+        assert!(error.contains("unresolved save or publication custody"));
+        assert_eq!(std::fs::read(&closed.path).unwrap(), before);
+    }
+}
+#[test]
+fn writable_reopen_requires_known_owned_publication_completion() {
+    use layerfs_history::{BranchId, LayerStackId};
+    use phase6_live_probe::{reservations::Owner, strict_catalog::SaveContext};
+    for completed in [false, true] {
+        let (closed, catalog) = ClosedDatabase::new();
+        let save = catalog
+            .begin_save_owned(&SaveContext {
+                owner: Owner {
+                    workspace: b"closed-reopen-owner".to_vec(),
+                    incarnation: [5; 32],
+                    project: LayerStackId::from_authority([1; 16]).to_bytes(),
+                    branch: BranchId::from_authority([2; 16]).to_bytes(),
+                },
+                generation: 1,
+                scope: [1; 32],
+                profile: [2; 32],
+                base_root: [3; 32],
+            })
+            .unwrap();
+        catalog.finish_storage(save).unwrap();
+        catalog.publish(save).unwrap();
+        if completed {
+            catalog.complete_owned_publication(save).unwrap();
+        }
+        drop(catalog);
+        let before = std::fs::read(&closed.path).unwrap();
+        let reopened = StrictCatalog::open_writable(&closed.path);
+        assert_eq!(reopened.is_ok(), completed);
+        assert_eq!(std::fs::read(&closed.path).unwrap(), before);
+    }
+}
+#[test]
+fn writable_reopen_refuses_missing_old_profile_and_changed_shape_without_migration() {
+    let (closed, catalog) = ClosedDatabase::new();
+    drop(catalog);
+    let missing = closed.path.with_extension("missing");
+    assert!(StrictCatalog::open_writable(&missing).is_err());
+    assert!(!missing.exists());
+    for mutation in [
+        "PRAGMA user_version=2",
+        "PRAGMA application_id=1",
+        "DROP INDEX saves_unresolved",
+        "PRAGMA journal_mode=WAL",
+    ] {
+        let (closed, catalog) = ClosedDatabase::new();
+        drop(catalog);
+        let sql = rusqlite::Connection::open(&closed.path).unwrap();
+        sql.execute_batch(mutation).unwrap();
+        drop(sql);
+        let before = std::fs::read(&closed.path).unwrap();
+        assert!(StrictCatalog::open_writable(&closed.path).is_err());
+        assert_eq!(std::fs::read(&closed.path).unwrap(), before);
+    }
+}
+#[test]
+fn writable_reopen_refuses_sidecars_before_sqlite_can_recover_or_remove_them() {
+    let (closed, catalog) = ClosedDatabase::new();
+    drop(catalog);
+    let before = std::fs::read(&closed.path).unwrap();
+    for suffix in ["-journal", "-wal", "-shm"] {
+        let mut sidecar = closed.path.as_os_str().to_os_string();
+        sidecar.push(suffix);
+        let sidecar = PathBuf::from(sidecar);
+        std::fs::write(&sidecar, b"retained unqualified sidecar").unwrap();
+        let error = StrictCatalog::open_writable(&closed.path).err().unwrap();
+        assert!(error.contains("sidecar refused"));
+        assert_eq!(
+            std::fs::read(&sidecar).unwrap(),
+            b"retained unqualified sidecar"
+        );
+        assert_eq!(std::fs::read(&closed.path).unwrap(), before);
+        std::fs::remove_file(sidecar).unwrap();
+    }
+}
+#[test]
+fn closed_custody_queries_use_the_pinned_partial_indexes() {
+    let (closed, catalog) = ClosedDatabase::new();
+    drop(catalog);
+    let sql = rusqlite::Connection::open(&closed.path).unwrap();
+    for (query, index) in [
+        ("SELECT 1 FROM saves INDEXED BY saves_unresolved WHERE status IN(0,1,3) LIMIT 1", "saves_unresolved"),
+        ("SELECT 1 FROM save_context INDEXED BY owned_pending_workspace WHERE owned_pending=1 LIMIT 1", "owned_pending_workspace"),
+    ] {
+        let mut statement = sql.prepare(&format!("EXPLAIN QUERY PLAN {query}")).unwrap();
+        let plans: Vec<String> = statement.query_map([], |row| row.get(3)).unwrap().map(Result::unwrap).collect();
+        assert!(plans.iter().any(|plan| plan.contains(index)), "{plans:?}");
+    }
+}

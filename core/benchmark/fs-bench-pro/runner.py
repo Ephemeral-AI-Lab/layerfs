@@ -26,6 +26,7 @@ from families import workspace_commit_native as native  # noqa: E402
 from families import workspace_namespace as namespace  # noqa: E402
 from families import workspace_mutations as mutations  # noqa: E402
 from families import workspace_shell_package as package  # noqa: E402
+from families import sp1_components as sp1  # noqa: E402
 
 CONTRACT_COMMIT = "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2"
 BUILD_PROFILE = "release"
@@ -381,7 +382,7 @@ def main():
     run_parser = commands.add_parser("run")
     selector = run_parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--case")
-    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit", "workspace-commit-native", "workspace-commit-native-tail", "workspace-commit-native-counts", "workspace-commit-native-reconciliation", "workspace_namespace", "workspace-namespace-native", "workspace-namespace-sdk", "workspace_mutations", "workspace-mutations-native", "workspace-mutations-native-tail", "workspace-mutations-sdk", "workspace_shell_package", "workspace-shell-package-tail"])
+    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit", "workspace-commit-native", "workspace-commit-native-tail", "workspace-commit-native-counts", "workspace-commit-native-reconciliation", "workspace_namespace", "workspace-namespace-native", "workspace-namespace-sdk", "workspace_mutations", "workspace-mutations-native", "workspace-mutations-native-tail", "workspace-mutations-sdk", "workspace_shell_package", "workspace-shell-package-tail", "sp1-components", "sp1-metadata", "sp1-small-save", "sp1-payload", "sp1-sql"])
     run_parser.add_argument("--out", required=True)
     proof_parser = commands.add_parser("prove")
     proof_parser.add_argument("--run", required=True)
@@ -390,6 +391,8 @@ def main():
         commands.add_parser(name).add_argument("--run", required=True)
     args = parser.parse_args()
     if args.command == "list":
+        for name in sp1.CASES:
+            print(f"{name}\tstrict SP1 component diagnostic; one sample; command <=15s; separate proof <10s; no speed admission")
         for case in init.CASES.values():
             print(f"{case.id}\t{case.files}\t{case.logical_bytes}\t"
                   f"{'SDK selected' if case.id in init.SELECTED else 'NOT_RUN ' + init.NOT_RUN_REASON}")
@@ -425,6 +428,9 @@ def main():
             print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":
         selection = args.case or args.family
+        if selection in (*sp1.CASES, *sp1.GROUPS):
+            print(sp1.run(selection, args.out, sys.modules[__name__]))
+            return
         if selection in (*package.cases(), *package.NATIVE, package.SDK_CAUSE, package.DEFERRED, "workspace_shell_package", "workspace-shell-package-tail"):
             print(package.run(selection, args.out, sys.modules[__name__]))
             return
@@ -451,6 +457,9 @@ def main():
         print(run(selection, args.out))
     elif args.command == "prove":
         path = owned(args.run, existing=True)
+        if json.loads((path / "run.json").read_text()).get("schema") == sp1.SCHEMA:
+            print(sp1.prove(path, args.out, sys.modules[__name__]))
+            return
         if json.loads((path / "run.json").read_text()).get("schema") == package.SCHEMA:
             print(package.prove(path, args.out, sys.modules[__name__]))
             return
@@ -465,6 +474,9 @@ def main():
         print(commit.prove(path, args.out, sys.modules[__name__]))
     elif args.command == "verify":
         path = owned(args.run, existing=True)
+        if json.loads((path / "run.json").read_text()).get("schema") in (sp1.SCHEMA, sp1.PROOF_SCHEMA):
+            print(sp1.verify(path, sys.modules[__name__]))
+            return
         if json.loads((path / "run.json").read_text()).get("schema") in ("core-history-retention-run-v1", "core-history-retention-run-v2", "core-history-retention-run-v3", "core-history-retention-run-v4"):
             print(history.verify(path, sys.modules[__name__]))
         elif json.loads((path / "run.json").read_text()).get("schema") == "core-workspace-write-run-v1":
@@ -482,6 +494,9 @@ def main():
             print(verify_run(path))
     else:
         path = owned(args.run, existing=True)
+        if json.loads((path / "run.json").read_text()).get("schema") in (sp1.SCHEMA, sp1.PROOF_SCHEMA):
+            print(sp1.report(path), end="")
+            return
         if json.loads((path / "run.json").read_text()).get("schema") in ("core-history-retention-run-v1", "core-history-retention-run-v2", "core-history-retention-run-v3", "core-history-retention-run-v4"):
             print(history.report(path), end="")
         elif json.loads((path / "run.json").read_text()).get("schema") == "core-workspace-write-run-v1":
