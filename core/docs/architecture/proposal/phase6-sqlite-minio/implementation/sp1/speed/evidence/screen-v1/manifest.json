@@ -1,0 +1,49 @@
+{
+  "files": {
+    "catalog-test.log": {
+      "sha256": "d12fdc2f29406c49d83d6d6c5f327203265a87907a9323e979bb1dea628ff7fd",
+      "bytes": 2203
+    },
+    "harness-test.log": {
+      "sha256": "a32f440c4fd5292c61b78356b825ad427e9318313c45448d5544798f9a5d05a9",
+      "bytes": 1808
+    },
+    "provider-teardown.json": {
+      "sha256": "96624ffd7a7ab77ef3ea80267296c7c9a3a00b0e7cde69392c02993b63221725",
+      "bytes": 519
+    },
+    "provider.json": {
+      "sha256": "f85a46ddf21fa391594cfc5b3210e30071488c9b0b43b98adfe0ad7c8ab42eec",
+      "bytes": 1278
+    },
+    "source-checks.json": {
+      "sha256": "1f3d01a1c826b21c8e95adcd54f6dcc3ae31efa82ad6c88fa70613b57a3d5896",
+      "bytes": 618
+    },
+    "source-commit.json": {
+      "sha256": "e0648e52176202eb5ad1b136acc14084f145b8aed6759ba1a1b4525c28f07132",
+      "bytes": 192
+    },
+    "source-loc.json": {
+      "sha256": "a645e6493e0df2a89c49780042bba5d99bcc240cc72bb5fcc354452451ca8433",
+      "bytes": 7071
+    },
+    "sp1-speed-proof-r001.tar.gz": {
+      "sha256": "b41c92c939c7335981ccd2000cab5101ff56fba1575dbe4d201478512f10646f",
+      "bytes": 252400
+    },
+    "sp1-speed-r001.tar.gz": {
+      "sha256": "7d2a9701af8fcfa709ef03ddfd62df7ebfe98c4b10f88670707ec380f19070d4",
+      "bytes": 5679
+    },
+    "sp1-speed-r002.tar.gz": {
+      "sha256": "5f14c80857109e22aacf32224f51647fa57dbd55a6c7d8577190c4324eef926b",
+      "bytes": 1881968
+    },
+    "summary.json": {
+      "sha256": "95a4f8b70e916a9028f25ef33ff060410e592b47ab915d28733feca5c77e5f4f",
+      "bytes": 30271
+    }
+  },
+  "scope": "exact archived receipt bytes; public provider identity; no private values"
+}

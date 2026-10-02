@@ -259,3 +259,63 @@ product totals and counted_lines() for the declared experimental/support lists.
 The exact staged/committed tree and source-subtree confirmation are included in
 the published issue checkpoint. Test, evidence, documentation and target output
 never contribute to the production headline.
+
+
+## L3 — four component speed investigations, 2026-10-02
+
+Owner asked "proceed with the 4". Prospective spec published at
+1ad6715d10ad070cdf6ceefdf8b97cf2e6483347; measured implementation sealed at
+c838d8d6db85158c6ed9576dd7e8fddf65489704, clean tree
+cd3c5ec0dd46ef3f59413dc48a49ebe4bdcc6be3. Schema3 adds an unresolved-custody
+index and fail-closed ordinary writable admission for caller-qualified closed
+clones; previous schema2/fingerprint receipts remain unchanged. Wire staysV2.
+
+[Full report, exact operands, reproduction and next work](speed/REPORT-v1.md)
+and [archived receipt manifest](speed/evidence/screen-v1/manifest.json).
+Nine unique rows cover metadata route, small save/reuse, FULL/PREFIX writer/reader
+and SQL hydration/metadata transfer; the FULL write is shared and collected once.
+All9 operations observed once, all9 separately verified PASS; complete commands
+30,628,709–51,939,542ns within15s, separate proofs61,162,792–75,689,750ns <10s.
+Numeric speed INELIGIBLE for every row: host clone residency zero is proven,
+SQLite pager and MinIO process/VM/volume/device cache domains remain unverified.
+Physical RSS/phase peaks/device reads/provider allocation are UNAVAILABLE.
+
+Raw operation ns by frozen order: metadata-local2,237,750; metadata-native
+11,577,959; small-new-full13,650,083; small-exact-reuse12,961,834;
+payload-prefix-write18,307,042; payload-full-read9,135,875;
+payload-prefix-read11,744,959; candidate-hydration16,690,875;
+metadata-transfer1,885,250. All below frozen diagnostic alerts; this is not
+numeric admission, an improvement comparison or an end-to-end SDK result.
+
+Mechanism evidence: metadata-native70RPCs including41GroupFor; exact reuse
+one96097B GET/no PUT; PREFIXwriteone96097B GET+one190B PUT and retainedbase;
+FULLreadoneGET/PREFIXreadtwoGETs; hydration8192rows/65pages/onebuild,
+zero page fullscan/sorts. Transfer5752B/32groups/one8192B page/3RPCs,
+ready-bodyACK only; no multi-page scaling or C5/save-finalization inference.
+
+Retained non-passing work: first release dependency build30,012,927,292ns
+TIMEOUT, all9 NOT_RUN/sample_count0. Same-limit incremental build nextcompleted
+7,208,789,708ns, then each arm ran once. No timeout/worker/workload relaxation,
+no repeated arm or warm retry. Five masters acquiredonce/closedbytecopy clones;
+release archive exactSHA reused across everyrow/proof; source sealed before
+all collection. Local lifecycle PASS. Ownedprovider stop/remove PASS
+270,818,625ns; binddata retained, GC/reclamation UNVERIFIED. Provider startup
+wall UNAVAILABLE (not instrumented), readyidentity retained. PublicSDK/FUSE/S2,
+retainedhistory and resource/cache admission remain NOT_RUN/open.
+
+Covering checks: strictcatalog21PASS/1ignored; finalpurefamily11PASS;
+adapterall-targetlockedClippy-Dwarnings andfmtcheck PASS. Core unchanged,
+priorL2 Core proofs not repeated; no CI/preflight claim.
+
+Production LOC per source commit: spec1ad6715d1 135991 ->135991(delta+0),
+Reference65417/Core70574 unchanged, experimentalstrict5955/support652 unchanged.
+Implementationc838d8d6d 135991 ->135991(delta+0), Reference65417/Core70574 unchanged;
+experimentalstrict5955 ->6009(delta+54), support652 unchanged. Evidencecheckpoint
+135991 ->135991(delta+0), sameproductsubtotals, strict6009/support652 unchanged.
+Same tools/production_loc.py SHA256c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb,
+exactfirst-parent/finalstagedsnapshot scope and testexclusions; experimental
+unshippedruntime disclosed separately. Benchmarkdriver/harness/tests/docs excluded.
+
+Next: investigate bounded batching/request-scoped group lookup work without
+weakening validation, preregister a legal multi-page metadata transfer diagnostic,
+then public end-to-end checks on sealedS2 integration. No unchanged-arm resample.

@@ -1,0 +1,163 @@
+{
+  "parent": "1ad6715d10ad070cdf6ceefdf8b97cf2e6483347",
+  "staged_tree": "cd3c5ec0dd46ef3f59413dc48a49ebe4bdcc6be3",
+  "method": "tools/production_loc.py",
+  "method_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "snapshot_command": "git archive <identity> -- crates core/crates tools/production_loc.py core/benchmark/phase6-live/src; same source scanner/count function on exact snapshots",
+  "records": {
+    "before": {
+      "root": "/Users/yifanxu/.codex/worktrees/phase6-sp1-strict/layerfs/benchmark-results/sp1-speed-source/before",
+      "scopes": {
+        "core": {
+          "files": 359,
+          "lines": 70574,
+          "crates": {
+            "layerfs-api": 796,
+            "layerfs-bridge": 6834,
+            "layerfs-content": 13483,
+            "layerfs-daemon": 2151,
+            "layerfs-fuse": 1447,
+            "layerfs-history": 2658,
+            "layerfs-sandbox": 1106,
+            "layerfs-server": 3996,
+            "layerfs-storage": 9011,
+            "layerfs-telemetry": 2257,
+            "layerfs-workspace": 26835
+          }
+        },
+        "reference": {
+          "files": 193,
+          "lines": 65417,
+          "crates": {
+            "layerfs-cli": 1142,
+            "layerfs-content": 15701,
+            "layerfs-daemon": 3233,
+            "layerfs-fuse": 10986,
+            "layerfs-layerstack-store": 18376,
+            "layerfs-materialization": 358,
+            "layerfs-monitor": 414,
+            "layerfs-sdk": 979,
+            "layerfs-workspace": 11776,
+            "layerfs-workspace-core": 2452
+          }
+        }
+      },
+      "combined": 135991,
+      "experimental_strict_adapter": {
+        "classification": "unshipped research runtime, excluded from product total; same strict_* scope as L1",
+        "lines": 5955,
+        "files": [
+          "core/benchmark/phase6-live/src/strict_candidate_snapshot.sql",
+          "core/benchmark/phase6-live/src/strict_candidates.rs",
+          "core/benchmark/phase6-live/src/strict_catalog.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_candidates.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_owner.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_pool.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_profile.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_publication.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_registration.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_transfer.rs",
+          "core/benchmark/phase6-live/src/strict_client.rs",
+          "core/benchmark/phase6-live/src/strict_commit.rs",
+          "core/benchmark/phase6-live/src/strict_private.rs",
+          "core/benchmark/phase6-live/src/strict_publication.rs",
+          "core/benchmark/phase6-live/src/strict_read.rs",
+          "core/benchmark/phase6-live/src/strict_remote.rs",
+          "core/benchmark/phase6-live/src/strict_schema.sql",
+          "core/benchmark/phase6-live/src/strict_scope.rs",
+          "core/benchmark/phase6-live/src/strict_wire.rs",
+          "core/benchmark/phase6-live/src/strict_wire_dispatch.rs",
+          "core/benchmark/phase6-live/src/strict_writer.rs",
+          "core/benchmark/phase6-live/src/strict_writer_pool.rs"
+        ]
+      },
+      "modified_runtime_support": {
+        "classification": "unshipped existing runtime support, separately disclosed; expands L1 reporting, not product migration",
+        "lines": 652,
+        "files": [
+          "core/benchmark/phase6-live/src/construction.rs",
+          "core/benchmark/phase6-live/src/lib.rs",
+          "core/benchmark/phase6-live/src/minio.rs",
+          "core/benchmark/phase6-live/src/minio_failure.rs"
+        ]
+      }
+    },
+    "after": {
+      "root": "/Users/yifanxu/.codex/worktrees/phase6-sp1-strict/layerfs/benchmark-results/sp1-speed-source/after",
+      "scopes": {
+        "core": {
+          "files": 359,
+          "lines": 70574,
+          "crates": {
+            "layerfs-api": 796,
+            "layerfs-bridge": 6834,
+            "layerfs-content": 13483,
+            "layerfs-daemon": 2151,
+            "layerfs-fuse": 1447,
+            "layerfs-history": 2658,
+            "layerfs-sandbox": 1106,
+            "layerfs-server": 3996,
+            "layerfs-storage": 9011,
+            "layerfs-telemetry": 2257,
+            "layerfs-workspace": 26835
+          }
+        },
+        "reference": {
+          "files": 193,
+          "lines": 65417,
+          "crates": {
+            "layerfs-cli": 1142,
+            "layerfs-content": 15701,
+            "layerfs-daemon": 3233,
+            "layerfs-fuse": 10986,
+            "layerfs-layerstack-store": 18376,
+            "layerfs-materialization": 358,
+            "layerfs-monitor": 414,
+            "layerfs-sdk": 979,
+            "layerfs-workspace": 11776,
+            "layerfs-workspace-core": 2452
+          }
+        }
+      },
+      "combined": 135991,
+      "experimental_strict_adapter": {
+        "classification": "unshipped research runtime, excluded from product total; same strict_* scope as L1",
+        "lines": 6009,
+        "files": [
+          "core/benchmark/phase6-live/src/strict_candidate_snapshot.sql",
+          "core/benchmark/phase6-live/src/strict_candidates.rs",
+          "core/benchmark/phase6-live/src/strict_catalog.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_candidates.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_owner.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_pool.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_profile.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_publication.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_registration.rs",
+          "core/benchmark/phase6-live/src/strict_catalog_transfer.rs",
+          "core/benchmark/phase6-live/src/strict_client.rs",
+          "core/benchmark/phase6-live/src/strict_commit.rs",
+          "core/benchmark/phase6-live/src/strict_private.rs",
+          "core/benchmark/phase6-live/src/strict_publication.rs",
+          "core/benchmark/phase6-live/src/strict_read.rs",
+          "core/benchmark/phase6-live/src/strict_remote.rs",
+          "core/benchmark/phase6-live/src/strict_schema.sql",
+          "core/benchmark/phase6-live/src/strict_scope.rs",
+          "core/benchmark/phase6-live/src/strict_wire.rs",
+          "core/benchmark/phase6-live/src/strict_wire_dispatch.rs",
+          "core/benchmark/phase6-live/src/strict_writer.rs",
+          "core/benchmark/phase6-live/src/strict_writer_pool.rs"
+        ]
+      },
+      "modified_runtime_support": {
+        "classification": "unshipped existing runtime support, separately disclosed; expands L1 reporting, not product migration",
+        "lines": 652,
+        "files": [
+          "core/benchmark/phase6-live/src/construction.rs",
+          "core/benchmark/phase6-live/src/lib.rs",
+          "core/benchmark/phase6-live/src/minio.rs",
+          "core/benchmark/phase6-live/src/minio_failure.rs"
+        ]
+      }
+    }
+  }
+}

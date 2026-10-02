@@ -1,0 +1,2 @@
+# Exact test output bytes include terminal blank lines; preserve authenticated evidence.
+**/*.log -text whitespace=-blank-at-eof

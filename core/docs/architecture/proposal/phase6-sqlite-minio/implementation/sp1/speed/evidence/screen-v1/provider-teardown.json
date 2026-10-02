@@ -1,0 +1,11 @@
+{
+  "container_id": "ed084277b67276e47aa53d5a394918cb37d0c152e62c9ceaf58df7470df66add",
+  "stop_exit": 0,
+  "remove_exit": 0,
+  "wall_ns": 270818625,
+  "status": "PASS",
+  "scope": "owned provider lifecycle ended; bind data retained; no physical reclamation claim",
+  "bind_data": "/Users/yifanxu/.codex/worktrees/phase6-sp1-strict/layerfs/benchmark-results/sp1-speed-provider/r001/data",
+  "startup_wall_ns": null,
+  "startup_wall_unavailable_reason": "not instrumented at provider startup; ready identity retained"
+}

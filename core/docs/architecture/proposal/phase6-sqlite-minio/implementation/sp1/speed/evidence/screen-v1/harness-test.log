@@ -1,0 +1,16 @@
+test_byte_clone_is_independent_and_master_mutation_refuses (test_sp1_components.Sp1Components.test_byte_clone_is_independent_and_master_mutation_refuses) ... ok
+test_cli_preserves_perf_binding_and_secrets_are_not_arguments (test_sp1_components.Sp1Components.test_cli_preserves_perf_binding_and_secrets_are_not_arguments) ... ok
+test_failed_setup_never_attempts_performance_or_hides_row (test_sp1_components.Sp1Components.test_failed_setup_never_attempts_performance_or_hides_row) ... ok
+test_frozen_thresholds_and_missing_metrics_never_zero (test_sp1_components.Sp1Components.test_frozen_thresholds_and_missing_metrics_never_zero) ... ok
+test_nine_unique_rows_and_shared_control_collected_once (test_sp1_components.Sp1Components.test_nine_unique_rows_and_shared_control_collected_once) ... ok
+test_release_build_seals_before_after_and_archives_exact_binary (test_sp1_components.Sp1Components.test_release_build_seals_before_after_and_archives_exact_binary) ... ok
+test_report_always_lists_nine_rows_and_four_views (test_sp1_components.Sp1Components.test_report_always_lists_nine_rows_and_four_views) ... ok
+test_retained_cardinality_rejects_missing_or_admitted_rows (test_sp1_components.Sp1Components.test_retained_cardinality_rejects_missing_or_admitted_rows) ... ok
+test_sidecar_and_symlink_fail_closed (test_sp1_components.Sp1Components.test_sidecar_and_symlink_fail_closed) ... ok
+test_source_change_during_build_refuses_publication (test_sp1_components.Sp1Components.test_source_change_during_build_refuses_publication) ... ok
+test_successful_clock_stays_cache_ineligible_and_retains_for_proof (test_sp1_components.Sp1Components.test_successful_clock_stays_cache_ineligible_and_retains_for_proof) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.019s
+
+OK
