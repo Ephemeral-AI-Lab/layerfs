@@ -20,6 +20,53 @@ Read before touching measurement, benchmark or release work:
 - [`benchmark_agent_report.md`](benchmark_agent_report.md) — required per-family tables and Server/daemon attribution for every benchmark run
 - [`docs/general/release-policy.md`](docs/general/release-policy.md), [`docs/general/documentation-policy.md`](docs/general/documentation-policy.md)
 
+## Phase 6 storage split and metadata implementation preference
+
+**Owner decision, 2026-10-02; applies to Phase 6 under #293/#295.**
+
+- One persistent daemon-owned SQLite engine holds live Workspace metadata in
+  shared Workspace/incarnation-scoped tables. Do not create a database or table
+  set per Workspace, Commit or Exec.
+- Global SQLite owns committed immutable directory/inode/attribute/file-mapping
+  metadata, canonical snapshot metadata objects, pooled metadata values/records,
+  object locations, Commit/history/Branch references and conditional publication.
+  Preserve canonical identities and retained old-state semantics with indexed,
+  bounded operations; no second authoritative namespace or whole-state copy.
+- **MinIO stores file-content packs only:** small whole-file payloads and CDC
+  chunk payloads, including FULL/PREFIX/STORED representations. Never upload
+  filesystem trees, mappings, attributes or pooled metadata value groups as
+  MinIO content packs. Immutable metadata may use SQL BLOB/group storage; this
+  is distinct from a forbidden SQL shadow store for file-content packs.
+- Classify placement by logical use/provenance, not filename/command or only an
+  ObjectRole that may also encode attribute values. The source-reviewed boundary
+  must handle identical canonical bytes used in both domains without changing
+  their identity or silently rerouting file content into SQL.
+- Keep existing CDC, exact CAS, compression/delta and metadata pooling behavior
+  where supported. Upload/ACK file content first; write metadata in bounded SQL
+  batches; conditionally publish the completed root in a short SQL transaction.
+  No SQL/ownership lock spans command execution or content construction/upload.
+  Unknown outcomes retain custody; no guessed adoption, resend or shared deletion.
+- This strict split supersedes the earlier unreleased SP1 proposal to put ordinary
+  and pooled metadata packs in MinIO. Preserve its historical source/evidence;
+  do not claim that current code already implements the revised split.
+
+**Prefer SQLite over custom metadata indexing/paging/cache machinery whenever
+its existing capability suffices.** Use its built-in B-tree tables/indexes,
+pages, cache and transactions instead of rolling your own population registry,
+ordered scratch/index engine or manual disk pager. An exception needs a concrete
+source/capability/work measurement, not a generic belief that custom code is faster.
+Existing bounded codec/chunker buffers and immutable content-tree algorithms
+remain their own responsibilities; this preference does not move file payloads
+into SQLite or add a new dependency when an existing one suffices.
+
+Complexity terminology is precise: replace linear point lookups with indexed
+O(log n) access; use indexed keyset pages instead of repeated scans/OFFSET work;
+replace quadratic repeated ordering with a suitable indexed/streamed algorithm.
+O(n log n) is not generally an improvement over O(n) for the same operation.
+Near-O(1) describes bounded per-operation/page work only when justified by actual
+counts. SQLite's indexes do not make a full traversal constant-time or a bounded
+page cache a whole-process memory proof. Do not move a quadratic scan to SQL.
+
 ## 1. A warm cache must never credit a measured phase
 
 The harness runs timers; the OS, the Store and the page cache are not part of the

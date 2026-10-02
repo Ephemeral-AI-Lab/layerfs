@@ -50,6 +50,30 @@ This file adds the owner's product-source and module-structure requirements.
 - Keep unrelated work intact. Package/source moves and legacy retirement follow
   the migration plan; they are not implicit parts of implementing a component.
 
+## Phase 6 strict storage ownership
+
+Follow the root [Phase 6 split and SQLite preference](../AGENTS.md#phase-6-storage-split-and-metadata-implementation-preference).
+The daemon owns one persistent SQLite engine with scoped live Workspace rows;
+global SQLite owns all committed filesystem/snapshot metadata, mapping trees,
+attributes, pooled metadata values/records and history/publication indexes.
+MinIO owns file-content packs only (whole-file and CDC chunk FULL/PREFIX/STORED).
+Do not carry the legacy all-object pack placement into the Phase 6 MinIO adapter.
+
+Preserve exact canonical metadata bytes/identities while changing physical
+placement/access; do not store a complete mutable namespace plus a conflicting
+second authority. Metadata compression/pooling remains available in SQLite.
+Use logical placement provenance because a content-object grammar can also be
+used for metadata values. Dual-use equal identities need an explicit reviewed
+lookup/dedup rule; no command or workload recognizer.
+
+Reuse existing SQLite indexing, paging, caching and transactions for growing
+metadata state. Prefer indexed point/keyset access to a custom B-tree/pager or
+resident population map when existing capability suffices. Preserve bounded
+SQL transactions/journals/results, code ownership and failure/Unknown rules.
+A fixed memory window must not become a total file/edit/metadata capacity cap.
+This rule applies to the Phase 6 replacement path; it does not rewrite historical
+Core/benchmark format promises, receipts or the existing backend before cutover.
+
 ## Architecture documents follow the code
 
 `docs/architecture/` describes this workspace's product source. It is a

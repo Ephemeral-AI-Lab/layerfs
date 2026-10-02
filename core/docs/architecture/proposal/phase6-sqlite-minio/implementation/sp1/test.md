@@ -1,9 +1,11 @@
 # SP1 minimal tests and retained-history qualification
 
 Status: Dated planning checkpoint; not release evidence or a product contract.
-Written against published source `bfbf48ea7694e8450bd47a3bf2c297fdac36badc`,
-2026-10-02; branch `codex/phase6-metadata-experiments`. S2 working edits are
-uncommitted and unverified. All additions below are prospective and `NOT_RUN`.
+Revision written against published source `8c926b9392f3636ae156236dc26d0510ee069d8d`,
+2026-10-02; branch `codex/phase6-metadata-experiments`. The owner strict-split
+revision is unimplemented/unverified; all additions remain prospective `NOT_RUN`.
+It supersedes the unreleased all-object-MinIO proposal; its prior evidence retains
+its recorded source/scope/status.
 Owning issue: [#295](https://github.com/Ephemeral-AI-Lab/layerfs/issues/295).
 Read [implementation](IMPLEMENTATION.md), [SP1 scope](../STORAGE-PARITY-SPEC.md),
 [historical baseline](../HISTORY-STORAGE-BASELINE.md), and
@@ -15,16 +17,24 @@ Use existing external C2/adapter tests and the existing `fs-bench-pro` runner.
 Add the four witnesses below to those owners; do not build a second framework,
 broad campaign, new workload family, or per-edit suite. A component PASS proves
 its component contract only. The SDK/FUSE witness is independently required.
-Reader and writer witnesses must pass before stride collection. Keep C1
+Strict SP1 starts from clean published source independently of S2a WIP; no
+coherent-S2a prerequisite or WIP import. Reader/writer witnesses must pass before
+stride collection. Keep C1
 unfinished-draft removal, S2 population/shared-engine/concurrency, successor
-cutover and complete-checkout import outside this suite.
+cutover and complete-checkout import outside this suite. Global SQLite stores
+committed directory/inode/attribute/file-mapping canonical metadata, pooled
+values/leaf records, locators and C5 history. MinIO stores file-content whole/CDC
+FULL/PREFIX/STORED packs only; no Ordinary/PooledMetadata objects are uploaded.
 
 Freeze fixture/oracle manifests **before candidate implementation or sampling**:
 input bytes/SHA256, old producer commit/binary SHA256, C1 roots/ObjectIds,
 canonical bytes, roles, predecessors, physical FULL/PREFIX/pool selections,
 framed costs, group shape, locators, counters, policies and oracle SHA256.
 Generate expected bytes with an independent byte splice; use the sealed existing
-C1/C2 producer for canonical and physical expectations. Never derive expected
+C1/C2 producer for canonical and codec/selection expectations. Metadata
+physical placement now changes to SQL; retain its canonical IDs and existing
+framing/codec rather than a second metadata codec. Freeze new location inventory
+separately from these unchanged semantic expectations. Never derive expected
 roots/selections by running the candidate. If the proposed fixture fails to
 produce a required PREFIX/grouped/pool witness on the old producer, preregistration
 is `INCOMPLETE`; freeze a corrected fixture before candidate work, preserving
@@ -41,32 +51,85 @@ request cardinalities and expected counters are immutable manifest data.
 
 | Proposed witness ID | Minimal fixture and operations | Required result |
 | --- | --- | --- |
-| `sp1-reader-v1` | Old-producer sealed packs: whole-file `N(96000)` and `E(N(96000))`; chunks `N(20000)`, `E(N(20000))`, and a second mutation `[128,160)` XOR `0xff`; unrelated chunk bytes XOR `0xa5`. Store base and dependent in different immutable packs. Read deepest, base, then mixed FULL/PREFIX IDs in reverse locator order, with one repeated requested ID. | Exact requested cardinality/order and every canonical/logical byte; actual PREFIX, intermediate/final ObjectId authentication; same-lane mixed FULL/PREFIX and native multi-record group; base GETs, decoded work and peak bounded by existing policy. Reader succeeds without SQLite `object_packs` BLOB backing. |
-| `sp1-writer-v1` | The same payload set through real C1 finalized/predecessor handoff. One save contains two similar eligible whole-files (same-save candidate), two grouped native chunks, an exact duplicate, and unrelated payload. Separate saves make the cross-pack chain. Add pooled leaves below and file lengths `T-1 -> T -> T-1`. | Dedup before trial; exactly one eligible trial per selected candidate; FULL and PREFIX counts/costs equal sealed expectations, both formats readable in one lane; grouped Native by framed size rather than one-record-per-group. Pool ordinals/groups and threshold roots/bytes retain parity. |
-| `sp1-refusals-custody-v1` | Disposable independent copies of reader/writer fixture; one fault per copy using external provider/SQL controls. Missing base pack, altered base/intermediate frame, wrong role, forward/cyclic chronology, invalid locator, supported chunk-depth1 on the sealed two-edge chunk fixture and fixed chain-work boundary; definite PUT/registration failure and lost ACK after successful PUT/registration. | Typed failure at owning boundary for malformed stored records; policy-ineligible/depth/work candidates select FULL with explicit counters; no codec/I/O/integrity error converted into FULL, no publish/retry/alternate route. Unknown quarantines preserved representations/pins and sends no guessed delete/resend. First valid locator remains selected; discarded Commit ownership cannot reclaim a live base. |
-| `sp1-exec-history-v1` | One real SDK Workspace from a prepared empty namespace; three source files `whole=N(96000)`, `chunked=N(200000)`, `boundary=N(T-1)`. Three known successful retained commits: initial; edit `[64,96)` of whole/chunked and append `0x7a` to boundary; truncate boundary to `T-1`, create `duplicate` containing the initial whole bytes. | Generic `WorkspaceApi::exec` runs the ordinary workload through real Linux FUSE, daemon C1/C2, real MinIO packs, host global SQLite and C5. Separate proof reads complete old/new bytes for every path at all three retained roots, content roots/partitions match sealed expectations; metadata and independent full filesystem root follow the timestamp rule below; actual PREFIX and exact dedup recorded, checked cleanup/custody. |
+| `sp1-reader-strict-v2` | Old-producer sealed payload packs: whole-file `N(96000)` and `E(N(96000))`; chunks `N(20000)`, `E(N(20000))`, and a second mutation `[128,160)` XOR `0xff`; unrelated chunk bytes XOR `0xa5`. Store base and dependent in different immutable packs. Read deepest, base, then mixed FULL/PREFIX IDs in reverse locator order, with one repeated requested ID. | Exact requested cardinality/order and every canonical/logical byte; actual PREFIX, intermediate/final ObjectId authentication; same-lane mixed FULL/PREFIX and native multi-record group; base GETs, decoded work and peak bounded by existing policy. Payload reader succeeds without SQL file-payload shadow packs; SQL-only metadata/pool subfixture below reconstructs the same canonical IDs with zero MinIO GETs during its isolated metadata read. |
+| `sp1-writer-strict-v2` | The same payload set through real C1 finalized/predecessor handoff. One save contains two similar eligible whole-files (same-save candidate), two grouped native chunks, an exact duplicate, and unrelated payload. Separate saves make the cross-pack chain. Add SQL pooled leaves, attribute/dual-use provenance below and file lengths `T-1 -> T -> T-1`. | Dedup before trial; exactly one eligible trial per selected candidate; FULL and PREFIX counts/costs equal sealed expectations, both formats readable in one lane; grouped Native by framed size rather than one-record-per-group. SQL pool ordinals/groups and threshold roots/bytes retain parity; MinIO upload inventory has file-payload origin only, SQL holds metadata including mappings/attribute values, and exact ID dual use retains both domain locations. |
+| `sp1-refusals-custody-strict-v2` | Disposable independent copies of reader/writer fixture; one fault per copy using external provider/SQL controls. Missing payload base pack or SQL metadata/pool dependency, altered base/intermediate frame, wrong role, forward/cyclic chronology, invalid locator, supported chunk-depth1 on the sealed two-edge chunk fixture and fixed chain-work boundary; definite PUT/registration failure and lost ACK after successful PUT/registration. | Typed failure at owning boundary for malformed stored records; policy-ineligible/depth/work candidates select FULL with explicit counters; no codec/I/O/integrity error converted into FULL, no publish/retry/alternate route. Unknown quarantines preserved representations/pins and sends no guessed delete/resend. First valid locator remains selected; discarded Commit ownership cannot reclaim a live base. |
+| `sp1-exec-history-strict-v2` | One real SDK Workspace from a prepared empty namespace; three source files `whole=N(96000)`, `chunked=N(200000)`, `boundary=N(T-1)`. Three known successful retained commits: initial; edit `[64,96)` of whole/chunked and append `0x7a` to boundary; truncate boundary to `T-1`, create `duplicate` containing the initial whole bytes. | Generic `WorkspaceApi::exec` runs the ordinary workload through real Linux FUSE, daemon C1/C2, real payload-only MinIO packs, host global SQLite committed metadata/pools and C5. Separate proof reads complete old/new bytes for every path at all three retained roots, content roots/partitions match sealed expectations; metadata and independent full filesystem root follow the timestamp rule below; actual PREFIX and exact dedup recorded, checked cleanup/custody. |
 
-The pool subfixture in `sp1-writer-v1` uses four 40-row inode leaves, first
+The SQL pool subfixture in `sp1-writer-strict-v2` uses four 40-row inode leaves, first
 serial1; values use the existing `metadata_pool` external-test generator:
 RegularFile, refs1, seeds0..39, big-endian seed in a 32-byte zero buffer for
 content ObjectId and `[seed as u8;8]` for metadata ObjectId. At step0..3,
 increment byte1 of the first four encoded values by the step; supply previous
 leaf as predecessor. Require one pooled FULL leaf and three pooled delta leaves,
-reused value ordinals across leaves/saves, exact canonical bytes after reopen.
+reused value ordinals across leaves/saves, exact canonical bytes after reopen. Read each retained pool leaf independently
+and verify its sealed canonical ID. Current pooled decoding authenticates value-
+group digests/edge IDs and the requested final leaf, without reconstructing/hash-
+checking every intermediate leaf inside a single dependent read. Payload chain
+intermediate/final hashing is a separate retained requirement.
 The policy group ceiling is 165 values, but public construction emits one leaf
 of at most100 values per group. If reservation/group-window ownership changes,
 reuse `a_group_holds_one_leaf_and_never_reaches_the_group_capacity`: three
 100-row leaves have ordinal starts1/101/201. Do not invent an existing165-value
 public fixture or duplicate unchanged capacity proofs.
 
-For the new MinIO pool seam, include the existing minimal two-leaf same-save
+For the SQL pool seam, include the existing minimal two-leaf same-save
 fixture: eight shared values plus two new values from `metadata_pool.rs`. Require
+`leaves=2`, `reused_values=8`, `new_values=10` (eight initial plus two new),
 private ordinal reuse inside that save, while an unrelated/older captured scope
 refuses private groups even after a successful own-save read warmed the cache.
-Check publication/save identity and captured pack ceiling before value/group
-cache answers. Reuse the owning unrelated-reader refusal; count bounded group
-reads/seals, with no GET/PUT per value. Include these within the existing writer
-and refusal witnesses, not a separate campaign.
+Check publication/save identity and captured SQL visibility ceiling before
+value/group cache answers. Observe via a fresh read-only SQL connection that
+private rows are absent from public selection until ready; count bounded SQL
+group reads/seals, with zero MinIO GET/PUT for that metadata phase. Include
+these within the writer/refusal witnesses, not a separate campaign.
+
+The reader reuses the old producer's sealed initial three-file directory/inode/
+attribute/mapping graph, with declared mode0640/directory0750/mtime
+1700000000000000000ns, scope seed `[0x53;32]`, and the
+four-leaf pool chain, now stored in global SQL with existing C2 framing. Read
+through the production SQL domain route from fresh connections; require canonical
+roots/bytes, pooled dependencies and full retained graph authentication unchanged.
+Its isolated metadata/pool-read window has **MinIO GET delta0**; a later file
+content read may legitimately GET payload packs. SQL BLOB/group metadata is
+allowed; a full old SQL Store containing file-payload packs cannot qualify.
+
+Audit every producer/caller route to the typed domain boundary; absent provenance
+fails explicitly. Coalesce provenance vectors into writer/reader witnesses: seal
+the first actual CDC chunk from ordinary regular-file `construct_stream(N(200000))`
+at frozen default policy before candidate work. Record its raw offset/range,
+bytes/hash and canonical ID in the independent manifest; raw length is at most
+32768. Use those **exact chunk raw bytes** as `AttributeKey` domain `sp1`, key
+`opaque` through ordinary C1 attribute construction. Current `attributes/value.rs`
+`emit_value` emits Chunk + ExtentLeaf + FileState. Both real producers must emit
+the identical Chunk ID/canonical bytes; a manually labelled `N(20000)` Chunk
+cannot prove the regular-file producer, whose default representation is WholeFile.
+The raw20k reader/codec component fixtures above remain unchanged.
+
+Both uses reopen with locators keyed `(PlacementDomain, ObjectId)` and agreeing
+canonical role/length descriptors; both placements are mandatory for dual use.
+Read SQL Metadata first then FilePayload, and reverse the order, sharing the
+owner caches. On separate private fixture copies omit each required domain
+placement in turn, warm the other domain's ID, then require the missing-domain
+read to refuse despite its canonical-ID cache hit. Check domain, physical-body
+identity, captured scope and generation before cache answers; separate these
+cache keys. Attribute-only use stays SQL, file-only use stays MinIO; dual use
+cannot silently substitute SQL for a file read or MinIO for a metadata read.
+A shared SQL FileState/Extent mapping ID also retains reference-use facts
+`RegularFileGraph` versus `MetadataGraph`; its child routing follows the current
+logical use, never whichever use first populated the ID/cache.
+
+Inventory provenance for every uploaded record; reject directory, inode,
+attribute, mapping or pooled-value origin, regardless of filename/command or
+misleading WholeFile/Chunk role. A dual-use ID in MinIO is allowed only for its
+independently recorded file-payload use; metadata lookup still uses SQL. No
+recognized command path or special test hook may establish classification.
+
+Persist signature/pool catalog derivations in bounded SQL batches, query through
+indexed O(log n) point lookups/keyset pages, and preserve private/public scope.
+The small witnesses record SQL row/page/VM work and observed query plans for
+changed ownership; no custom rolling B-tree, population cache or new pager is
+required. C1 immutable content/metadata trees and bounded codec buffers remain.
 
 The same-save witness freezes current C2 eligibility after its **private group
 seal**, before external ACK. Raw `Pending` finalized bytes alone cannot be read
@@ -80,7 +143,7 @@ bytes, GETs and group/pack seals separately from upload/registration ACKs.
 Refusal mutations occur outside timers, on private copies, without product fault
 hooks, fake clocks/allocators, inline tests or test-only product branches.
 Corrupt immutable bytes externally, retaining key/locator so integrity fails;
-for intermediate-authentication proof, prepare a digest-valid altered pack and
+for payload-chain intermediate-authentication proof, prepare a digest-valid altered pack and
 its private selected locator before the read. Distinguish pack SHA, frame
 checksum, intermediate canonical ID and final canonical ID refusals; a pack-digest
 failure alone cannot prove deeper authentication. Missing candidate is policy
@@ -106,10 +169,10 @@ pins and report unsupported reclamation; never invent a GC service to pass.
 
 ## 2. Public route, counters, timers and provider identity
 
-`sp1-exec-history-v1` uses arbitrary shell/POSIX workload bytes through generic
+`sp1-exec-history-strict-v2` uses arbitrary shell/POSIX workload bytes through generic
 Exec. Freeze three Exec processes and three Commit calls: the first creates the three
-files in the mounted empty Workspace, the next two perform the listed changes;
-and no command recognition, SDK range-edit replacement, direct Store mutation
+files in the mounted empty Workspace, the next two perform the listed changes.
+No command recognition, SDK range-edit replacement, direct Store mutation
 or host canonical construction shortcut. The workload binary/script SHA and
 full commands belong to its manifest. The independent verifier uses ordinary
 public historical reads; direct SQL/pack inspection is supplemental, never the
@@ -136,7 +199,9 @@ provider evidence; add genuine bounded telemetry only when the product needs it.
 
 Component tests are correctness/count diagnostics, with no numeric speed gate.
 Integrated witness declares a 15s complete command bound and separate 9.5s proof
-bound. The external timer is launch-to-exit including Mount/Exec/Commit/Status,
+bound; existing Workspace16MiB, backing1GiB and container512MiB ceilings stay
+unchanged. Combined live SQL/codec/cache peaks need real attribution; bounded
+individual buffers cannot establish a whole-owner memory PASS. The external timer is launch-to-exit including Mount/Exec/Commit/Status,
 unmount/deletion and receipt/cleanup work; report inner Exec/Commit spans as
 nested attribution. Oracle generation, fixture acquisition/builds and verifier
 are separate scopes. No per-operation output poll, digest or reconnect in the
@@ -150,7 +215,8 @@ SDK/daemon/host binaries and ARMv8 flags. These are prerequisites, not guessed
 pins: unresolved identity means `NOT_RUN`. Local prototype MinIO is HTTP without
 fallback; that is an experimental topology, not cloud durability. Host owns
 SDK/Server/global SQLite/C5; Linux owns daemon/FUSE/workload; real MinIO provider
-owns packs at the declared provider location. Freeze locality and account for
+owns file-content packs at the declared provider location; global SQLite owns
+all committed canonical metadata/pool representations and indices. Freeze locality and account for
 all owners. Do not put global SQLite/coordinator in Docker or silently switch
 provider. Schema/wire changes require reviewed source allocation before tests.
 
@@ -254,16 +320,18 @@ python3 core/benchmark/fs-bench-pro/runner.py report --run EXISTING_OWNED_RUN
 Stride3/1 use `history-retention-stride-3-total-storage-v4` and
 `history-retention-stride-1-total-storage-v4`. Existing `run` invokes performance
 and the separate bounded native verifier; `verify --run` rederives retained
-evidence only. There is currently **no MinIO history selector/profile**; no
+evidence only. There is currently **no strict-split MinIO/SQL history selector/profile**; no
 `--backend minio`, `--profile sp1` or `--storage-verify-run` in this Core parser.
 Add a versioned adapter/profile to this same runner/registry prospectively,
 retaining schedule/oracle semantics and documenting topology before collection.
 
-Freeze meaningful same-layer MinIO numeric parity gates before candidate
-sampling. Inventory encoded records/pack bodies, all MinIO object bytes,
-provider allocated disk/control overhead, all required global SQL locator,
-candidate, pooling, dependency and history indices, persistent daemon storage,
-temporary/spool high-water and duplicate/alternate packs. Track retained base
+Freeze meaningful same-layer strict-split numeric parity gates before candidate
+sampling. Inventory all MinIO payload records/pack bodies plus SQL encoded
+metadata/pool records/groups: this sum is the comparable encoded-body denominator
+against the historical all-object pack-body totals, not MinIO alone. Also inventory
+all MinIO object bytes, provider allocated disk/control overhead, all required
+global SQL canonical metadata/group bodies and locator/candidate/pooling/
+dependency/history indices, persistent daemon storage, temporary/spool high-water and duplicate/alternate packs. Track retained base
 closure and abandoned/Unknown objects. MinIO payload bytes alone cannot be
 compared to historical C2+C5 `st_blocks*512`. Separate payload efficiency from
 provider disk footprint and total retained allocation; do not apply the old

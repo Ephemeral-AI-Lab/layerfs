@@ -1,41 +1,93 @@
-# SP1 implementation specification
+# SP1 strict SQLite metadata / MinIO file-content implementation
 
 Status: Proposal; target LayerFS 0.1.7; not a released contract.
 
-Source audit: published parent `bfbf48ea7694e8450bd47a3bf2c297fdac36badc`,
-branch `codex/phase6-metadata-experiments`, 2026-10-02. The publication commit for this prospective specification is recorded on #295.
-SP1 is unimplemented
-and unrun; existing uncommitted S2 runtime/documentation changes are a separate,
-unverified checkpoint. [#295](https://github.com/Ephemeral-AI-Lab/layerfs/issues/295)
-owns SP1 under #293. [Storage parity scope](../STORAGE-PARITY-SPEC.md),
-[S2 ownership](https://github.com/Ephemeral-AI-Lab/layerfs/issues/296), and [test plan](test.md) govern the handoff.
+Source audit: published `8c926b9392f3636ae156236dc26d0510ee069d8d`, branch
+`codex/phase6-metadata-experiments`, 2026-10-02. The strict split below follows
+owner direction and updated root/core AGENTS; it is local/unpublished until its
+exact revision commit is recorded. **Strict SP1 is unimplemented and NOT_RUN.**
+S2 changes remain a separate uncommitted/unverified checkpoint.
+Strict SP1 starts from a clean published source independently of that WIP.
+[#295](https://github.com/Ephemeral-AI-Lab/layerfs/issues/295) owns SP1 under #293;
+[scope](../STORAGE-PARITY-SPEC.md), [test plan](test.md), and
+[S2](https://github.com/Ephemeral-AI-Lab/layerfs/issues/296) are owning references.
 
-## 1. Selected change and source evidence
+**Dated supersession note, 2026-10-02:** commit `8c926b9392f3636ae156236dc26d0510ee069d8d`
+published an unreleased SP1 proposal with ordinary/pooled metadata packs in
+MinIO and a metadata-only catalog. This owner decision supersedes that placement.
+Its source/history and receipts remain intact; no earlier receipt is relabeled
+as strict-split proof. The old `34 MiB - 2` simultaneous-buffer subtotal is a
+legacy conservative envelope, not the revised topology's measured memory.
 
-Retain C1 canonical objects, CDC, `construct_stream` and `apply_edits`; retain
-C2's exact CAS, existing FULL/PREFIX/STORED encoding, selector, pooled inode
-metadata, group/pack placement and chain policies. Refactor their actual storage
-access so the daemon can use MinIO immutable packs with a metadata-only global
-SQLite catalog. One coordinated storage/Bridge owner owns that contract.
+## 1. Ownership and retained algorithms
 
-The audit identifies these concrete gaps; they are not implemented capabilities:
-
-| Source | Existing mechanism or gap |
+| Owner | Authoritative data |
 | --- | --- |
-| [C2 selector](../../../../../../crates/layerfs-storage/src/encoding/delta/select.rs) | `SelectInput`, depth walk and base acquisition depend on `Connection`; one eligible trial compares complete framed record cost. |
-| [C2 resolver](../../../../../../crates/layerfs-storage/src/encoding/delta/read.rs) | Reads base ID from packed record; checks strict locator chronology; authenticates every intermediate and final canonical object. |
-| [C2 placement/selection](../../../../../../crates/layerfs-storage/src/cas/selection.rs) | `pending_base_for` seals/places a pending group before a candidate is used; this is a private placed row, not ordinary publication. |
-| [C2 pool reader](../../../../../../crates/layerfs-storage/src/encoding/pool/read.rs), [pool owner](../../../../../../crates/layerfs-storage/src/cas/pool_lane.rs) | Ordinal/value-group catalog, exact value checks, COPY/INSERT leaf deltas and reconstruction also depend on SQLite access. |
-| [Prototype packing](../../../../../../benchmark/phase6-live/src/packing.rs) | Calls `encode_full`; inode leaves bypass pooling; Native is incorrectly sealed per record relative to current C2 grouping. |
-| [Prototype reader](../../../../../../benchmark/phase6-live/src/read_window.rs) | Calls `decode_canonical` with base `None`; cannot reconstruct PREFIX. |
-| [Prototype catalog](../../../../../../benchmark/phase6-live/src/metadata_catalog.rs) | Application `P6L2`, schema 2, only `packs`/`objects`; first registered exact identity keeps its locator. No pool/signature/save catalog. |
-| [Prototype construction](../../../../../../benchmark/phase6-live/src/construction.rs) | Already uses C1 fresh construction and inherited edits; adapt its consumer/provider, preserve these algorithms. |
+| One persistent daemon SQLite engine | Live mutable Workspace inode/name/extent/edit rows in shared Workspace/incarnation-scoped tables; S2 ownership. No DB/table set per W, Commit or Exec. |
+| Global SQLite | Immutable canonical directory/inode/attribute/file-mapping/root metadata, metadata records/groups and pooled values, both-domain locators, save visibility, Commit/history/Branch references and conditional publication. |
+| MinIO | **File-content packs only:** regular-file whole payloads and CDC chunks, with existing FULL/PREFIX/STORED representations. No mapping, attribute, filesystem tree or pooled metadata pack. |
 
-No second selector, codec, fingerprint algorithm, host constructor, SQLite
-BLOB-pack shadow store, third-party patch, new worker or tuned profile is selected.
-Physical pack digests may differ with immutable placement; canonical IDs must not.
+Canonical metadata is immutable and keyed by its existing ObjectId: reuse old
+objects, insert only newly changed objects, retain prior roots. Encoded/pool
+storage is a representation of those exact canonical bytes, not a conflicting
+mutable namespace. SQL metadata BLOBs/groups are permitted. SQL storage of
+file-payload bytes or file-content pack shadows is forbidden.
 
-## 2. Frozen profile
+Retain C1 canonical formats/IDs, CDC, `construct_stream`, `apply_edits` and roots;
+retain C2 exact CAS, selector, FULL/PREFIX/STORED codec, framed-cost comparison,
+metadata compression/pooling and depth/work policies. Change placement/access,
+not algorithms. One coordinated storage/Bridge owner owns this boundary; global
+services never run C1 construction or recertify namespace/provider contents.
+No universal manager, second selector/codec, new dependency, patched dependency,
+new worker, fallback backend or custom metadata pager is selected.
+
+| Source evidence | Consequence for this implementation |
+| --- | --- |
+| [C2 selector](../../../../../../crates/layerfs-storage/src/encoding/delta/select.rs), [resolver](../../../../../../crates/layerfs-storage/src/encoding/delta/read.rs) | SQLite-coupled access must be extracted; retain one eligible trial, packed-record authoritative base ID, strict chronology and payload-chain intermediate/final hashes; pooled authentication has the separate scope below. |
+| [C2 private placement](../../../../../../crates/layerfs-storage/src/cas/selection.rs) | `pending_base_for` seals/places a group before a same-save base is acquired; retain this without one PUT per base. |
+| [C2 pool](../../../../../../crates/layerfs-storage/src/cas/pool_lane.rs), [pool reader](../../../../../../crates/layerfs-storage/src/encoding/pool/read.rs) | Retain ordinals, exact value matching, COPY/INSERT leaves and work limits, with SQL metadata group access. |
+| [Attribute values](../../../../../../crates/layerfs-content/src/filesystem/attributes/value.rs) | `emit_value` emits **Chunk + ExtentLeaf + FileState** for metadata. ObjectRole alone cannot classify placement. |
+| [Finalized output](../../../../../../crates/layerfs-content/src/object/output.rs), [filesystem objects](../../../../../../crates/layerfs-content/src/filesystem/objects.rs) | Existing objects carry role/bytes/references/predecessors, not placement domain; consumer/provider must bind logical producer provenance. |
+| [Prototype packing](../../../../../../benchmark/phase6-live/src/packing.rs), [reader](../../../../../../benchmark/phase6-live/src/read_window.rs), [catalog](../../../../../../benchmark/phase6-live/src/metadata_catalog.rs) | FULL-only all-role packing, base `None`, unpooled inode leaves and two-table catalog do not implement the selected split. |
+
+## 2. Placement provenance and exact-ID dual use
+
+Use two concrete operation-scoped adapter pairs, bound at logical C1 entry points:
+
+- `MetadataConsumer`/`MetadataReader` for FilesystemObjects, directories, inodes,
+  attributes, symlinks and their complete value/mapping graphs. Every emitted or
+  acquired object in that scope is global SQL metadata, even WholeFile/Chunk.
+- `FileConsumer`/`FileReader` for regular-file `construct_stream`, `apply_edits`
+  and content reads reached from a regular-file inode content reference. In this
+  explicit file scope WholeFile/Chunk are MinIO payload; extent pages/FileState
+  are SQL metadata. Role refines known provenance; it never creates provenance.
+
+Attribute `read_value` descends existing file-mapping grammar through its
+**MetadataReader**, so its Chunk read remains SQL. Regular-file FileView/mapping
+reads use the **FileReader** with SQL mappings and MinIO payloads. These wrappers
+implement existing C1 FinalizedConsumer/AuthenticatedObjects; no hash/grammar
+change is required. SP1.0 audits every producer and filesystem/content caller,
+including mixed read batches and unchanged references; an unbound producer or
+ambiguous caller fails explicitly, never guesses from filename/command or probes
+one backend after the other fails.
+
+Maintain canonical identity facts once and physical placement eligibility per
+`(PlacementDomain, ObjectId)`. A byte-identical Chunk used both as an attribute
+value and regular-file data has **the same ID**, and must have both a SQL metadata
+representation and a MinIO payload representation. Validate equal role, length
+and exact authenticated bytes; dedup within each domain, never count a SQL copy
+as a completed file-payload upload or move metadata into MinIO because its ID
+already has a payload locator. Shared canonical mapping IDs can be reused in SQL;
+edge-use/reader scope distinguishes attribute-chunk from file-chunk references.
+Registration preserves `LogicalUse::{RegularFileGraph, MetadataGraph}` beside
+physical domain, including reference-use facts for a deduplicated mapping. The
+same SQL mapping body may need both use facts; its child placement is checked
+for each use, not frozen once by the first writer of its canonical ID.
+Candidate/base and pooled-value lookup are domain-scoped; no delta dependency
+crosses SQL/MinIO storage domains. Global identity equality does not authorize a
+missing required placement. First valid locator wins **within its domain**.
+
+## 3. Frozen construction/encoding profile
 
 [C1 policy](../../../../../../crates/layerfs-content/src/policy.rs),
 [CDC](../../../../../../crates/layerfs-content/src/file/cdc/gear.rs),
@@ -44,54 +96,50 @@ Physical pack digests may differ with immutable placement; canonical IDs must no
 
 | Item | Retained setting |
 | --- | --- |
-| Logical file length | 0 = empty; `0 < length < 128 KiB` whole-file; `>=128 KiB` chunked. Cutoff is exclusive. |
-| CDC | Minimum/target/maximum 8/16/32 KiB; existing seed/profile unchanged. |
-| Encoding | Payload Zstd level 3; ordinary/pooled group level 1; existing STORED probe/selection unchanged. |
-| Delta depth | Whole-file 8, chunk 4, pooled metadata 8. |
-| Payload dependency work | Canonical 512 KiB; encoded 256 KiB. |
-| Codec arenas | Encode 16 MiB per writer; decode 1 MiB per read owner. |
-| Placement | Framed group target 48 KiB; group canonical ceiling 512 KiB; ordinary/Native/whole packs 256 KiB; new pooled packs 64 KiB. |
-| Pool | 165 values/group; 100 rows/leaf; value index 131,072 entries; current ordinal reservation/window policy. |
+| Regular-file length | 0 empty; `0 < length < 128 KiB` whole; `>=128 KiB` chunked. Attribute extent-only grammar remains unchanged. |
+| CDC | Minimum/target/maximum 8/16/32 KiB, existing seed/profile. |
+| Codec | Payload Zstd 3; ordinary/pooled groups Zstd 1; existing STORED probe and complete-cost choice. Metadata Chunk uses its existing codec in SQL. |
+| Depth | Whole-file 8, chunk 4, pooled metadata 8. |
+| Payload-grammar dependency work | Canonical 512 KiB, encoded 256 KiB, whether a Chunk is file payload or metadata value. |
+| Arenas | Encode 16 MiB per admitted writer; decode 1 MiB per read owner. |
+| Placement/pool | Group framed target 48 KiB, canonical group cap 512 KiB; current lane capacities, 165 values/group, 100 rows/leaf, 131072-entry pool index. |
 
-Keep the existing distinction: an ordinary requested object is bounded by object
-and read-wave capacity; chain work charges its **dependencies**. Acquiring an
-object as a dependency charges that object too. Do not make the requested root
-consume a dependency budget. Pooled chains retain their separate canonical,
-encoded and 32 MiB decoded-work limits from C2 policy.
+Ordinary requested-object size is bounded separately from dependency work;
+`resolve_dependency` charges the acquired object too. Keep pooled chains' separate
+canonical/encoded and 32 MiB decoded-work limits. Small/large file transitions
+retain canonical and byte semantics; cross-role delta hints remain deferred #185.
+C1 deferred mapping draft `8 MiB - 1` is a separate accumulation gate, unchanged.
 
-Small/large transitions retain logical byte/canonical semantics. Cross-role
-whole/chunk delta hints remain deferred to #185. The C1 deferred mapping draft
-guard (`8 MiB - 1`) is a separate accumulation gate; SP1 neither changes it nor
-claims arbitrary accumulated edit capacity.
+## 4. One neutral reader/selector access seam
 
-## 3. Narrow access contract
-
-These are **proposed signatures**, to be implemented once in C2 and re-used by
-both existing SQLite and MinIO adapters. Types live in focused access files;
-`lib.rs`/`mod.rs` only declare/re-export/delegate. Avoid a universal Store manager.
+These are **proposed**, source-reviewable signatures, not already exported APIs:
 
 ```rust
+enum PlacementDomain { FilePayload, Metadata }
 struct CatalogScope { publication: u64, captured_pack_ceiling: i64,
                       own_save: Option<SaveId> }
-struct LocatedObject { location: ObjectLocation, pack: PackRef }
-enum PackRef { Registered { order: i64, digest: [u8; 32] },
-               Private { owner: SaveId, order: i64, generation: u64 } }
+struct LocatedObject { location: ObjectLocation, domain: PlacementDomain,
+                       body: BodyRef }
+enum BodyRef { PayloadPack { order: i64, digest: [u8; 32] },
+               MetadataPack { order: i64, row: MetadataPackId },
+               MetadataValueGroup { ordinal: u32, row: ValueGroupId },
+               Private { owner: SaveId, domain: PlacementDomain,
+                         order: i64, generation: u64 } }
 trait CatalogRead {
-    fn locations(&self, scope: CatalogScope, ids: &[ObjectId])
-        -> StorageResult<Vec<Option<LocatedObject>>>;
+    fn locations(&self, scope: CatalogScope, domain: PlacementDomain,
+                 ids: &[ObjectId]) -> StorageResult<Vec<Option<LocatedObject>>>;
     fn value_group(&self, scope: CatalogScope, ordinal: u32)
         -> StorageResult<Option<LocatedValueGroup>>;
     fn group_page(&self, scope: CatalogScope, from: u32, limit: usize)
         -> StorageResult<GroupPage>;
 }
-trait PackRead {
-    fn read_into(&self, pack: PackRef, out: &mut Vec<u8>) -> StorageResult<()>;
+trait BodyRead {
+    fn read_into(&self, scope: CatalogScope, body: BodyRef,
+                 out: &mut Vec<u8>) -> StorageResult<()>;
 }
-fn resolve_at(catalog: &dyn CatalogRead, packs: &dyn PackRead,
-              scope: CatalogScope, root: LocatedObject,
+fn resolve_at(access: &ReadAccess<'_>, root: LocatedObject,
               state: &mut ResolveState<'_>) -> StorageResult<(Vec<u8>, ObjectId)>;
-fn resolve_dependency_at(catalog: &dyn CatalogRead, packs: &dyn PackRead,
-                         scope: CatalogScope, root: LocatedObject,
+fn resolve_dependency_at(access: &ReadAccess<'_>, root: LocatedObject,
                          state: &mut ResolveState<'_>)
     -> StorageResult<(Vec<u8>, ObjectId)>;
 fn select(input: &mut SelectInput<'_>, id: ObjectId, canonical: &[u8],
@@ -99,199 +147,179 @@ fn select(input: &mut SelectInput<'_>, id: ObjectId, canonical: &[u8],
           encode: &mut CompressionWorkspace) -> StorageResult<EncodedRecord>;
 ```
 
-`SelectInput` borrows catalog/pack access plus scope instead of a `Connection`;
-keep its existing capacities, Candidates, DepthCache, codec/cache/counter fields.
-Writer base acquisition calls `resolve_dependency_at`: it charges the acquired
-base itself and its chain, matching existing `resolve_dependency`. Ordinary
-`resolve_at` exempts only its requested object from dependency work. Both call
-one shared bounded resolver; the adapter must not substitute an uncharged read.
-`ResolveState<'a>` borrows the caller's C2 caches/workspace for one wave; returned
-canonical bytes are caller-owned. No SQLite mutex/statement or pending mutex
-survives a provider/codec call. Pack bytes remain in caller-owned bounded storage;
-private pack access copies into that cache at most once per generation, never
-returns a reference that outlives the mutable lane tail. Appending a tail changes
-its generation and invalidates its cached pack body; closed group/value content
-remains immutable. There is no daemon-lifetime payload cache.
+`ReadAccess` borrows captured scope, domain, catalog and body reader; SelectInput
+borrows this seam instead of Connection and retains existing C2 cache/counter/
+capacity fields. Both resolve functions call one existing bounded chain algorithm.
+Move/re-export ObjectLocation from SQLite-specific access without semantic change.
+Concrete current SQLite adapter preserves existing standalone Store behavior.
+Phase6 body access dispatches a typed PayloadPack to MinIO, MetadataPack/MetadataValueGroup to
+bounded global SQL pages, and Private only to its matching owner. Metadata native
+encoded records, pooled leaves and value-group reads **never issue a MinIO GET**.
+SQL `MetadataPack` stores the original complete bounded metadata-pack envelope
+(header, directory and framed records), because the existing canonical decoder
+and stored-base lookup parse that envelope. It contains only metadata-domain
+records. SQL pooled value groups retain their existing separate value-group bytes
+and checked lane/codec/decoded-length/digest descriptors through
+`MetadataValueGroup` and the existing value-group decoder/authenticator; those
+standalone bytes do not enter the PoolReader pack-header path.
+Do not feed bare group bytes into a pack decoder or store a file-payload pack in
+SQL. SP1.0 freezes concrete row IDs, bounded transfer assembly and wire allocation.
+Keep existing record/group bytes/lane versions; physical placement is not a new
+codec. Pack digest authenticates MinIO bytes; SQL group/record authentication
+retains existing digests and payload-grammar intermediate/final canonical IDs.
+Existing pooled-leaf reconstruction authenticates value-group digests/edge IDs
+and the requested final canonical leaf; it does not independently reconstruct/
+hash every intermediate leaf during one dependent read. Read each retained leaf
+individually against its sealed canonical ID in the pool witness. Stronger
+per-step pooled canonical hashing is not claimed as existing behavior.
 
-`ObjectLocation` moves/re-exports from its SQLite-specific module into neutral
-access without changing its role/length/group/record meaning. The current SQLite
-adapter preserves read-scope/ceiling SQL and pack access. The MinIO adapter maps
-registered pack order to digest, verifies GET digest and invokes the same
-resolver/pool reader. Enforce both publication/save visibility and captured
-registered-pack ceiling before **every** lookup/provider/cache answer. Private
-locations additionally require the matching save and tail generation; they do
-not bypass captured public visibility. Advancing a view is an explicit new
-selection, not a cache refresh or retry. A pack
-digest is identity, not chronological order.
+Qualify body/group caches by domain plus immutable body/order/group identity;
+private keys include save/generation. Equal numeric SQL and payload orders must
+never collide. Check required `(domain, ID)` placement, logical-use references,
+captured publication/ceiling and save ownership before any provider/cache
+answer, including a canonical-ID cache hit. Shared-owner reads in both domain
+orders must refuse a missing placement even when equal canonical bytes are cached. Private snapshots require matching generation; immutable SQL rows do not
+become visible because their bytes are cached. Tail append invalidates its pack
+snapshot; returned canonical bytes are caller-owned. ResolveState borrows caches
+and codec for a declared wave/operation. No SQL mutex/statement spans C1/codec/
+provider calls, and no daemon-lifetime file-payload cache is introduced.
 
-Metadata mutation has a separate concrete client with bounded methods:
-`begin_save(owner) -> SaveScope`; `reserve_ordinals(save, demand) -> Range`;
-`register_page(save, completed_packs, objects, value_groups) -> SelectedPage`;
-`candidate_page(scope, cursor) -> CandidatePage`;
-`finish_storage(save) -> ReadyStorage`; `abandon(save)` / `quarantine(save)`.
-Do not put upload, reconstruction, C1 construction or C5 history into this client.
-`SelectedPage` returns normalized locators in input order and exact cardinality;
-it also returns registration order for value groups and a continuation cursor.
+## 5. Bounded writer chronology and publication
 
-## 4. Private placement, chronology and publication
+1. Domain-scoped exact CAS checks role/length/authenticated canonical bytes.
+   Pending finalized bytes are visible to their own C1 construction, but are not
+   physical delta bases. Preserve seal_pending/private placed representation and
+   chronological `(order, group, record)` checks before acquiring a same-save
+   candidate. Keep one bounded tail per relevant domain/lane; no input-wide packs.
+2. File payload lanes retain framed-byte grouping, including multi-record Native
+   groups. A private group seal need not upload/close a payload pack. At existing
+   capacity/completion seals, hash and PUT complete immutable content packs;
+   base precedes dependent in the same pack or its prior uploaded pack. ACK, or
+   definite 412 plus exact-byte validation, establishes complete payload custody.
+   Do not upload metadata lane tails or issue a tiny PUT for every private base.
+3. After referenced file-payload ACKs, stage newly changed metadata objects,
+   encoded groups, pooled value groups/leaves and normalized payload locators in
+   bounded global SQL transactions. Previously staged same-save SQL metadata is
+   a private eligible base; foreign/private metadata is hidden. Value groups are
+   staged before leaves using their ordinals; base metadata precedes its delta.
+   Reuse old immutable SQL objects; no whole namespace copy, transaction or scan.
+4. Bounded registration pages normalize selected `(domain, ID)` locators. Base
+   ID remains authoritative in physical record; daemon-derived edge metadata
+   must agree. Check normalized base-before-dependent chronology/availability
+   and value-group coverage incrementally. Alternate valid payload packs keep
+   first valid locator; existing selected dependents retain their recorded edge.
+   Invalid chronology/identity fails the page atomically, with no re-encoding.
+5. `finish_storage` checks incremental completion/closure markers, not the whole
+   namespace. Mark completed SQL metadata/locators/candidates ready, then perform
+   the short existing C5 conditional root/head publication. No SQL/ownership lock
+   spans Exec, construction or upload; no cross-provider atomicity promise.
+   Global authority checks row shape, ownership and readiness only, without
+   content/tree/provider recertification. Keep runtime SQL atomicity, not new
+   fsync/cloud durability. Retained old roots still reference unchanged objects.
 
-1. Admit finalized objects into the existing bounded operation window. Exact CAS
-   checks role, canonical length and authenticated canonical bytes, including a
-   competing selected representation. C1 may read same-operation finalized bytes
-   while constructing references; those raw bytes alone are not a physical base.
-2. Preserve C2 `pending_base_for`/`seal_pending`: close and place a needed group
-   into the operation's bounded lane tail, create an owner-private locator, then
-   let the existing selector acquire that representation. Private packed records
-   and bases are visible only to that save; another Workspace sees neither them
-   nor private candidate admissions. Do not PUT one tiny pack per candidate.
-3. Preserve framed-byte grouping for Ordinary, Native and WholeFile. Native
-   payload records carry their own codec frame but may share a raw group. Only
-   actual C2 singleton/pooled grammar and existing capacity/seal events force
-   their relevant boundaries. Retain one tail/lane, bounded queued groups and
-   backpressure; never return a `Vec<Pack>` for an entire input.
-4. Private chronology is `(owner's pack order, group, record)`; a base is strictly
-   earlier than its dependent. Closing a group need not close its pack. When an
-   immutable pack closes, hash/upload its final complete bytes under digest key.
-   Every dependency's pack is uploaded no later than its dependent's; bases in
-   the same pack appear earlier within that pack. PUT success, or the current
-   definite 412 plus exact-byte validation, establishes complete storage.
-5. Register uploaded packs and trusted complete record/value-group metadata in
-   bounded save-private pages. Assign final catalog pack order in dependency
-   order; translate private locations to normalized selected locations. A record's
-   base ObjectId remains authoritative in its bytes; any dependency manifest is
-   derived by the daemon's C2 parser and must agree. The global service validates
-   row shape/ownership, selected reference availability and chronology only;
-   it never GETs packs, rebuilds trees or recertifies the provider.
-6. For distinct valid alternate packs of the same exact object, keep the first
-   valid selected locator and return it. A dependent refers to base **identity**,
-   not the discarded base's proposed pack. Existing selected dependents retain
-   their own recorded edge. Check newly selected dependency chronology against
-   the normalized base; a conflict or malformed/forward edge fails that bounded
-   registration transaction. Never silently pick another locator or re-encode.
-7. Each registration page records completion and resolves outstanding selected
-   dependency/value-group edges incrementally. `finish_storage` checks those
-   counters/markers and closure, without rescanning a namespace, then atomically marks its catalog
-   rows and candidate updates eligible for ordinary storage reads. Storage
-   readiness precedes C5 stage/commit; these are distinct acknowledgments, not a
-   cross-provider atomicity or crash-durability promise. C5 receives only the
-   ready root/profile and trusted provenance; retain its thin publication path.
-   An older read scope never gains newly private rows through cache reuse.
+Concrete mutation client operations: begin_save, bounded metadata-body staging,
+payload-locator registration, reserve_ordinals, paged candidate/group access,
+finish_storage, abandon and quarantine. Source-reviewed schema/transport carries
+these capabilities; it does not become a construction/upload/namespace manager.
+S2 owns live mutable metadata and daemon engine lifetime. Current prototype is
+serialized single-W with one pending Commit per W; non-pausing successor writes,
+multi-Exec and multi-W concurrency remain separate gates.
 
-Global packs, complete canonical locators and storage publication are not
-Workspace dirty metadata. S2's one daemon-lifetime SQLite database has
-Workspace/incarnation-scoped mutable rows; SP1 does not introduce a DB per W.
-Current prototype is serialized single-W; retain one pending Commit per W.
-Non-pausing Exec/successor writes, multi-Exec and multi-W isolation require later
-owning gates rather than being inferred from new access traits.
+## 6. Global SQL catalog, index custody and failure
 
-## 5. Pool and candidate ownership
+Global SQL stores canonical metadata descriptors keyed by ID and immutable
+physical metadata bodies/groups sufficient to reconstruct their exact bytes.
+Compression/pooling may avoid a duplicate uncompressed canonical copy; this is
+still authoritative canonical metadata storage. Include scoped save/publication,
+chronological body order, both-domain selected locators, pooled spans/decoded-body
+digests, ordinal cursor/window, and existing bounded FULL-winner stamps/signatures.
+Use SQLite B-trees/keyset paging, not a new custom metadata index/pager.
 
-Global SQLite persists C2 policy/profile, save ownership/publication, pack order
-and digest, selected canonical locators, pooled value-group ordinal span/location/
-decoded-body digest, ordinal reservation cursor and metadata window start, and
-the existing bounded FULL-winner signature rows/stamps. No canonical or encoded
-payload BLOB column is permitted. Pooled value bytes live only in MinIO packs.
-Use existing first-encounter ordinals, reservation block rules and whole-window
-eviction; do not add a permanent full-value lookup table to improve deduplication.
+Keep existing Candidates/PoolIndex algorithms as bounded disposable daemon
+derivations over authoritative SQL. Declare domain activation/replica counts;
+never accidentally double a 704 KiB candidate allowance. Private admissions are
+save-scoped, selected ready updates persist, failures invalidate derivations.
+Whole-file content candidates and first advisory chunk candidate retain current
+policy; metadata fingerprint matches still acquire SQL groups and compare full
+value bytes. Pool values exist in SQL metadata only, with current first-encounter
+ordinal reservations and whole-window eviction. No index lock spans provider I/O.
 
-The daemon uses existing `Candidates` (8,192 slots, declared 704 KiB) and
-`PoolIndex` (131,072 entries, source charge per entry) as bounded derived indexes.
-Global metadata is authoritative; load/synchronize it in pages. A save's private
-FULL admissions/pooled groups form its own eligible overlay. Persist only the
-selected ready updates; failure invalidates affected derived index state. Do not
-make failed/private admissions eligible to another save or hold index locks
-across MinIO I/O. The content index proposes whole-file candidates; chunks keep
-the existing first advisory candidate rule. Pool fingerprints propose ordinals;
-existing C2 authenticates groups and compares full value bytes.
+Missing/ineligible/unprofitable candidate chooses FULL by policy. Acquired-base
+I/O, codec, allocation or integrity failure is terminal. Unknown PUT, SQL staging/
+registration or C5 ACK quarantines custody: no resend, refresh or guessed delete.
+Definite failure aborts owned private SQL rows once; complete shared SQL objects,
+payload packs and live bases remain retained. Deleting the originating Commit
+cannot reclaim a base needed by another retained dependent. Runtime GC/migration
+remains unsupported; report orphan/alternate bytes and unresolved custody.
 
-## 6. Allocation, error disposition and resident accounting
+## 7. Source-first allocation and simultaneous resources
 
-Freeze the catalog and transport allocation in SP1.0 before edits depend on it.
-Current independent identities are C2 schema 10/format profile 1; experimental
-global catalog `P6L2`/version 2; wire `P6META7`, actions 0–7, 16 KiB request limit,
-and [statistics arrays](../../../../../../benchmark/phase6-live/src/transport_stats.rs)
-of width 8. The [wire](../../../../../../benchmark/phase6-live/src/wire.rs),
-[dispatch](../../../../../../benchmark/phase6-live/src/metadata.rs), and
-[session](../../../../../../benchmark/phase6-live/src/metadata_session.rs) are the
-allocation sources. Record the exact new schema/wire/action table in the same
-SP1.0 patch after checking this source; no inferred unused native Bridge `Kind`
-values, invented record tags, profile change or silent migration. Old incompatible
-experimental catalogs/wire are rejected explicitly; old receipts keep their pins.
-Each operation page fits existing 128-row/16 KiB wire bounds by encoded bytes,
-not just row count; pooled group/candidate pages need their own checked row shape.
+SP1.0 must record actual schema/wire/action allocation before dependent edits.
+Audit [catalog](../../../../../../benchmark/phase6-live/src/metadata_catalog.rs),
+[wire](../../../../../../benchmark/phase6-live/src/wire.rs),
+[dispatch](../../../../../../benchmark/phase6-live/src/metadata.rs),
+[session](../../../../../../benchmark/phase6-live/src/metadata_session.rs) and
+[statistics](../../../../../../benchmark/phase6-live/src/transport_stats.rs): current
+experimental `P6L2` schema 2, `P6META7`, actions0–7, 16 KiB requests, 8-wide arrays;
+independent C2 schema10/profile1. Allocate domain/body/save fields and bounded SQL
+metadata-body transfer against real sources, not guessed Bridge Kind/lane tags.
+Reject incompatible old catalogs/wire explicitly; no silent migration/profile
+change. Page by encoded bytes within declared wire/128-row bounds; split large
+metadata group transfer into ordered bounded pages without a whole-load buffer.
 
-Retain MEMORY journal, synchronous OFF, temp_store MEMORY, mmap disabled,
-the existing pager-cache allowance, zero busy timeout and one attempted operation
-for new/refactored catalog connections. No WAL, busy handler/retry or
-fsync/fdatasync/sync_data/sync_all is introduced. SQLite COMMIT is runtime
-atomicity, not a new crash/cloud durability promise.
+Retain MEMORY journal, synchronous OFF, temp_store MEMORY, mmap disabled, existing
+pager allowance, zero busy timeout, one attempted operation; no WAL/retry/fsync.
 
-Use typed definite/Unknown outcomes across MinIO, registration and publication.
-Missing/ineligible/unprofitable candidate is a FULL policy outcome. I/O, codec,
-allocation, integrity or acquired-base failure is terminal, never FULL fallback.
-Unknown PUT/registration/C5 acknowledgment quarantines operation and ownership:
-no resend, refresh, guessed retry or delete. Definite failure aborts private
-metadata once; complete shared/selected packs are retained. Bases/value groups
-stay in custody while any retained selected dependent or unresolved save needs
-them, even if the originating Commit is deleted. Keep runtime GC/migration
-unsupported; this milestone retains complete packs and reports orphan/alternate
-bytes rather than making an unproved reclamation claim.
-
-Account simultaneous owners, not separate per-buffer maxima:
-
-| Live owner | Charge/release |
+| Domain/owner | Retained bound and lifetime |
 | --- | --- |
-| Pending canonical + caller read results | Each `4 MiB - 1`; 512 pending objects; result IDs/pages retain current bounds. Drain/move objects; no second full pending copy. |
-| Ordinary + pooled pack caches | Each 4 MiB; one copy per distinct pack/generation; wholesale release before next insertion crosses bound. |
-| Decode group + pooled value caches | Each 512 KiB; wave/operation ownership as existing C2; private append invalidates pack snapshots. |
-| Codec | Writer encode 16 MiB + decode 1 MiB; read-only owner decode 1 MiB; no duplicate arena per object. |
-| Placement | Sum of one tail per C2 lane: `3*256 KiB + 64 KiB + (16 MiB+4096)` upper envelope; queued groups at most 256 KiB. Preserve smaller actual frozen-profile admissions. |
-| Candidate/pool indexes | 704 KiB candidate bound plus `131072*(size_of::<(i64,u32)>()+8)` reported PoolIndex charge; one declared replica/owner, not per file. |
-| Metadata/transport | Global and S2 daemon pager caches each remain separately charged; bounded page/request/reply and SQL journal/temp memory are additional live costs. |
+| Shared construction admission | Pending canonical/result windows each `<4 MiB`,512 pending objects; move allocations, do not duplicate whole windows per domain. |
+| File payload read/write | Existing bounded dependency pack cache up to4 MiB, payload lane tails and queued framing; release before crossing allowance/private generation change. No pooled MinIO cache. |
+| SQL metadata read/write | Existing pooled body cache up to4 MiB, value cache512 KiB, decoded ordinary groups512 KiB, bounded native/ordinary/pool body pages; SQL pager/journal/temp memory charged separately. |
+| Codec | Existing encode16 MiB and decode1 MiB arenas; declare whether serialized daemon-shared or per operation, never a copy per object/domain. |
+| Derived indexes | Candidates704 KiB allowance; PoolIndex charge `131072*(size_of::<(i64,u32)>()+8)`; domain overlays/replicas and invalidation explicitly charged. |
+| Engine/catalog/transport | One S2 daemon and global SQL pager allowances remain separate; bounded request/reply/group staging, current+base canonical buffers and assembly copies are additional terms. |
 
-The first four writer rows can coexist: `2*(4 MiB-1)+2*4 MiB+2*512 KiB+17 MiB`
-= `34 MiB-2` before tails, indexes, chain/current-object buffers, SQL and transport.
-This already exceeds the current Workspace 16 MiB memory budget; current 1 GiB
-backing-disk and 512 MiB container limits do not resolve that admission mismatch.
-The encode/decode/cache owners above are per construction/read operation; only
-explicitly serialized reuse can make an arena daemon-shared, and it must not
-multiply once per Workspace or imply future overlap is supported. Freeze actual
-Workspace-vs-daemon charging and mutually exclusive lifetimes in SP1.0. Admission
-and physical proof remain open if the unchanged budgets cannot fit; do not raise
-quotas or call these independent maxima automatically compatible.
-List those extra terms with actual multiplicity in implementation; a bounded heap
-subtotal is not a physical-memory PASS. Admission checks cover temporary old+new
-canonical buffers and group/pack assembly copies, transfer ownership of a closed
-tail into upload, and release caches on error. Keep current MinIO 1 MiB HTTP-body
-limit and explicit unsupported larger-pack failure; do not imply SP1 opens the
-entire configurable 16 MiB singleton profile. No total-load quota/worker expansion.
+The 512 pending objects and byte/result limits are temporary operation windows,
+reused with backpressure; they are not a total namespace/file/edit/population cap.
+The old all-MinIO `34 MiB-2` subtotal is not evidence of revised domain overlap
+or a newly fitted budget. Derive a new simultaneous live ledger from actual owner
+lifetimes in SP1.0, including SQL metadata transfers and codec/base copies.
+Keep Workspace16 MiB, backing disk1 GiB and container512 MiB unchanged. If actual
+admission/physical ownership cannot fit, report that open failure; do not raise
+quotas or silently exclude shared daemon/SQL/cache terms. Current MinIO1 MiB HTTP
+body capability does not imply the entire configurable16 MiB singleton profile.
 
-## 7. Submilestones, file ownership and exit gates
+## 8. Four implementation steps and focused folder ownership
 
-Finish S2a atomicity/source checkpoint first. Then these small coherent patches,
-with one storage/Bridge contract owner; tests are external and paired with their
-owning patch. All gates below are prospective, **NOT_RUN** at this specification.
+Start clean strict-source SP1 independently; importing or completing uncommitted
+S2 is not a prerequisite. One storage/Bridge owner executes:
 
-| Patch | Exclusive implementation responsibility | Required exit |
+| Step | Source responsibility | Exit gate, currently NOT_RUN |
 | --- | --- | --- |
-| SP1.0 | C2 neutral `access/{catalog,pack,location}.rs`; existing SQLite adapters; phase6 catalog/wire/session/statistics contracts | Exact type/schema/action allocation reviewed; old SQLite behavior retained; no second codec/selector and no payload catalog storage. |
-| SP1.1 reader | C2 `delta/read.rs`, `decode.rs`, `pool/read.rs`; phase6 `read_window.rs`, Reader portion of `objects.rs` | Smallest complete authenticated FULL/PREFIX/pool reader on real MinIO; old/new bytes, intermediate IDs, scope/chronology/depth/work refusals and bounded base GET accounting. |
-| SP1.2 writer | C2 `delta/select.rs`, `candidates.rs`, `pool/index.rs`, `cas/{selection,pool_lane,placement}`; phase6 `packing.rs`, Consumer/pending and catalog registration | Same selector and packing policies; same-save placed candidate works without per-base PUT; exact dedup, profitable PREFIX, FULL policy outcomes, native multi-record groups, pooled values/deltas, closure/normalization and failure custody. |
-| SP1.3 integration | phase6 construction/provider wiring, metadata/publication/install contract; associated SDK/Bridge adapter paths | Ordinary public generic SDK Exec/FUSE mutation -> C1 -> C2 -> MinIO ready -> C5 -> read retained old/new heads -> cleanup. No command recognizer; inherited parent/provenance/bytes and explicit Unknown custody. |
+| SP1.0 provenance/access | C2 `access/{catalog,body,location}` and concrete SQLite adapter; phase6 domain consumers/readers, actual catalog/wire allocation | Every producer/caller classified; exact-ID dual placement works; frozen source allocation/owner ledger; old standalone C2 path preserved. |
+| SP1.1 reader | Existing C2 resolver/decode/pool read through seam; phase6 payload MinIO and metadata SQL body adapters | FULL/PREFIX and metadata pool reconstruction, payload intermediate IDs, each retained pool leaf final ID, scope/chronology/work refusals; metadata-only read GET=0; no discarded SQLite file-payload shadow. |
+| SP1.2 writer | Existing selector/candidates/pool/index/placement; phase6 private state, content transport and canonical SQL staging | Same-save private bases without per-base PUT; actual payload PREFIX/STORED/dedup; SQL metadata compression/pooling; domain inventory, incremental closure/normalization, Unknown/base custody. |
+| SP1.3 public route | Construction/provider wiring, Bridge/metadata/C5 publication/install | Generic SDK Exec/FUSE -> C1/C2 -> payload ACK + SQL metadata -> short C5 CAS -> retained old/new reads/cleanup. No command recognizer; unchanged roots/byte semantics. |
 
-S2 retains Engine/inode/name/extent/admission/schema/lifetime files, normalized
-edit SQL and paged verifier. Coordinate call-site signatures with that owner;
-do not rewrite its mutable metadata under SP1. Keep product files <=999 physical
-lines, entry files <=200 declaration/delegation lines; update affected architecture
-alongside product boundaries. No product-source fixtures/hooks or legacy includes.
+Keep focused existing-runtime folders: `storage/{domain,reader,consumer,private,
+placement}`; `canonical_metadata/{schema,objects,bodies,saves,pool,signatures}`;
+reuse existing `minio.rs` payload transport and metadata/wire/session/publication
+owners. Core `access/` stays provider-neutral; no MinIO library/new crate in C2.
+Only thin module entry files; <=999 physical lines/file and <=200 entry lines.
+S2 retains Engine/live inode/name/edit/admission/lifetime/paged-verifier files.
 
-Follow [test.md](test.md) once per frozen owning checkpoint with locked C2/adapter
-tests, owning core tests/examples/fmt/Clippy and boundary/self-tests. Record exact
-checks, source/compilation/dependency/flags seals and production LOC per commit;
-no CI/preflight claim. Reuse unaffected canonical/Phase B proofs in original scope.
-After SP1.3, stride10/3/1 are three separately declared storage selections using
-[historical baseline](../HISTORY-STORAGE-BASELINE.md) and prospective provider
-allocation accounting; they are not a compression tuning loop or permission to
-rerun unchanged arms. Full repository import, large S2 measurements, non-pausing
-successors, C1 draft accumulation removal, physical-memory/cold-cache/storage
-qualification and cloud durability remain separate, explicit gates.
+Dated source pointer, 2026-10-02: old task published fixture-only
+`81f2cf22dd52dd17d2977c12f06d80d37d82654f` from `8c926b9`; its runtime remains
+PARTIAL. Reuse unaffected independent fixtures only by exact source/hash and
+matching oracle scope; do not regenerate expectations from the strict candidate
+or import runtime WIP as a dependency.
+
+[test.md](test.md) owns four compact external witnesses and subsequent distinct
+stride10/3/1 selections. Verify once at frozen identity with relevant locked core/
+adapter tests/examples/fmt/Clippy and boundary/self-tests; record exact seals,
+checks/gaps and production LOC per commit. No CI/preflight claim or runs here.
+Reuse unaffected canonical/Phase B proof scopes without relabeling. Strict storage
+accounting includes MinIO file packs **plus SQL immutable metadata** and required
+SQL/history allocation; historical all-object pack ratios are not MinIO-only
+comparators. Large S2/repository metrics, C1 draft accumulation, concurrency,
+physical-memory/cold-cache qualification and cloud durability remain separate.

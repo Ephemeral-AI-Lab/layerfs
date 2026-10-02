@@ -41,3 +41,41 @@ SHA256 and arithmetic, whitespace and exact owned staging. Full product checks
 remain prospective because this checkpoint changes documentation/evidence only.
 Exact production LOC is measured separately on first-parent/final staged trees;
 the issue checkpoint records resulting publication and checks.
+
+## Strict-split owner revision — 2026-10-02
+
+Source audit parent: `8c926b9392f3636ae156236dc26d0510ee069d8d`. The preceding
+review records the original proposal; it is not strict-split runtime evidence.
+Implementation/test authors revised separate owned files, and a read-only
+reviewer checked the new storage/provenance/visibility boundary against source.
+
+- Global SQLite now stores all canonical filesystem metadata and pooled values/
+  groups; MinIO uploads regular-file whole payloads and CDC chunks only.
+- Attribute values emit Chunk/ExtentLeaf/FileState. Logical producer/reader
+  provenance, dual-domain locations and per-use mapping references preserve
+  exact IDs without SQL file-payload fallback or role-only classification.
+- The SQL metadata pack representation retains complete bounded pack envelopes
+  for the existing decoder; pooled value groups keep their distinct existing
+  framing. Bare group bytes cannot substitute for a pack envelope.
+- Domain/body/generation cache identities and placement checks before canonical
+  cache hits prevent SQL bytes from satisfying a missing payload location.
+  The dual-use vector uses an actual sealed CDC chunk from a large regular file
+  as an attribute value; manually encoding a small Chunk is not ordinary file
+  producer provenance. Both cache-read orders are covered prospectively.
+- Old S2-first wording was corrected: clean strict SP1 can proceed without
+  importing unfinished S2 or the stopped old SP1 implementation. Published old
+  fixture-only evidence may be reused by its actual source/hash/scope.
+- Payload chains retain intermediate/final canonical hashing. Existing pooled
+  reads authenticate group digests/edges and the requested final canonical leaf;
+  witnesses independently read/hash every retained pool leaf. The packet does
+  not claim existing pooled decoding hashes every intermediate canonical leaf.
+- The four revised witnesses require isolated metadata/pool MinIO GET delta0,
+  exact dual-use IDs, private/public cache visibility, payload chain parity and
+  public generic SDK/FUSE history. They remain prospective NOT_RUN.
+- Resource accounting separates SQL metadata, payload and shared codec/index
+  ownership. Existing quotas are unchanged; physical fit remains open.
+
+Documentation validation checks local links against the final staged snapshot,
+all historical receipt-copy hashes/lengths and ratio arithmetic, owned diff
+whitespace and exact staging. No product tests, builds, provider measurements
+or performance qualification are claimed by this documentation revision.

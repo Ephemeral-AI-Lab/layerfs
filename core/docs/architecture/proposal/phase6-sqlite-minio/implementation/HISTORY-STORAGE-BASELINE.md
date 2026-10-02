@@ -57,7 +57,8 @@ exact owned copies and arithmetic are published in
 
 After SP1, use existing three selections/oracles and a prospectively declared
 MinIO/global-SQLite storage adapter/profile in the existing runner. Report encoded
-pack bodies, MinIO object bytes, actual provider disk allocation, required SQLite
+file-payload pack bodies plus encoded SQL metadata/pool records and groups,
+MinIO object bytes, actual provider disk allocation, required SQLite
 allocations, temporary high-water, duplicate physical packs, FULL/PREFIX/pooling
 counts and base-chain reads separately. Never compare MinIO payload bytes alone
 to historical C2+C5 allocated bytes. Preserve one sample per case/profile and

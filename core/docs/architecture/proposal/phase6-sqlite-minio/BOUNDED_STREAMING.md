@@ -1,5 +1,12 @@
 # Bounded streaming and accumulated work
 
+> **Owner storage-placement amendment, 2026-10-02:** The strict
+> [SP1 specification](implementation/sp1/IMPLEMENTATION.md) supersedes earlier
+> physical placement descriptions here. Global SQLite holds all committed
+> filesystem metadata and pooled values/groups. MinIO holds regular-file
+> whole-payload and CDC chunk packs only. Canonical identities and historical
+> evidence remain unchanged; the strict replacement is prospective/unverified.
+
 > **Status: Current planning checklist; no release candidate exists.**
 > Source, scope and evidence: [README](README.md).
 
