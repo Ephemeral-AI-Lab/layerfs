@@ -2,8 +2,8 @@
 
 Status: Dated planning checkpoint; not release evidence or a product contract.
 Revision written against published source `8c926b9392f3636ae156236dc26d0510ee069d8d`,
-2026-10-02; branch `codex/phase6-metadata-experiments`. The owner strict-split
-revision is unimplemented/unverified; all additions remain prospective `NOT_RUN`.
+2026-10-02; branch `codex/phase6-metadata-experiments`. At that recorded revision,
+the owner strict-split additions were unimplemented/unverified and `NOT_RUN`.
 It supersedes the unreleased all-object-MinIO proposal; its prior evidence retains
 its recorded source/scope/status.
 Owning issue: [#295](https://github.com/Ephemeral-AI-Lab/layerfs/issues/295).
@@ -11,11 +11,21 @@ Read [implementation](IMPLEMENTATION.md), [SP1 scope](../STORAGE-PARITY-SPEC.md)
 [historical baseline](../HISTORY-STORAGE-BASELINE.md), and
 [benchmark policy](../../../../../../../docs/general/benchmark_rules.md).
 
+Owner extension, 2026-10-02: the [S2 specification](../S2-SPEC.md) and
+[S2 test contract](../S2-TEST.md) require these existing witnesses and
+retained-history obligations to pass before final seven-family qualification.
+Published strict SP1 implementation `c838d8d6db85158c6ed9576dd7e8fddf65489704`
+and evidence `16407e03ee36e7bde8af66ae3fc12f3b1c197c80` are external dependencies;
+their source-specific component proofs do not imply the public SDK/FUSE witness
+or every obligation below has passed. New S2 qualification remains `NOT_RUN`.
+
 ## 1. Minimal means four complete witnesses
 
 Use existing external C2/adapter tests and the existing `fs-bench-pro` runner.
 Add the four witnesses below to those owners; do not build a second framework,
-broad campaign, new workload family, or per-edit suite. A component PASS proves
+new workload family, or per-edit suite. These compact witnesses precede the
+owner-requested final seven-family S2 campaign in section 5; they do not launch
+that campaign during development. A component PASS proves
 its component contract only. The SDK/FUSE witness is independently required.
 Strict SP1 starts from clean published source independently of S2a WIP; no
 coherent-S2a prerequisite or WIP import. Reader/writer witnesses must pass before
@@ -348,3 +358,46 @@ numeric cache eligibility. Before every invocation read
 [report template](../../../../../../../benchmark_agent_report.md); publish raw
 operands, exact identities/commands, included scopes and omissions. A missing
 oracle/provider/cold proof or exceeded bound cannot become admission PASS.
+
+
+## 5. Owner-requested S2 final qualification extension — 2026-10-02
+
+The owner now requires the simplified S2/SP1 public path to satisfy every
+existing requirement in sections 1–4, add deterministic concurrent workload
+qualification, and then pass the selected contracts of all seven Core
+`fs-bench-pro` families with speed/storage comparison against Core/Phase B #286.
+The [S2 test contract](../S2-TEST.md) owns the added requirement-to-receipt matrix,
+concurrent capture/successor cases, complete family selection, comparator
+bindings and accounting. This extends final qualification rather than weakening
+or replacing the compact witnesses, independent root/byte/partition oracles,
+retained-history schedules, custody rules or limits above.
+
+Reader/writer/refusal and the real generic SDK Exec/FUSE/C5 witness must retain
+full coverage. A component Engine proof is not the fourth public witness.
+A serialized public proof is not a non-pausing proof. The added concurrent
+workload must demonstrate acknowledged successor reads/writes while captured
+Commit remains pending, exact captured publication and successor-preserving
+installation, with one construction producer. Multi-Workspace or additional
+Exec admission requires its own lifecycle/resource evidence.
+
+Use the accepted #286 [seven-family checkpoint](../../../../../issues/286/SEVEN-FAMILY-CHECKPOINT-20260930.md)
+and [exact receipt map](../../../../../issues/286/experiments/20260930-seven-family-reuse.json)
+as the selected primary baseline. Historical mixed-source, cache-ineligible
+observations stay under their original identities. Qualified speed ratios require
+matched baseline/candidate operation, fixture, harness, timing/acknowledgement
+and cache evidence. Count strict MinIO payload plus SQL metadata bodies for
+encoded parity and each original physical provider/SQL/history owner once for
+allocation; never compare MinIO payload alone to historical C2+C5 totals.
+
+The final campaign uses the existing seven family owners and preserves explicit
+rows, expected refusals/custody outcomes, failures, deferrals and unsupported
+cases. Required unsupported or unrun members block complete-family PASS.
+A strict-split history/public route adapter and an exact ordered case/arm
+manifest must be published before new samples; no invented backend flags or
+component replacement for public workloads. Do not run a broad sweep on every
+edit or add another runner. Reuse exact-identity qualifying candidate history
+receipts in the final Family 2 table when the same final mechanism and contract
+already passed section 4; never sample that unchanged arm twice.
+
+This extension records prospective requirements only. It runs no checks,
+benchmarks or concurrency campaign and grants no new PASS or numeric admission.
