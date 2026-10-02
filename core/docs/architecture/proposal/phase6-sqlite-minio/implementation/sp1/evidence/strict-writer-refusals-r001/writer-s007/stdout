@@ -1,0 +1,11 @@
+
+running 1 test
+test real_provider_shared_mapping_body_keeps_per_logical_use_child_routes ... FAILED
+
+failures:
+
+failures:
+    real_provider_shared_mapping_body_keeps_per_logical_use_child_routes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.25s
+

@@ -1,0 +1,110 @@
+{
+  "status": "SEALED_INDEPENDENT_EMPTY_CANONICAL_AND_OLD_METADATA_PACKS",
+  "product_source": "285dd3f4a54a896344e389b51a8495300b98b4ca",
+  "source_inventory": "../strict-oracle-v2/unchanged-source.json",
+  "source_inventory_sha256": "c4d2ecb893eb45f01d6d31077921d8af7659157056d4a2d559d69dfad937203e",
+  "producer_test_sha256": "a8561d22c15b8861486489441f08868183a239838baeda2580e456777ffab571",
+  "producer_binary_sha256": "bd686406973c07ef9b75e18b3c32d0a08c9e31f864057738f7770939cca51c19",
+  "root": "8695e940462fb74e219c71332fc2065cdb4b5e08fa5a644121cb80cec0a681d8",
+  "metadata": {
+    "scope_seed": "5353535353535353535353535353535353535353535353535353535353535353",
+    "root_serial": 1,
+    "mode": "0750",
+    "mtime_ns": 1700000000000000000,
+    "regular_files": 0
+  },
+  "command": "SP1_EMPTY_SEAL_OUT=<fresh owned target> LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test sp1_empty_fixture_seal -- --ignored --nocapture; cwd unchanged owned archive, own core/target",
+  "scope": "Ordinary unchanged C1 empty filesystem construction + C2 complete envelopes, Metadata-only. No candidate expected bytes/IDs. Debug oracle acquisition, not SDK Init measurement. PublicSDK/FUSE/S2 strict gate remains NOT_RUN.",
+  "files": [
+    {
+      "path": "1c4be84646f7b5fa22b4f2f3a5480b12356a8a4417e16db9b6c2e92538168da5.canonical",
+      "bytes": 143,
+      "sha256": "beeb6b84ead34858e7d0d29b8992aa9436c80f32fbf293e48111b89779264f3e"
+    },
+    {
+      "path": "2692b115e6265604d3d01fcf5e1c579f94e17ef3edf477f5647cc5dea1c94aa5.canonical",
+      "bytes": 106,
+      "sha256": "0d16319275eb26331f173698dbf5dbd9ea8473c3f035a32715e893a9ba3b1103"
+    },
+    {
+      "path": "405426a56ce69f82b209dd67922de7d608e6abbab7a39e4775b72f07a3eeee83.canonical",
+      "bytes": 125,
+      "sha256": "7505db5943c7913e2cb69052b844dc6016b7c0c5f3785fd4580a1c70edaf3c51"
+    },
+    {
+      "path": "410a207086f7b7a69bcc4687b3873c472f7f58b36fc7da7fa46a2175d2b899d3.canonical",
+      "bytes": 33,
+      "sha256": "ec606b7f60861d09430a778590147d11a0f15a747f4412b4c0ad73eebfa53c3f"
+    },
+    {
+      "path": "45985ef8370c7a1f741eb99e1a15ca203cd6f0cf18836bcd3778f7b88e0fd256.canonical",
+      "bytes": 106,
+      "sha256": "88178c60cf8c2b6f10c29d122b96724ae9c7c491ab2f2662722fc37f93d843b3"
+    },
+    {
+      "path": "4a3399a1eb8366c6f37bcb5dae5974926ca987e5e911eb0ff5ff0c295eb92c53.canonical",
+      "bytes": 25,
+      "sha256": "4156b8bf58147caa30c7ca60dba1d0923557f9f63a5f2e4f8b7ef374c9f92a3c"
+    },
+    {
+      "path": "8695e940462fb74e219c71332fc2065cdb4b5e08fa5a644121cb80cec0a681d8.canonical",
+      "bytes": 129,
+      "sha256": "c339dc90c9a7a3de3bf3e19aab6e42ed5692a0bb5babb4bb3fbc30dba9b0010c"
+    },
+    {
+      "path": "87980f9bdd06a6358ccdc3d72cb62ca6cf580c4e8b378fef9f69afa22526aa0b.canonical",
+      "bytes": 84,
+      "sha256": "c229517fd41070549c57f78bc149b1c0be485de0e004d9fe88aaa3533baffb16"
+    },
+    {
+      "path": "91bbf7f7759604b2c940a8c2f5a032ec491721e55a8b6a0b6aa0abf8b8f7678c.canonical",
+      "bytes": 44,
+      "sha256": "e26dc2fb18071b2eccfe75c764139feec782d359a445a92ba6f013fbb9f99265"
+    },
+    {
+      "path": "aafd16476d5831f13a4bd678407ec145cb0b23065f173607dce301bc186242de.canonical",
+      "bytes": 84,
+      "sha256": "882a2513c531f6af86f4134c533b8d60468a55fb0f63bfe421d582fd9a29177d"
+    },
+    {
+      "path": "acquisition.rs",
+      "bytes": 4181,
+      "sha256": "a8561d22c15b8861486489441f08868183a239838baeda2580e456777ffab571"
+    },
+    {
+      "path": "metadata.sqlite",
+      "bytes": 100352,
+      "sha256": "274596e5b35f45823520a5956bc2258d82d137f211c1cf4331fb68103e906197"
+    },
+    {
+      "path": "objects.tsv",
+      "bytes": 1224,
+      "sha256": "8cdab5878ccf4df51a706128cfef00a92058805caa175b5c87f0ddbf45e39dbf"
+    },
+    {
+      "path": "outcome.txt",
+      "bytes": 2009,
+      "sha256": "f8ab96d3b6879d90fb86e29275be6912de3252346a8d9d0a084d9c056035a344"
+    },
+    {
+      "path": "pack-1.row",
+      "bytes": 4223,
+      "sha256": "0d498eb18bca86a4d928eeef179f118ae93ca57e22690e90d3cdebef17287312"
+    },
+    {
+      "path": "pack-2.row",
+      "bytes": 864,
+      "sha256": "9cd22ac8259ecf73782cbbdb43cbc8241c3f793c510487fe4f16f7960c32d1c4"
+    },
+    {
+      "path": "pack-3.row",
+      "bytes": 318,
+      "sha256": "47a0d1b6fa5d9b3e93e2922a2e0bb09223e63d290cc3e66f232296f30730ae99"
+    },
+    {
+      "path": "root.txt",
+      "bytes": 64,
+      "sha256": "0cf8cb77bdb355ad2e763206fe2594857ba26935b747c81ec094ac5ccb58a600"
+    }
+  ]
+}

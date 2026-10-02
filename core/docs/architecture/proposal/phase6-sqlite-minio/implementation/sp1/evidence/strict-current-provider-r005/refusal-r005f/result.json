@@ -1,0 +1,12 @@
+{
+  "test": "real_provider_definite_sql_registration_failure_retains_known_ack_body",
+  "exit_code": 0,
+  "bucket": "sp1-r001-refusal-r005f",
+  "stdout_sha256": "7a9389871cf20818c2724ba613182728f0129744bd73e31772b8a70ccd669f86",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "binary_sha256": "a6050b5b66dc06d7e9cf3719219a4c8aa24c4d91031b83b7bb30170754ef282d",
+  "source_inventory_sha256": "3cf032d5a6985d0273490cefbedc00f5c32bf5f80bc1c6f30d0a0722e4ffedd8",
+  "provider_identity_sha256": "38f9e4ad03c6aa8eb212bd67ec52eb620457361e229b08414068763c1bdd4627",
+  "command": "<sealed strict_refusals binary> real_provider_definite_sql_registration_failure_retains_known_ack_body --ignored --nocapture --exact",
+  "profile": "functional count diagnostics only, no elapsed speed or whole-owner memory PASS"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "58a1e3eac2e8b53705667deb101ede6134fe2160d8a8c69765367e7a4d9ac209",
+  "name": "/layerfs-sp1-strict-minio-r001",
+  "image": "sha256:4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285",
+  "state": {
+    "running": true,
+    "status": "running"
+  },
+  "mounts": [
+    {
+      "Type": "bind",
+      "Source": "/Users/yifanxu/.codex/worktrees/phase6-sp1-strict/layerfs/benchmark-results/sp1-strict-provider/r001/data",
+      "Destination": "/data",
+      "Mode": "",
+      "RW": true,
+      "Propagation": "rprivate"
+    }
+  ],
+  "memory_limit": 536870912,
+  "nano_cpus": 1000000000
+}

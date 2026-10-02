@@ -7,7 +7,9 @@ use layerfs_storage::{
 };
 use phase6_live_probe::{
     minio::{digest, Minio},
-    strict_catalog::{LogicalUse, PhysicalBase, PlacementDomain, Registration, StrictCatalog},
+    strict_catalog::{
+        LogicalUse, PhysicalBase, PlacementDomain, Reference, Registration, StrictCatalog,
+    },
 };
 use rusqlite::Connection;
 use std::{
@@ -222,4 +224,134 @@ pub fn old_objects() -> BTreeMap<String, ObjectId> {
             (cells[0].to_owned(), id(cells[1]))
         })
         .collect()
+}
+
+/// Complete empty filesystem graph, registered in the independently sealed C1
+/// producer order. Physical pack order differs because pooled leaves flush later.
+pub fn empty_fixture(catalog: &StrictCatalog) {
+    let source = evidence().join("empty-oracle-v1");
+    let db = Connection::open_with_flags(
+        source.join("metadata.sqlite"),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )
+    .unwrap();
+    let save = catalog.begin_save().unwrap();
+    let mut bodies = BTreeMap::new();
+    let mut query = db
+        .prepare("SELECT pack_id,data FROM object_packs ORDER BY pack_id")
+        .unwrap();
+    for row in query
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
+        })
+        .unwrap()
+    {
+        let (order, bytes) = row.unwrap();
+        let placed = catalog
+            .register_body(
+                PlacementDomain::Metadata,
+                save,
+                digest(&bytes),
+                Some(&bytes),
+            )
+            .unwrap();
+        bodies.insert(order, placed);
+    }
+    let mut query = db.prepare("SELECT first_ordinal,count,pack_id,group_number,digest FROM metadata_value_groups ORDER BY first_ordinal").unwrap();
+    for row in query
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, u32>(0)?,
+                row.get::<_, u32>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, u32>(3)?,
+                row.get::<_, Vec<u8>>(4)?,
+            ))
+        })
+        .unwrap()
+    {
+        let (first, count, pack, group, hash) = row.unwrap();
+        assert_eq!(
+            catalog.reserve_ordinals(save, count as usize).unwrap(),
+            first
+        );
+        catalog
+            .insert_groups(
+                catalog.capture(Some(save)).unwrap(),
+                save,
+                &[ValueGroupRow {
+                    first_ordinal: first,
+                    count: count as usize,
+                    pack_id: bodies[&pack],
+                    group_number: group as usize,
+                    digest: ObjectId::from_bytes(&hash).unwrap(),
+                }],
+            )
+            .unwrap();
+    }
+    for line in std::fs::read_to_string(source.join("objects.tsv"))
+        .unwrap()
+        .lines()
+        .skip(1)
+    {
+        let cells = line.split('\t').collect::<Vec<_>>();
+        let object = id(cells[1]);
+        let role = ObjectRole::from_code(cells[2].parse().unwrap()).unwrap();
+        let mut refs = cells[4]
+            .split(',')
+            .filter(|text| !text.is_empty())
+            .map(id)
+            .collect::<std::collections::BTreeSet<_>>();
+        if role == ObjectRole::InodeLeaf {
+            let leaf = layerfs_content::inode_leaf::InodeLeaf::decode(
+                &std::fs::read(source.join(format!("{}.canonical", cells[1]))).unwrap(),
+            )
+            .unwrap();
+            for row in leaf.rows {
+                let value = layerfs_content::inode_leaf::decode_inode_value(&row.value).unwrap();
+                assert_eq!(
+                    value.kind,
+                    layerfs_content::inode_leaf::InodeKind::Directory
+                );
+                refs.insert(value.content_root);
+                refs.insert(value.metadata_root);
+            }
+        }
+        let (pack, group, record): (i64, u32, u32) = db
+            .query_row(
+                "SELECT pack_id,group_number,record_number FROM objects WHERE object_id=?1",
+                [object.as_bytes().as_slice()],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        catalog
+            .register(
+                catalog.capture(Some(save)).unwrap(),
+                save,
+                &[Registration {
+                    location: ObjectLocation {
+                        object_id: object,
+                        role,
+                        canonical_length: cells[3].parse().unwrap(),
+                        pack_id: bodies[&pack],
+                        group_number: group as usize,
+                        record_number: record as usize,
+                    },
+                    domain: PlacementDomain::Metadata,
+                    logical_use: LogicalUse::MetadataGraph,
+                    references: refs
+                        .into_iter()
+                        .map(|id| Reference {
+                            id,
+                            domain: PlacementDomain::Metadata,
+                            logical_use: LogicalUse::MetadataGraph,
+                        })
+                        .collect(),
+                    base: None,
+                }],
+            )
+            .unwrap();
+    }
+    catalog.finish_storage(save).unwrap();
+    catalog.publish(save).unwrap();
 }

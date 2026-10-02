@@ -1,0 +1,17 @@
+{
+  "label": "SUPPLEMENTAL_COUNT_DIAGNOSTIC_NO_CASE_RERUN",
+  "save_rows": [
+    [
+      1,
+      3,
+      0
+    ]
+  ],
+  "body_ready": 1,
+  "metadata_bytes": null,
+  "selected_locators": 0,
+  "provider_http": 200,
+  "provider_pack_bytes": 96097,
+  "provider_pack_sha256": "135dcee328350b0f5b8ec26fe88e391cf0a4ebd24ac5c7a74b57be2474e44a2d",
+  "matches_presealed_old_pack": true
+}

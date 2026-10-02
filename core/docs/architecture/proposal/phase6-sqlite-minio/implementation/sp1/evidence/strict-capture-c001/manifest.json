@@ -1,0 +1,28 @@
+{
+  "status": "FAIL_EXTERNAL_ENGINE_FIXTURE_SETUP",
+  "cause": "Initial component fixture tried one200000B Engine.write. Existing public request cap is128KiB and returned E2BIG before C1/C2 preparation or C5. Corrected fixture splits the SAME presealed input bytes into bounded128KiB calls; no size/profile/worker/timeout/oracle changed.",
+  "following_compile": "Next named build could not produce c002 binary because newcandidatehelper used removedrusqlite DatabaseName type and unsignedFromSql; owner corrected toSome(temp)/checked i64decode. c002 NOT_RUN pending final adapter sourcefreeze/gate. These are source/API diagnostics, no performance samples.",
+  "scope": "Component Enginefixture source is not publicSDK/Exec/FUSE or approvedS2daemon engine. Fixed metadata SQL preconditioning is not an ordinary FUSEtimestamp oracle. No earlier receipt promoted.",
+  "files": [
+    {
+      "path": "result.json",
+      "bytes": 815,
+      "sha256": "811b96416113b1e14a7dcda1f448022fe47d2121f96581d661355587a1e77c4a"
+    },
+    {
+      "path": "source.json",
+      "bytes": 17128,
+      "sha256": "c7d95f592bdad5aa7fc3928b46926b2c3f5c6260b8184b8442872e40e256240a"
+    },
+    {
+      "path": "stderr",
+      "bytes": 242,
+      "sha256": "119eb93642502d81d7447f9d46c3c879c63484c60a0a8374a41f3c1024adade2"
+    },
+    {
+      "path": "stdout",
+      "bytes": 274,
+      "sha256": "c5f4f0bce051dfaf78aa3d97a2ec9d17fe0866b589e8c42d50deb315c4332ddb"
+    }
+  ]
+}

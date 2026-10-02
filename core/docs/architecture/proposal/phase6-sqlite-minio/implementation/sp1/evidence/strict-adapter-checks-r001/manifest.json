@@ -1,0 +1,96 @@
+{
+  "status": "BROAD_GATE_FAILURES_PRESERVED_SCOPED_REPAIRS_PASS",
+  "scope": "The all-target r002 command is FAIL due to a new invalid C1 paging fixture. Its8 unchanged wire tests passed; exact repaired test and remaining writer target pass separately. No historical command is relabeled. Production library source unchanged through test-only repairs; new helper/integration proofs and targeted checks retain their own manifests. No performance, physical resource or release admission.",
+  "commands": [
+    {
+      "command": "cargo +1.85.1 test --manifest-path core/benchmark/phase6-live/Cargo.toml --locked --all-targets",
+      "attempt": "r001",
+      "exit": 101,
+      "reason": "new external test requested usize FromSql"
+    },
+    {
+      "command": "cargo +1.85.1 test --manifest-path core/benchmark/phase6-live/Cargo.toml --locked --all-targets",
+      "attempt": "r002",
+      "exit": 101,
+      "reason": "new wire fixture exceeded128-entry C1 leaf admission; other executed targets PASS"
+    },
+    {
+      "command": "cargo +1.85.1 test --manifest-path core/benchmark/phase6-live/Cargo.toml --locked --test strict_wire native_registration_preserves_order_across_encoded_byte_pages -- --exact --nocapture",
+      "attempt": "r003",
+      "exit": 0
+    },
+    {
+      "command": "cargo +1.85.1 test --manifest-path core/benchmark/phase6-live/Cargo.toml --locked --test strict_writer",
+      "exit": 0,
+      "ignored": 5,
+      "note": "real cases executed separately at current profile"
+    },
+    {
+      "command": "cargo +1.85.1 clippy --manifest-path core/benchmark/phase6-live/Cargo.toml --locked --all-targets -- -D warnings",
+      "attempt": "r003",
+      "exit": 101,
+      "reason": "integration fixture needless_range_loop"
+    },
+    {
+      "command": "cargo +1.85.1 clippy --manifest-path core/benchmark/phase6-live/Cargo.toml --locked --all-targets -- -D warnings",
+      "attempt": "r004",
+      "exit": 0
+    },
+    {
+      "command": "cargo +1.85.1 fmt --manifest-path core/benchmark/phase6-live/Cargo.toml --all -- --check",
+      "exit": 0
+    }
+  ],
+  "files": [
+    {
+      "path": "all-target-compile-fail.stdout",
+      "bytes": 2120,
+      "sha256": "2f7276b6dc895e0c492cac4133f78d6f4dfa062a84d7dcb81ca022f0cb6ec5d9"
+    },
+    {
+      "path": "all-target-run.stdout",
+      "bytes": 14247,
+      "sha256": "bf549e5ab4e3869cfa8b2e0d14e5bbeb8c1f4a84bda13adc363ce35e73367fa2"
+    },
+    {
+      "path": "clippy-cover.stdout",
+      "bytes": 197,
+      "sha256": "fc348ef8dbf8db420df6d27f343a66809cda920ad114dcab96bfae3025e8129e"
+    },
+    {
+      "path": "clippy-fail.stdout",
+      "bytes": 921,
+      "sha256": "3c199ab0c55eb18bf3e8d0935b90b208e8af3389e95bc9685bbc0127c213ba9d"
+    },
+    {
+      "path": "fmt.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "source-before-r002.json",
+      "bytes": 125065,
+      "sha256": "0d326406bd9b88fad5476d129e39333c10ab648781b6bc8b4afc6a392dbad4b3"
+    },
+    {
+      "path": "source-before-r003.json",
+      "bytes": 125047,
+      "sha256": "60aee938cf7c54606846b48b95fb82143d9adbd7fd43fa5c592243920a8af020"
+    },
+    {
+      "path": "source-before.json",
+      "bytes": 124962,
+      "sha256": "bb065fd1f2b3d1440483b656818b73b25c5ef2268b9e844c5553c325bd847194"
+    },
+    {
+      "path": "wire-repair.stdout",
+      "bytes": 494,
+      "sha256": "77dcc0371a28e4635a8c627f1a06ca1dd4b0b7da4c7fd5e2cd5ccec5c29db68a"
+    },
+    {
+      "path": "writer-target.stdout",
+      "bytes": 1012,
+      "sha256": "2c16ac1db83803be4e2fc792171becb5f4e1808ccee7af3bec34dff08e41b247"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "status": "PASS_TYPED_PROVIDER_CUSTODY_COMPONENT",
+  "source_scope": "Root changed one HTTP put path to explicit before-send definite versus possible-send/ACK Unknown classification. Only covering controlled closed-connect and lostACK cases ran once for the changed binary/source; no unrelated old component witness rerun.",
+  "previous_failure": "../strict-definite-f007/manifest.json retains original status3-versus4 FAIL and exact old source/binary",
+  "outcomes": {
+    "refusal-f008": "PASS connection-refused before request bytes; save status4 definite-abandoned, one attempt/no publish/retry",
+    "refusal-f009": "PASS external single-shot forwarder observed real MinIOPUT200 and dropped ACK; save status3 Unknown, ready0 global SQL descriptor retains exact96097B provider object, one attempt/no resend/delete/publication"
+  },
+  "scope": "Component custody/functionality count diagnostic only; no elapsed speed, memory, release, cloud durability or SDK/FUSE/C5 history PASS. Known SQL registration rollback classification target remains NOT_RUN until owner adds definite acknowledgment taxonomy. Resource/global orphan reclamation remains unsupported; abort visibility does not imply physical reclamation.",
+  "files": [
+    {
+      "path": "refusal-f008/result.json",
+      "bytes": 830,
+      "sha256": "8867d1cd23f4ea7182d09054b64ded4efd6b8e7451985fe16d3e2d9a8e65dabf"
+    },
+    {
+      "path": "refusal-f008/source.json",
+      "bytes": 16820,
+      "sha256": "7a2dea8cc0b3e92a891b7a05eb29adc564015f3c1a30df0808d67051499c3c78"
+    },
+    {
+      "path": "refusal-f008/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "refusal-f008/stdout",
+      "bytes": 361,
+      "sha256": "c74dd7849af7003d6bbf0d7fb713f9d2f40c3c4146a2287ffe0765818372b45a"
+    },
+    {
+      "path": "refusal-f009/result.json",
+      "bytes": 846,
+      "sha256": "542b1dea73a8cb8ae9b6adb39bb992937513f1a1e1f5aaf15fd31c198270f7fe"
+    },
+    {
+      "path": "refusal-f009/source.json",
+      "bytes": 16820,
+      "sha256": "7a2dea8cc0b3e92a891b7a05eb29adc564015f3c1a30df0808d67051499c3c78"
+    },
+    {
+      "path": "refusal-f009/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "refusal-f009/stdout",
+      "bytes": 364,
+      "sha256": "dc7413f1bbc61ca6ac4fafbc2bfd1981e48795747b50c30e82105f3af191c9ce"
+    }
+  ]
+}

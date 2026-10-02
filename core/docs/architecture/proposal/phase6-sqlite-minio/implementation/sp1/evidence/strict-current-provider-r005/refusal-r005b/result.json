@@ -1,0 +1,12 @@
+{
+  "test": "real_provider_missing_required_base_never_probes_sql_shadow",
+  "exit_code": 0,
+  "bucket": "sp1-r001-refusal-r005b",
+  "stdout_sha256": "f257ce977419c5a609f7c19e60cb4bd1c47188707d29b87728b797eace553bae",
+  "stderr_sha256": "e672c086bc1a844c62edadc8049d23c10825b43aa6374a649d57f0354e0cedfc",
+  "binary_sha256": "a6050b5b66dc06d7e9cf3719219a4c8aa24c4d91031b83b7bb30170754ef282d",
+  "source_inventory_sha256": "3cf032d5a6985d0273490cefbedc00f5c32bf5f80bc1c6f30d0a0722e4ffedd8",
+  "provider_identity_sha256": "38f9e4ad03c6aa8eb212bd67ec52eb620457361e229b08414068763c1bdd4627",
+  "command": "<sealed strict_refusals binary> real_provider_missing_required_base_never_probes_sql_shadow --ignored --nocapture --exact",
+  "profile": "functional count diagnostics only, no elapsed speed or whole-owner memory PASS"
+}

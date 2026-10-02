@@ -1,0 +1,29 @@
+{
+  "status": "PASS_DEFINITE_SQL_REGISTRATION_CUSTODY_COMPONENT",
+  "previous_failure": "../strict-sql-definite-f010/manifest.json preserves status3-versus4 FAIL before cleanup recognized explicitly acknowledged rollback",
+  "outcome": "External SQL RAISE(ABORT) after real MinIOPUT ACK; catalog attests one successful explicit rollback, writer aborts SQL visibility in status4; original96097B provider pack remains exact, ready1, selected locators0, no publication/retry/delete. Root complete-provider/S3 removal/GC and cloud durability are separate unsupported gates.",
+  "source_scope": "Only affected named registration test executed once for changed root cleanup/catalog source; unrelated prior provider/reader/writer passes reused within their declared scope. Source inventory and immutable executable hash pinned.",
+  "unsupported": "Genuine physical SQL COMMIT-Unknown failure is NOT_RUN; no product fault hook or speculative rollback added. Native SDK/FUSE retained full-byte history and whole-owner resource qualification remain outside this component proof.",
+  "files": [
+    {
+      "path": "result.json",
+      "bytes": 842,
+      "sha256": "942cdf97dc6214d94d1dab1772273feb87d9739f46f15929a4f6f16938d95f0a"
+    },
+    {
+      "path": "source.json",
+      "bytes": 17130,
+      "sha256": "64fee9bc4c2022df40a2e2539ff53ae17ee11b466b1b321cf46615b1df5a0dc2"
+    },
+    {
+      "path": "stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "stdout",
+      "bytes": 421,
+      "sha256": "8b473026d6708321e3677b2e630539c48e917db4dbefbc82b781302a0e2db07d"
+    }
+  ]
+}

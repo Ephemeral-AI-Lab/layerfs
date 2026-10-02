@@ -1,0 +1,4 @@
+
+thread 'real_provider_missing_required_base_never_probes_sql_shadow' panicked at tests/strict_refusals.rs:150:14:
+called `Result::unwrap()` on an `Err` value: "missing HTTP content length"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

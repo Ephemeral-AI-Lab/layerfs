@@ -1,0 +1,38 @@
+{
+  "status": "FAIL_DEFINITE_SQL_ROLLBACK_CLASSIFICATION",
+  "cause": "External locators RAISE(ABORT) reaches acknowledged real MinIO upload. Catalog returns definite marker only after explicit rollback acknowledgment; writer still quarantines status3 instead of definite-abandoned4. Source/binary exact failure preserved.",
+  "supplemental": "A labeled post-failure count diagnostic (no case rerun) confirms ready1, metadataNULL, locators0, providerGET200 and exact independently sealed96097B packSHA135dcee...; original failure interrupted those later test assertions, so this separate receipt supplies their observations.",
+  "scope": "No SQL COMMIT-Unknown fault was run; crash/cloud/durability/reclamation and SDK/FUSE history remain unsupported/unrun. No provider delete/resend performed.",
+  "files": [
+    {
+      "path": "known-ack-body.bin",
+      "bytes": 96097,
+      "sha256": "135dcee328350b0f5b8ec26fe88e391cf0a4ebd24ac5c7a74b57be2474e44a2d"
+    },
+    {
+      "path": "post-failure-custody.json",
+      "bytes": 380,
+      "sha256": "98dd0b7f5daa885045d6ed5912c1b2dd3d518ec3d86c504e32e2f127456d148d"
+    },
+    {
+      "path": "result.json",
+      "bytes": 844,
+      "sha256": "56d5f5b65a5a7abab01d4def909e2f8a6444a279b4e28a9cd0287e63975ba51e"
+    },
+    {
+      "path": "source.json",
+      "bytes": 16820,
+      "sha256": "a64e7c05565ab80f50959c131dca93fc8e6064b401e290fd83b5721fc96bfb7f"
+    },
+    {
+      "path": "stderr",
+      "bytes": 345,
+      "sha256": "126d2c4cf0a304864c7bc140ee3a85fdb3b056fee6756e6c796164e05050d44c"
+    },
+    {
+      "path": "stdout",
+      "bytes": 300,
+      "sha256": "2c54d66118a3db37322cc9f3c5a5cdafaa64f350aac3c51d64fa25cfc7da437c"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+
+running 1 test
+sp1-writer-strict-v2 SQL same-save ordinals/private captured cache refusal PASS PoolCounters { leaves: 2, reused_values: 8, new_values: 10, groups: 2, delta_leaves: 0, full_leaves: 2, trials: 0, work_exceeded: 0 }; MinIO GET/PUTdelta0
+test real_provider_sql_pool_same_save_ordinals_and_captured_scope_refusal ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.06s
+

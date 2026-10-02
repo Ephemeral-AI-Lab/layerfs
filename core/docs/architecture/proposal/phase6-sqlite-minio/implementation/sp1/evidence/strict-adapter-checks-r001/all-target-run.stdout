@@ -1,0 +1,259 @@
+   Compiling phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sp1-strict/layerfs/core/benchmark/phase6-live)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.06s
+     Running unittests src/lib.rs (core/benchmark/phase6-live/target/debug/deps/phase6_live_probe-ff52b923f0960e97)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (core/benchmark/phase6-live/target/debug/deps/phase6_live_probe-a6428a2c96c41e2d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/construction.rs (core/benchmark/phase6-live/target/debug/deps/construction-031b62dd7e6fc942)
+
+running 7 tests
+test published_overlay_truncate_regrow_and_ordinal_eof ... ok
+test changed_names_and_one_dirty_file_preserve_unrelated_values ... ok
+test tombstone_open_orphan_and_fresh_cancel_have_no_lifetime_scan ... ok
+test moved_directory_replacement_and_new_empty_match_legacy_namespace ... ok
+test quarantined_source_retirement_refuses_construction_before_canonical_effects ... ok
+test large_immediate_file_edit_keeps_tail_and_old_root ... ok
+test sql_native_namespace_matches_legacy_and_consumes270names_once ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests/directory.rs (core/benchmark/phase6-live/target/debug/deps/directory-a81b3ee611609202)
+
+running 2 tests
+test maximum_names_byte_bound_handle_type_range_and_cookie_replacement ... ok
+test multiple_pages_exact_inventory_seek_deleted_cookie_and_indexed_plan ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/engine.rs (core/benchmark/phase6-live/target/debug/deps/engine-79d31e86a969dbb6)
+
+running 3 tests
+test ordinary_final_state_sources_and_handles ... ok
+test exact_handle_admission_and_refund ... ok
+test repeated_overwrites_do_not_retain_write_history ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/metadata_catalog.rs (core/benchmark/phase6-live/target/debug/deps/metadata_catalog-883aab1563d233ff)
+
+running 4 tests
+test coordinate_conflict_rolls_back_exact_page_and_pack_insertion ... ok
+test first_locator_wins_alternate_pack_and_same_page_duplicates ... ok
+test invalid_page_and_conflicting_identity_refuse_before_effects ... ok
+test two_table_profile_and_readonly_query_exactly_preserve_identity ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/metadata_session.rs (core/benchmark/phase6-live/target/debug/deps/metadata_session-39f2dde9a45fe671)
+
+running 4 tests
+test oversized_input_refuses_before_connection_effect ... ok
+test wrong_reply_identity_quarantines_without_resend ... ok
+test two_requests_share_real_authenticated_connection ... ok
+test known_idle_rotation_opens_new_session_without_replaying_request ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.08s
+
+     Running tests/packing.rs (core/benchmark/phase6-live/target/debug/deps/packing-10afc21a19187634)
+
+running 4 tests
+test packed_locator_codec_has_exact_fields_and_eof ... ok
+test native_pack_group_ceiling_seals_without_losing_objects ... ok
+test multi_record_pack_reconstructs_exact_input_objects ... ok
+test pending_count_and_byte_refusal_preserves_accepted_objects ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/proof_plan.rs (core/benchmark/phase6-live/target/debug/deps/proof_plan-894d84f844f04f62)
+
+running 2 tests
+test known_reply_plan_roundtrip_exact_eof_and_counts ... ok
+test reopened_locator_verifier_refuses_mutations_before_provider_io ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/publication.rs (core/benchmark/phase6-live/target/debug/deps/publication-ec1247a7a8fbff8d)
+
+running 7 tests
+test known_commit_and_clean_successor_need_no_provider_reads ... ok
+test wrong_registered_role_cannot_be_published ... ok
+test exact_typed_conflict_roundtrips_public_bridge_framing ... ok
+test identity_context_generation_and_candidate_refuse_before_history_effects ... ok
+test actual_c5_stage_race_retains_loser_and_roundtrips_context ... ok
+test competing_branch_head_is_explicit_and_not_adopted_or_replayed ... ok
+test lost_reply_after_real_c5_commit_is_unknown_and_never_resent ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/rename.rs (core/benchmark/phase6-live/target/debug/deps/rename-fcabc8f06077bae7)
+
+running 4 tests
+test real_directory_listing_uses_names_parent_with_inode_parent_present ... ok
+test refused_cycles_types_nonempty_and_noreplace_preserve_namespace ... ok
+test move_descendants_keeps_ids_and_parent_counts ... ok
+test replacement_preserves_open_victim_and_same_parent_refcounts ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/reservations.rs (core/benchmark/phase6-live/target/debug/deps/reservations-4750cb397d9e3cb2)
+
+running 7 tests
+test grant_exact_wire_eof_context_and_terminal_serials ... ok
+test real_c5_pages_nonoverlap_and_invalid_owner_refuses_without_consumption ... ok
+test native_range_reply_is_exact_and_bad_reply_never_resends_consumed_grant ... ok
+test context_refusal_before_bootstrap_and_failed_provider_stays_pending ... ok
+test exhausted_local_range_refuses_before_inode_or_name_effect ... ok
+test real_refused_c5_refill_quarantines_creation_and_preserves_prior_bytes ... ok
+test real_engine_creation_crosses_page_without_population_scan ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/scenario.rs (core/benchmark/phase6-live/target/debug/deps/scenario-117a59d99cf6552d)
+
+running 1 test
+test sealed_input_exact_eof_and_manifest_refusal ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/source_retirement.rs (core/benchmark/phase6-live/target/debug/deps/source_retirement-37c74f3d2bba99ed)
+
+running 3 tests
+test repeated_overwrite_split_truncate_regrow_preserves_only_live_sources ... ok
+test refused_write_has_no_source_effect_and_missing_retirement_file_fails_explicitly ... ok
+test truncate_retirement_is_batched_and_open_unlinked_victim_remains_readable ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/span_read.rs (core/benchmark/phase6-live/target/debug/deps/span_read-40eea275256e9a5e)
+
+running 2 tests
+test literal_holes_partial_sources_eof_and_zero_length_reads ... ok
+test late_read_seeks_instead_of_scanning_4097_span_prefix ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.08s
+
+     Running tests/sql_windows.rs (core/benchmark/phase6-live/target/debug/deps/sql_windows-6ffca5fd0213206d)
+
+running 2 tests
+test partial_install_quarantines_and_preserves_readable_accepted_bytes ... ok
+test indexed_clear_uses64_row_mutations_on_actual_sqlite ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/strict_catalog.rs (core/benchmark/phase6-live/target/debug/deps/strict_catalog-0b83682ef42b5b0a)
+
+running 16 tests
+test actual_os_write_limit_commit_quarantines_engine ... ignored, real OS write refusal; requires fresh SP1_SQL_FAULT_OUT; never a speed/durability gate
+test current_markers_do_not_authorize_an_incompatible_schema ... ok
+test ordinal_reservations_are_global_and_not_recycled_on_abandon ... ok
+test readonly_profile_authentication_reads_no_product_population ... ok
+test unused_ordinal_tail_only_reclaims_its_owned_latest_reservation ... ok
+test implicit_statement_uncertainty_quarantines_without_guessing_absence ... ok
+test domain_bytes_and_old_schema_are_refused ... ok
+test ordered_metadata_blob_pages_finish_once_without_payload_shadow ... ok
+test captured_scope_excludes_foreign_private_and_later_publication ... ok
+test actual_locator_trigger_refusal_acknowledges_single_abort_and_keeps_reads_available ... ok
+test new_use_of_committed_metadata_stays_private_until_publication ... ok
+test candidate_ring_pages_are_domain_and_publication_scoped ... ok
+test pending_payload_blocks_publication_and_quarantine_hides_private_scope ... ok
+test equal_identity_has_two_domain_locations_and_no_payload_sql_bytes ... ok
+test canonical_cross_lane_reference_accepts_later_body_order_after_child_ready ... ok
+test current_profile_refuses_missing_transfer_table_changed_columns_and_indexes ... ok
+
+test result: ok. 15 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/strict_commit.rs (core/benchmark/phase6-live/target/debug/deps/strict_commit-535ee1bdb9379dd9)
+
+running 1 test
+test real_provider_native_capture_and_three_retained_c5_states ... ignored, real provider identity and fresh SP1_WITNESS_OUT required; Engine fixture not public SDK/FUSE
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/strict_pending.rs (core/benchmark/phase6-live/target/debug/deps/strict_pending-96e88c245a3d350e)
+
+running 1 test
+test pending_exact_reuse_does_not_seal_or_upload ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/strict_publication.rs (core/benchmark/phase6-live/target/debug/deps/strict_publication-e24758c9a6101134)
+
+running 9 tests
+test every_capture_fact_is_bound_before_owned_publication ... ok
+test owned_duplicate_constraint_is_definite_only_after_acknowledged_abort ... ok
+test one_owned_pending_capture_survives_storage_publish_until_known_completion ... ok
+test reused_committed_root_records_owned_use_and_c5_reports_up_to_date ... ok
+test grant_generation_and_ready_save_refusals_leave_no_submission ... ok
+test existing_real_stage_retains_custody_and_blocks_resubmission ... ok
+test anonymous_and_mismatched_owned_saves_cannot_publish ... ok
+test two_conditional_commits_retain_both_sealed_sql_metadata_roots ... ok
+test moved_branch_refuses_before_storage_publication_or_stage_creation ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/strict_reader.rs (core/benchmark/phase6-live/target/debug/deps/strict_reader-faeed5228f03c2b3)
+
+running 3 tests
+test real_provider_actual_cdc_dual_use_read_orders_and_missing_domain_refusal ... ignored, real MinIO identity/resources and fresh SP1_WITNESS_OUT required
+test real_provider_reader_payload_chains_and_sql_pools ... ignored, real MinIO identity/resources and fresh SP1_WITNESS_OUT required
+test real_provider_sql_metadata_graph_retains_all_independent_canonicals ... ignored, real MinIO identity/resources and fresh SP1_WITNESS_OUT required
+
+test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/strict_refusals.rs (core/benchmark/phase6-live/target/debug/deps/strict_refusals-a7c44fd1e8373eb9)
+
+running 6 tests
+test real_provider_definite_connection_refusal_abandons_without_retry ... ignored, real provider identity and fresh SP1_WITNESS_OUT required; definite custody gate
+test real_provider_definite_sql_registration_failure_retains_known_ack_body ... ignored, real provider identity and fresh SP1_WITNESS_OUT required; definite registration gate
+test real_provider_digest_valid_altered_intermediate_refuses_canonical_identity ... ignored, real provider identity and fresh SP1_WITNESS_OUT required
+test real_provider_missing_required_base_never_probes_sql_shadow ... ignored, real provider identity and fresh SP1_WITNESS_OUT required
+test real_provider_put_succeeds_lost_ack_quarantines_without_resend_or_delete ... ignored, real provider identity and fresh SP1_WITNESS_OUT required
+test real_provider_sealed_depth_and_fixed_chain_work_boundaries ... ignored, real provider identity and fresh SP1_WITNESS_OUT required
+
+test result: ok. 0 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/strict_storage_windows.rs (core/benchmark/phase6-live/target/debug/deps/strict_storage_windows-25f7ae201248a20f)
+
+running 3 tests
+test candidate_snapshot_builds_once_and_pages_use_stamp_index ... ok
+test separate_transfer_cursor_avoids_full_blob_record_materialization ... ok
+test production_transfer_cursor_is_scalar_and_released_after_complete_body ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
+
+     Running tests/strict_wire.rs (core/benchmark/phase6-live/target/debug/deps/strict_wire-150c5d489650b2b0)
+
+running 9 tests
+test wrong_native_reply_identity_quarantines_without_replay ... ok
+test malformed_requests_refuse_before_mutation_and_old_profile_is_incompatible ... ok
+test native_owned_save_context_is_immutable_and_anonymous_save_has_no_public_binding ... ok
+test authenticated_reply_engine_change_quarantines_captured_scope ... ok
+test reserved_metadata_transfer_keeps_body_order_and_frozen_digest ... ok
+test page_transfer_roundtrips_and_missing_domain_remains_absent ... ok
+test real_native_session_transfers_sql_metadata_and_preserves_definite_refusal ... ok
+test native_catalog_drives_existing_metadata_writer_and_c2_reader_without_provider_io ... ok
+test native_registration_preserves_order_across_encoded_byte_pages ... FAILED
+
+failures:
+
+---- native_registration_preserves_order_across_encoded_byte_pages stdout ----
+
+thread 'native_registration_preserves_order_across_encoded_byte_pages' panicked at tests/strict_wire.rs:641:18:
+called `Result::unwrap()` on an `Err` value: NonCanonicalPagePartition
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    native_registration_preserves_order_across_encoded_byte_pages
+
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+error: test failed, to rerun pass `--test strict_wire`

@@ -1,0 +1,73 @@
+{
+  "status": "COMPONENT_CORRECTED_SETUP_AND_NEW_BOUNDARY_GATES_PASS",
+  "previous_attempts": "../strict-writer-refusals-r001/manifest.json retains s007 FK-setup FAIL, f003 DELETE-setup FAIL and pooltrial parity mismatch",
+  "outcomes": {
+    "writer-s008": "PASS adapter dual-graph with SAME presealed C1 FileState/Extent bodies submitted for both logical uses; both complete200000B reads; metadataGETdelta0; after warming shared owner each missing childdomain refuses",
+    "refusal-f005": "PASS external curlAWSsigv4 DELETE204 configstdin then required base HTTP404 reader refusal; no SQL payload shadows or resend",
+    "refusal-f006": "PASS independently sealed chunk-depth2 writer FULL/PREFIX/PREFIX/FULL and atcaptrial0/ineligible1; warm owner chunkdepth1 read refused; fixed12step N120000 workvector exactIDs/counters FULL0/4/8/workExceeded4/8"
+  },
+  "scope": "These are source/binary/provider pinned functional count diagnostics; no elapsed speed, memory, release, FUSE, publicC5history or cloud durability PASS. Adapter dual-graph is not an ordinary attribute multiple-extent mapping fixture; actual ordinary attribute equalChunk/tree identity is separately demonstrated by s003. Definite-versus-Unknown custody taxonomy remains open.",
+  "fault_setup": "Only disposable external malformed fixture connection uses foreign_keysOFF to omit childlocator while preserving use facts; product SQL policy unchanged. Missingbase deletion uses existing system curl as external providercontrol; credentials piped via stdinconfig, never output/argv.",
+  "files": [
+    {
+      "path": "refusal-f005/result.json",
+      "bytes": 820,
+      "sha256": "0e2d70f356ae2c641956bc494367daba0c358892d4fa2ecfeb44b2a2a8766816"
+    },
+    {
+      "path": "refusal-f005/source.json",
+      "bytes": 15870,
+      "sha256": "6fd39b3bec5314e880e7fe495db91d0e93a9be2e2f0a9c885ead224bc3050330"
+    },
+    {
+      "path": "refusal-f005/stderr",
+      "bytes": 44,
+      "sha256": "e672c086bc1a844c62edadc8049d23c10825b43aa6374a649d57f0354e0cedfc"
+    },
+    {
+      "path": "refusal-f005/stdout",
+      "bytes": 330,
+      "sha256": "c079197b0da5bbdaa733397f873d25d8daf0552820162c630c0e6b809a25c516"
+    },
+    {
+      "path": "refusal-f006/result.json",
+      "bytes": 818,
+      "sha256": "8bcbcd4b1235b3ff9aab4bbe3f0d5beeb16c227764f2ace753f415e80f067ddb"
+    },
+    {
+      "path": "refusal-f006/source.json",
+      "bytes": 15870,
+      "sha256": "6fd39b3bec5314e880e7fe495db91d0e93a9be2e2f0a9c885ead224bc3050330"
+    },
+    {
+      "path": "refusal-f006/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "refusal-f006/stdout",
+      "bytes": 3543,
+      "sha256": "de309d1ea98b4126fd082074ecfa26725b0ab5ed0908caa452863353e13f901f"
+    },
+    {
+      "path": "writer-s008/result.json",
+      "bytes": 835,
+      "sha256": "b25810b359e39e7acd970bc50a290d265ccd22eb56bc6d4e8bc51c3e12cc110d"
+    },
+    {
+      "path": "writer-s008/source.json",
+      "bytes": 15868,
+      "sha256": "fda4312ca66d57bd15afb05fe90e665b831d9a156c158189c48a249077159e11"
+    },
+    {
+      "path": "writer-s008/stderr",
+      "bytes": 98,
+      "sha256": "a0c26a8d3bcbbaa6b771f5731cf7b1c1ad9ac84b5660b452669c10b9490a0e02"
+    },
+    {
+      "path": "writer-s008/stdout",
+      "bytes": 474,
+      "sha256": "c1a34cafff3f03a98f6b0a0304c97cb2895e518d6e9a588364691ea5be4706a0"
+    }
+  ]
+}

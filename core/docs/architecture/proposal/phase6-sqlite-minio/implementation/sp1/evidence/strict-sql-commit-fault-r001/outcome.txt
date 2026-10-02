@@ -1,0 +1,5 @@
+DIAGNOSTIC: actual OS write refusal at explicit COMMIT
+read refusal: unknown catalog custody: engine quarantined after unresolved SQL mutation
+write refusal: unknown catalog custody: engine quarantined after unresolved SQL mutation
+forensic previous/current DB observation: readable publication 1
+No durability, recovery, cleanup or speed PASS. Failed-abort physical proof remains NOT_RUN.

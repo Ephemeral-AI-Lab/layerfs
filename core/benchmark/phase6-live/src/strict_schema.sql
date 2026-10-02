@@ -19,10 +19,15 @@ CREATE TABLE bodies (
  digest BLOB NOT NULL CHECK(length(digest)=32),
  metadata BLOB,
  ready INTEGER NOT NULL DEFAULT 0 CHECK(ready IN(0,1)),
- received INTEGER NOT NULL DEFAULT 0 CHECK(received>=0),
  CHECK((domain=0 AND metadata IS NULL) OR
        (domain=1 AND ((ready=0 AND metadata IS NULL) OR (metadata IS NOT NULL AND length(metadata) BETWEEN 32 AND 1048576)))),
  UNIQUE(body_order,domain)
+);
+CREATE TABLE body_transfers (
+ body_order INTEGER PRIMARY KEY REFERENCES bodies(body_order) ON DELETE CASCADE,
+ received INTEGER NOT NULL DEFAULT 0 CHECK(received>=0),
+ total INTEGER NOT NULL CHECK(total BETWEEN 32 AND 1048576),
+ CHECK(received<=total)
 );
 CREATE UNIQUE INDEX body_ready_digest ON bodies(save_id,domain,digest) WHERE ready=1;
 CREATE INDEX bodies_save ON bodies(save_id,body_order);
@@ -101,3 +106,20 @@ CREATE TABLE candidate_slots (
 ) WITHOUT ROWID;
 CREATE UNIQUE INDEX candidate_identity_stamp ON candidate_entries(domain,stamp);
 CREATE INDEX ordinal_reservation_save ON ordinal_reservations(save_id,first_ordinal);
+CREATE TABLE save_context (
+ save_id INTEGER PRIMARY KEY REFERENCES saves,
+ workspace BLOB NOT NULL CHECK(length(workspace) BETWEEN 1 AND 255),
+ incarnation BLOB NOT NULL CHECK(length(incarnation)=32),
+ project BLOB NOT NULL CHECK(length(project)=17),
+ branch BLOB NOT NULL CHECK(length(branch)=17),
+ generation INTEGER NOT NULL CHECK(generation>0),
+ scope BLOB NOT NULL CHECK(length(scope)=32),
+ profile BLOB NOT NULL CHECK(length(profile)=32),
+ base_root BLOB NOT NULL CHECK(length(base_root)=32),
+ owned_pending INTEGER NOT NULL DEFAULT 1 CHECK(owned_pending IN(0,1))
+);
+CREATE UNIQUE INDEX owned_pending_workspace ON save_context(workspace,incarnation) WHERE owned_pending=1;
+CREATE TRIGGER abandon_owned_capture AFTER UPDATE OF status ON saves WHEN NEW.status=4 BEGIN
+ UPDATE save_context SET owned_pending=0 WHERE save_id=NEW.save_id;
+END;
+CREATE INDEX logical_use_save ON logical_uses(save_id,locator_id,logical_use);

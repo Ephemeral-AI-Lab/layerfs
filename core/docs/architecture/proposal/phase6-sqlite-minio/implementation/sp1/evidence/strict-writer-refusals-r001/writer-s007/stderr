@@ -1,0 +1,4 @@
+
+thread 'real_provider_shared_mapping_body_keeps_per_logical_use_child_routes' panicked at tests/strict_writer.rs:637:14:
+called `Result::unwrap()` on an `Err` value: SqliteFailure(Error { code: ConstraintViolation, extended_code: 787 }, Some("FOREIGN KEY constraint failed"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

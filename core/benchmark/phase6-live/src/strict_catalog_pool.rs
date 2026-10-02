@@ -7,32 +7,31 @@ impl StrictCatalog {
         if count == 0 || count > u32::MAX as usize {
             return Err("ordinal reservation admission".into());
         }
-        let mut db = self.db.lock().map_err(|_| "catalog owner")?;
-        let tx = db.transaction().map_err(err)?;
-        active(&tx, save)?;
-        let first: i64 = tx
-            .query_row(
-                "SELECT next_ordinal FROM catalog_state WHERE singleton=1",
-                [],
-                |r| r.get(0),
+        self.with_transaction(|tx| {
+            active(tx, save)?;
+            let first: i64 = tx
+                .query_row(
+                    "SELECT next_ordinal FROM catalog_state WHERE singleton=1",
+                    [],
+                    |r| r.get(0),
+                )
+                .map_err(err)?;
+            let end = first.checked_add(count as i64).ok_or("ordinal overflow")?;
+            if end > u32::MAX as i64 + 1 {
+                return Err("ordinal space exhausted".into());
+            }
+            tx.execute(
+                "INSERT INTO ordinal_reservations VALUES(?1,?2,?3)",
+                params![first, count as i64, save],
             )
             .map_err(err)?;
-        let end = first.checked_add(count as i64).ok_or("ordinal overflow")?;
-        if end > u32::MAX as i64 + 1 {
-            return Err("ordinal space exhausted".into());
-        }
-        tx.execute(
-            "INSERT INTO ordinal_reservations VALUES(?1,?2,?3)",
-            params![first, count as i64, save],
-        )
-        .map_err(err)?;
-        tx.execute(
-            "UPDATE catalog_state SET next_ordinal=?1 WHERE singleton=1",
-            [end],
-        )
-        .map_err(err)?;
-        tx.commit().map_err(err)?;
-        Ok(first as u32)
+            tx.execute(
+                "UPDATE catalog_state SET next_ordinal=?1 WHERE singleton=1",
+                [end],
+            )
+            .map_err(err)?;
+            Ok(first as u32)
+        })
     }
     pub fn release_ordinals(
         &self,
@@ -46,9 +45,8 @@ impl StrictCatalog {
         }
         let used = i64::try_from(used_end).map_err(|_| "ordinal maximum")?;
         let reserved = i64::try_from(reserved_end).map_err(|_| "ordinal maximum")?;
-        let mut db = self.db.lock().map_err(|_| "catalog owner")?;
-        let tx = db.transaction().map_err(err)?;
-        active(&tx, save)?;
+        self.with_transaction(|tx| {
+        active(tx, save)?;
         let first:Option<i64>=tx.query_row("SELECT first_ordinal FROM ordinal_reservations WHERE save_id=?1 AND first_ordinal+count=?2 AND first_ordinal<=?3",params![save,reserved,used],|r|r.get(0)).optional().map_err(err)?;
         let Some(first) = first else {
             return Err("ordinal tail ownership".into());
@@ -79,7 +77,8 @@ impl StrictCatalog {
                 .map_err(err)?;
             }
         }
-        tx.commit().map_err(err)
+        Ok(())
+        })
     }
     pub fn insert_groups(
         &self,
@@ -91,9 +90,8 @@ impl StrictCatalog {
         if scope.own_save != Some(save) || groups.len() > PAGE {
             return Err("group owner/page admission".into());
         }
-        let mut db = self.db.lock().map_err(|_| "catalog owner")?;
-        let tx = db.transaction().map_err(err)?;
-        active(&tx, save)?;
+        self.with_transaction(|tx| {
+        active(tx, save)?;
         for group in groups {
             if group.count == 0 || group.count > VALUES_PER_GROUP {
                 return Err("group count admission".into());
@@ -114,7 +112,8 @@ impl StrictCatalog {
             )
             .map_err(err)?;
         }
-        tx.commit().map_err(err)
+        Ok(())
+        })
     }
     pub fn group_for(
         &self,
@@ -124,7 +123,7 @@ impl StrictCatalog {
         if ordinal == 0 {
             return Err("ordinal zero".into());
         }
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
+        let db = self.connection()?;
         let sql=format!("{} AND g.first_ordinal=(SELECT MAX(first_ordinal) FROM metadata_value_groups WHERE first_ordinal<=?4) AND g.first_ordinal+g.count>?4",group_query());
         let row: Option<(u32, i64, i64, i64, Vec<u8>)> = db
             .query_row(
@@ -146,7 +145,7 @@ impl StrictCatalog {
         if limit == 0 || limit > PAGE {
             return Err("group page admission".into());
         }
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
+        let db = self.connection()?;
         let sql = format!(
             "{} AND g.first_ordinal>=?4 ORDER BY g.first_ordinal LIMIT ?5",
             group_query()
@@ -174,13 +173,13 @@ impl StrictCatalog {
         if used > 131072 || first == 0 {
             return Err("pool window admission".into());
         }
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
+        let db = self.connection()?;
         active(&db, save)?;
-        db.execute("UPDATE catalog_state SET metadata_window_start=CASE WHEN metadata_window_values+?1>131072 THEN ?2 ELSE metadata_window_start END,metadata_window_values=CASE WHEN metadata_window_values+?1>131072 THEN ?1 ELSE metadata_window_values+?1 END WHERE singleton=1",params![used as i64,first]).map_err(err)?;
+        self.mutation_result(db.execute("UPDATE catalog_state SET metadata_window_start=CASE WHEN metadata_window_values+?1>131072 THEN ?2 ELSE metadata_window_start END,metadata_window_values=CASE WHEN metadata_window_values+?1>131072 THEN ?1 ELSE metadata_window_values+?1 END WHERE singleton=1",params![used as i64,first]))?;
         Ok(())
     }
     pub fn metadata_window_start(&self, scope: CatalogScope) -> Result<u32, String> {
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
+        let db = self.connection()?;
         let _ = eligible(scope)?;
         db.query_row(
             "SELECT metadata_window_start FROM catalog_state WHERE singleton=1",

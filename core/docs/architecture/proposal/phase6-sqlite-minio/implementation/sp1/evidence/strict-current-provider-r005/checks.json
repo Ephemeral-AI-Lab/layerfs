@@ -1,0 +1,47 @@
+{
+  "adapter_tests": [
+    "strict_reader",
+    "strict_writer",
+    "strict_refusals"
+  ],
+  "commands": [
+    [
+      "cargo",
+      "+1.85.1",
+      "clippy",
+      "--manifest-path",
+      "core/benchmark/phase6-live/Cargo.toml",
+      "--locked",
+      "--test",
+      "strict_reader",
+      "--test",
+      "strict_writer",
+      "--test",
+      "strict_refusals",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/benchmark/phase6-live/Cargo.toml",
+      "--locked",
+      "--test",
+      "strict_reader",
+      "--test",
+      "strict_writer",
+      "--test",
+      "strict_refusals",
+      "--no-run"
+    ]
+  ],
+  "exit_codes": [
+    0,
+    0
+  ],
+  "source_frozen_during_proof": true,
+  "note": "Actual preceding commands completed PASS and were observed in tool output; no reconstructed stdout or repeated checks. Core existing759-pass/alltarget proof remains separately retained; only new edit acquisition target compile/Clippy/fmt ran."
+}

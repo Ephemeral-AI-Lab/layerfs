@@ -1,0 +1,6 @@
+
+thread 'real_provider_definite_connection_refusal_abandons_without_retry' panicked at tests/strict_refusals.rs:491:5:
+assertion `left == right` failed: definite pre-send failure is abandoned; it cannot be Unknown custody
+  left: 3
+ right: 4
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

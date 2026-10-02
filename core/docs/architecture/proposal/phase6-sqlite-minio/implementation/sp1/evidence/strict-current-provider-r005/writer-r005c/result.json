@@ -1,0 +1,12 @@
+{
+  "test": "real_provider_actual_cdc_attribute_dual_use_and_threshold_roots",
+  "exit_code": 0,
+  "bucket": "sp1-r001-writer-r005c",
+  "stdout_sha256": "88e6f3113f90c0a5c424348a0d342060c61399c7535e4449c19278b936b0a089",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "binary_sha256": "39c6562ac0edac4f54bb6c53a3463269abca2d6eff96282a92db9a30032b6436",
+  "source_inventory_sha256": "b6ed1070e0015e193eeefd38ad565b557a2169890b918fbcfdf66c86ae7243c8",
+  "provider_identity_sha256": "38f9e4ad03c6aa8eb212bd67ec52eb620457361e229b08414068763c1bdd4627",
+  "command": "<sealed strict_writer binary> real_provider_actual_cdc_attribute_dual_use_and_threshold_roots --ignored --nocapture --exact",
+  "profile": "functional count diagnostics only, no elapsed speed or whole-owner memory PASS"
+}

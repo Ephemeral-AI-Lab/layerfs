@@ -1,0 +1,8 @@
+
+running 1 test
+sp1-writer-strict-v2 shared SQL mapping body RegularFileGraph child-domain missing refuses with owner caches warm; adapter dual-graph fixture
+sp1-writer-strict-v2 shared SQL mapping body MetadataGraph child-domain missing refuses with owner caches warm; adapter dual-graph fixture
+test real_provider_shared_mapping_body_keeps_per_logical_use_child_routes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.47s
+

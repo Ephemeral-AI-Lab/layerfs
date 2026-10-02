@@ -1,0 +1,47 @@
+{
+  "status": "PASS_OWNED_CONTAINER_TEARDOWN",
+  "provider_identity_sha256": "38f9e4ad03c6aa8eb212bd67ec52eb620457361e229b08414068763c1bdd4627",
+  "scope": "Owned container only. Persistent bind data and failed attempts retained. Product abort/quarantine visibility does not claim physical GC/reclamation.",
+  "files": [
+    {
+      "path": "before.json",
+      "bytes": 604,
+      "sha256": "f4ec82ab067fe22f8ce154a63ba566df50a0c69d7f6db4cdbc3fc932ea2c03f3"
+    },
+    {
+      "path": "remaining.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "remaining.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "remove.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "remove.stdout",
+      "bytes": 30,
+      "sha256": "c0705b4b0a3a5633bb0c20af4926c2d33c51bdbbc95cad2aca9f2afa1f85b36f"
+    },
+    {
+      "path": "result.json",
+      "bytes": 665,
+      "sha256": "743fe2e6a4cf4f0d5dd46f495d569ff6f36958523a1fb768c74f5b8280b0ed24"
+    },
+    {
+      "path": "stop.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "stop.stdout",
+      "bytes": 30,
+      "sha256": "c0705b4b0a3a5633bb0c20af4926c2d33c51bdbbc95cad2aca9f2afa1f85b36f"
+    }
+  ]
+}

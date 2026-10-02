@@ -1,0 +1,30 @@
+[
+  {
+    "path": "target/sp1-c003-diagnostic/read",
+    "sha256": "f011c93f41a87c811f9fa13ab2bd49c6e2de206e63d76d5ae59c4fe20dc346e7"
+  },
+  {
+    "path": "target/sp1-c003-diagnostic/parent-edit",
+    "sha256": "25a241b64b02c3ebbe7077c1d1dabb2828fb6beb286e1e3d1b9f99f0f28e4a82"
+  },
+  {
+    "path": "target/sp1-oracle-source/core/target/debug/deps/liblayerfs_content-4fc6a5268239c9ee.rlib",
+    "sha256": "940771ff2d8778fe72577a20fa820c7856d52c55c62f73aa57a327d32433af7b"
+  },
+  {
+    "path": "target/sp1-oracle-source/core/target/debug/deps/liblayerfs_telemetry-bf6a78305e5c0106.rlib",
+    "sha256": "3a221f91c612c2aa24385e63ed18eba46e47a3341a821a95757f2dad4123e4f9"
+  },
+  {
+    "path": "target/sp1-oracle-source/core/crates/layerfs-content/tests/support/mod.rs",
+    "sha256": "d395e462731885a37d97d00a7ca346b2bf534232c5074d41b3f2915db286f861"
+  },
+  {
+    "path": "target/sp1-oracle-source/core/crates/layerfs-content/tests/support/edits.rs",
+    "sha256": "0b0ebe145261e985f37c2d312d9d337468e06a7b2a10225f3a924873d653f069"
+  },
+  {
+    "path": "target/sp1-oracle-source/core/crates/layerfs-content/tests/support/filesystem.rs",
+    "sha256": "492671183645a38ce67bd0ba4863e929a9227c2cb903e0325f11e04fb8c7dcc1"
+  }
+]

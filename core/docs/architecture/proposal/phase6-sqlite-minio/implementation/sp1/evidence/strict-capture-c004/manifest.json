@@ -1,0 +1,31 @@
+{
+  "status": "PASS_EDIT_OPERATION_V1_COMPONENT_THREE_STATES",
+  "oracle_manifest_sha256": "243ddb6944825f3018a1d8997823097ed46a4e05f1aca2049ec4b22643fdfdd0",
+  "raw_bytes_oracle_manifest_sha256": "1add4cb1373d183a601d0184a30f4b80c356d5131f0c9f3dca6d6d5ae01024a6",
+  "empty_oracle_manifest_sha256": "c96a59d0d21a8577b3af11c8c09849d1d65cf3a93c93b04d432faf972d7d72b7",
+  "scope": "Real Engine fixture capture with fixture metadata preconditioning, actual authenticated native catalog transport, real MinIO file payloads, SQL-only complete metadata pack bytes, C5 three retained immutable commits. All independently edit-built FSroots/content roots, all old raw vectors, every inodevalue typedrefs (21edges), fresh readonlycatalog+history and ancestry validated. No publicSDK/Exec/FUSE/S2 or complete-stream/editroot equivalence, performance, whole-owner memory, cloud, release or GC claim.",
+  "history": "c001 oversizedexternalwrite setup FAIL, following helper API compile FAIL, c002 emptypreload refs FAIL, c003 wrong prospectively declared fullstreamroot FAIL remain untouched. NEW edit-oracle-v1 acquired from unchanged original archived C1 before c004 expected use; no productalgorithm changes.",
+  "checks": "Targeted strict_commit Clippy-Dwarnings and --no-run PASS before c004; root final unaffected adapter/Core checks retained separately.",
+  "files": [
+    {
+      "path": "result.json",
+      "bytes": 813,
+      "sha256": "7146ba6d15cc91522a6ab3ac61ed07f936e589915a065c5505f72490ae8cfb81"
+    },
+    {
+      "path": "source.json",
+      "bytes": 17456,
+      "sha256": "d50e3de04c03a5dc9eb20974bc98cf9f4d6117c7505611caf9b02703be76fd27"
+    },
+    {
+      "path": "stderr",
+      "bytes": 337,
+      "sha256": "f9d2a0c7aaf1f0d4d867b1bab2556cfdd1b62ec1b81c35fdaf2150fa3bef1e2f"
+    },
+    {
+      "path": "stdout",
+      "bytes": 2382,
+      "sha256": "83c2c3f7f78d8792ba895e78689fe8482e92fdc64cb92fbb702cad4699a7e0c2"
+    }
+  ]
+}

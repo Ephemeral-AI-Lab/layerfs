@@ -1,0 +1,11 @@
+
+running 1 test
+test real_provider_definite_connection_refusal_abandons_without_retry ... FAILED
+
+failures:
+
+failures:
+    real_provider_definite_connection_refusal_abandons_without_retry
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.06s
+

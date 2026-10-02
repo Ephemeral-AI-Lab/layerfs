@@ -1,0 +1,51 @@
+{
+  "status": "OWNING_CORE_CHECKS_PASS",
+  "head": "f95290bf99998cec85ff1cce55bd0004f7ccf1b7",
+  "core_product_subtree": "f1178922e3a929f6a9e07cbba9756586bc68bfc3",
+  "scope": "Current Core workspace checks; this is not a speed, physical resource or release receipt. All tracked Core product implementation unchanged from published L1; untracked empty acquisition target is independently sourced and remains ignored in routine test run.",
+  "commands": [
+    {
+      "command": "LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked --all-targets",
+      "exit": 0,
+      "binary_reports": 200,
+      "passed": 759,
+      "failed": 0,
+      "ignored": 10
+    },
+    {
+      "command": "LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings",
+      "exit": 0
+    },
+    {
+      "command": "cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check",
+      "exit": 0
+    },
+    {
+      "command": "python3 core/tools/check_product_boundary.py",
+      "exit": 0,
+      "files": 359
+    },
+    {
+      "command": "python3 -m unittest discover -s core/tools -p 'test_*.py'",
+      "exit": 0,
+      "passed": 9
+    }
+  ],
+  "files": [
+    {
+      "path": "clippy.stdout",
+      "bytes": 2465,
+      "sha256": "d908a9cfa4ce6d4a88cab404940eee2ee27ef52b5884ee767b7104ea38924846"
+    },
+    {
+      "path": "source.json",
+      "bytes": 109428,
+      "sha256": "6a58cf478722f667f969ecd0cf6c5b27d4db4f0087f3a0fd989513fae284fdf1"
+    },
+    {
+      "path": "test.stdout",
+      "bytes": 127871,
+      "sha256": "ec61d0d3aa7339eea368291cc72aa48c41c441bf1c90912ddb2ba9bbdda07e77"
+    }
+  ]
+}

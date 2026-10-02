@@ -1,0 +1,12 @@
+{
+  "test": "real_provider_same_save_selection_grouping_and_private_eligibility",
+  "exit_code": 0,
+  "bucket": "sp1-r001-writer-s001",
+  "stdout_sha256": "d166d57d424301beb28f9eb34473e616195aa6905f5f85449f349721c536b1be",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "binary_sha256": "f23abcb1fc29f24cfbce91798d30a7a30165fec8da320dfe0741454bcdaa2afd",
+  "source_inventory_sha256": "7ac4fd98031dd7e2c157f5881e4d3a4f782450d71e3785cf765e6ed726d93f88",
+  "provider_identity_sha256": "38f9e4ad03c6aa8eb212bd67ec52eb620457361e229b08414068763c1bdd4627",
+  "command": "<sealed strict_writer binary> real_provider_same_save_selection_grouping_and_private_eligibility --ignored --nocapture --exact",
+  "profile": "functional count diagnostics only, no elapsed speed or whole-owner memory PASS"
+}

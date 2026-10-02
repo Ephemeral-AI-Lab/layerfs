@@ -6,31 +6,43 @@ use sha2::{Digest, Sha256};
 use std::{
     path::Path,
     sync::{
-        atomic::{AtomicU64, Ordering},
-        Mutex,
+        atomic::{AtomicBool, Ordering},
+        Mutex, MutexGuard,
     },
     time::Duration,
 };
 
 #[path = "strict_catalog_candidates.rs"]
 mod candidates;
+#[path = "strict_catalog_owner.rs"]
+mod owner;
+#[path = "strict_catalog_profile.rs"]
+mod profile;
+#[path = "strict_catalog_publication.rs"]
+mod publication;
+pub use owner::SaveContext;
+pub use profile::SCHEMA_FINGERPRINT;
 #[path = "strict_catalog_pool.rs"]
 mod pool;
 #[path = "strict_catalog_registration.rs"]
 mod registration;
-pub use candidates::CandidateRow;
+pub use candidates::{CandidateRow, CandidateSnapshotWork};
 #[path = "strict_catalog_transfer.rs"]
 mod transfer;
 pub use transfer::BodyPage;
-static NEXT_CACHE_NAMESPACE: AtomicU64 = AtomicU64::new(1);
+// Experimental service-instance identity: one OS-random draw, no retry.
+// This scopes disposable caches; it is not a persistence or recovery guarantee.
 fn next_cache_namespace() -> Result<u64, String> {
-    NEXT_CACHE_NAMESPACE
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
-        .map_err(|_| "catalog cache namespace exhausted".into())
+    let bytes = layerfs_sandbox::random::<8>().map_err(|e| e.to_string())?;
+    let epoch = u64::from_be_bytes(bytes);
+    if epoch == 0 {
+        return Err("catalog cache namespace unavailable".into());
+    }
+    Ok(epoch)
 }
 
 pub const APPLICATION_ID: u32 = u32::from_be_bytes(*b"P6S1");
-pub const USER_VERSION: u32 = 1;
+pub const USER_VERSION: u32 = 2;
 pub const PAGE: usize = layerfs_storage::policy::LOOKUP_PAGE_IDS;
 pub const BODY_LIMIT: usize = 1024 * 1024;
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -78,13 +90,45 @@ pub struct Registration {
     pub references: Vec<Reference>,
     pub base: Option<PhysicalBase>,
 }
+pub(super) struct TransactionOutcome<'a> {
+    catalog: &'a StrictCatalog,
+    acknowledged: bool,
+}
+impl TransactionOutcome<'_> {
+    fn acknowledge(&mut self) {
+        self.acknowledged = true;
+    }
+}
+impl Drop for TransactionOutcome<'_> {
+    fn drop(&mut self) {
+        if !self.acknowledged {
+            self.catalog.quarantined.store(true, Ordering::Release);
+        }
+    }
+}
 pub struct StrictCatalog {
     db: Mutex<Connection>,
     writable: bool,
+    quarantined: AtomicBool,
     cache_namespace: u64,
 }
+pub(super) fn unknown(e: rusqlite::Error) -> String {
+    format!("unknown catalog custody: {e}")
+}
 pub(super) fn err(e: rusqlite::Error) -> String {
-    e.to_string()
+    unknown(e)
+}
+pub(super) fn admission_err(e: rusqlite::Error) -> String {
+    match e.sqlite_error_code() {
+        Some(rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked) => {
+            format!("definite catalog refusal: {e}")
+        }
+        _ => unknown(e),
+    }
+}
+/// Only reviewed typed admission or acknowledged-abort paths emit this marker.
+pub fn is_definite_catalog_error(message: &str) -> bool {
+    message.starts_with("definite catalog refusal: ")
 }
 pub(super) fn active(db: &Connection, save: i64) -> Result<(), String> {
     let status: Option<i64> = db
@@ -102,6 +146,81 @@ pub(super) fn eligible(scope: CatalogScope) -> Result<i64, String> {
     i64::try_from(scope.publication).map_err(|_| "publication overflow".into())
 }
 impl StrictCatalog {
+    pub(super) fn connection(&self) -> Result<MutexGuard<'_, Connection>, String> {
+        if self.quarantined.load(Ordering::Acquire) {
+            return Err(
+                "unknown catalog custody: engine quarantined after unresolved SQL mutation".into(),
+            );
+        }
+        let db = self
+            .db
+            .lock()
+            .map_err(|_| "unknown catalog custody: SQL owner poisoned")?;
+        // A caller may have waited while the previous operation quarantined it.
+        if self.quarantined.load(Ordering::Acquire) {
+            return Err(
+                "unknown catalog custody: engine quarantined after unresolved SQL mutation".into(),
+            );
+        }
+        Ok(db)
+    }
+    pub(super) fn mutation_result(&self, result: rusqlite::Result<usize>) -> Result<usize, String> {
+        match result {
+            Ok(rows) => Ok(rows),
+            Err(cause) => {
+                self.quarantined.store(true, Ordering::Release);
+                Err(unknown(cause))
+            }
+        }
+    }
+    pub(super) fn commit_tx(
+        &self,
+        mut tx: rusqlite::Transaction<'_>,
+        outcome: &mut TransactionOutcome<'_>,
+    ) -> Result<(), String> {
+        tx.set_drop_behavior(rusqlite::DropBehavior::Ignore);
+        match tx.commit() {
+            Ok(()) => {
+                outcome.acknowledge();
+                Ok(())
+            }
+            Err(cause) => {
+                self.quarantined.store(true, Ordering::Release);
+                Err(format!("unknown catalog custody: SQL COMMIT: {cause}"))
+            }
+        }
+    }
+    pub(super) fn with_transaction<T>(
+        &self,
+        operation: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, String>,
+    ) -> Result<T, String> {
+        self.write()?;
+        let mut db = self.connection()?;
+        let mut tx = match db.transaction() {
+            Ok(tx) => tx,
+            Err(cause) => {
+                if !matches!(
+                    cause.sqlite_error_code(),
+                    Some(rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked)
+                ) {
+                    self.quarantined.store(true, Ordering::Release);
+                }
+                return Err(admission_err(cause));
+            }
+        };
+        tx.set_drop_behavior(rusqlite::DropBehavior::Ignore);
+        let mut outcome = TransactionOutcome {
+            catalog: self,
+            acknowledged: false,
+        };
+        match operation(&tx) {
+            Ok(value)=> {self.commit_tx(tx,&mut outcome)?;Ok(value)},
+            Err(cause)=>match tx.rollback() {
+                Ok(())=> {outcome.acknowledge();Err(format!("definite catalog refusal: {cause}"))},
+                Err(rollback)=>Err(format!("unknown catalog custody: {cause}; abort acknowledgement unavailable: {rollback}")),
+            },
+        }
+    }
     pub fn cache_namespace(&self) -> u64 {
         self.cache_namespace
     }
@@ -127,9 +246,11 @@ impl StrictCatalog {
             .map_err(err)?;
         db.pragma_update(None, "user_version", USER_VERSION)
             .map_err(err)?;
+        profile::validate(&db)?;
         Ok(Self {
             db: Mutex::new(db),
             writable: true,
+            quarantined: AtomicBool::new(false),
             cache_namespace: next_cache_namespace()?,
         })
     }
@@ -146,14 +267,16 @@ impl StrictCatalog {
         if app != APPLICATION_ID || version != USER_VERSION {
             return Err("strict catalog schema/profile".into());
         }
+        profile::validate(&db)?;
         Ok(Self {
             db: Mutex::new(db),
             writable: false,
+            quarantined: AtomicBool::new(false),
             cache_namespace: next_cache_namespace()?,
         })
     }
     pub fn capture(&self, own_save: Option<i64>) -> Result<CatalogScope, String> {
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
+        let db = self.connection()?;
         if let Some(save) = own_save {
             let status: Option<i64> = db
                 .query_row("SELECT status FROM saves WHERE save_id=?1", [save], |r| {
@@ -174,9 +297,8 @@ impl StrictCatalog {
     }
     pub fn begin_save(&self) -> Result<i64, String> {
         self.write()?;
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
-        db.execute("INSERT INTO saves DEFAULT VALUES", [])
-            .map_err(err)?;
+        let db = self.connection()?;
+        self.mutation_result(db.execute("INSERT INTO saves DEFAULT VALUES", []))?;
         Ok(db.last_insert_rowid())
     }
     /// Payload registration is authorized only after a definite provider ACK.
@@ -208,13 +330,12 @@ impl StrictCatalog {
             }
             _ => return Err("strict body domain/byte admission".into()),
         }
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
+        let db = self.connection()?;
         active(&db, save)?;
-        db.execute(
+        self.mutation_result(db.execute(
             "INSERT INTO bodies(domain,save_id,digest,metadata,ready) VALUES(?1,?2,?3,?4,1)",
             params![domain as i64, save, digest.as_slice(), metadata],
-        )
-        .map_err(err)?;
+        ))?;
         Ok(db.last_insert_rowid())
     }
     pub fn body(
@@ -223,13 +344,13 @@ impl StrictCatalog {
         domain: PlacementDomain,
         order: i64,
     ) -> Result<([u8; 32], Option<Vec<u8>>), String> {
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
+        let db = self.connection()?;
         let row: Option<(Vec<u8>,Option<Vec<u8>>)> = db.query_row("SELECT b.digest,b.metadata FROM bodies b JOIN saves s USING(save_id) WHERE b.body_order=?1 AND b.domain=?2 AND b.body_order<=?3 AND ((s.status IN (0,1) AND b.save_id=?4) OR (s.status=2 AND s.publication<=?5))", params![order,domain as i64,scope.ceiling,scope.own_save,eligible(scope)?], |r| Ok((r.get(0)?,r.get(1)?))).optional().map_err(err)?;
         let (digest, bytes) = row.ok_or("body unavailable in captured domain/scope")?;
         Ok((digest.try_into().map_err(|_| "body digest width")?, bytes))
     }
     pub fn descriptor(&self, id: ObjectId) -> Result<Option<(ObjectRole, usize)>, String> {
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
+        let db = self.connection()?;
         descriptor(&db, id)
     }
     pub fn location(
@@ -238,7 +359,7 @@ impl StrictCatalog {
         domain: PlacementDomain,
         id: ObjectId,
     ) -> Result<Option<Located>, String> {
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
+        let db = self.connection()?;
         location(&db, scope, domain, id)
     }
     pub fn locations(
@@ -250,7 +371,7 @@ impl StrictCatalog {
         if ids.len() > PAGE {
             return Err("catalog lookup page admission".into());
         }
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
+        let db = self.connection()?;
         if ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -300,20 +421,17 @@ impl StrictCatalog {
         id: ObjectId,
         usage: LogicalUse,
     ) -> Result<bool, String> {
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
+        let db = self.connection()?;
         has_use(&db, scope, id, usage)
     }
     pub fn finish_storage(&self, save: i64) -> Result<(), String> {
         self.write()?;
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
+        let db = self.connection()?;
         active(&db, save)?;
-        if db
-            .execute(
-                "UPDATE saves SET status=1 WHERE save_id=?1 AND status=0 AND pending=0",
-                [save],
-            )
-            .map_err(err)?
-            != 1
+        if self.mutation_result(db.execute(
+            "UPDATE saves SET status=1 WHERE save_id=?1 AND status=0 AND pending=0",
+            [save],
+        ))? != 1
         {
             return Err("save has unacknowledged bodies".into());
         }
@@ -321,8 +439,7 @@ impl StrictCatalog {
     }
     pub fn publish(&self, save: i64) -> Result<u64, String> {
         self.write()?;
-        let mut db = self.db.lock().map_err(|_| "catalog owner")?;
-        let tx = db.transaction().map_err(err)?;
+        self.with_transaction(|tx| {
         let publication: i64 = tx.query_row("UPDATE catalog_state SET publication=publication+1 WHERE singleton=1 AND publication<9223372036854775807 RETURNING publication",[],|r|r.get(0)).map_err(err)?;
         if tx
             .execute(
@@ -334,8 +451,8 @@ impl StrictCatalog {
         {
             return Err("save not storage ready".into());
         }
-        tx.commit().map_err(err)?;
         Ok(publication as u64)
+        })
     }
     pub fn abandon(&self, save: i64) -> Result<(), String> {
         self.stop(save, 4)
@@ -345,14 +462,11 @@ impl StrictCatalog {
     }
     fn stop(&self, save: i64, status: i64) -> Result<(), String> {
         self.write()?;
-        let db = self.db.lock().map_err(|_| "catalog owner")?;
-        if db
-            .execute(
-                "UPDATE saves SET status=?2 WHERE save_id=?1 AND status IN(0,1)",
-                params![save, status],
-            )
-            .map_err(err)?
-            != 1
+        let db = self.connection()?;
+        if self.mutation_result(db.execute(
+            "UPDATE saves SET status=?2 WHERE save_id=?1 AND status IN(0,1)",
+            params![save, status],
+        ))? != 1
         {
             return Err("save cannot be stopped".into());
         }
@@ -373,6 +487,7 @@ fn configure(db: &Connection, writable: bool) -> Result<(), String> {
     if writable {
         db.execute_batch("PRAGMA journal_mode=MEMORY;PRAGMA synchronous=OFF;")
             .map_err(err)?;
+        candidates::initialize_snapshot(db)?;
     } else {
         db.execute_batch("PRAGMA query_only=ON;").map_err(err)?;
     }

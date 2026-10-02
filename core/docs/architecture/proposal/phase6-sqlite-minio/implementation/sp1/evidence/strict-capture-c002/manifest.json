@@ -1,0 +1,27 @@
+{
+  "status": "FAIL_IMMUTABLE_REUSE_REFERENCE_FACTS",
+  "cause": "Before state0 candidate or C5 publication, prepare_owned was refused: definite catalog refusal: immutable reuse reference mismatch. Empty fixture import supplied no reference sidecars, despite sealed objects.tsv containing canonical child facts. Diagnosis pending; expected vectors remain unchanged.",
+  "scope": "Functional Engine fixture/native/real MinIO/C5 component, not public SDK/Exec/FUSE/S2 or a performance sample. Retained attempt source and immutable binary identities are in result.json.",
+  "files": [
+    {
+      "path": "result.json",
+      "bytes": 815,
+      "sha256": "b492aa9abb4ee05c20853087f47be1b5e2e24a8b0358f1ea86557c48d5d39a41"
+    },
+    {
+      "path": "source.json",
+      "bytes": 17456,
+      "sha256": "b1ba371f2ec0d8ab284c24826daba27d200e0c40c339593fd509048e4f9d3129"
+    },
+    {
+      "path": "stderr",
+      "bytes": 341,
+      "sha256": "04da2dc0f7366d9865a6e58fb648f42812e3e76d41a499d7028107b057065f3e"
+    },
+    {
+      "path": "stdout",
+      "bytes": 274,
+      "sha256": "7ec119cd8bbd92e20af90265a6662cab45aec12d3995caf0f6b9a9c1596cf8c8"
+    }
+  ]
+}

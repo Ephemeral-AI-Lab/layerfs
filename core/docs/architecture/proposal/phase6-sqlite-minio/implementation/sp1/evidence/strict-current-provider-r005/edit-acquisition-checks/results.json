@@ -1,0 +1,47 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-storage",
+      "--test",
+      "sp1_edit_fixture_seal",
+      "--no-run"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "clippy",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-storage",
+      "--test",
+      "sp1_edit_fixture_seal",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "rustfmt",
+      "+1.85.1",
+      "--edition",
+      "2021",
+      "--check",
+      "core/crates/layerfs-storage/tests/sp1_edit_fixture_seal.rs"
+    ],
+    "exit_code": 0
+  }
+]

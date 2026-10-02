@@ -571,3 +571,225 @@ fn candidate_ring_pages_are_domain_and_publication_scoped() {
         .locations(public, PlacementDomain::Metadata, &ids)
         .is_err());
 }
+#[test]
+fn actual_locator_trigger_refusal_acknowledges_single_abort_and_keeps_reads_available() {
+    let db = Database::new();
+    let p = pack();
+    let save = db.catalog.begin_save().unwrap();
+    let digest: [u8; 32] = Sha256::digest(&p.bytes).into();
+    let order = db
+        .catalog
+        .register_body(PlacementDomain::Metadata, save, digest, Some(&p.bytes))
+        .unwrap();
+    let external = rusqlite::Connection::open(&db.path).unwrap();
+    external.execute_batch("CREATE TRIGGER deny_locator BEFORE INSERT ON locators BEGIN SELECT RAISE(ABORT,'external locator refusal'); END;").unwrap();
+    let scope = db.catalog.capture(Some(save)).unwrap();
+    let error = db
+        .catalog
+        .register(
+            scope,
+            save,
+            &[row(
+                &p,
+                order,
+                PlacementDomain::Metadata,
+                LogicalUse::MetadataGraph,
+            )],
+        )
+        .unwrap_err();
+    assert!(phase6_live_probe::strict_catalog::is_definite_catalog_error(&error));
+    let identities: i64 = external
+        .query_row("SELECT COUNT(*) FROM identities", [], |r| r.get(0))
+        .unwrap();
+    let locators: i64 = external
+        .query_row("SELECT COUNT(*) FROM locators", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!((identities, locators), (0, 0));
+    assert!(db.catalog.capture(Some(save)).is_ok());
+    assert!(db
+        .catalog
+        .location(scope, PlacementDomain::Metadata, p.rows[0].id)
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        db.catalog
+            .body(scope, PlacementDomain::Metadata, order)
+            .unwrap()
+            .1
+            .unwrap(),
+        p.bytes
+    );
+}
+#[test]
+fn current_markers_do_not_authorize_an_incompatible_schema() {
+    let path = std::env::temp_dir().join(format!(
+        "layerfs-strict-shape-{}-{}.db",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let raw = rusqlite::Connection::open(&path).unwrap();
+    raw.execute_batch("CREATE TABLE old_marker(id INTEGER PRIMARY KEY)")
+        .unwrap();
+    raw.pragma_update(
+        None,
+        "application_id",
+        phase6_live_probe::strict_catalog::APPLICATION_ID,
+    )
+    .unwrap();
+    raw.pragma_update(
+        None,
+        "user_version",
+        phase6_live_probe::strict_catalog::USER_VERSION,
+    )
+    .unwrap();
+    drop(raw);
+    let before = std::fs::read(&path).unwrap();
+    assert!(StrictCatalog::open_read_only(&path).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    std::fs::remove_file(path).unwrap();
+}
+#[test]
+fn current_profile_refuses_missing_transfer_table_changed_columns_and_indexes() {
+    for alteration in [
+        "DROP TABLE body_transfers",
+        "ALTER TABLE bodies ADD COLUMN old_received INTEGER",
+        "DROP INDEX locators_domain_id",
+        "DROP TRIGGER abandon_owned_capture",
+    ] {
+        let db = Database::new();
+        let raw = rusqlite::Connection::open(&db.path).unwrap();
+        raw.execute_batch(alteration).unwrap();
+        drop(raw);
+        let before = std::fs::read(&db.path).unwrap();
+        assert!(
+            StrictCatalog::open_read_only(&db.path).is_err(),
+            "accepted {alteration}"
+        );
+        assert_eq!(std::fs::read(&db.path).unwrap(), before);
+    }
+}
+#[test]
+fn readonly_profile_authentication_reads_no_product_population() {
+    let db = Database::new();
+    let save = db.catalog.begin_save().unwrap();
+    db.catalog.finish_storage(save).unwrap();
+    db.catalog.publish(save).unwrap();
+    let reader = StrictCatalog::open_read_only(&db.path).unwrap();
+    assert_eq!(reader.capture(None).unwrap().publication, 1);
+    assert_eq!(
+        phase6_live_probe::strict_catalog::SCHEMA_FINGERPRINT.len(),
+        32
+    );
+}
+#[test]
+fn implicit_statement_uncertainty_quarantines_without_guessing_absence() {
+    let db = Database::new();
+    let external = rusqlite::Connection::open(&db.path).unwrap();
+    external.execute_batch("CREATE TRIGGER fail_after_save AFTER INSERT ON saves BEGIN SELECT RAISE(FAIL,'external retained-effects refusal'); END").unwrap();
+    let error = db.catalog.begin_save().unwrap_err();
+    assert!(!phase6_live_probe::strict_catalog::is_definite_catalog_error(&error));
+    // RAISE(FAIL) can retain the statement's row; the adapter does not guess absent.
+    let count: i64 = external
+        .query_row("SELECT COUNT(*) FROM saves", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 1);
+    assert!(db
+        .catalog
+        .capture(None)
+        .unwrap_err()
+        .contains("engine quarantined"));
+    assert!(db
+        .catalog
+        .begin_save()
+        .unwrap_err()
+        .contains("engine quarantined"));
+}
+#[cfg(unix)]
+#[test]
+#[ignore = "real OS write refusal; requires fresh SP1_SQL_FAULT_OUT; never a speed/durability gate"]
+fn actual_os_write_limit_commit_quarantines_engine() {
+    const NAME: &str = "actual_os_write_limit_commit_quarantines_engine";
+    let out = PathBuf::from(
+        std::env::var_os("SP1_SQL_FAULT_OUT").expect("fresh diagnostic output required"),
+    );
+    if std::env::var_os("SP1_SQL_FAULT_CHILD").is_none() {
+        std::fs::create_dir(&out).unwrap();
+        let result = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--ignored",
+                "--exact",
+                NAME,
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("SP1_SQL_FAULT_CHILD", "1")
+            .output()
+            .unwrap();
+        std::fs::write(out.join("child.stdout"), &result.stdout).unwrap();
+        std::fs::write(out.join("child.stderr"), &result.stderr).unwrap();
+        assert!(
+            result.status.success(),
+            "OS diagnostic failed; preserve {}",
+            out.display()
+        );
+        return;
+    }
+    let path = out.join("fault.sqlite");
+    let catalog = StrictCatalog::create(&path).unwrap();
+    let p = pack();
+    let old = catalog.begin_save().unwrap();
+    let (_, body) = insert(
+        &catalog,
+        old,
+        &p,
+        PlacementDomain::Metadata,
+        LogicalUse::MetadataGraph,
+    );
+    catalog.finish_storage(old).unwrap();
+    let publication = catalog.publish(old).unwrap();
+    let source = catalog
+        .body(
+            catalog.capture(None).unwrap(),
+            PlacementDomain::Metadata,
+            body,
+        )
+        .unwrap()
+        .1
+        .unwrap();
+    assert_eq!(source, p.bytes);
+    let original = std::fs::read(&path).unwrap();
+    std::fs::copy(&path, out.join("before-fault.sqlite")).unwrap();
+    std::fs::write(out.join("previous.json"),format!("{{\"save\":{old},\"publication\":{publication},\"body_order\":{body},\"canonical_id\":\"{}\",\"db_bytes\":{},\"body_sha256\":\"{}\",\"db_sha256\":\"{}\"}}\n",phase6_live_probe::minio::hex(p.rows[0].id.as_bytes()),original.len(),phase6_live_probe::minio::hex(&Sha256::digest(&source)),phase6_live_probe::minio::hex(&Sha256::digest(&original)))).unwrap();
+    let save = catalog.begin_save().unwrap();
+    let limit = libc::rlimit {
+        rlim_cur: std::fs::metadata(&path).unwrap().len() as libc::rlim_t,
+        rlim_max: std::fs::metadata(&path).unwrap().len() as libc::rlim_t,
+    };
+    // Process isolation keeps the owning runner and every other owner unaffected.
+    unsafe {
+        assert_ne!(libc::signal(libc::SIGXFSZ, libc::SIG_IGN), libc::SIG_ERR);
+        assert_eq!(libc::setrlimit(libc::RLIMIT_FSIZE, &limit), 0);
+    }
+    let result =
+        catalog.begin_metadata_body(save, [9; 32], phase6_live_probe::strict_catalog::BODY_LIMIT);
+    let error = result
+        .expect_err("the growing metadata allocation must encounter the actual OS write limit");
+    std::fs::write(out.join("failure.txt"), &error).unwrap();
+    assert!(
+        error.contains("SQL COMMIT:"),
+        "earlier failure is not a COMMIT witness: {error}"
+    );
+    let read = catalog.capture(None).unwrap_err();
+    let write = catalog.begin_save().unwrap_err();
+    assert!(read.contains("engine quarantined"));
+    assert!(write.contains("engine quarantined"));
+    assert!(path.exists());
+    let forensic = match StrictCatalog::open_read_only(&path) {
+        Ok(db) => match db.capture(None) {
+            Ok(scope) => format!("readable publication {}", scope.publication),
+            Err(e) => format!("unavailable: {e}"),
+        },
+        Err(e) => format!("unavailable: {e}"),
+    };
+    std::fs::write(out.join("outcome.txt"),format!("DIAGNOSTIC: actual OS write refusal at explicit COMMIT\nread refusal: {read}\nwrite refusal: {write}\nforensic previous/current DB observation: {forensic}\nNo durability, recovery, cleanup or speed PASS. Failed-abort physical proof remains NOT_RUN.\n")).unwrap();
+}

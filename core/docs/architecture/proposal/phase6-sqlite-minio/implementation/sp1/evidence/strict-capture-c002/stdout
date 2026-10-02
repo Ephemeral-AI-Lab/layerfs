@@ -1,0 +1,11 @@
+
+running 1 test
+test real_provider_native_capture_and_three_retained_c5_states ... FAILED
+
+failures:
+
+failures:
+    real_provider_native_capture_and_three_retained_c5_states
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+

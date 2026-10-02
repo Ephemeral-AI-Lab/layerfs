@@ -1,0 +1,24 @@
+{
+  "status": "PASS_OWNED_PROVIDER_CONTAINER_REMOVED_DATA_RETAINED",
+  "commands": [
+    {
+      "command": [
+        "docker",
+        "stop",
+        "layerfs-sp1-strict-minio-r001"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "docker",
+        "rm",
+        "layerfs-sp1-strict-minio-r001"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "remaining_container_ids": [],
+  "data_retained": true,
+  "scope": "Only owned r001 Docker container stopped/removed. Host bind data, all owned witness databases, raw failure attempts and immutable executables retained; this is runtime container cleanup, not product GC/reclamation or a timed result."
+}

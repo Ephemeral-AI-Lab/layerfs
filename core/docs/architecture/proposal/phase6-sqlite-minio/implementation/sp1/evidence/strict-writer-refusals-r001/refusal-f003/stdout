@@ -1,0 +1,11 @@
+
+running 1 test
+test real_provider_missing_required_base_never_probes_sql_shadow ... FAILED
+
+failures:
+
+failures:
+    real_provider_missing_required_base_never_probes_sql_shadow
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.08s
+

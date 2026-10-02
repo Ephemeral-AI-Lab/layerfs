@@ -1,0 +1,12 @@
+{
+  "test": "real_provider_shared_mapping_body_keeps_per_logical_use_child_routes",
+  "exit_code": 0,
+  "bucket": "sp1-r001-writer-s008",
+  "stdout_sha256": "c1a34cafff3f03a98f6b0a0304c97cb2895e518d6e9a588364691ea5be4706a0",
+  "stderr_sha256": "a0c26a8d3bcbbaa6b771f5731cf7b1c1ad9ac84b5660b452669c10b9490a0e02",
+  "binary_sha256": "1479ffbfb1e47269ac8b9325a0d6f4b81581d34787c9376d7b38b62e7e21dcaf",
+  "source_inventory_sha256": "fda4312ca66d57bd15afb05fe90e665b831d9a156c158189c48a249077159e11",
+  "provider_identity_sha256": "38f9e4ad03c6aa8eb212bd67ec52eb620457361e229b08414068763c1bdd4627",
+  "command": "<sealed strict_writer binary> real_provider_shared_mapping_body_keeps_per_logical_use_child_routes --ignored --nocapture --exact",
+  "profile": "functional count diagnostics only, no elapsed speed or whole-owner memory PASS"
+}

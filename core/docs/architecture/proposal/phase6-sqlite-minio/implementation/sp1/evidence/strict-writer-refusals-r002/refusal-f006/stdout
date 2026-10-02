@@ -1,0 +1,23 @@
+
+running 1 test
+sealed refusal-depth-boundary step0: DeltaCounters { prepared_full: 1, trials: 0, prefix_selected: 0, full_losses: 0, no_candidate: 1, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }
+sealed refusal-depth-boundary step1: DeltaCounters { prepared_full: 1, trials: 1, prefix_selected: 1, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }
+sealed refusal-depth-boundary step2: DeltaCounters { prepared_full: 1, trials: 1, prefix_selected: 1, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }
+sealed refusal-depth-boundary step3: DeltaCounters { prepared_full: 1, trials: 0, prefix_selected: 0, full_losses: 0, no_candidate: 1, absent_candidates: 0, ineligible_candidates: 1, work_exceeded: 0 }
+sealed refusal-work-boundary step0: DeltaCounters { prepared_full: 1, trials: 0, prefix_selected: 0, full_losses: 0, no_candidate: 1, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }
+sealed refusal-work-boundary step1: DeltaCounters { prepared_full: 1, trials: 1, prefix_selected: 1, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }
+sealed refusal-work-boundary step2: DeltaCounters { prepared_full: 1, trials: 1, prefix_selected: 1, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }
+sealed refusal-work-boundary step3: DeltaCounters { prepared_full: 1, trials: 1, prefix_selected: 1, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }
+sealed refusal-work-boundary step4: DeltaCounters { prepared_full: 1, trials: 0, prefix_selected: 0, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 1 }
+sealed refusal-work-boundary step5: DeltaCounters { prepared_full: 1, trials: 1, prefix_selected: 1, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }
+sealed refusal-work-boundary step6: DeltaCounters { prepared_full: 1, trials: 1, prefix_selected: 1, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }
+sealed refusal-work-boundary step7: DeltaCounters { prepared_full: 1, trials: 1, prefix_selected: 1, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }
+sealed refusal-work-boundary step8: DeltaCounters { prepared_full: 1, trials: 0, prefix_selected: 0, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 1 }
+sealed refusal-work-boundary step9: DeltaCounters { prepared_full: 1, trials: 1, prefix_selected: 1, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }
+sealed refusal-work-boundary step10: DeltaCounters { prepared_full: 1, trials: 1, prefix_selected: 1, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }
+sealed refusal-work-boundary step11: DeltaCounters { prepared_full: 1, trials: 1, prefix_selected: 1, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }
+sp1-refusals-custody-strict-v2 old sealed chunk depth1 read refusal/depth2 writer no-trial FULL and fixed 12-step whole-work vectors PASS
+test real_provider_sealed_depth_and_fixed_chain_work_boundaries ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 1.04s
+

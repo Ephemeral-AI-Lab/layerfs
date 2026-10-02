@@ -52,5 +52,16 @@ pub mod publication;
 
 pub mod publication_failure;
 
+pub mod strict_candidates;
 pub mod strict_catalog;
+pub mod strict_private;
 pub mod strict_read;
+pub mod strict_remote;
+pub mod strict_wire;
+pub mod strict_writer;
+
+pub mod minio_failure;
+pub mod strict_client;
+pub mod strict_commit;
+pub mod strict_publication;
+pub mod strict_scope;

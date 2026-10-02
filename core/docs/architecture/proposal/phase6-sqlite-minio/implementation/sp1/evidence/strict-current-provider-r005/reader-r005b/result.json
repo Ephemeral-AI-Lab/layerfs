@@ -1,0 +1,12 @@
+{
+  "test": "real_provider_actual_cdc_dual_use_read_orders_and_missing_domain_refusal",
+  "exit_code": 0,
+  "bucket": "sp1-r001-reader-r005b",
+  "stdout_sha256": "c7bbe1aa4f112e5d0b10125cbbf418c2e35500dcbf7ec9d1255b07b2e00e01bb",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "binary_sha256": "e1bcd6df5d20dce145d99b219206e0caca9942174589631c18a4a615e1c3e413",
+  "source_inventory_sha256": "b3471f716a24cdf0e52714439cbc956f06f88f711168897abc7f217a6262a0f3",
+  "provider_identity_sha256": "38f9e4ad03c6aa8eb212bd67ec52eb620457361e229b08414068763c1bdd4627",
+  "command": "<sealed strict_reader binary> real_provider_actual_cdc_dual_use_read_orders_and_missing_domain_refusal --ignored --nocapture --exact",
+  "profile": "functional count diagnostics only, no elapsed speed or whole-owner memory PASS"
+}

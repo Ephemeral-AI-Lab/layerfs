@@ -1,7 +1,8 @@
 //! Explicit logical-use readers over global SQL metadata and MinIO payloads.
+use crate::strict_client::Catalog;
 use crate::{
     minio::Minio,
-    strict_catalog::{CatalogScope, LogicalUse, PlacementDomain, StrictCatalog},
+    strict_catalog::{CatalogScope, LogicalUse, PlacementDomain},
 };
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId, ObjectRole};
 use layerfs_storage::{
@@ -27,7 +28,7 @@ pub fn placement(logical_use: LogicalUse, role: ObjectRole) -> PlacementDomain {
 
 /// The scope is captured before construction or decoding. No backend probing.
 pub struct Access<'a> {
-    pub catalog: &'a StrictCatalog,
+    pub catalog: &'a dyn Catalog,
     pub provider: &'a Minio,
     pub scope: CatalogScope,
     pub logical_use: LogicalUse,
@@ -127,12 +128,6 @@ impl ReadOwner {
         if ids.len() > 4096 {
             return Err("strict read object window".into());
         }
-        let namespace = access.catalog.cache_namespace();
-        if self.namespace != Some(namespace) {
-            self.packs.clear();
-            self.pool = PoolReader::new();
-            self.namespace = Some(namespace);
-        }
         // Preflight every required placement before any canonical/body cache can answer.
         let mut total = 0usize;
         for id in ids {
@@ -146,6 +141,12 @@ impl ReadOwner {
             if total > crate::read_window::BYTES {
                 return Err("strict read byte window".into());
             }
+        }
+        let namespace = access.catalog.cache_namespace();
+        if self.namespace != Some(namespace) {
+            self.packs.clear();
+            self.pool = PoolReader::new();
+            self.namespace = Some(namespace);
         }
         let mut out = Vec::with_capacity(ids.len());
         let mut groups = GroupCache::new();
@@ -171,7 +172,7 @@ impl ReadOwner {
 }
 
 pub struct Reader {
-    pub catalog: Arc<StrictCatalog>,
+    pub catalog: Arc<dyn Catalog>,
     pub provider: Minio,
     pub scope: CatalogScope,
     pub logical_use: LogicalUse,
@@ -181,7 +182,7 @@ pub struct Reader {
 impl AuthenticatedObjects for Reader {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
         let access = Access {
-            catalog: &self.catalog,
+            catalog: self.catalog.as_ref(),
             provider: &self.provider,
             scope: self.scope,
             logical_use: self.logical_use,
@@ -191,6 +192,34 @@ impl AuthenticatedObjects for Reader {
             .read(&access, &self.capacities, ids)
             .map_err(|message| {
                 eprintln!("strict reader: {message}");
+                ContentError::Io
+            })
+    }
+}
+
+/// A thread-safe immutable captured view for FUSE/retained-file access. Each
+/// operation owns and releases its decode/body caches; no daemon-lifetime payload
+/// cache survives a completed operation or doubles the construction owner's arena.
+#[derive(Clone)]
+pub struct WaveReader {
+    pub catalog: Arc<dyn Catalog>,
+    pub provider: Minio,
+    pub scope: CatalogScope,
+    pub logical_use: LogicalUse,
+    pub capacities: StorageCapacities,
+}
+impl AuthenticatedObjects for WaveReader {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        let access = Access {
+            catalog: self.catalog.as_ref(),
+            provider: &self.provider,
+            scope: self.scope,
+            logical_use: self.logical_use,
+        };
+        ReadOwner::new()
+            .and_then(|mut owner| owner.read(&access, &self.capacities, ids))
+            .map_err(|message| {
+                eprintln!("strict captured wave: {message}");
                 ContentError::Io
             })
     }

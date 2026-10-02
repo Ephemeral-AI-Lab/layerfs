@@ -1,0 +1,7 @@
+
+running 1 test
+sp1-refusals-custody-strict-v2 actual MinIO PUT200 lost ACK Unknown retained 96097 bytes, one PUT, no resend/delete/publication: unknown provider custody: HTTP status
+test real_provider_put_succeeds_lost_ack_quarantines_without_resend_or_delete ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.07s
+

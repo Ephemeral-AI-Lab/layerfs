@@ -1,0 +1,4 @@
+
+thread 'real_provider_native_capture_and_three_retained_c5_states' panicked at tests/strict_commit.rs:190:14:
+called `Result::unwrap()` on an `Err` value: "E2BIG"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

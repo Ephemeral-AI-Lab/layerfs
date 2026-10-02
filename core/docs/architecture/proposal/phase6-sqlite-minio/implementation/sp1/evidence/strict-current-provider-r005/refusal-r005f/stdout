@@ -1,0 +1,7 @@
+
+running 1 test
+sp1-refusals-custody-strict-v2 definite registration abort status4, original96097B known ACK body retained, no publication/retry/delete: definite catalog refusal: unknown catalog custody: sp1 external definite locator refusal
+test real_provider_definite_sql_registration_failure_retains_known_ack_body ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.07s
+

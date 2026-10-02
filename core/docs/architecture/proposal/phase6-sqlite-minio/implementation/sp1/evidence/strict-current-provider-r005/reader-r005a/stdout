@@ -1,0 +1,7 @@
+
+running 1 test
+sp1-reader-strict-v2 payload/pool component PASS: ChainCounters { objects: 17, edges: 6, encoded_bytes: 156208, canonical_bytes: 209264, max_depth: 2, group_decodes: 0, pooled: PoolReadCounters { leaf_requests: 4, chain_edges: 6, physical_record_calls: 20, physical_group_decodes: 4, physical_group_decoded_bytes: 2132, physical_group_cache_hits: 4, value_group_decodes: 4, pack_fetches: 8, pack_bytes: 22018 } }; {"put_calls":7,"get_calls":6,"put_requested_bytes":137641,"get_received_bytes":137641}
+test real_provider_reader_payload_chains_and_sql_pools ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.16s
+

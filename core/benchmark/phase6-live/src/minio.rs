@@ -1,3 +1,4 @@
+use crate::minio_failure::UploadFailure;
 use sha2::{Digest, Sha256};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
@@ -72,11 +73,24 @@ impl Minio {
         body: &[u8],
         conditional: bool,
     ) -> Result<(u16, Vec<u8>), String> {
+        self.call_classified(method, key, body, conditional)
+            .map_err(|e| e.to_string())
+    }
+    pub fn call_classified(
+        &self,
+        method: &str,
+        key: &str,
+        body: &[u8],
+        conditional: bool,
+    ) -> Result<(u16, Vec<u8>), UploadFailure> {
         if !key.bytes().all(|b| b.is_ascii_hexdigit()) || key.len() > 64 {
-            return Err("invalid object key".into());
+            return Err(UploadFailure::Definite("invalid object key".into()));
         }
         {
-            let mut stats = self.stats.lock().map_err(|_| "MinIO statistics owner")?;
+            let mut stats = self
+                .stats
+                .lock()
+                .map_err(|_| UploadFailure::Definite("MinIO statistics owner".into()))?;
             match method {
                 "PUT" => {
                     stats.put_calls += 1;
@@ -117,26 +131,29 @@ impl Minio {
             self.access,
             hex(&hmac(&k, to_sign.as_bytes()))
         );
-        let mut stream = TcpStream::connect(&self.authority).map_err(|e| e.to_string())?;
+        let mut stream = TcpStream::connect(&self.authority)
+            .map_err(|e| UploadFailure::Definite(e.to_string()))?;
         stream
             .set_read_timeout(Some(Duration::from_secs(5)))
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| UploadFailure::Definite(e.to_string()))?;
         stream
             .set_write_timeout(Some(Duration::from_secs(5)))
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| UploadFailure::Definite(e.to_string()))?;
         let condition = if conditional {
             "If-None-Match: *\r\n"
         } else {
             ""
         };
-        write!(stream,"{method} {path} HTTP/1.1\r\nHost: {}\r\nX-Amz-Content-Sha256: {hash}\r\nX-Amz-Date: {now}\r\nAuthorization: {authorization}\r\n{condition}Content-Length: {}\r\nConnection: close\r\n\r\n",self.authority,body.len()).map_err(|e| e.to_string())?;
-        stream.write_all(body).map_err(|e| e.to_string())?;
+        write!(stream,"{method} {path} HTTP/1.1\r\nHost: {}\r\nX-Amz-Content-Sha256: {hash}\r\nX-Amz-Date: {now}\r\nAuthorization: {authorization}\r\n{condition}Content-Length: {}\r\nConnection: close\r\n\r\n",self.authority,body.len()).map_err(|e| UploadFailure::Unknown(e.to_string()))?;
+        stream
+            .write_all(body)
+            .map_err(|e| UploadFailure::Unknown(e.to_string()))?;
         let mut reader = BufReader::new(stream);
         let mut line = String::new();
         (&mut reader)
             .take(16384)
             .read_line(&mut line)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| UploadFailure::Unknown(e.to_string()))?;
         let status: u16 = line
             .split_whitespace()
             .nth(1)
@@ -150,7 +167,7 @@ impl Minio {
             let n = (&mut reader)
                 .take(16384)
                 .read_line(&mut line)
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| UploadFailure::Unknown(e.to_string()))?;
             header_bytes += n;
             if n == 0 || header_bytes > 16384 {
                 return Err("HTTP header bound/EOF".into());
@@ -174,7 +191,7 @@ impl Minio {
         let mut response = vec![0; n];
         reader
             .read_exact(&mut response)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| UploadFailure::Unknown(e.to_string()))?;
         if method == "GET" {
             let mut stats = self.stats.lock().map_err(|_| "MinIO statistics owner")?;
             stats.get_received_bytes = stats
@@ -191,17 +208,26 @@ impl Minio {
         Ok(())
     }
     pub fn put(&self, key: &[u8; 32], bytes: &[u8]) -> Result<(), String> {
-        let (status, _) = self.call("PUT", &hex(key), bytes, true)?;
+        self.put_classified(key, bytes).map_err(|e| e.to_string())
+    }
+    pub fn put_classified(&self, key: &[u8; 32], bytes: &[u8]) -> Result<(), UploadFailure> {
+        let (status, _) = self.call_classified("PUT", &hex(key), bytes, true)?;
         match status {
             200 => Ok(()),
             412 => {
-                if self.get(key)? == bytes {
+                let existing = self.get(key).map_err(UploadFailure::Definite)?;
+                if existing == bytes {
                     Ok(())
                 } else {
-                    Err("immutable key collision".into())
+                    Err(UploadFailure::Definite("immutable key collision".into()))
                 }
             }
-            other => Err(format!("object upload HTTP {other}")),
+            400..=499 => Err(UploadFailure::Definite(format!(
+                "object upload HTTP {status}"
+            ))),
+            other => Err(UploadFailure::Unknown(format!(
+                "object upload HTTP {other}"
+            ))),
         }
     }
     pub fn get(&self, key: &[u8; 32]) -> Result<Vec<u8>, String> {

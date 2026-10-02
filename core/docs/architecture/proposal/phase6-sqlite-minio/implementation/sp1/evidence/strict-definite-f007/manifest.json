@@ -1,0 +1,27 @@
+{
+  "status": "FAIL_DEFINITE_CUSTODY_CLASSIFICATION",
+  "cause": "Controlled closed loopback endpoint refuses TCP connect before any header/payload byte can be sent. Current writer placed save in status3 Unknown instead of required definite abort status4. Original narrower unknown-lossACK proof remains correct at its source.",
+  "scope": "No measured speed/memory/release claim. Source and binary pinned in result. This failure is retained unchanged; corrected source must have a new receipt. Known SQL registration rollback gate stays NOT_RUN until explicit rollback acknowledgment taxonomy exists.",
+  "files": [
+    {
+      "path": "result.json",
+      "bytes": 832,
+      "sha256": "edcfd3701860096687fa6807fc6c23e017694c71637b82a660865a3e3f4b485a"
+    },
+    {
+      "path": "source.json",
+      "bytes": 16820,
+      "sha256": "ac46f36b45a44f8982e514cba2261676b5f4793f72b27093ae8df5678b53f483"
+    },
+    {
+      "path": "stderr",
+      "bytes": 320,
+      "sha256": "274a30d7e85a077cb30ffae617202cc0526d3322bd080aff8611a485570fe192"
+    },
+    {
+      "path": "stdout",
+      "bytes": 288,
+      "sha256": "3ba916f2df8f18fb20010719e26bccbdb84a6767314cfa586adf56a424c8eaff"
+    }
+  ]
+}

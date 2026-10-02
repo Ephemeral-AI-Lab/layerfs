@@ -1,0 +1,12 @@
+{
+  "test": "real_provider_definite_connection_refusal_abandons_without_retry",
+  "exit_code": 0,
+  "bucket": "sp1-r001-refusal-f008",
+  "stdout_sha256": "c74dd7849af7003d6bbf0d7fb713f9d2f40c3c4146a2287ffe0765818372b45a",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "binary_sha256": "5d52a914e784d67c37d0ee460c5462d866e2d030dcb8bf9e02a8c38da1fcc02a",
+  "source_inventory_sha256": "7a2dea8cc0b3e92a891b7a05eb29adc564015f3c1a30df0808d67051499c3c78",
+  "provider_identity_sha256": "38f9e4ad03c6aa8eb212bd67ec52eb620457361e229b08414068763c1bdd4627",
+  "command": "<sealed strict_refusals binary> real_provider_definite_connection_refusal_abandons_without_retry --ignored --nocapture --exact",
+  "profile": "functional count diagnostics only, no elapsed speed or whole-owner memory PASS"
+}

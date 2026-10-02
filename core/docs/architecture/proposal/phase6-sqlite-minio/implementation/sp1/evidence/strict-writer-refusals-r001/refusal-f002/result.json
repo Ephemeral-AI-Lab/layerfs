@@ -1,0 +1,12 @@
+{
+  "test": "real_provider_digest_valid_altered_intermediate_refuses_canonical_identity",
+  "exit_code": 0,
+  "bucket": "sp1-r001-refusal-f002",
+  "stdout_sha256": "68e4be36aff5dd808833325ab837eee6b281955d8bca11dd1ded96f8d95050dd",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "binary_sha256": "00ee9ea71b680cd87253ff370a151ba4b20396d569d55c7c0677289888ad9200",
+  "source_inventory_sha256": "e984c3ef6455461ea1168877d132430e9376d38f98458d5b87a6be6639364021",
+  "provider_identity_sha256": "38f9e4ad03c6aa8eb212bd67ec52eb620457361e229b08414068763c1bdd4627",
+  "command": "<sealed strict_refusals binary> real_provider_digest_valid_altered_intermediate_refuses_canonical_identity --ignored --nocapture --exact",
+  "profile": "functional count diagnostics only, no elapsed speed or whole-owner memory PASS"
+}

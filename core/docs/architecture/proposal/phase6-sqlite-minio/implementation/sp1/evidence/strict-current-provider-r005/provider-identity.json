@@ -1,0 +1,29 @@
+{
+  "status": "IDENTITY_FROZEN_BEFORE_WITNESSES",
+  "container_id": "58a1e3eac2e8b53705667deb101ede6134fe2160d8a8c69765367e7a4d9ac209",
+  "image_id": "sha256:4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285",
+  "repo_digests": [
+    "cgr.dev/chainguard/minio@sha256:4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285"
+  ],
+  "architecture": "arm64",
+  "server_version": "minio version RELEASE.2026-09-22T19-25-18Z (commit-id=df34868a88cc8c396807e04a7e220810b321bdaa)\nRuntime: go1.27.1 linux/arm64\nLicense: GNU AGPLv3 - https://www.gnu.org/licenses/agpl-3.0.html\nCopyright: 2015-2026 MinIO, Inc.",
+  "version_exit": 0,
+  "endpoint": "127.0.0.1:60216",
+  "mounts": [
+    {
+      "Type": "bind",
+      "Source": "/Users/yifanxu/.codex/worktrees/phase6-sp1-strict/layerfs/benchmark-results/sp1-strict-provider/r001/data",
+      "Destination": "/data",
+      "Mode": "",
+      "RW": true,
+      "Propagation": "rprivate"
+    }
+  ],
+  "memory_bytes": 536870912,
+  "nano_cpus": 1000000000,
+  "http_tls": "HTTP local isolated prototype; no TLS/fallback",
+  "topology": "one container single-disk server /data; host owns global SQL; MinIO owns file-payload packs only",
+  "provider_disk": "host bind mount; all-domain allocation peak and Docker disk footprint unavailable",
+  "secrets": "isolated credentials kept only in private env file; omitted",
+  "command": "docker run -d --name layerfs-sp1-strict-minio-r001 --memory=512m --cpus=1 --publish 127.0.0.1::9000 --mount type=bind,src=<owned r001/data>,dst=/data --env-file <private provider.env> cgr.dev/chainguard/minio@sha256:4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285 server /data"
+}

@@ -1,0 +1,12 @@
+{
+  "test": "real_provider_native_capture_and_three_retained_c5_states",
+  "exit_code": 0,
+  "bucket": "sp1-r001-commit-c004",
+  "stdout_sha256": "83c2c3f7f78d8792ba895e78689fe8482e92fdc64cb92fbb702cad4699a7e0c2",
+  "stderr_sha256": "f9d2a0c7aaf1f0d4d867b1bab2556cfdd1b62ec1b81c35fdaf2150fa3bef1e2f",
+  "binary_sha256": "19836de5c8a6bccf46ede6e0e2fde8e0806c0c59510a52a83b5caefb24a4fe90",
+  "source_inventory_sha256": "d50e3de04c03a5dc9eb20974bc98cf9f4d6117c7505611caf9b02703be76fd27",
+  "provider_identity_sha256": "38f9e4ad03c6aa8eb212bd67ec52eb620457361e229b08414068763c1bdd4627",
+  "command": "<sealed strict_commit binary> real_provider_native_capture_and_three_retained_c5_states --ignored --nocapture --exact",
+  "profile": "functional count diagnostics only, no elapsed speed or whole-owner memory PASS"
+}

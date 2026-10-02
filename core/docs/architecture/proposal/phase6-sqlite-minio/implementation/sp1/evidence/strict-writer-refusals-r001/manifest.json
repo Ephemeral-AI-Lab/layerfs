@@ -1,0 +1,221 @@
+{
+  "status": "COMPONENT_FUNCTIONAL_DIAGNOSTICS_WITH_PRESERVED_FAILURES_AND_OPEN_GATES",
+  "provider_identity": "../strict-reader-r001/provider-identity.json",
+  "outcomes": {
+    "writer-s001": "PASS component exact dedup/private same-save FULL/PREFIX/grouping; physical pack envelopes2/156514B versus old4/156882B separately observed",
+    "writer-s002": "PASS exact cross-pack payload pack costs/counters and four SQL pooled leaves; each leaf independently authenticated, pool GET/PUTdelta0",
+    "writer-s003": "PASS ordinary construct_stream actual CDC exactID and ordinary AttrKey(sp1,opaque) portable tree root; independently pinned threshold roots/fullbytes",
+    "writer-s004": "Original narrower test PASS; exact old pool.trials parity FAIL (observed1 expected0), retained as mismatch diagnostic",
+    "writer-s005": "PASS corrected source proves exact pool.trials0 plus2FULL/0delta/8reuse/10new private capturedscope cache refusal",
+    "writer-s006": "PASS affected bounded pending private-read correction with exact same-save payload record counters",
+    "writer-s007": "FAIL external missing-child fixture setup foreign-key constraint; both pre-mutation graph reads succeeded but missing-placement refusal NOT_RUN",
+    "refusal-f001": "NOT_RUN helper script renamed incorrect binary path before provider operation; fresh directory retained",
+    "refusal-f002": "PASS digest-valid/frame-valid altered intermediate exact dependency identity refusal",
+    "refusal-f003": "FAIL external DELETE setup generic product parser refused204 withoutContent-Length; target dependency read NOT_RUN",
+    "refusal-f004": "PASS external forwarder observed actual MinIOPUT200 then droppedACK; status3 Unknown and original96097B body retained, onePUT/no resend/delete/publication"
+  },
+  "files": [
+    {
+      "path": "refusal-f002/result.json",
+      "sha256": "0332cc4255f5e91b5f5d8989c1c67934aa2880b5cf56e4c4a066995663ebf7b6",
+      "bytes": 850
+    },
+    {
+      "path": "refusal-f002/source.json",
+      "sha256": "e984c3ef6455461ea1168877d132430e9376d38f98458d5b87a6be6639364021",
+      "bytes": 15717
+    },
+    {
+      "path": "refusal-f002/stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "refusal-f002/stdout",
+      "sha256": "68e4be36aff5dd808833325ab837eee6b281955d8bca11dd1ded96f8d95050dd",
+      "bytes": 321
+    },
+    {
+      "path": "refusal-f003/result.json",
+      "sha256": "298121afc2d7a4023d05d29c2ef0aed2aba7594a9f1a7e797daafbfd00a36ff3",
+      "bytes": 822
+    },
+    {
+      "path": "refusal-f003/source.json",
+      "sha256": "e984c3ef6455461ea1168877d132430e9376d38f98458d5b87a6be6639364021",
+      "bytes": 15717
+    },
+    {
+      "path": "refusal-f003/stderr",
+      "sha256": "6b918da3a38bf9e501a38948f7fdec8afb023099dedab7831e119a59ac524d7c",
+      "bytes": 268
+    },
+    {
+      "path": "refusal-f003/stdout",
+      "sha256": "881df4186535c9219a8eebca3f512ce90d17c48d7aa2ac8310681ca50f0c0cf4",
+      "bytes": 278
+    },
+    {
+      "path": "refusal-f004/result.json",
+      "sha256": "f63b007286eb11cc2bfc73400e4577596f323ff2429ca8218be3ea079f4e37f5",
+      "bytes": 846
+    },
+    {
+      "path": "refusal-f004/source.json",
+      "sha256": "e984c3ef6455461ea1168877d132430e9376d38f98458d5b87a6be6639364021",
+      "bytes": 15717
+    },
+    {
+      "path": "refusal-f004/stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "refusal-f004/stdout",
+      "sha256": "ce4776feb074e076c29dd57cc3625c8c2e0292292c118d980c34132cfa767b0a",
+      "bytes": 338
+    },
+    {
+      "path": "writer-s001/result.json",
+      "sha256": "a19202c25bf912740a5539fff9210ff249d1c97344b13394fb625db4f1d1f259",
+      "bytes": 831
+    },
+    {
+      "path": "writer-s001/source.json",
+      "sha256": "7ac4fd98031dd7e2c157f5881e4d3a4f782450d71e3785cf765e6ed726d93f88",
+      "bytes": 15715
+    },
+    {
+      "path": "writer-s001/stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "writer-s001/stdout",
+      "sha256": "d166d57d424301beb28f9eb34473e616195aa6905f5f85449f349721c536b1be",
+      "bytes": 683
+    },
+    {
+      "path": "writer-s002/result.json",
+      "sha256": "010564a4db92fdd90eaf4a5a87bb772909cb9395913135aa1f2e817f6fb22d3e",
+      "bytes": 823
+    },
+    {
+      "path": "writer-s002/source.json",
+      "sha256": "7ac4fd98031dd7e2c157f5881e4d3a4f782450d71e3785cf765e6ed726d93f88",
+      "bytes": 15715
+    },
+    {
+      "path": "writer-s002/stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "writer-s002/stdout",
+      "sha256": "a330e10ff5258afc39ad9a1d791c29bac6cc757d273d2df1be3ba49d7aa4d8d0",
+      "bytes": 5417
+    },
+    {
+      "path": "writer-s003/result.json",
+      "sha256": "61f834be009e5a5a840c5d2c4b59701f1e2dc38f9543ddfef710424ed97e56e6",
+      "bytes": 825
+    },
+    {
+      "path": "writer-s003/source.json",
+      "sha256": "7ac4fd98031dd7e2c157f5881e4d3a4f782450d71e3785cf765e6ed726d93f88",
+      "bytes": 15715
+    },
+    {
+      "path": "writer-s003/stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "writer-s003/stdout",
+      "sha256": "adf8c78b3f8fc2405e26762fa5442064ec0dbb7b9d28cf6e4ffd3a5eb84dc718",
+      "bytes": 611
+    },
+    {
+      "path": "writer-s004/result.json",
+      "sha256": "002737cffdb7a4c4bd3845543a55f5a72c63dc51084d0ee32b2cf6ea9a940e09",
+      "bytes": 835
+    },
+    {
+      "path": "writer-s004/source.json",
+      "sha256": "7ac4fd98031dd7e2c157f5881e4d3a4f782450d71e3785cf765e6ed726d93f88",
+      "bytes": 15715
+    },
+    {
+      "path": "writer-s004/stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "writer-s004/stdout",
+      "sha256": "ef428c211723c7e96be5e1c0e2bd6e3f2f485d48c3c0b2be4d29eff807d60ba4",
+      "bytes": 428
+    },
+    {
+      "path": "writer-s005/result.json",
+      "sha256": "27aa0afba608244a571a2e1c86d66c7b9ec72b42cbaff6b0f697cd52a28bb256",
+      "bytes": 835
+    },
+    {
+      "path": "writer-s005/source.json",
+      "sha256": "e996898b12d53d552362019b7e0f782401ce6ba29df69f608af061227571f347",
+      "bytes": 15715
+    },
+    {
+      "path": "writer-s005/stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "writer-s005/stdout",
+      "sha256": "f612247ba18fd360d88bc41561f43129258cc9cbd911ea7f459a45abb594e131",
+      "bytes": 428
+    },
+    {
+      "path": "writer-s006/result.json",
+      "sha256": "ba5b9eadf5ffa09280b30cb65ed57fcc62f984430cd373761da13a591dd3ef4c",
+      "bytes": 831
+    },
+    {
+      "path": "writer-s006/source.json",
+      "sha256": "e996898b12d53d552362019b7e0f782401ce6ba29df69f608af061227571f347",
+      "bytes": 15715
+    },
+    {
+      "path": "writer-s006/stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "writer-s006/stdout",
+      "sha256": "171f50a826fef6b6283f6a29f31c53a9110bc892cfa9110deb507763bab0d925",
+      "bytes": 683
+    },
+    {
+      "path": "writer-s007/result.json",
+      "sha256": "280abffba857ed4b6e4c0a2e9d9f895174e71fb869f391adf29ac3b9d0fe6af3",
+      "bytes": 837
+    },
+    {
+      "path": "writer-s007/source.json",
+      "sha256": "e996898b12d53d552362019b7e0f782401ce6ba29df69f608af061227571f347",
+      "bytes": 15715
+    },
+    {
+      "path": "writer-s007/stderr",
+      "sha256": "c6a43a6905766133d8d88f6ace560aa7d31f311be2ee3bb02b354c57d1733f7f",
+      "bytes": 355
+    },
+    {
+      "path": "writer-s007/stdout",
+      "sha256": "a9611a985a68993f324fc0858f7c61574d8542aaf01d8ad016ef742e6af4ebfd",
+      "bytes": 296
+    }
+  ],
+  "scope": "No elapsed speed, whole-owner allocation, release, cloud durability or SDK/FUSE/C5 full retained history qualification; reader normal imported fixture references are empty in helper and prove requested canonical auth, not per-logical-use graph-edge facts. New shared-map fixture is explicitly adapter dual graph, not ordinary attribute multi-extent production.",
+  "remaining": "Missing-base and shared-map missing-child refusal setup fixes exist, await current wire compilation; exact definite-versus-Unknown custody taxonomy remains unsupported. Core/adapter owning final checks remain parent-owned."
+}

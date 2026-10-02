@@ -1,0 +1,6 @@
+
+thread 'real_provider_definite_sql_registration_failure_retains_known_ack_body' panicked at tests/strict_refusals.rs:536:5:
+assertion `left == right` failed: definite registration rollback is abandoned while known provider custody stays retained
+  left: 3
+ right: 4
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

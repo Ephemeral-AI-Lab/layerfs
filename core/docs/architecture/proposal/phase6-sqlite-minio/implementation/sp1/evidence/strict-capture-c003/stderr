@@ -1,0 +1,7 @@
+P6_STRICT_PUBLICATION context_ns=363209 stage_ns=255584 storage_ns=89459 commit_ns=213125 ready_root_locators=1
+
+thread 'real_provider_native_capture_and_three_retained_c5_states' panicked at tests/strict_commit.rs:241:9:
+assertion `left == right` failed
+  left: ObjectId("b634e9244a0bd690df9157bfd7bd4561b7a089cff936648cae6aa3982b41119c")
+ right: ObjectId("711b4bb80908c287a4c08efed2d1d8461340b0f201bc971739b7fe3d2d176d4d")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

@@ -1,0 +1,30 @@
+{
+  "label": "DIAGNOSTIC only: actual OS metadata write refusal at explicit SQL COMMIT",
+  "started_utc": "2026-10-02T05:22:39.774784+00:00",
+  "head": "f95290bf99998cec85ff1cce55bd0004f7ccf1b7",
+  "binary": "/Users/yifanxu/.codex/worktrees/phase6-sp1-strict/layerfs/core/benchmark/phase6-live/target/debug/deps/strict_catalog-0b83682ef42b5b0a",
+  "binary_sha256": "a0dd36bf4645baaf568e17b8a69ac253436a50e516229177b4e2273f4307631f",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/phase6-sp1-strict/layerfs/core/benchmark/phase6-live/target/debug/deps/strict_catalog-0b83682ef42b5b0a",
+    "--ignored",
+    "--exact",
+    "actual_os_write_limit_commit_quarantines_engine",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "environment": {
+    "SP1_SQL_FAULT_OUT": "/Users/yifanxu/.codex/worktrees/phase6-sp1-strict/layerfs/core/docs/architecture/proposal/phase6-sqlite-minio/implementation/sp1/evidence/strict-sql-commit-fault-r001"
+  },
+  "exit_code": 0,
+  "source_unchanged": true,
+  "source_inventory_sha256": "b3c240339a699dba2a21afbc4408673a127264691668fc6332d02515808e5d18",
+  "schema_fingerprint": "f7a6d0a2da131c1e9f238cbbe1bd94ed63d41ceb95ad546c27007bdcff4dc2c3",
+  "claims_excluded": [
+    "cloud durability",
+    "crash recovery",
+    "failed-abort physical proof",
+    "speed",
+    "memory admission",
+    "release admission"
+  ]
+}

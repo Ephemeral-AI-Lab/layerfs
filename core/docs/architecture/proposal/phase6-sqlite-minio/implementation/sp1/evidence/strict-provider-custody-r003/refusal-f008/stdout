@@ -1,0 +1,7 @@
+
+running 1 test
+sp1-refusals-custody-strict-v2 definite pre-send connection refusal status4, one attempt, no publication/retry: definite provider refusal: Connection refused (os error 61)
+test real_provider_definite_connection_refusal_abandons_without_retry ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.05s
+

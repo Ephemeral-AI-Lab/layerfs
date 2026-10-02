@@ -1,0 +1,12 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running tests/strict_writer.rs (core/benchmark/phase6-live/target/debug/deps/strict_writer-9157d1400ef59020)
+
+running 5 tests
+test real_provider_actual_cdc_attribute_dual_use_and_threshold_roots ... ignored, real provider identity and fresh SP1_WITNESS_OUT required
+test real_provider_cross_pack_payload_and_sql_four_leaf_pool_parity ... ignored, real provider identity and fresh SP1_WITNESS_OUT required
+test real_provider_same_save_selection_grouping_and_private_eligibility ... ignored, real provider identity and fresh SP1_WITNESS_OUT required
+test real_provider_shared_mapping_body_keeps_per_logical_use_child_routes ... ignored, real provider identity and fresh SP1_WITNESS_OUT required
+test real_provider_sql_pool_same_save_ordinals_and_captured_scope_refusal ... ignored, real provider identity and fresh SP1_WITNESS_OUT required
+
+test result: ok. 0 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

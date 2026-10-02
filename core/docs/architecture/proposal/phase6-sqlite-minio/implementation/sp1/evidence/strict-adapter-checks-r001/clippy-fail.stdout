@@ -1,0 +1,17 @@
+    Checking phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sp1-strict/layerfs/core/benchmark/phase6-live)
+error: the loop variable `state` is used to index `expected_fs`
+   --> tests/strict_commit.rs:208:18
+    |
+208 |     for state in 0..3 {
+    |                  ^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_range_loop
+    = note: `-D clippy::needless-range-loop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_range_loop)]`
+help: consider using an iterator and enumerate()
+    |
+208 |     for (state, <item>) in expected_fs.iter().enumerate().take(3) {
+    |         ~~~~~~~~~~~~~~~    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error: could not compile `phase6-live-probe` (test "strict_commit") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

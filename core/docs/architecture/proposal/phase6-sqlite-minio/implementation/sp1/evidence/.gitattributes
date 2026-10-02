@@ -2,3 +2,5 @@
 # are authenticated bytes. Preserve them; normal source/docs whitespace checks apply.
 **/*.tsv -text whitespace=-blank-at-eol,-blank-at-eof
 **/*.stdout -text whitespace=-blank-at-eof
+**/stdout -text whitespace=-blank-at-eof
+**/stderr -text whitespace=-blank-at-eof

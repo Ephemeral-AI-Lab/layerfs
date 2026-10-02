@@ -1,0 +1,12 @@
+
+running 1 test
+strict capture/native/C5 component state0: FSrootFilesystemRootId(ObjectId("f7bb395fe7359ddf87221a3928ef861d6ba0bc9e564727f15c79f1da38343461")),storageCounts { objects: 24, exact_reuses: 24, payload_packs: 3, metadata_packs: 3, payload_bytes: 331742, metadata_bytes: 6063, private_group_seals: 9, peak_private_objects: 18, peak_private_canonical: 200725 },deltaDeltaCounters { prepared_full: 16, trials: 1, prefix_selected: 1, full_losses: 0, no_candidate: 15, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 },poolPoolCounters { leaves: 1, reused_values: 0, new_values: 4, groups: 1, delta_leaves: 0, full_leaves: 1, trials: 1, work_exceeded: 0 }
+test real_provider_native_capture_and_three_retained_c5_states ... FAILED
+
+failures:
+
+failures:
+    real_provider_native_capture_and_three_retained_c5_states
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+

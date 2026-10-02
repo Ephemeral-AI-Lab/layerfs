@@ -70,6 +70,45 @@ pub fn build(
     reader: &dyn AuthenticatedObjects,
     consumer: &mut dyn FinalizedConsumer,
 ) -> Result<(FilesystemResult, ConstructionWork), String> {
+    build_inner(engine, scope, base, reader, consumer, None)
+}
+
+/// Explicit provenance at the C1 caller: filesystem/attributes and regular files
+/// have different consumers/readers even when their canonical grammar agrees.
+pub fn build_scoped(
+    engine: &Engine,
+    scope: InodeScope,
+    base: FilesystemRootId,
+    metadata_reader: &dyn AuthenticatedObjects,
+    metadata_consumer: &mut dyn FinalizedConsumer,
+    file_reader: &dyn AuthenticatedObjects,
+    file_consumer: &mut dyn FinalizedConsumer,
+) -> Result<(FilesystemResult, ConstructionWork), String> {
+    build_inner(
+        engine,
+        scope,
+        base,
+        metadata_reader,
+        metadata_consumer,
+        Some(FileIo {
+            reader: file_reader,
+            consumer: file_consumer,
+        }),
+    )
+}
+
+struct FileIo<'a> {
+    reader: &'a dyn AuthenticatedObjects,
+    consumer: &'a mut dyn FinalizedConsumer,
+}
+fn build_inner(
+    engine: &Engine,
+    scope: InodeScope,
+    base: FilesystemRootId,
+    reader: &dyn AuthenticatedObjects,
+    consumer: &mut dyn FinalizedConsumer,
+    mut file_io: Option<FileIo<'_>>,
+) -> Result<(FilesystemResult, ConstructionWork), String> {
     engine.source_ready()?;
     let query_start = engine.row_queries.get();
     crate::sql_windows::clear(&engine.db, crate::sql_windows::Table::Prepared)?;
@@ -105,39 +144,10 @@ pub fn build(
         }
         let kind = InodeKind::from_code(n.kind).map_err(|e| e.to_string())?;
         let content = if n.kind == 1 {
-            let policy = ConstructionPolicy::default();
-            let (result, _) = Timing::disabled("file.construct", |t| {
-                if let Some(root) = n.root.as_deref() {
-                    let root = ObjectId::from_bytes(root)?;
-                    let edits = Edits::prepare(engine, n.id).map_err(|_| ContentError::Io)?;
-                    work.file_edits += edits.len();
-                    apply_edits(
-                        policy,
-                        &policy.capacities(),
-                        reader,
-                        EditRequest {
-                            root,
-                            edits: &edits,
-                            source: &edits,
-                        },
-                        consumer,
-                        t.child("edit"),
-                    )
-                } else {
-                    construct_stream(
-                        policy,
-                        &policy.capacities(),
-                        Source {
-                            engine,
-                            id: n.id,
-                            at: 0,
-                        },
-                        consumer,
-                        t.child("stream"),
-                    )
-                }
-            });
-            result.map_err(|e| e.to_string())?.root
+            match file_io.as_mut() {
+                Some(io) => construct_regular(engine, &n, io.reader, &mut *io.consumer, &mut work)?,
+                None => construct_regular(engine, &n, reader, &mut *consumer, &mut work)?,
+            }
         } else {
             let base_directory = if n.published {
                 Some(layerfs_content::filesystem::DirectoryRoot(
@@ -284,4 +294,46 @@ pub fn genesis(
     let _ = profile_id();
     build_filesystem(&mut FilesystemObjects::new(reader, consumer), &input, None)
         .map_err(|e| e.to_string())
+}
+
+fn construct_regular(
+    engine: &Engine,
+    n: &crate::engine::Node,
+    reader: &dyn AuthenticatedObjects,
+    consumer: &mut dyn FinalizedConsumer,
+    work: &mut ConstructionWork,
+) -> Result<ObjectId, String> {
+    let policy = ConstructionPolicy::default();
+    let (result, _) = Timing::disabled("file.construct", |t| {
+        if let Some(root) = n.root.as_deref() {
+            let root = ObjectId::from_bytes(root)?;
+            let edits = Edits::prepare(engine, n.id).map_err(|_| ContentError::Io)?;
+            work.file_edits += edits.len();
+            apply_edits(
+                policy,
+                &policy.capacities(),
+                reader,
+                EditRequest {
+                    root,
+                    edits: &edits,
+                    source: &edits,
+                },
+                consumer,
+                t.child("edit"),
+            )
+        } else {
+            construct_stream(
+                policy,
+                &policy.capacities(),
+                Source {
+                    engine,
+                    id: n.id,
+                    at: 0,
+                },
+                consumer,
+                t.child("stream"),
+            )
+        }
+    });
+    result.map(|r| r.root).map_err(|e| e.to_string())
 }

@@ -1,0 +1,5 @@
+strict scoped boundary: definite catalog refusal: immutable reuse reference mismatch
+
+thread 'real_provider_native_capture_and_three_retained_c5_states' panicked at tests/strict_commit.rs:246:10:
+called `Result::unwrap()` on an `Err` value: "content I/O failure"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

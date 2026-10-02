@@ -1,0 +1,7 @@
+
+running 1 test
+sp1-reader-strict-v2 real CDC dual-domain read orders and placement cache refusal PASS
+test real_provider_actual_cdc_dual_use_read_orders_and_missing_domain_refusal ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.10s
+

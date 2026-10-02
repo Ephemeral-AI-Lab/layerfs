@@ -1,0 +1,9 @@
+   Compiling phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sp1-strict/layerfs/core/benchmark/phase6-live)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.52s
+     Running tests/strict_wire.rs (core/benchmark/phase6-live/target/debug/deps/strict_wire-150c5d489650b2b0)
+
+running 1 test
+test native_registration_preserves_order_across_encoded_byte_pages ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.31s
+

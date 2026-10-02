@@ -1,0 +1,48 @@
+   Compiling phase6-live-probe v0.1.0 (/Users/yifanxu/.codex/worktrees/phase6-sp1-strict/layerfs/core/benchmark/phase6-live)
+error[E0277]: the trait bound `usize: FromSql` is not satisfied
+   --> tests/strict_storage_windows.rs:181:201
+    |
+181 | ...) WHERE body_order=?1",[order],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).unwrap();
+    |                                            ^^^ the trait `FromSql` is not implemented for `usize`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `usize: FromSql` is not satisfied
+   --> tests/strict_storage_windows.rs:181:211
+    |
+181 | ...dy_order=?1",[order],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).unwrap();
+    |                                            ^^^ the trait `FromSql` is not implemented for `usize`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `phase6-live-probe` (test "strict_storage_windows") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

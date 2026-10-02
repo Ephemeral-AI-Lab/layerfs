@@ -1,0 +1,4 @@
+ordinal	id	role	canonical_length	refs	predecessors
+0	1e0fef9665b05b8e018c8a953ce8b085363fb43e931ece8a9a0bcd72d5f156c0	7	94		
+1	9b820a5ab2dbcacbaf2a671a6d0b2fa1d869b0ae7ce95af37fd99ca9d20ddf44	6	368		
+2	b634e9244a0bd690df9157bfd7bd4561b7a089cff936648cae6aa3982b41119c	10	129	9b820a5ab2dbcacbaf2a671a6d0b2fa1d869b0ae7ce95af37fd99ca9d20ddf44	

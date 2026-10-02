@@ -1,0 +1,64 @@
+{
+  "status": "FAIL_STATE1_DECLARED_COMPLETE_STREAM_ROOT_COMPARISON",
+  "observed": "state0 candidate exact f7bb395fe7359ddf87221a3928ef861d6ba0bc9e564727f15c79f1da38343461 and real native/MinIO/C5 publication succeeded. State1 candidate FSroot b634e9244a0bd690df9157bfd7bd4561b7a089cff936648cae6aa3982b41119c differs from independently full-stream-built fixture711b4bb80908c287a4c08efed2d1d8461340b0f201bc971739b7fe3d2d176d4d.",
+  "diagnosis": "Actual retained private chunked root62f38d975e15e1a3f398bc36af9f8994f19f67632dc329cb996fd3c62f0c3a14 reads all200000 sealed state1 bytes exactly (0 mismatches); unchanged original parent C1 apply_edits of sealed state0 graph with one overwrite64..96 emits the identical edited root and canonical bytes. This confirms existing edit-path behavior differs from complete-stream fixture rootccead465af722b1f8f26e4fa8dc4db5ac586a0bd51c3f589320d246664b19506. No product fix or candidate expected regeneration.",
+  "diagnostic_scope": "One read-only retained private SQL/real provider graph diagnostic; one new independent original-parent C1 edit API diagnostic. No repeated treatment sample and no performance inference. Direct rustc1.85.1 builds use owned targets, original compiled dependency rlibs and repo AES flags; actual provider PUT0 GET2. Sources/stdout and linked identity hashes retained.",
+  "scope": "Engine fixture/native/real MinIO/C5 component only. Public SDK/Exec/FUSE/S2 remains NOT_RUN; no receipt promotion. Previous empty import setup corrected solely by sealed refs/topological producer order.",
+  "files": [
+    {
+      "path": "diagnostics/identities.json",
+      "bytes": 1220,
+      "sha256": "6ab8d32e3131fcee450d24a5c0980dea0672d7e2e7f4e7043652d00b78707fb5"
+    },
+    {
+      "path": "diagnostics/parent-edit.rs",
+      "bytes": 1833,
+      "sha256": "92a423856d6450695700f786d58bed6a59769d48b1b7246dc4f6ec6684ddf0c0"
+    },
+    {
+      "path": "diagnostics/parent-edit.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "diagnostics/parent-edit.stdout",
+      "bytes": 680,
+      "sha256": "417cd54bcfadae201a1eccdfe83386f72caaddc54c00eac010b87d5a00ba651e"
+    },
+    {
+      "path": "diagnostics/read.rs",
+      "bytes": 2109,
+      "sha256": "cc4bc66c7b1c87c5c0df968a5d8b24c82423d7c95811a1feb7bf9f175803d5fc"
+    },
+    {
+      "path": "diagnostics/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "diagnostics/stdout",
+      "bytes": 973,
+      "sha256": "ca866e34e86f36776cabe09a84c6d8aef53545d7ede383ec8b8090fb0066e07f"
+    },
+    {
+      "path": "result.json",
+      "bytes": 815,
+      "sha256": "f8add73bc36c0e6e8666a63e537b533bb0bf04ac929609cc0799614d629916a3"
+    },
+    {
+      "path": "source.json",
+      "bytes": 17456,
+      "sha256": "43ba76f5ad06f992d30e8944629d9e2b3214a7659b6d5f3f2fa3c08bcfec8f1c"
+    },
+    {
+      "path": "stderr",
+      "bytes": 503,
+      "sha256": "86d32cf27d88628cd44b5a140f1eb111c2736f1087455d8eb98b33e9478c9343"
+    },
+    {
+      "path": "stdout",
+      "bytes": 939,
+      "sha256": "a2d44cfeaff0f08cf70599160cf9421ceb35888efcf81079adbfb98374dadaaf"
+    }
+  ]
+}
