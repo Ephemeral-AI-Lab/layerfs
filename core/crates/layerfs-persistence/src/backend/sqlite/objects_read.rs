@@ -24,7 +24,7 @@ pub(crate) fn read(
         .collect();
     let mut descriptors = Vec::new();
     let mut total = 0usize;
-    for page in ids.chunks(tx.variable_limit()?) {
+    for page in ids.chunks(tx.input_limit(1, 128, 2)?) {
         let sql = format!(
             "SELECT pack_id,domain,digest,length FROM pack WHERE pack_id IN({}) ORDER BY pack_id",
             std::iter::repeat_n("?", page.len())

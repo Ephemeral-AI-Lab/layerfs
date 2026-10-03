@@ -38,7 +38,7 @@ pub(crate) fn covering(
     ids: &[u32],
 ) -> Result<Vec<ValueGroupRow>, PersistenceError> {
     let mut found = Vec::new();
-    for page in ids.chunks(tx.variable_limit()?) {
+    for page in ids.chunks(tx.input_limit(1, 512, 4)?) {
         let sql=format!("WITH wanted(ordinal) AS(VALUES {}),covering AS(SELECT ordinal,(SELECT first_ordinal FROM metadata_value_group WHERE first_ordinal<=w.ordinal ORDER BY first_ordinal DESC LIMIT 1) first FROM wanted w) SELECT DISTINCT g.first_ordinal,g.count,g.pack_id,g.group_number,g.digest FROM covering c JOIN metadata_value_group g ON g.first_ordinal=c.first WHERE c.ordinal<g.first_ordinal+g.count ORDER BY g.first_ordinal",std::iter::repeat_n("(?)",page.len()).collect::<Vec<_>>().join(","));
         for r in tx.query(
             &sql,

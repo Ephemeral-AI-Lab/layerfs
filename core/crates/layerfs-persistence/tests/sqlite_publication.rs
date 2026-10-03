@@ -90,6 +90,8 @@ fn wal_full_settings_and_unavailable_engine_are_explicit() {
         (4096, 0, 0, 1000, -2048)
     );
     assert!(p.variable_limit >= 6);
+    assert!(p.column_limit >= 13);
+    assert!(p.length_limit >= layerfs_storage::policy::SINGLETON_PACK_LIMIT + 1024);
     assert!(p.sql_length_limit > 192);
     let names = rusqlite::Connection::open(&path)
         .unwrap()
@@ -286,4 +288,29 @@ fn canonical_save_read_reuse_and_persisted_reservations_survive_reopen() {
         8
     );
     assert!(!h.checkpoint().unwrap().busy);
+}
+
+#[test]
+fn writable_open_does_not_migrate_an_unrelated_database_journal() {
+    let t = Temp::new("foreign-journal");
+    let path = t.join("db");
+    let sql = rusqlite::Connection::open(&path).unwrap();
+    sql.execute_batch("CREATE TABLE marker(value TEXT); INSERT INTO marker VALUES('untouched');")
+        .unwrap();
+    assert!(Handles::open_writable(
+        PersistenceConfig::sqlite(&path),
+        &config().binding_key,
+        [71; 32]
+    )
+    .is_err());
+    let mode: String = sql
+        .pragma_query_value(None, "journal_mode", |r| r.get(0))
+        .unwrap();
+    assert_eq!(mode, "delete");
+    assert_eq!(
+        sql.query_row("SELECT value FROM marker", [], |r| r.get::<_, String>(0))
+            .unwrap(),
+        "untouched"
+    );
+    assert!(!std::path::PathBuf::from(format!("{}-wal", path.display())).exists());
 }

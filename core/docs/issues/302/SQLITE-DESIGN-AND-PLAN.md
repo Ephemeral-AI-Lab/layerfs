@@ -279,3 +279,13 @@ An active goal is created without a token budget. A1-A6 now have material local
 SQLite implementation and functional tests; A7 and all seven competitive
 benchmark decisions remain NOT_RUN. B0 count instrumentation is implemented;
 B1 larger-tier qualification and conditional B2 paging remain incomplete.
+
+Init's prospective contract is now SQLITE-STEP10-CONTRACT.md: conservative final
+DB/WAL/SHM allocation<=matched Phase4.5 final total, plus separate before-checkpoint
+allocation; complete fresh-database lifecycle is included. History deadlines
+remain pending and no history driver/sample is substituted. New runner registers
+all seven, uses per-child wait4 accounting and fails unresolved history calls
+before setup. No SQLite benchmark receipt has yet been taken.
+
+Source retirement completed in b604389a4 after bd9ededba:140936->137448(-3488),
+active core27987 unchanged. The prior checkpoint/LOC evidence remains unchanged.

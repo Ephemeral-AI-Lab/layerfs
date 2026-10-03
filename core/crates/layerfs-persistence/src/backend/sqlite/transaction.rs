@@ -16,6 +16,20 @@ pub(crate) struct Transaction<'a> {
     uncertain: Cell<bool>,
 }
 impl Transaction<'_> {
+    pub(crate) fn input_limit(
+        &self,
+        bindings: usize,
+        prefix: usize,
+        per_row: usize,
+    ) -> Result<usize, BackendError> {
+        let count = (self.variable_limit()? / bindings)
+            .min(self.sql_length_limit()?.saturating_sub(prefix) / per_row);
+        if count == 0 {
+            return Err(BackendError::Capacity);
+        }
+        Ok(count)
+    }
+
     pub(crate) fn bootstrap(&self, script: &str) -> Result<(), BackendError> {
         let r = query::batch(self.connection, script, self.work);
         if r.as_ref().err() == Some(&BackendError::Unknown) {

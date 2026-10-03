@@ -1297,3 +1297,29 @@ separate from read commits and never misrepresented as observed sync syscalls.
 New matched reference harness source is product-unmodified and recording-disabled.
 Both fresh database creation and final close remain in the proposed complete
 child comparison, with candidate checkpoint included. New runner/receipts pending.
+
+## 2026-10-04 — prospective SQLite runner/Init contract
+
+Retired metadata directory deletions omitted from bd9 staging are separately
+committed in b604389a4. Exact LOC140936->137448(-3488), reference65417 unchanged,
+core72031, active27987 unchanged, inactive core reference44044. No active compiled
+mechanism changes; preserve first checkpoint and its original count.
+
+SQLITE-STEP10-CONTRACT.md freezes complete child creation/import/checkpoint/close,
+10*candidate<=11*matched baseline, conservative Init final allocation<=baseline,
+regular-file cold attestation and fresh Store, release/seals/one-sample claims,
+15s performance/9.5s proof. Source metadata/cache observation limits explicit.
+New runner lists all seven and uses blocking wait4 with a deadline watchdog,
+avoiding timer-poll quantization and lifetime aggregate RSS. Required history
+budget/actual driver/proof remain pending. Harness4 tests PASS; no speed sample.
+
+Final runtime-limit audit adds actual SQLite column/row-BLOB capability readback
+and fail-closed minimums. Dynamic location/descriptor/ordinal queries now split
+against both actual bind-variable and SQL-length limits; no zero-bound fallback.
+This is a changed required-capability mechanism before sampling, so covering
+publication/profile and namespace proof are run at the final identity.
+
+Pre-freeze review fixes writable-open profile handling: only fresh creation can
+switch journal mode. Existing incompatible/non-WAL databases are refused before
+persistent journal mutation; a new public-API foreign-database test proves the
+original DELETE mode and marker remain unchanged. All changes precede sampling.

@@ -27,9 +27,7 @@ pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published
     }
     let mut inserted = BTreeSet::new();
     // Both actual limits constrain one statement. SQL size is bounded conservatively.
-    let limit = (tx.variable_limit()? / 6)
-        .min(tx.sql_length_limit()?.saturating_sub(192) / 32)
-        .max(1);
+    let limit = tx.input_limit(6, 192, 32)?;
     for page in batch.objects.chunks(limit) {
         let sql=format!("INSERT INTO object_location(object_id,role,canonical_length,pack_id,group_number,record_number) VALUES {} ON CONFLICT(object_id) DO NOTHING RETURNING object_id",std::iter::repeat_n("(?,?,?,?,?,?)",page.len()).collect::<Vec<_>>().join(","));
         let params = page

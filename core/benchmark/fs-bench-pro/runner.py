@@ -19,6 +19,7 @@ CORE = ROOT / "core"
 RESULTS = ROOT / "benchmark-results/fs-bench-pro"
 sys.path.insert(0, str(HERE))
 from diagnostics import run_init as causes  # noqa: E402
+from families import phase7_sqlite as sqlite_phase7
 from families import phase7_storage as phase7  # noqa: E402
 from families import init_namespace as init  # noqa: E402
 from families import history_retention as history  # noqa: E402
@@ -394,6 +395,8 @@ def main():
         commands.add_parser(name).add_argument("--run", required=True)
     args = parser.parse_args()
     if args.command == "list":
+        for case in sqlite_phase7.CASES.values():
+            print(f"{case.id}\tSQLite-only; candidate<=1.10*matched Phase4.5; prospective contract/proof pending")
         for case in causes.CASES:
             print(f"{case}\tCAUSE_DIAGNOSTIC; one case/arm, no speed admission")
         for case in phase7.CASES.values():
@@ -433,6 +436,11 @@ def main():
             print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":
         selection = args.case or args.family
+        if selection in sqlite_phase7.CASES:
+            if args.arm is None or args.arm=="baseline" and args.baseline_root is None:
+                parser.error("SQLite Phase7 requires an arm and owned baseline root")
+            print(sqlite_phase7.run(selection,args.out,args.arm,args.baseline_root,sys.modules[__name__]))
+            return
         if selection in causes.CASES:
             if args.arm is None:
                 parser.error("cause diagnostic requires --arm")

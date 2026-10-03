@@ -44,6 +44,8 @@ pub struct ConnectionProfile {
     pub sql_length_limit: usize,
     /// Actual row/BLOB byte limit.
     pub length_limit: usize,
+    /// Actual column count limit, required by the full history schema.
+    pub column_limit: usize,
 }
 /// Counts and inclusive wall from actual attempted SQLite work.
 #[derive(Clone, Copy, Debug, Default)]
@@ -120,7 +122,7 @@ impl Session {
         if create {
             query::run(&connection, "PRAGMA page_size=4096", vec![], &work)?;
         }
-        if writable {
+        if writable && create {
             let values = query::run(&connection, "PRAGMA journal_mode=WAL", vec![], &work)?;
             if values
                 .first()
@@ -128,6 +130,15 @@ impl Session {
                 .get::<String>(0)?
                 != "wal"
             {
+                return Err(BackendError::Integrity);
+            }
+        }
+        if !create {
+            let mode = query::run(&connection, "PRAGMA journal_mode", vec![], &work)?
+                .first()
+                .ok_or(BackendError::Integrity)?
+                .get::<String>(0)?;
+            if mode != "wal" {
                 return Err(BackendError::Integrity);
             }
         }
@@ -186,6 +197,9 @@ impl Session {
             sql_length_limit: connection
                 .limit(Limit::SQLITE_LIMIT_SQL_LENGTH)
                 .map_err(rows::error)? as usize,
+            column_limit: connection
+                .limit(Limit::SQLITE_LIMIT_COLUMN)
+                .map_err(rows::error)? as usize,
             length_limit: connection
                 .limit(Limit::SQLITE_LIMIT_LENGTH)
                 .map_err(rows::error)? as usize,
@@ -201,6 +215,9 @@ impl Session {
             || profile.cache_size != -2048
             || profile.busy_timeout != 0
             || profile.mmap_size != 0
+            || profile.column_limit < 13
+            || profile.length_limit < layerfs_storage::policy::SINGLETON_PACK_LIMIT + 1024
+            || profile.sql_length_limit < 4096
             || profile.variable_limit < 6
         {
             return Err(BackendError::Integrity);

@@ -16,6 +16,25 @@ fn hex(bytes: &[u8]) -> String {
     }
     s
 }
+#[cfg(unix)]
+fn allocated(path: &Path) -> Result<u64, Box<dyn std::error::Error>> {
+    use std::os::unix::fs::MetadataExt;
+    let mut bytes = 0;
+    for suffix in ["", "-wal", "-shm"] {
+        let mut name = path.as_os_str().to_os_string();
+        name.push(suffix);
+        match std::fs::metadata(Path::new(&name)) {
+            Ok(m) => bytes += m.blocks() * 512,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(bytes)
+}
+#[cfg(not(unix))]
+fn allocated(_path: &Path) -> Result<u64, Box<dyn std::error::Error>> {
+    Err("allocation observation requires Unix".into())
+}
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Vec<_>>();
     if args.len() != 5 {
@@ -51,6 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     })
     .0?;
     let init_ns = init_start.elapsed().as_nanos();
+    let allocation_before_checkpoint = allocated(Path::new(&args[2]))?;
     let checkpoint = handles.checkpoint()?;
     if checkpoint.busy {
         return Err("final checkpoint obstructed".into());
@@ -62,9 +82,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     drop(storage);
     drop(handles);
     let close_ns = close.elapsed().as_nanos();
+    let allocation_after_close = allocated(Path::new(&args[2]))?;
     let complete_product_ns = start.elapsed().as_nanos();
     println!("{{\"status\":\"COMPLETE\",\"operation_ns\":{complete_product_ns},\"bootstrap_ns\":{bootstrap_ns},\"init_ns\":{init_ns},\"checkpoint_ns\":{},\"close_ns\":{close_ns},\"root\":\"{}\",\"stack\":\"{}\",\"root_serial\":{},\"entries\":{}}}",checkpoint.wall_ns,hex(result.root.as_bytes()),hex(&[0x41;16]),result.root_serial,result.entries);
-    eprintln!("DIAGNOSTIC profile={profile:?}");
+    eprintln!("DIAGNOSTIC profile={profile:?} allocation_before_checkpoint={allocation_before_checkpoint} allocation_after_close={allocation_after_close}");
     eprintln!("DIAGNOSTIC sqlite={work:?} checkpoint={checkpoint:?} storage={:?} saves={save_work:?} namespace={:?}",result.diagnostics,result.namespace_work);
     Ok(())
 }

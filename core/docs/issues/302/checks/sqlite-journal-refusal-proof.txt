@@ -1,0 +1,13 @@
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-persistence)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.00s
+     Running tests/sqlite_publication.rs (core/target/debug/deps/sqlite_publication-7d1124b261a8c716)
+
+running 6 tests
+test writable_open_does_not_migrate_an_unrelated_database_journal ... ok
+test wal_full_settings_and_unavailable_engine_are_explicit ... ok
+test readonly_refusal_and_external_writer_busy_do_not_retry ... ok
+test failure_after_body_insert_rolls_back_the_entire_unit_and_published_body_is_immutable ... ok
+test final_body_multirow_locators_and_first_wins_have_one_atomic_ack ... ok
+test canonical_save_read_reuse_and_persisted_reservations_survive_reopen ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
