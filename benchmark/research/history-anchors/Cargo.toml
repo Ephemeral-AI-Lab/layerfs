@@ -1,0 +1,12 @@
+[package]
+name = "layerfs-history-anchor-research"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[workspace]
+
+[dependencies]
+layerfs-content = { path = "../../../crates/layerfs-content" }
+layerfs-layerstack-store = { path = "../../../crates/layerfs-layerstack-store" }
