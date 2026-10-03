@@ -182,7 +182,11 @@ impl PgHistory {
             Ok(incarnation as u64)
         })
     }
-    /// Actual protocol exchanges and bytes, labelled diagnostics by callers.
+    /// Bounded per-statement caller, queue and driver wall observations.
+    pub fn statement_work(&self) -> crate::PgWork {
+        self.client.statement_work()
+    }
+    /// Cumulative physical SQL, protocol and socket observations.
     pub fn diagnostics(&self) -> HistoryResult<PgDiagnostics> {
         self.client.diagnostics().map_err(error)
     }

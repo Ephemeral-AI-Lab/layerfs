@@ -6,8 +6,20 @@ use layerfs_metadata::PgHistory;
 use support::*;
 fn record<T>(catalog: &PgHistory, label: &str, operation: impl FnOnce() -> T) -> T {
     let before = catalog.diagnostics().unwrap();
+    let work_before = catalog
+        .statement_work()
+        .statements
+        .iter()
+        .map(|row| row.calls)
+        .sum::<u64>();
     let value = operation();
     let after = catalog.diagnostics().unwrap();
+    let work = catalog.statement_work();
+    assert_eq!(work.omitted, 0);
+    assert_eq!(
+        work.statements.iter().map(|row| row.calls).sum::<u64>() - work_before,
+        after.operations - before.operations
+    );
     println!("DIAGNOSTIC history-{label} operations={} sync={} ready={} protocol_sent={} protocol_received={}",after.operations-before.operations,after.sync_messages-before.sync_messages,after.ready_for_query-before.ready_for_query,after.protocol_sent-before.protocol_sent,after.protocol_received-before.protocol_received);
     assert_eq!(
         after.operations - before.operations,

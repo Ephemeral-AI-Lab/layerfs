@@ -76,6 +76,7 @@ impl State<'_> {
                 c.reserve += 1;
                 c.ordinal_reservations += 1;
             });
+            let _work = self.storage.work.span(super::Stage::OrdinalReserve);
             let allocation = self.storage.source.metadata.reserve(Reserve {
                 packs: 0,
                 ordinals: block,

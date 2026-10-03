@@ -20,7 +20,23 @@ fn every_metadata_unit_is_one_actual_wire_round_trip() {
             completed: counts.ready_for_query,
         }
     });
-    println!("DIAGNOSTIC pg-units {:?}", store.diagnostics().unwrap());
+    let before = store.diagnostics().unwrap();
+    let work = store.statement_work();
+    assert_eq!(work.omitted, 0);
+    assert_eq!(
+        work.statements.iter().map(|row| row.calls).sum::<u64>(),
+        before.operations
+    );
+    assert!(work
+        .statements
+        .iter()
+        .all(|row| row.caller_ns >= row.queue_ns + row.driver_ns));
+    assert_eq!(
+        store.diagnostics().unwrap(),
+        before,
+        "observation must issue no SQL"
+    );
+    println!("DIAGNOSTIC pg-units {before:?} work={work:?}");
 }
 #[test]
 fn two_connections_first_wins_without_a_registration_retry() {

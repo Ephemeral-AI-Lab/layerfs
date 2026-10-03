@@ -28,6 +28,33 @@ fn conditional_create_reads_head_and_exact_ranges_on_the_pinned_service() {
         .unwrap();
     assert_eq!(out, body[251..751]);
     let before = store.diagnostics().unwrap();
+    assert_eq!(before.request_work[0].calls, before.puts);
+    assert_eq!(before.request_work[1].calls, before.gets);
+    assert_eq!(before.request_work[2].calls, before.heads);
+    assert_eq!(
+        before
+            .request_work
+            .iter()
+            .map(|row| row.body_sent)
+            .sum::<u64>(),
+        before.body_sent
+    );
+    assert_eq!(
+        before
+            .request_work
+            .iter()
+            .map(|row| row.body_received)
+            .sum::<u64>(),
+        before.body_received
+    );
+    assert_eq!(
+        before
+            .request_work
+            .iter()
+            .map(|row| row.continue_wait_ns)
+            .sum::<u64>(),
+        before.continue_wait_ns
+    );
     assert_eq!(
         store.put_if_absent(key, b"different body"),
         Err(ObjectError::Malformed)

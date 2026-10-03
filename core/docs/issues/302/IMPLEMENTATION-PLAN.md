@@ -1092,3 +1092,44 @@ no canonical object/locator/pack/root payload is prepared or primed.
 
 Only the Init diagnostic sublane is executable at this point. History's direct
 port driver remains NOT_RUN/unbound, and full step 10/11/M5 are incomplete.
+
+
+### Owner-directed cause diagnostics before optimization — 2026-10-04
+
+The owner explicitly directs a side-by-side diagnostic of Phase 4.5 and the
+candidate before optimization. Start with the frozen 100/1,000 Init fixtures,
+one labelled count diagnostic per case/arm, under the existing 15 s child and
+9.5 s verifier bounds. No new admission rows or unchanged-arm speed resamples.
+All existing failed speed receipts remain intact. SQL profiles are explanatory
+inputs, never a waiver for the strict speed/storage gate.
+
+The baseline uses unmodified product at 7edddbdb8 with a harness example calling
+the same public Service ImportNativeDirectory body, so its existing recording
+is returned rather than discarded by ProjectApi::init. This diagnostic scope
+is explicitly not the SDK route/timer. Candidate calls project::init. Both use
+identical explicit authority/seed/name, fixtures and constructor budgets. The
+baseline harness example is copied into examples only for its locked release
+build then removed; product source remains unchanged. An external first-party
+macOS interposer observes system SQLite statement profiles/VM counters and
+step/exec call walls; it neither modifies nor replaces third-party code.
+
+Candidate work observation is real bounded product telemetry: PostgreSQL has
+128 template classes with caller/queue/driver walls, S3 has three method classes
+with protocol-stage walls, and C2 has ten inclusive stages plus four recent
+successful-save snapshots. No algorithms, SQL text, framing, allocation policy,
+worker count or durability setting is optimized by these changes.
+
+For these diagnostics only, fresh owned PostgreSQL loads its shipped
+pg_stat_statements extension, track=all/planning=on and I/O/WAL timing. Defaults
+fsync/synchronous_commit/full_page_writes and pinned CPU/memory/swap/PID limits
+remain unchanged. The observer profile is recorded and is not an admission
+profile. Snapshots and nested statement counts are captured before verification.
+Post-proof EXPLAIN diagnostics have separate declared populated/warm state.
+Source residency is invalidated and checked identically before each child.
+Complete identities and observer binaries are frozen before running.
+
+Remaining coverage gaps must be explicit: request-duration sums overlap across
+workers; SQLite PROFILE time has coarse resolution and step/exec coverage may
+exclude separate blob APIs; SQLite VM instructions and PostgreSQL executor work
+are distinct units. Neither profiling overhead nor missing attribution may be
+called a speed improvement. Full step 10/11/M5 remain incomplete.

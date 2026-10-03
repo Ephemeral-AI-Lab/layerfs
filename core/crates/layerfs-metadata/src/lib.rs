@@ -10,9 +10,11 @@ mod schema;
 mod storage;
 mod tls;
 mod wire;
+mod work;
 pub use config::{PgConfig, TlsProfile};
 pub use storage::PgMetadata;
 pub use wire::PgDiagnostics;
+pub use work::{PgStatementWork, PgWork};
 
 mod history;
 pub use history::PgHistory;

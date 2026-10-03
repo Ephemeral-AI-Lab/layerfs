@@ -11,3 +11,7 @@ mod upload;
 mod wave;
 pub use operation::{Save, SaveSink};
 pub use state::WriteOutcome;
+
+mod work;
+pub use work::{SaveHistory, SaveWork, StageWork};
+pub(crate) use work::{Stage, Work};

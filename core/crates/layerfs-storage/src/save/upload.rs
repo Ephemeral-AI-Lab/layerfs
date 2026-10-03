@@ -3,6 +3,7 @@ use super::state::State;
 use crate::{location::PackDomain, StorageError, StorageResult};
 impl State<'_> {
     pub(super) fn upload_ready(&self) -> StorageResult<()> {
+        let _work = self.storage.work.span(super::Stage::Upload);
         let packs: Vec<_> = self
             .packer
             .ready

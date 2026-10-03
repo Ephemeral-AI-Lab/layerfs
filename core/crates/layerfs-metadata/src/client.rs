@@ -13,9 +13,12 @@ use std::{
         Arc, Mutex,
     },
     thread::JoinHandle,
+    time::Instant,
 };
 pub(crate) struct Job {
     pub(crate) sql: String,
+    pub(crate) sql_id: u64,
+    pub(crate) submitted: Instant,
     pub(crate) params: Vec<Param>,
     pub(crate) bootstrap: bool,
     pub(crate) mutating: bool,
@@ -34,6 +37,7 @@ pub(crate) struct Client {
     thread: Mutex<Option<JoinHandle<()>>>,
     trace: Arc<Trace>,
     config: PgConfig,
+    work: Arc<crate::work::Work>,
 }
 impl Client {
     pub(crate) fn connect(config: PgConfig) -> Result<Arc<Self>, MetadataError> {
@@ -43,9 +47,11 @@ impl Client {
         let (startup, ready) = mpsc::sync_channel(1);
         let profile = config.clone();
         let counts = Arc::clone(&trace);
+        let work = Arc::new(crate::work::Work::default());
+        let observer = Arc::clone(&work);
         let thread = std::thread::Builder::new()
             .name("layerfs-pg-io".to_owned())
-            .spawn(move || connection::run(profile, receiver, startup, counts))
+            .spawn(move || connection::run(profile, receiver, startup, counts, observer))
             .map_err(|_| MetadataError::Uncertain)?;
         ready
             .recv_timeout(config.connect_timeout)
@@ -58,6 +64,7 @@ impl Client {
             thread: Mutex::new(Some(thread)),
             trace,
             config,
+            work,
         }))
     }
     pub(crate) fn query(
@@ -66,18 +73,27 @@ impl Client {
         params: Vec<Param>,
         mutating: bool,
     ) -> Result<Vec<Row>, MetadataError> {
-        self.call(self.config.sql(template), params, false, mutating)
+        self.call(
+            self.config.sql(template),
+            crate::work::sql_id(template),
+            params,
+            false,
+            mutating,
+        )
     }
     pub(crate) fn bootstrap(&self, sql: String) -> Result<(), MetadataError> {
-        self.call(sql, Vec::new(), true, true).map(|_| ())
+        let id = crate::work::sql_id(&sql);
+        self.call(sql, id, Vec::new(), true, true).map(|_| ())
     }
     fn call(
         &self,
         sql: String,
+        id: u64,
         params: Vec<Param>,
         bootstrap: bool,
         mutating: bool,
     ) -> Result<Vec<Row>, MetadataError> {
+        let started = Instant::now();
         let mut state = self.state.lock().map_err(|_| MetadataError::Uncertain)?;
         if state.failed {
             return Err(MetadataError::Uncertain);
@@ -90,6 +106,8 @@ impl Client {
             .sender
             .send(Message::Run(Job {
                 sql,
+                sql_id: id,
+                submitted: Instant::now(),
                 params,
                 bootstrap,
                 mutating,
@@ -103,6 +121,11 @@ impl Client {
         let result = receiver
             .recv_timeout(self.config.request_timeout)
             .unwrap_or(Err(MetadataError::Uncertain));
+        self.work.record(id, |row| {
+            row.calls += 1;
+            row.mutating_calls += u64::from(mutating);
+            row.caller_ns += crate::work::elapsed(started);
+        });
         if matches!(
             result,
             Err(MetadataError::Uncertain | MetadataError::Malformed)
@@ -110,6 +133,9 @@ impl Client {
             state.failed = true;
         }
         result
+    }
+    pub(crate) fn statement_work(&self) -> crate::PgWork {
+        self.work.snapshot()
     }
     pub(crate) fn diagnostics(&self) -> Result<PgDiagnostics, MetadataError> {
         self.trace.snapshot().map_err(|_| MetadataError::Uncertain)

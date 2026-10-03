@@ -989,3 +989,56 @@ Owned-service post-proof teardown PASS (1209505875 ns, separate cleanup scope).
 Containers/volumes/network removed only after retaining proof/allocation/SQL
 evidence. Both services are down; next owned work uses phase7_services.up.
 No original performance receipt is rewritten or promoted by this cleanup.
+
+
+## 2026-10-04 — cause instrumentation prepared before optimization
+
+Owner approves paired Phase 4.5/current diagnostics at 100 and 1,000 files.
+No optimization or new admission speed row is claimed. The same workload,
+explicit scope/authority, four constructors, bounded four uploads, service
+limits, default durability and input-residency contract stay. The baseline
+product remains unmodified at 7edddbdb8; a harness example uses public Service
+import to return its existing timing report. It is not an SDK gate timer.
+Candidate real telemetry records PG caller/queue/driver work (128 template
+classes), S3 protocol work (three methods), and C2 save work (ten inclusive
+stages, four recent acknowledged snapshots). Detailed setup is in the plan and
+architecture counter/import notes. Off-platform observer qualification is open.
+
+External SQLite observer calibration PASS: five explicit probe statements,
+positive VM work, three SELECT step calls and one exec-script call. Interposed
+step and exec timing paths are disjoint in that calibration. Dynamic library
+uses system SQLite without third-party changes. Statement profiles cover exec
+statements; PROFILE time is coarse and direct blob API timing remains a gap.
+
+Checks: metadata initial covering suite 37 PASS, unchanged engine proof reused;
+first project part 5 PASS/1 FAIL, retained. Repaired storage/project/S3 all-target
+command 278 PASS/0 failed/0 ignored. All-target core Clippy PASS, fmt PASS,
+boundary 473 files PASS, tools 21 PASS; focused diagnostic harness 3 PASS and
+substrate 7 PASS. Locked release builds: candidate final 5.04 s, baseline final
+0.63 s. Source product/format/SQL unchanged except telemetry/timing scope.
+
+Every failure/repair is retained in checks/step10-cause-build-* (raw originals
+also target/phase7-agent): first metadata compile lacked a diagnostics doc after
+adding statement_work; restore the doc. First SQLite probe output was absent
+because RTLD_NEXT dlsym returned the interposed function recursively; LLDB
+confirmed observed_open repeated on the stack. Direct original-symbol calls
+inside the interposer fix it; probe then passes. Initial destructor/atexit
+output investigations were superseded by that root cause, not rewritten.
+Baseline diagnostic first called private handle_until_bound; use public
+set_import_root + handle_until without changing product visibility. Functional
+parity failed with PG 23505: server log confirms pg_namespace_nspname_index
+collision. External fixtures discarded their atomic counter when naming schemas;
+preserve PID/counter/timestamp. No provider retry or SQL change fixes it.
+
+Owned PG observer-profile calibration PASS: shipped pg_stat_statements, all
+nested statements/planning, I/O/WAL timing; fsync/synchronous_commit/
+full_page_writes remain on. This is a diagnostic profile, not admission.
+Freeze source/binary/observer/cases before the four diagnostic children. All
+four cause children are NOT_RUN at this commit. Existing v1/v2 speed failures
+remain; full step 10/11/M5 and direct history harness remain incomplete.
+
+Production LOC: 143238 -> 143542 (delta +304). Exact first-parent/staged
+snapshots counted with tools/production_loc.py (nonblank/noncomment product
+Rust and shipped SQL, external tests/examples/tools excluded). Reference
+65417 -> 65417; core 77821 -> 78125; old path 6025 -> 6025; new path
+7448 -> 7752; rest core 64348 -> 64348. Growth is bounded telemetry.

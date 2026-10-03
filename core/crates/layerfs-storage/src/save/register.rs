@@ -10,6 +10,7 @@ use layerfs_content::ObjectId;
 use std::collections::{BTreeMap, BTreeSet};
 impl State<'_> {
     pub(super) fn register_ready(&mut self) -> StorageResult<()> {
+        let _work = self.storage.work.span(super::Stage::Registration);
         // Every reference to an unframed member forces its owning lane to seal.
         // Repeating this bounded closure walk discovers prerequisites of those seals;
         // it never repeats an engine operation.
@@ -262,7 +263,10 @@ impl State<'_> {
             }
         }
         self.storage.source.note(|c| c.register += 1);
-        let result = self.storage.source.metadata.register(batch)?;
+        let result = {
+            let _work = self.storage.work.span(super::Stage::Metadata);
+            self.storage.source.metadata.register(batch)?
+        };
         self.storage.source.note(|c| {
             c.metadata_write_bytes += batch
                 .packs

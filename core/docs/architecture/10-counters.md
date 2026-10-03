@@ -334,3 +334,28 @@ consumer that reads the outcome alone must not treat a node that never completed
 an operation that completed successfully."* And `Disabled` versus `Clipped` are
 different states with different consequences, so *"a caller that checks only
 `is_incomplete()` therefore never fails a disabled row."*
+
+
+## Phase 7 bounded work observation
+
+Source: the instrumentation commit containing this section, based on dc8b7bd8d.
+This describes observer behavior, not an optimization or admission result.
+PgMetadata/PgHistory expose at most 128 SQL-template classes, recording caller,
+queue and published-driver query-future wall. Identifiers hash the unexpanded
+shipped template; parameters and SQL bodies are not retained. Class exhaustion
+is explicit in the omitted count; observation failure does not resend or change
+a product operation. Physical Sync/Ready/socket counts remain separate.
+
+S3 diagnostics retain three request classes (PUT/GET/HEAD), local signing/body
+validation and header/continue/body/final-head/entity wall. Aggregate request
+walls can overlap across Init's four existing connections. No request, timeout,
+framing or concurrency policy changes.
+
+Storage records ten inclusive save stages in a fixed aggregate, plus a ring of
+four recent acknowledged saves. Reservations and metadata calls are nested in
+admission/registration stages; they must not be added to their parents. A
+failed save contributes attempted-stage work but no acknowledged recent save.
+The existing count Diagnostics stays separate, preserving its count equality.
+No object IDs, bodies, fixture data, I/O priming, retries or extra producer are
+introduced. The Init adapter adds ordinary timing scopes around the existing
+finish and history calls; disabled timing still executes the same operation.

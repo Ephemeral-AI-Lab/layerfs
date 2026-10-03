@@ -51,6 +51,7 @@ pub(crate) struct Http {
 }
 impl Http {
     pub(crate) fn connect(config: &S3Config) -> Result<Self, ObjectError> {
+        let started = Instant::now();
         let (host, port, _) = config.address()?;
         // Choose one IPv4 address for the declared local profile before attempting
         // the connection. A failed address is never replaced or retried.
@@ -73,10 +74,16 @@ impl Http {
                 deadline,
                 counts: S3Diagnostics {
                     connections: 1,
+                    connect_ns: started.elapsed().as_nanos() as u64,
                     ..Default::default()
                 },
             }),
         })
+    }
+    pub(crate) fn note_local(&mut self, method: &str, signing_ns: u64, validation_ns: u64) {
+        let row = &mut self.reader.get_mut().counts.request_work[crate::work::index(method)];
+        row.signing_ns += signing_ns;
+        row.validation_ns += validation_ns;
     }
     pub(crate) fn diagnostics(&self) -> S3Diagnostics {
         self.reader.get_ref().counts
@@ -94,6 +101,7 @@ impl Http {
             .ok_or(ObjectError::Malformed)?;
         let counts = &mut self.reader.get_mut().counts;
         counts.requests += 1;
+        counts.request_work[crate::work::index(method)].calls += 1;
         match method {
             "PUT" => counts.puts += 1,
             "GET" => counts.gets += 1,
@@ -107,6 +115,7 @@ impl Http {
             ""
         };
         let request=format!("{method} {path} HTTP/1.1\r\n{headers}Content-Length: {}\r\n{expect_header}Connection: keep-alive\r\n\r\n",body.len());
+        let started = Instant::now();
         self.reader
             .get_mut()
             .write_all(request.as_bytes())
@@ -115,8 +124,18 @@ impl Http {
             .get_mut()
             .flush()
             .map_err(|_| ObjectError::Uncertain)?;
+        let elapsed = started.elapsed().as_nanos() as u64;
+        self.reader.get_mut().counts.header_write_ns += elapsed;
+        self.reader.get_mut().counts.request_work[crate::work::index(method)].header_write_ns +=
+            elapsed;
         if expect {
-            let (status, headers) = self.read_head()?;
+            let started = Instant::now();
+            let head = self.read_head();
+            let elapsed = started.elapsed().as_nanos() as u64;
+            self.reader.get_mut().counts.continue_wait_ns += elapsed;
+            self.reader.get_mut().counts.request_work[crate::work::index(method)]
+                .continue_wait_ns += elapsed;
+            let (status, headers) = head?;
             if status != 100 {
                 if (200..300).contains(&status) {
                     return Err(ObjectError::Malformed);
@@ -125,6 +144,7 @@ impl Http {
             }
             self.reader.get_mut().counts.interim_responses += 1;
         }
+        let started = Instant::now();
         let mut written = 0;
         while written < body.len() {
             let n = self
@@ -137,12 +157,23 @@ impl Http {
             }
             written += n;
             self.reader.get_mut().counts.body_sent += n as u64;
+            self.reader.get_mut().counts.request_work[0].body_sent += n as u64;
         }
         self.reader
             .get_mut()
             .flush()
             .map_err(|_| ObjectError::Uncertain)?;
-        let (status, headers) = self.read_head()?;
+        let elapsed = started.elapsed().as_nanos() as u64;
+        self.reader.get_mut().counts.body_write_ns += elapsed;
+        self.reader.get_mut().counts.request_work[crate::work::index(method)].body_write_ns +=
+            elapsed;
+        let started = Instant::now();
+        let head = self.read_head();
+        let elapsed = started.elapsed().as_nanos() as u64;
+        self.reader.get_mut().counts.response_head_ns += elapsed;
+        self.reader.get_mut().counts.request_work[crate::work::index(method)].response_head_ns +=
+            elapsed;
+        let (status, headers) = head?;
         if status == 100 {
             return Err(ObjectError::Malformed);
         }
@@ -197,6 +228,7 @@ impl Http {
         status: u16,
         headers: BTreeMap<String, String>,
     ) -> Result<Reply, ObjectError> {
+        let started = Instant::now();
         let close = match headers.get("connection") {
             None => false,
             Some(value) if value.eq_ignore_ascii_case("keep-alive") => false,
@@ -222,6 +254,12 @@ impl Http {
                 _ => return Err(ObjectError::Malformed),
             }
         }
+        let elapsed = started.elapsed().as_nanos() as u64;
+        self.reader.get_mut().counts.response_body_ns += elapsed;
+        self.reader.get_mut().counts.request_work[crate::work::index(method)].response_body_ns +=
+            elapsed;
+        self.reader.get_mut().counts.request_work[crate::work::index(method)].body_received +=
+            body.len() as u64;
         Ok(Reply {
             status,
             headers,

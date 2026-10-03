@@ -73,7 +73,9 @@ impl S3Objects {
         key: ObjectKey,
         body: &[u8],
         extra: Option<(&str, String)>,
+        validation_ns: u64,
     ) -> Result<Reply, ObjectError> {
+        let signing_started = std::time::Instant::now();
         let (_, _, host) = self.config.address()?;
         let path = self.config.path(key);
         let payload = if method == "PUT" {
@@ -82,6 +84,7 @@ impl S3Objects {
             *ObjectKey::for_bytes(&[]).as_bytes()
         };
         let headers = sign::headers(&self.config, method, &path, &host, payload, extra)?;
+        let signing_ns = signing_started.elapsed().as_nanos() as u64;
         if self.failed.load(Ordering::Acquire) {
             return Err(ObjectError::Uncertain);
         }
@@ -104,6 +107,7 @@ impl S3Objects {
             })?);
         }
         let http = connection.http.as_mut().ok_or(ObjectError::Uncertain)?;
+        http.note_local(method, signing_ns, validation_ns);
         let result = http.request(&self.config, method, &path, &headers, body);
         let counts = http.diagnostics();
         connection.counts = connection.prior;
@@ -125,10 +129,17 @@ impl S3Objects {
 }
 impl ObjectStore for S3Objects {
     fn put_if_absent(&self, key: ObjectKey, body: &[u8]) -> Result<Put, ObjectError> {
+        let started = std::time::Instant::now();
         if body.len() > self.config.max_body_bytes || ObjectKey::for_bytes(body) != key {
             return Err(ObjectError::Malformed);
         }
-        let reply = self.request("PUT", key, body, Some(("if-none-match", "*".to_owned())))?;
+        let reply = self.request(
+            "PUT",
+            key,
+            body,
+            Some(("if-none-match", "*".to_owned())),
+            started.elapsed().as_nanos() as u64,
+        )?;
         match reply.status {
             200 | 201 => Ok(Put::Created),
             412 => Ok(Put::AlreadyPresent),
@@ -155,7 +166,7 @@ impl ObjectStore for S3Objects {
                 Ok::<_, ObjectError>(("range", format!("bytes={}-{}", range.start, end)))
             })
             .transpose()?;
-        let reply = self.request("GET", key, &[], extra)?;
+        let reply = self.request("GET", key, &[], extra, 0)?;
         match reply.status {
             404 => return Err(ObjectError::Missing),
             200 if range.is_none() => {}
@@ -189,7 +200,7 @@ impl ObjectStore for S3Objects {
         Ok(())
     }
     fn head(&self, key: ObjectKey) -> Result<Option<u64>, ObjectError> {
-        let reply = self.request("HEAD", key, &[], None)?;
+        let reply = self.request("HEAD", key, &[], None, 0)?;
         match reply.status {
             404 => Ok(None),
             200 => {

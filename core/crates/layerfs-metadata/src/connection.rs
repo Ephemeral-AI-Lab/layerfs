@@ -59,6 +59,7 @@ pub(crate) fn run(
     requests: Receiver<Message>,
     startup: SyncSender<Result<(), MetadataError>>,
     trace: Arc<Trace>,
+    work: Arc<crate::work::Work>,
 ) {
     let runtime = match Builder::new_current_thread().enable_all().build() {
         Ok(runtime) => runtime,
@@ -95,6 +96,8 @@ pub(crate) fn run(
             let _ = job.reply.send(Err(MetadataError::Uncertain));
             continue;
         }
+        let queue_ns = crate::work::elapsed(job.submitted);
+        let started = std::time::Instant::now();
         let bindings = job
             .params
             .iter()
@@ -109,6 +112,10 @@ pub(crate) fn run(
                 }
             })
             .await
+        });
+        work.record(job.sql_id, |row| {
+            row.queue_ns += queue_ns;
+            row.driver_ns += crate::work::elapsed(started);
         });
         let result = match result {
             Ok(Ok(rows)) => Ok(rows),

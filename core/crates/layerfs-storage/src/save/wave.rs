@@ -10,6 +10,7 @@ use layerfs_content::{FinalizedObject, ObjectId};
 use std::collections::{BTreeMap, BTreeSet};
 impl State<'_> {
     pub(super) fn reserve_packs(&mut self, count: usize) -> StorageResult<()> {
+        let _work = self.storage.work.span(super::Stage::PackReserve);
         self.storage.source.note(|c| c.reserve += 1);
         let reserved = self.storage.source.metadata.reserve(Reserve {
             packs: count,
@@ -32,6 +33,7 @@ impl State<'_> {
         if objects.is_empty() {
             return Ok(());
         }
+        let membership = self.storage.work.span(super::Stage::Membership);
         self.storage.source.begin_demand();
         let ids: Vec<_> = objects
             .iter()
@@ -54,6 +56,8 @@ impl State<'_> {
             &mut self.packs,
             &mut self.decode,
         )?;
+        drop(membership);
+        let admission = self.storage.work.span(super::Stage::Admission);
         let mut reserved = false;
         let mut prepared = BTreeMap::<ObjectId, usize>::new();
         for (index, object) in objects.iter().enumerate() {
@@ -100,8 +104,11 @@ impl State<'_> {
                 self.offer(object)?;
             }
         }
+        drop(admission);
+        let flush = self.storage.work.span(super::Stage::Flush);
         self.packer.flush(&mut self.next_pack, self.pack_end)?;
         self.flush_signatures()?;
+        drop(flush);
         self.register_ready()
     }
     pub(super) fn flush_signatures(&mut self) -> StorageResult<()> {

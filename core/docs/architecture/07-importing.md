@@ -385,3 +385,16 @@ Recorded as `unknown` rather than guessed, per this set's conventions:
 An external test under `core/crates/layerfs-content/tests/` importing a synthetic
 100,000-file tree would replace §11.8 and the first three items with measured
 numbers, with root reuse on and off as the two arms.
+
+
+## Phase 7 diagnostic timing scope
+
+Source: the instrumentation commit containing this note, based on dc8b7bd8d.
+The project port adapter retains the existing scan, four constructors and three
+saves. Named finish, inode-reservation and genesis-publication timing scopes now
+expose those existing steps. No construction, encoding, cache bound, physical
+format, ordering or publication behavior changes. Per-save work comes from the
+Storage handle's bounded observer; it is not a second import implementation.
+The Phase 4.5 public Service diagnostic uses its existing recorder through the
+public import-root binding and handle_until API, with explicit shared authority
+and scope seed. It is a cause diagnostic, not a public SDK speed measurement.

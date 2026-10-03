@@ -149,16 +149,19 @@ impl Fixture {
     }
     pub fn service_config(&self) -> layerfs_metadata::PgConfig {
         let mut c = layerfs_metadata::PgConfig::from_env().unwrap();
+        // Preserve the fixture's atomic counter as well as PID and timestamp.
+        // Timestamp alone can collide between parallel cases on this host.
         c.schema = format!(
-            "lfs302_project_{}_{}",
-            std::process::id(),
+            "lfs302_{}",
             self.path
                 .file_name()
                 .unwrap()
                 .to_string_lossy()
-                .split('-')
-                .next_back()
-                .unwrap()
+                .replace('-', "_")
+        );
+        assert!(
+            c.schema.len() <= 63,
+            "test schema exceeds PostgreSQL identifier bound"
         );
         c
     }

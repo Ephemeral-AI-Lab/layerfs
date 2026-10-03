@@ -56,12 +56,14 @@ pub fn init(
     let entries = scan::scan_and_save(request.source, storage, &mut progress, timer)?;
     let count = u64::try_from(entries.len()).map_err(|_| ProjectError::Capacity)?;
     let scope = scope_for_seed(request.scope_seed);
-    let reservation = catalog
-        .reserve_inodes(&ReserveRequest {
-            scope: scope.object(),
-            count,
-        })
-        .map_err(ProjectError::History)?;
+    let reservation = timer.child("history.reserve_inodes").run(|_| {
+        catalog
+            .reserve_inodes(&ReserveRequest {
+                scope: scope.object(),
+                count,
+            })
+            .map_err(ProjectError::History)
+    })?;
     let provider = storage.reader().map_err(crate::error::storage)?;
     let root = namespace::build_namespace(
         request.scratch_parent,
@@ -75,15 +77,17 @@ pub fn init(
         timer,
     )?;
     progress.tick()?;
-    let stack = catalog
-        .initialize_layerstack(&StackInitialization {
-            stack: request.stack,
-            name: request.name,
-            scope: scope.object(),
-            profile: profile_id(),
-            genesis_root: root,
-        })
-        .map_err(ProjectError::History)?;
+    let stack = timer.child("history.initialize_layerstack").run(|_| {
+        catalog
+            .initialize_layerstack(&StackInitialization {
+                stack: request.stack,
+                name: request.name,
+                scope: scope.object(),
+                profile: profile_id(),
+                genesis_root: root,
+            })
+            .map_err(ProjectError::History)
+    })?;
     Ok(Initialized {
         stack,
         root,

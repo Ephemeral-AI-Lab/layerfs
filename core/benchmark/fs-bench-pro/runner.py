@@ -18,6 +18,7 @@ ROOT = HERE.parents[2]
 CORE = ROOT / "core"
 RESULTS = ROOT / "benchmark-results/fs-bench-pro"
 sys.path.insert(0, str(HERE))
+from diagnostics import run_init as causes  # noqa: E402
 from families import phase7_storage as phase7  # noqa: E402
 from families import init_namespace as init  # noqa: E402
 from families import history_retention as history  # noqa: E402
@@ -393,6 +394,8 @@ def main():
         commands.add_parser(name).add_argument("--run", required=True)
     args = parser.parse_args()
     if args.command == "list":
+        for case in causes.CASES:
+            print(f"{case}\tCAUSE_DIAGNOSTIC; one case/arm, no speed admission")
         for case in phase7.CASES.values():
             print(f"{case.id}\tstrict candidate < baseline; storage ceiling {case.storage_ceiling}")
         for case in init.CASES.values():
@@ -430,6 +433,11 @@ def main():
             print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":
         selection = args.case or args.family
+        if selection in causes.CASES:
+            if args.arm is None:
+                parser.error("cause diagnostic requires --arm")
+            causes.run(causes.CASES[selection], args.arm, args.out)
+            return
         if selection in phase7.CASES:
             if args.arm is None or args.arm == "baseline" and args.baseline_root is None:
                 parser.error("phase7 requires --arm and a baseline root for baseline")

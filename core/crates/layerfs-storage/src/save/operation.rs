@@ -14,10 +14,14 @@ pub struct Save<'a> {
     pub(super) terminal: Cell<bool>,
     failure: RefCell<Option<StorageError>>,
     finished: Cell<bool>,
+    work_start: super::SaveWork,
 }
 impl<'a> Save<'a> {
     pub(crate) fn new(storage: &'a Storage, parallel_uploads: bool) -> StorageResult<Self> {
+        let work_start = storage.work.snapshot().total;
+        let _work = storage.work.span(super::Stage::Begin);
         Ok(Self {
+            work_start,
             state: RefCell::new(State::new(storage, parallel_uploads)?),
             terminal: Cell::new(false),
             failure: RefCell::new(None),
@@ -56,6 +60,7 @@ impl<'a> Save<'a> {
         let mut state = self.state.borrow_mut();
         let objects = state.pending.drain();
         state.wave(objects)?;
+        let closing = state.storage.work.span(super::Stage::FinishClose);
         state.finishing = true;
         if state.packer.unfinished() {
             state.reserve_packs(5 + crate::policy::BATCH_OBJECT_LIMIT)?;
@@ -81,8 +86,10 @@ impl<'a> Save<'a> {
         }
         state.packer.seal_pool()?;
         state.flush_signatures()?;
+        drop(closing);
         state.register_ready()?;
         state.outcome.pool = state.pool_stats;
+        state.storage.work.close(self.work_start);
         self.finished.set(true);
         Ok(state.outcome)
     }

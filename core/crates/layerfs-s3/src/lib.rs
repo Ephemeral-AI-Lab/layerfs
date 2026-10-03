@@ -4,6 +4,8 @@
 mod client;
 mod config;
 mod counters;
+mod work;
+pub use work::S3RequestWork;
 mod http;
 mod sign;
 pub use client::S3Objects;

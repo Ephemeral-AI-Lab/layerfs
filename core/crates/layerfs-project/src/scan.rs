@@ -106,7 +106,9 @@ pub(crate) fn scan_and_save(
         Ok(entries)
     });
     let entries = scanned?;
-    save.finish().map_err(storage)?;
+    timer
+        .child("history.import_finish_save")
+        .run(|_| save.finish().map_err(storage))?;
     Ok(entries)
 }
 

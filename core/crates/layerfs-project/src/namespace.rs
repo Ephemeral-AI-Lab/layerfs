@@ -143,7 +143,9 @@ pub(crate) fn build_namespace(
         Ok(value)
     });
     let result = built?;
-    save.finish().map_err(storage)?;
+    timer
+        .child("history.finish_tree_save")
+        .run(|_| save.finish().map_err(storage))?;
     Ok(result.root.0)
 }
 
@@ -236,7 +238,9 @@ fn prerequisites(
         Ok(value)
     });
     let values = built?;
-    save.finish().map_err(storage)?;
+    timer
+        .child("history.finish_prerequisite_save")
+        .run(|_| save.finish().map_err(storage))?;
     Ok(values)
 }
 

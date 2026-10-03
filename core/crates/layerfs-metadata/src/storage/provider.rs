@@ -26,6 +26,10 @@ impl PgMetadata {
         result.read_policy()?;
         Ok(result)
     }
+    /// Bounded per-statement caller, queue and driver wall observations.
+    pub fn statement_work(&self) -> crate::PgWork {
+        self.client.statement_work()
+    }
     /// Actual SQL/protocol/socket counts. No timing or admission claim.
     pub fn diagnostics(&self) -> Result<PgDiagnostics, MetadataError> {
         self.client.diagnostics()

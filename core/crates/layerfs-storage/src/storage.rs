@@ -15,6 +15,7 @@ use std::{cell::RefCell, sync::Arc};
 /// C2's immutable-body path, independent of engines and history.
 pub struct Storage {
     pub(crate) source: Fetch,
+    pub(crate) work: crate::save::Work,
     policy: StoragePolicy,
     capacities: StorageCapacities,
     pub(crate) candidates: RefCell<Candidates>,
@@ -32,6 +33,7 @@ impl Storage {
         let capacities = StorageCapacities::from_policy(policy)?;
         Ok(Self {
             source,
+            work: crate::save::Work::default(),
             policy,
             capacities,
             candidates: RefCell::new(Candidates::new()?),
@@ -59,6 +61,10 @@ impl Storage {
     /// Creates an operation-owned authenticated reader with bounded caches.
     pub fn reader(&self) -> StorageResult<Reader<'_>> {
         Reader::new(self)
+    }
+    /// Bounded recent and cumulative save-stage wall observations.
+    pub fn save_work(&self) -> crate::save::SaveHistory {
+        self.work.snapshot()
     }
     /// Cumulative operation counts, labelled diagnostics; no timing claims.
     pub fn diagnostics(&self) -> Diagnostics {
