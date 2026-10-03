@@ -1,0 +1,5 @@
+     Locking 196 packages to latest compatible versions
+      Adding blake3 v1.8.5 (available: v1.8.7)
+      Adding libc v0.2.189 (available: v0.2.190)
+      Adding sha2 v0.10.9 (available: v0.11.0)
+      Adding wasip2 v1.0.4+wasi-0.2.12 (requires Rust 1.87.0)

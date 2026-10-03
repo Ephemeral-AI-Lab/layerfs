@@ -16,9 +16,9 @@ pub struct Save<'a> {
     finished: Cell<bool>,
 }
 impl<'a> Save<'a> {
-    pub(crate) fn new(storage: &'a Storage) -> StorageResult<Self> {
+    pub(crate) fn new(storage: &'a Storage, parallel_uploads: bool) -> StorageResult<Self> {
         Ok(Self {
-            state: RefCell::new(State::new(storage)?),
+            state: RefCell::new(State::new(storage, parallel_uploads)?),
             terminal: Cell::new(false),
             failure: RefCell::new(None),
             finished: Cell::new(false),
@@ -85,6 +85,10 @@ impl<'a> Save<'a> {
         state.outcome.pool = state.pool_stats;
         self.finished.set(true);
         Ok(state.outcome)
+    }
+    /// Takes the original error retained by a C1 sink before abandoning a save.
+    pub fn take_failure(&self) -> Option<StorageError> {
+        self.failure.borrow_mut().take()
     }
     /// Actual delta-selection outcomes for this producer.
     pub fn delta_counters(&self) -> crate::encoding::delta::select::DeltaCounters {

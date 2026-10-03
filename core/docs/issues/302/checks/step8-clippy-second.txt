@@ -1,0 +1,17 @@
+    Checking layerfs-s3 v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-s3)
+    Checking layerfs-project v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-project)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-sdk v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-api/sdk)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-server)
+    Checking layerfs-metadata v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-metadata)
+    Checking layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-fuse)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+error[E0599]: no variant or associated item named `ChunkData` found for enum `layerfs_content::ObjectRole` in the current scope
+  --> crates/layerfs-storage/tests/parallel_upload.rs:58:59
+   |
+58 |             let object = FinalizedObject::new(ObjectRole::ChunkData, raw).unwrap();
+   |                                                           ^^^^^^^^^ variant or associated item not found in `ObjectRole`
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `layerfs-storage` (test "parallel_upload") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

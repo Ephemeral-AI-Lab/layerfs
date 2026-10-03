@@ -972,3 +972,44 @@ lock assertion. These provider-specific changes preserve their semantic tests
 and are reported explicitly. Test support uses already-locked blake3; no new
 package/version is resolved. Remote/cloud and Linux OpenSSL qualification stay
 deferred as recorded at step 6. No timed sample is authorized before step 10.
+
+
+### Step 8 source decisions — namespace Init and upload window
+
+The actual source home is server/src/service/save/import/ (scan, namespace and
+batch/producer), with service/save/metadata.rs::build_metadata; earlier shortened
+paths in this plan describe those same modules. Copy/adapt their production Init
+algorithms into layerfs-project while server/SDK keep building. This is relocation
+with adaptation during coexistence (duplication), not legacy retirement. The
+existing four constructors, ordered bounded batch queue (4 slots, 256 KiB or one
+oversized object per batch), frozen C1/physical encoders and three-save flow stay.
+C5 consumes serials before namespace construction and acknowledges genesis only
+after C2 finishes. The host supplies typed authority/name/scope seed, scratch
+parent and deadline. ProjectError retains C1/C2/C5/I/O failures; bridge protocol
+progress bytes are omitted from this standalone API. Scratch creation is one
+attempt and its cleanup failure is explicit. No engine/cluster 2 name appears
+in project src/. The native scan is cfg-gated for Unix; unsupported platforms return an explicit Unsupported refusal. Off-platform compilation is NOT_RUN.
+
+Storage::begin_parallel_save explicitly selects Init's four-upload window;
+begin_save remains single-producer/single-upload by default for all other work.
+One Save owner still handles construction batches, selection and registration.
+After closure and reference validation, borrowed sealed payload bodies upload in
+windows of at most four; every window joins all acknowledgements before any
+batch registration. No canonical/pack bytes change or body copies are added for
+uploading. Failure stops publication without retry or guessed orphan cleanup.
+Save::take_failure preserves the C1 consumer's original storage error on abandon.
+S3Objects::connect_parallel explicitly opens four independent one-attempt
+connections; connect stays one. The connection pool is terminal after transport
+uncertainty, including a failed first connection for a subsequent operation
+following an acknowledged normal close. This does not retry a failed operation.
+
+The 100/1,000 entry fixture tests verify all paths, kinds, portable metadata and
+file bytes through the same public namespace oracle, over memory ports and owned
+services. They are functional fixtures; they do not replace the acceptance corpus
+frozen in step 10. Examples compose real engines outside product source and retain
+the independent manifest/sample verifier. No example main is sampled in step 8.
+All existing dependency versions remain pinned; the new project lock entry alone
+is added after discarding unrelated fresh-resolution changes. The cursor codec's
+135 LOC relocated at step 7 is retained at retirement; subtract it from the old
+C5 delete-set estimate when recording actual retirement rather than counting it
+as deleted code.

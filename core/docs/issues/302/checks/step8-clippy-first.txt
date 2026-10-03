@@ -1,0 +1,75 @@
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-telemetry)
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-content)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-api-core v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-api/core)
+    Checking layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-sandbox)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-history)
+    Checking layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-daemon)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-server)
+    Checking layerfs-metadata v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-metadata)
+    Checking layerfs-s3 v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-s3)
+    Checking layerfs-project v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-project)
+error: using `map_err` over `inspect_err`
+   --> crates/layerfs-s3/src/client.rs:102:64
+    |
+102 |             connection.http = Some(Http::connect(&self.config).map_err(|error| {
+    |                                                                ^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_inspect
+    = note: `-D clippy::manual-inspect` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_inspect)]`
+help: try
+    |
+102 ~             connection.http = Some(Http::connect(&self.config).inspect_err(|error| {
+103 ~                 self.failed.store(true, Ordering::Release);
+    |
+
+error: the following explicit lifetimes could be elided: 'a
+  --> crates/layerfs-project/src/namespace.rs:50:6
+   |
+50 | impl<'a> ImportProgress<'a> {
+   |      ^^                 ^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_lifetimes
+   = note: `-D clippy::needless-lifetimes` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::needless_lifetimes)]`
+help: elide the lifetimes
+   |
+50 - impl<'a> ImportProgress<'a> {
+50 + impl ImportProgress<'_> {
+   |
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-project/src/namespace.rs:143:5
+    |
+143 |     drop(sink);
+    |     ^^^^^^^^^^
+    |
+note: argument has type `layerfs_storage::SaveSink<'_, '_>`
+   --> crates/layerfs-project/src/namespace.rs:143:10
+    |
+143 |     drop(sink);
+    |          ^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+    = note: `-D clippy::drop-non-drop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::drop_non_drop)]`
+
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-project/src/namespace.rs:245:9
+    |
+245 |         drop(handoff);
+    |         ^^^^^^^^^^^^^
+    |
+note: argument has type `layerfs_storage::SaveSink<'_, '_>`
+   --> crates/layerfs-project/src/namespace.rs:245:14
+    |
+245 |         drop(handoff);
+    |              ^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+
+error: could not compile `layerfs-s3` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-project` (lib) due to 3 previous errors

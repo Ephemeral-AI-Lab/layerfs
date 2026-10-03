@@ -747,6 +747,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-project"
+version = "0.1.6"
+dependencies = [
+ "layerfs-content",
+ "layerfs-history",
+ "layerfs-metadata",
+ "layerfs-s3",
+ "layerfs-storage",
+ "layerfs-telemetry",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "layerfs-s3"
 version = "0.1.6"
 dependencies = [

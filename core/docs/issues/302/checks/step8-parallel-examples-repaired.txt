@@ -1,0 +1,33 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-project)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.88s
+     Running unittests examples/benchmark_init.rs (core/target/debug/examples/benchmark_init-fccbefbad3c8ab9f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/verify_namespace.rs (core/target/debug/examples/verify_namespace-2597b62910f413a4)
+
+running 1 test
+test tests::lite_sample_covers_anchors_empty_sizes_and_tree_tail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/parallel_upload.rs (core/target/debug/deps/parallel_upload-8306987385a77ade)
+
+running 1 test
+
+thread 'the_four_upload_window_is_acknowledged_before_any_registration' panicked at crates/layerfs-storage/tests/parallel_upload.rs:58:71:
+called `Result::unwrap()` on an `Err` value: UnsupportedFraming
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test the_four_upload_window_is_acknowledged_before_any_registration ... FAILED
+
+failures:
+
+failures:
+    the_four_upload_window_is_acknowledged_before_any_registration
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-storage --test parallel_upload`

@@ -1,0 +1,39 @@
+    Checking layerfs-project v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-project)
+error[E0252]: the name `ProjectResult` is defined multiple times
+ --> crates/layerfs-project/src/init.rs:7:27
+  |
+5 |     scan, ProjectError, ProjectResult,
+  |                         ------------- previous import of the type `ProjectResult` here
+6 | };
+7 | use crate::{ProjectError, ProjectResult};
+  |                           ^^^^^^^^^^^^^ `ProjectResult` reimported here
+  |
+  = note: `ProjectResult` must be defined only once in the type namespace of this module
+
+error[E0252]: the name `ProjectError` is defined multiple times
+ --> crates/layerfs-project/src/init.rs:7:13
+  |
+5 |     scan, ProjectError, ProjectResult,
+  |           ------------ previous import of the type `ProjectError` here
+6 | };
+7 | use crate::{ProjectError, ProjectResult};
+  |             ^^^^^^^^^^^^--
+  |             |
+  |             `ProjectError` reimported here
+  |             help: remove unnecessary import
+  |
+  = note: `ProjectError` must be defined only once in the type namespace of this module
+
+error: unused imports: `ProjectError` and `ProjectResult`
+ --> crates/layerfs-project/src/init.rs:7:13
+  |
+7 | use crate::{ProjectError, ProjectResult};
+  |             ^^^^^^^^^^^^  ^^^^^^^^^^^^^
+  |
+  = note: `-D unused-imports` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(unused_imports)]`
+
+For more information about this error, try `rustc --explain E0252`.
+error: could not compile `layerfs-project` (lib) due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-project` (lib test) due to 3 previous errors

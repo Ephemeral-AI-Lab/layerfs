@@ -48,7 +48,13 @@ impl Storage {
     }
     /// Begins one producer's bounded save. Separate handles may write concurrently.
     pub fn begin_save(&self) -> StorageResult<Save<'_>> {
-        Save::new(self)
+        Save::new(self, false)
+    }
+    /// Begins the namespace Init producer with at most four concurrent uploads.
+    /// Construction and registration still have one save owner. Other operations
+    /// use begin_save and its single upload producer.
+    pub fn begin_parallel_save(&self) -> StorageResult<Save<'_>> {
+        Save::new(self, true)
     }
     /// Creates an operation-owned authenticated reader with bounded caches.
     pub fn reader(&self) -> StorageResult<Reader<'_>> {

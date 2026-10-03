@@ -1,0 +1,50 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-s3 v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-s3)
+   Compiling layerfs-metadata v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-metadata)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-project)
+error[E0283]: type annotations needed
+  --> crates/layerfs-project/src/scan.rs:66:53
+   |
+66 |                     return Err(Failure::Unsupported.into());
+   |                                                     ^^^^
+   |
+   = note: cannot satisfy `_: From<ProjectError>`
+   = note: required for `ProjectError` to implement `Into<_>`
+help: try using a fully qualified path to specify the expected types
+   |
+66 |                     return Err(<ProjectError as Into<T>>::into(Failure::Unsupported));
+   |                                ++++++++++++++++++++++++++++++++                    ~
+
+error[E0283]: type annotations needed
+   --> crates/layerfs-project/src/scan.rs:66:53
+    |
+66  |                     return Err(Failure::Unsupported.into());
+    |                                                     ^^^^
+...
+108 |     let entries = scanned?;
+    |                          - type must be known at this point
+    |
+note: multiple `impl`s satisfying `ProjectError: From<_>` found
+   --> crates/layerfs-project/src/error.rs:45:1
+    |
+45  | impl From<io::Error> for ProjectError {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: and another `impl` found in the `core` crate: `impl<T> From<T> for T;`
+    = note: required for `Result<Vec<PreparedEntry>, ProjectError>` to implement `FromResidual<Result<Infallible, _>>`
+help: try using a fully qualified path to specify the expected types
+    |
+66  |                     return Err(<ProjectError as Into<T>>::into(Failure::Unsupported));
+    |                                ++++++++++++++++++++++++++++++++                    ~
+
+warning: unused import: `FinalizedConsumer`
+ --> crates/layerfs-project/src/scan.rs:8:41
+  |
+8 | use layerfs_content::{construct_stream, FinalizedConsumer, ObjectId, PathName};
+  |                                         ^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+For more information about this error, try `rustc --explain E0283`.
+warning: `layerfs-project` (lib) generated 1 warning
+error: could not compile `layerfs-project` (lib) due to 2 previous errors; 1 warning emitted
+warning: build failed, waiting for other jobs to finish...

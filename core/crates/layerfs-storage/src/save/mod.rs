@@ -7,6 +7,7 @@ mod seal;
 mod select;
 mod source;
 mod state;
+mod upload;
 mod wave;
 pub use operation::{Save, SaveSink};
 pub use state::WriteOutcome;

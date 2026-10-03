@@ -1,0 +1,21 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.06s
+     Running tests/parallel_upload.rs (core/target/debug/deps/parallel_upload-911419b5c8b04cb0)
+
+running 1 test
+
+thread 'the_four_upload_window_is_acknowledged_before_any_registration' panicked at crates/layerfs-storage/tests/parallel_upload.rs:67:9:
+assertion `left == right` failed
+  left: 0
+ right: 4
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test the_four_upload_window_is_acknowledged_before_any_registration ... FAILED
+
+failures:
+
+failures:
+    the_four_upload_window_is_acknowledged_before_any_registration
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p layerfs-storage --test parallel_upload`

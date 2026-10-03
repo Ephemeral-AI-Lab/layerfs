@@ -1,0 +1,18 @@
+[package]
+name = "layerfs-project"
+description = "Engine-independent namespace initialization over C1/C2/C5."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-content = { path = "../layerfs-content" }
+layerfs-storage = { path = "../layerfs-storage" }
+layerfs-history = { path = "../layerfs-history", default-features = false }
+layerfs-telemetry = { path = "../layerfs-telemetry" }
+
+[dev-dependencies]
+layerfs-s3 = { path = "../layerfs-s3" }
+layerfs-metadata = { path = "../layerfs-metadata" }
+sha2 = "=0.10.9"

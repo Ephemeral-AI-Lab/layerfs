@@ -40,6 +40,7 @@ pub struct WriteOutcome {
 }
 
 pub(super) struct State<'a> {
+    pub(super) parallel_uploads: bool,
     pub(super) storage: &'a Storage,
     pub(super) pending: PendingBatch,
     pub(super) candidates: RefMut<'a, Candidates>,
@@ -68,7 +69,7 @@ pub(super) struct State<'a> {
     pub(super) pack_end: i64,
 }
 impl<'a> State<'a> {
-    pub(super) fn new(storage: &'a Storage) -> StorageResult<Self> {
+    pub(super) fn new(storage: &'a Storage, parallel_uploads: bool) -> StorageResult<Self> {
         let mut candidates = storage
             .candidates
             .try_borrow_mut()
@@ -77,6 +78,7 @@ impl<'a> State<'a> {
             candidates.reload(&storage.source)?;
         }
         Ok(Self {
+            parallel_uploads,
             storage,
             pending: PendingBatch::new(storage.capacities()),
             candidates,

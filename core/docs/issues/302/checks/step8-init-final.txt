@@ -1,0 +1,27 @@
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-project)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.55s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_project-20f6740a47d321b1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/init_memory.rs (core/target/debug/deps/init_memory-4325029d6eb1537d)
+
+running 1 test
+DIAGNOSTIC init-memory-100 Diagnostics { policy: 1, locate: 6, read_packs: 0, value_groups: 2, signatures: 1, reserve: 9, register: 5, puts: 4, gets: 1, heads: 0, put_bytes: 9739, get_bytes: 377, metadata_bytes: 0, metadata_write_bytes: 26826, pooled_packs: 1, pooled_groups: 2, reserved_directory_bytes: 4096, ordinal_reservations: 2, locator_hits: 1434, locator_misses: 571, pack_hits: 509, pack_misses: 1, forced_seals: 0 }
+DIAGNOSTIC init-memory-1000 Diagnostics { policy: 1, locate: 26, read_packs: 12, value_groups: 2, signatures: 1, reserve: 26, register: 15, puts: 13, gets: 18, heads: 0, put_bytes: 211352, get_bytes: 59644, metadata_bytes: 104736, metadata_write_bytes: 203451, pooled_packs: 2, pooled_groups: 20, reserved_directory_bytes: 8192, ordinal_reservations: 6, locator_hits: 14318, locator_misses: 5209, pack_hits: 5256, pack_misses: 30, forced_seals: 6 }
+test init_100_and_1000_over_memory_ports_pass_the_full_namespace_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.83s
+
+     Running tests/init_services.rs (core/target/debug/deps/init_services-53c7b00484cbcaf6)
+
+running 1 test
+DIAGNOSTIC init-only-100 pg=PgDiagnostics { connections: 1, operations: 25, sync_messages: 24, simple_queries: 1, ready_for_query: 25, wire_sent: 118563, wire_received: 6329, protocol_sent: 118255, protocol_received: 5708 } s3=S3Diagnostics { connections: 4, requests: 5, interim_responses: 4, puts: 4, gets: 1, heads: 0, wire_sent: 12749, wire_received: 2995, body_sent: 9737, body_received: 377 }
+DIAGNOSTIC init-services-100 storage=Diagnostics { policy: 1, locate: 6, read_packs: 0, value_groups: 2, signatures: 1, reserve: 9, register: 5, puts: 4, gets: 1, heads: 0, put_bytes: 9737, get_bytes: 377, metadata_bytes: 0, metadata_write_bytes: 26823, pooled_packs: 1, pooled_groups: 2, reserved_directory_bytes: 4096, ordinal_reservations: 2, locator_hits: 1434, locator_misses: 571, pack_hits: 509, pack_misses: 1, forced_seals: 0 } pg=PgDiagnostics { connections: 1, operations: 2062, sync_messages: 2061, simple_queries: 1, ready_for_query: 2062, wire_sent: 1184501, wire_received: 6308933, protocol_sent: 1184193, protocol_received: 6308312 } s3=S3Diagnostics { connections: 4, requests: 426, interim_responses: 4, puts: 4, gets: 422, heads: 0, wire_sent: 247246, wire_received: 1302148, body_sent: 9737, body_received: 1059239 }
+DIAGNOSTIC init-only-1000 pg=PgDiagnostics { connections: 1, operations: 83, sync_messages: 82, simple_queries: 1, ready_for_query: 83, wire_sent: 896807, wire_received: 141784, protocol_sent: 896499, protocol_received: 141163 } s3=S3Diagnostics { connections: 4, requests: 30, interim_responses: 12, puts: 12, gets: 18, heads: 0, wire_sent: 106272, wire_received: 91361, body_sent: 88876, body_received: 74940 }
+DIAGNOSTIC init-services-1000 storage=Diagnostics { policy: 1, locate: 26, read_packs: 12, value_groups: 2, signatures: 1, reserve: 26, register: 14, puts: 12, gets: 18, heads: 0, put_bytes: 88876, get_bytes: 74940, metadata_bytes: 104628, metadata_write_bytes: 203423, pooled_packs: 2, pooled_groups: 20, reserved_directory_bytes: 8192, ordinal_reservations: 6, locator_hits: 14314, locator_misses: 5209, pack_hits: 5256, pack_misses: 30, forced_seals: 6 } pg=PgDiagnostics { connections: 1, operations: 18256, sync_messages: 18255, simple_queries: 1, ready_for_query: 18256, wire_sent: 10412041, wire_received: 136812166, protocol_sent: 10411733, protocol_received: 136811545 } s3=S3Diagnostics { connections: 4, requests: 4050, interim_responses: 12, puts: 12, gets: 4038, heads: 0, wire_sent: 2345412, wire_received: 32697815, body_sent: 88876, body_received: 30385934 }
+test init_100_and_1000_over_owned_services_pass_the_full_namespace_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.85s

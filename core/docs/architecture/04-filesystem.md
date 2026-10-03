@@ -437,3 +437,22 @@ The Workspace's keyed namespace pages now use the common level-7 physical page
 limit for all key kinds. This lifts the former level-3 tombstone and level-2
 inode/directory ceilings without changing an encoded page. The physical page
 slot format and other representation ceilings remain separate constraints.
+
+
+### #302 standalone namespace Init (step 8)
+
+This description covers the same-commit implementation based on `cba8a2804`.
+`layerfs-project::init` scans a Unix directory, constructs through C1, saves
+through the two C2 ports and publishes the genesis LayerStack through C5. The
+caller supplies authority/name/scope seed, scratch parent and deadline. The
+existing server algorithms are adapted beside their old home until cluster 2
+retirement; this is duplication during relocation. Four file constructors feed
+one bounded Save owner. Init explicitly selects four acknowledged payload
+uploads at a time, with all acknowledgements before registration; ordinary
+begin_save retains one upload producer. S3's explicitly selected four-connection
+window supplies independent streams. No engine is named by project source; real
+composition is in examples/tests. Canonical/physical formats and namespace
+construction rules are unchanged. Typed failures stop the operation; scratch
+cleanup failure is explicit, and no payload is retried or deleted on a guess.
+The functional fixture counts and independent verification carry no timing or
+acceptance claim. The release harness/corpus/cache contract still awaits step 10.

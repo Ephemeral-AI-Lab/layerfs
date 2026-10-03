@@ -112,6 +112,9 @@ impl State<'_> {
         if order.len() != members.len() {
             return Err(StorageError::Integrity("registration reference cycle"));
         }
+        if self.parallel_uploads {
+            self.upload_ready()?;
+        }
         let limits = self.storage.capacities();
         let mut batch = Registration::default();
         let mut bytes = 0_u64;
@@ -181,7 +184,7 @@ impl State<'_> {
                     .iter()
                     .find(|p| p.info.pack_id == location.pack_id)
                     .ok_or(StorageError::Integrity("registered pack missing"))?;
-                if pack.info.domain == PackDomain::Payload {
+                if pack.info.domain == PackDomain::Payload && !self.parallel_uploads {
                     self.storage.source.note(|c| {
                         c.puts += 1;
                         c.put_bytes += pack.body.len() as u64;

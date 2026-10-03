@@ -702,3 +702,64 @@ coexisting PostgreSQL history is replacement code, not simplification.
 This milestone-entry commit preserves all current subtotals.
 
 Production LOC: 142416 -> 142416 (delta +0)
+
+
+## 2026-10-04 — step 8 namespace Init complete; M4 in progress
+
+Implementation commit is the commit containing this entry (parent `cba8a2804`).
+Project Init adapts the existing server scan/batch/namespace/attribute builders,
+retaining four construction workers and three saves. The server source remains;
+this is duplication during relocation, with no legacy retirement. Host authority,
+name, scope seed, deadline and ordering-scratch ownership are explicit inputs.
+C2 has an explicit four-upload Init path; ordinary saves keep one. S3's explicit
+Init connection window opens four independent streams. Every closed batch waits
+for its uploads before registration. No encoding/framing/identity change.
+
+Exact checks, with the private owned-service environment loaded for Cargo tests:
+
+- `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-project -p layerfs-storage -p layerfs-s3 --all-targets -- --nocapture` — PASS: 274 passed/0 FAIL/0 ignored. This includes 265 storage (new parallel window proof), 6 S3, 2 Init suites and the independent verifier's sample-selection test. Both 100- and 1,000-file functional fixtures pass all paths, kinds, mode/mtime and file-byte checks over memory and real ports. These are not acceptance workloads or timed samples.
+- `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test parallel_upload -- --nocapture` — final PASS: 1 test. A four-way barrier proves simultaneous uploads; refusal permits no registration and no retry. Existing exact sealed-byte vectors ran in the full suite.
+- `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-project --tests -- --nocapture` — PASS: 2 tests after adding before-verifier engine counts; its output remains separate from the final complete suite.
+- `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test parallel_upload -p layerfs-project --examples -- --nocapture` — verifier example's 1 test PASS; the initial parallel fixture FAIL below is retained. Example main functions were not run.
+- `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings` — final PASS, including examples and server/SDK coexistence. After the functional suite, native source was cfg-gated for Unix with an explicit Unsupported path; final all-target Clippy built that final source. The active Unix algorithm did not change in that refinement.
+- `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check` — final PASS.
+- `python3 core/tools/check_product_boundary.py` — final PASS, 470 product Rust/SQL files.
+- `python3 -m unittest discover -s core/tools -p 'test_*.py'` — PASS, 21 tests.
+- `git diff --cached --check` — PASS before commit.
+
+Every FAIL/repair is preserved in checks/step8-*:
+
+- First package compile failed on an ambiguous obsolete bridge-style .into() conversion; return ProjectError directly and remove the unused consumer import. The second package suite passed.
+- Initial Clippy found inspect_err, an unnecessary progress lifetime, and two obsolete explicit drops of the new non-Drop sink. Use inspect_err, simplify standalone deadline progress (no bridge progress bytes), and rely on ordinary borrow scopes. Its next invocation exposed an incorrectly named ChunkData fixture role; use the actual public role. Final Clippy passed.
+- The parallel test first lacked a canonical envelope (UnsupportedFraming), then supplied a foreign value for the Chunk role (0 PUTs; source diagnosis identifies the missing chunk grammar). Replace it with the already-established valid whole-file singleton vector and a declared zero-depth profile. The final four-way barrier test passes. Product validation was preserved.
+- The Unix cfg refinement initially duplicated ProjectError/ProjectResult imports. Remove the duplicate; final locked all-target Clippy passed. These separately exposed fixture/import defects required extra invocations beyond the requested single-repair cadence; no output is omitted.
+- Offline lock generation succeeded but freshly resolved unrelated entries. Retain only the newly resolved project package block and restore all existing published package/version entries. The final lock adds 13 lines for project alone; every build is locked and no third-party source is changed.
+
+Diagnostics: engine totals before the independent verifier include explicit
+bootstrap/open, since these are cumulative handle counters. They are not phase
+latencies, and the complete-test totals include the verifier's reads.
+
+| Functional fixture | PG connections / operations / Sync / simple Query / Ready | S3 connections / requests / PUT / GET | S3 entity sent / received B |
+| --- | --- | --- | --- |
+| 100 files, before verifier | 1 / 25 / 24 / 1 / 25 | 4 / 5 / 4 / 1 | 9739 / 377 |
+| 1,000 files, before verifier | 1 / 83 / 82 / 1 / 83 | 4 / 30 / 12 / 18 | 88831 / 70600 |
+
+The final fixture's exact C2 cache/round-trip/forced-seal counters, all wire and
+protocol byte counts, and after-verifier counts are in step8-tests-final.txt.
+The functional fixtures have 111 and 1,011 namespace entries, respectively.
+Per-file mtime and constructor order belong to each stated fixture; no count is
+normalised or pooled across runs. The inherited independent manifest verifier
+is port-bound in examples; its main awaits the frozen release harness.
+
+NOT_RUN/open gaps: real-engine combined storage parity (step 9), frozen harness
+and all acceptance/timed rows (10–11), example main functions, off-platform Init
+compilation, remote/cloud and Linux OpenSSL qualification. M4 is not yet claimed
+complete. Step 12 remains gated on cluster 2 M9. No service setting, timeout,
+worker count or workload is changed to convert an acceptance miss into a pass.
+
+LOC uses the root counter on exact first-parent/final staged snapshots with
+runtime SQL included: reference 65417 -> 65417; core 76999 -> 77821;
+old-path 6025 -> 6025; new-path 6626 -> 7448; rest-core 64348 -> 64348.
+Init is adaptation/duplication while its old source remains, not simplification.
+
+Production LOC: 142416 -> 143238 (delta +822)
