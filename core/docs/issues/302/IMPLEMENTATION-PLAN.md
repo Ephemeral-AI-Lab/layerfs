@@ -310,11 +310,14 @@ core/crates/
 │  │                                      workspace_stage, scope_allocator
 │  ├─ src/
 │  │  ├─ lib.rs                           declarations
-│  │  ├─ config.rs                        host, port, database, schema, credentials, timeouts
-│  │  ├─ connection.rs                    connect, authenticate, one-round-trip batches, timeouts, counters
+│  │  ├─ config.rs                        local/cloud endpoint, database, schema, credentials, TLS, timeouts
+│  │  ├─ client.rs                        thin postgres client wrapper; typed batches, timeouts, counters
+│  │  ├─ tls.rs                           verified TLS connector; system/provider trust roots
+│  │  ├─ error.rs                         definite versus uncertain port/catalog errors
 │  │  ├─ schema.rs                        bootstrap and identity validation; never migrates
 │  │  ├─ storage/
 │  │  │  ├─ mod.rs                        declarations
+│  │  │  ├─ provider.rs                   PgMetadata state and MetadataStore delegation
 │  │  │  ├─ read.rs                       policy, locate, read_packs, value_groups, signatures
 │  │  │  └─ write.rs                      reserve, register
 │  │  └─ history/
@@ -324,7 +327,13 @@ core/crates/
 │  │     └─ allocation.rs  query.rs  rows.rs
 │  └─ tests/
 │     ├─ storage_contract.rs
-│     ├─ history_*.rs                     the six C5 contract files, bound to PostgreSQL
+│     ├─ history_allocation.rs            C5 allocation contract, bound to PostgreSQL
+│     ├─ history_lifecycle.rs             C5 lifecycle contract
+│     ├─ history_remediation.rs           C5 staged failure/remediation contract
+│     ├─ history_conditional_updates.rs   C5 conditional head updates
+│     ├─ history_pages.rs                 C5 bounded history pagination
+│     ├─ history_reopen.rs                C5 reopen/binding contract
+│     ├─ connection_contract.rs           local TCP/TLS, verified identity, timeout/lost reply
 │     └─ support/mod.rs
 │
 └─ layerfs-project/                     + namespace Init / import (Q3)
@@ -375,15 +384,58 @@ changes what they describe).
 
 ### 1.2 Environment
 
-**Decided** (packet 04 §3 and §9, amended `core/AGENTS.md`): one machine;
-PostgreSQL and MinIO each in a local Docker container; MinIO reached over plain
-HTTP with the S3 API, PostgreSQL over its own protocol on TCP; no TLS and no
-remote endpoint; daemons connect over the Docker network and host tools through
-a port published on localhost; both images pinned by digest and recorded in
-every identity set. MinIO is single node, single drive, one bucket on a named
+**Local verification environment** (packet 04 §3 and §9, amended
+`core/AGENTS.md`): PostgreSQL and MinIO each run in a local Docker container.
+MinIO uses plain HTTP with the S3 API. PostgreSQL uses its own protocol over TCP.
+Daemons connect over the Docker network and host tools through localhost ports;
+both local images are pinned by digest and recorded in every identity set.
+
+**Owner amendment, 2026-10-03:** the PostgreSQL solution must support both a
+local service and cloud PostgreSQL. This supersedes the earlier local-only,
+no-remote/no-TLS restriction for the PostgreSQL adapter. One metadata engine
+accepts a configurable endpoint, database, schema, credentials and explicit
+transport profile. Cloud connections require TLS with certificate-chain and
+hostname verification; provider CA configuration is supported when needed.
+No TLS downgrade, automatic retry, reconnect or alternate-host fallback.
+The local Docker profile remains the frozen measurement environment; no cloud
+latency or cloud integration proof is inferred from local results. MinIO's
+local profile is unchanged by this PostgreSQL requirement.
+
+The client choice remains Q1. The complete `postgres` client is now recommended
+for the existing synchronous C2 ports, with a TLS connector whose exact dependency
+tree/build requirements must be recorded before approval/addition. `tokio-postgres`
+is the async alternative; using it to make C2 calls yield requires an explicit
+port/orchestration API amendment. Cloud support alone does not select that change.
+Client configuration and TLS connector capabilities were checked in the primary
+[client documentation](https://docs.rs/postgres/0.19.14/postgres/config/struct.Config.html)
+and [TLS connector documentation](https://docs.rs/postgres-native-tls/latest/postgres_native_tls/).
+
+Local MinIO settings: MinIO is single node, single drive, one bucket on a named
 volume, with versioning, object lock, lifecycle rules, server-side compression
 and encryption off. PostgreSQL uses its default durability settings and
 `READ COMMITTED`.
+
+**Concrete Q1 client proposal (2026-10-03; not approved yet).** Use
+`postgres =0.19.14`, `postgres-native-tls =0.5.3` and `native-tls =0.2.18`.
+The database client wrapper is `layerfs-metadata/src/client.rs`; it delegates
+protocol/authentication to the complete client. The S3 client remains
+`layerfs-s3/src/client.rs` as approved in Q2. Neither engine crate or client
+file exists yet; steps 5 and 6 implement them. Their implemented contracts are
+`layerfs-storage/src/port/{object_store,metadata_store}.rs`.
+
+A scratch resolver probe under `target/phase7-agent/pg-client-tls-proposal/`
+used Cargo 1.85.1, a fresh standalone lock and `--target`/`--filter-platform`
+`aarch64-unknown-linux-musl`. It resolved **77 selected packages**, excluding
+the probe itself: **46 names absent from current core/Cargo.lock**, and **15
+additional versions of names already in that lock**. Those 15 include fresh
+resolver updates that may unify with existing core versions; this is not the
+final core dependency union. No selected package declared an MSRV above 1.85;
+**no build was run**, and compilation compatibility is unverified. Full inventory
+is retained in `checks/pg-client-tls-proposal-inventory.json`. Reproduce with
+`cargo +1.85.1 tree --manifest-path target/phase7-agent/pg-client-tls-proposal/Cargo.toml --locked --target aarch64-unknown-linux-musl`.
+On Linux native-tls requires system OpenSSL; vendoring remains forbidden.
+No dependency or system package is added without the required approval. This
+proposal keeps synchronous C2 ports; it does not claim non-blocking C2 calls.
 
 **Proposed** (not yet confirmed by the owner; image pins are Q12). These are the
 two products' default ports. `core/tools/phase7_services.py` is the only place
@@ -400,7 +452,7 @@ that starts, resets and stops the containers for cluster 1 tests and benchmarks.
 | Created by bootstrap | one schema with the twelve tables below (`layerfs_metadata::schema`) | one bucket; keys `<prefix>/packs/<hh>/<digest>` |
 | Image | pin by digest (Q12) | pin by digest (Q12) |
 
-Both ports bind to `127.0.0.1` only. Credentials are generated per deployment by
+The local development containers publish both ports on `127.0.0.1` only. Credentials are generated per deployment by
 the tool and never committed. The tool prints the connection settings as
 environment variables that the engine tests and benchmark drivers read; the
 variable names are fixed in step 1. A missing service fails a test, it does not
@@ -667,9 +719,9 @@ is in the ledger entry.
 
 ## Questions for the owner
 
-1. **D11:** `postgres-protocol 0.6.12` with our own blocking connection (recommended), `postgres 0.19.14` with tokio, or no dependency?
-2. **D5:** approve the own S3 client using the already-locked `sha2`, with HMAC written in `layerfs-s3`?
-3. Approve a 14th crate for Init, named `layerfs-project`?
+1. **D11, updated for the owner’s local/cloud requirement:** approve the complete `postgres 0.19.14` synchronous client (recommended for the current ports), choose `tokio-postgres` and amend the ports to async, or retain `postgres-protocol 0.6.12` with our own connection? TLS dependencies remain unapproved until their concrete tree is presented.
+2. **D5:** approve the own S3 client using the already-locked `sha2`, with HMAC written in `layerfs-s3`? **Owner answer: approved in this implementation chat, 2026-10-03.**
+3. Approve a 14th crate for Init, named `layerfs-project`? **Owner answer: approved in this implementation chat, 2026-10-03.**
 4. Which host-side crate may name the engines to call Init outside a sandbox — `layerfs-api`'s SDK (recommended) or another?
 5. Is "meet the baseline" strictly `candidate ≤ matched baseline` on one pair, or is there a tolerance, and what is it?
 6. Are all four Init tiers in the acceptance set, or only 100 and 1,000?

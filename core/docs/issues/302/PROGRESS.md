@@ -157,3 +157,51 @@ No production change, check, counter or measurement in this answer record.
 Reference 65,417 -> 65,417; core 71,198 -> 71,198; old-path 6,159 -> 6,159;
 new-path 840 -> 840; rest-core 64,199 -> 64,199; no relocation.
 Production LOC: 136615 -> 136615 (delta +0)
+
+## 2026-10-03 — PostgreSQL local/cloud requirement
+
+Owner direction in this chat: "the postgresql solution should support both"
+local PostgreSQL and cloud PostgreSQL. The plan's §1.2 and Q1 are amended to
+require configurable remote endpoints and verified TLS in the metadata adapter.
+The two-service architecture and C2 algorithms/formats remain unchanged. Local
+Docker services remain the measurement profile. Cloud live proof is NOT_RUN;
+no cloud endpoint or credentials have been supplied, and no cloud result is claimed.
+
+The owner asked about blocking versus async clients but has not selected either.
+The recommendation for the current synchronous C2 ports is the complete postgres
+client with verified TLS. This is a recommendation, not approval. No client or TLS
+dependency was added. Q1 remains open; Q2/Q3 retain their explicit approvals.
+Q10/Q12 and the other unanswered questions remain open.
+
+Checks: primary client configuration and TLS documentation read; plan/progress
+review. No product check or counter rerun for this docs-only scope amendment.
+Reference 65,417 -> 65,417; core 71,198 -> 71,198; old-path 6,159 -> 6,159;
+new-path 840 -> 840; rest-core 64,199 -> 64,199; no relocation.
+Production LOC: 136615 -> 136615 (delta +0)
+
+## 2026-10-03 — Concrete client and folder proposal
+
+In response to the owner's request for the client choice and file structure,
+the proposed Q1 choice is postgres 0.19.14 with postgres-native-tls 0.5.3 and
+native-tls 0.2.18. The metadata tree now calls the thin database wrapper
+`src/client.rs` (formerly planned as connection.rs), separates TLS/error mapping,
+and gives PgMetadata's required trait delegation its own provider.rs. The six
+C5 external contract filenames are explicit. The approved own S3 client remains
+`layerfs-s3/src/client.rs`. No new crate or client file was created; both client
+contracts are already implemented under layerfs-storage/src/port/.
+
+The scratch resolution probe is tooling under target/, not a product dependency
+addition. Cargo 1.85.1 generate-lockfile/tree/metadata succeeded for the proposed
+set, filtered to aarch64-unknown-linux-musl: 77 selected package versions excluding
+probe; 46 new names against core's lock; 15 additional versions of existing names
+in this fresh standalone resolution. Actual core unification is not yet resolved.
+No selected dependency declared an MSRV above 1.85, but nothing was built.
+Linux requires system OpenSSL with this TLS connector; no vendoring or system
+package installation. Inventory, probe manifest and lock retained beside this
+record as proposal evidence. All native-TLS build/live checks are NOT_RUN.
+
+Q1 and TLS dependencies remain proposed pending explicit approval. Q2/Q3 are
+approved. Q10/Q12 remain unanswered. No operation counter or performance sample.
+Reference 65,417 -> 65,417; core 71,198 -> 71,198; old-path 6,159 -> 6,159;
+new-path 840 -> 840; rest-core 64,199 -> 64,199; no relocation.
+Production LOC: 136615 -> 136615 (delta +0)

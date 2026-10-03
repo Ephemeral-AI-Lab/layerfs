@@ -1,0 +1,12 @@
+[package]
+name = "phase7-pg-client-tls-proposal"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.85"
+
+[workspace]
+
+[dependencies]
+postgres = "=0.19.14"
+postgres-native-tls = "=0.5.3"
+native-tls = "=0.2.18"
