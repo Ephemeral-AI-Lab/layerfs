@@ -1,0 +1,27 @@
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-server)
+error[E0164]: expected tuple struct or tuple variant, found struct variant `StorageError::UnknownOutcome`
+   --> crates/layerfs-storage/tests/port_write.rs:245:13
+    |
+245 |         Err(StorageError::UnknownOutcome(_))
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not a tuple struct or tuple variant
+    |
+help: the struct variant's field is being ignored
+    |
+245 |         Err(StorageError::UnknownOutcome { original: _ })
+    |                                          ~~~~~~~~~~~~~~~
+
+error[E0164]: expected tuple struct or tuple variant, found struct variant `StorageError::UnknownOutcome`
+   --> crates/layerfs-storage/tests/port_write.rs:265:13
+    |
+265 |         Err(StorageError::UnknownOutcome(_))
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not a tuple struct or tuple variant
+    |
+help: the struct variant's field is being ignored
+    |
+265 |         Err(StorageError::UnknownOutcome { original: _ })
+    |                                          ~~~~~~~~~~~~~~~
+
+For more information about this error, try `rustc --explain E0164`.
+error: could not compile `layerfs-storage` (test "port_write") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

@@ -1,0 +1,28 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.30s
+     Running tests/port_write.rs (core/target/debug/deps/port_write-771385df185b0213)
+
+running 13 tests
+test lost_registration_reply_is_not_retried_or_cleaned_up ... ok
+test missing_reference_never_reaches_registration ... ok
+test same_save_reads_and_duplicates_use_the_bounded_pending_object ... ok
+test failed_payload_cannot_publish_an_ordinary_parent ... ok
+test higher_pack_first_wins_base_keeps_its_lower_pack_dependent_readable ... ok
+test c1_edit_uses_the_save_provider_and_sink_without_a_legacy_store ... ok
+diagnostics closure Diagnostics { policy: 1, locate: 2, read_packs: 0, value_groups: 0, signatures: 1, reserve: 3, register: 2, puts: 1, gets: 1, heads: 0, put_bytes: 16689, get_bytes: 16689, metadata_bytes: 0, locator_hits: 1030, locator_misses: 514, pack_hits: 2, pack_misses: 1, forced_seals: 1 }
+test closure_forces_the_unfinished_payload_before_registering_its_parents ... ok
+diagnostics file Diagnostics { policy: 1, locate: 3, read_packs: 3, value_groups: 0, signatures: 1, reserve: 2, register: 1, puts: 0, gets: 0, heads: 0, put_bytes: 0, get_bytes: 0, metadata_bytes: 1242, locator_hits: 14, locator_misses: 4, pack_hits: 28, pack_misses: 3, forced_seals: 0 } outcome WriteOutcome { inserted: 2, reused: 0, full_records: 2, prefix_records: 0, packs: 1, canonical_bytes: 150 }
+test port_reader_rejects_a_cycle_without_relying_on_pack_order ... ok
+diagnostics file Diagnostics { policy: 1, locate: 2, read_packs: 0, value_groups: 0, signatures: 1, reserve: 2, register: 1, puts: 1, gets: 3, heads: 0, put_bytes: 98, get_bytes: 294, metadata_bytes: 0, locator_hits: 9, locator_misses: 2, pack_hits: 21, pack_misses: 3, forced_seals: 0 } outcome WriteOutcome { inserted: 1, reused: 0, full_records: 1, prefix_records: 0, packs: 1, canonical_bytes: 24 }
+diagnostics file Diagnostics { policy: 1, locate: 2, read_packs: 0, value_groups: 0, signatures: 1, reserve: 2, register: 1, puts: 1, gets: 3, heads: 0, put_bytes: 96097, get_bytes: 288291, metadata_bytes: 0, locator_hits: 9, locator_misses: 2, pack_hits: 21, pack_misses: 3, forced_seals: 0 } outcome WriteOutcome { inserted: 1, reused: 0, full_records: 1, prefix_records: 0, packs: 1, canonical_bytes: 96023 }
+diagnostics depth-race Diagnostics { policy: 1, locate: 12, read_packs: 0, value_groups: 0, signatures: 1, reserve: 2, register: 2, puts: 2, gets: 19, heads: 0, put_bytes: 40194, get_bytes: 62795, metadata_bytes: 0, locator_hits: 34, locator_misses: 13, pack_hits: 83, pack_misses: 19, forced_seals: 0 }
+test a_deeper_first_wins_base_is_acknowledged_before_the_next_selection ... ok
+test singleton_keeps_the_existing_large_object_exception_and_exact_bytes ... ok
+diagnostics file Diagnostics { policy: 1, locate: 2, read_packs: 0, value_groups: 0, signatures: 1, reserve: 2, register: 1, puts: 1, gets: 3, heads: 0, put_bytes: 123, get_bytes: 369, metadata_bytes: 0, locator_hits: 9, locator_misses: 2, pack_hits: 21, pack_misses: 3, forced_seals: 0 } outcome WriteOutcome { inserted: 1, reused: 0, full_records: 1, prefix_records: 0, packs: 1, canonical_bytes: 96023 }
+test same_save_whole_file_prefix_and_reopened_chain_match_old_bytes ... ok
+diagnostics file Diagnostics { policy: 1, locate: 5, read_packs: 4, value_groups: 0, signatures: 1, reserve: 2, register: 2, puts: 3, gets: 6, heads: 0, put_bytes: 401082, get_bytes: 802164, metadata_bytes: 5008, locator_hits: 212, locator_misses: 48, pack_hits: 343, pack_misses: 10, forced_seals: 0 } outcome WriteOutcome { inserted: 24, reused: 0, full_records: 24, prefix_records: 0, packs: 4, canonical_bytes: 401492 }
+test grouped_records_cross_waves_with_bounded_pending_ownership ... ok
+diagnostics file Diagnostics { policy: 1, locate: 5, read_packs: 4, value_groups: 0, signatures: 1, reserve: 2, register: 2, puts: 9, gets: 21, heads: 0, put_bytes: 2003691, get_bytes: 4764740, metadata_bytes: 16692, locator_hits: 973, locator_misses: 218, pack_hits: 1533, pack_misses: 25, forced_seals: 0 } outcome WriteOutcome { inserted: 109, reused: 0, full_records: 109, prefix_records: 0, packs: 10, canonical_bytes: 2006677 }
+test file_vectors_preserve_canonical_identities_and_exact_pack_bytes ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s

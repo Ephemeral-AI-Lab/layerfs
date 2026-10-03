@@ -251,6 +251,9 @@ impl PoolReader {
             Vec::with_capacity(usize::from(capacities.metadata_delta_max_depth) + 1);
         let mut current = root;
         loop {
+            if chain.iter().any(|row| row.object_id == current.object_id) {
+                return Err(StorageError::Integrity("pooled dependency cycle"));
+            }
             chain.push(current);
             let record = self.record(connection, workspace, &current, groups.as_deref_mut())?;
             let Some(base) = pooled_base(&record)? else {
@@ -265,11 +268,12 @@ impl PoolReader {
             if location.role != root.role {
                 return Err(StorageError::Integrity("pooled chain role"));
             }
-            if (
-                location.pack_id,
-                location.group_number,
-                location.record_number,
-            ) >= (current.pack_id, current.group_number, current.record_number)
+            if connection.ordered_dependencies()
+                && (
+                    location.pack_id,
+                    location.group_number,
+                    location.record_number,
+                ) >= (current.pack_id, current.group_number, current.record_number)
             {
                 return Err(StorageError::Integrity("pooled chain chronology"));
             }

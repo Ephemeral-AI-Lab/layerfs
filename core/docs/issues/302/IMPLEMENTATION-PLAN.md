@@ -85,6 +85,8 @@ wave:
   2. chain prefetch, level by level: locate(frontier) + fetch packs         ≤ 2 per chain level
   3. per object, unchanged logic: exact reuse (byte comparison) or
      reference check → FULL/PREFIX/STORED selection → lane group
+     A pending physical base is sealed, closed and acknowledged before selection
+     reads its winning representation (step 4a source correction below).
   4. full groups → sealed packs held in the wave buffer (readable by this save)
   5. closure: seal every lane holding a pending member or pooled ordinal
      that a to-be-registered object references
@@ -543,6 +545,34 @@ breaks coexistence. Port errors instead retain their typed original inside the
 existing `Io` carrier (no I/O is performed by constructing that error), and an
 uncertain result wraps that carrier in `UnknownOutcome`. The engine ports keep
 their own four explicit classes. No cluster 2 source or old enum shape changes.
+
+**Step 4a source corrections (2026-10-03).** The legacy resolver and pooled
+reader require bases to precede their dependents by `(pack, group, record)`.
+Global first-wins insertion does not preserve that allocation order: another
+writer may acknowledge the same canonical base in a higher-numbered pack.
+The legacy source keeps its chronology rule. The port source accepts forward
+locators and explicitly checks repeated identities, with the existing role,
+depth, encoded/canonical-work and canonical-identity bounds unchanged. Pack
+framing, FULL/PREFIX/STORED selection and canonical identities remain unchanged.
+
+A winning base can also have a deeper physical chain than the producer's private
+copy. Therefore a pending physical candidate is sealed and reference-closed,
+uploaded and registered **before** the selector charges its chain cost. Selection
+then reads the acknowledged winner; a race invalidates the derived depth cache.
+This adds prerequisite registrations for same-save physical bases, so the ideal
+one-register-per-wave count is not a guarantee. Counts are recorded rather than
+hidden. Logical-reference closure still permits children and parents in the same
+atomic registration; a failed payload upload never registers that batch.
+
+The old non-pooled placement closes packs on queue flush, not at an arbitrary
+save-wide pack capacity. The new immutable assembler uses those same framing,
+queue and exact-fit predicates; paired file/group/chain/singleton fixtures compare
+all sealed bytes with the old path. The fixed pending batch is shared from its
+old module until its step 12 relocation. Registration is partitioned only when
+its existing row/byte bound requires it, in direct-reference order; each unit is
+closed. Metadata-body bytes are included in the submitted byte accounting.
+The legacy batch's lone-oversized-object admission remains inherited; no format
+or accepted-capacity increase is introduced.
 
 **Coexistence.** `layerfs-server` and `layerfs-sdk` are the only product
 consumers of C2's `Store` and C5's SQLite provider (`grep` of every

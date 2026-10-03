@@ -130,6 +130,9 @@ impl DepthCache {
         // below has to count it.
         let mut cached_edge = 0_u8;
         let cost = loop {
+            if path.iter().any(|(id, _)| *id == current) {
+                return Err(StorageError::Integrity("dependency cycle"));
+            }
             if let Some(cost) = self.costs.get(&current).copied() {
                 cached_edge = 1;
                 break cost;

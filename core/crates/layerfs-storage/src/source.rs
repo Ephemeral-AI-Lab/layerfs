@@ -10,6 +10,11 @@ use std::sync::{Mutex, MutexGuard};
 
 /// Physical input and advisory-index persistence used by unchanged encoding.
 pub trait Source {
+    /// Legacy sources require physical allocation order; first-wins sources
+    /// validate logical cycles instead because a winning locator can move forward.
+    fn ordered_dependencies(&self) -> bool {
+        true
+    }
     /// Eligible location under the caller's retained ceiling.
     fn location(&self, id: ObjectId, ceiling: i64) -> StorageResult<Option<ObjectLocation>>;
     /// Complete declared pack bytes, without capacity padding.

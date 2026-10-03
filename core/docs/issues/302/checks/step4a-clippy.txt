@@ -1,0 +1,17 @@
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+error[E0603]: module `batch` is private
+ --> crates/layerfs-storage/src/save/state.rs:4:11
+  |
+4 |     cas::{batch::PendingBatch, SaveProfile},
+  |           ^^^^^ private module
+  |
+note: the module `batch` is defined here
+ --> crates/layerfs-storage/src/cas/mod.rs:5:1
+  |
+5 | mod batch;
+  | ^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0603`.
+error: could not compile `layerfs-storage` (lib test) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-storage` (lib) due to 1 previous error

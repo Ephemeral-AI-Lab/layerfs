@@ -35,6 +35,7 @@ pub mod pack;
 pub mod policy;
 pub mod port;
 pub mod read;
+pub mod save;
 pub mod source;
 pub mod sqlite;
 mod storage;
@@ -44,4 +45,5 @@ pub use error::{StorageError, StorageResult};
 pub use policy::{SchemaIdentity, StorageCapacities, StoragePolicy, SCHEMA_IDENTITY};
 
 pub use read::{Diagnostics, Reader};
+pub use save::{Save, SaveSink, WriteOutcome};
 pub use storage::Storage;

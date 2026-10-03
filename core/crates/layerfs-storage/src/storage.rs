@@ -1,18 +1,20 @@
 //! Engine-independent two-port handle and shared bounded physical indexes.
 
+use crate::{encoding::delta::candidates::Candidates, save::Save};
 use crate::{
     error::StorageResult,
     policy::{StorageCapacities, StoragePolicy},
     port::{MetadataStore, ObjectStore},
     read::{Diagnostics, Fetch, Reader},
 };
-use std::sync::Arc;
+use std::{cell::RefCell, sync::Arc};
 
 /// C2's immutable-body path, independent of engines and history.
 pub struct Storage {
     pub(crate) source: Fetch,
     policy: StoragePolicy,
     capacities: StorageCapacities,
+    pub(crate) candidates: RefCell<Candidates>,
 }
 impl Storage {
     /// Opens one handle with an acknowledged persisted policy. No service bootstrap.
@@ -28,6 +30,7 @@ impl Storage {
             source,
             policy,
             capacities,
+            candidates: RefCell::new(Candidates::new()?),
         })
     }
     /// Persisted, validated storage policy.
@@ -37,6 +40,10 @@ impl Storage {
     /// Existing canonical, pack, wave and chain bounds under that policy.
     pub const fn capacities(&self) -> StorageCapacities {
         self.capacities
+    }
+    /// Begins one producer's bounded save. Separate handles may write concurrently.
+    pub fn begin_save(&self) -> StorageResult<Save<'_>> {
+        Save::new(self)
     }
     /// Creates an operation-owned authenticated reader with bounded caches.
     pub fn reader(&self) -> StorageResult<Reader<'_>> {

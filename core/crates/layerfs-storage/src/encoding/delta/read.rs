@@ -4,9 +4,9 @@
 //! authenticated, root first. The walk is iterative: no recursion depth depends on
 //! the stored chain length, the number of steps is bounded by the role's accepted
 //! depth, and the canonical, encoded and record work of one chain are charged
-//! against fixed budgets that do not grow with the cutoff or the depth. Chronology
-//! is enforced by the locator order, so a cycle cannot be expressed: every base
-//! must be located strictly before its dependent.
+//! against fixed budgets that do not grow with the cutoff or the depth. Legacy sources enforce allocation chronology. The
+//! first-wins path permits forward locators and explicitly refuses repeated
+//! identities in the chain, because concurrent winners can have higher pack ids.
 
 use std::collections::BTreeMap;
 
@@ -207,6 +207,9 @@ impl<'a> Resolver<'a> {
         let mut chain: Vec<ObjectLocation> = Vec::with_capacity(usize::from(role_depth) + 1);
         let mut current = root;
         loop {
+            if chain.iter().any(|row| row.object_id == current.object_id) {
+                return Err(StorageError::Integrity("dependency cycle"));
+            }
             chain.push(current);
             let Some(base) = self.base_of(&current)? else {
                 break;
@@ -221,7 +224,9 @@ impl<'a> Resolver<'a> {
             if location.role != current.role {
                 return Err(StorageError::Integrity("dependency role"));
             }
-            if locator_key(&location) >= locator_key(&current) {
+            if self.connection.ordered_dependencies()
+                && locator_key(&location) >= locator_key(&current)
+            {
                 return Err(StorageError::Integrity("dependency chronology"));
             }
             current = location;

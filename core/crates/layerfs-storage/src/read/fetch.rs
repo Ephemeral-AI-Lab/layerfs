@@ -49,6 +49,17 @@ impl Fetch {
     pub(crate) fn counters(&self) -> Diagnostics {
         self.counters.get()
     }
+    pub(crate) fn invalidate(&self, ids: &[ObjectId]) {
+        let mut cache = self.locators.borrow_mut();
+        let mut absent = self.absent.borrow_mut();
+        for id in ids {
+            cache.remove(id);
+            absent.remove(id);
+        }
+    }
+    pub(crate) fn invalidate_signatures(&self) {
+        *self.signatures.borrow_mut() = None;
+    }
     pub(crate) fn begin_demand(&self) {
         self.absent.borrow_mut().clear();
     }
@@ -250,6 +261,9 @@ impl Fetch {
     }
 }
 impl Source for Fetch {
+    fn ordered_dependencies(&self) -> bool {
+        false
+    }
     fn location(&self, id: ObjectId, _ceiling: i64) -> StorageResult<Option<ObjectLocation>> {
         self.locate(&[id])?;
         Ok(self.locators.borrow().get(&id).map(|row| row.location))

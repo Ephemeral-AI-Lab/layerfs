@@ -274,3 +274,95 @@ LOC. No relocation in this commit. Step 12 still waits on cluster 2 M9; the
 original prior-owner 4097 ignored test remains recorded with step 2.
 
 Production LOC: 136615 -> 136615 (delta +0)
+
+
+## 2026-10-03 — step 4a complete; M1 remains in progress
+
+Implementation commit is the commit containing this entry (parent `366046097`).
+`Storage::begin_save`, `Save`, `SaveSink` and ordinary/payload lane orchestration
+use the two ports. The existing pending batch, selector, codec and pack assembler
+are shared. Reference-closed units register only after every payload PUT is
+acknowledged; no retry or guessed cleanup. Same-save reads, exact reuse and lost
+first-wins byte comparison use authenticated reconstruction. Registration units
+respect row/byte bounds and prerequisite order. Pooled writes remain step 4b.
+
+Source corrections are in the plan and architecture document: allocation order
+cannot prove acyclicity with first-wins rows, and a winning base can have a deeper
+chain than its private losing representation. The port resolver explicitly checks
+cycles; physical candidates are acknowledged before their chain cost is used for
+selection. Same-input framing remains unchanged. Extra prerequisite registrations
+are counted, not described as one-register-per-wave. No new dependency in this
+slice; the legacy pending batch is shared until its step-12 relocation, not moved.
+
+Exact final checks run:
+
+- `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check` — PASS.
+- `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings` — PASS, including unchanged server/SDK coexistence builds.
+- `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage -- --nocapture` — final PASS, 254 passed, 0 failed, 0 ignored; includes 13 port-write cases. Complete final output: `checks/step4a-tests-sealed.txt`.
+- `python3 core/tools/check_product_boundary.py` — PASS, 379 production files.
+- `python3 -m unittest discover -s core/tools -p 'test_*.py'` — PASS, 21 tests.
+- `git diff --cached --check` — PASS before commit.
+
+Counts below are diagnostics for the tests' complete stated call sequences,
+including their deliberate reads/reuse assertions; they are not phase timing or
+performance acceptance. The file parity sequence saves, reads the logical file,
+resaves and compares reads through a reopened handle. Its 400,000-byte input:
+policy 1, locate 5, read_packs 4, signatures 1, reserve 2, register 2, PUT 3,
+GET 6, HEAD 0, payload PUT bytes 401,082, GET bytes 802,164, metadata read bytes
+5,008, locator hits/misses 212/48, pack hits/misses 343/10, forced seals 0;
+24 inserted, 0 reused in the first save, 4 packs, 401,492 canonical bytes.
+The 2,000,000-byte sequence: policy 1, locate 5, read_packs 4, signatures 1,
+reserve 2, register 2, PUT 9, GET 21, HEAD 0, PUT bytes 2,003,691, GET bytes
+4,764,740, metadata bytes 16,692, locator hits/misses 973/218, pack hits/misses
+1,533/25; 109 inserted in the first save, 10 packs, 2,006,677 canonical bytes.
+Value-group calls and forced seals are 0 for these file sequences.
+The closure fixture records forced seals 1, reserve 3, register 2, PUT 1,
+GET 1, PUT/GET bytes 16,689 each. The depth-race fixture records policy 1,
+locate 12, signatures 1, reserve 2, register 2, PUT 2, GET 19, HEAD 0, PUT
+bytes 40,194, GET bytes 62,795, locator hits/misses 34/13, pack hits/misses
+83/19; metadata/value-group requests and forced seals 0. Full counters and
+other file rows remain in the append-only check outputs.
+
+Every FAIL/gap:
+
+- First formatting invocation omitted `--all` for the virtual workspace and failed
+  to find targets. Final correct formatting/check commands pass.
+- Initial Clippy compile FAIL: old `cas::batch` is private. Added a crate-internal
+  re-export to share the existing pending buffer. The rerun revealed a test using
+  tuple syntax for the existing struct-shaped `UnknownOutcome`; fixed the fixture
+  pattern. Later all-target Clippy passes.
+- First package run stopped at 205 PASS/1 FAIL: the race fixture installed the
+  winner before the final dependent pack reservation, so its asserted locator
+  order did not model the intended forward edge. Add the next dependent to seal
+  the first one within the existing low-id block. That race case passes.
+- The next package run stopped at 207 PASS/1 FAIL: a newly added singleton fixture
+  requested a 4 MiB cutoff beyond the existing 1 MiB maximum. Read the existing
+  capacity vector and use the supported 1 MiB cutoff; no product bound changed.
+  The full package then passed 253 tests.
+- Subsequent concurrency review identified the deeper-winning-base hazard and
+  required the source correction above. The new focused run had 12 PASS/1 FAIL:
+  its extra initial full object supplied an eligible alternate cache candidate,
+  so the unchanged selector legitimately chose a PREFIX. Remove that unrelated
+  candidate to isolate the depth-limit case. Focused rerun: 13 PASS/0 FAIL; full
+  final package: 254 PASS/0 FAIL.
+- These compiler/fixture repairs and the new concurrency correction required more
+  check invocations than the requested single-repair cadence. All attempts are
+  retained; no benchmark arm was sampled or repeated, and no result was erased.
+- NOT_RUN: real engine tests (steps 5/6), pooled port writes (4b), Init/harness and
+  timed samples (steps 8–11). No timed sample before step 10. Server/SDK runtime
+  suites were not rerun for this C2-only slice; their build coexistence is checked.
+  The pre-existing owner-directed ignored 4097 server test remains recorded at
+  step 2. No skipped final covering check for step 4a.
+
+M1 is not claimed complete: step 4b remains. No owner question is pending for
+this slice; choices are recorded under the owner's delegated judgment. Step 12
+still requires external cluster 2 M9.
+
+LOC method: `python3 tools/production_loc.py --json --root <snapshot>` on the
+exact first-parent and final staged trees, with the same root counter and source
+classification. Reference 65,417 -> 65,417; core 71,198 -> 72,349; old-path 6,159
+-> 6,160 (the shared-buffer re-export); new-path 840 -> 1,976; rest-core 64,199
+-> 64,213. New orchestration coexists with the old implementation. No relocation,
+legacy retirement or algorithmic simplification is claimed in this commit.
+
+Production LOC: 136615 -> 137766 (delta +1151)

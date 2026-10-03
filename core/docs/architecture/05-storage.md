@@ -18,6 +18,42 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 
 ## 6. Storage (C2 — `layerfs-storage`)
 
+### #302 two-port ordinary writes (2026-10-03)
+
+Described against parent `366046097` and the step 4a implementation. `Storage`
+shares a fixed candidate index across saves; each handle admits one producer,
+while separate handles may write concurrently through the ports. `Save` holds
+the existing 512-object/4 MiB−1 pending batch, bounded lane groups, immutable
+wave packs and the existing codec/decode workspaces. It is also C1's authenticated
+same-operation provider; `SaveSink` is its consumer adapter and preserves the
+original typed error for `finish`.
+
+Wave membership includes offered ids, direct references and declared physical
+candidates. Known dependency chains are prefetched by level. Exact reuse checks
+role, length and reconstructed bytes. The existing selector, group builder and
+pack assembler supply the physical representation; queue flushes keep the old
+non-pooled placement boundaries. A registered object is immediately valid for
+other readers, so each registration is closed under direct references. Pending
+lanes referenced by ready members are sealed to achieve that closure. Payload
+PUT acknowledgements precede registration; a failed or uncertain operation is
+terminal and causes neither resend nor guessed cleanup. A later failed save can
+leave previously acknowledged independent batches and unreferenced payloads.
+
+A first-wins physical base must be acknowledged before a dependent's PREFIX
+selection: its winning chain may differ in depth from this producer's private
+copy. Candidate-triggered seals therefore register their closed prerequisites
+before selection reads the winner. This can add registrations within a wave;
+operation counts expose the cost. Returned lost ids are batch-located and
+compared through authenticated canonical reconstruction. A race clears the
+producer's derived depth cache.
+
+The old path still checks allocation chronology. The port path checks explicit
+logical cycles, because a winning base's pack id can exceed its dependent's
+reserved id. Both paths retain the existing role/depth/work/identity checks.
+No canonical identity, CDC, deduplication, record grammar or pack framing changes.
+Pooled write admission is the following rollout slice and is not yet available
+through `Save`; the old API remains available to the server and SDK.
+
 ### #302 two-port authenticated reader (2026-10-03)
 
 Described against parent `6db678f3a`. `Storage` reads its persisted policy once
@@ -25,8 +61,8 @@ and holds bounded locator/catalogue indexes. `Reader` owns the existing decode
 arena, ordinary pack/group caches and pooled reader. Dependency locators are
 prefetched by chain level; metadata pack demands are batched up to 4 MiB and
 payload bodies are fetched whole. SHA-256 covers every sealed pack and the
-existing resolver checks each reconstructed BLAKE3 object identity, chronology,
-role and chain budgets. Routing is derived from the pack lane and checked against
+existing resolver checks each reconstructed BLAKE3 object identity, role and
+chain budgets, with source-specific cycle/chronology validation described above. Routing is derived from the pack lane and checked against
 the returned descriptor. There is no service bootstrap, retry or alternate route.
 
 `ObjectStore` is opaque immutable-body I/O; `MetadataStore` has policy, locate,

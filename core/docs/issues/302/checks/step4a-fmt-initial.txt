@@ -1,0 +1,3 @@
+FAIL: cargo +1.85.1 fmt --manifest-path core/Cargo.toml
+Failed to find targets
+The virtual workspace command omitted --all. Corrected to --all; final --check PASS.
