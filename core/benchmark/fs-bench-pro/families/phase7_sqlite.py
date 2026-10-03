@@ -47,7 +47,7 @@ def invoke(command,folder,label,budget_ns,env,cwd):
     except (ValueError,UnicodeError):data=None
     return {'command':command,'wall_ns':wall,'budget_ns':budget_ns,'exit_code':child.returncode,'timed_out':timeout,'child':data,
             'cpu_ns':round((usage.ru_utime+usage.ru_stime)*1e9),'peak_rss_bytes':usage.ru_maxrss,
-            'rss_scope':'Darwin wait4 per-child lifetime; complete compared child includes creation/open/Init/close'}
+            'rss_scope':'Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution'}
 
 def archive(binary,root,common):
     sha=common.digest(binary);dst=root/'benchmark-results/fs-bench-pro/binary-archive'/sha/binary.name
