@@ -17,11 +17,17 @@
 struct counts {
     uint64_t files, bytes, pages, resident_first, resident_after, invalidated;
     uint64_t opens, fstats, maps, mincores, unmaps, msyncs, entries, vector_peak;
+    uint64_t first_fingerprint;
 };
 static struct counts c;
 static size_t page;
 static unsigned char *vector;
 static size_t vector_capacity;
+static uint64_t fingerprint;
+static void mix(const void *value, size_t length) {
+    const unsigned char *bytes = value;
+    for (size_t i = 0; i < length; i++) { fingerprint ^= bytes[i]; fingerprint *= UINT64_C(1099511628211); }
+}
 static void fail(const char *what, const char *path) {
     fprintf(stderr, "cold helper: %s: %s: %s\n", what, path, strerror(errno));
     free(vector);
@@ -35,18 +41,21 @@ static uint64_t now(void) {
 static int order(const FTSENT **a, const FTSENT **b) {
     return strcmp((*a)->fts_name, (*b)->fts_name);
 }
-static int open_file(const FTSENT *entry, int flags, size_t *length) {
+static int open_file(const FTSENT *entry, int flags, size_t *length, int inventory) {
     struct stat s;
     c.opens++;
-    int fd = open(entry->fts_path, flags | O_NOFOLLOW);
+    int fd = open(entry->fts_path, flags | O_NOFOLLOW | O_NONBLOCK);
     if (fd < 0) fail("open", entry->fts_path);
     c.fstats++;
     if (fstat(fd, &s)) fail("fstat", entry->fts_path);
-    if (!S_ISREG(s.st_mode) || s.st_size < 0 || s.st_dev != entry->fts_statp->st_dev
-        || s.st_ino != entry->fts_statp->st_ino || s.st_size != entry->fts_statp->st_size) {
+    if (!S_ISREG(s.st_mode) || s.st_size < 0) {
         errno = EINVAL; fail("inventory identity changed", entry->fts_path);
     }
     *length = (size_t)s.st_size;
+    if (inventory) {
+        mix(entry->fts_path, strlen(entry->fts_path) + 1);
+        mix(&s.st_dev, sizeof(s.st_dev)); mix(&s.st_ino, sizeof(s.st_ino)); mix(&s.st_size, sizeof(s.st_size));
+    }
     return fd;
 }
 static void close_file(int fd, const char *path) {
@@ -76,7 +85,7 @@ static void unmap_file(void *address, size_t length, const char *path) {
     if (munmap(address, length)) fail("munmap", path);
 }
 static uint64_t inspect(const FTSENT *entry, size_t *length) {
-    int fd = open_file(entry, O_RDONLY, length);
+    int fd = open_file(entry, O_RDONLY, length, 1);
     if (!*length) { close_file(fd, entry->fts_path); return 0; }
     void *address = map_file(fd, *length, entry->fts_path);
     close_file(fd, entry->fts_path);
@@ -84,44 +93,54 @@ static uint64_t inspect(const FTSENT *entry, size_t *length) {
     unmap_file(address, *length, entry->fts_path);
     return n;
 }
-static void invalidate(const FTSENT *entry) {
-    size_t length;
-    int fd = open_file(entry, O_RDWR, &length);
-    void *address = map_file(fd, length, entry->fts_path);
+static uint64_t precondition(const FTSENT *entry, size_t *length) {
+    int fd = open_file(entry, O_RDONLY, length, 1);
+    if (!*length) { close_file(fd, entry->fts_path); return 0; }
+    void *address = map_file(fd, *length, entry->fts_path);
     close_file(fd, entry->fts_path);
-    c.msyncs++;
-    if (msync(address, length, MS_INVALIDATE)) fail("msync invalidate", entry->fts_path);
-    unmap_file(address, length, entry->fts_path);
-    c.invalidated++;
-    /* Keep the primitive's immediate check as well as the final whole-tree pass. */
-    (void)inspect(entry, &length);
+    uint64_t n = resident(address, *length, entry->fts_path);
+    if (n) {
+        /* Preserve the existing writable invalidation capability check. The
+           read-only shared mapping was never faulted and can be reused. */
+        size_t confirmed;
+        int writable = open_file(entry, O_RDWR, &confirmed, 0);
+        close_file(writable, entry->fts_path);
+        if (confirmed != *length) { errno = EINVAL; fail("invalidation size changed", entry->fts_path); }
+        c.msyncs++;
+        if (msync(address, *length, MS_INVALIDATE)) fail("msync invalidate", entry->fts_path);
+        c.invalidated++;
+        (void)resident(address, *length, entry->fts_path);
+    }
+    unmap_file(address, *length, entry->fts_path);
+    return n;
 }
 static void walk(char *root, int final) {
     char *paths[] = {root, NULL};
-    FTS *tree = fts_open(paths, FTS_PHYSICAL | FTS_NOCHDIR, order);
+    FTS *tree = fts_open(paths, FTS_PHYSICAL | FTS_NOCHDIR | FTS_NOSTAT, order);
     if (!tree) fail("fts_open", root);
     FTSENT *entry;
     uint64_t files = 0, bytes = 0, pages = 0;
+    fingerprint = UINT64_C(14695981039346656037);
     errno = 0;
     while ((entry = fts_read(tree))) {
         c.entries++;
         if (entry->fts_info == FTS_D || entry->fts_info == FTS_DP) continue;
-        if (entry->fts_info != FTS_F) { errno = EINVAL; fail("nonregular entry", entry->fts_path); }
+        if (entry->fts_info != FTS_F && entry->fts_info != FTS_NSOK) { errno = EINVAL; fail("nonregular entry", entry->fts_path); }
         size_t length;
-        uint64_t n = inspect(entry, &length);
+        uint64_t n = final ? inspect(entry, &length) : precondition(entry, &length);
         files++; bytes += length; pages += length / page + (length % page != 0);
         if (final) c.resident_after += n;
-        else { c.resident_first += n; if (n) invalidate(entry); }
+        else c.resident_first += n;
         errno = 0;
     }
     if (errno) fail("fts_read", root);
     if (fts_close(tree)) fail("fts_close", root);
     if (!files) { errno = EINVAL; fail("empty source inventory", root); }
     if (final) {
-        if (files != c.files || bytes != c.bytes || pages != c.pages) {
+        if (files != c.files || bytes != c.bytes || pages != c.pages || fingerprint != c.first_fingerprint) {
             errno = EINVAL; fail("whole-tree inventory changed", root);
         }
-    } else { c.files = files; c.bytes = bytes; c.pages = pages; }
+    } else { c.files = files; c.bytes = bytes; c.pages = pages; c.first_fingerprint = fingerprint; }
 }
 int main(int argc, char **argv) {
     struct stat s;

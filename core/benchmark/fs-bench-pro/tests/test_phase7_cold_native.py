@@ -45,6 +45,9 @@ class ColdNative(unittest.TestCase):
         self.assertGreater(actual['resident_first'], 0)
         self.assertEqual(actual['msync_calls'], 2)
         self.assertEqual(actual['invalidated_files'], 2)
+        self.assertEqual(actual['mmap_calls'], 4)
+        self.assertEqual(actual['mincore_calls'], 6)
+        self.assertEqual(actual['opens'], 8)
         cold_out = self.out / 'cold'; cold_out.mkdir()
         cold = cold_native.attest(root, self.helper, cold_out, 2_000_000_000, invoke, runner.ROOT)
         self.assertEqual(cold['resident_first'], 0)
@@ -67,6 +70,21 @@ class ColdNative(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'attestation failed'):
                 cold_native.attest(root, self.helper, out, 2_000_000_000, invoke, runner.ROOT)
             self.assertTrue((out / 'cold.stderr').read_text())
+
+    @unittest.skipIf(os.geteuid() == 0, 'root bypasses file permission checks')
+    def test_readonly_nonresident_source_passes_but_warm_invalidation_refuses(self):
+        root = self.out / 'readonly'; root.mkdir()
+        path = root / 'data'; path.write_bytes(b'x' * os.sysconf('SC_PAGESIZE'))
+        self.assertTrue(sqlite_contract.residency.de_warm(path).dewarmed)
+        path.chmod(0o444)
+        cold_out = self.out / 'readonly-cold'; cold_out.mkdir()
+        cold = cold_native.attest(root, self.helper, cold_out, 2_000_000_000, invoke, runner.ROOT)
+        self.assertEqual(cold['resident_after'], 0)
+        path.read_bytes()
+        warm_out = self.out / 'readonly-warm'; warm_out.mkdir()
+        with self.assertRaisesRegex(ValueError, 'attestation failed'):
+            cold_native.attest(root, self.helper, warm_out, 2_000_000_000, invoke, runner.ROOT)
+        path.chmod(0o644)
 
     def test_seal_mismatch_refuses_before_invocation(self):
         bad = json.loads(json.dumps(self.helper)); bad['binary_sha256'] = '0' * 64

@@ -53,3 +53,37 @@ invalidation/attestation contract inside its own envelope. Both matched arms use
 the same new helper/harness identity; no historical arm is re-labelled.
 Raw issue302-nativecold100000-counts-treatment1. Largest-tier matched pair is
 now prospectively selected, no buffer/worker/deadline/profile changes.
+
+
+## First largest-tier pair at2e6c0edd0: timeout retained
+
+Reference product5421641709ns; complete11845503875ns, final allocation518029312B,
+proof1657169250nsPASS, cold6410521833ns, residents0 before andafter. Candidate
+cold12993975333ns:109495resident pages,82296invalidated files,362592mappings,
+364592opens/fstats. Extra164592mappings result from reopening/remapping around
+invalidation's immediate check. Product only receives2005504333ns remaining;
+watchdog kills it (-9), product comparison unavailable, proofNOT_RUN, statusFAIL,
+command15011762583ns exceeds15s. Allocation189906944B is partial, not an
+admitted storage outcome. This arm is never retried or reported as competitive.
+Raw issue302-nativecold100000-{baseline,candidate}-treatment1.
+
+## Qualified warm-state mechanism change
+
+Reuse the initially unfaulted read-only shared mapping for conditional invalidation
+and its immediate mincore check; retain the writable capability/size check before
+invalidation and the separate final traversal. This reduces mapping/open/stat
+multiplicity, never drops attestation. Descriptor fstat supplies actual metadata;
+FTS_NOSTAT removes redundant traversal stats. A bounded streaming pathname/device/
+inode/size FNV consistency fingerprint compares the two traversals, alongside
+file/byte/page counts. It is not a cryptographic content/tamper proof; the closed
+identity-pinned fixture and independent product root/proof remain required.
+Nonblocking/nofollow open plus descriptor type checks refuse nonregular entries.
+
+Native qualification4PASS (warm mapping reuse, cold equivalence, read-only cold
+acceptance/warm writable refusal, symlink/FIFO/empty/root and seal refusal).
+Wall/Wextra/Werror compilationPASS. Installed macOS msync(2)/fts(3) documentation
+checked; no statp dereference in FTS_NOSTAT paths. Intermediate test/code revisions
+are retained under target/phase7-agent, not speed receipts. No product edits or
+unchanged speed-arm reruns. Prospectively select one fresh largest-tier pair at
+this changed mechanism/harness identity, same15s/9.5s/profile/workload/worker/cache
+and allocation gates. Other required rows/history remain unqualified.
