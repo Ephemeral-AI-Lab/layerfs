@@ -1,1 +1,0 @@
-INSERT INTO ${schema}.workspace_stage (workspace_id, stage_token, layer_stack_id, branch_id, expected_head_commit_id, expected_base_layer_id, expected_root_id, construction_base_root_id, intended_commit_base_layer_id, candidate_root_id, profile_id, scope_id, input_generation) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING 1;

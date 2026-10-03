@@ -1,1 +1,0 @@
-INSERT INTO ${schema}.history_meta (id,catalog_id,catalog_incarnation,binding_key,identity_format,schema_version,schema_source,schema_definition,next_stage_token) VALUES (1,$1,$2,$3,1,1,$4,$5,1) RETURNING 1;
