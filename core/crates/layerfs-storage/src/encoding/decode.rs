@@ -15,10 +15,10 @@ use layerfs_content::ObjectRole;
 use crate::encoding::codec::{CodecProfile, DecompressionWorkspace};
 use crate::encoding::delta::record;
 use crate::error::{StorageError, StorageResult};
+use crate::location::ObjectLocation;
 use crate::pack::assemble::FULL_TAG as ORDINARY_FULL_TAG;
 use crate::pack::layout::{group_view, parse_header, record_range, GroupCodec, PackLane};
 use crate::policy::{StorageCapacities, CANONICAL_LIMIT};
-use crate::sqlite::lookup::ObjectLocation;
 
 /// Bounded cache of decoded ordinary-lane group bodies, keyed by locator group.
 ///

@@ -18,22 +18,7 @@ use layerfs_content::{ObjectId, ObjectRole};
 use crate::error::{StorageError, StorageResult};
 use crate::policy::LOOKUP_PAGE_IDS;
 
-/// One stored object's descriptor and physical location.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ObjectLocation {
-    /// Canonical identity.
-    pub object_id: ObjectId,
-    /// Logical role code.
-    pub role: ObjectRole,
-    /// Canonical object length recorded at save time.
-    pub canonical_length: usize,
-    /// Pack holding the record.
-    pub pack_id: i64,
-    /// Group ordinal inside the pack.
-    pub group_number: usize,
-    /// Record ordinal inside the group.
-    pub record_number: usize,
-}
+pub use crate::location::ObjectLocation;
 
 /// Pages `ids` into bounded groups.
 pub fn pages(ids: &[ObjectId]) -> impl Iterator<Item = &[ObjectId]> {

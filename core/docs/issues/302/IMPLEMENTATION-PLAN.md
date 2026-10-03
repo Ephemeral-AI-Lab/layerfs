@@ -462,7 +462,7 @@ labelled relocation.
 | # | Step | Depends on | Covering tests (`-p`) | Exit condition |
 | ---: | --- | --- | --- | --- |
 | 1 | **Contracts and tooling.** Commit this plan; extend the boundary guard with the allowed-dependency table for cluster 1 crates and the rule that no `layerfs-storage`/`-history`/`-project` `[dependencies]` names an engine or a cluster 2 crate; add `phase7_services.py` with both images pinned by digest | Q1–Q4, Q10, Q12 | tools unit tests | Guard fails on a seeded forbidden edge; LOC delta 0 |
-| 2 | **Read seam.** Move the location and row types to `location.rs`; add `source.rs`; `encoding/` reads through it; the old path implements it in `sqlite/source.rs` | — | `layerfs-storage`, `layerfs-server`, `layerfs-sdk` | Every existing test passes unchanged; no `rusqlite` import under `encoding/` or `pack/` (added to the guard) |
+| 2 | **Read seam.** Move the location and row types to `location.rs`; add `source.rs`; `encoding/` uses it for reads and advisory signature persistence; the old path implements it in `sqlite/source.rs` | — | `layerfs-storage`, `layerfs-server`, `layerfs-sdk` | Every existing test passes unchanged; no `rusqlite` import under `encoding/` or `pack/` (added to the guard) |
 | 3 | **Ports and read path.** `port/`, `storage.rs`, `read/`; in-memory engines under `tests/support/` | 2 | `layerfs-storage` | Objects registered through the port by a test read back authenticated, including PREFIX chains across packs and pooled leaves; wrong digest, missing pack and missing base are refused; round trips per read wave are asserted |
 | 4a | **Write path, file objects.** `save/` for the Native, WholeFile, Singleton and Ordinary lanes: reuse, collision, selection, sealing, closure, register | 3 | `layerfs-storage` | The C2 file vectors (roundtrip, reuse, delta chains, delta payload, stored payloads, physical formats, edit pipeline, memory bounds) pass on the port path; sealed pack bytes equal the old path's for the same input; a batch whose reference is unregistered is never registered (test with a failing engine) |
 | 4b | **Write path, pooled metadata (D12).** `save/pooled.rs`; ordinal reservation; sealed pooled packs | 4a | `layerfs-storage` | Filesystem and metadata-pool vectors pass; roots equal the old path's; pooled packs, forced seals and reserved-directory bytes are counted and recorded |
@@ -474,6 +474,15 @@ labelled relocation.
 | 10 | **Harness.** New, separately identified fs-bench-pro selections for both arms (§3); history driver bound to the port path; server cold contract and storage accounting implemented; focused harness tests | 7, 9, Q5–Q9 | harness Python tests | Self-checks pass; case specification frozen before any timed sample |
 | 11 | **Final verification and acceptance rows** (§3) | 10 | all cluster 1 packages, once | §3 exit |
 | 12 | **Retirement.** Delete the two delete sets; collapse `source.rs`; drop `rusqlite`, `nix`, the `native` feature | Cluster 2 has removed `layerfs-server` and the SDK's dependency on it (M9) | all | No reference to the removed paths; LOC reported as retirement, with the net against the base stated |
+
+**Step 2 source correction (2026-10-03).** At the base, `encoding/delta/candidates.rs`
+also writes the signature ring, and `encoding/delta/select.rs` takes the old
+caller arbitration. The seam therefore carries bounded signature read/write
+rows as well as locations, packs and streamed pooled catalogue rows. SQLite
+statements relocate to `sqlite/source.rs`; the engine-independent mutex helper
+moves to `source.rs`, with a legacy re-export. The old API and its tests keep
+working via `Source for rusqlite::Connection`. This is relocation with adaptation,
+not retirement or a format/algorithm change.
 
 **Coexistence.** `layerfs-server` and `layerfs-sdk` are the only product
 consumers of C2's `Store` and C5's SQLite provider (`grep` of every

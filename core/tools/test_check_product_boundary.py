@@ -6,6 +6,14 @@ from check_product_boundary import production_files, unsafe_violations, violatio
 
 
 class ProductBoundaryTests(unittest.TestCase):
+    def test_storage_encoding_engine_boundary(self):
+        for folder in ("encoding", "pack"):
+            path = Path("core/crates/layerfs-storage/src") / folder / "read.rs"
+            for source in ("use rusqlite::Connection;", "crate::sqlite::lookup::location();"):
+                self.assertTrue(violations(path, source))
+            self.assertFalse(violations(path, "use crate::source::Source;"))
+        self.assertFalse(violations(Path("core/crates/layerfs-storage/src/sqlite/source.rs"), "use rusqlite::Connection;"))
+
     def test_product_attributes(self):
         for source in (
             "#[test]\nfn case() {}",

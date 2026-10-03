@@ -80,6 +80,9 @@ def violations(path, source):
             code = line.split("//", 1)[0].strip()
             if IMPL.search(code):
                 found.append((number, "implementation construct in declaration/delegation entry file"))
+    if crate_name(path) == "layerfs-storage" and any(part in ("encoding", "pack") for part in path.parts):
+        for match in re.finditer(r"\b(?:rusqlite|sqlite)\s*::", source):
+            found.append((source.count("\n", 0, match.start()) + 1, "engine access under encoding/ or pack/; use source seam"))
     found.extend(unsafe_violations(path, source))
     return found
 

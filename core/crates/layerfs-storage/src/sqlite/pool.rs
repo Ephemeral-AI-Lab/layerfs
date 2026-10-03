@@ -15,20 +15,7 @@ use crate::policy::VALUES_PER_GROUP;
 /// One raw catalogue row in the fixed selected column order.
 type CatalogueRow = (i64, i64, i64, i64, Vec<u8>);
 
-/// One catalogue row.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ValueGroupRow {
-    /// First ordinal the group covers.
-    pub first_ordinal: u32,
-    /// Number of values in the group.
-    pub count: usize,
-    /// Pack holding the group.
-    pub pack_id: i64,
-    /// Group ordinal inside the pack.
-    pub group_number: usize,
-    /// Digest of the decoded group body.
-    pub digest: ObjectId,
-}
+pub use crate::location::ValueGroupRow;
 
 /// Next ordinal a new value group starts at when the Store holds no group.
 const FIRST_ORDINAL: u32 = 1;

@@ -18,6 +18,18 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 
 ## 6. Storage (C2 — `layerfs-storage`)
 
+### #302 encoding access seam (2026-10-03)
+
+This change is described against parent `15155598b`. `location.rs` owns engine-independent object, pooled catalogue and
+signature rows. `encoding/` now consumes `source::Source`; `sqlite/source.rs`
+implements the seam for the legacy connection. It preserves the old publication
+ceiling, streamed catalogue traversal, bounded signature ring and caller-owned
+transactions. The old mutex helper relocates into the seam and is re-exported
+by the SQLite owner. These are relocations with adaptation during coexistence;
+canonical identities, encoding, packs, cache bounds and authentication are
+unchanged. This seam is not yet the Phase 7 two-port reader or writer.
+
+
 ### #286 grouped whole-file dependency work (2026-09-30)
 
 This update describes the change against parent `8baf47e45` in the same

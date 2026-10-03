@@ -26,7 +26,8 @@
 //! 8,192 slots and never further, at which point the ring size stops mattering
 //! altogether. The measured coverage curve is flat above 8,192 slots.
 
-use rusqlite::Connection;
+use crate::location::SignatureRow;
+use crate::source::Source;
 
 use layerfs_content::ObjectId;
 
@@ -228,7 +229,7 @@ impl Candidates {
     ///
     /// The read is bounded by the table, which is bounded by [`SLOTS`]: at most
     /// 8,192 rows, and a table that holds more is refused rather than truncated.
-    pub fn load(connection: &Connection) -> StorageResult<Self> {
+    pub fn load(connection: &dyn Source) -> StorageResult<Self> {
         let mut index = Self::new()?;
         index.read(connection)?;
         Ok(index)
@@ -261,7 +262,7 @@ impl Candidates {
     }
 
     /// Re-reads the persisted table into this index.
-    pub fn reload(&mut self, connection: &Connection) -> StorageResult<()> {
+    pub fn reload(&mut self, connection: &dyn Source) -> StorageResult<()> {
         self.clear();
         self.read(connection)
     }
@@ -279,30 +280,25 @@ impl Candidates {
     /// The reference table is rebuilt **in stamp order** rather than in slot
     /// order, so a reference slot two entries collide on keeps the same winner a
     /// live insertion sequence would have left there.
-    fn read(&mut self, connection: &Connection) -> StorageResult<()> {
-        let mut statement = connection
-            .prepare("SELECT c.stamp, c.object_id, c.signature FROM content_signatures c JOIN saves s USING(save_id), temp.layerfs_read_scope r WHERE c.save_id = r.save_id OR s.publication <= r.publication ORDER BY c.stamp")?;
-        let mut rows = statement.query([])?;
-        let mut retained = 0_usize;
-        while let Some(row) = rows.next()? {
-            if retained >= SLOTS {
-                return Err(StorageError::Integrity("content index over slot bound"));
-            }
-            let stamp = u64::try_from(row.get::<_, i64>(0)?)
-                .map_err(|_| StorageError::Integrity("content index stamp range"))?;
+    fn read(&mut self, connection: &dyn Source) -> StorageResult<()> {
+        let rows = connection.signatures()?;
+        if rows.len() > SLOTS {
+            return Err(StorageError::Integrity("content index over slot bound"));
+        }
+        for row in rows {
+            let stamp = row.stamp;
             // Stamps are one-based and the query is ordered, so a row that does
             // not advance the running maximum is a table this index did not write.
             if stamp <= self.stamp {
                 return Err(StorageError::Integrity("content index stamp order"));
             }
-            let id = ObjectId::from_bytes(&row.get::<_, Vec<u8>>(1)?)?;
-            let signature = decode(&row.get::<_, Vec<u8>>(2)?)?;
+            let id = row.object_id;
+            let signature = decode(&row.signature)?;
             self.slots[slot_of(stamp)] = Some(Entry { id, signature });
             for hash in signature.iter().copied().filter(|hash| *hash != EMPTY32) {
                 self.references[hash as usize & (REFERENCES - 1)] = slot_of(stamp) as u16;
             }
             self.stamp = stamp;
-            retained += 1;
         }
         self.next = (self.stamp % SLOTS as u64) as usize;
         self.flushed = self.stamp;
@@ -351,7 +347,7 @@ impl Candidates {
     ///
     /// The caller owns the transaction: this is a write and it belongs in the
     /// transaction that publishes the objects the entries name.
-    pub fn flush(&mut self, connection: &Connection) -> StorageResult<usize> {
+    pub fn flush(&mut self, connection: &dyn Source) -> StorageResult<usize> {
         if self.stamp == self.flushed {
             return Ok(0);
         }
@@ -359,24 +355,19 @@ impl Candidates {
             .flushed
             .saturating_add(1)
             .max(self.stamp.saturating_sub(SLOTS as u64 - 1));
-        let mut statement = connection.prepare_cached(
-            "INSERT OR REPLACE INTO content_signatures (slot, stamp, object_id, signature, save_id) \
-             VALUES (?1, ?2, ?3, ?4, (SELECT save_id FROM temp.layerfs_read_scope))",
-        )?;
-        let mut written = 0_usize;
+        let mut rows = Vec::new();
         for value in start..=self.stamp {
             let slot = slot_of(value);
             let entry =
                 self.slots[slot].ok_or(StorageError::Integrity("content index flush slot"))?;
-            let id = entry.id.to_bytes();
-            statement.execute(rusqlite::params![
-                slot as i64,
-                value as i64,
-                &id[..],
-                &encode(&entry.signature)[..],
-            ])?;
-            written += 1;
+            rows.push(SignatureRow {
+                slot,
+                stamp: value,
+                object_id: entry.id,
+                signature: encode(&entry.signature),
+            });
         }
+        let written = connection.write_signatures(&rows)?;
         self.flushed = self.stamp;
         Ok(written)
     }

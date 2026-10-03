@@ -9,6 +9,7 @@ pub mod ownership;
 pub mod pool;
 mod reservation;
 pub mod schema;
+mod source;
 pub mod write;
 
 pub use cleanup::CleanupReport;

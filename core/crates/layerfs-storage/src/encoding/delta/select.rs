@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use rusqlite::Connection;
+use crate::source::Source;
 
 use layerfs_content::{ObjectId, ObjectRole};
 
@@ -19,9 +19,9 @@ use crate::encoding::delta::candidates::{signature, Candidates};
 use crate::encoding::delta::read::{ChainBases, ChainCounters, Resolver};
 use crate::encoding::full::{encode_full, encode_prefix, raw_payload, EncodedRecord};
 use crate::error::{StorageError, StorageResult};
+use crate::location::ObjectLocation;
 use crate::pack::layout::PackLane;
 use crate::policy::StorageCapacities;
-use crate::sqlite::lookup::{self, ObjectLocation};
 use layerfs_content::MAXIMUM_DELTA_MAX_DEPTH;
 use std::time::Instant;
 
@@ -87,14 +87,14 @@ impl DepthCache {
     /// Depth of `id` in its dependency chain, or `None` when it is not stored.
     pub fn depth_of<F>(
         &mut self,
-        connection: &Connection,
+        connection: &dyn Source,
         workspace: &mut DecompressionWorkspace,
         id: ObjectId,
         base_of: F,
     ) -> StorageResult<Option<u8>>
     where
         F: FnMut(
-            &Connection,
+            &dyn Source,
             &mut DecompressionWorkspace,
             &ObjectLocation,
         ) -> StorageResult<Option<ObjectId>>,
@@ -110,14 +110,14 @@ impl DepthCache {
     /// longer than that is corrupt and is reported rather than absorbed.
     pub fn cost_of<F>(
         &mut self,
-        connection: &Connection,
+        connection: &dyn Source,
         workspace: &mut DecompressionWorkspace,
         id: ObjectId,
         mut base_of: F,
     ) -> StorageResult<Option<ChainCost>>
     where
         F: FnMut(
-            &Connection,
+            &dyn Source,
             &mut DecompressionWorkspace,
             &ObjectLocation,
         ) -> StorageResult<Option<ObjectId>>,
@@ -134,7 +134,7 @@ impl DepthCache {
                 cached_edge = 1;
                 break cost;
             }
-            let Some(location) = lookup::location(connection, current, i64::MAX)? else {
+            let Some(location) = connection.location(current, i64::MAX)? else {
                 return Ok(None);
             };
             path.push((current, location.canonical_length as u64));
@@ -199,7 +199,7 @@ impl DepthCache {
 /// Everything one selection needs besides the object itself.
 pub struct SelectInput<'a> {
     /// Open write connection: candidate lookups and base reads use it.
-    pub connection: &'a Connection,
+    pub connection: &'a dyn Source,
     /// Serializes database work, without holding write ownership during encoding.
     pub arbitration: &'a std::sync::Mutex<()>,
     /// True when the caller's wave already holds `arbitration`.
@@ -403,8 +403,7 @@ pub fn select(
         // The walk reads each edge from its record through the selection's own
         // pack cache, which the acquisition of this same base already filled: the
         // bodies are fetched once, not once per walk and once per read.
-        let _guard =
-            crate::sqlite::ownership::lock_unless_held(input.arbitration, input.wave_held)?;
+        let _guard = crate::source::lock_unless_held(input.arbitration, input.wave_held)?;
         let mut bases = ChainBases::new(input.packs);
         let started = Instant::now();
         let base_cost = input.depths.cost_of(
@@ -483,8 +482,8 @@ fn eligible(
     role: ObjectRole,
     depth_cap: u8,
 ) -> StorageResult<bool> {
-    let _guard = crate::sqlite::ownership::lock_unless_held(input.arbitration, input.wave_held)?;
-    let Some(location) = lookup::location(input.connection, id, i64::MAX)? else {
+    let _guard = crate::source::lock_unless_held(input.arbitration, input.wave_held)?;
+    let Some(location) = input.connection.location(id, i64::MAX)? else {
         input.counters.absent_candidates = input.counters.absent_candidates.saturating_add(1);
         return Ok(false);
     };
@@ -509,7 +508,7 @@ fn eligible(
 }
 
 fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> {
-    let _guard = crate::sqlite::ownership::lock_unless_held(input.arbitration, input.wave_held)?;
+    let _guard = crate::source::lock_unless_held(input.arbitration, input.wave_held)?;
     let started = Instant::now();
     let value = {
         let mut groups = crate::encoding::GroupCache::new();

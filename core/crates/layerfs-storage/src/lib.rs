@@ -30,8 +30,10 @@
 pub mod cas;
 pub mod encoding;
 pub mod error;
+pub mod location;
 pub mod pack;
 pub mod policy;
+pub mod source;
 pub mod sqlite;
 
 pub use cas::{SaveHandoff, SaveOperation, SaveOutcome, Store, StoreProvider, StoreReadCounters};

@@ -37,3 +37,33 @@
   step 8 needs Q3; step 10 needs Q5–Q9. Step 12 waits for cluster 2 retirement.
 
 Production LOC: 135696 -> 135696 (delta +0)
+
+## 2026-10-03 — Step 2 read seam
+
+Implementation commit is the commit containing this entry (parent `15155598b`).
+Row types and the mutex helper relocate with adaptation; signature SQL relocates
+from encoding into `sqlite/source.rs`. Both storage paths coexist; none is retired.
+The source correction is recorded in implementation-plan §2 and architecture 05.
+
+Checks run once at the implemented tree:
+
+- `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check` — PASS.
+- `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings` — PASS; the server and SDK build.
+- `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage -p layerfs-server -p layerfs-sdk` — command PASS: 295 tests passed, 0 failed, 1 existing ignored test.
+- `python3 core/tools/check_product_boundary.py` — PASS, 360 Rust/SQL files.
+- `python3 -m unittest discover -s core/tools -p 'test_*.py'` — PASS, 10 tests.
+- `git diff --check` — PASS.
+
+Gap: `layerfs-server/tests/direct.rs::authenticated_generic_save_accepts_4097_separated_final_runs`
+remains ignored by the existing owner instruction, "already passed once; owner
+directed no further 4097 runs". It was not re-enabled or run. No milestone is
+claimed complete, and this omission is retained for M1 review. No red result,
+repair or rerun. No timed sample or new operation counter recorded in this slice.
+
+Counter method is the same first-parent/final-staged-tree root counter as above;
+reference 65,417 -> 65,417; core 70,279 -> 70,375;
+old-path 6,141 -> 6,184; new-path 0 -> 53; rest-core 64,138 -> 64,138.
+The increase reflects the coexistence seam and adapted relocation, not a saving.
+All owner questions remain open; M0 is still blocked.
+
+Production LOC: 135696 -> 135792 (delta +96)
