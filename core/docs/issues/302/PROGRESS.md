@@ -1442,3 +1442,19 @@ partial476270592B not allocation admission. No unchanged source resampling.
 Detailed failures/commands/unrun rows inSQLITE-NATIVE-COLD-TREATMENT.md.
 Next product work: publication/validation cost; actual history binding still
 required. All-seven goal remains active. ProductLOC137505 unchanged(+0 each).
+
+
+### Signature batchingdd19f21ea
+
+512signature count514->3 statements;513rows4, one acknowledgement; stale/tie,
+second-page FK whole-unit rollback and namespace proofPASS.10 scoped tests,
+Clippy/fmt/boundary+23PASS. New matched1000 product140170375/250016458nsFAIL,
+1000005568755291/6851490875nsFAIL. Largest envelope14125868875nsPASS; allocation
+518029312/521052160BFAIL,3022848B overage. Both roots/cache/proof/cleanupPASS.
+Actual statements320/9800,VM203940/14757575,writecommits20/401.
+Current main logical515006464 vsbaseline515342336B; allocated521019392 vs
+517996544B. Excess filesystem allocation rather than free-page evidence.
+Disposable APFS transfer-extra-extents removes16MiB unused allocation, preserves
+4096logicalB; same-size truncate does not. No production trim yet or gate relabel.
+Detailed raw/diagnostic identities and all unrun work in signature treatmentreport;
+all-seven goalactive. ProductionLOC137505->137544(+39); evidencefollowup+0.
