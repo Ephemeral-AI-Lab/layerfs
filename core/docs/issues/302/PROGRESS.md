@@ -949,3 +949,43 @@ boundary repair; unchanged product functional checks are reused from first slice
 Full step 10, step 11, M5 and retirement remain incomplete.
 
 Production LOC: 143238 -> 143238 (delta +0)
+
+
+## 2026-10-04 — corrected Init v2 measured speed blocker; M5 incomplete
+
+See STEP10-INIT-PAIR.md and checks/step10-v2-* for every raw operand, scope,
+seal, query-plan/count diagnostic and retained failure. One prospectively
+frozen matched 100-file pair at c9165d4da, against unmodified 7edddbdb8, has
+zero resident input pages, matching VM/image/settings/fixture/harness identities
+and separate verifier PASS for both arms. Baseline 38354625 ns;
+candidate 248079166 ns; delta +209724541 ns (6.468038x).
+The owner strict speed condition is FAIL. Baseline allocation 7372800 B;
+candidate 5804032 B (MinIO 5148672 + PG C2 352256 + PG C5 303104).
+Init has no numeric storage ceiling; no smaller storage result waives speed.
+No unchanged arm is rerun. Six other declared selections are NOT_RUN: no
+complete qualifying campaign exists, and the history direct-port driver remains
+unbound. Step 10/11 and M5 are incomplete; retirement remains gated on M9.
+
+C2 count reconciliation: 24 Sync/Ready = open policy + Storage policy + locate5
++ catalogue2 + signatures1 + reserve9 + register5. C5: 20 Sync/Ready = open6
+(read transaction) + reserve6 + initialize8 (two write transactions). S3 has
+37 requests/28 interim replies, PUT28/GET9. Timed open/validation is 34174750 ns;
+remaining operation 213904416 ns, never subtracted from the gate. Diagnostics
+identify acknowledged network work; no speculative product tuning is called a
+speed improvement. Post-proof query plans are explicitly warm diagnostics.
+
+Both proofs inventory 102 paths/100 files/2 directories, read full metadata and
+3,354,003 B from 53 selected files; this is sampled content, not all 5 MB.
+Both command/verifier bounds and child scratch cleanup pass. Complete seven-case
+harness/teardown qualification remains open as stated in the report. Local
+owned services retain their pinned profile; remote/cloud/Linux OpenSSL and
+off-platform qualification remain deferred. No push, PR, merge or retirement.
+
+Production LOC: 143238 -> 143238 (delta +0)
+Reference 65417; core 77821; old 6025; new 7448; rest-core 64348 unchanged.
+Method remains the exact parent/staged/committed root counter including SQL.
+
+Owned-service post-proof teardown PASS (1209505875 ns, separate cleanup scope).
+Containers/volumes/network removed only after retaining proof/allocation/SQL
+evidence. Both services are down; next owned work uses phase7_services.up.
+No original performance receipt is rewritten or promoted by this cleanup.

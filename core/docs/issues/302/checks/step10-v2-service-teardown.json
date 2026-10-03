@@ -1,0 +1,8 @@
+{
+  "label": "post-proof owned-service teardown; separate cleanup window, not added to raw operation timing",
+  "wall_ns": 1209505875,
+  "result": {
+    "status": "PASS",
+    "cleanup": "owned-containers-volumes-network-removed"
+  }
+}
