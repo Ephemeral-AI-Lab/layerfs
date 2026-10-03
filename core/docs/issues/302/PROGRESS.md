@@ -1408,3 +1408,18 @@ Exact roots/cache/proof/cleanup/allocationPASS; storage23101440/20561920B,
 envelopes254645208/1105380958ns, proof50093167/539248542ns. No established
 material Init speed benefit. Preserve all earlierFAIL/NOT_RUN. Details and
 commands inSQLITE-READER-CACHE-TREATMENT.md. Active goal unchanged.
+
+
+### Logical reference acquisition treatmentb32c2a8eb
+
+Valid extent leaf/128 persisted32KiB chunks triggered2batched+36individual
+reads/12275774B before change; membership-preserving physical-root filter removes
+all child acquisition. Missing dependency/exactreuse/readback coveragePASS;
+14 scoped tests,3-package Clippy,fmt,boundary+23PASS.
+Matched10000-v2 product1646280917/2450084791ns: speedFAIL1.488254383x.
+Roots/cache/proof/cleanupPASS; allocation312508416/307597312B PASS in this pair;
+envelopes2648136875/5121216333ns, proof615745708/978408792ns. C2reads now4911B
+vs prior126603056B; no controlled cross-window latency gain claim. SQL13677,
+VM2580946,writecommits136,commit1226820153ns. More boundary work remains.
+All priorFAIL/historyNOT_RUN retained, goal active; report
+SQLITE-LOGICAL-REFERENCE-TREATMENT.md and raw comparison JSON.
