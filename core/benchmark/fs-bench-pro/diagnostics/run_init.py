@@ -15,6 +15,7 @@ HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE.parent));sys.path.insert(0,str(HERE))
 import runner
 from diagnostics import services as observer
+from diagnostics.minio_trace import Trace
 from families import init_namespace as init
 from families.phase7_storage import invoke
 from shared import phase7 as contract
@@ -65,8 +66,10 @@ def run(case_id,arm,out):
             record['machine']=json.loads(contract.services.docker('info','--format','{{json .}}').stdout)
             record['machine']={k:record['machine'].get(k) for k in ('NCPU','MemTotal','Architecture','OSType','KernelVersion')}
             record['before']=observer.snapshot()
+            trace=Trace(out) if arm=='candidate' else None
             record['residency']=contract.dewarm_tree(fixture['source'])
             if record['residency']['status']!='PASS':
+                if trace:record['minio_trace']=trace.stop()
                 record['status']='INELIGIBLE';runner.write_json(out/'receipt.json',record);return
             scratch=out/'scratch';scratch.mkdir()
             env['TMPDIR']=str(scratch)
@@ -78,7 +81,10 @@ def run(case_id,arm,out):
             claim=runner.RESULTS/'phase7-diagnostic-claims'/hashlib.sha256(f'{case_id}|{arm}|{executable["sha256"]}|{observation_seal}|{fixture["manifest_sha256"]}'.encode()).hexdigest()
             claim.parent.mkdir(parents=True,exist_ok=True)
             with claim.open('x') as file:file.write(str(out)+'\n')
-            record['driver']=invoke(command,out,'driver',15_000_000_000,env,runner.ROOT)
+            if trace:trace.start_product()
+            try:record['driver']=invoke(command,out,'driver',15_000_000_000,env,runner.ROOT)
+            finally:
+                if trace:record['minio_trace']=trace.stop()
             record['sample_count']=1
             record['after']=observer.snapshot()
             runner.write_json(out/'pg-statements.json',observer.statements())

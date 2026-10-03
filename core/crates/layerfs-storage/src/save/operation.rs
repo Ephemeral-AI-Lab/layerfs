@@ -63,7 +63,8 @@ impl<'a> Save<'a> {
         let closing = state.storage.work.span(super::Stage::FinishClose);
         state.finishing = true;
         if state.packer.unfinished() {
-            state.reserve_packs(5 + crate::policy::BATCH_OBJECT_LIMIT)?;
+            let required = state.packer.finish_pack_bound();
+            state.reserve_packs(required, required)?;
         }
         for lane in PackLane::ALL {
             let State {

@@ -139,3 +139,86 @@ fn malformed_input_has_no_wire_attempt_and_definite_refusal_is_atomic() {
     store.locate(&[id], &mut rows).unwrap();
     assert!(rows.is_empty());
 }
+
+#[test]
+fn bounded_registration_keeps_mixed_conflicts_in_input_order_and_rolls_back() {
+    let config = support::config("bulk");
+    let store = PgMetadata::create(config.clone(), StoragePolicy::frozen_default()).unwrap();
+    let pack = store
+        .reserve(Reserve {
+            packs: 1,
+            ordinals: 0,
+        })
+        .unwrap()
+        .first_pack_id;
+    let body = vec![7; 64];
+    store
+        .register(&Registration {
+            packs: vec![RegisteredPack {
+                info: PackInfo {
+                    pack_id: pack,
+                    domain: PackDomain::Metadata,
+                    key: ObjectKey::for_bytes(&body),
+                    length: body.len(),
+                },
+                body: Some(body),
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+    let make = |n: u8| ObjectLocation {
+        object_id: ObjectId::for_bytes(&[n]),
+        role: ObjectRole::DirectoryLeaf,
+        canonical_length: 100,
+        pack_id: pack,
+        group_number: 0,
+        record_number: n as usize,
+    };
+    let first = vec![make(3), make(1)];
+    store
+        .register(&Registration {
+            objects: first.clone(),
+            ..Default::default()
+        })
+        .unwrap();
+    let batch = Registration {
+        objects: vec![make(3), make(2), make(1), make(4)],
+        ..Default::default()
+    };
+    let before = store.diagnostics().unwrap();
+    assert_eq!(
+        store.register(&batch).unwrap().lost,
+        vec![make(3).object_id, make(1).object_id]
+    );
+    assert_eq!(
+        store.diagnostics().unwrap().sync_messages - before.sync_messages,
+        1
+    );
+    let mut bad = make(5);
+    bad.pack_id = 999999;
+    assert!(matches!(
+        store.register(&Registration {
+            objects: vec![make(6), bad],
+            ..Default::default()
+        }),
+        Err(MetadataError::Refused { .. })
+    ));
+    let mut rows = Vec::new();
+    store
+        .locate(&[make(5).object_id, make(6).object_id], &mut rows)
+        .unwrap();
+    assert!(rows.is_empty());
+    let mut rows = Vec::new();
+    store
+        .locate(
+            &[
+                make(1).object_id,
+                make(2).object_id,
+                make(3).object_id,
+                make(4).object_id,
+            ],
+            &mut rows,
+        )
+        .unwrap();
+    assert_eq!(rows.len(), 4);
+}

@@ -1086,3 +1086,57 @@ no push/PR/merge/retirement.
 Production LOC: 143542 -> 143542 (delta +0), evidence/docs-only exact
 first-parent/staged snapshots with tools/production_loc.py. Reference 65417,
 core 78125, old path 6025, new path 7752, rest core 64348 unchanged.
+
+## 2026-10-04 — four-path optimization implemented before new pair
+
+Owner explicitly directs the four ranked paths. C2 lane queues share the old
+aggregate pack/row budget, avoiding lane-switch-only seals; framing and canonical
+identities stay. S3 bounded bodies send without Expect, require the same final
+conditional acknowledgement, authenticate body/key, and never retry. Registration
+uses bounded unnest/INSERT/RETURNING and input-ordered lost IDs, preserving atomic
+first-wins. Reservations consume remaining blocks using conservative next-wave
+and actual final-seal bounds without increasing allocation requests. Immutable
+checked C1 PoolingLeaf reuses canonical decode. Required S3 hash check remains;
+exact MinIO server/storage wait and remaining encode/read cost stay open.
+
+New public-API regression cases for fewer mixed-lane packs, single reservation
+across 1600 objects, independent exact readback, mixed conflicts/rollback, pooled
+ordinal checks, and immediate acknowledged conditional S3 writes PASS. Project
+100/1000 full namespace oracles over memory/live engines and existing physical
+codec/reuse/race/unknown-outcome checks PASS. Source boundary 473 files PASS,
+tools21 and focused harness5 PASS, warning-denying Clippy/fmt PASS.
+
+Retained failures: initial compile missed same-save provider's reserve_packs
+caller; fixed its two-argument conservative bound. Pair-claim edit had a missing
+quote; fixed, harness5 PASS. Old S3 test expected2 connections after conditional
+conflict; immediate-body request keeps1 and subsequent reads succeed, assert
+updated, that covering test PASS. No successful suite resampled.
+
+One unrelated history_remediation stress case FAIL: LOCK history_meta EXCLUSIVE
+NOWAIT returns55P03 Busy. PG log failure19:08:52.058 UTC; same schema autovacuum
+completes history_meta at19:08:52.086, with autoanalyze immediately afterwards.
+This is consistent with background vacuum lock contention. C5 implementation
+is unchanged. Preserve failure; no retries, timeout change or autovacuum/profile
+relaxation. Other passed targets reused; remaining/unrun targets run separately.
+This covering-check gap prevents a claim that all owning tests pass.
+
+Freeze implementation locally before release builds/new matched measurements.
+Pair claims bind candidate tree as well as measured source/harness/fixture, so
+a changed candidate has its required new baseline arm and cannot resample that
+pair. Case profiles, fixtures, gate/timers and budgets unchanged. All prior FAIL
+receipts remain. New performance/count diagnostics NOT_RUN at this commit;
+large Init/history cases and step10/11/M5 remain NOT_RUN/incomplete. Production
+LOC is counted from exact parent/staged/committed snapshots with the unchanged
+root counter including shipped SQL; see this commit's message and final report.
+
+Final checks: storage267 PASS, project7 PASS, S3 seven contract cases PASS
+(the changed connection assertion verified separately), content plus unaffected
+metadata307 PASS with the one retained C5 stress FAIL, remaining metadata7 PASS.
+Warnings-denying final all-target Clippy/fmt PASS. Diagnostic dispatch/bounds/
+redaction3 PASS; unchanged external SQLite observer calibration reused. Shipped
+mc server trace calibration PASS,457 records/198786 bytes, zero omitted/invalid;
+fixed16MiB output cap, credential/body redaction, explicit ready sentinel outside
+timers and own PID shutdown. Trace adds observer work only in count diagnostics;
+default-profile matched speed arms do not enable it. Server events are matched
+by measured object path and reconciled against request counts; aggregate request
+clocks are not interpreted as disjoint elapsed spans.

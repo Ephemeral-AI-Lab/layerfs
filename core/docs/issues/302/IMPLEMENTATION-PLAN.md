@@ -1133,3 +1133,34 @@ workers; SQLite PROFILE time has coarse resolution and step/exec coverage may
 exclude separate blob APIs; SQLite VM instructions and PostgreSQL executor work
 are distinct units. Neither profiling overhead nor missing attribution may be
 called a speed improvement. Full step 10/11/M5 remain incomplete.
+
+### Owner-directed four-path optimization — 2026-10-04
+
+Owner authorizes implementation of the four ranked paths in the comparison.
+Measured mechanisms: always-on Expect exchange, lane-switch queue sealing,
+per-object PG INSERT loop, replaced unused reservations, repeated canonical
+inode decode. Preserve required conditional acknowledgements, public ports,
+format/identity/collision checks, four uploads/constructors, bounded queue and
+read windows, pinned service resources and default durability. The immutable
+packer may regroup lane groups under the original aggregate byte/row budget;
+this owner-directed utilization change does not promise identical cross-lane
+pack bytes. Canonical read/format/physical bound proofs remain mandatory.
+S3 still authenticates body/key at the port boundary. No unsafe prehash hint,
+page warming, retry, new dependency or server durability change is introduced.
+
+One prospective matched performance pair each for 100 then 1000 at the frozen
+optimized identity; baseline is rebuilt locked/release at unchanged 7edddbdb8.
+The existing Phase7 case IDs/fixture profiles/timers/budgets stay. Pair claims
+now include the paired candidate tree as well as measured source/harness/fixture
+identities, enforcing one arm per frozen pair when candidate product changes.
+The changed harness requires both matched arms; no old receipt is relabeled or
+replayed, no unchanged candidate is resampled. 10000/100000 and all three direct
+history cases stay explicit NOT_RUN. Init's numeric allocation ceiling remains
+open; no M5 or strict speed PASS is assumed. A count diagnostic of the changed
+mechanism can use the existing observers and distinct cause receipt.
+
+Changed-mechanism count diagnostics additionally use the mc binary shipped in
+the pinned MinIO image: bounded16MiB redacted JSON server API/storage/OS trace,
+non-workload readiness sentinel, stop before verifier. Profiler overhead is
+declared; exact request counts and measured pack paths qualify trace completeness.
+No new dependency/image, MinIO config or default-profile speed-arm observer.

@@ -81,7 +81,7 @@ CREATE FUNCTION ${schema}.register_storage(
     _s_slots BIGINT[],_s_stamps BIGINT[],_s_ids BYTEA[],_s_values BYTEA[],
     _window BIGINT,_release_first BIGINT,_release_count BIGINT)
 RETURNS BYTEA[] LANGUAGE plpgsql AS $body$
-DECLARE i INTEGER; inserted_ BYTEA; lost_ BYTEA[] := ARRAY[]::BYTEA[];
+DECLARE i INTEGER; lost_ BYTEA[] := ARRAY[]::BYTEA[];
 BEGIN
     IF cardinality(_p_ids)+cardinality(_o_ids)+cardinality(_g_first)+cardinality(_s_slots)
         + (CASE WHEN _window IS NULL THEN 0 ELSE 1 END) + (CASE WHEN _release_first IS NULL THEN 0 ELSE 1 END) > 8191 THEN
@@ -104,12 +104,19 @@ BEGIN
     END IF;
     INSERT INTO ${schema}.pack(pack_id,domain,digest,length,body)
         SELECT * FROM unnest(_p_ids,_p_domains,_p_keys,_p_lengths,_p_bodies);
-    FOR i IN 1..cardinality(_o_ids) LOOP
+    -- The provider validates unique object IDs before issuing this bounded unit.
+    -- RETURNING distinguishes a concurrent first-wins conflict without a second
+    -- snapshot lookup. Keep lost identities in the caller's dependency order.
+    WITH input AS MATERIALIZED (
+        SELECT * FROM unnest(_o_ids,_o_roles,_o_lengths,_o_packs,_o_groups,_o_records)
+            WITH ORDINALITY AS r(object_id,role,canonical_length,pack_id,group_number,record_number,position)
+    ), inserted AS (
         INSERT INTO ${schema}.object(object_id,role,canonical_length,pack_id,group_number,record_number)
-            VALUES (_o_ids[i],_o_roles[i],_o_lengths[i],_o_packs[i],_o_groups[i],_o_records[i])
-            ON CONFLICT(object_id) DO NOTHING RETURNING object_id INTO inserted_;
-        IF NOT FOUND THEN lost_ := array_append(lost_,_o_ids[i]); END IF;
-    END LOOP;
+            SELECT object_id,role,canonical_length,pack_id,group_number,record_number FROM input ORDER BY position
+            ON CONFLICT(object_id) DO NOTHING RETURNING object_id
+    )
+    SELECT COALESCE(array_agg(input.object_id ORDER BY position),ARRAY[]::BYTEA[]) INTO lost_
+        FROM input WHERE NOT EXISTS (SELECT 1 FROM inserted WHERE inserted.object_id=input.object_id);
     INSERT INTO ${schema}.metadata_value_group(first_ordinal,count,pack_id,group_number,digest)
         SELECT * FROM unnest(_g_first,_g_counts,_g_packs,_g_numbers,_g_digests);
     -- Preserve the existing per-leaf/group value-count window recurrence.

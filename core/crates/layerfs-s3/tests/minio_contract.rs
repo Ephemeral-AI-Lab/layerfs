@@ -73,7 +73,8 @@ fn conditional_create_reads_head_and_exact_ranges_on_the_pinned_service() {
     assert_eq!(store.diagnostics().unwrap(), before);
     assert_eq!(before.requests, 5);
     assert_eq!((before.puts, before.gets, before.heads), (2, 2, 1));
-    assert_eq!(before.connections, 2);
+    // Sending the bounded duplicate body lets MinIO retain the connection.
+    assert_eq!(before.connections, 1);
     println!("DIAGNOSTIC conditional-create {:?}", before);
 }
 #[test]
@@ -150,4 +151,24 @@ fn labelled_body_size_diagnostics_have_no_timer_or_repeated_sample() {
         assert_eq!(counts.body_received, size as u64);
         println!("DIAGNOSTIC opaque-body size={} {:?}", size, counts);
     }
+}
+
+#[test]
+fn bounded_puts_send_immediately_and_still_require_conditional_acknowledgement() {
+    let store = S3Objects::connect(support::config("immediate-body")).unwrap();
+    let body = vec![8; 256 * 1024];
+    let key = ObjectKey::for_bytes(&body);
+    assert_eq!(store.put_if_absent(key, &body).unwrap(), Put::Created);
+    assert_eq!(
+        store.put_if_absent(key, &body).unwrap(),
+        Put::AlreadyPresent
+    );
+    let counts = store.diagnostics().unwrap();
+    assert_eq!(counts.puts, 2);
+    assert_eq!(counts.interim_responses, 0);
+    assert_eq!(counts.continue_wait_ns, 0);
+    assert_eq!(counts.body_sent, 2 * body.len() as u64);
+    let mut out = Vec::new();
+    store.read(key, None, &mut out).unwrap();
+    assert_eq!(out, body);
 }

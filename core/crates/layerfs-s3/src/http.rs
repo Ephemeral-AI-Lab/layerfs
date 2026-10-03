@@ -108,13 +108,9 @@ impl Http {
             "HEAD" => counts.heads += 1,
             _ => return Err(ObjectError::Malformed),
         }
-        let expect = method == "PUT" && !body.is_empty();
-        let expect_header = if expect {
-            "Expect: 100-continue\r\n"
-        } else {
-            ""
-        };
-        let request=format!("{method} {path} HTTP/1.1\r\n{headers}Content-Length: {}\r\n{expect_header}Connection: keep-alive\r\n\r\n",body.len());
+        // These bounded bodies are already available: send them immediately,
+        // then require the same complete conditional-create acknowledgement.
+        let request=format!("{method} {path} HTTP/1.1\r\n{headers}Content-Length: {}\r\nConnection: keep-alive\r\n\r\n",body.len());
         let started = Instant::now();
         self.reader
             .get_mut()
@@ -128,22 +124,6 @@ impl Http {
         self.reader.get_mut().counts.header_write_ns += elapsed;
         self.reader.get_mut().counts.request_work[crate::work::index(method)].header_write_ns +=
             elapsed;
-        if expect {
-            let started = Instant::now();
-            let head = self.read_head();
-            let elapsed = started.elapsed().as_nanos() as u64;
-            self.reader.get_mut().counts.continue_wait_ns += elapsed;
-            self.reader.get_mut().counts.request_work[crate::work::index(method)]
-                .continue_wait_ns += elapsed;
-            let (status, headers) = head?;
-            if status != 100 {
-                if (200..300).contains(&status) {
-                    return Err(ObjectError::Malformed);
-                }
-                return self.response(config, method, status, headers);
-            }
-            self.reader.get_mut().counts.interim_responses += 1;
-        }
         let started = Instant::now();
         let mut written = 0;
         while written < body.len() {

@@ -12,7 +12,7 @@ use crate::{
     source::Source,
 };
 use layerfs_content::{
-    inode_leaf::{pooled_body, InodeLeaf, INODE_VALUE_BYTES},
+    inode_leaf::{PoolingLeaf, INODE_VALUE_BYTES},
     FinalizedObject, ObjectId, ObjectRole,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -39,10 +39,10 @@ impl State<'_> {
         advisory: &[ObjectId],
     ) -> StorageResult<(EncodedRecord, Vec<u32>)> {
         self.sync_pool()?;
-        let input = InodeLeaf::decode(object.canonical())?;
+        let input = PoolingLeaf::decode(object.canonical())?;
         let mut seen = BTreeSet::new();
         let unknown: Vec<_> = input
-            .rows
+            .rows()
             .iter()
             .filter_map(|row| seen.insert(row.value).then_some(row.value))
             .collect();
@@ -94,9 +94,9 @@ impl State<'_> {
         }
         let mut memo = BTreeMap::<[u8; INODE_VALUE_BYTES], u32>::new();
         let mut fresh = Vec::new();
-        let mut ordinals = Vec::with_capacity(input.rows.len());
+        let mut ordinals = Vec::with_capacity(input.rows().len());
         let mut first = None;
-        for row in &input.rows {
+        for row in input.rows() {
             let ordinal =
                 if let Some(ordinal) = memo.get(&row.value).or_else(|| known.get(&row.value)) {
                     self.pool_stats.reused_values += 1;
@@ -139,7 +139,7 @@ impl State<'_> {
                 self.pool_stats.groups += 1;
             }
         }
-        let body = pooled_body(object.canonical(), &ordinals)?;
+        let body = input.body(&ordinals)?;
         let full = leaf::encode_full(&body)?;
         self.pool_stats.leaves += 1;
         if let Some((id, base)) =

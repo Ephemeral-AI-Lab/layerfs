@@ -46,7 +46,7 @@ pub(super) struct Sealed {
 }
 pub(super) struct Packer {
     pub(super) groups: [Group; 5],
-    queued: Queue,
+    queued: [Queue; 5],
     pub(super) ready: Vec<Sealed>,
     pub(super) pooled: Option<PooledTail>,
 }
@@ -54,14 +54,14 @@ impl Packer {
     pub(super) fn new() -> Self {
         Self {
             groups: std::array::from_fn(|_| Group::default()),
-            queued: Queue::default(),
+            queued: std::array::from_fn(|_| Queue::default()),
             ready: Vec::new(),
             pooled: None,
         }
     }
     pub(super) fn unfinished(&self) -> bool {
         self.groups.iter().any(|group| !group.records.is_empty())
-            || self.queued.lane.is_some()
+            || self.queued.iter().any(|queue| queue.lane.is_some())
             || self.pooled.is_some()
     }
     pub(super) fn pending(&self, id: ObjectId) -> bool {
@@ -70,8 +70,8 @@ impl Packer {
             .any(|g| g.members.iter().any(|m| m.id == id))
             || self
                 .queued
-                .groups
                 .iter()
+                .flat_map(|queue| &queue.groups)
                 .any(|g| g.members.iter().any(|m| m.id == id))
     }
     pub(super) fn location(&self, id: ObjectId) -> Option<ObjectLocation> {
@@ -100,17 +100,35 @@ impl Packer {
             PackLane::Ordinary | PackLane::Native | PackLane::WholeFile
         ) && bytes <= PACK_LIMIT
             && rows <= BATCH_OBJECT_LIMIT;
+        // Independent lanes share the original single queue's byte/row budget.
+        // Charge each live lane's framing too; a lane switch need not seal the
+        // preceding partially filled pack or allocate a larger buffering window.
+        let charged: usize = self
+            .queued
+            .iter()
+            .filter_map(|queue| {
+                queue
+                    .lane
+                    .map(|lane| queue.bytes + layout::body_area_offset(lane))
+            })
+            .sum();
+        let framing = if self.queued[lane.index()].lane.is_none() {
+            layout::body_area_offset(lane)
+        } else {
+            0
+        };
+        let queued_rows: usize = self.queued.iter().map(|queue| queue.rows).sum();
         if !queueable
-            || self.queued.lane.is_some_and(|active| active != lane)
-            || self.queued.bytes.saturating_add(bytes) > PACK_LIMIT
-            || self.queued.rows.saturating_add(rows) > BATCH_OBJECT_LIMIT
+            || charged.saturating_add(bytes).saturating_add(framing) > PACK_LIMIT
+            || queued_rows.saturating_add(rows) > BATCH_OBJECT_LIMIT
         {
             self.flush(next, end)?;
         }
-        self.queued.lane = Some(lane);
-        self.queued.bytes += bytes;
-        self.queued.rows += rows;
-        self.queued.groups.push(Framed {
+        let queue = &mut self.queued[lane.index()];
+        queue.lane = Some(lane);
+        queue.bytes += bytes;
+        queue.rows += rows;
+        queue.groups.push(Framed {
             group,
             members: pending.members,
         });
@@ -137,14 +155,7 @@ impl Packer {
                 forced += 1;
             }
         }
-        if self
-            .queued
-            .groups
-            .iter()
-            .any(|g| g.members.iter().any(|m| ids.contains(&m.id)))
-        {
-            self.flush(next, end)?;
-        }
+        self.flush_if_contains(ids, next, end)?;
         Ok(forced)
     }
     pub(super) fn flush_if_contains(
@@ -153,21 +164,39 @@ impl Packer {
         next: &mut i64,
         end: i64,
     ) -> StorageResult<()> {
-        if self
-            .queued
-            .groups
-            .iter()
-            .any(|g| g.members.iter().any(|m| ids.contains(&m.id)))
-        {
-            self.flush(next, end)?;
+        for lane in PackLane::ALL {
+            if self.queued[lane.index()]
+                .groups
+                .iter()
+                .any(|g| g.members.iter().any(|m| ids.contains(&m.id)))
+            {
+                self.flush_lane(lane, next, end)?;
+            }
         }
         Ok(())
     }
     pub(super) fn flush(&mut self, next: &mut i64, end: i64) -> StorageResult<()> {
-        let Some(lane) = self.queued.lane else {
+        for lane in PackLane::ALL {
+            self.flush_lane(lane, next, end)?;
+        }
+        Ok(())
+    }
+    pub(super) fn finish_pack_bound(&self) -> usize {
+        self.groups
+            .iter()
+            .filter(|group| !group.records.is_empty())
+            .count()
+            + self
+                .queued
+                .iter()
+                .map(|queue| queue.groups.len())
+                .sum::<usize>()
+    }
+    fn flush_lane(&mut self, lane: PackLane, next: &mut i64, end: i64) -> StorageResult<()> {
+        let queue = std::mem::take(&mut self.queued[lane.index()]);
+        if queue.lane.is_none() {
             return Ok(());
-        };
-        let queue = std::mem::take(&mut self.queued);
+        }
         let mut groups = Vec::new();
         let mut members = Vec::new();
         let mut length = layout::body_area_offset(lane);

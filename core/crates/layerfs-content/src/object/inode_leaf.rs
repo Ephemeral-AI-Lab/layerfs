@@ -368,17 +368,40 @@ pub fn pooled_physical_length(canonical_length: usize) -> ContentResult<usize> {
 
 /// Builds the pooled physical body of a leaf: the prefix and `(serial, ordinal)` rows.
 pub fn pooled_body(canonical: &[u8], ordinals: &[u32]) -> ContentResult<Vec<u8>> {
-    let leaf = InodeLeaf::decode(canonical)?;
-    if ordinals.len() != leaf.rows.len() || ordinals.iter().any(|ordinal| *ordinal == 0) {
-        return Err(ContentError::InvalidRecord("pooled ordinal count"));
+    PoolingLeaf::decode(canonical)?.body(ordinals)
+}
+
+/// Immutable checked canonical leaf reused while assigning pooled ordinals.
+/// The borrowed canonical prefix and decoded rows cannot diverge after decode.
+pub struct PoolingLeaf<'a> {
+    canonical: &'a [u8],
+    leaf: InodeLeaf,
+}
+impl<'a> PoolingLeaf<'a> {
+    /// Checks the canonical grammar once and retains the decoded rows.
+    pub fn decode(canonical: &'a [u8]) -> ContentResult<Self> {
+        Ok(Self {
+            canonical,
+            leaf: InodeLeaf::decode(canonical)?,
+        })
     }
-    let mut body = Vec::with_capacity(pooled_physical_length(canonical.len())?);
-    body.extend_from_slice(&canonical[..POOLED_PREFIX_BYTES]);
-    for (row, ordinal) in leaf.rows.iter().zip(ordinals) {
-        body.extend_from_slice(&row.serial.to_be_bytes());
-        body.extend_from_slice(&ordinal.to_be_bytes());
+    /// Checked rows for value matching and ordinal assignment.
+    pub fn rows(&self) -> &[InodeLeafRow] {
+        &self.leaf.rows
     }
-    Ok(body)
+    /// Builds the same physical body without parsing the canonical leaf again.
+    pub fn body(&self, ordinals: &[u32]) -> ContentResult<Vec<u8>> {
+        if ordinals.len() != self.leaf.rows.len() || ordinals.iter().any(|ordinal| *ordinal == 0) {
+            return Err(ContentError::InvalidRecord("pooled ordinal count"));
+        }
+        let mut body = Vec::with_capacity(pooled_physical_length(self.canonical.len())?);
+        body.extend_from_slice(&self.canonical[..POOLED_PREFIX_BYTES]);
+        for (row, ordinal) in self.leaf.rows.iter().zip(ordinals) {
+            body.extend_from_slice(&row.serial.to_be_bytes());
+            body.extend_from_slice(&ordinal.to_be_bytes());
+        }
+        Ok(body)
+    }
 }
 
 /// One row of a pooled physical body.

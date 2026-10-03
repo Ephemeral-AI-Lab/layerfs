@@ -9,7 +9,10 @@ use crate::{
 use layerfs_content::{FinalizedObject, ObjectId};
 use std::collections::{BTreeMap, BTreeSet};
 impl State<'_> {
-    pub(super) fn reserve_packs(&mut self, count: usize) -> StorageResult<()> {
+    pub(super) fn reserve_packs(&mut self, required: usize, count: usize) -> StorageResult<()> {
+        if required as i64 <= self.pack_end.saturating_sub(self.next_pack) {
+            return Ok(());
+        }
         let _work = self.storage.work.span(super::Stage::PackReserve);
         self.storage.source.note(|c| c.reserve += 1);
         let reserved = self.storage.source.metadata.reserve(Reserve {
@@ -58,6 +61,18 @@ impl State<'_> {
         )?;
         drop(membership);
         let admission = self.storage.work.span(super::Stage::Admission);
+        // One possible payload pack per object, plus one possible pooled-value
+        // pack per inode leaf, and the five preceding open lane groups. Keep
+        // the original allocation block; only the reuse test needs this bound.
+        let pooled = objects
+            .iter()
+            .filter(|object| object.role() == layerfs_content::ObjectRole::InodeLeaf)
+            .count();
+        let required = objects.len()
+            + pooled
+                * layerfs_content::inode_leaf::MAXIMUM_LEAF_ROWS
+                    .div_ceil(crate::policy::VALUES_PER_GROUP)
+            + 5;
         let mut reserved = false;
         let mut prepared = BTreeMap::<ObjectId, usize>::new();
         for (index, object) in objects.iter().enumerate() {
@@ -73,7 +88,7 @@ impl State<'_> {
             prepared.insert(object.id(), index);
             if self.packer.pending(object.id()) {
                 if !reserved {
-                    self.reserve_packs(objects.len() * 2 + 5)?;
+                    self.reserve_packs(required, objects.len() * 2 + 5)?;
                     reserved = true;
                 }
                 self.packer.seal_pending(
@@ -98,7 +113,7 @@ impl State<'_> {
                 self.outcome.reused += 1;
             } else {
                 if !reserved {
-                    self.reserve_packs(objects.len() * 2 + 5)?;
+                    self.reserve_packs(required, objects.len() * 2 + 5)?;
                     reserved = true;
                 }
                 self.offer(object)?;

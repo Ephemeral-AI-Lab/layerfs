@@ -30,7 +30,8 @@ impl Save<'_> {
         state.storage.source.begin_demand();
         state.storage.source.locate(ids)?;
         if ids.iter().any(|id| state.packer.pending(*id)) {
-            state.reserve_packs(crate::policy::BATCH_OBJECT_LIMIT + 5)?;
+            let required = state.packer.finish_pack_bound();
+            state.reserve_packs(required, crate::policy::BATCH_OBJECT_LIMIT + 5)?;
             let State {
                 packer,
                 compression,

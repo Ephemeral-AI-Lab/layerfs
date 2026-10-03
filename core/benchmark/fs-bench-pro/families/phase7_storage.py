@@ -129,6 +129,7 @@ def run(selection, output, arm, baseline_root, common):
         identity['compilation_seal'] = scope_seal(inputs)
         record = {'schema': 'phase7-cluster1-v1', 'case': case.id, 'arm': arm, 'identity': identity,
                   'sample_count': 0, 'status': 'NOT_RUN', 'cache_contract': contract.CACHE,
+                  'paired_candidate_tree': identity['source_tree'],
                   'cache_status': 'INCOMPLETE', 'verification_status': 'NOT_RUN',
                   'command_budget_ns': case.command_budget_ns, 'verification_budget_ns': case.verification_budget_ns,
                   'storage_ceiling': case.storage_ceiling, 'storage_gap': 'Init has no numeric storage ceiling',
@@ -176,7 +177,7 @@ def run(selection, output, arm, baseline_root, common):
         command = ([driver, fixture['source'], str(scratch), os.urandom(16).hex(), os.urandom(32).hex(), case.id]
                    if arm == 'candidate' else [driver, fixture['source'], str(store), str(history), case.id])
         # Persistent exclusive claim prevents another sample of this arm/identity.
-        key = hashlib.sha256(json.dumps([case.id,arm,identity['measured_source_tree'],identity['harness_seal'],fixture['manifest_sha256']],sort_keys=True).encode()).hexdigest()
+        key = hashlib.sha256(json.dumps([case.id,arm,identity['source_tree'],identity['measured_source_tree'],identity['harness_seal'],fixture['manifest_sha256']],sort_keys=True).encode()).hexdigest()
         claim = common.RESULTS/'phase7-sample-claims'/key
         claim.parent.mkdir(parents=True,exist_ok=True)
         with claim.open('x') as claimed:

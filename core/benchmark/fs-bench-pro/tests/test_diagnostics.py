@@ -37,3 +37,7 @@ class CauseDiagnostics(unittest.TestCase):
         self.assertIn("'CAUSE_DIAGNOSTIC'",source)
         self.assertIn('15_000_000_000',source);self.assertIn('9_500_000_000',source)
         self.assertIn("with claim.open('x')",source)
+
+    def test_minio_trace_redacts_authentication_and_payloads(self):
+        from diagnostics.minio_trace import redact
+        self.assertEqual(redact({'Authorization':'secret','nested':{'body':'payload','x-amz-security-token':'secret','duration':123}}),{'nested':{'duration':123}})

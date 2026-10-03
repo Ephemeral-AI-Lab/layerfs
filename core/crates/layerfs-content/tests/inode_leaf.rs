@@ -242,3 +242,20 @@ fn a_pooled_body_rejects_a_zero_ordinal_and_a_wrong_width() {
         Err(ContentError::UnexpectedEof)
     ));
 }
+
+#[test]
+fn checked_pooling_leaf_reuses_decode_and_retains_all_ordinal_checks() {
+    let canonical = leaf(2).encode().unwrap();
+    let checked = layerfs_content::inode_leaf::PoolingLeaf::decode(&canonical).unwrap();
+    assert_eq!(checked.rows(), InodeLeaf::decode(&canonical).unwrap().rows);
+    assert_eq!(
+        checked.body(&[3, 7]).unwrap(),
+        pooled_body(&canonical, &[3, 7]).unwrap()
+    );
+    assert!(checked.body(&[0, 7]).is_err());
+    assert!(checked.body(&[3]).is_err());
+    assert!(
+        layerfs_content::inode_leaf::PoolingLeaf::decode(&canonical[..canonical.len() - 1])
+            .is_err()
+    );
+}

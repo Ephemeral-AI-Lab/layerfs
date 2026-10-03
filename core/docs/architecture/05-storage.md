@@ -751,3 +751,35 @@ construction rules are unchanged. Typed failures stop the operation; scratch
 cleanup failure is explicit, and no payload is retried or deleted on a guess.
 The functional fixture counts and independent verification carry no timing or
 acceptance claim. The release harness/corpus/cache contract still awaits step 10.
+
+## Owner-directed measured optimization (2026-10-04)
+
+The #302 optimization after source base 988eb538b keeps the existing five pack
+lanes and framing. Immutable lane queues share one aggregate PACK_LIMIT byte
+charge (including active-lane framing) and BATCH_OBJECT_LIMIT row budget. Lane
+switches no longer alone force partially filled packs to close. Closure seals
+and flushes referenced lanes before registration; all queues drain at wave and
+save boundaries. Different cross-lane grouping is permitted by this optimization
+and is not a claim of byte-identical mixed-lane packs. Existing canonical/codec
+parity and independent reopen checks remain required. No additional producer
+or upload worker, wider cache window or relaxed physical pack limit is used.
+
+Pack reservations use a conservative next-wave bound (one pack per object,
+pooled-value packs per inode leaf, and preceding open groups); an existing block
+is consumed when it can cover that bound. The allocation request keeps its
+original size. Final seals use the actual remaining-group bound. IDs are never
+reclaimed or made contiguous across independent reservations.
+
+PostgreSQL object registration is one bounded INSERT FROM unnest with RETURNING;
+a materialized input and returned winners derive lost IDs in input order,
+without a second snapshot lookup. The public provider rejects duplicate input
+identities before wire submission; first-wins races and the encompassing atomic
+registration still apply. No deployed schema is silently altered by open.
+
+For already available bounded S3 bodies, the client sends body bytes without an
+Expect exchange and still requires the complete conditional-create response.
+Unknown acknowledgement outcomes remain terminal and are never resent. Required
+key/body authentication remains at the opaque ObjectStore boundary. C1 exposes
+an immutable checked PoolingLeaf view, so pooled ordinal assignment and body
+construction share a canonical decode; malformed canonical/ordinal/body checks
+remain. Full result and any failed checks belong to #302 progress/evidence.
