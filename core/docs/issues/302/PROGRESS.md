@@ -1423,3 +1423,22 @@ vs prior126603056B; no controlled cross-window latency gain claim. SQL13677,
 VM2580946,writecommits136,commit1226820153ns. More boundary work remains.
 All priorFAIL/historyNOT_RUN retained, goal active; report
 SQLITE-LOGICAL-REFERENCE-TREATMENT.md and raw comparison JSON.
+
+
+### Native cold-contract work f5abcee18 /2e6c0edd0 /2aaf6c7d1
+
+Preserve complete invalidation/immediate/whole-input attestation inside15s,
+seal native helper/compiler/source/flags/binary, resource scopes per child.
+Cold count diagnostic100000:6675567875ns, zero product samples; all residency0.
+First largest pair candidate cold12993975333ns leaves2005504333ns product,
+times out; envelope15011762583nsFAIL, proofNOT_RUN, product time unavailable.
+Warm cause82296invalidations and164592extra maps. Reuse shared read-only mapping,
+retain writable capability check; descriptor metadata and streaming identity
+fingerprint replace redundant traversal stat.4native qualification testsPASS.
+New largest pair reference5376246166ns product/11622127959ns envelope; candidate
+cold first5666985000+final3231373000ns,198000maps despite95358invalidations.
+Candidate again times out, envelope15015172917nsFAIL, no product time/proof;
+partial476270592B not allocation admission. No unchanged source resampling.
+Detailed failures/commands/unrun rows inSQLITE-NATIVE-COLD-TREATMENT.md.
+Next product work: publication/validation cost; actual history binding still
+required. All-seven goal remains active. ProductLOC137505 unchanged(+0 each).

@@ -87,3 +87,36 @@ are retained under target/phase7-agent, not speed receipts. No product edits or
 unchanged speed-arm reruns. Prospectively select one fresh largest-tier pair at
 this changed mechanism/harness identity, same15s/9.5s/profile/workload/worker/cache
 and allocation gates. Other required rows/history remain unqualified.
+
+
+## Fused mapping pair at2aaf6c7d1: second timeout retained
+
+Reference product5376246166ns; envelope11622127959ns; final allocation518029312B;
+proof1623258833nsPASS; cold6233551000ns; initially/finally nonresident.
+Candidate initially122558 resident pages,95358invalidated files, final0.
+Firstpass5666985000ns and finalattestation3231373000ns; mappings198000 (removes
+extra maps), mincore293358,opens/fstats295358 (capability checks retained).
+Complete cold child8904244459ns. Product receives
+6095223542ns, times out(-9); comparison unavailable,
+proofNOT_RUN, complete15015172917ns exceeds15s. Ordering scratch cleanupPASS.
+Partial allocation476270592B is not storage admission. GateINCOMPLETE;
+no numeric relative speed, root equivalence or final-memory verdict is possible.
+
+Raw issue302-fusedcold100000-{baseline,candidate}-treatment1; comparison JSON
+issue302-fusedcold100000-comparison-treatment1. Reproduction runner.py run --case
+phase7-sqlite-init-100000-v2 --arm baseline --baseline-root
+target/phase7-baseline/layerfs --out <fresh-owned-output>, then --arm candidate,
+reading benchmark_agent_report.md before each invocation. No resample of this
+identity. Both previous and this timeout remain intact. Other three Init rows and
+three history rows are NOT_RUN at this harness identity, not dropped or PASS.
+
+The warm-state mechanism removes redundant mappings and reduces work even with
+more resident files than the previous window. Different windows are not a
+controlled timing delta. This still does not leave enough envelope for current
+product work. Keep15s/9.5s/profile/cache/worker/byte bounds fixed; next product
+focus is durable publication composition and redundant full-body validation,
+with immutable proof/atomicity preserved. History driver/proof/budget binding
+remains required. All-seven goal active. No further unchanged-arm retry or deadline
+extension. No product source edits this round; every commit LOC137505 unchanged,
+reference65417/core72088,active28044/inactive44044; exact snapshot methods in
+f5abcee18/2e6c0edd0/2aaf6c7d1 commit bodies.
