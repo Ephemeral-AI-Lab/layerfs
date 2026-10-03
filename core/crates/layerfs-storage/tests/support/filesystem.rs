@@ -30,6 +30,8 @@ use layerfs_storage::{SaveOutcome, StorageError, Store};
 pub struct Bag {
     /// Every object this test holds, by identity.
     pub objects: BTreeMap<ObjectId, (ObjectRole, Vec<u8>)>,
+    /// Actual C1 emission order, retaining direct references for closed port saves.
+    pub finalized: Vec<FinalizedObject>,
 }
 
 impl Bag {
@@ -51,6 +53,7 @@ impl Bag {
 
     /// Merges another bag into this one.
     pub fn absorb(&mut self, other: &Bag) {
+        self.finalized.extend(other.finalized.iter().cloned());
         self.objects
             .extend(other.objects.iter().map(|(id, value)| (*id, value.clone())));
     }
@@ -58,6 +61,7 @@ impl Bag {
 
 impl FinalizedConsumer for Bag {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
+        self.finalized.push(object.clone());
         let parts = object.into_parts();
         let (id, role, bytes) = (parts.id, parts.role, parts.canonical);
         self.objects.insert(id, (role, bytes));

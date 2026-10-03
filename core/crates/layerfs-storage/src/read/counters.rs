@@ -29,6 +29,16 @@ pub struct Diagnostics {
     pub get_bytes: u64,
     /// Metadata body bytes returned.
     pub metadata_bytes: u64,
+    /// Metadata body bytes acknowledged by registration.
+    pub metadata_write_bytes: u64,
+    /// Sealed pooled packs acknowledged by registration.
+    pub pooled_packs: u64,
+    /// Value catalogue rows acknowledged by registration.
+    pub pooled_groups: u64,
+    /// Actual reserved directory bytes in acknowledged pooled packs.
+    pub reserved_directory_bytes: u64,
+    /// Reservation calls containing ordinal allocation.
+    pub ordinal_reservations: u64,
     /// Cached locator consults.
     pub locator_hits: u64,
     /// Uncached locator consults.

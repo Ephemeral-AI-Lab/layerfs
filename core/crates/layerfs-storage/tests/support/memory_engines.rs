@@ -71,6 +71,7 @@ pub struct MetadataState {
     pub groups: BTreeMap<u32, ValueGroupRow>,
     pub signatures: BTreeMap<usize, SignatureRow>,
     pub window: u32,
+    pub window_values: usize,
     pub next_pack: i64,
     pub next_ordinal: u64,
     pub registrations: Vec<Registration>,
@@ -85,6 +86,7 @@ impl Default for MetadataState {
             groups: BTreeMap::new(),
             signatures: BTreeMap::new(),
             window: 1,
+            window_values: 0,
             next_pack: 1,
             next_ordinal: 1,
             registrations: Vec::new(),
@@ -239,6 +241,12 @@ impl MetadataStore for MemoryMetadata {
             }
         }
         for row in &batch.value_groups {
+            if next.window_values + row.count > layerfs_storage::policy::METADATA_INDEX_VALUES {
+                next.window = row.first_ordinal;
+                next.window_values = row.count;
+            } else {
+                next.window_values += row.count;
+            }
             next.groups.insert(row.first_ordinal, *row);
             next.next_ordinal = next
                 .next_ordinal

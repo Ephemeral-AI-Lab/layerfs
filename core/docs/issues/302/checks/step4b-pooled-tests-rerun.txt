@@ -1,0 +1,32 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.99s
+     Running tests/port_pooled.rs (core/target/debug/deps/port_pooled-142e7ebf24b7e8d0)
+
+running 9 tests
+test a_lost_metadata_acknowledgement_never_registers_a_leaf_again ... ok
+test missing_or_corrupt_value_groups_fail_without_an_alternate_lookup ... ok
+test same_save_and_reopened_saves_reuse_exact_value_ordinals ... ok
+DIAGNOSTIC pooled-single Diagnostics { policy: 1, locate: 2, read_packs: 3, value_groups: 3, signatures: 1, reserve: 3, register: 1, puts: 0, gets: 0, heads: 0, put_bytes: 0, get_bytes: 0, metadata_bytes: 12405, metadata_write_bytes: 11734, pooled_packs: 1, pooled_groups: 1, reserved_directory_bytes: 4096, ordinal_reservations: 1, locator_hits: 3, locator_misses: 2, pack_hits: 5, pack_misses: 3, forced_seals: 0 }
+test a_real_hundred_row_leaf_has_the_same_canonical_and_sealed_bytes ... ok
+DIAGNOSTIC filesystem entries=100 Diagnostics { policy: 1, locate: 18, read_packs: 18, value_groups: 2, signatures: 0, reserve: 0, register: 0, puts: 0, gets: 4, heads: 0, put_bytes: 0, get_bytes: 1171, metadata_bytes: 39145, metadata_write_bytes: 0, pooled_packs: 0, pooled_groups: 0, reserved_directory_bytes: 0, ordinal_reservations: 0, locator_hits: 22, locator_misses: 18, pack_hits: 138, pack_misses: 22, forced_seals: 0 }
+DIAGNOSTIC pooled-waves Diagnostics { policy: 1, locate: 4, read_packs: 5, value_groups: 3, signatures: 1, reserve: 77, register: 3, puts: 0, gets: 0, heads: 0, put_bytes: 0, get_bytes: 0, metadata_bytes: 57172, metadata_write_bytes: 141268, pooled_packs: 5, pooled_groups: 1100, reserved_directory_bytes: 20480, ordinal_reservations: 73, locator_hits: 2202, locator_misses: 1102, pack_hits: 10, pack_misses: 6, forced_seals: 1 }
+test ordinal_blocks_and_closure_are_bounded_across_waves ... ok
+DIAGNOSTIC filesystem entries=1000 Diagnostics { policy: 1, locate: 39, read_packs: 39, value_groups: 20, signatures: 0, reserve: 0, register: 0, puts: 0, gets: 4, heads: 0, put_bytes: 0, get_bytes: 1171, metadata_bytes: 379988, metadata_write_bytes: 0, pooled_packs: 0, pooled_groups: 0, reserved_directory_bytes: 0, ordinal_reservations: 0, locator_hits: 43, locator_misses: 39, pack_hits: 285, pack_misses: 43, forced_seals: 0 }
+test real_filesystem_roots_and_every_emitted_object_match_c1_and_the_old_path ... ok
+test pooled_prefix_chains_and_depth_limit_preserve_old_choices_and_bytes ... ok
+
+thread 'zero_depth_stores_full_and_a_fifty_link_profile_reads_back' panicked at crates/layerfs-storage/tests/port_pooled.rs:200:22:
+called `Result::unwrap()` on an `Err` value: Integrity("prefetch dependency depth")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test zero_depth_stores_full_and_a_fifty_link_profile_reads_back ... FAILED
+DIAGNOSTIC pooled-window Diagnostics { policy: 1, locate: 4, read_packs: 3, value_groups: 3, signatures: 1, reserve: 91, register: 7, puts: 0, gets: 0, heads: 0, put_bytes: 0, get_bytes: 0, metadata_bytes: 21748, metadata_write_bytes: 10475925, pooled_packs: 167, pooled_groups: 1330, reserved_directory_bytes: 684032, ordinal_reservations: 87, locator_hits: 2661, locator_misses: 1331, pack_hits: 5, pack_misses: 3, forced_seals: 1 }
+test the_candidate_window_resets_at_the_existing_value_bound ... ok
+
+failures:
+
+failures:
+    zero_depth_stores_full_and_a_fifty_link_profile_reads_back
+
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+error: test failed, to rerun pass `-p layerfs-storage --test port_pooled`

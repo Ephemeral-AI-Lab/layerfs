@@ -16,11 +16,6 @@ use crate::{
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 impl State<'_> {
     pub(super) fn offer(&mut self, object: &FinalizedObject) -> StorageResult<()> {
-        if object.role() == ObjectRole::InodeLeaf {
-            return Err(StorageError::UnsupportedPolicy {
-                field: "pooled metadata admission",
-            });
-        }
         for reference in object.references() {
             if !self.packer.pending(*reference)
                 && self.packer.location(*reference).is_none()
@@ -92,14 +87,21 @@ impl State<'_> {
             counters: &mut self.delta,
             profile: &mut self.profile,
         };
-        let record = select(
-            &mut input,
-            object.id(),
-            object.canonical(),
-            object.role(),
-            &advisory,
-            &mut self.compression,
-        )?;
+        let (record, ordinals) = if object.role() == ObjectRole::InodeLeaf {
+            self.select_pooled(object, &advisory)?
+        } else {
+            (
+                select(
+                    &mut input,
+                    object.id(),
+                    object.canonical(),
+                    object.role(),
+                    &advisory,
+                    &mut self.compression,
+                )?,
+                Vec::new(),
+            )
+        };
         let lane = record.lane;
         let body = assemble::framed_length(std::slice::from_ref(&record.record))?;
         let body_limit = crate::encoding::lane_body_limit(lane, &capacities);
@@ -142,6 +144,7 @@ impl State<'_> {
             length: object.canonical_len(),
             references,
             prefix: record.base.is_some(),
+            ordinals,
         });
         if lane == PackLane::Singleton {
             self.packer.seal(

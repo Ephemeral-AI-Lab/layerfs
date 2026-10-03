@@ -1,0 +1,9 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-server)
+    Finished `test` profile [optimized + debuginfo] target(s) in 6.21s
+     Running tests/direct.rs (core/target/debug/deps/direct-85fa9d76cb10b0b3)
+
+running 1 test
+test authenticated_generic_save_accepts_4097_separated_final_runs ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.08s

@@ -51,8 +51,42 @@ The old path still checks allocation chronology. The port path checks explicit
 logical cycles, because a winning base's pack id can exceed its dependent's
 reserved id. Both paths retain the existing role/depth/work/identity checks.
 No canonical identity, CDC, deduplication, record grammar or pack framing changes.
-Pooled write admission is the following rollout slice and is not yet available
-through `Save`; the old API remains available to the server and SDK.
+Pooled write admission is described below; the old API remains available to the
+server and SDK.
+
+### #302 pooled writes and namespace parity (2026-10-03)
+
+Described against parent `10954a167` and the step 4b implementation. `Save`
+admits canonical inode leaves using the existing pooled value encoding and
+COPY/INSERT selector. The handle shares a bounded `PoolIndex`; the operation
+synchronizes its catalogue/window before first use. Each leaf assigns unknown
+values in encounter order with a leaf-sized memo. The first four ordinal blocks
+are exact; later blocks cover sixteen leaves of the current fresh-value width.
+A completed save conditionally releases its unused final allocator tail, while a
+failed operation neither retries nor guesses that an unacknowledged tail is free.
+
+The pooled tail retains at most one bounded pack, with the existing group grammar,
+compression rule, fit predicate and directory width. Same-operation group reads
+can assemble that private tail; appends release pack caches while decoded values
+remain immutable. Full packs, finish and ordinal-reference closure seal it.
+Catalogue rows and complete metadata pack bodies enter atomic registration before
+or with the leaves that use them. Window advancement accompanies its group rows;
+the metadata provider applies the existing value-count recurrence atomically.
+The shared index remains bounded even while other handles allocate ordinals.
+
+`WriteOutcome.pool` and `Save::pool_counters` expose real assignment and selection
+counts. Port diagnostics record acknowledged metadata bytes, pooled packs/groups,
+reserved pooled directory bytes and ordinal reservation calls. These are counts,
+not performance acceptance. The private pooled tail's population can be closed by
+D12; counts expose that placement cost. Paired single-leaf, reopened-chain and
+100/1,000-entry filesystem fixtures compare exact canonical objects, roots and
+complete sealed bytes at their stated inputs.
+
+An absent ordinal is negatively cached within the current demand, preventing a
+second catalogue request for the same absence. The next demand clears those
+negative facts. A maximum-depth chain is accepted when prefetch reaches an empty
+frontier on its final permitted iteration; the resolver retains every existing
+role, depth, work and identity bound. No record or pack framing changes.
 
 ### #302 two-port authenticated reader (2026-10-03)
 

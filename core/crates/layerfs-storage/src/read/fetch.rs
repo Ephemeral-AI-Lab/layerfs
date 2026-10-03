@@ -23,6 +23,7 @@ pub(crate) struct Fetch {
     absent: RefCell<BTreeSet<ObjectId>>,
     descriptors: RefCell<BTreeMap<i64, PackInfo>>,
     groups: RefCell<BTreeMap<u32, ValueGroupRow>>,
+    missing_ordinals: RefCell<BTreeSet<u32>>,
     window: Cell<Option<u32>>,
     signatures: RefCell<Option<Vec<SignatureRow>>>,
     counters: Cell<Diagnostics>,
@@ -36,6 +37,7 @@ impl Fetch {
             absent: RefCell::new(BTreeSet::new()),
             descriptors: RefCell::new(BTreeMap::new()),
             groups: RefCell::new(BTreeMap::new()),
+            missing_ordinals: RefCell::new(BTreeSet::new()),
             window: Cell::new(None),
             signatures: RefCell::new(None),
             counters: Cell::new(Diagnostics::default()),
@@ -57,11 +59,15 @@ impl Fetch {
             absent.remove(id);
         }
     }
+    pub(crate) fn refresh_window(&self) {
+        self.window.set(None);
+    }
     pub(crate) fn invalidate_signatures(&self) {
         *self.signatures.borrow_mut() = None;
     }
     pub(crate) fn begin_demand(&self) {
         self.absent.borrow_mut().clear();
+        self.missing_ordinals.borrow_mut().clear();
     }
     pub(crate) fn locate(&self, ids: &[ObjectId]) -> StorageResult<()> {
         let mut missing = BTreeSet::new();
@@ -203,12 +209,24 @@ impl Fetch {
             .copied()
             .collect::<BTreeSet<_>>()
             .into_iter()
-            .filter(|ordinal| self.covering(*ordinal).is_none())
+            .filter(|ordinal| {
+                self.covering(*ordinal).is_none()
+                    && !self.missing_ordinals.borrow().contains(ordinal)
+            })
             .collect();
         for page in wanted.chunks(READ_OBJECT_LIMIT) {
             let reply = self.catalogue(ValueGroupQuery::Ordinals(page))?;
             if reply.next.is_some() || reply.rows.len() > page.len() {
                 return Err(StorageError::Integrity("catalogue set cardinality"));
+            }
+            for ordinal in page {
+                if self.covering(*ordinal).is_none() {
+                    let mut missing = self.missing_ordinals.borrow_mut();
+                    if missing.len() >= READ_OBJECT_LIMIT {
+                        missing.clear();
+                    }
+                    missing.insert(*ordinal);
+                }
             }
             for row in &reply.rows {
                 if !page.iter().any(|ordinal| covers(*row, *ordinal)) {

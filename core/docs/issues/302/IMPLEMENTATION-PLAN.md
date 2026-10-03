@@ -574,6 +574,41 @@ closed. Metadata-body bytes are included in the submitted byte accounting.
 The legacy batch's lone-oversized-object admission remains inherited; no format
 or accepted-capacity increase is introduced.
 
+**Step 4b source corrections (2026-10-03).** The accepted maximum depth is
+50, including the pooled profile. A depth-50 chain has 51 records: the bounded
+prefetch walk must accept an empty frontier after its final permitted iteration.
+The resolver's depth/work checks remain authoritative; no capacity is raised.
+An ordinal omitted from a catalogue demand is negatively cached for that demand,
+so the resolver does not issue the same missing-ordinal query again.
+
+The old pooled writer assigns the first four reservations exactly, then reserves
+`fresh_count * ORDINAL_BLOCK_LEAVES` (16 leaves) and conditionally releases its
+unused final tail. This rule, first-encounter assignment, the 131,072-value index
+reset and the COPY/INSERT selection are retained. A bounded pooled tail uses the
+existing value-group builder and exact pack-fit predicates. It becomes immutable
+when full, at finish, or when an acknowledged leaf needs its ordinals (D12).
+Window advancement is atomic with the relevant value-group rows; the metadata
+provider must apply the existing per-group value-count recurrence, including
+concurrent writers, inside `register`. Catalogue/window refresh for a new pooled
+save is explicit, never an error-driven fallback. Counters distinguish pooled
+packs, group rows, actual reserved-directory bytes and ordinal reservation calls.
+
+The old filesystem test `Bag` discarded FinalizedObject references and emission
+order. Its port-path fixture now preserves both so it exercises actual C1
+reference closure. The old save helper is unchanged. The 100/1,000-entry paired
+fixtures compare canonical roots, every emitted canonical object and all sealed
+pack bytes. Pooled single-leaf and reopened-chain fixtures also compare complete
+sealed bytes. Stress diagnostics record D12's actual sealing granularity; no
+unmeasured density or speed claim is inferred.
+
+**M1 verification decision (2026-10-03).** The server's existing 4097-run
+case is ignored with an older owner-directed "no further runs" annotation. The
+current owner requires no skipped milestone check and delegates judgment without
+further questions. Run that single case once with `--exact --ignored` at this
+source identity to close the M1 gap; do not alter the annotation, cluster 2 source
+or historical receipts. It passed (1 test, 0 failed, 0 ignored). This is correctness
+verification, not a timed sample or permission to repeat an unchanged benchmark.
+
 **Coexistence.** `layerfs-server` and `layerfs-sdk` are the only product
 consumers of C2's `Store` and C5's SQLite provider (`grep` of every
 `core/crates/*/Cargo.toml`). They keep building against the old API, which

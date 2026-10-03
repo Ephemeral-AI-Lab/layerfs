@@ -24,6 +24,9 @@ impl Source for WaveSource<'_> {
         }
     }
     fn pack_bytes(&self, id: i64) -> StorageResult<Vec<u8>> {
+        if let Some(body) = self.packer.pooled_body(id)? {
+            return Ok(body);
+        }
         match self
             .packer
             .ready
@@ -35,7 +38,10 @@ impl Source for WaveSource<'_> {
         }
     }
     fn value_group(&self, ordinal: u32) -> StorageResult<Option<ValueGroupRow>> {
-        self.fetch.value_group(ordinal)
+        match self.packer.pooled_row(ordinal) {
+            Some(row) => Ok(Some(row)),
+            None => self.fetch.value_group(ordinal),
+        }
     }
     fn value_groups(
         &self,

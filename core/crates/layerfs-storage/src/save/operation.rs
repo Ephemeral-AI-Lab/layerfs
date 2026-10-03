@@ -56,6 +56,7 @@ impl<'a> Save<'a> {
         let mut state = self.state.borrow_mut();
         let objects = state.pending.drain();
         state.wave(objects)?;
+        state.finishing = true;
         if state.packer.unfinished() {
             state.reserve_packs(5 + crate::policy::BATCH_OBJECT_LIMIT)?;
         }
@@ -78,8 +79,10 @@ impl<'a> Save<'a> {
             } = &mut *state;
             packer.flush(next_pack, *pack_end)?;
         }
+        state.packer.seal_pool()?;
         state.flush_signatures()?;
         state.register_ready()?;
+        state.outcome.pool = state.pool_stats;
         self.finished.set(true);
         Ok(state.outcome)
     }
@@ -91,6 +94,14 @@ impl<'a> Save<'a> {
     pub fn chain_counters(&self) -> crate::encoding::delta::read::ChainCounters {
         self.state.borrow().chain_total
     }
+    /// Actual pooled value reuse, allocation and selection outcomes.
+    pub fn pool_counters(&self) -> crate::cas::PoolCounters {
+        self.state.borrow().pool_stats
+    }
+    /// Bounded candidate index's current charged bytes.
+    pub fn pooled_index_bytes(&self) -> usize {
+        self.state.borrow().pool_index.live_bytes()
+    }
     /// Canonical bytes waiting in the bounded producer batch.
     pub fn pending_canonical_bytes(&self) -> u64 {
         self.state.borrow().pending.canonical_bytes()
@@ -101,6 +112,8 @@ impl Drop for Save<'_> {
         if !self.finished.get() {
             let state = self.state.get_mut();
             state.candidates.invalidate();
+            state.pool_index.invalidate();
+            state.storage.source.refresh_window();
             state.storage.source.invalidate_signatures();
         }
     }

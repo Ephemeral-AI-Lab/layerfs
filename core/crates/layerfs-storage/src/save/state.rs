@@ -8,7 +8,7 @@ use crate::{
             read::ChainCounters,
             select::{DeltaCounters, DepthCache},
         },
-        pool::PoolReader,
+        pool::{PoolIndex, PoolReader},
         CompressionWorkspace, DecompressionWorkspace, GroupCache,
     },
     error::StorageResult,
@@ -35,6 +35,8 @@ pub struct WriteOutcome {
     pub packs: u64,
     /// Canonical bytes of new acknowledged objects.
     pub canonical_bytes: u64,
+    /// Actual pooled selection and value assignment counts, including race trials.
+    pub pool: crate::cas::PoolCounters,
 }
 
 pub(super) struct State<'a> {
@@ -48,6 +50,14 @@ pub(super) struct State<'a> {
     pub(super) groups: GroupCache,
     pub(super) packs: BTreeMap<i64, Vec<u8>>,
     pub(super) pool: PoolReader,
+    pub(super) pool_index: RefMut<'a, PoolIndex>,
+    pub(super) pool_synced: bool,
+    pub(super) pool_stats: crate::cas::PoolCounters,
+    pub(super) next_ordinal: u64,
+    pub(super) ordinal_end: u64,
+    pub(super) ordinal_reservations: usize,
+    pub(super) window_change: Option<u32>,
+    pub(super) finishing: bool,
     pub(super) depths: DepthCache,
     pub(super) chain: ChainCounters,
     pub(super) chain_total: ChainCounters,
@@ -77,6 +87,17 @@ impl<'a> State<'a> {
             groups: GroupCache::new(),
             packs: BTreeMap::new(),
             pool: PoolReader::new(),
+            pool_index: storage
+                .pool_index
+                .try_borrow_mut()
+                .map_err(|_| crate::StorageError::Integrity("one pooled producer per handle"))?,
+            pool_synced: false,
+            pool_stats: crate::cas::PoolCounters::default(),
+            next_ordinal: 0,
+            ordinal_end: 0,
+            ordinal_reservations: 0,
+            window_change: None,
+            finishing: false,
             depths: DepthCache::new(),
             chain: ChainCounters::default(),
             chain_total: ChainCounters::default(),

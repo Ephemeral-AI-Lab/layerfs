@@ -1,5 +1,6 @@
 //! Bounded immutable-pack saves through the two persistence ports.
 mod operation;
+mod pooled;
 mod provider;
 mod register;
 mod seal;

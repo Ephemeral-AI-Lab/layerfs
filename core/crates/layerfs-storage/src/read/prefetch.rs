@@ -53,7 +53,11 @@ pub(crate) fn chains(
             })
             .collect::<StorageResult<Vec<_>>>()?;
     }
-    Err(StorageError::Integrity("prefetch dependency depth"))
+    if frontier.is_empty() {
+        Ok(())
+    } else {
+        Err(StorageError::Integrity("prefetch dependency depth"))
+    }
 }
 
 pub(crate) fn values(

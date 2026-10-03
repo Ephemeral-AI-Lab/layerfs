@@ -69,7 +69,7 @@ impl State<'_> {
             prepared.insert(object.id(), index);
             if self.packer.pending(object.id()) {
                 if !reserved {
-                    self.reserve_packs(objects.len() + 5)?;
+                    self.reserve_packs(objects.len() * 2 + 5)?;
                     reserved = true;
                 }
                 self.packer.seal_pending(
@@ -94,7 +94,7 @@ impl State<'_> {
                 self.outcome.reused += 1;
             } else {
                 if !reserved {
-                    self.reserve_packs(objects.len() + 5)?;
+                    self.reserve_packs(objects.len() * 2 + 5)?;
                     reserved = true;
                 }
                 self.offer(object)?;
