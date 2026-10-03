@@ -1042,3 +1042,47 @@ snapshots counted with tools/production_loc.py (nonblank/noncomment product
 Rust and shipped SQL, external tests/examples/tools excluded). Reference
 65417 -> 65417; core 77821 -> 78125; old path 6025 -> 6025; new path
 7448 -> 7752; rest core 64348 -> 64348. Growth is bounded telemetry.
+
+## 2026-10-04 — four cause diagnostics completed, no optimization
+
+Instrumentation/source frozen at fdfbee48f; Phase 4.5 product pin 7edddbdb8.
+Declared 100 baseline/current then 1000 baseline/current, one child each.
+Release/locked archives reused, same prepared inputs and explicit authority/seed,
+four Init constructors/four uploads, no durability or cache relaxation. All
+four whole-input residency checks zero pages; all independent lite proofs,
+15 s child bounds, 9.5 s verifier bounds and scratch cleanup PASS. Canonical
+roots match per size. Public Phase 4.5 Service import versus direct project
+init is a component cause diagnostic, not a matched SDK speed admission pair.
+
+Outer operation ns: baseline100 39,345,500; current100 198,558,750
+(including 32,245,208 open); baseline1000 132,890,541; current1000 579,322,083
+(including 27,650,041 open). Current project timers 166,310,458 / 551,672,042 ns.
+Measured bounded upload windows 89,605,958 / 290,809,582 ns dominate, request
+response waits overlap across four connections. PG statements 44 / 61 frontend;
+observed query/boundary-derived transactions 27 / 44; nested object INSERTs
+346 / 2003, execution 7,087,669 / 39,631,220 ns. SQLite operation statements
+697 / 3544, VM steps 56,726 / 325,153, transaction starts 20 / 28 including
+one rollback each; object INSERTs batched into 30 / 102 statements.
+
+Detailed small-step, CPU, SQL, VM, protocol, warm post-proof plan, allocation,
+identity, reproduction/custody and revised ranking in STEP10-CAUSE-DIAGNOSTIC.md.
+No MinIO server trace or exact RTT attribution, direct SQLite blob API clock,
+per-worker split or phase memory peak; these stay unavailable. PostgreSQL WAL
+sync deltas 2.687 / 5.597 ms are shared observer windows, not product excuses.
+First SQLite EXPLAIN missed the pack-ceiling bind; failure retained, SQLite
+plan call corrected; no successful PG plan/performance child repeated.
+Post-proof write plans use copied disposable schema, rolled back, dropped.
+Original1000 canonical inventory confirmed 2003 objects / 20,187,652 bytes.
+
+Allocation B: baseline100 7,372,800/current100 5,808,128; baseline1000
+23,101,440/current1000 21,725,184. Numeric Init ceiling remains undeclared.
+Four original run manifests, plan and campaign custody PASS; raw append-only
+paths and compressed checks retained. Owned services removed PASS; baseline
+checkout and immutable build archives retained for reuse. No product tests
+repeated for this evidence-only change; frozen covering proofs from the previous
+entry reused. No admission FAIL relabeled, no step10/11/M5 completion claimed,
+no push/PR/merge/retirement.
+
+Production LOC: 143542 -> 143542 (delta +0), evidence/docs-only exact
+first-parent/staged snapshots with tools/production_loc.py. Reference 65417,
+core 78125, old path 6025, new path 7752, rest core 64348 unchanged.
