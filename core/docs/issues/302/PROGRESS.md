@@ -632,3 +632,73 @@ Test-fixture extraction is test code, not production relocation. New engine code
 coexists with the old implementation; no retirement or simplification claim.
 
 Production LOC: 139022 -> 140532 (delta +1510)
+
+
+## 2026-10-04 — M3 complete: PostgreSQL C2 and C5
+
+Commits: step 6 `f141ea927` (local C2); step 7 `d9fe835fc` (complete C5);
+this milestone entry is documentation only. Both engines connect to the owned
+local PostgreSQL service. The existing C5 trait, identity derivation, stages,
+conditional transitions and cursor v2 are retained. The pure 135-production-LOC
+cursor codec is relocated for both providers. All operational SQL is embedded
+from sql/queries/history/. No C2/C5 FK, cluster 2 change or legacy retirement.
+
+Exact step-7 checks (step-6 commands/results remain in its preceding entry):
+
+- `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-metadata -p layerfs-history -- --nocapture`, private owned-service environment loaded — PASS: 66 passed, 0 FAIL, 0 ignored. All six copied C5 files ran against PostgreSQL (30 tests) alongside the original native contracts (30) and existing C2/connection tests (6). The long lineage case ran without shrinking its 4,354-Commit history. Its 77.62-s test wall is a functional check, not an acceptance sample.
+- `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-metadata --test history_connections -- --nocapture`, same environment — PASS: 1 passed, 0 FAIL, 0 ignored. Two independent writable connections preserve the stale loser's exact stage and return HeadMoved; externally held NOWAIT authority gives Busy, while another connection can read. No retry.
+- `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check` — PASS, including the final added test.
+- `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings` — final PASS, including server/SDK coexistence and all final test targets.
+- `python3 core/tools/check_product_boundary.py` — PASS, 462 product Rust/SQL files.
+- `python3 -m unittest discover -s core/tools -p 'test_*.py'` — PASS, 21 tests.
+- `git diff --cached --check` — PASS; first-parent/staged/committed identities confirmed for the implementation commit.
+
+Every FAIL and decision:
+
+- Offline Cargo metadata failed downloading the already-locked web-sys 0.3.104 for an unbuilt platform. It updated only the engine's reference to the already-locked blake3 dev dependency. No package/version entry changed. Subsequent builds stayed locked and passed; no dependency patch or registry edit.
+- First Clippy failed on a redundant inherited row-decoder closure. Replace it with the function. Rerun revealed three unused copied-test imports and nested fixture formatting. Remove unused imports and flatten the formatting; final Clippy PASS. This needed a third invocation beyond the requested single-repair cadence; all outputs are retained.
+- PostgreSQL equivalents replace SQLite page-size/profile assertions and raw corruption controls with deferred-key/schema checks. A cancelled mutation replaces the undefined-function unknown-outcome fixture because PostgreSQL reports that function error definitely. Server connection abort releases its transaction; the test asserts no replay/no further protocol calls and retained committed stage rather than SQLite's retained file lock. The exact semantic assertions and all 30 contracts remain covered. Plan and architecture describe these source decisions.
+
+Diagnostics below are actual operations/Sync/ReadyForQuery exchanges in the
+recorded fixture, excluding creation from individual units. They are counts,
+not speed measurements; first-page/current small-history variants are stated.
+
+| History unit | Operations / Sync / Ready |
+| --- | --- |
+| catalog_id, incarnation | 0 / 0 / 0 each |
+| initialize_layerstack | 8 / 8 / 8 |
+| fork from genesis Layer | 11 / 11 / 11 |
+| stage_changes | 12 / 12 / 12 |
+| commit_staged successful Commit | 11 / 11 / 11 |
+| layer_stack, layer_stacks first page, branch, commit, layer, stage | 3 / 3 / 3 each |
+| branch_snapshot with Commit head | 6 / 6 / 6 |
+| branches first page, stages first page | 4 / 4 / 4 each |
+| commit_history one Commit, layer_history genesis | 5 / 5 / 5 each |
+| add_layer successful publication | 11 / 11 / 11 |
+| discard_stage exact token | 5 / 5 / 5 |
+| reserve_inodes first allocation | 6 / 6 / 6 |
+| reserve_inodes while catalog locked | 3 / 3 / 3, Busy |
+
+Whole fixture connection A: 1 connection, 119 operations, 118 Sync + 1 simple
+Query, 119 ReadyForQuery, wire sent/received 56602/67179 B, protocol sent/received
+56294/66558 B. Connection B: 1 connection, 34 operations/Sync/Ready, wire
+8352/40835 B, protocol 8044/40214 B. Per-unit protocol byte counts are in
+checks/step7-connections.txt. No warm/timed sample, no lifetime-memory claim.
+
+NOT_RUN/open gaps: project Init (8), real combined parity (9), frozen harness
+and all acceptance rows (10–11), remote/cloud deployment and Linux system
+OpenSSL qualification. Current M3 acceptance is local PostgreSQL, as directed;
+remote/cloud capability remains configured but unqualified. No local M3
+covering check is skipped or failing. Step 12 remains gated on cluster 2 M9.
+
+LOC method: root production counter on exact first-parent/final staged trees,
+including shipped SQL, excluding tests/docs/tools. Step 6: combined
+139022 -> 140532 (+1510); reference 65417 -> 65417; core 73605 -> 75115;
+old-path 6160 -> 6160; new-path 3232 -> 4742; rest-core 64213 -> 64213.
+Step 7: combined 140532 -> 142416 (+1884); reference 65417 -> 65417;
+core 75115 -> 76999; old-path 6160 -> 6025; new-path 4742 -> 6626;
+rest-core 64213 -> 64348. The 135-line old-path change is cursor relocation;
+coexisting PostgreSQL history is replacement code, not simplification.
+This milestone-entry commit preserves all current subtotals.
+
+Production LOC: 142416 -> 142416 (delta +0)
