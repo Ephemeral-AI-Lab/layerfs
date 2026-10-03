@@ -1,0 +1,14 @@
+.F..................
+======================================================================
+FAIL: test_domain_source_component_names (test_check_product_boundary.ProductBoundaryTests.test_domain_source_component_names)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/tools/test_check_product_boundary.py", line 28, in test_domain_source_component_names
+    self.assertTrue(violations(path, "use layerfs_s3::S3Objects;"))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: [] is not true
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.022s
+
+FAILED (failures=1)

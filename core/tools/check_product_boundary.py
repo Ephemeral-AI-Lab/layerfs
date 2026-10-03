@@ -3,6 +3,7 @@
 from pathlib import Path
 import re
 import sys
+import tomllib
 
 
 ATTR = re.compile(r"#\s*!?\s*\[([^\]]*)\]", re.DOTALL)
@@ -20,12 +21,72 @@ UNSAFE = re.compile(r"\bunsafe\b")
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
 }
-UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry")
+UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-s3", "layerfs-metadata", "layerfs-project")
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
     "layerfs-content": "#![forbid(unsafe_code)]",
     "layerfs-telemetry": "#![forbid(unsafe_code)]",
+    "layerfs-s3": "#![forbid(unsafe_code)]",
+    "layerfs-metadata": "#![forbid(unsafe_code)]",
+    "layerfs-project": "#![forbid(unsafe_code)]",
 }
+
+
+# First-party production edges; third-party approvals and the locked graph are
+# checked separately. Existing native SQLite providers coexist until step 12.
+ALLOWED_DEPENDENCIES = {
+    "layerfs-telemetry": set(),
+    "layerfs-content": {"layerfs-telemetry"},
+    "layerfs-storage": {"layerfs-content", "layerfs-telemetry"},
+    "layerfs-history": {"layerfs-content"},
+    "layerfs-s3": {"layerfs-storage"},
+    "layerfs-metadata": {"layerfs-storage", "layerfs-history", "layerfs-content"},
+    "layerfs-project": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-telemetry"},
+}
+DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-project"}
+ENGINES_AND_CLUSTER2 = {
+    "layerfs-s3", "layerfs-metadata", "layerfs-overlay", "layerfs-workspace",
+    "layerfs-fuse", "layerfs-daemon", "layerfs-bridge", "layerfs-sandbox",
+    "layerfs-server", "layerfs-sdk", "layerfs-api-core",
+}
+
+
+def dependency_violations(source):
+    """Check production/build edges, including target tables and aliases."""
+    manifest = tomllib.loads(source)
+    name = manifest.get("package", {}).get("name")
+    if name not in ALLOWED_DEPENDENCIES:
+        return []
+    sections = [manifest.get(key, {}) for key in ("dependencies", "build-dependencies")]
+    for target in manifest.get("target", {}).values():
+        sections.extend(target.get(key, {}) for key in ("dependencies", "build-dependencies"))
+    found = []
+    for section in sections:
+        for alias, specification in section.items():
+            dependency = specification.get("package", alias) if isinstance(specification, dict) else alias
+            if dependency.startswith("layerfs-") and dependency not in ALLOWED_DEPENDENCIES[name]:
+                found.append((1, f"forbidden production dependency {name} -> {dependency}"))
+    return found
+
+
+def component_violations(path, source):
+    """Reject forbidden crate references in domain code and first-party imports."""
+    name = crate_name(path)
+    if name not in ALLOWED_DEPENDENCIES:
+        return []
+    found = []
+    if name in DOMAIN_CRATES:
+        for dependency in ENGINES_AND_CLUSTER2:
+            spelling = dependency.replace("-", "[-_]")
+            for match in re.finditer(r"\b" + spelling + r"\b", source):
+                found.append((source.count("\n", 0, match.start()) + 1,
+                              f"domain source names forbidden component {dependency}"))
+    for match in re.finditer(r"\b(layerfs_[a-z0-9_]+)\s*::", source):
+        dependency = match[1].replace("_", "-")
+        if dependency != name and dependency not in ALLOWED_DEPENDENCIES[name]:
+            found.append((source.count("\n", 0, match.start()) + 1,
+                          f"forbidden first-party source import {name} -> {dependency}"))
+    return found
 
 
 def crate_name(path):
@@ -84,6 +145,7 @@ def violations(path, source):
         for match in re.finditer(r"\b(?:rusqlite|sqlite)\s*::", source):
             found.append((source.count("\n", 0, match.start()) + 1, "engine access under encoding/ or pack/; use source seam"))
     found.extend(unsafe_violations(path, source))
+    found.extend(component_violations(path, source))
     return found
 
 
@@ -108,6 +170,10 @@ def main():
     for path in files:
         for line, reason in violations(path, path.read_text()):
             print(f"{path.relative_to(core)}:{line}: {reason}")
+            failures += 1
+    for manifest in sorted((core / "crates").glob("*/Cargo.toml")):
+        for line, reason in dependency_violations(manifest.read_text()):
+            print(f"{manifest.relative_to(core)}:{line}: {reason}")
             failures += 1
     if failures:
         print(f"FAIL: {failures} product-source boundary violations")

@@ -205,3 +205,72 @@ approved. Q10/Q12 remain unanswered. No operation counter or performance sample.
 Reference 65,417 -> 65,417; core 71,198 -> 71,198; old-path 6,159 -> 6,159;
 new-path 840 -> 840; rest-core 64,199 -> 64,199; no relocation.
 Production LOC: 136615 -> 136615 (delta +0)
+
+## 2026-10-03 — M0 complete: step 1 contracts and services
+
+The owner explicitly approved Q1's postgres/native-TLS dependency set, then
+instructed the agent to make remaining choices without further questions and
+record deviations. The plan's owner-delegated decisions table resolves Q4–Q13;
+Q2/Q3 retain prior explicit approval. No historical receipt was relabelled.
+
+Implementation commit is the commit containing this entry (parent `fb46d92f6`).
+Changes: dependency graph/source-reference/unsafe guard rules for cluster 1,
+seeded forbidden-edge tests, and the owned phase7_services up/reset/down/status
+tool. Credentials live only in private ignored target files. Runtime-table SQL
+is intentionally introduced at steps 6/7; M0 creates the schema namespace and
+bucket. The source-ordering correction is in the plan.
+
+Exact checks run:
+
+- `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check` — PASS.
+- `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings` — PASS.
+- `python3 core/tools/check_product_boundary.py` — PASS, 370 product Rust/SQL files and the allowed manifest edges.
+- `python3 -m unittest discover -s core/tools -p 'test_*.py'` — final PASS, 21 tests; seeded forbidden edges and source references fail as required; foreign-resource deletion is refused.
+- `python3 core/tools/phase7_services.py reset` — final PASS: cleanup/recreate/readiness/namespace and bucket bootstrap.
+- `python3 core/tools/phase7_services.py up` on complete setup — PASS: explicit `owned-services-and-volumes` reuse, identical epoch/images/settings hash.
+- All three pre-existing unrelated containers checked — PASS: original images retained and running.
+- `git diff --check` — PASS.
+
+Rust package runtime tests NOT_RUN for this tools/docs-only slice (no production
+source or Cargo input changed); the covering step-1 tests are the tools suite.
+Previous Rust check results are not described as a new provider proof. No engine
+crate tests, runtime-schema proof, new C2 operation counter or benchmark sample.
+M0 has no skipped covering check; M1 remains in progress at completed steps 2/3.
+
+Every red attempt retained in `checks/step1-*.txt`:
+
+- Initial tools FAIL: engine import scanner omitted digits, so an S3 import was
+  missed. Added digits; the seeded test passes.
+- Initial live up FAIL before creation: Docker's absent-container error is
+  lowercase. Normalize case without swallowing daemon/permission failures.
+- Next live up FAIL before creation: absent-network message says "network NAME
+  not found". Recognize that specific form and add its fixture; no generic error
+  fallback.
+- Next live up FAIL during startup readiness: an HTTP connection can close before
+  MinIO's health endpoint is ready. PostgreSQL's temporary initialization server
+  also must not count as final TCP readiness. Require pg_isready over TCP, handle
+  only startup connection failures within the setup polling budget, and add the
+  readiness fixture. Existing partial setup was explicitly reset after diagnosis;
+  the tool refuses silent partial resumption. Final reset and reuse both PASS.
+- These separately revealed tool faults required more check invocations than the
+  requested single-repair cadence. The extra attempts are disclosed; none was a
+  performance sample or an attempt to select a favorable timing.
+
+Service identity/profile (actual tool output):
+
+- PostgreSQL 17.11, image digest `639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652`.
+- MinIO RELEASE.2026-09-22T19-25-18Z, commit `df34868a88cc8c396807e04a7e220810b321bdaa`, image digest `4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285`.
+- PostgreSQL settings hash `e5e159f48d94d08910307b94056a010c7f41dbe90c0a588760d6a64ccd644f9d`; fsync/full_page_writes/synchronous_commit on; READ COMMITTED; UTF8; UTC; default statement_timeout=0.
+- Each server: 2 CPUs, 536,870,912-byte memory cap, no swap, 256 PIDs. MinIO UID 0,
+  compression/encryption/browser off, one named-volume drive; loopback ports only.
+- Final successful epoch `9571f8de27bece7c53a399ff`; state/secret files under
+  `target/phase7-services/`. Health polling counts are not instrumented; no count
+  is invented. The product-provider request diagnostics enter with the engines.
+
+LOC method remains the exact first-parent/final-staged root counter. Reference
+65,417 -> 65,417; core 71,198 -> 71,198; old-path 6,159 -> 6,159; new-path 840 ->
+840; rest-core 64,199 -> 64,199. Tool/docs/test changes contribute no production
+LOC. No relocation in this commit. Step 12 still waits on cluster 2 M9; the
+original prior-owner 4097 ignored test remains recorded with step 2.
+
+Production LOC: 136615 -> 136615 (delta +0)

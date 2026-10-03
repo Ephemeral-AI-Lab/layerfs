@@ -2,10 +2,31 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from check_product_boundary import production_files, unsafe_violations, violations
+from check_product_boundary import production_files, unsafe_violations, violations, dependency_violations
 
 
 class ProductBoundaryTests(unittest.TestCase):
+    def test_cluster1_dependency_edges(self):
+        for package in ("layerfs-storage", "layerfs-history", "layerfs-project", "layerfs-content"):
+            for dependency in ("layerfs-s3", "layerfs-metadata", "layerfs-workspace", "layerfs-sdk"):
+                for table in ("dependencies", "build-dependencies", "target.'cfg(unix)'.dependencies"):
+                    source = f'[package]\nname="{package}"\n[{table}]\nrenamed={{package="{dependency}",path="../{dependency}"}}\n'
+                    self.assertTrue(dependency_violations(source))
+                source = f'[package]\nname="{package}"\n[dev-dependencies]\n"{dependency}"={{path="../{dependency}"}}\n'
+                self.assertFalse(dependency_violations(source))
+        self.assertFalse(dependency_violations('[package]\nname="layerfs-metadata"\n[dependencies]\nlayerfs-history={path="../layerfs-history"}\n'))
+        self.assertTrue(dependency_violations('[package]\nname="layerfs-s3"\n[dependencies]\nlayerfs-history={path="../layerfs-history"}\n'))
+
+    def test_domain_source_component_names(self):
+        for folder in ("layerfs-storage", "layerfs-history", "layerfs-project", "layerfs-content"):
+            path = Path("core/crates") / folder / "src" / "implementation.rs"
+            self.assertTrue(violations(path, "use layerfs_s3::S3Objects;"))
+            self.assertTrue(violations(path, "// layerfs-metadata owns this"))
+            self.assertTrue(violations(path, "use layerfs_workspace::Workspace;"))
+        path = Path("core/crates/layerfs-metadata/src/implementation.rs")
+        self.assertFalse(violations(path, "use layerfs_storage::port::MetadataStore;"))
+        self.assertTrue(violations(path, "use layerfs_s3::S3Objects;"))
+
     def test_storage_encoding_engine_boundary(self):
         for folder in ("encoding", "pack"):
             path = Path("core/crates/layerfs-storage/src") / folder / "read.rs"

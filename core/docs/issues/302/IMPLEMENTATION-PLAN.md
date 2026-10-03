@@ -401,7 +401,7 @@ The local Docker profile remains the frozen measurement environment; no cloud
 latency or cloud integration proof is inferred from local results. MinIO's
 local profile is unchanged by this PostgreSQL requirement.
 
-The client choice remains Q1. The complete `postgres` client is now recommended
+The owner selected Q1. The complete `postgres` client is used
 for the existing synchronous C2 ports, with a TLS connector whose exact dependency
 tree/build requirements must be recorded before approval/addition. `tokio-postgres`
 is the async alternative; using it to make C2 calls yield requires an explicit
@@ -415,7 +415,7 @@ volume, with versioning, object lock, lifecycle rules, server-side compression
 and encryption off. PostgreSQL uses its default durability settings and
 `READ COMMITTED`.
 
-**Concrete Q1 client proposal (2026-10-03; not approved yet).** Use
+**Selected Q1 client (explicit owner approval, 2026-10-03).** Use
 `postgres =0.19.14`, `postgres-native-tls =0.5.3` and `native-tls =0.2.18`.
 The database client wrapper is `layerfs-metadata/src/client.rs`; it delegates
 protocol/authentication to the complete client. The S3 client remains
@@ -434,7 +434,7 @@ final core dependency union. No selected package declared an MSRV above 1.85;
 is retained in `checks/pg-client-tls-proposal-inventory.json`. Reproduce with
 `cargo +1.85.1 tree --manifest-path target/phase7-agent/pg-client-tls-proposal/Cargo.toml --locked --target aarch64-unknown-linux-musl`.
 On Linux native-tls requires system OpenSSL; vendoring remains forbidden.
-No dependency or system package is added without the required approval. This
+The owner approved this dependency set; no vendored feature is enabled. This
 proposal keeps synchronous C2 ports; it does not claim non-blocking C2 calls.
 
 **Proposed** (not yet confirmed by the owner; image pins are Q12). These are the
@@ -710,16 +710,62 @@ is in the ledger entry.
 | D10 port shape | Seven transactional units (§0.2) | Operations sharing one SQL transaction today: the wave (`cas/save.rs` → `owner.with_wave`: lookup, pack and row inserts, collision validation, signature flush, commit), same-save reads of unpublished rows (`cas/store.rs::SaveOperation::read_batch`), ordinal reservation (`cas/pool_lane.rs`), publish (`cas/lifecycle.rs::finish_inner`). Each maps to `locate` + wave buffer + `register`; none needs a transaction held across calls |
 | D12 pooled packs | Sealed when full or when referenced by a registered leaf; in-place append removed | `pack/placement.rs` keeps only this lane open; `lifecycle.rs` already closes the tail at every save. Base shape: 1,585 / 4,035 / 8,959 appends, 41 / 72 / 172 pooled packs, 1.10–2.41 pooled packs per save. Cost in extra packs: unknown, counted in step 4b |
 | D13 Init home | New crate `layerfs-project` | C2 may not depend on C5; Init reads a directory; `examples/verify_namespace.rs` already needs only C1, C2 and C5 |
-| D5 S3 client | Own client, pending approval (Q2) | `sha2 0.10.9` is already a product dependency (`cargo tree -i sha2`); no new package |
-| D11 PostgreSQL client | Presented, not chosen (Q1) | Resolved trees, 2026-10-03, `aarch64-unknown-linux-musl`, not built: `postgres 0.19.14` = 58 packages, 35 new names including `tokio 1.53.1`, `tokio-util`, `mio`, `socket2`, `futures-*`, and 12 second versions of locked crates; `postgres-protocol 0.6.12` = 29 packages, 16 new names, no runtime; `pq-sys 0.7.6` = 2 packages plus native libpq in every build |
+| D5 S3 client | Own client, approved (Q2) | `sha2 0.10.9` is already a product dependency (`cargo tree -i sha2`); no new package |
+| D11 PostgreSQL client | Complete postgres client plus verified TLS, approved (Q1); earlier comparison retained below | Resolved trees, 2026-10-03, `aarch64-unknown-linux-musl`, not built: `postgres 0.19.14` = 58 packages, 35 new names including `tokio 1.53.1`, `tokio-util`, `mio`, `socket2`, `futures-*`, and 12 second versions of locked crates; `postgres-protocol 0.6.12` = 29 packages, 16 new names, no runtime; `pq-sys 0.7.6` = 2 packages plus native libpq in every build |
 | D6 pack size | Unchanged | No count yet says otherwise; the Init-10,000 request count (1,320) times the PUT cost measured in step 5 is the evidence that would |
 | `saves` and ceilings | Removed, with the closure rule | §0.6 row 3 |
 | Coexistence | Additive; old path retired in step 12 | §0.6 row 8; only `layerfs-server` and `layerfs-sdk` consume the old API |
 | Baseline | No eligible row exists; a matched arm is taken | §3.1 |
 
+## Owner-delegated decisions, 2026-10-03
+
+The owner explicitly approved Q1's complete postgres/native-TLS dependency set,
+Q2's own S3 client and Q3's project crate, then directed: "continue to make your
+best judgement and stick with the implementation plan (no need to ask me
+question, but you can record the decision you made that is not defined or
+different from the plan)". The remaining choices are now delegated; these are
+prospective decisions, not measurement claims or historical receipt changes.
+
+| Question | Decision |
+| --- | --- |
+| Q1 | postgres 0.19.14 + postgres-native-tls 0.5.3 + native-tls 0.2.18, system OpenSSL on Linux; synchronous C2 ports; local/cloud config and verified TLS |
+| Q2 / Q3 | Approved own S3 client / layerfs-project |
+| Q4 | The SDK is the eventual host composition root; this cluster supplies project APIs/examples and does not edit cluster 2 product source |
+| Q5 | Strict candidate <= matched baseline, one pair; no added tolerance |
+| Q6 | All four Init tiers, including 10,000 and 100,000, remain in the declared acceptance set |
+| Q7 | Preserve the previously frozen history command 60/170/170 s and verifier 10/20/30 s profiles as declared extended-history exceptions; never raise them after a miss |
+| Q8 | PostgreSQL: LayerFS heap, index and TOAST relation allocation. MinIO: allocated object data and per-object metadata; exclude system directory, with that exclusion disclosed. Global PostgreSQL catalogs/WAL are separately reported overhead |
+| Q9 | Default synchronous_commit=on, fsync=on, full_page_writes=on; no speed repair by disabling sync |
+| Q10 | Missing required services fail engine tests; no skipped provider proof |
+| Q11 | Keep server/SDK builds until cluster 2 M9; step 12 remains externally gated |
+| Q12 | PostgreSQL 17 official Bookworm digest and existing MinIO RELEASE.2026-09-22T19-25-18Z digest below |
+| Q13 | Preserve the source-defined SDK Init profile's matched-baseline acceptance. Record the original cold 2.7 s target separately with its operation/profile applicability; do not reinterpret r045 or substitute a different API to claim that target |
+
+Immutable service pins, resolved and inspected once before infrastructure checks:
+
+- PostgreSQL: `postgres@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652` (17-bookworm; server reports its exact minor in tool status).
+- MinIO: `cgr.dev/chainguard/minio@sha256:4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285`; binary reports `RELEASE.2026-09-22T19-25-18Z`, commit `df34868a88cc8c396807e04a7e220810b321bdaa`, go1.27.1 linux/arm64.
+
+The development tool declares each server at 2 CPUs, 512 MiB memory, no swap,
+256 PIDs, loopback-only published ports; MinIO uses UID 0 for its root-owned named
+volume. These are fixed before measurement, not changed to recover a miss.
+Credentials are generated and saved only in private ignored target files.
+`up` reuses complete identity-matched owned services; `reset` recreates owned
+containers/volumes; every operation refuses foreign resources.
+
+Step-1 source ordering correction: C2/C5 runtime schemas are frozen only in steps
+6/7, so step 1 creates the PostgreSQL database/schema namespace and MinIO bucket.
+The runtime-table bootstrap is explicit when those SQL files enter; no empty
+product crate or placeholder schema is added to force the earlier tool step.
+M0 proves tooling/readiness, not metadata-provider behavior.
+
+Step-5 measurement correction: its early 256 KiB/16 MiB checks record request
+and byte counts only. Request-cost timings wait for the step-10 frozen harness,
+cases and cache contract, as required by the implementation prompt.
+
 ## Questions for the owner
 
-1. **D11, updated for the owner’s local/cloud requirement:** approve the complete `postgres 0.19.14` synchronous client (recommended for the current ports), choose `tokio-postgres` and amend the ports to async, or retain `postgres-protocol 0.6.12` with our own connection? TLS dependencies remain unapproved until their concrete tree is presented.
+1. **D11, updated for the owner’s local/cloud requirement:** approve the complete `postgres 0.19.14` synchronous client (recommended for the current ports), choose `tokio-postgres` and amend the ports to async, or retain `postgres-protocol 0.6.12` with our own connection? **Owner answer: postgres 0.19.14 + postgres-native-tls 0.5.3 + native-tls 0.2.18 approved in this chat, 2026-10-03.**
 2. **D5:** approve the own S3 client using the already-locked `sha2`, with HMAC written in `layerfs-s3`? **Owner answer: approved in this implementation chat, 2026-10-03.**
 3. Approve a 14th crate for Init, named `layerfs-project`? **Owner answer: approved in this implementation chat, 2026-10-03.**
 4. Which host-side crate may name the engines to call Init outside a sandbox — `layerfs-api`'s SDK (recommended) or another?
