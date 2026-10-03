@@ -783,3 +783,10 @@ key/body authentication remains at the opaque ObjectStore boundary. C1 exposes
 an immutable checked PoolingLeaf view, so pooled ordinal assignment and body
 construction share a canonical decode; malformed canonical/ordinal/body checks
 remain. Full result and any failed checks belong to #302 progress/evidence.
+
+Init now admits sealed bodies through a rolling pool of at most4 scoped upload
+workers per ready list. A completed slot can take the next body without a
+chunk-wide barrier. The same body ownership and byte limits hold; every admitted
+attempt joins before any registration, and failure stops new admission without
+retry or orphan deletion. S3 leases a free member of its existing socket window
+before I/O; ordinary callers exceeding that fixed window wait, not expand it.

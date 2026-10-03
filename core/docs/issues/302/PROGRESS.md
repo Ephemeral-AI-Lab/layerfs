@@ -1206,3 +1206,35 @@ No unchanged-arm rerun or best-of selection, no push/PR/merge/retirement.
 Evidence-only Production LOC143581->143581(delta+0), exact parent/staged
 root counter incl shipped SQL; reference65417/core78164/old6025/new7774/
 rest64365 unchanged.
+
+## 2026-10-04 — rolling upload window after side-conversation finding
+
+The side conversation identifies fixed chunks(4) as an admission barrier and
+requests considering work-conserving four uploads. Implement under the owner's
+existing S3 optimization scope: at most4 scoped persistent workers consume the
+sealed pack list, each admits its next pack after its own acknowledgement,
+without waiting for unrelated slow requests. Shared counters record attempts/
+bytes on the producer after all admitted jobs join; errors stop admission,
+retain terminal outcome semantics, and prevent metadata registration. Bodies
+remain borrowed from the same bounded ready state, no extra payload queue/copy.
+
+S3 connection admission prefers an idle socket under a short selection mutex;
+I/O is outside that mutex. Init's4 callers do not queue behind an unrelated
+busy round-robin socket while another is free. Excess ordinary caller contention
+waits within the same fixed connection window; no new socket/retry.
+
+Public-API controlled-channel proofs PASS: pack5 starts while pack1 gated,
+active calls never exceed4; real MinIO proxy proves request5 reaches free
+connection while reply1 is held, exactly4 connections/5 acknowledged HEADs.
+Storage/S3/project owning suite PASS; final Clippy/fmt/boundary PASS. Initial
+new test compile failed on end-of-block mutex-guard lifetime; retain error and
+fix test-only local count binding. No passing suite resampled. Prior C5 stress
+Busy FAIL remains.
+
+Freeze another changed-mechanism identity: one new matched default-profile
+100/1000 pair each, and one1000 PG/mc count diagnostic. Same fixtures/cold
+contract, service defaults, physical/working limits, four constructors/uploads,
+15s children/9.5s proof; complete runner envelopes15s (cause25s outer exception).
+All earlier FAIL receipts retained, no best-of. These children NOT_RUN here.
+Exact production LOC parent/staged/committed comparison in commit message;
+root counter/SQL scope unchanged. No architecture or port/format change.

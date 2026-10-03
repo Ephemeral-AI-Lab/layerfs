@@ -172,3 +172,54 @@ fn bounded_puts_send_immediately_and_still_require_conditional_acknowledgement()
     store.read(key, None, &mut out).unwrap();
     assert_eq!(out, body);
 }
+
+#[test]
+fn a_fifth_call_uses_a_free_connection_while_the_first_reply_is_gated() {
+    let config = support::config("available-slot");
+    let initial = S3Objects::connect(config.clone()).unwrap();
+    let body = vec![3; 100];
+    let key = ObjectKey::for_bytes(&body);
+    initial.put_if_absent(key, &body).unwrap();
+    drop(initial);
+    let (starts, events) = std::sync::mpsc::channel();
+    let (release, gate) = std::sync::mpsc::channel();
+    let (config, proxy) = support::gated_connections(&config, starts, gate);
+    let store = std::sync::Arc::new(S3Objects::connect_parallel(config).unwrap());
+    let first_store = store.clone();
+    let first = std::thread::spawn(move || first_store.head(key).unwrap());
+    assert_eq!(
+        events
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap(),
+        0
+    );
+    let jobs = (0..3)
+        .map(|_| {
+            let store = store.clone();
+            std::thread::spawn(move || store.head(key).unwrap())
+        })
+        .collect::<Vec<_>>();
+    for job in jobs {
+        assert_eq!(job.join().unwrap(), Some(100));
+    }
+    for _ in 0..3 {
+        events
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap();
+    }
+    let fifth_store = store.clone();
+    let fifth = std::thread::spawn(move || fifth_store.head(key).unwrap());
+    let used = events.recv_timeout(std::time::Duration::from_secs(2)).ok();
+    release.send(()).unwrap();
+    assert_eq!(first.join().unwrap(), Some(100));
+    assert_eq!(fifth.join().unwrap(), Some(100));
+    assert!(
+        used.is_some_and(|connection| connection != 0),
+        "the fifth request must reach an idle connection before reply one is released"
+    );
+    let counts = store.diagnostics().unwrap();
+    assert_eq!(counts.connections, 4);
+    assert_eq!(counts.heads, 5);
+    drop(store);
+    proxy.join().unwrap();
+}

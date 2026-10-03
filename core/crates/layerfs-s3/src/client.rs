@@ -8,7 +8,7 @@ use crate::{
 use layerfs_storage::port::{ByteRange, ObjectError, ObjectKey, ObjectStore, Put};
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
-    Mutex,
+    Mutex, MutexGuard, TryLockError,
 };
 struct Connection {
     http: Option<Http>,
@@ -22,6 +22,7 @@ pub struct S3Objects {
     config: S3Config,
     connections: Vec<Mutex<Connection>>,
     next: AtomicUsize,
+    selection: Mutex<()>,
     failed: AtomicBool,
 }
 impl S3Objects {
@@ -51,6 +52,7 @@ impl S3Objects {
             config,
             connections,
             next: AtomicUsize::new(0),
+            selection: Mutex::new(()),
             failed: AtomicBool::new(false),
         })
     }
@@ -66,6 +68,29 @@ impl S3Objects {
             );
         }
         Ok(counts)
+    }
+    fn available_connection(&self) -> Result<MutexGuard<'_, Connection>, ObjectError> {
+        // Serialize admission, not I/O: an available slot cannot be taken by a
+        // competing selector while this bounded scan chooses it. The Init pool
+        // has at most four callers, so a completing worker can reuse a free slot.
+        let selection = self.selection.lock().map_err(|_| ObjectError::Uncertain)?;
+        let first = self.next.fetch_add(1, Ordering::Relaxed) % self.connections.len();
+        for offset in 0..self.connections.len() {
+            match self.connections[(first + offset) % self.connections.len()].try_lock() {
+                Ok(connection) => return Ok(connection),
+                Err(TryLockError::WouldBlock) => {}
+                Err(TryLockError::Poisoned(_)) => {
+                    self.failed.store(true, Ordering::Release);
+                    return Err(ObjectError::Uncertain);
+                }
+            }
+        }
+        // Ordinary callers exceeding the selected window wait as before; no
+        // connection or request is created to expand the in-flight limit.
+        drop(selection);
+        self.connections[first]
+            .lock()
+            .map_err(|_| ObjectError::Uncertain)
     }
     fn request(
         &self,
@@ -88,10 +113,7 @@ impl S3Objects {
         if self.failed.load(Ordering::Acquire) {
             return Err(ObjectError::Uncertain);
         }
-        let index = self.next.fetch_add(1, Ordering::Relaxed) % self.connections.len();
-        let mut connection = self.connections[index]
-            .lock()
-            .map_err(|_| ObjectError::Uncertain)?;
+        let mut connection = self.available_connection()?;
         if self.failed.load(Ordering::Acquire) {
             return Err(ObjectError::Uncertain);
         }

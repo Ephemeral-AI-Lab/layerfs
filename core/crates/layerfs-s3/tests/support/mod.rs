@@ -119,3 +119,70 @@ pub fn proxy(config: &S3Config, fault: Fault) -> (S3Config, std::thread::JoinHan
     });
     (proxied, thread)
 }
+
+/// Four real upstream connections; delay only connection zero's first HEAD reply.
+pub fn gated_connections(
+    config: &S3Config,
+    starts: std::sync::mpsc::Sender<usize>,
+    release: std::sync::mpsc::Receiver<()>,
+) -> (S3Config, std::thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let mut proxied = config.clone();
+    proxied.endpoint = format!("http://{}", listener.local_addr().unwrap());
+    let address = config.endpoint.strip_prefix("http://").unwrap().to_owned();
+    let release = std::sync::Arc::new(std::sync::Mutex::new(release));
+    let thread = std::thread::spawn(move || {
+        std::thread::scope(|scope| {
+            for connection in 0..4 {
+                let (client, _) = listener.accept().unwrap();
+                let starts = starts.clone();
+                let release = release.clone();
+                let address = &address;
+                scope.spawn(move || {
+                    client
+                        .set_read_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                    let mut client = BufReader::new(client);
+                    let upstream = TcpStream::connect(address).unwrap();
+                    upstream
+                        .set_read_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                    let mut upstream = BufReader::new(upstream);
+                    let mut first = true;
+                    loop {
+                        let mut request = Vec::new();
+                        if client.read_until(b'\n', &mut request).unwrap() == 0 {
+                            break;
+                        }
+                        assert!(request.starts_with(b"HEAD "));
+                        loop {
+                            let mut line = Vec::new();
+                            assert!(client.read_until(b'\n', &mut line).unwrap() > 0);
+                            let end = line == b"\r\n";
+                            request.extend(line);
+                            if end {
+                                break;
+                            }
+                            assert!(request.len() < 16 * 1024);
+                        }
+                        assert_eq!(length(&request), 0);
+                        upstream.get_mut().write_all(&request).unwrap();
+                        let response = header(&mut upstream);
+                        assert!(response.starts_with(b"HTTP/1.1 200 "));
+                        starts.send(connection).unwrap();
+                        if connection == 0 && first {
+                            release
+                                .lock()
+                                .unwrap()
+                                .recv_timeout(Duration::from_secs(10))
+                                .unwrap();
+                        }
+                        first = false;
+                        client.get_mut().write_all(&response).unwrap();
+                    }
+                });
+            }
+        })
+    });
+    (proxied, thread)
+}

@@ -1172,3 +1172,10 @@ compilation identity, one new matched pair per100/1000, plus one1000 changed-
 mechanism diagnostic (MinIO/PG observers explicit). First treatment failures
 remain. No routine earlier-family sweep: exact pack/canonical/namespace/known
 digest covering proofs validate the changed hash scope.
+
+The rolling-window follow-up reuses exactly4 upload workers/sockets and the
+existing ready bodies, with upload-before-registration and terminal failure
+handling. A changed source identity needs one matched pair100/1000 plus a
+1000 count diagnostic, not an unchanged-arm rerun. Side-conversation container
+aggregation remains architectural study only: current D10 pack/digest/location
+contract is not changed by this scheduling treatment.
