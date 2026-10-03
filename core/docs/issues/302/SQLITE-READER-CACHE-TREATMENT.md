@@ -26,3 +26,41 @@ another all-tier qualification. Other earlier FAIL receipts remain unchanged.
 There is no claim that operation-owned read reuse fixes Save-wave prefetch
 thrashing, duplicate backend authentication, cold-preconditioning overhead,
 allocation overages or the missing history driver/proof.
+
+
+## Matched1000-file outcome at1735fb8b0
+
+One release/locked sample per arm. Complete-product Phase4.5=143347625ns;
+candidate=224717708ns, ratio1.56764, **time FAIL**. Exact arithmetic:
+2247177080 >1576823875. Roots match. Cold-content attestation, independent
+sampled proof, cleanup and allocation PASS. Final allocation23101440/20561920B.
+Performance envelopes254645208/1105380958ns; verification50093167/539248542ns,
+both under their15s/9.5s bounds. The verifier is excluded from product time.
+
+Candidate statements1284, executed VM209982, transactions39, write commits20,
+commit_ns119135582. C2read_packs4/3402630B, payload_reads0, reserve8,publish9.
+These are cumulative scoped diagnostics; nested spans overlap. This small case
+cannot attribute the100000-file payload reads. It supplies no evidence of a
+material Init speed improvement over the earlier treatment227274084ns: the
+windows differ and there is one sample per changed identity.
+
+Raw receipts: benchmark-results/fs-bench-pro/issue302-reader1000-{baseline,
+candidate}-treatment1; comparison JSON inissue302-reader1000-comparison-treatment1.
+Reproduce once at the frozen source with runner.py run --case
+phase7-sqlite-init-1000-v2 --arm baseline --baseline-root
+target/phase7-baseline/layerfs --out <fresh-owned-path>, then --arm candidate
+with its own fresh output. Read benchmark_agent_report.md before each invocation.
+Do not replay either measured arm at this identity.
+
+Code commit1735fb8b0: Production LOC137501->137502(+1), reference65417,
+core72084->72085; active28040->28041, inactive44044 unchanged; exact first-parent
+snapshot counter recorded in commit. Full-workspace tests not repeated; owning
+four transaction/cache tests and scoped all-target Clippy pass, fmt/boundary
+and23 boundary self-tests pass. No CI/preflight/push/PR/merge.
+
+Remaining: all four prior Init time failures and large-tier allocation/envelope
+failures remain. Histories17/53/157 remain NOT_RUN. All-seven goal ACTIVE.
+Next source-backed investigation is Save-wave chain prefetch: it fetches the
+entire frontier before traversing it, while aggregate pack bytes may exceed its
+unchanged cache bound. A count diagnostic must establish reacquisition before
+any change. Durable exchange composition remains the larger small-case path.

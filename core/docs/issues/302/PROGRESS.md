@@ -1396,3 +1396,15 @@ Next: bounded allocation/publication composition, repeated payload acquisition,
 cold-preconditioning envelope cause and namespace-count qualification; actual
 history driver/proof/deadline still pending. All-seven goal ACTIVE; no unchanged
 arm replay or deadline/worker/buffer/durability relaxation.
+
+
+### Operation-owned Reader treatment1735fb8b0
+
+The public-API count test exposed repeated acquisition across demands within one
+Reader (read_packs1->2). Retain existing bounded authenticated map across demands;
+new Reader still pays. Four owning tests, scoped Clippy, fmt/boundary+23 pass.
+Matched1000 v2 product143347625/224717708ns: timeFAIL (1.56764x).
+Exact roots/cache/proof/cleanup/allocationPASS; storage23101440/20561920B,
+envelopes254645208/1105380958ns, proof50093167/539248542ns. No established
+material Init speed benefit. Preserve all earlierFAIL/NOT_RUN. Details and
+commands inSQLITE-READER-CACHE-TREATMENT.md. Active goal unchanged.
