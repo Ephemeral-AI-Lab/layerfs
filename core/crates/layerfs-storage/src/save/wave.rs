@@ -49,9 +49,14 @@ impl State<'_> {
             .into_iter()
             .collect();
         self.storage.source.locate(&ids)?;
-        let roots = ids
+        // Logical children require locator membership, not payload reconstruction.
+        // Only exact-reuse objects and declared physical candidates need chains.
+        let roots = objects
             .iter()
-            .filter_map(|id| self.storage.source.location(*id, i64::MAX).transpose())
+            .flat_map(|o| std::iter::once(o.id()).chain(o.predecessors().ids()))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .filter_map(|id| self.storage.source.location(id, i64::MAX).transpose())
             .collect::<StorageResult<Vec<_>>>()?;
         crate::read::chains(
             &self.storage.source,

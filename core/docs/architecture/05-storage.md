@@ -802,3 +802,16 @@ single oversize-pack exception apply; no cache budget is enlarged. A fresh
 Reader starts empty. Published packs are immutable and pack IDs are never reused,
 so retaining an authenticated body within the operation does not reinterpret a
 later publication. Results remain in demand order, including duplicate IDs.
+
+
+### Logical reference membership and physical reconstruction
+
+This change is based on896e84c3b. Save-wave membership still batches offered IDs,
+logical references and declared predecessors. Chain prefetch now selects only
+offered IDs for exact reuse and declared physical predecessors. Logical children
+remain subject to admission and atomic-publication closure checks; their bodies
+are acquired when actually reconstructed, not merely because a new parent names
+them. Automatically selected physical candidates still undergo the selector's
+bounded authenticated chain acquisition. Exact reuse, lost-winner comparison,
+cycle/depth/work checks and full pack authentication are unchanged. This removes
+no required read check and enlarges no cache or publication bound.
