@@ -1265,3 +1265,35 @@ Refinement incorporated before implementation:12 logical tables in one SQLite
 Store, Objects/Metadata/History groups shared once; no whole-namespace atomicity
 claim. Cross-group publication at adapter/publication.rs. Published packs stay
 immutable; private append mechanics cannot mutate previous sealed digests.
+
+## 2026-10-04 — durable database-only implementation; active competitive goal
+
+The SQLite-only implementation replaces metadata crate and both physical ports,
+shares Objects/Metadata/History in one database, and removes service/S3 packages
+from active workspace. PostgreSQL explicitly unavailable. Common operations,
+SQLite mechanics, immutable final inserts, borrowed/shared body publication,
+first-wins bulk locator writes, WAL/FULL and all required readback settings are
+implemented. Exact source/retirement/LOC classification is in the local commit.
+See SQLITE-IMPLEMENTATION-ROUND.md for coverage and limitations.
+
+Initial owning58 PASS; final changed-mechanism Persistence/Project40 PASS;
+Clippy/fmt/boundary/tooling23 PASS at their recorded identities. Canonical
+namespace oracle100/1000 and live-process SIGKILL recovery PASS. Historical
+native/service tests archived and never counted as new coverage. The first
+Clippy findings and compilation/lock errors are retained; no third-party identity
+is added by the final narrow lock update. No source warmup/speed sample occurred.
+
+Owner's new active goal uses10*candidate_ns<=11*matched_phase45_ns, all four Init
+tiers and three history selections, no implicit budget. All competitive rows
+remain NOT_RUN; history deadline exception/Init allocation criterion pending.
+Count instrumentation is implemented; large-tier memory qualification and
+conditional paging remain incomplete. No whole-import boundedness, terminal
+success, release admission, push, PR or merge is claimed.
+
+New direct Init/verifier examples compile; legacy PG/MinIO speed/cause entrypoints
+refuse before service start. Final changed-counter publication/recovery7 PASS.
+Actual statements include connection/readback/schema work; write commits are
+separate from read commits and never misrepresented as observed sync syscalls.
+New matched reference harness source is product-unmodified and recording-disabled.
+Both fresh database creation and final close remain in the proposed complete
+child comparison, with candidate checkpoint included. New runner/receipts pending.

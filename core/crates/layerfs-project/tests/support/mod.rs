@@ -5,10 +5,7 @@ use layerfs_content::{
 };
 use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId};
 use layerfs_project::{init, InitRequest, Initialized};
-use layerfs_storage::{
-    port::{MetadataStore, ObjectStore},
-    Storage,
-};
+use layerfs_storage::{port::PackPersistence, Storage};
 use layerfs_telemetry::timer::Timing;
 use std::{
     collections::BTreeMap,
@@ -24,7 +21,6 @@ use std::{
 pub mod memory_history;
 #[path = "../../../layerfs-storage/tests/support/memory_metadata.rs"]
 pub mod memory_metadata;
-pub mod memory_objects;
 pub struct Fixture {
     pub path: PathBuf,
     pub source: PathBuf,
@@ -147,30 +143,12 @@ impl Fixture {
             .to_string_lossy()
             .starts_with("ordering-")));
     }
-    pub fn service_config(&self) -> layerfs_metadata::PgConfig {
-        let mut c = layerfs_metadata::PgConfig::from_env().unwrap();
-        // Preserve the fixture's atomic counter as well as PID and timestamp.
-        // Timestamp alone can collide between parallel cases on this host.
-        c.schema = format!(
-            "lfs302_{}",
-            self.path
-                .file_name()
-                .unwrap()
-                .to_string_lossy()
-                .replace('-', "_")
-        );
-        assert!(
-            c.schema.len() <= 63,
-            "test schema exceeds PostgreSQL identifier bound"
-        );
-        c
-    }
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
     }
 }
-pub fn storage(metadata: Arc<dyn MetadataStore>, objects: Arc<dyn ObjectStore>) -> Storage {
-    Storage::new(metadata, objects).unwrap()
+pub fn storage(metadata: Arc<dyn PackPersistence>) -> Storage {
+    Storage::new(metadata).unwrap()
 }

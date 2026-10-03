@@ -1,0 +1,20 @@
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-persistence v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-persistence)
+    Checking layerfs-project v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-project)
+error: empty line after doc comment
+   --> crates/layerfs-storage/tests/support/mod.rs:252:1
+    |
+252 | / /// Keep an existing larger row's capacity; a test that intentionally adds
+253 | |
+    | |_^
+254 |   pub fn patterned(len: usize) -> Vec<u8> {
+    |   --------------------------------------- the comment documents this function
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#empty_line_after_doc_comments
+    = note: `-D clippy::empty-line-after-doc-comments` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::empty_line_after_doc_comments)]`
+    = help: if the empty line is unintentional remove it
+
+error: could not compile `layerfs-storage` (test "codec_frames") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-storage` (test "physical_formats") due to 1 previous error

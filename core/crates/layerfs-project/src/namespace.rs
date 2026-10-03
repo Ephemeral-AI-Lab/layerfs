@@ -43,10 +43,14 @@ static NEXT_ORDERING_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 /// One bounded progress byte on a long native import, separate from result data.
 pub(crate) struct ImportProgress {
     deadline: Instant,
+    pub(crate) work: crate::NamespaceWork,
 }
 impl ImportProgress {
     pub fn new(deadline: Instant) -> Self {
-        Self { deadline }
+        Self {
+            deadline,
+            work: crate::NamespaceWork::default(),
+        }
     }
     pub fn deadline(&self) -> Instant {
         self.deadline
@@ -101,6 +105,15 @@ pub(crate) fn build_namespace(
         timer,
     )?;
     let directories = directory_updates(entries, &serials)?;
+    progress.work.serial_capacity_bytes = serials.capacity() * std::mem::size_of::<u64>();
+    progress.work.inode_capacity_bytes = inodes.capacity() * std::mem::size_of::<InodeUpdate>();
+    progress.work.directory_bindings = directories.iter().map(|d| d.changes.len()).sum();
+    progress.work.directory_capacity_bytes =
+        directories.capacity() * std::mem::size_of::<DirectoryUpdate>();
+    progress.work.change_capacity_bytes = directories
+        .iter()
+        .map(|d| d.changes.capacity() * std::mem::size_of::<(PathName, Option<u64>)>())
+        .sum();
     let input = FilesystemInput {
         base: None,
         scope,
@@ -117,7 +130,7 @@ pub(crate) fn build_namespace(
         std::process::id(),
         NEXT_ORDERING_DIRECTORY.fetch_add(1, Ordering::Relaxed)
     ));
-    let save = store.begin_parallel_save().map_err(storage)?;
+    let save = store.begin_save().map_err(storage)?;
     fs::DirBuilder::new().mode(0o700).create(&scratch)?;
     let mut sink = save.sink();
     let mut backing = FileBacking::new(&scratch);
@@ -161,7 +174,7 @@ fn prerequisites(
     progress: &mut ImportProgress,
     timer: &TimingScope<'_, Active>,
 ) -> Result<Vec<InodeUpdate>, Failure> {
-    let save = store.begin_parallel_save().map_err(storage)?;
+    let save = store.begin_save().map_err(storage)?;
     let built = {
         let mut handoff = save.sink();
         let result = timer.child("history.prerequisites").run(|_| {

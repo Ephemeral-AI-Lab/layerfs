@@ -33,7 +33,7 @@ impl Source for WaveSource<'_> {
             .iter()
             .find(|pack| pack.info.pack_id == id)
         {
-            Some(pack) => Ok(pack.body.clone()),
+            Some(pack) => Ok(pack.body.as_ref().clone()),
             None => self.fetch.pack_bytes(id),
         }
     }

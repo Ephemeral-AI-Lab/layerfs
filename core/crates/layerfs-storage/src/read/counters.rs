@@ -7,7 +7,7 @@ pub struct Diagnostics {
     pub policy: u64,
     /// Batched locator calls.
     pub locate: u64,
-    /// Batched metadata-body calls.
+    /// Batched physical-body calls.
     pub read_packs: u64,
     /// Catalogue set/page calls.
     pub value_groups: u64,
@@ -16,21 +16,15 @@ pub struct Diagnostics {
     /// Reservation calls.
     pub reserve: u64,
     /// Atomic registration calls.
-    pub register: u64,
-    /// Conditional payload creates.
-    pub puts: u64,
+    pub publish: u64,
     /// Payload reads.
-    pub gets: u64,
-    /// Payload length queries.
-    pub heads: u64,
-    /// Payload bytes submitted.
-    pub put_bytes: u64,
+    pub payload_reads: u64,
     /// Payload bytes returned.
-    pub get_bytes: u64,
-    /// Metadata body bytes returned.
-    pub metadata_bytes: u64,
-    /// Metadata body bytes acknowledged by registration.
-    pub metadata_write_bytes: u64,
+    pub payload_read_bytes: u64,
+    /// Physical body bytes returned.
+    pub pack_read_bytes: u64,
+    /// Physical body bytes acknowledged by publication.
+    pub pack_write_bytes: u64,
     /// Sealed pooled packs acknowledged by registration.
     pub pooled_packs: u64,
     /// Value catalogue rows acknowledged by registration.

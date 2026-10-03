@@ -1,7 +1,6 @@
 //! One producer's bounded pending, framing and reconstruction state.
 use super::seal::Packer;
 use crate::{
-    cas::{PendingBatch, SaveProfile},
     encoding::{
         delta::{
             candidates::Candidates,
@@ -13,6 +12,7 @@ use crate::{
     },
     error::StorageResult,
     location::SignatureRow,
+    save::{PendingBatch, SaveProfile},
     storage::Storage,
 };
 use std::{
@@ -36,11 +36,10 @@ pub struct WriteOutcome {
     /// Canonical bytes of new acknowledged objects.
     pub canonical_bytes: u64,
     /// Actual pooled selection and value assignment counts, including race trials.
-    pub pool: crate::cas::PoolCounters,
+    pub pool: crate::save::PoolCounters,
 }
 
 pub(super) struct State<'a> {
-    pub(super) parallel_uploads: bool,
     pub(super) storage: &'a Storage,
     pub(super) pending: PendingBatch,
     pub(super) candidates: RefMut<'a, Candidates>,
@@ -53,7 +52,7 @@ pub(super) struct State<'a> {
     pub(super) pool: PoolReader,
     pub(super) pool_index: RefMut<'a, PoolIndex>,
     pub(super) pool_synced: bool,
-    pub(super) pool_stats: crate::cas::PoolCounters,
+    pub(super) pool_stats: crate::save::PoolCounters,
     pub(super) next_ordinal: u64,
     pub(super) ordinal_end: u64,
     pub(super) ordinal_reservations: usize,
@@ -69,7 +68,7 @@ pub(super) struct State<'a> {
     pub(super) pack_end: i64,
 }
 impl<'a> State<'a> {
-    pub(super) fn new(storage: &'a Storage, parallel_uploads: bool) -> StorageResult<Self> {
+    pub(super) fn new(storage: &'a Storage) -> StorageResult<Self> {
         let mut candidates = storage
             .candidates
             .try_borrow_mut()
@@ -78,7 +77,6 @@ impl<'a> State<'a> {
             candidates.reload(&storage.source)?;
         }
         Ok(Self {
-            parallel_uploads,
             storage,
             pending: PendingBatch::new(storage.capacities()),
             candidates,
@@ -94,7 +92,7 @@ impl<'a> State<'a> {
                 .try_borrow_mut()
                 .map_err(|_| crate::StorageError::Integrity("one pooled producer per handle"))?,
             pool_synced: false,
-            pool_stats: crate::cas::PoolCounters::default(),
+            pool_stats: crate::save::PoolCounters::default(),
             next_ordinal: 0,
             ordinal_end: 0,
             ordinal_reservations: 0,

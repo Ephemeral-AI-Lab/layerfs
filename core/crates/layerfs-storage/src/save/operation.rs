@@ -8,7 +8,7 @@ use crate::{
 use layerfs_content::{ContentError, ContentResult, FinalizedConsumer, FinalizedObject};
 use std::cell::{Cell, RefCell};
 
-/// One bounded producer. Registered reference-closed batches survive later failure.
+/// One bounded producer. Published reference-closed batches survive later failure.
 pub struct Save<'a> {
     pub(super) state: RefCell<State<'a>>,
     pub(super) terminal: Cell<bool>,
@@ -17,12 +17,12 @@ pub struct Save<'a> {
     work_start: super::SaveWork,
 }
 impl<'a> Save<'a> {
-    pub(crate) fn new(storage: &'a Storage, parallel_uploads: bool) -> StorageResult<Self> {
+    pub(crate) fn new(storage: &'a Storage) -> StorageResult<Self> {
         let work_start = storage.work.snapshot().total;
         let _work = storage.work.span(super::Stage::Begin);
         Ok(Self {
             work_start,
-            state: RefCell::new(State::new(storage, parallel_uploads)?),
+            state: RefCell::new(State::new(storage)?),
             terminal: Cell::new(false),
             failure: RefCell::new(None),
             finished: Cell::new(false),
@@ -107,7 +107,7 @@ impl<'a> Save<'a> {
         self.state.borrow().chain_total
     }
     /// Actual pooled value reuse, allocation and selection outcomes.
-    pub fn pool_counters(&self) -> crate::cas::PoolCounters {
+    pub fn pool_counters(&self) -> crate::save::PoolCounters {
         self.state.borrow().pool_stats
     }
     /// Bounded candidate index's current charged bytes.

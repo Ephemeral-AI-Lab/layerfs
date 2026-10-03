@@ -1,3 +1,9 @@
+> **Status:** Historical native-provider detail below; current C2 owns only the
+> shared bounded save/read/encoding/pack flow. Persistence moved to
+> [layerfs-persistence](../layerfs-persistence/README.md), with an atomic
+> PackPersistence port and the new separately qualified WAL/FULL profile. Old
+> MEMORY/OFF and private-save descriptions/receipts retain their historical scope.
+
 # layerfs-storage (C2)
 
 > **Status:** Implemented slice; FULL and PREFIX payload records, pooled physical

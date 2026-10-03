@@ -13,3 +13,6 @@ mod namespace;
 mod scan;
 pub use error::{ProjectError, ProjectResult};
 pub use init::{init, InitRequest, Initialized};
+
+mod namespace_work;
+pub use namespace_work::NamespaceWork;

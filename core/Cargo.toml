@@ -9,6 +9,14 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/layerfs-content",
+    "crates/layerfs-storage",
+    "crates/layerfs-persistence",
+    "crates/layerfs-project",
+    "crates/layerfs-history",
+    "crates/layerfs-telemetry",
+]
+exclude = [
     "crates/layerfs-api/core",
     "crates/layerfs-api/sdk",
     "crates/layerfs-sandbox",
@@ -17,13 +25,7 @@ members = [
     "crates/layerfs-workspace",
     "crates/layerfs-bridge",
     "crates/layerfs-server",
-    "crates/layerfs-content",
-    "crates/layerfs-storage",
     "crates/layerfs-s3",
-    "crates/layerfs-metadata",
-    "crates/layerfs-project",
-    "crates/layerfs-history",
-    "crates/layerfs-telemetry",
 ]
 
 [workspace.package]

@@ -69,12 +69,9 @@ impl State<'_> {
             packer: &self.packer,
             signatures: &self.signatures,
         };
-        let arbitration = std::sync::Mutex::new(());
         let capacities = self.storage.capacities();
         let mut input = SelectInput {
             connection: &view,
-            arbitration: &arbitration,
-            wave_held: true,
             capacities: &capacities,
             candidates: &mut self.candidates,
             depths: &mut self.depths,

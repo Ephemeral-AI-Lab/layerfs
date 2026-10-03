@@ -11,13 +11,13 @@
 use layerfs_content::file::mapping::{decode_chunk_payload, CHUNK_MAGIC};
 use layerfs_content::{whole_file_payload, ObjectId, ObjectRole};
 
-use crate::cas::SaveProfile;
 use crate::encoding::codec::{CodecProfile, CompressionWorkspace};
 use crate::encoding::delta::record;
 use crate::error::{StorageError, StorageResult};
 use crate::pack::assemble::FULL_TAG;
 use crate::pack::layout::{directory_capacity, PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN};
 use crate::policy::{StorageCapacities, CANONICAL_LIMIT};
+use crate::save::SaveProfile;
 
 /// One framed record ready to join a group.
 #[derive(Clone, Debug, Eq, PartialEq)]

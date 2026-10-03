@@ -6,12 +6,10 @@ use layerfs_content::{
     read_all, FilesystemRead, LogicalPath, ObjectId,
 };
 use layerfs_history::{HistoryCatalog, LayerStackId};
-use layerfs_metadata::{PgConfig, PgHistory, PgMetadata};
-use layerfs_s3::{S3Config, S3Objects};
+use layerfs_persistence::{Handles, PersistenceConfig};
 use layerfs_storage::{Reader, Storage};
 use layerfs_telemetry::timer::Timing;
 use sha2::{Digest, Sha256};
-use std::sync::Arc;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt::Write as _,
@@ -156,7 +154,7 @@ fn check_metadata(
 }
 
 fn verify_files(
-    configs: &(PgConfig, S3Config),
+    configs: &PersistenceConfig,
     expected: &BTreeMap<String, Expected>,
     jobs: VecDeque<(String, InodeValue)>,
 ) -> Result<(u64, u64, u64), String> {
@@ -166,7 +164,8 @@ fn verify_files(
         for _ in 0..VERIFY_WORKERS {
             let queue = &queue;
             workers.push(scope.spawn(move || -> Result<(u64, u64, u64), String> {
-                let storage=Storage::new(Arc::new(PgMetadata::open(configs.0.clone()).map_err(|e|e.to_string())?),Arc::new(S3Objects::connect(configs.1.clone()).map_err(|e|e.to_string())?)).map_err(|e|e.to_string())?;
+                let handles=Handles::open_read_only(configs.clone(),b"layerfs-bench-pro",[0x28;32]).map_err(|e|e.to_string())?;
+                let storage=Storage::new(handles.storage.clone()).map_err(|e|e.to_string())?;
                 let provider = storage.reader().map_err(|e|e.to_string())?;
                 let mut attributes = AttributeReadWork::default();
                 let mut memo = None;
@@ -245,9 +244,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cursor: [u8; 32] = unhex(&std::env::var("LAYERFS_HISTORY_CURSOR_KEY")?)?
         .try_into()
         .map_err(|_| "cursor key width")?;
-    let config = PgConfig::from_env()?;
-    let s3 = S3Config::from_env()?;
-    let history = PgHistory::open_read_only(config.clone(), b"layerfs-bench-pro", cursor)?;
+    let config = PersistenceConfig::sqlite(&args[1]);
+    let handles = Handles::open_read_only(config.clone(), b"layerfs-bench-pro", cursor)?;
+    let history = &handles.history;
     let record = history
         .layer_stack(LayerStackId::from_authority(stack))?
         .ok_or("missing stack")?;
@@ -257,10 +256,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if layer.root != root {
         return Err("history root differs from returned root".into());
     }
-    let storage = Storage::new(
-        Arc::new(PgMetadata::open(config.clone())?),
-        Arc::new(S3Objects::connect(s3.clone())?),
-    )?;
+    let storage = Storage::new(handles.storage.clone())?;
     let provider = storage.reader()?;
     let mut fs = FilesystemRead::new(
         &provider,
@@ -326,7 +322,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     eprintln!("LFS237 lite verifier traversal paths={} directories={} discovered_files={} sampled_files={} metadata_attribute_waves={}", seen.len(), directories, discovered_files, jobs.len(), attributes.read_waves);
     let (sampled_files, sampled_bytes, file_metadata_waves) =
-        verify_files(&(config, s3), &expected, jobs).map_err(io::Error::other)?;
+        verify_files(&config, &expected, jobs).map_err(io::Error::other)?;
     if sampled_files as usize != sample.len() {
         return Err("sampled file count mismatch".into());
     }

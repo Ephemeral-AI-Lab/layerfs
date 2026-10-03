@@ -1,0 +1,13 @@
+//! SQLite-only connection, transaction, query, schema and physical mechanics.
+pub(crate) mod connection;
+pub(crate) mod metadata_allocation;
+pub(crate) mod metadata_locations;
+pub(crate) mod metadata_policy;
+pub(crate) mod metadata_pooling;
+pub(crate) mod metadata_signatures;
+pub(crate) mod objects_read;
+pub(crate) mod publish;
+pub(crate) mod query;
+pub(crate) mod rows;
+pub(crate) mod schema;
+pub(crate) mod transaction;

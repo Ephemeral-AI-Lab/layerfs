@@ -13,7 +13,6 @@ use crate::source::Source;
 
 use layerfs_content::{ObjectId, ObjectRole};
 
-use crate::cas::SaveProfile;
 use crate::encoding::codec::{CompressionWorkspace, DecompressionWorkspace};
 use crate::encoding::delta::candidates::{signature, Candidates};
 use crate::encoding::delta::read::{ChainBases, ChainCounters, Resolver};
@@ -22,6 +21,7 @@ use crate::error::{StorageError, StorageResult};
 use crate::location::ObjectLocation;
 use crate::pack::layout::PackLane;
 use crate::policy::StorageCapacities;
+use crate::save::SaveProfile;
 use layerfs_content::MAXIMUM_DELTA_MAX_DEPTH;
 use std::time::Instant;
 
@@ -201,17 +201,8 @@ impl DepthCache {
 
 /// Everything one selection needs besides the object itself.
 pub struct SelectInput<'a> {
-    /// Open write connection: candidate lookups and base reads use it.
+    /// Bounded physical source for candidate lookup and base reconstruction.
     pub connection: &'a dyn Source,
-    /// Serializes database work, without holding write ownership during encoding.
-    pub arbitration: &'a std::sync::Mutex<()>,
-    /// True when the caller's wave already holds `arbitration`.
-    ///
-    /// Selection runs inside a preparation wave, and a wave holds the Store's
-    /// arbitration for its whole duration so that one write transaction can span
-    /// its seals; every acquisition below therefore has to know whether it is
-    /// nested. See `cas::owner::MutationOwner::with_wave`.
-    pub wave_held: bool,
     /// Accepted capacities: frames, depths and chain budgets.
     pub capacities: &'a StorageCapacities,
     /// Admitted-FULL winner cache.
@@ -406,7 +397,6 @@ pub fn select(
         // The walk reads each edge from its record through the selection's own
         // pack cache, which the acquisition of this same base already filled: the
         // bodies are fetched once, not once per walk and once per read.
-        let _guard = crate::source::lock_unless_held(input.arbitration, input.wave_held)?;
         let mut bases = ChainBases::new(input.packs);
         let started = Instant::now();
         let base_cost = input.depths.cost_of(
@@ -485,7 +475,6 @@ fn eligible(
     role: ObjectRole,
     depth_cap: u8,
 ) -> StorageResult<bool> {
-    let _guard = crate::source::lock_unless_held(input.arbitration, input.wave_held)?;
     let Some(location) = input.connection.location(id, i64::MAX)? else {
         input.counters.absent_candidates = input.counters.absent_candidates.saturating_add(1);
         return Ok(false);
@@ -511,7 +500,6 @@ fn eligible(
 }
 
 fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> {
-    let _guard = crate::source::lock_unless_held(input.arbitration, input.wave_held)?;
     let started = Instant::now();
     let value = {
         let mut groups = crate::encoding::GroupCache::new();

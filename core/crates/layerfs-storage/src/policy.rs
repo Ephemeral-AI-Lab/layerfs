@@ -14,88 +14,6 @@ use crate::error::{StorageError, StorageResult};
 /// Persisted profile identifier of this slice.
 pub const FORMAT_PROFILE: u8 = 1;
 
-/// SQLite application id written by the candidate schema.
-pub const APPLICATION_ID: i64 = 1_279_677_261;
-/// SQLite `user_version` written by the candidate schema.
-///
-/// Version 2 added `store_policy.retained_pack_ceiling`, the publication
-/// watermark that keeps an unfinished save's early-committed output invisible to
-/// ordinary readers. Version 3 widened the persisted policy ranges to the
-/// supported configurable profile. Version 4 adds
-/// `store_policy.metadata_delta_max_depth`, the pooled-metadata dependency bound.
-/// Version 5 removes `objects.base_object_id`: the direct base identity is a
-/// property of the packed record, which already carries it, so the column was a
-/// second copy of the same fact. A version-4 Store is rejected rather than
-/// migrated, and the reader never guesses a base it cannot read from the record.
-/// Version 6 adds `content_signatures`, the persisted cross-save content index
-/// (`encoding/delta/candidates.rs`, the W2 section of `sql/schema.sql`).
-/// Version 7 landed the save-owned multi-writer model: a `saves` row carries
-/// either a private slot or a publication sequence, reads are
-/// publication-scoped, and pack allocation advances a Store-wide watermark.
-/// Version 8 replaces the fixed two-slot save model with the configured
-/// per-Store write admission (#216): `store_policy.max_concurrent_writes` holds
-/// the authoritative writer budget (1..=[`MAX_CONCURRENT_WRITES_LIMIT`]) and
-/// `saves.active_slot` spans the whole supported slot space instead of 1..=2, so
-/// a Store created at a higher setting keeps valid rows when the setting is
-/// lowered. A version-7 Store is rejected rather than migrated, exactly as every
-/// earlier version is, and no row is rewritten to fit the new column.
-/// Version 9 changes the **pack framing** (#219): the group directory moves into
-/// a region reserved at the lane's own width, so a body never moves when a group
-/// is appended, and the pack declares its own assembled length in its control
-/// area, so a pack row may be allocated with spare capacity and written in place
-/// through incremental BLOB I/O. Framing versions 1, 2, 4, 6 and 7 are the
-/// pre-v9 layout and are refused by the reader; a version-8 Store is refused at
-/// open by the check below, before any pack is read, exactly as every earlier
-/// version is. No row is rewritten and no pack is migrated.
-/// Version 10 removes the `objects_save` secondary index on `objects` (#219): a
-/// locator insert maintained two B-trees per row where the reference shape
-/// maintains one, and the index's only consumer is one bounded cleanup page query
-/// on the definite-failure path (`sqlite/cleanup.rs::abandon`). No column, no
-/// constraint and no stored byte changes, so no row is rewritten and no pack is
-/// migrated; a version-9 Store is refused at open by the check below, exactly as
-/// every earlier version is.
-/// Older Stores are rejected rather than migrated.
-pub const SCHEMA_VERSION: i64 = 10;
-
-/// Largest writer budget one Store may be configured with.
-///
-/// It is the width of the private save-slot space: `saves.active_slot` is
-/// constrained to `1..=MAX_CONCURRENT_WRITES_LIMIT` by the shipped schema, while
-/// the budget actually admitted at any moment is the persisted
-/// `store_policy.max_concurrent_writes`, which is at most this value. The two are
-/// deliberately different numbers: the slot space has to keep accepting rows a
-/// higher earlier setting produced.
-pub const MAX_CONCURRENT_WRITES_LIMIT: u8 = 64;
-/// Writer budget of a Store that was created without an explicit setting.
-///
-/// Two is the v0.1.6 behaviour, so an existing operator sees no change until the
-/// setting is raised on purpose. It is not a ceiling: any value up to
-/// [`MAX_CONCURRENT_WRITES_LIMIT`] is supported.
-pub const DEFAULT_MAX_CONCURRENT_WRITES: u8 = 2;
-/// Locator rows one ObjectId may own.
-///
-/// Ownership is per save, and a save inserts its own locator only while no
-/// eligible published row exists to reuse; the saves that were simultaneously
-/// private at that moment are therefore the only ones that can hold a copy. The
-/// supported slot space bounds that number, not the current setting, because
-/// rows written under a higher setting remain valid after it is lowered.
-pub const SAVE_SLOT_SPACE: usize = MAX_CONCURRENT_WRITES_LIMIT as usize;
-
-/// Declared storage schema identifier.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct SchemaIdentity {
-    /// SQLite application id.
-    pub application_id: i64,
-    /// SQLite `user_version`.
-    pub user_version: i64,
-}
-
-/// The schema identity this crate creates and accepts.
-pub const SCHEMA_IDENTITY: SchemaIdentity = SchemaIdentity {
-    application_id: APPLICATION_ID,
-    user_version: SCHEMA_VERSION,
-};
-
 /// Declared bounds shared by placement, transactions and reads.
 pub const GROUP_LIMIT: usize = 65_536;
 /// Target framed size of one ordinary or native group.
@@ -248,8 +166,7 @@ pub const METADATA_INDEX_VALUES: usize = 131_072;
 /// existence. One reservation per leaf closes the wave's transaction once per
 /// leaf - measured at **~207 reservations and ~210 of #219's 285 COMMITs** - and
 /// every closed transaction rewrites the pages dirtied in it again, because the
-/// connection's journal is in memory and a committed page stays in the pager
-/// cache. The block is the *smallest* number of ordinals a reservation takes, so
+/// backend synchronizes the pages dirtied by each acknowledged write unit. The block is the *smallest* number of ordinals a reservation takes, so
 /// a leaf that needs more still gets exactly what it needs; the cost is that up
 /// to `ORDINAL_RESERVE_BLOCK - 1` ordinals are burnt when a save aborts, out of a
 /// 32-bit space, and that the retained window's value count over-claims by the

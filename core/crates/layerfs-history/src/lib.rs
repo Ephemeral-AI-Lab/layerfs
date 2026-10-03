@@ -5,7 +5,7 @@
 //! reservations and atomic conditional history transitions with bounded queries.
 //! It opens no content object, reads no pack and never interprets a physical
 //! save, locator or publication field: those remain C2's private ownership, and
-//! no foreign key crosses between the two databases.
+//! C2 and C5 retain separate semantic transaction boundaries in the adapter.
 //!
 //! The crate is deliberately independent of the service, the bridge, the daemon,
 //! the Workspace, FUSE and any executor. Its semantic operations take typed
@@ -14,10 +14,6 @@
 //! Branch ID and a Workspace incarnation are explicit checked inputs from the
 //! application authority - this crate never invents one from a clock or a PID.
 //!
-//! The native SQLite provider behind the `native` feature is one implementation
-//! of the [`catalog::HistoryCatalog`] contract. Building without that feature
-//! proves the contract is separable; it claims no other persistence backend.
-
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
@@ -26,9 +22,6 @@ pub mod error;
 pub mod identity;
 pub mod query;
 pub mod records;
-
-#[cfg(feature = "native")]
-pub mod sqlite;
 
 pub use catalog::{HistoryCatalog, HistoryCatalogConfig};
 pub use error::{HistoryError, HistoryResult};

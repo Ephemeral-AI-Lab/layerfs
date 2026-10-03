@@ -133,3 +133,11 @@ class ProductBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class DurablePersistenceEdges(unittest.TestCase):
+    def test_domain_engine_dependencies_are_refused(self):
+        for name in ("layerfs-storage","layerfs-history","layerfs-project"):
+            for engine in ("rusqlite","postgres","tokio-postgres"):
+                self.assertTrue(dependency_violations(f'[package]\nname="{name}"\n[dependencies]\n{engine}="1"\n'))
+    def test_persistence_adapter_accepts_its_domain_edges(self):
+        self.assertFalse(dependency_violations('[package]\nname="layerfs-persistence"\n[dependencies]\nlayerfs-storage={path="../layerfs-storage"}\nlayerfs-history={path="../layerfs-history"}\n'))

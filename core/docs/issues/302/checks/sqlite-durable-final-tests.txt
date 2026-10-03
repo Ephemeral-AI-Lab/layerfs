@@ -1,0 +1,133 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-project)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.59s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_persistence-b5ab5c4930d62fc2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/history_allocation.rs (core/target/debug/deps/history_allocation-2eb38c10f7fd37a2)
+
+running 3 tests
+test counts_are_checked_and_the_terminal_endpoint_is_refused ... ok
+test a_consumed_reservation_survives_a_later_failure ... ok
+test reservations_are_monotone_half_open_and_per_scope ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/history_conditional_updates.rs (core/target/debug/deps/history_conditional_updates-8893af382edcfcb6)
+
+running 6 tests
+test stage_insertion_enforces_the_frozen_context ... ok
+test a_stale_loser_keeps_its_exact_stage ... ok
+test an_exact_token_is_the_only_stage_a_discard_removes ... ok
+test an_exact_earlier_publication_is_up_to_date_before_a_stale_head ... ok
+test two_branches_commit_independently_and_one_wins_the_stack_head ... ok
+test a_commit_whose_root_equals_its_base_is_no_changes ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/history_history_pages.rs (core/target/debug/deps/history_history_pages-5381d27519b8c91b)
+
+running 3 tests
+test a_cursor_is_bound_to_its_range_subject_and_content ... ok
+test every_bounded_list_paginates_without_gaps_or_repeats ... ok
+test an_immutable_anchor_keeps_a_cursor_valid_as_the_branch_advances ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/history_lifecycle.rs (core/target/debug/deps/history_lifecycle-73b5d7ce67da3a19)
+
+running 3 tests
+test genesis_is_atomic_and_unique ... ok
+test fork_shares_content_and_uses_the_selected_commit_base ... ok
+test history_reads_return_the_recorded_ancestry_and_chain ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/history_remediation.rs (core/target/debug/deps/history_remediation-d605c4dbc4cf9451)
+
+running 12 tests
+test read_only_cursor_capability_survives_reopen_and_rejects_wrong_keys ... ok
+test unknown_statement_outcome_quarantines_without_implicit_rollback ... ok
+test last_representable_reservation_is_consumed_and_terminal_refusal_is_atomic ... ok
+test empty_history_checks_page_and_cursor_before_returning_empty ... ok
+test exact_source_publication_revalidates_immutable_provenance ... ok
+test forged_sibling_position_and_obsolete_checksum_are_refused ... ok
+test concurrent_reservations_never_overlap_and_discard_does_not_refund ... ok
+test advancing_the_actual_subject_preserves_both_anchor_forms ... ok
+test all_legal_name_widths_paginate_by_identity ... ok
+test stale_base_precedes_no_changes_and_derived_provenance_collision ... ok
+test reopen_refuses_each_independent_schema_or_binding_corruption ... ok
+test explicit_membership_ceiling_is_capacity_but_old_authenticated_anchor_stays_valid ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.41s
+
+     Running tests/history_reopen.rs (core/target/debug/deps/history_reopen-7ced3ddc42aa2ef9)
+
+running 3 tests
+test a_read_only_reopen_reads_every_record_and_mutates_nothing ... ok
+test an_incompatible_or_foreign_catalog_is_refused ... ok
+test a_stage_written_by_one_handle_is_visible_to_a_read_only_handle ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/sqlite_publication.rs (core/target/debug/deps/sqlite_publication-7d1124b261a8c716)
+
+running 5 tests
+test wal_full_settings_and_unavailable_engine_are_explicit ... ok
+test readonly_refusal_and_external_writer_busy_do_not_retry ... ok
+test failure_after_body_insert_rolls_back_the_entire_unit_and_published_body_is_immutable ... ok
+test final_body_multirow_locators_and_first_wins_have_one_atomic_ack ... ok
+test canonical_save_read_reuse_and_persisted_reservations_survive_reopen ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/sqlite_recovery.rs (core/target/debug/deps/sqlite_recovery-052f1239f5152917)
+
+running 2 tests
+test crash_child ... ok
+test sigkill_preserves_acknowledged_body_locator_and_reservation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_project-8795d72ab652ec98)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/init_memory.rs (core/target/debug/deps/init_memory-1eadef5806ad8009)
+
+running 1 test
+test init_100_and_1000_over_memory_ports_pass_the_full_namespace_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.34s
+
+     Running tests/init_sqlite.rs (core/target/debug/deps/init_sqlite-7643a213453bb641)
+
+running 1 test
+test durable_init_100_and_1000_passes_the_full_namespace_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.67s
+
+     Running tests/namespace_scaling.rs (core/target/debug/deps/namespace_scaling-7da6a0714bd919ce)
+
+running 1 test
+test retained_collection_counts_expose_entry_count_growth ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+   Doc-tests layerfs_persistence
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_project
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

@@ -7,7 +7,7 @@ use crate::{
 use crate::{
     error::StorageResult,
     policy::{StorageCapacities, StoragePolicy},
-    port::{MetadataStore, ObjectStore},
+    port::PackPersistence,
     read::{Diagnostics, Fetch, Reader},
 };
 use std::{cell::RefCell, sync::Arc};
@@ -23,11 +23,8 @@ pub struct Storage {
 }
 impl Storage {
     /// Opens one handle with an acknowledged persisted policy. No service bootstrap.
-    pub fn new(
-        metadata: Arc<dyn MetadataStore>,
-        objects: Arc<dyn ObjectStore>,
-    ) -> StorageResult<Self> {
-        let source = Fetch::new(metadata, objects);
+    pub fn new(metadata: Arc<dyn PackPersistence>) -> StorageResult<Self> {
+        let source = Fetch::new(metadata);
         source.note(|c| c.policy += 1);
         let policy = source.metadata.policy()?.validated()?;
         let capacities = StorageCapacities::from_policy(policy)?;
@@ -50,13 +47,7 @@ impl Storage {
     }
     /// Begins one producer's bounded save. Separate handles may write concurrently.
     pub fn begin_save(&self) -> StorageResult<Save<'_>> {
-        Save::new(self, false)
-    }
-    /// Begins the namespace Init producer with at most four concurrent uploads.
-    /// Construction and registration still have one save owner. Other operations
-    /// use begin_save and its single upload producer.
-    pub fn begin_parallel_save(&self) -> StorageResult<Save<'_>> {
-        Save::new(self, true)
+        Save::new(self)
     }
     /// Creates an operation-owned authenticated reader with bounded caches.
     pub fn reader(&self) -> StorageResult<Reader<'_>> {

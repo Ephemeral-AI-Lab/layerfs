@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 use layerfs_content::ObjectId;
 use layerfs_storage::{
-    location::{LocatedObject, ObjectLocation, PackDomain, SignatureRow, ValueGroupRow},
+    location::{LocatedObject, ObjectLocation, SignatureRow, ValueGroupRow},
     policy::{StoragePolicy, DEPENDENCY_PACK_CACHE_BYTES, READ_OBJECT_LIMIT},
     port::*,
 };
@@ -13,7 +13,7 @@ use std::{
 #[derive(Clone)]
 pub struct MetadataState {
     pub policy: StoragePolicy,
-    pub packs: BTreeMap<i64, RegisteredPack>,
+    pub packs: BTreeMap<i64, PublishedPack>,
     pub objects: BTreeMap<ObjectId, ObjectLocation>,
     pub groups: BTreeMap<u32, ValueGroupRow>,
     pub signatures: BTreeMap<usize, SignatureRow>,
@@ -21,8 +21,8 @@ pub struct MetadataState {
     pub window_values: usize,
     pub next_pack: i64,
     pub next_ordinal: u64,
-    pub registrations: Vec<Registration>,
-    pub fail_register: Option<MetadataError>,
+    pub registrations: Vec<Publication>,
+    pub fail_register: Option<PersistenceError>,
 }
 impl Default for MetadataState {
     fn default() -> Self {
@@ -46,12 +46,16 @@ pub struct MemoryMetadata {
     pub state: Mutex<MetadataState>,
     pub calls: Mutex<Vec<(&'static str, usize)>>,
 }
-impl MetadataStore for MemoryMetadata {
-    fn policy(&self) -> Result<StoragePolicy, MetadataError> {
+impl PackPersistence for MemoryMetadata {
+    fn policy(&self) -> Result<StoragePolicy, PersistenceError> {
         self.calls.lock().unwrap().push(("policy", 1));
         Ok(self.state.lock().unwrap().policy)
     }
-    fn locate(&self, ids: &[ObjectId], out: &mut Vec<LocatedObject>) -> Result<(), MetadataError> {
+    fn locate(
+        &self,
+        ids: &[ObjectId],
+        out: &mut Vec<LocatedObject>,
+    ) -> Result<(), PersistenceError> {
         assert!(ids.len() <= READ_OBJECT_LIMIT);
         self.calls.lock().unwrap().push(("locate", ids.len()));
         let state = self.state.lock().unwrap();
@@ -61,7 +65,7 @@ impl MetadataStore for MemoryMetadata {
                 let pack = state
                     .packs
                     .get(&location.pack_id)
-                    .ok_or(MetadataError::Missing)?;
+                    .ok_or(PersistenceError::Missing)?;
                 out.push(LocatedObject {
                     location: *location,
                     pack: pack.info,
@@ -70,24 +74,25 @@ impl MetadataStore for MemoryMetadata {
         }
         Ok(())
     }
-    fn read_packs(&self, ids: &[i64], out: &mut Vec<MetadataPack>) -> Result<(), MetadataError> {
+    fn read_packs(
+        &self,
+        ids: &[i64],
+        out: &mut Vec<PersistedPack>,
+    ) -> Result<(), PersistenceError> {
         self.calls.lock().unwrap().push(("read_packs", ids.len()));
         let state = self.state.lock().unwrap();
         out.clear();
         for id in ids {
-            let pack = state.packs.get(id).ok_or(MetadataError::Missing)?;
-            if pack.info.domain != PackDomain::Metadata {
-                return Err(MetadataError::Malformed);
-            }
-            out.push(MetadataPack {
+            let pack = state.packs.get(id).ok_or(PersistenceError::Missing)?;
+            out.push(PersistedPack {
                 info: pack.info,
-                body: pack.body.clone().ok_or(MetadataError::Missing)?,
+                body: pack.body.as_ref().clone(),
             });
         }
         assert!(out.iter().map(|row| row.body.len()).sum::<usize>() <= DEPENDENCY_PACK_CACHE_BYTES);
         Ok(())
     }
-    fn value_groups(&self, query: ValueGroupQuery<'_>) -> Result<ValueGroups, MetadataError> {
+    fn value_groups(&self, query: ValueGroupQuery<'_>) -> Result<ValueGroups, PersistenceError> {
         self.calls.lock().unwrap().push(("value_groups", 1));
         let state = self.state.lock().unwrap();
         let (rows, next) = match query {
@@ -129,7 +134,7 @@ impl MetadataStore for MemoryMetadata {
             window_start: state.window,
         })
     }
-    fn signatures(&self, out: &mut Vec<SignatureRow>) -> Result<(), MetadataError> {
+    fn signatures(&self, out: &mut Vec<SignatureRow>) -> Result<(), PersistenceError> {
         self.calls.lock().unwrap().push(("signatures", 1));
         *out = self
             .state
@@ -142,12 +147,12 @@ impl MetadataStore for MemoryMetadata {
         out.sort_by_key(|row| row.stamp);
         Ok(())
     }
-    fn reserve(&self, request: Reserve) -> Result<Reserved, MetadataError> {
+    fn reserve(&self, request: Reserve) -> Result<Reserved, PersistenceError> {
         self.calls.lock().unwrap().push(("reserve", 1));
         let mut state = self.state.lock().unwrap();
         let first_pack_id = state.next_pack;
         let first_ordinal =
-            u32::try_from(state.next_ordinal).map_err(|_| MetadataError::Malformed)?;
+            u32::try_from(state.next_ordinal).map_err(|_| PersistenceError::Malformed)?;
         state.next_pack += request.packs as i64;
         state.next_ordinal += request.ordinals as u64;
         Ok(Reserved {
@@ -155,7 +160,7 @@ impl MetadataStore for MemoryMetadata {
             first_ordinal,
         })
     }
-    fn register(&self, batch: &Registration) -> Result<Registered, MetadataError> {
+    fn publish(&self, batch: &Publication) -> Result<Published, PersistenceError> {
         self.calls
             .lock()
             .unwrap()
@@ -168,17 +173,14 @@ impl MetadataStore for MemoryMetadata {
         let mut lost = Vec::new();
         for pack in &batch.packs {
             if next.packs.contains_key(&pack.info.pack_id) {
-                return Err(MetadataError::Malformed);
-            }
-            if (pack.info.domain == PackDomain::Metadata) != pack.body.is_some() {
-                return Err(MetadataError::Malformed);
+                return Err(PersistenceError::Malformed);
             }
             next.next_pack = next.next_pack.max(pack.info.pack_id + 1);
             next.packs.insert(pack.info.pack_id, pack.clone());
         }
         for row in &batch.objects {
             if !next.packs.contains_key(&row.pack_id) {
-                return Err(MetadataError::Malformed);
+                return Err(PersistenceError::Malformed);
             }
             match next.objects.entry(row.object_id) {
                 std::collections::btree_map::Entry::Occupied(_) => lost.push(row.object_id),
@@ -212,6 +214,6 @@ impl MetadataStore for MemoryMetadata {
         }
         next.registrations.push(batch.clone());
         *state = next;
-        Ok(Registered { lost })
+        Ok(Published { lost })
     }
 }

@@ -1,0 +1,98 @@
+[
+  {
+    "path": "core/docs/issues/302/checks/sqlite-boundary-sealed.txt",
+    "raw_sha256": "677d3515f4aeb4ccf6012a9582f19c95f7fb0c4c55f0e1f43e94e8549f2bab81",
+    "tracked_sha256": "677d3515f4aeb4ccf6012a9582f19c95f7fb0c4c55f0e1f43e94e8549f2bab81",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-boundary-sealed.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-boundary.txt",
+    "raw_sha256": "677d3515f4aeb4ccf6012a9582f19c95f7fb0c4c55f0e1f43e94e8549f2bab81",
+    "tracked_sha256": "677d3515f4aeb4ccf6012a9582f19c95f7fb0c4c55f0e1f43e94e8549f2bab81",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-boundary.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-clippy-final.txt",
+    "raw_sha256": "4504bf07704c105f9ac78efa3f1d49541dd43afa5cc4e47e9736191761962807",
+    "tracked_sha256": "4504bf07704c105f9ac78efa3f1d49541dd43afa5cc4e47e9736191761962807",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-clippy-final.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-clippy-first.txt",
+    "raw_sha256": "13eb44dde8a90c280cd2fbb64b411d7b15b893dcea1529af03498b94902aed3c",
+    "tracked_sha256": "13eb44dde8a90c280cd2fbb64b411d7b15b893dcea1529af03498b94902aed3c",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-clippy-first.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-clippy-repaired.txt",
+    "raw_sha256": "d03279c8162c614ac428c7c59742ba524554217ccc14adef579069dd3bf23669",
+    "tracked_sha256": "d03279c8162c614ac428c7c59742ba524554217ccc14adef579069dd3bf23669",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-clippy-repaired.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-clippy-sealed.txt",
+    "raw_sha256": "907ee4fc72086ee625ab8a9e52202b1de719ccfa41b3e6bc8ffd263eb91b2c57",
+    "tracked_sha256": "907ee4fc72086ee625ab8a9e52202b1de719ccfa41b3e6bc8ffd263eb91b2c57",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-clippy-sealed.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-design-final-loc.txt",
+    "raw_sha256": "6d6602091c954e0901d00f87cac14564c65408a4d42e40eb2c4678c5617b8875",
+    "tracked_sha256": "6d6602091c954e0901d00f87cac14564c65408a4d42e40eb2c4678c5617b8875",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-design-final-loc.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-design-loc.txt",
+    "raw_sha256": "b5d32e8f19ee76d540c3156c94947d306d90996020113ad32850d0a68e229e27",
+    "tracked_sha256": "b5d32e8f19ee76d540c3156c94947d306d90996020113ad32850d0a68e229e27",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-design-loc.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-durable-final-tests.txt",
+    "raw_sha256": "ccca2c8689333ee860d881f2172941ac4ad5347c15bb88f1bfd4c1a9930c7a6c",
+    "tracked_sha256": "81fa436944bba414305f8eaba6c6ae2c9495662cea8953d74485e1cee8af12b4",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-durable-final-tests.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-final-counter-proof.txt",
+    "raw_sha256": "c4e55c1b67f592e4f454ec183f85ba0b8ad920d5975c82297faf03e9e668724f",
+    "tracked_sha256": "dcc568b54519202f48b5601d4571dc28ab6771ae07baffe26b8713b397e5b82b",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-final-counter-proof.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-final-source-boundary.txt",
+    "raw_sha256": "677d3515f4aeb4ccf6012a9582f19c95f7fb0c4c55f0e1f43e94e8549f2bab81",
+    "tracked_sha256": "677d3515f4aeb4ccf6012a9582f19c95f7fb0c4c55f0e1f43e94e8549f2bab81",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-final-source-boundary.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-final-source-clippy.txt",
+    "raw_sha256": "b8e89c7db1d10e98923b359bce1a160f6fd4f0900a4c5e71f085b8d11fde74bd",
+    "tracked_sha256": "b8e89c7db1d10e98923b359bce1a160f6fd4f0900a4c5e71f085b8d11fde74bd",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-final-source-clippy.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-final-source-fmt.txt",
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tracked_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-final-source-fmt.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-owning-tests-first.txt",
+    "raw_sha256": "70b72e3dc48df6d249e5caf6df4d8a517f70dda02f7d846affcde3cc96465dab",
+    "tracked_sha256": "41b8297f7d6f6a0ab94e5cd19330cd57237b2c27c73b9ba3dc458c994b595bfb",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-owning-tests-first.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-tools-sealed.txt",
+    "raw_sha256": "6e3fb3c79d21144ef9b1ff384bbd107d0d6c432f588027477dc16ba7e1035131",
+    "tracked_sha256": "6e3fb3c79d21144ef9b1ff384bbd107d0d6c432f588027477dc16ba7e1035131",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-tools-sealed.txt"
+  },
+  {
+    "path": "core/docs/issues/302/checks/sqlite-tools-tests.txt",
+    "raw_sha256": "6d6ab11a8341fe23fe62f7a416ea6f2a7d7093eb145fd8ba6508a0c28abb76e5",
+    "tracked_sha256": "6d6ab11a8341fe23fe62f7a416ea6f2a7d7093eb145fd8ba6508a0c28abb76e5",
+    "normalization": "trailing EOF whitespace only; raw output retained at target/phase7-agent/sqlite-tools-tests.txt"
+  }
+]

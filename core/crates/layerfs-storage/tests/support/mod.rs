@@ -10,10 +10,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use layerfs_content::{
-    construct_bytes, read_all, AdvisoryPredecessors, AuthenticatedObjects, ConstructionPolicy,
-    ContentError, ContentResult, FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole,
+    construct_bytes, AdvisoryPredecessors, AuthenticatedObjects, ConstructionPolicy, ContentError,
+    ContentResult, FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole,
 };
-use layerfs_storage::{StorageError, StoragePolicy, Store};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -151,28 +150,6 @@ impl AuthenticatedObjects for Provider<'_> {
     }
 }
 
-/// Provider that serves canonical bytes from a real Store.
-///
-/// This is the product bridge an adapter uses, not a second implementation of
-/// it: the test drives the same object the runtime does.
-pub use layerfs_storage::StoreProvider;
-
-/// Reads the whole logical file through the real C1 read path, with every
-/// canonical object acquired from the real Store.
-pub fn read_logical(store: &Store, root: ObjectId) -> Vec<u8> {
-    let mut bytes = Vec::new();
-    disabled(|scope| {
-        read_all(
-            &StoreProvider::new(store),
-            root,
-            &mut bytes,
-            scope.child("content.read"),
-        )
-    })
-    .expect("logical read through the store");
-    bytes
-}
-
 /// A root scope that records nothing.
 pub fn disabled<T, E>(
     body: impl FnOnce(
@@ -197,67 +174,6 @@ pub fn construct_file(bytes: &[u8]) -> (Collected, ObjectId, u64) {
     })
     .expect("complete-file construction");
     (collected, constructed.root, constructed.logical_len)
-}
-
-/// Creates a fresh Store with the frozen policy.
-pub fn create_store(path: &Path) -> Store {
-    disabled(|scope| Store::create(path, StoragePolicy::frozen_default(), scope.child("store")))
-        .expect("store creation")
-}
-
-/// Opens an existing Store.
-pub fn open_store(path: &Path) -> Store {
-    disabled(|scope| Store::open(path, scope.child("store"))).expect("store open")
-}
-
-/// Saves every collected object in emission order and acknowledges completion.
-pub fn save_all(
-    store: &Store,
-    collected: &Collected,
-) -> Result<layerfs_storage::SaveOutcome, StorageError> {
-    let objects = collected.finalized();
-    disabled(|scope| {
-        let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        for object in objects {
-            operation.accept(object)?;
-        }
-        operation.finish(scope.child("storage.finish"))
-    })
-}
-
-/// Saves one object with its own bounded operation.
-pub fn save_one(
-    store: &Store,
-    object: FinalizedObject,
-) -> Result<layerfs_storage::SaveOutcome, StorageError> {
-    disabled(|scope| {
-        let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        operation.accept(object)?;
-        operation.finish(scope.child("storage.finish"))
-    })
-}
-
-/// Saves a whole collected object set through the C1 handoff adapter.
-pub fn save_via_handoff(
-    store: &Store,
-    collected: &Collected,
-) -> Result<layerfs_storage::SaveOutcome, StorageError> {
-    let objects = collected.finalized();
-    disabled(|scope| {
-        let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        for object in objects {
-            operation.accept(object)?;
-        }
-        operation.finish(scope.child("storage.finish"))
-    })
-}
-
-/// Reads canonical bytes for `ids` from an independent Store connection.
-pub fn read_objects(
-    store: &Store,
-    ids: &[ObjectId],
-) -> Result<(Vec<Vec<u8>>, layerfs_storage::StoreReadCounters), StorageError> {
-    disabled(|scope| store.read_batch(ids, scope.child("storage.read")))
 }
 
 /// Builds a canonical whole-file object directly from raw payload bytes.
@@ -331,161 +247,7 @@ pub fn truncate_pack(data: Vec<u8>) -> Vec<u8> {
     pack
 }
 
-/// Writes a tampered pack back into its row.
-///
-/// Keep an existing larger row's capacity; a test that intentionally adds
-/// encoded padding may grow an exact-length row through this external UPDATE.
-pub fn write_pack_row(connection: &rusqlite::Connection, pack_id: i64, pack: &[u8]) {
-    let capacity: i64 = connection
-        .query_row(
-            "SELECT length(data) FROM object_packs WHERE pack_id = ?1",
-            rusqlite::params![pack_id],
-            |row| row.get(0),
-        )
-        .expect("pack row length");
-    let capacity = usize::try_from(capacity).expect("pack capacity");
-    let mut bytes = pack.to_vec();
-    bytes.resize(capacity.max(bytes.len()), 0);
-    let affected = connection
-        .execute(
-            "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1",
-            rusqlite::params![pack_id, bytes],
-        )
-        .expect("pack rewrite");
-    assert_eq!(affected, 1);
-}
-
-/// Deterministic structured input.
+/// Deterministic changing pattern for codec vectors.
 pub fn patterned(len: usize) -> Vec<u8> {
-    (0..len)
-        .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
-        .collect()
-}
-
-/// Flips one byte of the first stored pack body, simulating damaged storage.
-pub fn corrupt_first_pack(path: &Path) {
-    let connection = rusqlite::Connection::open(path).expect("external connection");
-    let pack_id: i64 = connection
-        .query_row("SELECT MIN(pack_id) FROM object_packs", [], |row| {
-            row.get(0)
-        })
-        .expect("pack row");
-    let mut damaged = read_pack_row(&connection, pack_id);
-    let index = damaged.len() - 1;
-    damaged[index] ^= 0xff;
-    write_pack_row(&connection, pack_id, &damaged);
-}
-
-/// Reads one pack row as the pack it declares. See [`truncate_pack`].
-pub fn read_pack_row(connection: &rusqlite::Connection, pack_id: i64) -> Vec<u8> {
-    let data: Vec<u8> = connection
-        .query_row(
-            "SELECT data FROM object_packs WHERE pack_id = ?1",
-            rusqlite::params![pack_id],
-            |row| row.get(0),
-        )
-        .expect("pack row");
-    truncate_pack(data)
-}
-
-/// Damages the digest of the first stored value-group catalogue row.
-pub fn corrupt_value_group_digest(path: &Path) {
-    let connection = rusqlite::Connection::open(path).expect("external connection");
-    let affected = connection
-        .execute(
-            "UPDATE metadata_value_groups SET digest = ?1 WHERE first_ordinal = \
-             (SELECT MIN(first_ordinal) FROM metadata_value_groups)",
-            rusqlite::params![vec![0xab_u8; 32]],
-        )
-        .expect("digest damage");
-    assert_eq!(affected, 1);
-}
-
-pub mod edits;
-pub mod filesystem;
-
-/// Rewrites the direct base identity one stored record carries.
-///
-/// There is no base column: a dependency edge lives in the packed record, so a
-/// test that forges one rewrites the pack. A raw group is patched in place; a
-/// compressed group is decoded, patched and re-encoded through the product's own
-/// framing, and the whole pack is written back.
-pub fn forge_stored_base(path: &std::path::Path, object: ObjectId, base: ObjectId) {
-    use layerfs_storage::pack::layout::{group_view, parse_header, GroupCodec, PackLane};
-    use layerfs_storage::pack::{assemble, build_group};
-
-    let connection = rusqlite::Connection::open(path).expect("raw connection");
-    let (pack_id, group_number, record_number): (i64, i64, i64) = connection
-        .query_row(
-            "SELECT pack_id, group_number, record_number FROM objects WHERE object_id = ?1",
-            rusqlite::params![object.to_bytes().to_vec()],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .expect("locator");
-    let pack = read_pack_row(&connection, pack_id);
-    let header = parse_header(&pack).expect("pack header");
-    let mut decode = layerfs_storage::encoding::DecompressionWorkspace::new().expect("decode");
-    let mut groups: Vec<Vec<Vec<u8>>> = Vec::new();
-    let mut compressed = false;
-    for group in 0..header.group_count {
-        let view = group_view(&pack, header, group).expect("group view");
-        let body = match view.codec {
-            GroupCodec::Raw => pack[view.start..view.end].to_vec(),
-            GroupCodec::Zstandard => {
-                compressed = true;
-                decode
-                    .decompress_group(&pack[view.start..view.end], view.decoded_length)
-                    .expect("group body")
-            }
-        };
-        // Every lane's group body is a count, one end offset per record and the
-        // records, including the compact whole-file lane: its records have no
-        // length fields of their own, which is exactly what the group's own end
-        // offsets supply.
-        let mut records: Vec<Vec<u8>> = layerfs_storage::encoding::group_records(&body)
-            .expect("group records")
-            .into_iter()
-            .map(<[u8]>::to_vec)
-            .collect();
-        if group == group_number as usize {
-            let record = &mut records[record_number as usize];
-            assert_eq!(record[0], 1, "the forged record must be a PREFIX record");
-            record[1..33].copy_from_slice(base.as_bytes());
-        }
-        groups.push(records);
-    }
-    // The rebuild path frames the records it read back, so it is only sound for a
-    // lane whose stored record form is the one `build_group` takes. That is every
-    // lane but the compact whole-file one, whose records are stored with their two
-    // length fields dropped and re-framed from them; that lane's bodies are always
-    // stored raw, so it never reaches this path.
-    let bytes = if compressed {
-        assert_ne!(
-            header.lane,
-            PackLane::WholeFile,
-            "a compact whole-file group is never compressed"
-        );
-        let mut encode = layerfs_storage::encoding::CompressionWorkspace::new().expect("encode");
-        let mut encoded = Vec::new();
-        for records in &groups {
-            encoded.push(build_group(header.lane, records, Some(&mut encode)).expect("group"));
-        }
-        assemble(header.lane, &encoded).expect("pack")
-    } else {
-        let mut bytes = pack;
-        let view = group_view(&bytes, header, group_number as usize).expect("group view");
-        let mut offset = 4 + 4 * groups[group_number as usize].len();
-        for record in &groups[group_number as usize][..record_number as usize] {
-            offset += record.len();
-        }
-        bytes[view.start + offset + 1..view.start + offset + 33].copy_from_slice(base.as_bytes());
-        bytes
-    };
-    let affected = connection
-        .execute(
-            "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1",
-            rusqlite::params![pack_id, bytes],
-        )
-        .expect("pack rewrite");
-    assert_eq!(affected, 1);
+    (0..len).map(|i| ((i * 17 + i / 64) % 251) as u8).collect()
 }

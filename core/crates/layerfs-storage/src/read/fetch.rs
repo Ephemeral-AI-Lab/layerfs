@@ -6,7 +6,7 @@ use crate::{
     location::{LocatedObject, ObjectLocation, PackDomain, PackInfo, SignatureRow, ValueGroupRow},
     pack::layout,
     policy::{DEPENDENCY_PACK_CACHE_BYTES, READ_OBJECT_LIMIT, SINGLETON_PACK_LIMIT},
-    port::{MetadataPack, MetadataStore, ObjectStore, ValueGroupQuery, ValueGroups},
+    port::{PackPersistence, PersistedPack, ValueGroupQuery, ValueGroups},
     source::Source,
 };
 use layerfs_content::ObjectId;
@@ -17,8 +17,7 @@ use std::{
 };
 
 pub(crate) struct Fetch {
-    pub(crate) metadata: Arc<dyn MetadataStore>,
-    pub(crate) objects: Arc<dyn ObjectStore>,
+    pub(crate) metadata: Arc<dyn PackPersistence>,
     locators: RefCell<BTreeMap<ObjectId, LocatedObject>>,
     absent: RefCell<BTreeSet<ObjectId>>,
     descriptors: RefCell<BTreeMap<i64, PackInfo>>,
@@ -29,10 +28,9 @@ pub(crate) struct Fetch {
     counters: Cell<Diagnostics>,
 }
 impl Fetch {
-    pub(crate) fn new(metadata: Arc<dyn MetadataStore>, objects: Arc<dyn ObjectStore>) -> Self {
+    pub(crate) fn new(metadata: Arc<dyn PackPersistence>) -> Self {
         Self {
             metadata,
-            objects,
             locators: RefCell::new(BTreeMap::new()),
             absent: RefCell::new(BTreeSet::new()),
             descriptors: RefCell::new(BTreeMap::new()),
@@ -148,11 +146,6 @@ impl Fetch {
                 .get(&id)
                 .copied()
                 .ok_or(StorageError::Integrity("pack descriptor missing"))?;
-            if info.domain == PackDomain::Payload {
-                let body = self.payload(info)?;
-                retain(packs, info.pack_id, body);
-                continue;
-            }
             if bytes + info.length > DEPENDENCY_PACK_CACHE_BYTES {
                 self.metadata_packs(&metadata, packs)?;
                 metadata.clear();
@@ -174,32 +167,37 @@ impl Fetch {
         });
         self.metadata.read_packs(ids, &mut rows)?;
         let bytes: usize = rows.iter().map(|row| row.body.len()).sum();
-        if rows.len() != ids.len() || bytes > DEPENDENCY_PACK_CACHE_BYTES {
+        if rows.len() != ids.len()
+            || bytes > DEPENDENCY_PACK_CACHE_BYTES
+                && !(rows.len() == 1 && bytes <= SINGLETON_PACK_LIMIT)
+        {
             return Err(StorageError::Integrity("metadata pack cardinality/bytes"));
         }
         let mut seen = BTreeSet::new();
-        for MetadataPack { info, body } in rows {
-            if !ids.contains(&info.pack_id)
-                || !seen.insert(info.pack_id)
-                || info.domain != PackDomain::Metadata
-            {
+        for PersistedPack { info, body } in rows {
+            if !ids.contains(&info.pack_id) || !seen.insert(info.pack_id) {
                 return Err(StorageError::Integrity("metadata pack descriptor"));
             }
             authenticate(info, &body)?;
             self.remember_pack(info)?;
-            self.note(|c| c.metadata_bytes += body.len() as u64);
+            self.note(|c| c.pack_read_bytes += body.len() as u64);
             retain(packs, info.pack_id, body);
         }
         Ok(())
     }
     fn payload(&self, info: PackInfo) -> StorageResult<Vec<u8>> {
-        let mut body = Vec::new();
         self.note(|c| {
-            c.gets += 1;
+            c.payload_reads += 1;
             c.pack_misses += 1;
         });
-        self.objects.read(info.key, None, &mut body)?;
-        self.note(|c| c.get_bytes += body.len() as u64);
+        let mut rows = Vec::new();
+        self.metadata.read_packs(&[info.pack_id], &mut rows)?;
+        let row = rows
+            .pop()
+            .filter(|row| rows.is_empty() && row.info == info)
+            .ok_or(StorageError::Integrity("payload descriptor"))?;
+        let body = row.body;
+        self.note(|c| c.payload_read_bytes += body.len() as u64);
         authenticate(info, &body)?;
         Ok(body)
     }

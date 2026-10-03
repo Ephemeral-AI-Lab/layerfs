@@ -82,6 +82,7 @@ def build(common, root, package, folder):
 
 
 def run(selection, output, arm, baseline_root, common):
+    raise ValueError("PostgreSQL/MinIO Phase7 selections are retired; SQLite-only selections require the new frozen contract")
     case = CASES[selection]
     if case.fixture is None:
         raise ValueError('history port driver not yet frozen; no sample authorized')

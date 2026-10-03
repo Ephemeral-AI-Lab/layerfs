@@ -1,0 +1,16 @@
+[package]
+name = "layerfs-persistence"
+description = "Shared physical persistence and history over durable embedded SQLite."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-storage = { path = "../layerfs-storage" }
+layerfs-history = { path = "../layerfs-history", default-features = false }
+layerfs-content = { path = "../layerfs-content" }
+rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
+
+[dev-dependencies]
+blake3 = { version = "=1.8.5", default-features = false }

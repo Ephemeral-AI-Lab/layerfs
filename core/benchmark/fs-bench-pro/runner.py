@@ -397,7 +397,7 @@ def main():
         for case in causes.CASES:
             print(f"{case}\tCAUSE_DIAGNOSTIC; one case/arm, no speed admission")
         for case in phase7.CASES.values():
-            print(f"{case.id}\tstrict candidate < baseline; storage ceiling {case.storage_ceiling}")
+            print(f"{case.id}\tRETIRED PG/MinIO selection; historical receipts preserved")
         for case in init.CASES.values():
             print(f"{case.id}\t{case.files}\t{case.logical_bytes}\t"
                   f"{'SDK selected' if case.id in init.SELECTED else 'NOT_RUN ' + init.NOT_RUN_REASON}")

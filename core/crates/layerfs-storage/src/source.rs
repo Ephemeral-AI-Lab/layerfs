@@ -1,12 +1,8 @@
-//! Internal encoding access seam while the two storage paths coexist.
-//!
-//! This seam carries physical bytes and catalogue rows, never engine types.
-//! The old path retains its publication ceiling and transaction ownership.
+//! Engine-independent bounded physical input for the shared encoding algorithms.
 
-use crate::error::{StorageError, StorageResult};
+use crate::error::StorageResult;
 use crate::location::{ObjectLocation, SignatureRow, ValueGroupRow};
 use layerfs_content::ObjectId;
-use std::sync::{Mutex, MutexGuard};
 
 /// Physical input and advisory-index persistence used by unchanged encoding.
 pub trait Source {
@@ -35,17 +31,4 @@ pub trait Source {
     fn note_pack_cache_hit(&self) {}
     /// Stores the bounded signature changes in the caller's transaction.
     fn write_signatures(&self, rows: &[SignatureRow]) -> StorageResult<usize>;
-}
-
-/// Takes the legacy caller's arbitration once, preserving its wave ownership.
-pub(crate) fn lock_unless_held(
-    owner: &Mutex<()>,
-    held: bool,
-) -> StorageResult<Option<MutexGuard<'_, ()>>> {
-    if held {
-        return Ok(None);
-    }
-    Ok(Some(owner.lock().map_err(|_| {
-        StorageError::Integrity("Store arbitration")
-    })?))
 }

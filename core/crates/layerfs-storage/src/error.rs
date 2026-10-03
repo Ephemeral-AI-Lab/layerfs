@@ -14,8 +14,6 @@ use layerfs_content::{ContentError, ObjectId};
 pub enum StorageError {
     /// A canonical construction, framing or read check failed.
     Content(ContentError),
-    /// The embedded engine reported a failure for one attempted statement.
-    Engine(rusqlite::Error),
     /// The host filesystem refused a physical Store reservation.
     Io(std::io::Error),
     /// The requested object is not stored.
@@ -94,7 +92,6 @@ impl fmt::Display for StorageError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Content(error) => write!(formatter, "content: {error}"),
-            Self::Engine(error) => write!(formatter, "engine: {error}"),
             Self::Io(error) => write!(formatter, "physical Store I/O: {error}"),
             Self::ObjectMissing(id) => write!(formatter, "object {id} is not stored"),
             Self::Unpublished(id) => {
@@ -152,31 +149,12 @@ impl From<ContentError> for StorageError {
     }
 }
 
-impl From<rusqlite::Error> for StorageError {
-    fn from(error: rusqlite::Error) -> Self {
-        Self::Engine(error)
-    }
-}
-
 /// Result alias for this component.
 pub type StorageResult<T> = Result<T, StorageError>;
 
-impl From<crate::port::ObjectError> for StorageError {
-    fn from(error: crate::port::ObjectError) -> Self {
-        let uncertain = error == crate::port::ObjectError::Uncertain;
-        let original = Self::Io(std::io::Error::other(error));
-        if uncertain {
-            Self::UnknownOutcome {
-                original: Box::new(original),
-            }
-        } else {
-            original
-        }
-    }
-}
-impl From<crate::port::MetadataError> for StorageError {
-    fn from(error: crate::port::MetadataError) -> Self {
-        let uncertain = error == crate::port::MetadataError::Uncertain;
+impl From<crate::port::PersistenceError> for StorageError {
+    fn from(error: crate::port::PersistenceError) -> Self {
+        let uncertain = error == crate::port::PersistenceError::Uncertain;
         let original = Self::Io(std::io::Error::other(error));
         if uncertain {
             Self::UnknownOutcome {
@@ -215,9 +193,6 @@ pub(crate) fn provider_error(error: StorageError) -> ContentError {
         },
         StorageError::MissingDependency { .. } => ContentError::ProviderFailure {
             what: "missing dependency",
-        },
-        StorageError::Engine(_) => ContentError::ProviderFailure {
-            what: "engine failure",
         },
         _ => ContentError::ProviderFailure {
             what: "store read failure",

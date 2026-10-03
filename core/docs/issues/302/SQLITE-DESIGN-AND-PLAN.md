@@ -250,3 +250,32 @@ new durable measurement receipts determine completion; documentation alone is
 not a working SQLite backend or a bounded whole-namespace claim. No aggregate
 preflight/CI, third-party edits, push, PR or merge. Every local commit carries
 exact parent/staged/committed production LOC and migration classification.
+
+## Revised goal and acceptance direction (2026-10-04)
+
+The user explicitly requests an active goal through actual terminal success:
+the SQLite-only solution must pass all four Init tiers (100/1000/10000/100000)
+and retained-history stride10/3/1 (17/53/157 states). Candidate comparison time
+must be <=1.10 times the matched unmodified7edddbdb8 Phase4.5 time. Exact integer
+arithmetic is `10*candidate_ns <= 11*baseline_ns`. This replaces the old strict
+speed inequality for this new treatment only. Previous PG/MinIO FAIL receipts
+are immutable. Required durability work is inside the comparison scope/lifecycle.
+
+The precise new timing/resource/cache/correctness contract must be frozen before
+samples. The proposed Init scope is complete child launch-to-exit, including
+fresh Store creation/opening, real Init, required checkpoint and final close;
+internal operation/bootstrap/commit/checkpoint spans are explanatory and may
+overlap. Both arms pay their own fresh database lifecycle. No after-the-fact
+subtraction of inconvenient terms. Counts/EXPLAIN and smaller-step comparisons
+are mandatory for large gaps, using cause diagnostics rather than speed repeats.
+
+Two contract points are pending direct user clarification: whether unchanged
+historical60/170/170s history bounds are a scoped exception to current15/25s
+rules; and the numeric Init allocation criterion (proposed: no greater than
+matched Phase4.5 total allocation). Existing history ceilings remain54,278,964 /
+70,427,034 /92,342,273B. Missing contract/proof/accounting work cannot become PASS.
+
+An active goal is created without a token budget. A1-A6 now have material local
+SQLite implementation and functional tests; A7 and all seven competitive
+benchmark decisions remain NOT_RUN. B0 count instrumentation is implemented;
+B1 larger-tier qualification and conditional B2 paging remain incomplete.

@@ -32,6 +32,7 @@ def archive(path):
 
 
 def run(case_id,arm,out):
+    raise ValueError("PostgreSQL/MinIO cause campaign is retired; retain existing receipts without new service runs")
     if sys.platform != "darwin":raise ValueError("this external SQLite diagnostic is qualified on macOS only")
     out=runner.owned(out);out.mkdir(parents=True)
     with (runner.RESULTS/'phase7.lock').open('a+b') as lock:

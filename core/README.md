@@ -1,29 +1,30 @@
 # LayerFS core (replacement product workspace)
 
-> **Status:** Current product workspace; three components are implemented and the
-> reference tree still ships the released product.
+> **Status:** Current SQLite-only replacement workspace under qualification.
 
-`core/` is the home of the replacement LayerFS product. It is an independent
-Cargo workspace with its own manifest, lockfile and target directory, and it is
-excluded from the reference workspace at the repository root, which keeps
-`crates/` available during migration.
+The active workspace has six packages: layerfs-content, layerfs-storage,
+layerfs-history, layerfs-persistence, layerfs-project and layerfs-telemetry.
+Storage and history are engine-independent domains. The persistence adapter
+owns the host-local SQLite connection, SQL, BLOB and durability mechanics;
+Objects/Metadata and History share one Store with separate bounded transaction
+acknowledgements. PostgreSQL is unavailable. MinIO/S3 is retired from active
+composition.
 
-Members are added only when a component boundary is agreed. The workspace
-currently contains three packages.
+The excluded API/runtime/server/S3 directories retain reference source. They are
+not functioning active application adapters or fallback dependencies; the sealed
+Phase 4.5 tree supplies historical comparison. A sandbox host endpoint remains
+an explicit application-adapter decision. The legacy product snapshot, archived
+tests and prior failed receipts are preserved.
 
-| Package | Responsibility | Status |
-| --- | --- | --- |
-| [`crates/layerfs-telemetry`](crates/layerfs-telemetry/README.md) | Environment-independent parent/child timing trees | Implemented standalone; adapter integration is follow-up work |
-| [`crates/layerfs-content`](crates/layerfs-content/README.md) (C1) | Canonical objects, complete-file construction, bounded logical reads | Implemented for the frozen 128 KiB/8/4 profile; edit and tree paths are later scope |
-| [`crates/layerfs-storage`](crates/layerfs-storage/README.md) (C2) | Exact CAS reuse, supported FULL encoding, pack placement, real SQLite | Implemented FULL-only; DELTA, pooling and cloud placement are later scope |
+See [the current design and plan](docs/issues/302/SQLITE-DESIGN-AND-PLAN.md) and
+[the persistence API/profile](crates/layerfs-persistence/README.md). The goal is
+all seven revised Step 10 selections under a frozen 10% Phase 4.5 time margin,
+with correctness/accounting/storage gates. Compilation and unit tests are not
+terminal success. Namespace-count retention is instrumented, not yet proven
+bounded for the whole importer.
 
-Rules for anything under `core/` are in [`AGENTS.md`](AGENTS.md): production code
-only in `src/`, external tests and runnable examples, production files limited to
-999 physical lines, `lib.rs`/`mod.rs` limited to
-200 physical lines of declarations, re-exports and thin delegation, and a
-production LOC comparison for every commit.
-Required capabilities fail explicitly; no retries/fallbacks, WAL or added durability
-work, and no third-party patches are part of the current replacement design.
+The source/LOC, locked dependency and verification rules remain in
+[AGENTS.md](AGENTS.md). No CI or aggregate preflight gate is used.
 
 ## Architecture
 

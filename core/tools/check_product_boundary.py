@@ -21,13 +21,14 @@ UNSAFE = re.compile(r"\bunsafe\b")
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
 }
-UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-s3", "layerfs-metadata", "layerfs-project")
+UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-s3", "layerfs-metadata", "layerfs-persistence", "layerfs-project")
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
     "layerfs-content": "#![forbid(unsafe_code)]",
     "layerfs-telemetry": "#![forbid(unsafe_code)]",
     "layerfs-s3": "#![forbid(unsafe_code)]",
     "layerfs-metadata": "#![forbid(unsafe_code)]",
+    "layerfs-persistence": "#![forbid(unsafe_code)]",
     "layerfs-project": "#![forbid(unsafe_code)]",
 }
 
@@ -41,11 +42,12 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-history": {"layerfs-content"},
     "layerfs-s3": {"layerfs-storage"},
     "layerfs-metadata": {"layerfs-storage", "layerfs-history", "layerfs-content"},
+    "layerfs-persistence": {"layerfs-storage", "layerfs-history", "layerfs-content"},
     "layerfs-project": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-telemetry"},
 }
 DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-project"}
 ENGINES_AND_CLUSTER2 = {
-    "layerfs-s3", "layerfs-metadata", "layerfs-overlay", "layerfs-workspace",
+    "layerfs-s3", "layerfs-metadata", "layerfs-persistence", "layerfs-overlay", "layerfs-workspace",
     "layerfs-fuse", "layerfs-daemon", "layerfs-bridge", "layerfs-sandbox",
     "layerfs-server", "layerfs-sdk", "layerfs-api-core",
 }
@@ -64,6 +66,8 @@ def dependency_violations(source):
     for section in sections:
         for alias, specification in section.items():
             dependency = specification.get("package", alias) if isinstance(specification, dict) else alias
+            if name in DOMAIN_CRATES and dependency in {"rusqlite", "postgres", "tokio-postgres", "native-tls", "reqwest"}:
+                found.append((1,f"engine dependency in domain {name} -> {dependency}"))
             if dependency.startswith("layerfs-") and dependency not in ALLOWED_DEPENDENCIES[name]:
                 found.append((1, f"forbidden production dependency {name} -> {dependency}"))
     return found

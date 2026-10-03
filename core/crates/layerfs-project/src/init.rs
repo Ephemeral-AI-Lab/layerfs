@@ -42,6 +42,8 @@ pub struct Initialized {
     pub entries: u64,
     /// Cumulative actual storage counts for the supplied handle; diagnostics.
     pub diagnostics: Diagnostics,
+    /// Actual retained-collection counts, without claiming whole-importer bounds.
+    pub namespace_work: crate::NamespaceWork,
 }
 /// Initializes one directory through the supplied ports, without an engine dependency.
 #[cfg(unix)]
@@ -94,6 +96,7 @@ pub fn init(
         root_serial: reservation.start,
         entries: count,
         diagnostics: storage.diagnostics(),
+        namespace_work: progress.work,
     })
 }
 

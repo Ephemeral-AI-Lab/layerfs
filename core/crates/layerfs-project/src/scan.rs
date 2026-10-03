@@ -40,7 +40,7 @@ pub(crate) fn scan_and_save(
     if !root_metadata.is_dir() || root_metadata.file_type().is_symlink() {
         return Err(Failure::InvalidInput);
     }
-    let save = store.begin_parallel_save().map_err(storage)?;
+    let save = store.begin_save().map_err(storage)?;
 
     let scanned = timer.child("history.import_scan").run(|_| {
         let mut entries = vec![entry(
@@ -53,8 +53,19 @@ pub(crate) fn scan_and_save(
         let mut jobs = Vec::new();
         let mut pending = VecDeque::from([(source.to_path_buf(), 0usize)]);
         while let Some((directory, parent)) = pending.pop_front() {
+            progress.work.frontier = progress.work.frontier.max(pending.len() + 1);
+            progress.work.frontier_capacity_bytes = progress.work.frontier_capacity_bytes.max(
+                pending.capacity() * std::mem::size_of::<(PathBuf, usize)>()
+                    + pending.iter().map(|(p, _)| p.capacity()).sum::<usize>()
+                    + directory.capacity(),
+            );
             progress.tick()?;
             let mut children = fs::read_dir(&directory)?.collect::<Result<Vec<_>, _>>()?;
+            progress.work.directory_children = progress.work.directory_children.max(children.len());
+            progress.work.child_vector_bytes = progress
+                .work
+                .child_vector_bytes
+                .max(children.capacity() * std::mem::size_of::<fs::DirEntry>());
             children.sort_by(|a, b| a.file_name().as_bytes().cmp(b.file_name().as_bytes()));
             for child in children {
                 progress.tick()?;
@@ -93,6 +104,16 @@ pub(crate) fn scan_and_save(
                 }
             }
         }
+        progress.work.entries = entries.len();
+        progress.work.entry_capacity_bytes = entries.capacity()
+            * std::mem::size_of::<PreparedEntry>()
+            + entries
+                .iter()
+                .map(|e| e.name.capacity() + e.target.as_ref().map_or(0, Vec::capacity))
+                .sum::<usize>();
+        progress.work.jobs = jobs.len();
+        progress.work.job_capacity_bytes = jobs.capacity() * std::mem::size_of::<Job>()
+            + jobs.iter().map(|j| j.path.capacity()).sum::<usize>();
         Ok((entries, jobs))
     });
     let scanned = scanned.and_then(|(mut entries, jobs)| {

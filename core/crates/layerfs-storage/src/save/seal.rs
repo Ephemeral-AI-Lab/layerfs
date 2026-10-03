@@ -40,7 +40,7 @@ struct Queue {
 }
 pub(super) struct Sealed {
     pub(super) info: PackInfo,
-    pub(super) body: Vec<u8>,
+    pub(super) body: std::sync::Arc<Vec<u8>>,
     pub(super) members: Vec<(ObjectLocation, Member)>,
     pub(super) value_groups: Vec<ValueGroupRow>,
 }
@@ -259,7 +259,7 @@ impl Packer {
         }
         self.ready.push(Sealed {
             info,
-            body,
+            body: std::sync::Arc::new(body),
             members,
             value_groups: Vec::new(),
         });
@@ -350,7 +350,7 @@ impl Packer {
         };
         self.ready.push(Sealed {
             info,
-            body,
+            body: std::sync::Arc::new(body),
             members: Vec::new(),
             value_groups: tail.rows,
         });

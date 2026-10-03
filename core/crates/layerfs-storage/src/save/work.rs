@@ -9,12 +9,12 @@ pub struct StageWork {
     pub wall_ns: u64,
 }
 /// Observed save work: begin, membership, admission, pack flush, registration
-/// preparation, upload window, metadata registration, pack reservation,
+/// preparation, metadata registration, pack reservation,
 /// ordinal reservation and finish pack closure, in that order.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SaveWork {
-    /// Fixed ten-stage aggregate.
-    pub stages: [StageWork; 10],
+    /// Fixed nine-stage aggregate.
+    pub stages: [StageWork; 9],
 }
 impl SaveWork {
     fn difference(self, earlier: Self) -> Self {
@@ -42,8 +42,7 @@ pub(crate) enum Stage {
     Membership,
     Admission,
     Flush,
-    Registration,
-    Upload,
+    Publication,
     Metadata,
     PackReserve,
     OrdinalReserve,
