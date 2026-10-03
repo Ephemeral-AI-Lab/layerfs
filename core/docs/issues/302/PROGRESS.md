@@ -366,3 +366,88 @@ classification. Reference 65,417 -> 65,417; core 71,198 -> 72,349; old-path 6,15
 legacy retirement or algorithmic simplification is claimed in this commit.
 
 Production LOC: 136615 -> 137766 (delta +1151)
+
+
+## 2026-10-03 — M1 complete: steps 2–4b
+
+Implementation commits: `6db678f3a` (read seam), `d6d159885` (ports/reader),
+`10954a167` (ordinary writes), `e0bf6a752` (pooled writes). M0 remains complete.
+The two C2 paths coexist; server/SDK source and dependencies remain available.
+No engine crate exists yet. Source corrections are committed in the plan and
+architecture 05; no canonical identity, CDC, deduplication, record grammar or
+pack framing changes. Reference closure replaces save-level publication on the
+port path. Physical candidates are acknowledged before selection charges the
+winning chain's depth/work. The legacy chronology rule remains; port reads check
+cycles explicitly. Pooled packing/index/selection use the existing builders.
+
+Exact checks and results:
+
+- Step 2: `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check`; `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings`; `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage -p layerfs-server -p layerfs-sdk`; `python3 core/tools/check_product_boundary.py`; `python3 -m unittest discover -s core/tools -p 'test_*.py'`; `git diff --check` — PASS, 295 runtime tests/0 FAIL, boundary 360, tools 10. The then-existing ignored test is recorded historically below; its current gap is closed by the targeted check.
+- Step 3: the same fmt/all-target locked Clippy/guard/tools commands, and `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage -- --nocapture` — final PASS, 241 runtime tests/0 FAIL/0 ignored, boundary 370, tools 10.
+- Step 4a: `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check`; the same locked Clippy and storage test commands — final PASS, 254 runtime tests/0 FAIL/0 ignored, boundary 379, tools 21. Complete file, grouped/wave, PREFIX chain, singleton and C1 edit vectors pass; paired sealed bytes equal the old path's. Failed/uncertain upload cannot register a parent, first-wins forward locators are readable, and a deeper winner is charged before selection.
+- Step 4b: the same fmt/locked Clippy/storage package commands — final PASS, 263 runtime tests/0 FAIL/0 ignored, boundary 380, tools 21. Pooled reuse, reopened chains, maximum depth 50, bounded ordinal blocks/index window, lost acknowledgement and malformed/missing groups pass. Counts are in `checks/step4b-tests-final.txt`.
+- `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test port_pooled real_filesystem_roots_and_every_emitted_object_match_c1_and_the_old_path -- --nocapture` — PASS, 1 test/0 FAIL/0 ignored, after adding the complete sealed-pack population comparison for both 100/1,000-entry fixtures. The full package pass preceded that test-only assertion addition; the final all-target Clippy/fmt checks cover the added assertion. Roots and every emitted canonical object also match C1 and the old path.
+- `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-server --test direct authenticated_generic_save_accepts_4097_separated_final_runs -- --exact --ignored` — PASS, 1 test/0 FAIL/0 ignored. The current owner's no-skipped-milestone requirement plus delegated judgment was applied over the older no-further-runs annotation. It ran once, with no annotation or cluster 2 source change. Historical step-2 receipt remains 295 PASS/1 ignored; it is not relabelled.
+- Final `git diff --cached --check` and committed-tree/first-parent identity checks — PASS. No skipped or failing M1 covering check remains.
+
+Every FAIL and repair remains append-only in this PROGRESS record and
+`checks/step3-*`, `checks/step4a-*`, `checks/step4b-*`:
+
+- Step 3: unused imports; exhaustive server error matching; SQLite oracle FromSql
+  type; repair-script assertion stopping before writing and an extra unchanged
+  failing Clippy invocation; trailing blank EOF in a copied check log. Final
+  checks pass. Typed errors use the existing carrier; no server enum/API edit.
+- Step 4a: virtual-workspace fmt omitted `--all`; private pending-batch access;
+  wrong UnknownOutcome fixture pattern; race fixture did not create its asserted
+  forward locator; unsupported 4 MiB cutoff fixture; deeper-race fixture offered
+  an unrelated eligible cache candidate. Source/fixture corrections are recorded
+  with their failed attempts; final checks pass.
+- Step 4b initial focused run: 7 PASS/2 FAIL. The missing ordinal was requested
+  twice (product defect): cache absence for this demand, without an error-driven
+  retry. The other fixture requested unsupported depth 63: use the existing
+  supported depth 50. Rerun: 8 PASS/1 FAIL, exposing a product prefetch off-by-one
+  at exactly 50 edges. Accept the final empty frontier without increasing the
+  bound; full final package: 263 PASS/0 FAIL/0 ignored.
+- These independently revealed compiler/fixture/maximum-bound faults exceeded
+  the requested single-repair invocation cadence. The extra invocations and their
+  outcomes are disclosed; no timed arm was sampled or repeated.
+
+Recorded diagnostics, never timing/acceptance claims:
+
+| Stated complete test sequence | policy | locate | read_packs | catalogue | signatures | reserve (ordinal) | register | PUT/GET/HEAD | metadata returned/written B | pooled packs/groups | reserved pooled directory B | forced seals |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | ---: | ---: |
+| Save/read one 100-row pooled leaf | 1 | 2 | 3 | 3 | 1 | 3 (1) | 1 | 0/0/0 | 12405 / 11734 | 1 / 1 | 4096 | 0 |
+| Save 1100 one-row leaves across waves, then read first/last | 1 | 4 | 5 | 3 | 1 | 77 (73) | 3 | 0/0/0 | 57172 / 141268 | 5 / 1100 | 20480 | 1 |
+| Save 1330 hundred-row leaves across the bounded window, then read last | 1 | 4 | 3 | 3 | 1 | 91 (87) | 7 | 0/0/0 | 21748 / 10475925 | 167 / 1330 | 684032 | 1 |
+
+The filesystem diagnostic is specifically a reopened reader: 100-entry fixture
+policy 1/locate 18/read_packs 18/catalogue 2/GET 4, payload bytes 1,171 and metadata
+bytes 39,145; 1,000-entry fixture policy 1/locate 39/read_packs 39/catalogue 20/GET
+4, payload bytes 1,171 and metadata bytes 379,988. It reports zero writes because
+that reader performed none. Other counters, the step-3 read cases, and step-4a
+file/closure/race sequences remain in their complete outputs and earlier entries.
+No lifetime memory or count is promoted to a phase timing.
+
+NOT_RUN: real S3/PostgreSQL provider tests and cloud TLS proof (steps 5–7), project
+Init (8), real storage parity (9), benchmark/harness selections and all timed
+samples (10–11). These are future milestone checks, not omissions from M1.
+Original Q1–Q3 approvals and delegated Q4–Q13 decisions are in the plan. No owner
+question blocks M1. Step 12 still requires external cluster 2 M9; no retirement
+or release acceptance is claimed.
+
+Production LOC per implementation commit, from exact first parent/final staged
+trees with `python3 tools/production_loc.py --json --root <snapshot>`:
+
+- `6db678f3a`: 135696 -> 135792 (delta +96), adapted relocation/read seam.
+- `d6d159885`: 135792 -> 136615 (delta +823), mapping relocation plus new port path.
+- `10954a167`: 136615 -> 137766 (delta +1151), new orchestration; no relocation.
+- `e0bf6a752`: 137766 -> 138273 (delta +507), pooled orchestration; no relocation.
+
+Across M1: reference 65,417 -> 65,417; core 70,279 -> 72,856; old-path 6,141 ->
+6,160; new-path 0 -> 2,483; rest-core 64,138 -> 64,213. Combined 135,696 ->
+138,273 (delta +2,577). Coexistence is growth, not legacy retirement or an
+algorithmic simplification. This milestone-entry commit changes documentation
+only: reference 65,417, core 72,856, old-path 6,160, new-path 2,483 and rest-core
+64,213 remain unchanged. No code relocates in this entry.
+
+Production LOC: 138273 -> 138273 (delta +0)
