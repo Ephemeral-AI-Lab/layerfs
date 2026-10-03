@@ -451,3 +451,90 @@ only: reference 65,417, core 72,856, old-path 6,160, new-path 2,483 and rest-cor
 64,213 remain unchanged. No code relocates in this entry.
 
 Production LOC: 138273 -> 138273 (delta +0)
+
+
+## 2026-10-03 — M2 complete: step 5 MinIO engine
+
+Implementation commit: `6be5b585c` (parent `8730ff801`). `layerfs-s3` now contains
+`src/{config,sign,http,client,counters}.rs`; `S3Objects` implements the three C2
+object calls with the approved own SigV4/HMAC client and already-locked sha2.
+No third-party package/version was added. Product code remains under src/ with
+external service/fault fixtures under tests/. No domain or cluster 2 source edit.
+
+Exact checks:
+
+- `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check` — PASS.
+- `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings` — final PASS, including server/SDK coexistence builds.
+- `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-s3 -- --nocapture` with the owned environment loaded from `target/phase7-services/settings.json` — final PASS, 6 tests/0 FAIL/0 ignored. Reproduce by loading the private generated `target/phase7-services/services.env` before the Cargo command. The run used a private target-only Python launcher; no credential value was printed. Missing required service inputs fail; tests have no skip branch.
+- `python3 core/tools/check_product_boundary.py` — PASS, 386 production files and allowed dependency edges.
+- `python3 -m unittest discover -s core/tools -p 'test_*.py'` — PASS, 21 tests.
+- `python3 core/tools/phase7_services.py status` — PASS, same owned epoch/image/settings profile; setup was reused, not regenerated.
+- `git diff --cached --check` and exact committed-tree/first-parent confirmation — PASS.
+
+The pinned MinIO proves If-None-Match conditional creation: first PUT Created,
+second PUT AlreadyPresent. Whole/range reads and HEAD match bytes. Missing GET
+returns Missing; bad credentials return Refused 403; a controlled proxy damages
+an actual GET reply and proves Malformed with no alternate request; a controlled
+proxy discards an acknowledged PUT reply and proves Uncertain, while a separate
+client confirms the body exists. Unknown/malformed clients stay terminal: a
+subsequent call issues no request or connection. Product source has no fault hook.
+
+Source-driven correction and every FAIL:
+
+- Initial Clippy FAIL on int-plus-one range comparison and two format-collect
+  string constructions. Simplify the equivalent comparison and append strings
+  directly; warning-denying rerun PASS. No lint suppression.
+- Initial service suite: 5 PASS/1 FAIL. The repeated conditional PUT returned
+  AlreadyPresent correctly, but MinIO's acknowledged 412 response explicitly
+  closed its HTTP connection. The following independent HEAD exposed that close.
+  Keep at most one active persistent connection. A new operation may open its
+  first connection once after an acknowledged successful normal close; no
+  completed request is repeated, and no failed/malformed request enters this
+  path. This interpretation preserves one attempt per operation and is explicitly
+  recorded in the plan/architecture. Final suite: 6 PASS/0 FAIL/0 ignored.
+- PUT uses HTTP 100-continue framing: definitive refusal can precede body transfer.
+  Interim replies are counted separately from HTTP requests. A chosen IPv4
+  address is never replaced after failure. The local profile uses plain HTTP,
+  two-second default TCP/wire bounds and the existing singleton-body ceiling;
+  HTTPS/other profiles fail explicitly. No error-driven transport downgrade.
+- Both red attempts and final outputs are retained in `checks/step5-*.txt`.
+  The initial/final body-size rows are count diagnostics with no timers; they are
+  not timed samples, replacement performance receipts or proof of cold caches.
+
+Diagnostics for each complete stated sequence (actual client counters):
+
+| Sequence | Connections | HTTP requests | Interim 100 | PUT/GET/HEAD | Wire sent/received B | Entity sent/received B |
+| --- | ---: | ---: | ---: | --- | --- | --- |
+| Conditional create + duplicate + HEAD + full/range GET | 2 | 5 | 1 | 2/2/1 | 34895 / 35955 | 32000 / 33078 |
+| 256 KiB create + HEAD + GET | 1 | 3 | 1 | 1/1/1 | 263863 / 263802 | 262144 / 262144 |
+| 16 MiB create + HEAD + GET | 1 | 3 | 1 | 1/1/1 | 16778937 / 16778878 | 16777216 / 16777216 |
+
+Entity counts include refusal bodies. The conditional PUT did not send the body
+again; the second connection belongs to the subsequent operation after the normal
+close. Lost/malformed cases assert one request and unchanged counters on the next
+call. No latency, throughput or memory number is inferred.
+
+Service identity: owned epoch `9571f8de27bece7c53a399ff`; MinIO
+RELEASE.2026-09-22T19-25-18Z, commit `df34868a88cc8c396807e04a7e220810b321bdaa`,
+image digest `4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285`.
+Resource profile remains 2 CPUs/536,870,912-byte memory/no swap, single drive,
+compression/encryption/browser off. Status preserves the M0 PostgreSQL settings
+hash. Test objects use fresh per-run prefixes in the existing owned bucket;
+no other owner's container was changed.
+
+NOT_RUN: PostgreSQL C2/C5/TLS tests (6–7), project Init (8), real C2 parity (9),
+harness/frozen acceptance cases and every timed sample (10–11). No skipped M2
+covering check. No owner question blocks the next step; Q1's explicit PostgreSQL
+client/TLS approval is recorded. The owner-notified operational query layout is
+adopted in the plan: schema SQL plus sql/queries/{storage,history}/, embedded by
+Rust with binding/decoding/error classification in the engine. No metadata file
+scaffold has been added before implementation. Step 12 still waits on cluster 2 M9.
+
+Implementation LOC comparison uses the exact first parent/final staged trees with
+`python3 tools/production_loc.py --json --root <snapshot>`: reference 65,417 ->
+65,417; core 72,856 -> 73,605; old-path 6,160 -> 6,160; new-path 2,483 -> 3,232;
+rest-core 64,213 -> 64,213. Combined 138273 -> 139022 (delta +749). New engine
+implementation; no relocation/retirement or algorithmic simplification claim.
+This milestone-entry commit changes only documentation with the same subtotals.
+
+Production LOC: 139022 -> 139022 (delta +0)
