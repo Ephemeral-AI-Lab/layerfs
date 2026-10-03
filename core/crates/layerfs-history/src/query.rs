@@ -3,7 +3,7 @@
 //! A cursor is a fixed 160-byte value. It binds the catalog identity and
 //! incarnation, the range it belongs to, the immutable anchor that range was
 //! opened at, and the position to resume after; a sixteen-byte keyed MAC covers
-//! everything before it. The server authenticates that MAC with its authority capability while it
+//! everything before it. The provider authenticates that MAC with its authority capability while it
 //! is serving, so a cursor from another catalog, another incarnation, another
 //! query or with a tampered body fails validation instead of being honoured.
 //!
@@ -18,9 +18,9 @@ use crate::records::{
 };
 
 /// Frozen cursor format version.
-pub(crate) const CURSOR_VERSION: u8 = 2;
+pub const CURSOR_VERSION: u8 = 2;
 /// Fixed encoded width of one cursor.
-pub(crate) const CURSOR_BYTES: usize = MAXIMUM_CURSOR_BYTES;
+pub const CURSOR_BYTES: usize = MAXIMUM_CURSOR_BYTES;
 /// Bytes each variable field occupies, zero padded.
 const FIELD_BYTES: usize = 33;
 /// Offset of the subject field.
@@ -34,7 +34,7 @@ const DIGEST_AT: usize = POSITION_AT + FIELD_BYTES + 1;
 
 /// The bounded range a cursor resumes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Range {
+pub enum Range {
     /// LayerStacks in name order.
     StackNames = 1,
     /// Branches of one stack in name order.
@@ -49,30 +49,30 @@ pub(crate) enum Range {
 
 /// The request context a cursor is only valid inside.
 #[derive(Clone, Copy)]
-pub(crate) struct Context<'a> {
+pub struct Context<'a> {
     /// Authority capability, never serialized.
-    pub(crate) key: &'a [u8; 32],
+    pub key: &'a [u8; 32],
     /// Catalog the cursor was issued by.
-    pub(crate) catalog: CatalogId,
+    pub catalog: CatalogId,
     /// Incarnation the cursor was issued in.
-    pub(crate) incarnation: u64,
+    pub incarnation: u64,
     /// Range being resumed.
-    pub(crate) range: Range,
+    pub range: Range,
     /// Subject identity bytes, empty when the range has none.
-    pub(crate) subject: &'a [u8],
+    pub subject: &'a [u8],
 }
 
 /// A decoded continuation.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct Cursor {
+pub struct Cursor {
     /// Immutable starting identity of the range.
-    pub(crate) anchor: Vec<u8>,
+    pub anchor: Vec<u8>,
     /// Last record already delivered.
-    pub(crate) position: Vec<u8>,
+    pub position: Vec<u8>,
 }
 
 /// Encodes one continuation for a range that has more records.
-pub(crate) fn encode(context: Context<'_>, cursor: &Cursor) -> HistoryResult<Vec<u8>> {
+pub fn encode(context: Context<'_>, cursor: &Cursor) -> HistoryResult<Vec<u8>> {
     let mut bytes = [0u8; CURSOR_BYTES];
     bytes[0] = CURSOR_VERSION;
     bytes[1] = context.range as u8;
@@ -87,7 +87,7 @@ pub(crate) fn encode(context: Context<'_>, cursor: &Cursor) -> HistoryResult<Vec
 }
 
 /// Validates one continuation against the request being served.
-pub(crate) fn decode(context: Context<'_>, bytes: &[u8]) -> HistoryResult<Cursor> {
+pub fn decode(context: Context<'_>, bytes: &[u8]) -> HistoryResult<Cursor> {
     if bytes.len() != CURSOR_BYTES {
         return Err(HistoryError::InvalidInput("page cursor width"));
     }
@@ -124,7 +124,7 @@ pub(crate) fn decode(context: Context<'_>, bytes: &[u8]) -> HistoryResult<Cursor
 /// The caller's `limit` is an upper bound; the encoded-result budget is the
 /// other. A page always carries at least one record when rows remain, because
 /// the widest record is far smaller than the budget.
-pub(crate) fn capacity(limit: u16, per_record: usize) -> HistoryResult<usize> {
+pub fn capacity(limit: u16, per_record: usize) -> HistoryResult<usize> {
     if limit == 0 || limit > MAXIMUM_PAGE_RECORDS {
         return Err(HistoryError::InvalidInput("page limit"));
     }
@@ -139,7 +139,7 @@ pub(crate) fn capacity(limit: u16, per_record: usize) -> HistoryResult<usize> {
 /// record, and every range resumes strictly after it: a name or token range with
 /// an exclusive comparison, and an ancestry walk by stepping to that record's
 /// parent. One convention, so no page repeats a record and none skips one.
-pub(crate) fn page<T>(
+pub fn page<T>(
     mut records: Vec<T>,
     capacity: usize,
     more: bool,

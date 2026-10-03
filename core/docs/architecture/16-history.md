@@ -59,6 +59,24 @@ Implementation specification and its pre-publication audit:
   `server/`, and uses `save/import/batch/` for bounded producer messages. This
   source is a new build identity; the earlier one-shot prototype timings do not
   automatically measure it.
+- **#302 PostgreSQL history provider:** this same-commit change, based on
+  `f141ea927`, adds `layerfs-metadata::PgHistory` beside the existing native
+  provider. The portable 20-method history contract, records and identities
+  are unchanged. Both providers use the relocated pure cursor codec at
+  `layerfs-history/src/query.rs`; this moves code without changing cursor v2.
+  PostgreSQL history has seven tables in the selected schema, separate from
+  C2 tables and with no cross-component FK. Operations hold one transaction:
+  coherent reads use REPEATABLE READ READ ONLY, writes take the history_meta
+  EXCLUSIVE lock with NOWAIT before validation and conditional publication.
+  Typed refusal rolls back; an uncertain outcome quarantines its handle,
+  without replay/reconnect or a guessed rollback. The server may abort an
+  abandoned connection. Stage failure observations use the same pure helper.
+  Every operational statement lives under metadata/sql/queries/history/;
+  history SQL schema creation, deferred keys and exact reopen validation live
+  in the engine. C5 may require multiple bounded statement exchanges per
+  operation; recorded counts are diagnostics and carry no speed claim.
+  Local PostgreSQL is the present acceptance profile; remote/cloud deployment
+  qualification remains deferred. The native provider remains until step 12.
 - **Scope:** the replacement product under `core/` only.
 - **#286 C5 physical page treatment:** this document's current source requests
   1-KiB SQLite pages for newly created catalogs. Existing schema-1 catalogs at

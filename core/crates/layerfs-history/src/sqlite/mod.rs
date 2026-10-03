@@ -11,7 +11,7 @@ mod branch;
 mod commit;
 mod layerstack;
 mod open;
-mod query;
+use crate::query;
 mod rows;
 mod staging;
 

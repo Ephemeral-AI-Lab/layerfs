@@ -1,0 +1,3 @@
+Command: cargo +1.85.1 metadata --manifest-path core/Cargo.toml --offline --format-version 1
+FAIL: failed to download web-sys v0.3.104; attempting HTTP with --offline specified.
+Lock updated only with the already-locked blake3 dev dependency on layerfs-metadata; no package/version changes. Subsequent locked builds succeeded.

@@ -734,6 +734,7 @@ dependencies = [
 name = "layerfs-metadata"
 version = "0.1.6"
 dependencies = [
+ "blake3",
  "layerfs-content",
  "layerfs-history",
  "layerfs-storage",

@@ -329,7 +329,7 @@ core/crates/
 │  │     ├─ mod.rs                        declarations
 │  │     ├─ catalog.rs                    PgHistory: create, open, HistoryCatalog delegation
 │  │     ├─ layerstack.rs  branch.rs  commit.rs  staging.rs
-│  │     └─ allocation.rs  query.rs  rows.rs
+│  │     └─ allocation.rs  rows.rs  transaction.rs  bindings.rs  open.rs
 │  └─ tests/
 │     ├─ storage_contract.rs
 │     ├─ history_allocation.rs            C5 allocation contract, bound to PostgreSQL
@@ -931,3 +931,44 @@ upload window is sufficient; every cost of PostgreSQL and MinIO in time or
 bytes; that the resolved dependency versions build on 1.85.1 and unify the same
 way inside `core/Cargo.lock`; that the benchmark history driver can be bound to
 the port path without changing its workload.
+
+
+### Step 7 source decisions — PostgreSQL C5
+
+The existing provider, not a new history design, owns the transition rules. Its
+six complete external contract files are copied and bound to PostgreSQL. The
+portable `HistoryCatalog` trait and records stay unchanged. Move the pure cursor
+codec from `history/src/sqlite/query.rs` to `history/src/query.rs` and expose it
+for both production providers; this is relocation, not deletion or a new format.
+Expose the existing pure `HistoryError::with_observed_stage` helper independently
+of the native feature for the PostgreSQL provider. No engine is named by C5.
+
+Each history operation opens one transaction. Reads use REPEATABLE READ READ
+ONLY for a coherent snapshot. Writes use READ COMMITTED and an EXCLUSIVE NOWAIT
+lock on this schema's history_meta table, preserving the original provider's
+single short writable authority with immediate Busy refusal. This lock permits
+ordinary concurrent reads and does not lock C2 tables. Each operation attempts
+once; definite refusal rolls back, while an uncertain operation quarantines its
+handle and issues no rollback guess or subsequent operation. The PostgreSQL
+server can abort an abandoned connection independently of the product. There
+is no new construction-worker budget and no retry. All statement text is in
+sql/queries/history/, including transaction control; Rust retains the exact
+checked identity derivation, immutable-row comparisons, page/cursor rules and
+conditional head updates. C5 round trips are recorded, not presumed to be one:
+the inherited validation/ancestry steps require several statements.
+
+Seven singular C5 tables preserve the old typed checks, deferred composite
+foreign keys, immutable ancestry constraints and non-recycling counters. C2 and
+C5 may share a schema; no FK crosses their boundary. Creation refuses existing
+history or foreign tables. Reopen validates the metadata binding, incarnation,
+identity/schema version and the complete C5 column/constraint/index/trigger
+fingerprint, stored alongside the exact shipped schema source at creation.
+SQLite's page-size assertion becomes a deferred-FK assertion; raw corruption
+controls use PostgreSQL DDL. The former unknown-missing-function fixture is
+replaced by a cancelled mutation: PostgreSQL gives a definite error for an
+undefined function, while the selected statement deadline proves quarantine and
+no replay. Server connection-abort behavior replaces SQLite's retained file
+lock assertion. These provider-specific changes preserve their semantic tests
+and are reported explicitly. Test support uses already-locked blake3; no new
+package/version is resolved. Remote/cloud and Linux OpenSSL qualification stay
+deferred as recorded at step 6. No timed sample is authorized before step 10.

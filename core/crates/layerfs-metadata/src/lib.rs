@@ -13,3 +13,6 @@ mod wire;
 pub use config::{PgConfig, TlsProfile};
 pub use storage::PgMetadata;
 pub use wire::PgDiagnostics;
+
+mod history;
+pub use history::PgHistory;

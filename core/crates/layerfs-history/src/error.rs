@@ -129,8 +129,8 @@ impl HistoryError {
         }
     }
 
-    #[cfg(feature = "native")]
-    pub(crate) fn with_observed_stage(
+    /// Attaches the stage observed inside a provider transaction to its failure.
+    pub fn with_observed_stage(
         self,
         workspace: WorkspaceId,
         observed: Option<Option<StageRecord>>,

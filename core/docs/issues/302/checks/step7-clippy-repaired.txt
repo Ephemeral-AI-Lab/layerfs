@@ -1,0 +1,2 @@
+    Checking layerfs-metadata v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-metadata)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.77s

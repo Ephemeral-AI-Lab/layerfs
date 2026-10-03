@@ -1,0 +1,209 @@
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-metadata v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-metadata)
+warning: unused import: `layerfs_metadata::PgHistory`
+ --> crates/layerfs-metadata/tests/history_lifecycle.rs:6:5
+  |
+6 | use layerfs_metadata::PgHistory;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `layerfs_metadata::PgHistory`
+ --> crates/layerfs-metadata/tests/history_history_pages.rs:7:5
+  |
+7 | use layerfs_metadata::PgHistory;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `layerfs_metadata::PgHistory`
+ --> crates/layerfs-metadata/tests/history_allocation.rs:6:5
+  |
+6 | use layerfs_metadata::PgHistory;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: `layerfs-metadata` (test "history_allocation") generated 1 warning (run `cargo fix --test "history_allocation"` to apply 1 suggestion)
+warning: `layerfs-metadata` (test "history_history_pages") generated 1 warning (run `cargo fix --test "history_history_pages"` to apply 1 suggestion)
+warning: `layerfs-metadata` (test "history_lifecycle") generated 1 warning (run `cargo fix --test "history_lifecycle"` to apply 1 suggestion)
+    Finished `test` profile [optimized + debuginfo] target(s) in 7.83s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_history-4be1e42c78228f55)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/allocation.rs (core/target/debug/deps/allocation-f7eb54280412a271)
+
+running 3 tests
+test counts_are_checked_and_the_terminal_endpoint_is_refused ... ok
+test reservations_are_monotone_half_open_and_per_scope ... ok
+test a_consumed_reservation_survives_a_later_failure ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/conditional_updates.rs (core/target/debug/deps/conditional_updates-479518a88384d125)
+
+running 6 tests
+test a_stale_loser_keeps_its_exact_stage ... ok
+test stage_insertion_enforces_the_frozen_context ... ok
+test an_exact_token_is_the_only_stage_a_discard_removes ... ok
+test a_commit_whose_root_equals_its_base_is_no_changes ... ok
+test two_branches_commit_independently_and_one_wins_the_stack_head ... ok
+test an_exact_earlier_publication_is_up_to_date_before_a_stale_head ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/history_pages.rs (core/target/debug/deps/history_pages-22ffcf2975086a39)
+
+running 3 tests
+test every_bounded_list_paginates_without_gaps_or_repeats ... ok
+test a_cursor_is_bound_to_its_range_subject_and_content ... ok
+test an_immutable_anchor_keeps_a_cursor_valid_as_the_branch_advances ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/lifecycle.rs (core/target/debug/deps/lifecycle-92c4331d3268838e)
+
+running 3 tests
+test genesis_is_atomic_and_unique ... ok
+test fork_shares_content_and_uses_the_selected_commit_base ... ok
+test history_reads_return_the_recorded_ancestry_and_chain ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/remediation.rs (core/target/debug/deps/remediation-033fad4557db10a5)
+
+running 12 tests
+test empty_history_checks_page_and_cursor_before_returning_empty ... ok
+test concurrent_reservations_never_overlap_and_discard_does_not_refund ... ok
+test exact_source_publication_revalidates_immutable_provenance ... ok
+test all_legal_name_widths_paginate_by_identity ... ok
+test advancing_the_actual_subject_preserves_both_anchor_forms ... ok
+test forged_sibling_position_and_obsolete_checksum_are_refused ... ok
+test last_representable_reservation_is_consumed_and_terminal_refusal_is_atomic ... ok
+test stale_base_precedes_no_changes_and_derived_provenance_collision ... ok
+test read_only_cursor_capability_survives_reopen_and_rejects_wrong_keys ... ok
+test unknown_statement_outcome_quarantines_without_implicit_rollback ... ok
+test reopen_refuses_each_independent_schema_or_binding_corruption ... ok
+test explicit_membership_ceiling_is_capacity_but_old_authenticated_anchor_stays_valid ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.97s
+
+     Running tests/reopen.rs (core/target/debug/deps/reopen-df6eb4668fb9eaad)
+
+running 3 tests
+test a_read_only_reopen_reads_every_record_and_mutates_nothing ... ok
+test a_stage_written_by_one_handle_is_visible_to_a_read_only_handle ... ok
+test an_incompatible_or_foreign_catalog_is_refused ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_metadata-cadb433623994965)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/connection_contract.rs (core/target/debug/deps/connection_contract-359a000c985c8fe3)
+
+running 3 tests
+DIAGNOSTIC pg-lost-reply PgDiagnostics { connections: 1, operations: 2, sync_messages: 2, simple_queries: 0, ready_for_query: 1, wire_sent: 1633, wire_received: 953, protocol_sent: 1325, protocol_received: 332 }
+test dropped_committed_reply_is_uncertain_and_the_same_operation_is_not_replayed ... ok
+DIAGNOSTIC pg-timeout PgDiagnostics { connections: 1, operations: 2, sync_messages: 2, simple_queries: 0, ready_for_query: 2, wire_sent: 1637, wire_received: 1831, protocol_sent: 1331, protocol_received: 1210 }
+test cancelled_registration_is_uncertain_and_does_not_reopen_or_resend ... ok
+DIAGNOSTIC pg-tls PgDiagnostics { connections: 1, operations: 2, sync_messages: 2, simple_queries: 0, ready_for_query: 2, wire_sent: 1276, wire_received: 2786, protocol_sent: 520, protocol_received: 664 }
+test verified_tls_checks_the_chain_and_hostname_and_never_downgrades ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+
+     Running tests/history_allocation.rs (core/target/debug/deps/history_allocation-b3035ce0416cc3c9)
+
+running 3 tests
+test counts_are_checked_and_the_terminal_endpoint_is_refused ... ok
+test a_consumed_reservation_survives_a_later_failure ... ok
+test reservations_are_monotone_half_open_and_per_scope ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+     Running tests/history_conditional_updates.rs (core/target/debug/deps/history_conditional_updates-34247e2dc8839487)
+
+running 6 tests
+test stage_insertion_enforces_the_frozen_context ... ok
+test an_exact_token_is_the_only_stage_a_discard_removes ... ok
+test a_stale_loser_keeps_its_exact_stage ... ok
+test an_exact_earlier_publication_is_up_to_date_before_a_stale_head ... ok
+test a_commit_whose_root_equals_its_base_is_no_changes ... ok
+test two_branches_commit_independently_and_one_wins_the_stack_head ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests/history_history_pages.rs (core/target/debug/deps/history_history_pages-23f7558507eceec9)
+
+running 3 tests
+test a_cursor_is_bound_to_its_range_subject_and_content ... ok
+test every_bounded_list_paginates_without_gaps_or_repeats ... ok
+test an_immutable_anchor_keeps_a_cursor_valid_as_the_branch_advances ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/history_lifecycle.rs (core/target/debug/deps/history_lifecycle-7d438cb3901441fd)
+
+running 3 tests
+test genesis_is_atomic_and_unique ... ok
+test fork_shares_content_and_uses_the_selected_commit_base ... ok
+test history_reads_return_the_recorded_ancestry_and_chain ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+
+     Running tests/history_remediation.rs (core/target/debug/deps/history_remediation-9f03930a256be421)
+
+running 12 tests
+test last_representable_reservation_is_consumed_and_terminal_refusal_is_atomic ... ok
+test empty_history_checks_page_and_cursor_before_returning_empty ... ok
+test read_only_cursor_capability_survives_reopen_and_rejects_wrong_keys ... ok
+test concurrent_reservations_never_overlap_and_discard_does_not_refund ... ok
+test exact_source_publication_revalidates_immutable_provenance ... ok
+test all_legal_name_widths_paginate_by_identity ... ok
+test forged_sibling_position_and_obsolete_checksum_are_refused ... ok
+test stale_base_precedes_no_changes_and_derived_provenance_collision ... ok
+test advancing_the_actual_subject_preserves_both_anchor_forms ... ok
+test reopen_refuses_each_independent_schema_or_binding_corruption ... ok
+test unknown_statement_outcome_quarantines_without_implicit_rollback ... ok
+test explicit_membership_ceiling_is_capacity_but_old_authenticated_anchor_stays_valid has been running for over 60 seconds
+test explicit_membership_ceiling_is_capacity_but_old_authenticated_anchor_stays_valid ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 77.62s
+
+     Running tests/history_reopen.rs (core/target/debug/deps/history_reopen-2e6062f3acfa1bf1)
+
+running 3 tests
+test an_incompatible_or_foreign_catalog_is_refused ... ok
+test a_stage_written_by_one_handle_is_visible_to_a_read_only_handle ... ok
+test a_read_only_reopen_reads_every_record_and_mutates_nothing ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+
+     Running tests/storage_contract.rs (core/target/debug/deps/storage_contract-167cf3138abd23a8)
+
+running 3 tests
+test malformed_input_has_no_wire_attempt_and_definite_refusal_is_atomic ... ok
+DIAGNOSTIC pg-units PgDiagnostics { connections: 1, operations: 12, sync_messages: 11, simple_queries: 1, ready_for_query: 12, wire_sent: 15503, wire_received: 4072, protocol_sent: 15195, protocol_received: 3451 }
+test every_metadata_unit_is_one_actual_wire_round_trip ... ok
+DIAGNOSTIC pg-race a=PgDiagnostics { connections: 1, operations: 4, sync_messages: 3, simple_queries: 1, ready_for_query: 4, wire_sent: 11392, wire_received: 1616, protocol_sent: 11084, protocol_received: 995 } b=PgDiagnostics { connections: 1, operations: 3, sync_messages: 3, simple_queries: 0, ready_for_query: 3, wire_sent: 1837, wire_received: 1326, protocol_sent: 1529, protocol_received: 705 }
+test two_connections_first_wins_without_a_registration_retry ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests layerfs_history
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_metadata
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

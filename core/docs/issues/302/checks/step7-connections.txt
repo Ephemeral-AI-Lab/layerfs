@@ -1,0 +1,32 @@
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-metadata v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-metadata)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.23s
+     Running tests/history_connections.rs (core/target/debug/deps/history_connections-f5f048ea33ad9fd5)
+
+running 1 test
+DIAGNOSTIC history-initialize operations=8 sync=8 ready=8 protocol_sent=1644 protocol_received=947
+DIAGNOSTIC history-fork operations=11 sync=11 ready=11 protocol_sent=2140 protocol_received=1944
+DIAGNOSTIC history-catalog-id operations=0 sync=0 ready=0 protocol_sent=0 protocol_received=0
+DIAGNOSTIC history-incarnation operations=0 sync=0 ready=0 protocol_sent=0 protocol_received=0
+DIAGNOSTIC history-stage-changes operations=12 sync=12 ready=12 protocol_sent=3329 protocol_received=3170
+DIAGNOSTIC history-commit-staged operations=11 sync=11 ready=11 protocol_sent=2541 protocol_received=2252
+DIAGNOSTIC history-layer-stack operations=3 sync=3 ready=3 protocol_sent=375 protocol_received=416
+DIAGNOSTIC history-layer-stacks operations=3 sync=3 ready=3 protocol_sent=363 protocol_received=416
+DIAGNOSTIC history-branch operations=3 sync=3 ready=3 protocol_sent=370 protocol_received=407
+DIAGNOSTIC history-branch-snapshot operations=6 sync=6 ready=6 protocol_sent=1018 protocol_received=1205
+DIAGNOSTIC history-branches operations=4 sync=4 ready=4 protocol_sent=642 protocol_received=748
+DIAGNOSTIC history-commit operations=3 sync=3 ready=3 protocol_sent=391 protocol_received=423
+DIAGNOSTIC history-layer operations=3 sync=3 ready=3 protocol_sent=408 protocol_received=430
+DIAGNOSTIC history-stage operations=3 sync=3 ready=3 protocol_sent=571 protocol_received=953
+DIAGNOSTIC history-stages operations=4 sync=4 ready=4 protocol_sent=822 protocol_received=1285
+DIAGNOSTIC history-commit-history operations=5 sync=5 ready=5 protocol_sent=854 protocol_received=1095
+DIAGNOSTIC history-layer-history operations=5 sync=5 ready=5 protocol_sent=893 protocol_received=1118
+DIAGNOSTIC history-add-layer operations=11 sync=11 ready=11 protocol_sent=2422 protocol_received=1776
+DIAGNOSTIC history-discard-stage operations=5 sync=5 ready=5 protocol_sent=936 protocol_received=1091
+DIAGNOSTIC history-reserve-inodes operations=6 sync=6 ready=6 protocol_sent=1015 protocol_received=424
+DIAGNOSTIC history-write-busy operations=3 sync=3 ready=3 protocol_sent=280 protocol_received=272
+DIAGNOSTIC history-authority-a PgDiagnostics { connections: 1, operations: 119, sync_messages: 118, simple_queries: 1, ready_for_query: 119, wire_sent: 56602, wire_received: 67179, protocol_sent: 56294, protocol_received: 66558 }
+DIAGNOSTIC history-authority-b PgDiagnostics { connections: 1, operations: 34, sync_messages: 34, simple_queries: 0, ready_for_query: 34, wire_sent: 8352, wire_received: 40835, protocol_sent: 8044, protocol_received: 40214 }
+test two_connections_preserve_the_loser_and_record_all_contract_units ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s

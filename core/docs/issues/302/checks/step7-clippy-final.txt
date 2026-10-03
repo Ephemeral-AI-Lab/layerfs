@@ -1,0 +1,57 @@
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-server)
+    Checking layerfs-sdk v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-api/sdk)
+    Checking layerfs-metadata v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-metadata)
+error: unused import: `layerfs_metadata::PgHistory`
+ --> crates/layerfs-metadata/tests/history_history_pages.rs:7:5
+  |
+7 | use layerfs_metadata::PgHistory;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `-D unused-imports` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(unused_imports)]`
+
+error: unused import: `layerfs_metadata::PgHistory`
+ --> crates/layerfs-metadata/tests/history_lifecycle.rs:6:5
+  |
+6 | use layerfs_metadata::PgHistory;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `-D unused-imports` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(unused_imports)]`
+
+error: unused import: `layerfs_metadata::PgHistory`
+ --> crates/layerfs-metadata/tests/history_allocation.rs:6:5
+  |
+6 | use layerfs_metadata::PgHistory;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `-D unused-imports` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(unused_imports)]`
+
+error: `format!` in `format!` args
+  --> crates/layerfs-metadata/tests/support/history.rs:23:46
+   |
+23 |           let path = std::env::temp_dir().join(format!(
+   |  ______________________________________________^
+24 | |             "layerfs-pg-history-{}-{}-{}",
+25 | |             std::process::id(),
+26 | |             format!(
+...  |
+34 | |             name
+35 | |         ));
+   | |_________^
+   |
+   = help: combine the `format!(..)` arguments with the outer `format!(..)` call
+   = help: or consider changing `format!` to `format_args!`
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#format_in_format_args
+   = note: `-D clippy::format-in-format-args` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::format_in_format_args)]`
+
+error: could not compile `layerfs-metadata` (test "history_reopen") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-metadata` (test "history_allocation") due to 2 previous errors
+error: could not compile `layerfs-metadata` (test "history_connections") due to 1 previous error
+error: could not compile `layerfs-metadata` (test "history_lifecycle") due to 2 previous errors
+error: could not compile `layerfs-metadata` (test "history_history_pages") due to 2 previous errors
+error: could not compile `layerfs-metadata` (test "history_conditional_updates") due to 1 previous error
+error: could not compile `layerfs-metadata` (test "history_remediation") due to 1 previous error
