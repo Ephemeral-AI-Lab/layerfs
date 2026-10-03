@@ -1178,3 +1178,31 @@ and one changed-mechanism1000 count diagnostic. At this commit those children
 are NOT_RUN. Source LOC remains143581 before/after(delta+0): manifest/lock/tests/
 evidence only, exact parent/staged snapshot root counter including shipped SQL;
 reference65417/core78164/old6025/new7774/rest64365 unchanged.
+
+## 2026-10-04 — hash treatment measured; parity not achieved
+
+Frozen85c1260c9, release build5.991s. Fresh matched pairs one/arm:100 baseline
+35506542/current195970292 ns,1000 baseline124550958/current431842125 ns. Strict
+speed FAIL, ratios5.519273/3.467192. Current allocation5808128/21741568 B versus
+7372800/23101440 B; numeric Init ceiling open. All four input-zero residency,
+sampled functional proof and scratch cleanup PASS. Complete runner envelopes
+5.935/7.897/5.756/6.479s <=15s, proof separately bounded and outside comparison.
+
+Distinct1000 count diagnostic: SHA validation11911622ns/20038352B (0.59444ns/B)
+versus preceding software60988418ns/20038436B (3.04357ns/B); observed5.12x
+per-byte decrease, not end-to-end guarantee. C2/C5 frontend35/20, transactions
+35implicit+3explicit=38, object bulk10 statements/13347500ns versus old2003
+per-object INSERTs. Canonical2003 objects/20187652B and fixed-root match PASS.
+MinIO93 PUT/18 distinct GET; reconciled2965 events/1201307B, no omissions.
+Server PUT summed630920877ns overlaps across4 requests; upload elapsed
+267990626ns remains dominant. No server durability excuse or relaxation.
+Current CPU178566000ns; old software count row270540000ns. Full details and
+non-additive timing limits in STEP10-OPTIMIZATION.md.
+
+Original manifests/compact custody PASS; owned services removed PASS. Remaining
+large Init/history cases NOT_RUN, C5 NOWAIT stress FAIL retained/unresolved,
+step10/11/M5 incomplete, phase memory/off-platform qualification unavailable.
+No unchanged-arm rerun or best-of selection, no push/PR/merge/retirement.
+Evidence-only Production LOC143581->143581(delta+0), exact parent/staged
+root counter incl shipped SQL; reference65417/core78164/old6025/new7774/
+rest64365 unchanged.
