@@ -1140,3 +1140,41 @@ timers and own PID shutdown. Trace adds observer work only in count diagnostics;
 default-profile matched speed arms do not enable it. Server events are matched
 by measured object path and reconciled against request counts; aggregate request
 clocks are not interpreted as disjoint elapsed spans.
+
+## 2026-10-04 — first optimized pair retained; hash backend next
+
+First treatment a7ebff1b4: default-profile raw SDK baseline/current Init ns
+100:39326291/209471834,1000:132328709/517663959. Speed FAIL (ratios5.326509
+and3.911955); storage7372800/5799936 and23101440/21737472 B. All four input
+residency, sampled proof and scratch checks PASS. Cases10000/100000/history
+NOT_RUN, Init ceiling open, step10/11/M5 incomplete. Count diagnostics separately
+reconcile MinIO server/client28PUT12GET and94PUT22GET, zero trace omissions.
+Server API sums211966750/598206024 ns overlap; matched write/sync spans nest.
+C2/C5 calls40/54; bulk object-registration statements5/9 replacing346/2003
+individual INSERTs. More distinct GET keys remain12/22, not repeated same-key
+reads. Registered PUT counts change marginally; no sweeping packing-win claim.
+Exact arithmetic, table, reproduced commands, identities, failures and custody
+in STEP10-OPTIMIZATION.md and raw issue302-opt-* directories. Services down PASS.
+
+The measured validation cost has a distinct source cause: storage selects
+sha2 0.10.9 without asm, hence software SHA256 on aarch64. Already-locked
+published0.11.0 selects ARM SHA2 by default. Change only C2's existing dependency
+reference; package/version/checksum set unchanged, no new crate, patch or feature
+shortcut. Key/body validation remains, canonical/framing/digest bytes unchanged.
+Crypto storage/project275 tests PASS, independent empty/abc/million-a SHA256
+answers PASS, final all-target Clippy/fmt and boundary473 PASS. Previous metadata/
+S3/C1 product proofs reused by unchanged scope; C5 stress FAIL stays unresolved.
+
+Retain preparation/check failures: no-deps metadata did not update dependency
+lock reference, first locked test therefore refused before any test ran. Full
+offline metadata resolves that reference but reports uncached unrelated wasm
+web-sys download; resolved package/checksum inventory unchanged, host locked
+build/tests work. Test-only hex format_collect warning fixed with fmt::Write;
+covering vector1/final Clippy PASS. No product retry, durability/profile change,
+third-party edit or unchanged speed resample.
+
+Freeze separate hash treatment, rebuilt matched default-profile100/1000 pairs
+and one changed-mechanism1000 count diagnostic. At this commit those children
+are NOT_RUN. Source LOC remains143581 before/after(delta+0): manifest/lock/tests/
+evidence only, exact parent/staged snapshot root counter including shipped SQL;
+reference65417/core78164/old6025/new7774/rest64365 unchanged.

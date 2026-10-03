@@ -1164,3 +1164,11 @@ the pinned MinIO image: bounded16MiB redacted JSON server API/storage/OS trace,
 non-workload readiness sentinel, stop before verifier. Profiler overhead is
 declared; exact request counts and measured pack paths qualify trace completeness.
 No new dependency/image, MinIO config or default-profile speed-arm observer.
+
+A second, distinct treatment selects already-locked sha2=0.11.0 in C2 instead
+of0.10.9. Published ARM acceleration keeps all required digest checks and bytes;
+the locked package/version/checksum set is unchanged. Freeze new source and
+compilation identity, one new matched pair per100/1000, plus one1000 changed-
+mechanism diagnostic (MinIO/PG observers explicit). First treatment failures
+remain. No routine earlier-family sweep: exact pack/canonical/namespace/known
+digest covering proofs validate the changed hash scope.
