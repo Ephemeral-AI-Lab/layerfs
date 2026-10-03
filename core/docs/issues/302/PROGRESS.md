@@ -763,3 +763,96 @@ old-path 6025 -> 6025; new-path 6626 -> 7448; rest-core 64348 -> 64348.
 Init is adaptation/duplication while its old source remains, not simplification.
 
 Production LOC: 142416 -> 143238 (delta +822)
+
+
+## 2026-10-04 — M4 complete; owner-directed pause after step 9
+
+Commits: step 8 `7c45bfbe6` (namespace Init and acknowledged upload window);
+step 9 `73a3faef9` (real storage parity/count proof); this M4 entry is
+documentation only. Steps 1–9/M0–M4 are complete at their stated local scope.
+Owner direction received through the side conversation requires pausing here:
+do not begin steps 10–12 or any timed sample. This is a pause, not complete
+Phase 7/benchmark/release qualification. Issue #302 remains open.
+
+Completed scope: engine-independent project Init adapts the retained server
+algorithms, four file constructors and three saves. Its explicit four-upload
+window and four independent MinIO connections acknowledge before registration;
+ordinary saves keep one producer/upload. Typed C5 publication follows completed
+C2 saves. Real-engine parity supplies identical finalized sequences to old and
+new paths and compares every declared sealed pack byte-for-byte after each save.
+Canonical identities, CDC, deduplication, FULL/PREFIX/STORED and pack framing are
+unchanged. Cluster 2 product source is untouched and server/SDK keep building.
+
+Exact final covering checks (all Cargo tests load the private owned-service env):
+
+- Step 8: `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-project -p layerfs-storage -p layerfs-s3 --all-targets -- --nocapture` — PASS, 274 passed/0 FAIL/0 ignored. Includes four-way acknowledgement/refusal proof, existing exact byte vectors, all six S3 tests, full 100/1,000-file namespace oracles through memory/real ports and the independent verifier sample-selection test.
+- Step 9: `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-project --all-targets -- --nocapture` — final PASS, 7 passed/0 FAIL/0 ignored: two Init suites, four real parity tests, one verifier example test. This exercises the final cfg-gated Unix source. Example main functions were not run.
+- `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings` — final PASS at both steps, including server/SDK and examples.
+- `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check` — final PASS at both steps.
+- `python3 core/tools/check_product_boundary.py` — final PASS, 470 production Rust/SQL files.
+- `python3 -m unittest discover -s core/tools -p 'test_*.py'` — PASS, 21 tests, at both steps.
+- `python3 core/tools/phase7_services.py status` — PASS; owned pinned-service identity/profile retained in checks/m4-services-status.json. Both services remain running for setup reuse; no teardown or foreign resource mutation.
+- `git diff --cached --check` — PASS before each commit; exact first-parent/staged/committed tree comparison confirmed.
+
+Every FAIL/repair remains evidence rather than being relabelled:
+
+- Step 8 compile: ambiguous inherited bridge-style conversion and unused consumer import; use the typed ProjectError directly.
+- Step 8 Clippy: inspect_err, unnecessary progress lifetime and obsolete explicit drops; corrected without suppression. The new parallel fixture initially named a nonexistent ChunkData role, then omitted a canonical envelope, then supplied a foreign Chunk value. A declared valid zero-depth whole-file singleton vector now proves four concurrent uploads and refusal before registration. The platform refinement duplicated two imports; remove them. All earlier outputs remain in checks/step8-* and the preceding step entry, including extra invocations beyond the one-repair cadence.
+- Step 9 first parity result: 1 PASS/2 FAIL. Whole-file FULL-count assumption was wrong because the inherited selector can choose a shallow signature candidate; metadata body-call assumption was wrong because the pooled reader acquired bodies twice before a missing ordinal. Preserve product behavior, verify the one catalogue lookup, record all body calls and add the explicit chunk predecessor proof for depth-bound FULL. Do not alter cache/codec/worker limits.
+- Step 9 second parity result: 3 PASS/1 FAIL. New chunk fixture was 90,000 bytes, exceeding C1's frozen 32,768-byte maximum. Correct the invalid functional fixture to the actual public CDC bound; do not change that bound or any registered acceptance workload. Add distinct corruption of the pooled value-base pack with its ordinary leaf pack intact. Final package result: 7 PASS. These separately revealed fixture faults required an extra invocation; failed logs remain FAIL.
+- The initial old-oracle module import produced an unused re-export warning; factor its exact snapshot function into external test support. No product source is included/recompiled by tests. Development controls use already-locked postgres/rusqlite versions; no published version changes, third-party patch, vendor or registry edit.
+
+Diagnostics only; no timed sample or speed claim:
+
+| Real parity case | Saved versions | FULL | PREFIX | Additional proof |
+| --- | ---: | ---: | ---: | --- |
+| Whole-file, 90,000 B raw | 8 | 1 | 7 | 8 exact reuses add zero PUTs/locators; bases cross packs; every pack equals old bytes |
+| Chunk, 32,768 B raw, depth 2 | 8 | 3 | 5 | FULL at versions 0/3/6; each version/pack equals old bytes |
+| Pooled 100-row leaf, depth 2 | 8 | 3 | 5 | All PoolCounters equal old path; metadata only, zero S3 requests |
+
+Selected cumulative final diagnostic points include engine bootstrap, reopening
+reads and earlier pack-oracle reads; external corruption/SQL-oracle controls are
+outside LayerFS client counters. The whole-file point is after its eighth exact
+reuse, the other two are after the eighth save/authenticated read and before that
+version's final pack oracle:
+
+| Sequence point | C2 locate / reserve / register | PG operations / Sync / simple Query / Ready | S3 requests / PUT / GET | C2 emitted payload or metadata B |
+| --- | --- | --- | --- | --- |
+| Whole-file after last reuse | 16 / 16 / 8 | 69 / 68 / 1 / 69 | 102 / 8 / 94 | payload PUT 91217 |
+| Chunk after last save/read | 8 / 16 / 8 | 58 / 57 / 1 / 58 | 64 / 8 / 56 | payload PUT 100947 |
+| Pooled after last save/read | 8 / 24 / 8 | 169 / 168 / 1 / 169 | 0 / 0 / 0 | metadata write 44444 |
+
+Pooled point: 8 value groups/packs, 32,768 reserved-directory B, 33 metadata-body
+calls, 17 catalogue calls, 40 pack-cache hits and 33 misses, 67 locator hits and
+15 misses, 0 forced seals. Whole-file and chunk points also have 0 forced seals.
+All per-version bytes, cache counts, engine wire/protocol bytes and selection
+outcomes are in checks/step9-tests-repaired.txt. Step 8's own exact Init and
+before/after-verifier counts remain in its entry/checks; rows are not pooled.
+
+Negative reads (fresh port handle; counts cover the failed read, excluding open):
+
+| Damage | Typed refusal | Metadata operation delta | C2 locate / body / catalogue / GET |
+| --- | --- | ---: | --- |
+| Missing PREFIX base locator | ObjectMissing(base) | 2 | 2 / 0 / 0 / 1 |
+| Missing pooled value catalogue | Integrity(metadata ordinal missing) | 4 | 1 / 2 / 1 / 0 |
+| Corrupt root metadata pack | Integrity(sealed pack length/digest) | 2 | 1 / 1 / 0 / 0 |
+| Corrupt pooled value-base pack | Integrity(sealed pack length/digest) | 5 | 1 / 3 / 1 / 0 |
+
+The multiple pooled body acquisitions remain a recorded count gap for later
+harness assessment; no speed/bound claim is made for them. No local M4 covering
+check is skipped or failing. NOT_RUN/open gaps: release example main functions,
+off-platform Init compilation, Linux system OpenSSL and remote/cloud PostgreSQL
+qualification; frozen harness/cases/cache contract (10), all final acceptance
+rows (11), retirement (12). Step 12 additionally requires cluster 2 M9. The old
+path remains and there is no retirement/simplification claim. No new owner answer
+is needed to stop at the expressly requested pause boundary.
+
+LOC method: python3 tools/production_loc.py --json --root <snapshot> on exact
+first-parent/final staged trees, shipped SQL included; tests/docs/tools excluded.
+Step 8: combined 142416 -> 143238 (+822); reference 65417 -> 65417;
+core 76999 -> 77821; old-path 6025 -> 6025; new-path 6626 -> 7448;
+rest-core 64348 -> 64348. This is adaptation/duplication during Init relocation.
+Step 9 and this entry: combined 143238 -> 143238 (+0); reference 65417,
+core 77821, old-path 6025, new-path 7448 and rest-core 64348 unchanged.
+
+Production LOC: 143238 -> 143238 (delta +0)
