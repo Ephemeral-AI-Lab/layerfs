@@ -1238,3 +1238,30 @@ contract, service defaults, physical/working limits, four constructors/uploads,
 All earlier FAIL receipts retained, no best-of. These children NOT_RUN here.
 Exact production LOC parent/staged/committed comparison in commit message;
 root counter/SQL scope unchanged. No architecture or port/format change.
+
+## 2026-10-04 — owner supersedes campaign; SQLite design first
+
+Retain fff66f0e7 rolling implementation and all earlier changes without rollback.
+Already-started1000 diagnostic completed before new work, preserved with its
+sealed receipts. Four rolling performance rows and trace manifests custody PASS,
+owned services down PASS. Speed100 baseline35505041/current199277084ns,1000
+baseline126823166/current414721792ns: FAIL, never relabeled. No new MinIO run.
+
+SQLITE-DESIGN-AND-PLAN.md is current: replace metadata crate with persistence,
+one shared storage/history flow, bounded atomic database bodies+metadata,
+SQLite only; PostgreSQL unavailable and MinIO removed from active execution.
+Pin WAL/FULL/foreign keys and macOS fullfsync/checkpoint settings/readback;
+process-crash proof is distinct from power-loss claims. A0 design complete;
+implementation/verification/measurement A1-A7 and separate namespace-count
+qualification B0-B2 NOT_RUN. Count-growing collections in scan/namespace and
+whole-slice C1 builder are explicit limitations; no whole-importer bound claim.
+
+Design/evidence-only Production LOC143628->143628(delta+0), exact snapshot
+root counter incl SQL; reference65417/core78211/old6025/new7821/rest64365
+unchanged. Active retirement/moves happen in later source commits and must be
+classified honestly. No push/PR/merge/third-party edit/aggregate gate.
+
+Refinement incorporated before implementation:12 logical tables in one SQLite
+Store, Objects/Metadata/History groups shared once; no whole-namespace atomicity
+claim. Cross-group publication at adapter/publication.rs. Published packs stay
+immutable; private append mechanics cannot mutate previous sealed digests.

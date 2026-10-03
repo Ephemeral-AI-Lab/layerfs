@@ -1179,3 +1179,20 @@ handling. A changed source identity needs one matched pair100/1000 plus a
 1000 count diagnostic, not an unchanged-arm rerun. Side-conversation container
 aggregation remains architectural study only: current D10 pack/digest/location
 contract is not changed by this scheduling treatment.
+
+### Owner supersession: embedded SQLite first (2026-10-04)
+
+The owner replaces the active PostgreSQL/MinIO execution scope. Current design
+and staged execution are now [SQLITE-DESIGN-AND-PLAN.md](SQLITE-DESIGN-AND-PLAN.md).
+This document's previous directions/measurements remain historical; do not
+continue MinIO optimization, run functioning PG, or relabel old evidence.
+Implement one shared provider/domain flow with WAL/FULL SQLite first, explicit
+PostgreSQL-unavailable marker, no active MinIO. Namespace-count qualification
+is separate; current retained collections are acknowledged unbounded in count.
+
+Refined owner design (2026-10-04): logical Objects/Metadata/History groups are
+shared once. One Store database has12 logical tables; bounded C2 and C5
+acknowledgements stay separate. The current SQLite design's concrete map uses
+storage_provider.rs/publication.rs, objects/, metadata/, shared history/, narrow
+backend/sqlite mechanics. Published sealed packs are immutable; incremental
+BLOB append applies only to unpublished construction. PostgreSQL unavailable.
