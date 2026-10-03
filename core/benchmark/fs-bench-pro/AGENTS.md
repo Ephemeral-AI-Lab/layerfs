@@ -55,3 +55,19 @@ manifest hashes every retained result file. Keep existing receipts append-only,
 including `FAIL`, `INELIGIBLE` and `NOT_RUN`. Check the focused Python tests
 after a harness edit and the owning Core checks once at final source identity;
 there is no CI or aggregate pre-push gate.
+
+
+## Scoped Phase 7 cluster 1 comparison (#302, owner 2026-10-04)
+
+New phase7 selections in runner.py may compare unmodified baseline
+7edddbdb8 ProjectApi::init with the candidate layerfs_project::init composed
+directly over PostgreSQL/MinIO. Candidate engine creation/validation/connections
+are inside its timer. Baseline Server::create precedes its raw Init timer and
+is included in complete command wall; disclose that conservative asymmetry.
+This exception changes neither old SDK identities nor their INELIGIBLE status.
+All four Init and three retained-history cases require candidate < baseline
+and the declared storage gate together. Equality fails. Init allocation has no
+numeric ceiling; retain the gap. Release binaries, separate sampled Init proof,
+strict input residency, fresh owned services, one sample/arm, default service
+durability and pinned resources remain mandatory. No timer/cache/harness freeze
+or M5 admission follows from implementing this exception.

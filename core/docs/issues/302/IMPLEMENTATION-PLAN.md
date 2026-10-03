@@ -729,7 +729,7 @@ product source, driven by the base drivers (`layerfs-sdk` example
 candidate arm uses the same fixtures, corpus, harness identity and machine
 window. Baseline and candidate rows are never pooled, and neither is repeated.
 
-Speed limit: `candidate ≤ matched baseline` per case, on the raw Init call and on
+Speed limit: `candidate < matched baseline` per case, on the raw Init call and on
 the complete history driver wall (the stride-1 internal span clips, r047). Any
 tolerance is the owner's to state before collection (Q5). Hard bounds that also
 apply: Init complete command ≤ 15 s and verifier ≤ 9.5 s; the history bounds
@@ -865,7 +865,7 @@ prospective decisions, not measurement claims or historical receipt changes.
 | Q1 | postgres 0.19.14 + postgres-native-tls 0.5.3 + native-tls 0.2.18, system OpenSSL on Linux; synchronous C2 ports; local/cloud config and verified TLS |
 | Q2 / Q3 | Approved own S3 client / layerfs-project |
 | Q4 | The SDK is the eventual host composition root; this cluster supplies project APIs/examples and does not edit cluster 2 product source |
-| Q5 | Strict candidate <= matched baseline, one pair; no added tolerance |
+| Q5 | Strict candidate < matched baseline for every case, one pair; equality FAIL; speed and storage pass together; owner update 2026-10-04 |
 | Q6 | All four Init tiers, including 10,000 and 100,000, remain in the declared acceptance set |
 | Q7 | Preserve the previously frozen history command 60/170/170 s and verifier 10/20/30 s profiles as declared extended-history exceptions; never raise them after a miss |
 | Q8 | PostgreSQL: LayerFS heap, index and TOAST relation allocation. MinIO: allocated object data and per-object metadata; exclude system directory, with that exclusion disclosed. Global PostgreSQL catalogs/WAL are separately reported overhead |
@@ -903,7 +903,7 @@ cases and cache contract, as required by the implementation prompt.
 2. **D5:** approve the own S3 client using the already-locked `sha2`, with HMAC written in `layerfs-s3`? **Owner answer: approved in this implementation chat, 2026-10-03.**
 3. Approve a 14th crate for Init, named `layerfs-project`? **Owner answer: approved in this implementation chat, 2026-10-03.**
 4. Which host-side crate may name the engines to call Init outside a sandbox — `layerfs-api`'s SDK (recommended) or another?
-5. Is "meet the baseline" strictly `candidate ≤ matched baseline` on one pair, or is there a tolerance, and what is it?
+5. Is "meet the baseline" strictly `candidate < matched baseline` on one pair, or is there a tolerance, and what is it?
 6. Are all four Init tiers in the acceptance set, or only 100 and 1,000?
 7. Do the history schedules keep their frozen 60 / 170 / 170 s command and 10 / 20 / 30 s verifier bounds as a declared exception to the 15 s / 25 s and <10 s rules?
 8. Does "PostgreSQL allocation" mean LayerFS relations only (recommended) or the whole data directory with catalogs and WAL; and is MinIO's system directory excluded?
@@ -1043,3 +1043,33 @@ and all covering checks, commit its implementation and M4 progress entry, update
 The later benchmark/test handoff will be discussed separately. This supersedes
 the original direction to continue automatically at the M4 boundary. Record the
 active goal as paused only after M4's required completion work is finished.
+
+
+### Step 10 owner resumption, strict gate and route amendment — 2026-10-04
+
+The owner resumes steps 10–11 in a separate session on this same worktree. The
+preceding pause remains historical. Q5 now requires candidate **strictly less
+than** its matched baseline in each of the seven declared cases; equality fails.
+Speed and the declared storage ceiling must pass together without pooling,
+tolerance or waiver. Init has no numeric storage ceiling: allocation is reported
+and this qualification gap stays explicit. Step 12 remains gated on cluster 2 M9.
+
+The candidate is composed in layerfs-project examples and calls project::init
+over PgMetadata/PgHistory/S3Objects directly. The baseline remains the unmodified
+7edddbdb8 SDK example calling ProjectApi::init over the retained host Service.
+These are new phase7 case identities, not a relabel of SDK v5-lite. The scoped
+amendment in core/benchmark/fs-bench-pro/AGENTS.md permits this comparison only.
+The server/SDK crates remain present. Removal of a Service layer alone proves
+neither lower time nor admission.
+
+Source inspection corrects §3.2's earlier assertion: the baseline driver calls
+Server::create before its raw Init timer; its operation subsequently opens its
+ordinary save/read handles. The candidate conservatively pays for creation,
+validation and all required PG/S3 connections inside its operation timer, then
+project::init. Both complete child command walls include all their bootstrap.
+Record candidate bootstrap separately as an overlapping diagnostic, never
+subtract it from the gate. Record this asymmetry beside the SQLite sync profile.
+The candidate's deadline is the declared 15 s, not the example's old 600 s.
+
+Harness implementation and SQL analysis are in progress. No source/case/harness
+freeze or eligible baseline is asserted by this entry.

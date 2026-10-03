@@ -856,3 +856,47 @@ Step 9 and this entry: combined 143238 -> 143238 (+0); reference 65417,
 core 77821, old-path 6025, new-path 7448 and rest-core 64348 unchanged.
 
 Production LOC: 143238 -> 143238 (delta +0)
+
+
+## 2026-10-04 — step 10 first slice: strict gate, timer and input/accounting contracts
+
+Owner resumes the same storage worktree in a separate chat. Q5 now requires
+strict candidate < matched baseline per case; equality FAIL, with storage
+passing simultaneously. The direct-engine candidate route is a scoped normative
+amendment, not relabelling the historical SDK selection. Server/SDK remain.
+The project example now includes engine creation, validation and connections in
+its timer, reports bootstrap as overlapping diagnostic work and uses the 15 s
+deadline. Source inspection corrects the plan's claim about baseline creation:
+Server::create is before its raw timer, inside complete driver wall. Candidate
+conservatively pays creation too; no subtraction. The amended current core
+WAL/sync rule is reconciled into this worktree with default PG durability intact.
+
+New seven-case registry, strict joint gate, no-content-read invalidation plus
+whole-input mincore pass, owned fresh-service validation, PostgreSQL relation
+and MinIO regular-file block accounting are implemented. The Init adapter has
+release-only arm builds, immutable binary archives, worktree locks and persistent
+one-sample claims. History port driver is not yet bound/frozen. M5 and full step
+10 remain incomplete; every acceptance case is NOT_RUN at this slice. A source
+analysis document distinguishes client operations, physical Sync/Ready exchanges,
+server statements and transactions; earlier counts remain diagnostic only.
+
+Checks: new contract tests 5 PASS; existing Init tests 2 PASS, history tests
+4 PASS, substrate tests 7 PASS; residency tests 10 PASS. Project all targets
+7 PASS/0 failed/0 ignored; locked all-target core Clippy and fmt PASS, boundary
+470 files PASS, tools 21 PASS. All output is in checks/step10-*. No core
+production source changed; the covering project example checks ran. No CI or
+preflight. No service sync/resource/worker/codec changes or new dependency.
+
+Candidate locked release example build: 18,675,087,834 ns / 30 s PASS. Baseline
+locked release build in the owned nested clean 7edddbdb8 worktree:
+19,680,266,458 ns / 30 s PASS after correcting package selection. The first
+baseline attempt FAIL (162,583,042 ns, no compilation): verify_namespace belongs
+to layerfs-server, not layerfs-sdk. Its log is retained; corrected selector includes
+both as the existing runner does. These are untimed builds, not gate samples.
+
+LOC method: python3 tools/production_loc.py --json --root <snapshot> on exact
+first-parent/final staged trees, shipped SQL included, tests/docs/harness/examples
+excluded. Reference 65417, core 77821, old path 6025, new path 7448, rest-core
+64348 unchanged. Full acceptance/remote/cloud/Linux OpenSSL remain unqualified.
+
+Production LOC: 143238 -> 143238 (delta +0)

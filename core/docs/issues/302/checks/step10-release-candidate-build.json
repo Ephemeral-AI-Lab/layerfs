@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-project",
+    "--example",
+    "benchmark_init",
+    "--example",
+    "verify_namespace"
+  ],
+  "wall_ns": 18675087834,
+  "budget_ns": 30000000000,
+  "exit_code": 0,
+  "status": "PASS",
+  "scope": "untimed build; dirty harness excluded from any timing claim"
+}

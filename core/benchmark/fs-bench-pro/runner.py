@@ -18,6 +18,7 @@ ROOT = HERE.parents[2]
 CORE = ROOT / "core"
 RESULTS = ROOT / "benchmark-results/fs-bench-pro"
 sys.path.insert(0, str(HERE))
+from families import phase7_storage as phase7  # noqa: E402
 from families import init_namespace as init  # noqa: E402
 from families import history_retention as history  # noqa: E402
 from families import workspace_write as write  # noqa: E402
@@ -383,6 +384,8 @@ def main():
     selector.add_argument("--case")
     selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write", "workspace-commit", "workspace-commit-native", "workspace-commit-native-tail", "workspace-commit-native-counts", "workspace-commit-native-reconciliation", "workspace_namespace", "workspace-namespace-native", "workspace-namespace-sdk", "workspace_mutations", "workspace-mutations-native", "workspace-mutations-native-tail", "workspace-mutations-sdk", "workspace_shell_package", "workspace-shell-package-tail"])
     run_parser.add_argument("--out", required=True)
+    run_parser.add_argument("--arm", choices=["baseline", "candidate"])
+    run_parser.add_argument("--baseline-root")
     proof_parser = commands.add_parser("prove")
     proof_parser.add_argument("--run", required=True)
     proof_parser.add_argument("--out", required=True)
@@ -390,6 +393,8 @@ def main():
         commands.add_parser(name).add_argument("--run", required=True)
     args = parser.parse_args()
     if args.command == "list":
+        for case in phase7.CASES.values():
+            print(f"{case.id}\tstrict candidate < baseline; storage ceiling {case.storage_ceiling}")
         for case in init.CASES.values():
             print(f"{case.id}\t{case.files}\t{case.logical_bytes}\t"
                   f"{'SDK selected' if case.id in init.SELECTED else 'NOT_RUN ' + init.NOT_RUN_REASON}")
@@ -425,6 +430,11 @@ def main():
             print(f"{name}\tNOT_RUN: {reason}")
     elif args.command == "run":
         selection = args.case or args.family
+        if selection in phase7.CASES:
+            if args.arm is None or args.arm == "baseline" and args.baseline_root is None:
+                parser.error("phase7 requires --arm and a baseline root for baseline")
+            print(phase7.run(selection, args.out, args.arm, args.baseline_root, sys.modules[__name__]))
+            return
         if selection in (*package.cases(), *package.NATIVE, package.SDK_CAUSE, package.DEFERRED, "workspace_shell_package", "workspace-shell-package-tail"):
             print(package.run(selection, args.out, sys.modules[__name__]))
             return

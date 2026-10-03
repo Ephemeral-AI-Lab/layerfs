@@ -1,0 +1,26 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-sdk",
+    "-p",
+    "layerfs-server",
+    "--example",
+    "benchmark_init",
+    "--example",
+    "verify_namespace"
+  ],
+  "wall_ns": 19680266458,
+  "budget_ns": 30000000000,
+  "exit_code": 0,
+  "status": "PASS",
+  "source": "7edddbdb8e8512627aed0ed42533ef099d802384",
+  "cwd": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-baseline/layerfs",
+  "scope": "untimed build, own worktree Cargo target"
+}

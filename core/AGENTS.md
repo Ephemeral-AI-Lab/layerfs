@@ -153,15 +153,12 @@ File size is a ceiling, not an instruction to fill entry files to 200 lines.
   error-driven alternate algorithm, backend or legacy implementation. Unsupported
   required capabilities fail explicitly; platform cfgs do not justify silent no-op
   substitutes. Deliberately disabled optional timing is ordinary configuration.
-- No WAL or added crash-durability work in the current C1/C2 implementation.
-  Embedded SQLite uses the selected MEMORY journal / synchronous OFF profile;
-  retain runtime transaction atomicity and definite-failure abort. Do not switch
-  journal mode to OFF or add recovery/checkpoint services or durable manifests.
-  No fsync, fdatasync, File::sync_all or File::sync_data in product operations or
-  timer report output. Ordinary buffered writes/flush and SQL COMMIT remain;
-  neither introduces a crash-durability promise. Selected backends must honor
-  the no-sync/no-WAL contract without third-party patches.
-  Unknown persistence outcome is a failed result; never resend or delete on a guess.
+- Journaling and synchronization are declared per store. WAL and sync are
+  permitted by owner direction 2026-10-03, superseding the earlier prohibition.
+  PostgreSQL/MinIO use their own default profiles. Existing embedded SQLite
+  keeps MEMORY journal / synchronous OFF until replaced. Preserve runtime
+  atomicity, definite-failure abort and exact unknown-outcome refusal; never
+  resend or delete on a guess. Claim only the declared profile's durability.
 - No third-party patches, forks, vendoring or registry edits. Follow the repository
   dependency rule and locked builds; an incompatible provider/dependency is a
   reported limitation, not permission to patch it or silently select another path.
