@@ -1073,3 +1073,22 @@ The candidate's deadline is the declared 15 s, not the example's old 600 s.
 
 Harness implementation and SQL analysis are in progress. No source/case/harness
 freeze or eligible baseline is asserted by this entry.
+
+
+### Step 10 boundary correction after the retained v1 diagnostic pair
+
+The first slice conservatively included empty runtime schema creation in the
+candidate timer. Plan §3.2 explicitly places schema bootstrap in service setup.
+New Init v2 identities therefore use an untimed, input-free prepare_storage
+example for fresh schema creation, then time PgMetadata::open,
+PgHistory::open_writable, all S3 connections, Storage::new and project::init.
+Connections and required reopen validation never leave the timed operation.
+This is the plan's intended boundary, not a product optimization. Both arms
+still have fresh empty stores and an identical whole-input residency contract.
+The v1 pair is retained as a creation-inclusive diagnostic FAIL, never relabelled.
+A new prospective v2 matched pair is required. Runtime schema pages are setup
+state, as the baseline's freshly created empty SQLite policy/catalog pages are;
+no canonical object/locator/pack/root payload is prepared or primed.
+
+Only the Init diagnostic sublane is executable at this point. History's direct
+port driver remains NOT_RUN/unbound, and full step 10/11/M5 are incomplete.

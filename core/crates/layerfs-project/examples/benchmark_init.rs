@@ -1,9 +1,9 @@
 //! Standalone Init composition; the harness freezes inputs before any sample.
-use layerfs_history::{HistoryCatalogConfig, HistoryName, LayerStackId};
+use layerfs_history::{HistoryName, LayerStackId};
 use layerfs_metadata::{PgConfig, PgHistory, PgMetadata};
 use layerfs_project::{init, InitRequest};
 use layerfs_s3::{S3Config, S3Objects};
-use layerfs_storage::{Storage, StoragePolicy};
+use layerfs_storage::Storage;
 use layerfs_telemetry::timer::Timing;
 use std::{
     fmt::Write,
@@ -39,20 +39,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cursor = unhex(&std::env::var("LAYERFS_HISTORY_CURSOR_KEY")?)?;
     let name = HistoryName::new(&args[5])?;
     let object_config = S3Config::from_env()?;
-    // Engine creation and all required connections belong to this operation.
+    // Empty schemas are setup; all required connections and validation are timed.
     let start = Instant::now();
-    let metadata = Arc::new(PgMetadata::create(
-        config.clone(),
-        StoragePolicy::frozen_default(),
-    )?);
-    let history = PgHistory::create(
-        config,
-        &HistoryCatalogConfig {
-            binding_key: b"layerfs-bench-pro".to_vec(),
-            incarnation: 1,
-            cursor_key: cursor,
-        },
-    )?;
+    let metadata = Arc::new(PgMetadata::open(config.clone())?);
+    let history = PgHistory::open_writable(config, b"layerfs-bench-pro", cursor)?;
     let objects = Arc::new(S3Objects::connect_parallel(object_config)?);
     let storage = Storage::new(metadata.clone(), objects.clone())?;
     let bootstrap_ns = start.elapsed().as_nanos();

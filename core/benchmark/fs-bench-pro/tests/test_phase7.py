@@ -61,7 +61,7 @@ class Phase7(unittest.TestCase):
         text = (runner.CORE/'crates/layerfs-project/examples/benchmark_init.rs').read_text()
         start = text.index('let start = Instant::now()')
         end = text.index('let operation_ns = start.elapsed()')
-        for call in ('PgMetadata::create(', 'PgHistory::create(', 'S3Objects::connect_parallel(', 'Storage::new(', '\n        init('):
+        for call in ('PgMetadata::open(', 'PgHistory::open_writable(', 'S3Objects::connect_parallel(', 'Storage::new(', '\n        init('):
             self.assertTrue(start < text.index(call) < end)
         self.assertIn('Duration::from_secs(15)',text)
         self.assertNotIn('Duration::from_secs(600)',text)

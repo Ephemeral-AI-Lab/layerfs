@@ -900,3 +900,52 @@ excluded. Reference 65417, core 77821, old path 6025, new path 7448, rest-core
 64348 unchanged. Full acceptance/remote/cloud/Linux OpenSSL remain unqualified.
 
 Production LOC: 143238 -> 143238 (delta +0)
+
+
+## 2026-10-04 — creation-inclusive Init v1 diagnostic retained; v2 boundary repair
+
+Source/harness 92d78ca1c6ed5990b5e285f0efcddcf2319c180d; baseline unmodified
+7edddbdb8e8512627aed0ed42533ef099d802384 in its own nested worktree/target.
+One 100-file arm each, fixture namespace-100-compact-v3 (5,000,000 logical B),
+seed 1, release binaries. Both fresh-service epochs and settings/image identities
+are retained; whole-input mincore after invalidation reported zero resident
+pages in both arms. No unchanged arm is repeated. Numeric observations are
+diagnostic, not M5 admission: v1 conservatively included candidate empty schema
+creation and did not capture the Docker VM CPU/memory identity; full history
+harness also remains unbound. These limitations are not relabelled after repair.
+
+| Files / arm / case | Raw operation ns | Complete child ns / 15 s | Verifier ns / 9.5 s | Allocated B | Semantic / cleanup | Disposition |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| 100 baseline / phase7-init-100-direct-engines-v1 | 38637291 | 994793250 | 554691292 | 7372800 | PASS / PASS | creation scope asymmetric; diagnostic |
+| 100 candidate / same | 280761708 | 866455875 | 764745167 | 5804032 | PASS / PASS | strict time comparison FAIL; admission INCOMPLETE |
+| Init 1,000 / 10,000 / 100,000 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | v1 diagnostic scope repair before more work |
+| History stride 10 / 3 / 1 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | direct-port history driver not yet bound |
+
+Time delta = 280,761,708 - 38,637,291 = +242,124,417 ns (+626.659920%).
+Storage delta = 5,804,032 - 7,372,800 = -1,568,768 B (-21.277778%).
+Candidate bootstrap alone is 63,098,500 ns; do not subtract it to manufacture
+a passing gate. Candidate allocation = MinIO 5,148,672 + PG C2 352,256 + PG C5
+303,104 = 5,804,032 B. Database 8,681,139 B, WAL 16,777,216 B and MinIO system
+allocation remain separate overhead in the raw receipt. Init has no numeric
+storage ceiling; the smaller allocation cannot qualify it. Both lite proofs
+cover complete paths/kinds and declared sampled file metadata/content only.
+
+Candidate before-verifier counts: C2 policy1/locate5/body0/catalogue2/signatures1/
+reserve9/register5; PUT29/GET12, 5,010,214 sent payload B, 2,153,226 received B.
+PG C2 1 connection/24 operations/23 Sync/1 simple Query/24 Ready; C5 likewise
+1/24/23/1/24 including bootstrap. S3 4 connections, 41 requests and 29 interim
+100-continue replies. These are counts, not per-query latency or storage reads.
+Every stdout/stderr/receipt/manifest is retained in append-only raw result paths
+and losslessly compressed under checks/step10-v1-*.
+
+Boundary repair follows plan §3.2: new Init v2 IDs bootstrap empty schemas in
+untimed, workload-free prepare_storage, then time all engine open/validation/
+connections and project::init. Existing v1 evidence keeps its original source
+and status. New v2 also captures the Docker VM resource identity before sample.
+No product algorithm/worker/codec/cache/buffer/durability setting changes.
+Locked release example build PASS 0.89 s; focused project all-target Clippy
+PASS 4.59 s; v2 contract tests 5 PASS. These checks cover the example-only
+boundary repair; unchanged product functional checks are reused from first slice.
+Full step 10, step 11, M5 and retirement remain incomplete.
+
+Production LOC: 143238 -> 143238 (delta +0)

@@ -26,7 +26,7 @@ class Case:
 
 
 CASES = {case.id: case for case in (
-    *(Case(f'phase7-init-{n}-direct-engines-v1', fixture.id, None, None, 15_000_000_000, 9_500_000_000)
+    *(Case(f'phase7-init-{n}-direct-engines-v2', fixture.id, None, None, 15_000_000_000, 9_500_000_000)
       for n, fixture in zip((100, 1000, 10000, 100000), init.CASES.values())),
     Case('phase7-history-stride10-direct-engines-v1', None, 17, 54_278_964, 60_000_000_000, 10_000_000_000),
     Case('phase7-history-stride3-direct-engines-v1', None, 53, 70_427_034, 170_000_000_000, 20_000_000_000),
@@ -58,7 +58,9 @@ def build(common, root, package, folder):
                '-p', package]
     if package == 'layerfs-sdk':
         command += ['-p', 'layerfs-server']
-    command += ['--example', 'benchmark_init', '--example', 'verify_namespace']
+    names = ['benchmark_init','verify_namespace'] + (['prepare_storage'] if package == 'layerfs-project' else [])
+    for name in names:
+        command += ['--example',name]
     # Each arm's target and binary archive stay within that arm's worktree.
     record = invoke(command, folder, 'build', 30_000_000_000,
                     {**os.environ, 'CARGO_TARGET_DIR': str(target)}, root)
@@ -67,7 +69,7 @@ def build(common, root, package, folder):
     record['dependency_reuse'] = 'worktree-local locked incremental target'
     if record['status'] == 'PASS':
         record['binaries'] = {}
-        for name in ('benchmark_init', 'verify_namespace'):
+        for name in names:
             binary = target / 'release/examples' / name
             sha = common.digest(binary)
             archive = root/'benchmark-results/fs-bench-pro/binary-archive'/sha/name
@@ -109,15 +111,29 @@ def run(selection, output, arm, baseline_root, common):
         identity['measured_source_tree'] = subprocess.check_output(['git','rev-parse','HEAD^{tree}'], cwd=root,text=True).strip()
         identity['root_cargo_config_sha256'] = common.digest(root / '.cargo/config.toml')
         identity['dependency_seal'] = common.digest(root / 'core/Cargo.lock')
-        identity['shipped_sql_seal'] = common.seal(list((common.CORE / 'crates').glob('*/sql/**/*.sql')))
-        identity['compilation_seal'] = hashlib.sha256((identity['product_seal'] + identity['dependency_seal'] + identity['root_cargo_config_sha256']).encode()).hexdigest()
+        def scope_seal(paths):
+            value = hashlib.sha256()
+            for path in sorted(paths):
+                value.update(str(path.relative_to(root)).encode()+b"\0")
+                value.update(path.read_bytes())
+            return value.hexdigest()
+        crates = root/'core/crates'
+        product = [p for p in crates.rglob('*.rs') if 'src' in p.relative_to(crates).parts]
+        sql = list(crates.rglob('*.sql'))
+        product += sql
+        identity['product_seal'] = scope_seal(product)
+        identity['shipped_sql_seal'] = scope_seal(sql)
+        inputs = product + list(crates.rglob('Cargo.toml'))
+        inputs += [p for p in crates.rglob('*.rs') if 'examples' in p.relative_to(crates).parts]
+        inputs += [root/'core/Cargo.toml', root/'core/Cargo.lock', root/'.cargo/config.toml']
+        identity['compilation_seal'] = scope_seal(inputs)
         record = {'schema': 'phase7-cluster1-v1', 'case': case.id, 'arm': arm, 'identity': identity,
                   'sample_count': 0, 'status': 'NOT_RUN', 'cache_contract': contract.CACHE,
                   'cache_status': 'INCOMPLETE', 'verification_status': 'NOT_RUN',
                   'command_budget_ns': case.command_budget_ns, 'verification_budget_ns': case.verification_budget_ns,
                   'storage_ceiling': case.storage_ceiling, 'storage_gap': 'Init has no numeric storage ceiling',
                   'route': 'layerfs-project::init -> PostgreSQL/MinIO' if arm == 'candidate' else 'ProjectApi::init -> retained host Service/SQLite',
-                  'timer': 'includes engine create/validation/connections' if arm == 'candidate' else 'raw ProjectApi::init; Server::create in command wall',
+                  'timer': 'includes engine open/validation/connections; empty schema bootstrap in setup' if arm == 'candidate' else 'raw ProjectApi::init; Server::create in command wall',
                   'construction_workers': 4, 'environment_construction_workers': 1,
                   'competing_work': common.competing_work()}
         common.write_json(out/'receipt.json', record)
@@ -135,6 +151,15 @@ def run(selection, output, arm, baseline_root, common):
         contract.services.down()
         record['services'] = contract.services.up()
         record['fresh'] = contract.empty_services()
+        record['machine'] = json.loads(contract.services.docker('info','--format','{{json .}}').stdout)
+        record['machine'] = {key:record['machine'].get(key) for key in ('NCPU','MemTotal','Architecture','OSType','KernelVersion','OperatingSystem')}
+        if arm == 'candidate':
+            setup = invoke([binaries['binaries']['prepare_storage']['path']],out,'schema-setup',30_000_000_000,
+                           {**os.environ,**contract.services.load()['environment']},root)
+            record['schema_setup'] = setup
+            if setup['exit_code'] != 0 or setup['timed_out'] or setup['child'].get('status') != 'PASS':
+                raise ValueError('empty-schema bootstrap failed')
+            contract.services.postgres_sql('CHECKPOINT;')
         record['residency'] = contract.dewarm_tree(fixture['source'])
         record['cache_status'] = record['residency']['status']
         if record['cache_status'] != 'PASS':

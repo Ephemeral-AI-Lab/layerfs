@@ -61,9 +61,10 @@ there is no CI or aggregate pre-push gate.
 
 New phase7 selections in runner.py may compare unmodified baseline
 7edddbdb8 ProjectApi::init with the candidate layerfs_project::init composed
-directly over PostgreSQL/MinIO. Candidate engine creation/validation/connections
+directly over PostgreSQL/MinIO. Candidate engine open/validation/connections
 are inside its timer. Baseline Server::create precedes its raw Init timer and
 is included in complete command wall; disclose that conservative asymmetry.
+Empty C2/C5 schemas are bootstrapped in untimed setup per plan §3.2, without workload inputs. Initial v1 creation-inclusive diagnostic receipts retain their scope/status.
 This exception changes neither old SDK identities nor their INELIGIBLE status.
 All four Init and three retained-history cases require candidate < baseline
 and the declared storage gate together. Equality fails. Init allocation has no
