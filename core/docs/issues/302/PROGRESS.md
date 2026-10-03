@@ -1323,3 +1323,9 @@ Pre-freeze review fixes writable-open profile handling: only fresh creation can
 switch journal mode. Existing incompatible/non-WAL databases are refused before
 persistent journal mutation; a new public-API foreign-database test proves the
 original DELETE mode and marker remain unchanged. All changes precede sampling.
+
+First frozen SQLite100 reference attempt e97d6ee0f is NOT_RUN/sample_count0:
+build FAIL because verify_namespace is owned by layerfs-server, not SDK. Raw
+receipt/build stdout/stderr retained. Fix the reference build to select both
+packages before any performance sample; a new harness seal/matched pair follows.
+No old row is promoted and no speed sample is repeated.

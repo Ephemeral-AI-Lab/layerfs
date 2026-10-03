@@ -65,6 +65,7 @@ def build(root,arm,out,common):
         shutil.copy2(common.ROOT/'core/benchmark/fs-bench-pro/diagnostics/sqlite_reference_init.rs',temporary)
     try:
         command=['cargo','+1.85.1','build','--manifest-path','core/Cargo.toml','--release','--locked','-p',package,'--example',example,'--example','verify_namespace']
+        if arm=='baseline':command+=['-p','layerfs-server']
         r=invoke(command,out,'build',30_000_000_000,{**os.environ,'CARGO_TARGET_DIR':str(target)},root)
         r['profile']='release/locked';r['dependency_reuse']='worktree-local incremental target';r['reference_product_unmodified']=arm=='baseline'
         if r['exit_code']!=0 or r['timed_out']:r['status']='BUILD_SLOW' if r['timed_out'] else 'FAIL';return r
