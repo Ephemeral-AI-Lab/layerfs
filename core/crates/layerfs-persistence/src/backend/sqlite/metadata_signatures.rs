@@ -26,3 +26,48 @@ pub(crate) fn read(
     }
     Ok(())
 }
+
+/// Bounded ordered UPSERT pages share the enclosing publication transaction.
+pub(crate) fn write(
+    tx: &super::transaction::Transaction<'_>,
+    rows: &[SignatureRow],
+) -> Result<(), BackendError> {
+    if rows.is_empty() {
+        return Ok(());
+    }
+    const PREFIX: &str = "INSERT INTO content_signature(slot,stamp,object_id,signature) VALUES ";
+    const SUFFIX: &str = " ON CONFLICT(slot) DO UPDATE SET stamp=excluded.stamp,object_id=excluded.object_id,signature=excluded.signature WHERE excluded.stamp>=content_signature.stamp";
+    const ROW: &str = "(?,?,?,?)";
+    let limit = tx
+        .input_limit(4, PREFIX.len() + SUFFIX.len(), ROW.len() + 1)?
+        .min(layerfs_storage::policy::BATCH_OBJECT_LIMIT);
+    for page in rows.chunks(limit) {
+        let sql = format!(
+            "{}{}{}",
+            PREFIX,
+            std::iter::repeat_n(ROW, page.len())
+                .collect::<Vec<_>>()
+                .join(","),
+            SUFFIX
+        );
+        // Borrow the immutable blobs; only bounded scalar/binding descriptors
+        // are staged, never another signature-body copy.
+        let encoded = page
+            .iter()
+            .map(|s| {
+                (
+                    s.slot as i64,
+                    s.stamp as i64,
+                    s.object_id.as_bytes().as_slice(),
+                    s.signature.as_slice(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let values = encoded
+            .iter()
+            .flat_map(|r| [&r.0 as &dyn rusqlite::ToSql, &r.1, &r.2, &r.3])
+            .collect::<Vec<_>>();
+        tx.borrowed(&sql, &values, page.len() as u64 * 80)?;
+    }
+    Ok(())
+}

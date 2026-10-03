@@ -62,9 +62,7 @@ pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published
             vec![Param::I64(i64::from(first)), Param::I64(count as i64)],
         )?;
     }
-    for s in &batch.signatures {
-        tx.query("INSERT INTO content_signature(slot,stamp,object_id,signature) VALUES(?1,?2,?3,?4) ON CONFLICT(slot) DO UPDATE SET stamp=excluded.stamp,object_id=excluded.object_id,signature=excluded.signature WHERE excluded.stamp>=content_signature.stamp",vec![Param::I64(s.slot as i64),Param::I64(s.stamp as i64),Param::Bytes(s.object_id.as_bytes().to_vec()),Param::Bytes(s.signature.to_vec())])?;
-    }
+    super::metadata_signatures::write(tx, &batch.signatures)?;
     Ok(Published {
         lost: batch
             .objects

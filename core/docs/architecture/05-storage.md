@@ -815,3 +815,15 @@ them. Automatically selected physical candidates still undergo the selector's
 bounded authenticated chain acquisition. Exact reuse, lost-winner comparison,
 cycle/depth/work checks and full pack authentication are unchanged. This removes
 no required read check and enlarges no cache or publication bound.
+
+
+### Bounded signature publication
+
+This change is based onf3913c845. SQLite signature registration uses ordered
+multirow UPSERT pages inside the same atomic publication. Each page is bounded
+by the actual SQL-length and variable limits and the existing512-object admission
+bound. Scalar/binding descriptors are bounded; signature/identity bytes are
+borrowed. Stale stamps are ignored and equal-stamp later publications retain the
+existing replacement rule. Foreign-key failure rolls back the entire publication,
+including bodies and preceding signature rows. No acknowledgement, transaction,
+profile, canonical/physical format or working-byte bound is enlarged.

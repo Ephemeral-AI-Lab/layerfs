@@ -4,7 +4,7 @@ use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, ReserveRequest};
 use layerfs_persistence::{BackendSelection, Handles, PersistenceConfig};
 use layerfs_storage::{
-    location::{ObjectLocation, PackDomain, PackInfo},
+    location::{ObjectLocation, PackDomain, PackInfo, SignatureRow},
     pack::{assemble, build_group, PackLane},
     port::*,
     Storage, StoragePolicy,
@@ -313,4 +313,133 @@ fn writable_open_does_not_migrate_an_unrelated_database_journal() {
         "untouched"
     );
     assert!(!std::path::PathBuf::from(format!("{}-wal", path.display())).exists());
+}
+
+#[test]
+fn signature_publication_is_bounded_set_based_and_preserves_stamps() {
+    let t = Temp::new("bulk-signatures");
+    let h = create(&t.join("db"));
+    let id = h
+        .storage
+        .reserve(Reserve {
+            packs: 1,
+            ordinals: 0,
+        })
+        .unwrap()
+        .first_pack_id;
+    let seed = unit(id, 1);
+    let object = seed.objects[0].object_id;
+    h.storage.publish(&seed).unwrap();
+    let batch = Publication {
+        signatures: (0..512)
+            .map(|slot| SignatureRow {
+                slot,
+                stamp: slot as u64 + 1,
+                object_id: object,
+                signature: [slot as u8; 32],
+            })
+            .collect(),
+        ..Publication::default()
+    };
+    let before = h.diagnostics().unwrap();
+    h.storage.publish(&batch).unwrap();
+    let after = h.diagnostics().unwrap();
+    // One atomic unit, with one SQL signature page under this host's actual limits.
+    assert_eq!(after.statements - before.statements, 3);
+    assert_eq!(after.write_commits - before.write_commits, 1);
+    let mut rows = Vec::new();
+    h.storage.signatures(&mut rows).unwrap();
+    assert_eq!(rows, batch.signatures);
+    for (stamp, value) in [(8193, 9), (1, 8), (8193, 7)] {
+        h.storage
+            .publish(&Publication {
+                signatures: vec![SignatureRow {
+                    slot: 0,
+                    stamp,
+                    object_id: object,
+                    signature: [value; 32],
+                }],
+                ..Publication::default()
+            })
+            .unwrap();
+    }
+    rows.clear();
+    h.storage.signatures(&mut rows).unwrap();
+    assert_eq!(rows.last().unwrap().stamp, 8193);
+    assert_eq!(rows.last().unwrap().signature, [7; 32]);
+}
+#[test]
+fn failing_signature_page_rolls_back_prior_body_and_all_signature_rows() {
+    let t = Temp::new("signature-rollback");
+    let h = create(&t.join("db"));
+    let first = h
+        .storage
+        .reserve(Reserve {
+            packs: 2,
+            ordinals: 0,
+        })
+        .unwrap()
+        .first_pack_id;
+    let seed = unit(first, 1);
+    let object = seed.objects[0].object_id;
+    h.storage.publish(&seed).unwrap();
+    let mut bad = unit(first + 1, 1);
+    bad.signatures = (0..513)
+        .map(|slot| SignatureRow {
+            slot,
+            stamp: slot as u64 + 1,
+            object_id: object,
+            signature: [slot as u8; 32],
+        })
+        .collect();
+    bad.signatures.last_mut().unwrap().object_id = ObjectId::for_bytes(b"absent-signature-owner");
+    let before = h.diagnostics().unwrap();
+    assert!(h.storage.publish(&bad).is_err());
+    let after = h.diagnostics().unwrap();
+    assert_eq!(after.rollbacks - before.rollbacks, 1);
+    assert_eq!(after.write_commits, before.write_commits);
+    let mut packs = Vec::new();
+    assert_eq!(
+        h.storage.read_packs(&[first + 1], &mut packs),
+        Err(PersistenceError::Missing)
+    );
+    let mut rows = Vec::new();
+    h.storage.signatures(&mut rows).unwrap();
+    assert!(rows.is_empty());
+}
+
+#[test]
+fn signature_pages_share_one_acknowledgement_at_the_existing_row_bound() {
+    let t = Temp::new("signature-pages");
+    let h = create(&t.join("db"));
+    let id = h
+        .storage
+        .reserve(Reserve {
+            packs: 1,
+            ordinals: 0,
+        })
+        .unwrap()
+        .first_pack_id;
+    let seed = unit(id, 1);
+    let object = seed.objects[0].object_id;
+    h.storage.publish(&seed).unwrap();
+    let batch = Publication {
+        signatures: (0..513)
+            .map(|slot| SignatureRow {
+                slot,
+                stamp: slot as u64 + 1,
+                object_id: object,
+                signature: [slot as u8; 32],
+            })
+            .collect(),
+        ..Publication::default()
+    };
+    let before = h.diagnostics().unwrap();
+    h.storage.publish(&batch).unwrap();
+    let after = h.diagnostics().unwrap();
+    assert_eq!(after.statements - before.statements, 4);
+    assert_eq!(after.write_commits - before.write_commits, 1);
+    let mut rows = Vec::new();
+    h.storage.signatures(&mut rows).unwrap();
+    assert_eq!(rows, batch.signatures);
 }
