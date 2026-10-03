@@ -1,0 +1,36 @@
+{
+  "status": "PASS",
+  "owner": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs",
+  "epoch": "9571f8de27bece7c53a399ff",
+  "images": {
+    "postgres": "postgres@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652",
+    "minio": "cgr.dev/chainguard/minio@sha256:4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285"
+  },
+  "image_ids": {
+    "postgres": "sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652",
+    "minio": "sha256:4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285"
+  },
+  "postgres_settings": [
+    "default_transaction_isolation=read committed",
+    "fsync=on",
+    "full_page_writes=on",
+    "server_encoding=UTF8",
+    "server_version=17.11 (Debian 17.11-1.pgdg12+2)",
+    "shared_buffers=16384",
+    "statement_timeout=0",
+    "synchronous_commit=on",
+    "TimeZone=UTC",
+    "wal_level=replica"
+  ],
+  "postgres_settings_sha256": "e5e159f48d94d08910307b94056a010c7f41dbe90c0a588760d6a64ccd644f9d",
+  "minio_version": "minio version RELEASE.2026-09-22T19-25-18Z (commit-id=df34868a88cc8c396807e04a7e220810b321bdaa)",
+  "schema_bootstrap": "namespace-only; C2/C5 runtime tables enter in steps 6/7",
+  "dependency_reuse": null,
+  "environment_file": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-services/services.env",
+  "resource_profile": {
+    "cpus_per_service": 2,
+    "memory_bytes_per_service": 536870912,
+    "swap": "disabled",
+    "minio_uid": 0
+  }
+}

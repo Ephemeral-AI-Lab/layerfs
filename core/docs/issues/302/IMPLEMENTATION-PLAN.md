@@ -1013,3 +1013,33 @@ is added after discarding unrelated fresh-resolution changes. The cursor codec's
 135 LOC relocated at step 7 is retained at retirement; subtract it from the old
 C5 delete-set estimate when recording actual retirement rather than counting it
 as deleted code.
+
+
+### Step 9 source decisions and owner pause boundary
+
+Real-engine tests feed identical finalized object sequences to the retained old
+path and the port path, comparing every declared sealed pack byte-for-byte after
+each save. Whole-file exact reuse, PREFIX and cross-pack bases are covered.
+A whole-file advisory that reaches the depth cap can select an older shallow
+signature candidate by the unchanged algorithm; it need not select FULL. The
+explicit chunk predecessor path (canonical chunks at the frozen 32,768-byte CDC
+maximum) proves depth-bound FULL without that automatic candidate behavior.
+Pooled 100-row leaf revisions also prove the metadata depth cap and exact old
+ordinal/selection/pack bytes. No codec, identity or bound is amended.
+
+Missing PREFIX locators, absent pooled catalogue rows, corrupt root metadata
+packs and corrupt pooled value-base packs fail over the real ports. One catalogue
+miss is looked up once. Metadata body acquisitions are recorded diagnostics,
+not an assumed one-call bound: the inherited pooled read makes two body calls
+before the missing-ordinal refusal and three before the corrupt pooled-base
+refusal. This remains a count gap to assess under a future frozen harness, not a
+retry or an alternate catalogue lookup. Development-only postgres/rusqlite edges
+use already locked versions for external corruption controls and the old pack
+oracle; project product dependencies and source remain engine-independent.
+
+Owner instruction received 2026-10-04 via the side conversation: finish step 9
+and all covering checks, commit its implementation and M4 progress entry, update
+#302, then pause immediately. Do not start steps 10, 11 or 12 or any timed sample.
+The later benchmark/test handoff will be discussed separately. This supersedes
+the original direction to continue automatically at the M4 boundary. Record the
+active goal as paused only after M4's required completion work is finished.

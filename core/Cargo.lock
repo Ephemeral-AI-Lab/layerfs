@@ -756,6 +756,8 @@ dependencies = [
  "layerfs-s3",
  "layerfs-storage",
  "layerfs-telemetry",
+ "postgres",
+ "rusqlite",
  "sha2 0.10.9",
 ]
 

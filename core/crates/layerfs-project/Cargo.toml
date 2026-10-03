@@ -16,3 +16,5 @@ layerfs-telemetry = { path = "../layerfs-telemetry" }
 layerfs-s3 = { path = "../layerfs-s3" }
 layerfs-metadata = { path = "../layerfs-metadata" }
 sha2 = "=0.10.9"
+postgres = "=0.19.14"
+rusqlite = "=0.40.2"
