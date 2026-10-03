@@ -139,3 +139,21 @@ paths remain present. M1 is still in progress (steps 4a/4b outstanding), M0 bloc
 and all owner questions remain open. Real engines and their tests are NOT_RUN.
 
 Production LOC: 135792 -> 136615 (delta +823)
+
+## 2026-10-03 — Explicit owner answers Q2 and Q3
+
+The owner answered in this Codex chat after step-3 commit `d6d159885`:
+
+- Q2: "Approve the planned own S3 client" — the layerfs-s3 client adapter,
+  using already-locked sha2 and its own HMAC, is approved.
+- Q3: "Approve layerfs-project" — the 14th crate for namespace Init is approved.
+- Clarification: PostgreSQL and MinIO are separate servers/services; LayerFS
+  connects to them. The client dependency options do not embed either server.
+
+Q1 (PostgreSQL client) is not yet answered. Q10 (missing-service test behavior)
+and Q12 (server image pins) still block completion of step 1. Q4–Q9 and Q11/Q13
+remain open. No client choice or image pin is inferred from this clarification.
+No production change, check, counter or measurement in this answer record.
+Reference 65,417 -> 65,417; core 71,198 -> 71,198; old-path 6,159 -> 6,159;
+new-path 840 -> 840; rest-core 64,199 -> 64,199; no relocation.
+Production LOC: 136615 -> 136615 (delta +0)
