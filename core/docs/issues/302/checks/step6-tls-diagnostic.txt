@@ -1,0 +1,19 @@
+   Compiling layerfs-metadata v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-metadata)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.30s
+     Running tests/connection_contract.rs (core/target/debug/deps/connection_contract-3aa007b38fea7c3d)
+
+running 1 test
+
+thread 'verified_tls_checks_the_chain_and_hostname_and_never_downgrades' panicked at crates/layerfs-metadata/tests/connection_contract.rs:257:44:
+called `Result::unwrap()` on an `Err` value: Refused { status: "TLS_IDENTITY: The extended key usage is not valid." }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test verified_tls_checks_the_chain_and_hostname_and_never_downgrades ... FAILED
+
+failures:
+
+failures:
+    verified_tls_checks_the_chain_and_hostname_and_never_downgrades
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.26s
+
+error: test failed, to rerun pass `-p layerfs-metadata --test connection_contract`

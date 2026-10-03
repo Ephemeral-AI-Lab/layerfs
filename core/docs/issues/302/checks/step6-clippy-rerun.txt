@@ -1,0 +1,28 @@
+    Checking layerfs-sdk v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-api/sdk)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-server)
+    Checking layerfs-metadata v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-metadata)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+error: the borrowed expression implements the required traits
+   --> crates/layerfs-metadata/src/config.rs:124:22
+    |
+124 |               .options(&format!(
+    |  ______________________^
+125 | |                 "-c statement_timeout={} -c TimeZone=UTC",
+126 | |                 self.statement_timeout.as_millis()
+127 | |             ));
+    | |_____________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_borrows_for_generic_args
+    = note: `-D clippy::needless-borrows-for-generic-args` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_borrows_for_generic_args)]`
+help: change this to
+    |
+124 ~             .options(format!(
+125 +                 "-c statement_timeout={} -c TimeZone=UTC",
+126 +                 self.statement_timeout.as_millis()
+127 ~             ));
+    |
+
+error: could not compile `layerfs-metadata` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-metadata` (lib test) due to 1 previous error

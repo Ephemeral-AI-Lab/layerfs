@@ -236,3 +236,37 @@ socket/entity bytes. They are not a timing or admission claim. Service tests use
 external response interception to drop an acknowledged PUT reply and damage a
 real GET header; product source contains no fault hook or alternate path.
 The complete sealed bytes supplied by C2 are unchanged by this transport.
+
+
+### #302 PostgreSQL C2 engine (2026-10-03)
+
+Described against parent `e828bb35f` and step 6 source. `layerfs-metadata` owns
+five C2 tables and the pack sequence, with no save/publication identity, group
+or dependency table. `pack` carries immutable descriptors for both destinations
+and bytea bodies only for metadata. SQL remains under `sql/`: schema bootstrap
+plus dedicated operational files in `sql/queries/storage/`; Rust embeds them and
+owns checked parameter binding, execution, decoding and outcome classification.
+
+The seven port units use explicit parameter types through the complete published
+PostgreSQL driver. One dedicated I/O worker hosts that driver and its bounded
+runtime; the public ports remain synchronous. The observer counts actual frontend
+Sync/simple Query and backend ReadyForQuery frames, as well as socket/protocol
+bytes. It skips data rather than decoding another protocol implementation.
+Deadlines cover connection setup and wire operations. Timeout/lost acknowledgement
+or malformed transport makes the handle terminal, with no retry, reconnect,
+cancel connection or alternate address. Unexpected TLS refusal retains a diagnostic
+reason without including credentials. The native TLS connector verifies chain/name
+and requires encryption; it never downgrades to the local/plain profile.
+
+Allocation locks the single policy row while reserving a sequence block and/or
+ordinals, so concurrent ranges cannot overlap. Atomic registration inserts packs,
+first-wins object locators, catalogue rows, signature changes and ordinal/window
+changes in one statement/transaction. The existing per-group window recurrence is
+retained. Unused-tail release is conditional on the current allocator watermark.
+Signature rows cannot refer to absent objects; stale stamps do not replace newer
+ring entries. The engine does not inspect canonical/record/pack contents.
+
+Current owner scope is local acceptance; remote/cloud deployment qualification is
+deferred. TLS configuration/capability remains. Local TLS proxy tests prove the
+mechanism at their stated fixture, with earlier fixture failures retained; they
+are not a remote-provider claim. C5 history is the next rollout slice.

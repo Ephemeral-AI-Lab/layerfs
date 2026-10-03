@@ -1,0 +1,23 @@
+   Compiling layerfs-metadata v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-metadata)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.11s
+     Running tests/connection_contract.rs (core/target/debug/deps/connection_contract-3aa007b38fea7c3d)
+
+running 3 tests
+DIAGNOSTIC pg-lost-reply PgDiagnostics { connections: 1, operations: 2, sync_messages: 2, simple_queries: 0, ready_for_query: 1, wire_sent: 1633, wire_received: 953, protocol_sent: 1325, protocol_received: 332 }
+test dropped_committed_reply_is_uncertain_and_the_same_operation_is_not_replayed ... ok
+DIAGNOSTIC pg-timeout PgDiagnostics { connections: 1, operations: 2, sync_messages: 2, simple_queries: 0, ready_for_query: 2, wire_sent: 1637, wire_received: 1831, protocol_sent: 1331, protocol_received: 1210 }
+test cancelled_registration_is_uncertain_and_does_not_reopen_or_resend ... ok
+
+thread 'verified_tls_checks_the_chain_and_hostname_and_never_downgrades' panicked at crates/layerfs-metadata/tests/connection_contract.rs:257:44:
+called `Result::unwrap()` on an `Err` value: Refused { status: "TLS_IDENTITY" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test verified_tls_checks_the_chain_and_hostname_and_never_downgrades ... FAILED
+
+failures:
+
+failures:
+    verified_tls_checks_the_chain_and_hostname_and_never_downgrades
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+error: test failed, to rerun pass `-p layerfs-metadata --test connection_contract`

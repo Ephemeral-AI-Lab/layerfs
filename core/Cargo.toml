@@ -20,6 +20,7 @@ members = [
     "crates/layerfs-content",
     "crates/layerfs-storage",
     "crates/layerfs-s3",
+    "crates/layerfs-metadata",
     "crates/layerfs-history",
     "crates/layerfs-telemetry",
 ]

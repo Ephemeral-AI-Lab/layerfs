@@ -493,7 +493,7 @@ Exact types and constraints are frozen in steps 6 and 7.
 Against the base schemas: `saves` and every `save_id` column are gone; the
 writer budget, publication sequence and pack ceiling leave `store_policy`; the
 pack-id counter becomes a sequence; `object` is keyed by `object_id` alone.
-File-content packs are objects in MinIO and appear in no table.
+File-content pack bytes are objects in MinIO; only their immutable descriptor rows live in `pack`, with a NULL body.
 
 ---
 
@@ -644,6 +644,39 @@ binding, execution, row decoding and error classification. Exact operation/varia
 filenames follow the implementation. All SQL stays in the metadata engine and is
 shipped production source under the same LOC/999-line guard. No query-directory
 scaffold is added before step 6 implements its contents.
+
+**Step 6 source corrections (2026-10-03).** The published synchronous
+`postgres::Client` delegates every query to the complete tokio-postgres driver,
+but does not expose a per-operation deadline or an observed raw stream. Its
+`query_typed` path avoids separate prepare/execute/close round trips. Use that
+same complete published driver behind a synchronous, bounded, single I/O-worker
+facade so DNS/TCP/TLS/auth and each wire operation have deadlines, failure closes
+the driver, and actual Sync/ReadyForQuery messages can be counted. No C2/C5 port
+becomes async, no authentication/protocol implementation is substituted, and no
+third-party code is changed. The selected postgres/native-TLS set remains; direct
+usage of its already-selected tokio-postgres/Tokio runtime packages adds no package
+beyond that dependency ecosystem. Typed arrays carry the bounded C2 registration,
+not an added serialization package. Statement cancellation on a mutation is
+Uncertain and never replayed. One selected address is attempted.
+
+The sequence's block reservation needs one policy-row lock: an unprotected
+nextval + setval pair can overlap concurrent blocks. The lock/ordinal allocation
+share the one reserve unit. Register holds that row only for pooled/window/release
+changes; other rows use PostgreSQL first-wins insertion. It inserts opaque pack
+descriptors for both domains, with body only for metadata. The earlier sentence
+saying payload packs appear in no table was imprecise; their bytes do not appear
+there, while their immutable descriptor is needed by locate/read routing.
+
+**Current acceptance scope (owner-notified direction, 2026-10-03).** Continue
+local PostgreSQL storage/history acceptance and defer remote/cloud deployment
+qualification. Retain verified TLS configuration/capability and do no further TLS
+investigation now. Failed certificate-import/verification receipts stay FAIL.
+Before this direction arrived, the fixture was repaired and a new targeted test
+passed certificate-chain/hostname checks and no-downgrade behavior against a TLS
+proxy to the owned local PostgreSQL service; that new PASS does not relabel the
+earlier failures or prove a remote provider. Remote/cloud provider certificates,
+endpoint and deployment acceptance remain an open follow-up before cloud use.
+The explicit local/plain profile is the present rollout and measurement profile.
 
 **Coexistence.** `layerfs-server` and `layerfs-sdk` are the only product
 consumers of C2's `Store` and C5's SQLite provider (`grep` of every

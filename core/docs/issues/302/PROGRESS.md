@@ -538,3 +538,97 @@ implementation; no relocation/retirement or algorithmic simplification claim.
 This milestone-entry commit changes only documentation with the same subtotals.
 
 Production LOC: 139022 -> 139022 (delta +0)
+
+
+## 2026-10-03 — step 6 local C2 PostgreSQL complete; M3 in progress
+
+Implementation commit is the commit containing this entry (parent `e828bb35f`).
+`layerfs-metadata` implements the seven C2 units, five tables and sequence with
+opaque typed arrays. Schema SQL and operational query files are separate under
+sql/. The complete published PostgreSQL driver runs behind a synchronous bounded
+one-I/O-worker facade; authentication/protocol/TLS remain in the selected client
+libraries. No public port becomes async. C2/C5/cluster 2 source is unchanged;
+only external C2 fixtures were factored to share the exact metadata contract.
+
+Final exact checks:
+
+- `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check` — PASS.
+- `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings` — final PASS, including server/SDK coexistence builds.
+- `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-metadata -p layerfs-storage -- --nocapture`, with the private owned-service environment loaded — final PASS: 270 passed/0 FAIL/0 ignored (264 storage, 6 metadata). The same external metadata contract file runs against both providers. Actual stream observation asserts one Sync/ReadyForQuery exchange for each unit. Two connections prove first-wins. Statement cancellation and dropped committed reply are Uncertain and never repeated; poisoned handles submit no further operation.
+- `python3 core/tools/check_product_boundary.py` — PASS, 409 production Rust/SQL files.
+- `python3 -m unittest discover -s core/tools -p 'test_*.py'` — PASS, 21 tests.
+- `cargo +1.85.1 metadata --manifest-path core/Cargo.toml --locked --format-version 1 --filter-platform aarch64-unknown-linux-musl` — resolver PASS: metadata's selected closure contains 109 packages, none declaring MSRV above 1.85. This is not a Linux build proof.
+- `git diff --cached --check` — PASS before commit; exact first-parent/staged/committed identities confirmed after commit.
+
+Every FAIL/repair and gap is retained in checks/step6-*:
+
+- Selective resolver update initially failed because the new workspace package was
+  not yet in the lock. Cargo metadata resolved the new graph without a build.
+  It initially updated five unrelated WASM lock entries; pin the newly needed
+  web-sys to its compatible 0.3.104 version, restoring all five old entries.
+  Final lock delta has no removed entries and 71 added package/version entries,
+  including the new first-party engine. The selected postgres/native-TLS pins are
+  exact; direct use of their Tokio driver/runtime adds no other client stack.
+  No patched, vendored or modified third-party source. Inventory/lock delta are
+  copied beside the check evidence.
+- Initial Clippy compile FAIL: the driver's can_connect method takes a private
+  marker and supplies a true default. Remove the unnecessary override and use the
+  public TlsConnect implementation; no dependency patch. Rerun exposed one needless
+  options borrow, removed without suppression; final Clippy PASS.
+- First local engine suite: 0 PASS/3 FAIL during schema creation, SQLSTATE 42601.
+  PostgreSQL log position identifies unparenthesized CASE expressions in a PL/pgSQL
+  IF. Parenthesize them; complete storage/metadata run then passed 267 tests.
+- First connection suite: 2 PASS/1 FAIL. macOS native identity import rejected the
+  generated OpenSSL 3 PKCS#12 container (-25293). Use a compatible encrypted test
+  container with a fixture password; no product TLS downgrade.
+- Connection rerun: 2 PASS/1 FAIL. Trusted test certificate was rejected. A labelled
+  diagnostic retained the native TLS reason: extended key usage not valid. Add
+  serverAuth/key usage to the external generated test certificate; do not disable
+  chain/name verification. The new targeted test passed, followed by the final
+  complete 270-PASS suite. These are new receipts; earlier failures remain FAIL.
+- The compile/schema/certificate faults required extra invocations beyond the
+  requested one-repair cadence. They are disclosed, not omitted. No timed sample.
+
+Owner-notified scope: local PostgreSQL acceptance is current. The instruction to
+move on from TLS arrived after the repaired local TLS test had passed. Retain TLS
+configuration/client capability and do no further TLS investigation. Earlier
+certificate failures are not relabelled. The synthetic local TLS proxy proved
+certificate-chain/hostname checks, rejection of wrong/untrusted identity, and no
+TLS downgrade at its stated fixture. Remote/cloud provider certificates, endpoint
+and deployment qualification remain DEFERRED/NOT_RUN and an open follow-up before
+remote/cloud use. This does not remove the cloud-support direction. Linux system
+OpenSSL compilation/proof remains NOT_RUN here; the resolver inventory is not that
+proof. C5 PostgreSQL contract tests remain step 7. M3 is not claimed complete yet.
+
+Diagnostics (whole stated test sequences, never timing claims):
+
+| Sequence | Connections | Operations | Sync/simple Query | ReadyForQuery | Wire sent/received B | Protocol sent/received B |
+| --- | ---: | ---: | --- | ---: | --- | --- |
+| Bootstrap + shared metadata contract | 1 | 12 | 11/1 | 12 | 15503/4072 | 15195/3451 |
+| First-wins connection A | 1 | 4 | 3/1 | 4 | 11392/1616 | 11084/995 |
+| First-wins connection B | 1 | 3 | 3/0 | 3 | 1837/1326 | 1529/705 |
+| Open + dropped committed register reply | 1 | 2 | 2/0 | 1 | 1633/953 | 1325/332 |
+| Open + cancelled register | 1 | 2 | 2/0 | 2 | 1637/1831 | 1331/1210 |
+| Local verified TLS open + policy | 1 | 2 | 2/0 | 2 | 1276/2786 | 520/664 |
+
+Socket counts include startup/TLS; protocol counts exclude startup and observe
+clear protocol frames before encryption/after decryption. No count is inferred
+from lifetime memory or from a client method name. The cancelled register leaves
+no row; the dropped acknowledged register exists, and neither is replayed.
+Resource/profile remains the owned PostgreSQL 17.11/default durability service;
+per-client statement bound is an explicit startup option, not a changed server
+profile. No process construction worker or global writer budget is added.
+
+NOT_RUN: PostgreSQL C5 (7), project Init (8), real combined parity (9), harness and
+all timed samples (10–11), remote/cloud deployment qualification. No skipped local
+step-6 covering check remains. Source corrections (descriptor-only payload rows,
+atomic sequence block, private complete driver/deadlines, query-file layout) are
+in the plan/architecture. Step 12 still waits on cluster 2 M9.
+
+LOC comparison uses the root counter on exact first-parent/final staged trees:
+reference 65,417 -> 65,417; core 73,605 -> 75,115; old-path 6,160 -> 6,160;
+new-path 3,232 -> 4,742; rest-core 64,213 -> 64,213. Shipped SQL is included.
+Test-fixture extraction is test code, not production relocation. New engine code
+coexists with the old implementation; no retirement or simplification claim.
+
+Production LOC: 139022 -> 140532 (delta +1510)

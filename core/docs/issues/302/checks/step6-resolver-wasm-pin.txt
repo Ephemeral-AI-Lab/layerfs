@@ -1,0 +1,8 @@
+    Updating crates.io index
+ Downgrading js-sys v0.3.106 -> v0.3.104 (available: v0.3.106)
+ Downgrading wasm-bindgen v0.2.129 -> v0.2.127 (available: v0.2.129)
+ Downgrading wasm-bindgen-macro v0.2.129 -> v0.2.127 (available: v0.2.129)
+ Downgrading wasm-bindgen-macro-support v0.2.129 -> v0.2.127 (available: v0.2.129)
+ Downgrading wasm-bindgen-shared v0.2.129 -> v0.2.127 (available: v0.2.129)
+ Downgrading web-sys v0.3.106 -> v0.3.104
+note: pass `--verbose` to see 18 unchanged dependencies behind latest

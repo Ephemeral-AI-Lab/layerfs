@@ -1,0 +1,9 @@
+   Compiling layerfs-metadata v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-metadata)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.23s
+     Running tests/connection_contract.rs (core/target/debug/deps/connection_contract-3aa007b38fea7c3d)
+
+running 1 test
+DIAGNOSTIC pg-tls PgDiagnostics { connections: 1, operations: 2, sync_messages: 2, simple_queries: 0, ready_for_query: 2, wire_sent: 1276, wire_received: 2786, protocol_sent: 520, protocol_received: 664 }
+test verified_tls_checks_the_chain_and_hostname_and_never_downgrades ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.28s

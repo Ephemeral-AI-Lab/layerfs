@@ -698,3 +698,37 @@ The source at `6fd7fce46` requested SQLite `auto_vacuum=INCREMENTAL` on new C2 S
 ### #286 bounded physical headroom before pack insertion (2026-09-30)
 
 The [r030 diagnostic](../issues/286/experiments/20260930-history-preallocation-diagnostic-r030.md) kept C2/C5 bytes identical to r021 but avoided its16-MiB APFS allocation step by reserving small physical increments on the original Store. The current source moves that work into C2's `insert_pack` path **before** each new bounded pack row, inside the save's existing write transaction and measured child. It asks the host for physical headroom through the next pack's declared capacity plus2 MiB, rounded to1 MiB, with one request capped by the singleton-pack bound plus3 MiB. On Darwin the already-locked `nix` crate's safe `F_PREALLOCATE` wrapper reserves from physical EOF; on Linux its safe `fallocate(FALLOC_FL_KEEP_SIZE)` wrapper reserves without changing logical length. The earlier unverified Linux `posix_fallocate` branch at `aed28dda1` would extend logical EOF, so it was corrected before any Linux execution or release claim. No product `unsafe` boundary, new third-party package, extra worker, preconstructed Store, file-sized spool, `fsync` or fallback is introduced. A missing path, unsupported platform, short reservation, I/O error or logical-length change fails explicitly before pack insertion; ordinary save cleanup handles the failure. This is physical placement work, not a new canonical or SQLite schema format. R030 is causal evidence only: fresh original-owner selected and stride1 receipts must decide storage, command/verifier bounds, semantics and cleanup.
+
+
+### #302 PostgreSQL C2 engine (2026-10-03)
+
+Described against parent `e828bb35f` and step 6 source. `layerfs-metadata` owns
+five C2 tables and the pack sequence, with no save/publication identity, group
+or dependency table. `pack` carries immutable descriptors for both destinations
+and bytea bodies only for metadata. SQL remains under `sql/`: schema bootstrap
+plus dedicated operational files in `sql/queries/storage/`; Rust embeds them and
+owns checked parameter binding, execution, decoding and outcome classification.
+
+The seven port units use explicit parameter types through the complete published
+PostgreSQL driver. One dedicated I/O worker hosts that driver and its bounded
+runtime; the public ports remain synchronous. The observer counts actual frontend
+Sync/simple Query and backend ReadyForQuery frames, as well as socket/protocol
+bytes. It skips data rather than decoding another protocol implementation.
+Deadlines cover connection setup and wire operations. Timeout/lost acknowledgement
+or malformed transport makes the handle terminal, with no retry, reconnect,
+cancel connection or alternate address. Unexpected TLS refusal retains a diagnostic
+reason without including credentials. The native TLS connector verifies chain/name
+and requires encryption; it never downgrades to the local/plain profile.
+
+Allocation locks the single policy row while reserving a sequence block and/or
+ordinals, so concurrent ranges cannot overlap. Atomic registration inserts packs,
+first-wins object locators, catalogue rows, signature changes and ordinal/window
+changes in one statement/transaction. The existing per-group window recurrence is
+retained. Unused-tail release is conditional on the current allocator watermark.
+Signature rows cannot refer to absent objects; stale stamps do not replace newer
+ring entries. The engine does not inspect canonical/record/pack contents.
+
+Current owner scope is local acceptance; remote/cloud deployment qualification is
+deferred. TLS configuration/capability remains. Local TLS proxy tests prove the
+mechanism at their stated fixture, with earlier fixture failures retained; they
+are not a remote-provider claim. C5 history is the next rollout slice.
