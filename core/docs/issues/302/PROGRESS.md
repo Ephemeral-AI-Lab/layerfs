@@ -67,3 +67,75 @@ The increase reflects the coexistence seam and adapted relocation, not a saving.
 All owner questions remain open; M0 is still blocked.
 
 Production LOC: 135696 -> 135792 (delta +96)
+
+## 2026-10-03 — Step 3 ports and authenticated reader
+
+Implementation commit is the commit containing this entry (parent `6db678f3a`).
+The two ports, Storage, Reader, bounded locator/catalogue caches, chain prefetch,
+whole-pack SHA-256 checks and existing canonical reconstruction are implemented.
+External memory engines install old-path physical fixtures through register and
+conditional put. No engine crate, client package, service tool or timed sample.
+The SHA-256 direct dependency uses the already-locked sha2 0.10.9; no package or
+version was added. Provider error mapping relocates to the shared error module.
+
+Final checks:
+
+- `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check` — PASS.
+- `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings` — final PASS; server and SDK build without source changes.
+- `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage -- --nocapture` — final PASS: 241 tests, 0 failed, 0 ignored (7 new port tests).
+- `python3 core/tools/check_product_boundary.py` — PASS: 370 Rust/SQL files.
+- `python3 -m unittest discover -s core/tools -p 'test_*.py'` — PASS: 10 tests.
+- `git diff --check` — PASS.
+
+Every red attempt and gap retained:
+
+1. First Clippy FAIL: two unused legacy-provider imports after mapping relocation.
+   Diagnosed from compiler output and source; removed those imports.
+2. Clippy rerun FAIL: the old server exhaustively matches StorageError and cannot
+   accept added variants. Source wins: port originals use the old typed error
+   carrier and uncertainty wrapper; the plan records this compatibility correction.
+3. First package-test invocation FAIL before execution: external SQLite oracle
+   used usize with FromSql. It now reads i64 and converts fixture fields explicitly.
+4. An assertion in the repair script matched ObjectMissing as well as the new
+   Object variant, stopped before writing, and the shell still started Clippy.
+   That extra unchanged-tree check failed again on the exhaustive match and
+   FromSql errors. This was an execution mistake and exceeds the requested
+   one-fix/one-rerun cadence; it is not omitted or presented as new evidence.
+   The script was corrected; subsequent checks ran on the repaired source.
+5. Guard/tools checks were repeated after the product repair to cover the final
+   tree; the source counts remained 370/10. No unchanged successful product check
+   or benchmark arm was rerun. The step-2 owner-directed ignored test remains the
+   previously recorded coexistence gap; server/SDK runtime tests were not rerun
+   for step 3 (only their all-target Clippy builds).
+
+6. Final staged diff check initially FAIL on a trailing blank line in the copied
+   successful test output. The documentation copy's trailing blank lines were
+   normalized; the original target log remains intact. The covering diff check
+   then passed. No product or test rerun was needed for this presentation repair.
+
+Failure and final outputs are retained under `checks/step3-*.txt` beside this
+record. Their wall/profile output is build/test information, not a performance
+sample. No check invokes a Phase 7 benchmark selection.
+
+Count diagnostics (printed by the port tests; never timing claims):
+
+| Fixture | policy | locate | metadata pack calls | catalogue calls | payload GETs | payload bytes | metadata body bytes | locator hits/misses | pack hits/misses | forced seals |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| PREFIX, two requests for one dependent across two packs | 1 | 2 | 0 | 0 | 2 | 1563 | 0 | 5 / 3 | 24 / 2 | 0 |
+| Pooled leaf, two requests for one 100-row leaf | 1 | 1 | 3 | 1 | 0 | 0 | 9247 | 2 / 2 | 9 / 3 | 0 |
+
+Signatures, reserve, register, PUT and HEAD counts for these reads are zero.
+Fixture installation precedes the Storage handle and is not in its diagnostic
+counts. PREFIX locate calls are asserted <= 6 (2 * 1 chain level + 4); pooled
+metadata pack calls are asserted <= 4. These cases do not prove a bound for every
+future workload. Wrong digest, missing payload/base, forged identity and oversized
+read demand are refused; an absent locator is retained only for the current demand
+so it is not silently queried again and is refreshed on the next demand.
+
+LOC by the same first-parent/final-staged root counter: reference 65,417 -> 65,417;
+core 70,375 -> 71,198; old-path 6,184 -> 6,159; new-path 53 -> 840;
+rest-core 64,138 -> 64,199. The provider mapping is relocation; both physical
+paths remain present. M1 is still in progress (steps 4a/4b outstanding), M0 blocked,
+and all owner questions remain open. Real engines and their tests are NOT_RUN.
+
+Production LOC: 135792 -> 136615 (delta +823)

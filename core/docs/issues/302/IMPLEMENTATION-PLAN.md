@@ -248,6 +248,7 @@ core/crates/
 │  │  │  └─ metadata_store.rs           + MetadataStore, Registration, Registered, Reserve, MetadataError
 │  │  ├─ read/
 │  │  │  ├─ mod.rs                      + declarations
+│  │  │  ├─ counters.rs                 + actual port/cache operation counts
 │  │  │  ├─ fetch.rs                    + locator cache, pack cache, store routing, digest check
 │  │  │  ├─ prefetch.rs                 + level-wise chain location and pack fetch for a wave
 │  │  │  ├─ objects.rs                  + bounded read wave: reconstruct, authenticate, counters
@@ -483,6 +484,13 @@ statements relocate to `sqlite/source.rs`; the engine-independent mutex helper
 moves to `source.rs`, with a legacy re-export. The old API and its tests keep
 working via `Source for rusqlite::Connection`. This is relocation with adaptation,
 not retirement or a format/algorithm change.
+
+**Step 3 source correction (2026-10-03).** The old server exhaustively matches
+`StorageError` (`layerfs-server/src/service/error.rs`), so extending that enum
+breaks coexistence. Port errors instead retain their typed original inside the
+existing `Io` carrier (no I/O is performed by constructing that error), and an
+uncertain result wraps that carrier in `UnknownOutcome`. The engine ports keep
+their own four explicit classes. No cluster 2 source or old enum shape changes.
 
 **Coexistence.** `layerfs-server` and `layerfs-sdk` are the only product
 consumers of C2's `Store` and C5's SQLite provider (`grep` of every

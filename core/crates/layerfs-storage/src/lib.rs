@@ -33,9 +33,15 @@ pub mod error;
 pub mod location;
 pub mod pack;
 pub mod policy;
+pub mod port;
+pub mod read;
 pub mod source;
 pub mod sqlite;
+mod storage;
 
 pub use cas::{SaveHandoff, SaveOperation, SaveOutcome, Store, StoreProvider, StoreReadCounters};
 pub use error::{StorageError, StorageResult};
 pub use policy::{SchemaIdentity, StorageCapacities, StoragePolicy, SCHEMA_IDENTITY};
+
+pub use read::{Diagnostics, Reader};
+pub use storage::Storage;

@@ -18,6 +18,28 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 
 ## 6. Storage (C2 — `layerfs-storage`)
 
+### #302 two-port authenticated reader (2026-10-03)
+
+Described against parent `6db678f3a`. `Storage` reads its persisted policy once
+and holds bounded locator/catalogue indexes. `Reader` owns the existing decode
+arena, ordinary pack/group caches and pooled reader. Dependency locators are
+prefetched by chain level; metadata pack demands are batched up to 4 MiB and
+payload bodies are fetched whole. SHA-256 covers every sealed pack and the
+existing resolver checks each reconstructed BLAKE3 object identity, chronology,
+role and chain budgets. Routing is derived from the pack lane and checked against
+the returned descriptor. There is no service bootstrap, retry or alternate route.
+
+`ObjectStore` is opaque immutable-body I/O; `MetadataStore` has policy, locate,
+read_packs, value_groups, signatures, reserve and register units. They own engine
+I/O and return definite or uncertain outcomes; uncertainty maps to the existing
+`UnknownOutcome` class. Typed port originals use the existing `Io` error carrier
+during coexistence because the server exhaustively matches the old enum. Creating
+the carrier performs no I/O. The old provider error mapping is shared from `error.rs`
+by both readers. Source cache-hit notifications count actual consults in the
+unchanged encoding caches; they do not select another algorithm. The already
+locked SHA-256 dependency is added directly to C2 without a package/version move.
+No write-path or engine implementation is claimed by this slice.
+
 ### #302 encoding access seam (2026-10-03)
 
 This change is described against parent `15155598b`. `location.rs` owns engine-independent object, pooled catalogue and

@@ -212,6 +212,8 @@ impl PoolReader {
                 self.packs.clear();
             }
             self.packs.insert(pack_id, bytes);
+        } else {
+            connection.note_pack_cache_hit();
         }
         self.packs
             .get(&pack_id)

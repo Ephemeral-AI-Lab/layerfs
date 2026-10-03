@@ -46,3 +46,45 @@ pub struct SignatureRow {
     /// Eight folded hashes in their existing little-endian representation.
     pub signature: [u8; 32],
 }
+
+/// Physical body destination, determined by its lane.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PackDomain {
+    /// Mapping and pooled metadata bytes.
+    Metadata,
+    /// File-content bytes.
+    Payload,
+}
+
+impl PackDomain {
+    /// Routes a lane without consulting an engine.
+    pub const fn for_lane(lane: crate::pack::layout::PackLane) -> Self {
+        use crate::pack::layout::PackLane;
+        match lane {
+            PackLane::Ordinary | PackLane::PooledMetadata => Self::Metadata,
+            PackLane::Native | PackLane::WholeFile | PackLane::Singleton => Self::Payload,
+        }
+    }
+}
+
+/// Persisted descriptor of a sealed immutable pack.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PackInfo {
+    /// Positive pack id, independent of content digest.
+    pub pack_id: i64,
+    /// Destination dictated by the lane.
+    pub domain: PackDomain,
+    /// SHA-256 of the complete sealed bytes.
+    pub key: crate::port::ObjectKey,
+    /// Exact sealed length, without capacity padding.
+    pub length: usize,
+}
+
+/// One object location together with the descriptor needed to fetch its pack.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LocatedObject {
+    /// Canonical object descriptor and position.
+    pub location: ObjectLocation,
+    /// Immutable body descriptor.
+    pub pack: PackInfo,
+}

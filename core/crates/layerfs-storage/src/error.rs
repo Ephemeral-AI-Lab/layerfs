@@ -160,3 +160,67 @@ impl From<rusqlite::Error> for StorageError {
 
 /// Result alias for this component.
 pub type StorageResult<T> = Result<T, StorageError>;
+
+impl From<crate::port::ObjectError> for StorageError {
+    fn from(error: crate::port::ObjectError) -> Self {
+        let uncertain = error == crate::port::ObjectError::Uncertain;
+        let original = Self::Io(std::io::Error::other(error));
+        if uncertain {
+            Self::UnknownOutcome {
+                original: Box::new(original),
+            }
+        } else {
+            original
+        }
+    }
+}
+impl From<crate::port::MetadataError> for StorageError {
+    fn from(error: crate::port::MetadataError) -> Self {
+        let uncertain = error == crate::port::MetadataError::Uncertain;
+        let original = Self::Io(std::io::Error::other(error));
+        if uncertain {
+            Self::UnknownOutcome {
+                original: Box::new(original),
+            }
+        } else {
+            original
+        }
+    }
+}
+
+/// Maps one Store read failure onto the provider contract's error classes.
+///
+/// `MissingObject` is the answer for absence and for nothing else, because a
+/// caller-authorized value root is allowed to name an object this Store does
+/// not hold (`admission-and-persistence.md`). Every other failure - a corrupt
+/// locator or pack, a private or out-of-range record, a capacity
+/// refusal, an engine failure - reaches C1 as a distinguishable
+/// [`ContentError::ProviderFailure`] instead of masquerading as absence, which
+/// is the distinction a later adapter needs between "this root is not in this
+/// Store" and "this Store is corrupt".
+pub(crate) fn provider_error(error: StorageError) -> ContentError {
+    match error {
+        StorageError::ObjectMissing(_) => ContentError::MissingObject,
+        StorageError::Content(content) => content,
+        StorageError::Integrity(what) => ContentError::ProviderFailure { what },
+        StorageError::CapacityExceeded { what, .. } => ContentError::ProviderFailure { what },
+        StorageError::UnsupportedPolicy { field } => ContentError::ProviderFailure { what: field },
+        StorageError::VisibilityCeiling { .. } | StorageError::Unpublished(_) => {
+            ContentError::ProviderFailure {
+                what: "record outside the publication scope",
+            }
+        }
+        StorageError::Collision(_) => ContentError::ProviderFailure {
+            what: "identity collision",
+        },
+        StorageError::MissingDependency { .. } => ContentError::ProviderFailure {
+            what: "missing dependency",
+        },
+        StorageError::Engine(_) => ContentError::ProviderFailure {
+            what: "engine failure",
+        },
+        _ => ContentError::ProviderFailure {
+            what: "store read failure",
+        },
+    }
+}

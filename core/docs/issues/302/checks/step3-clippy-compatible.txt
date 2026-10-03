@@ -1,0 +1,144 @@
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-server)
+error[E0277]: the trait bound `usize: rusqlite::types::FromSql` is not satisfied
+   --> crates/layerfs-storage/tests/support/memory_engines.rs:304:48
+    |
+304 |                 canonical_length: row.get::<_, usize>(2)?,
+    |                                       ---      ^^^^^ the trait `rusqlite::types::FromSql` is not implemented for `usize`
+    |                                       |
+    |                                       required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `rusqlite::types::FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `usize: rusqlite::types::FromSql` is not satisfied
+   --> crates/layerfs-storage/tests/support/memory_engines.rs:306:35
+    |
+306 |                 group_number: row.get(4)?,
+    |                                   ^^^ the trait `rusqlite::types::FromSql` is not implemented for `usize`
+    |
+    = help: the following other types implement trait `rusqlite::types::FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `usize: rusqlite::types::FromSql` is not satisfied
+   --> crates/layerfs-storage/tests/support/memory_engines.rs:307:36
+    |
+307 |                 record_number: row.get(5)?,
+    |                                    ^^^ the trait `rusqlite::types::FromSql` is not implemented for `usize`
+    |
+    = help: the following other types implement trait `rusqlite::types::FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `usize: rusqlite::types::FromSql` is not satisfied
+   --> crates/layerfs-storage/tests/support/memory_engines.rs:318:28
+    |
+318 |                 count: row.get(1)?,
+    |                            ^^^ the trait `rusqlite::types::FromSql` is not implemented for `usize`
+    |
+    = help: the following other types implement trait `rusqlite::types::FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `usize: rusqlite::types::FromSql` is not satisfied
+   --> crates/layerfs-storage/tests/support/memory_engines.rs:320:35
+    |
+320 |                 group_number: row.get(3)?,
+    |                                   ^^^ the trait `rusqlite::types::FromSql` is not implemented for `usize`
+    |
+    = help: the following other types implement trait `rusqlite::types::FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `layerfs-storage` (test "port_read") due to 5 previous errors
+warning: build failed, waiting for other jobs to finish...
+error[E0004]: non-exhaustive patterns: `layerfs_storage::StorageError::Object(_)` and `layerfs_storage::StorageError::Metadata(_)` not covered
+  --> crates/layerfs-server/src/service/error.rs:22:11
+   |
+22 |     match e {
+   |           ^ patterns `layerfs_storage::StorageError::Object(_)` and `layerfs_storage::StorageError::Metadata(_)` not covered
+   |
+note: `layerfs_storage::StorageError` defined here
+  --> /Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage/src/error.rs:14:1
+   |
+14 | pub enum StorageError {
+   | ^^^^^^^^^^^^^^^^^^^^^
+...
+20 |     Object(crate::port::ObjectError),
+   |     ------ not covered
+21 |     /// The metadata port refused or returned malformed data.
+22 |     Metadata(crate::port::MetadataError),
+   |     -------- not covered
+   = note: the matched value is of type `layerfs_storage::StorageError`
+help: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern, a match arm with multiple or-patterns as shown, or multiple match arms
+   |
+45 ~         S::Aborted => Code::InvalidInput.into(),
+46 ~         layerfs_storage::StorageError::Object(_) | layerfs_storage::StorageError::Metadata(_) => todo!(),
+   |
+
+For more information about this error, try `rustc --explain E0004`.
+error: could not compile `layerfs-server` (lib) due to 1 previous error
+error: could not compile `layerfs-server` (lib test) due to 1 previous error

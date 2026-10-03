@@ -26,6 +26,8 @@ pub trait Source {
     fn window_start(&self) -> StorageResult<u32>;
     /// At most 8,192 persisted signatures, in insertion order.
     fn signatures(&self) -> StorageResult<Vec<SignatureRow>>;
+    /// Records a real cache consult for operation-count diagnostics.
+    fn note_pack_cache_hit(&self) {}
     /// Stores the bounded signature changes in the caller's transaction.
     fn write_signatures(&self, rows: &[SignatureRow]) -> StorageResult<usize>;
 }

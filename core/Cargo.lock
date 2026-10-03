@@ -585,6 +585,7 @@ dependencies = [
  "layerfs-telemetry",
  "nix",
  "rusqlite",
+ "sha2",
  "zstd-sys",
 ]
 

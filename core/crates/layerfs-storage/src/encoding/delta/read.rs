@@ -508,6 +508,8 @@ fn pack_of<'b>(
         }
         packs.insert(pack_id, bytes);
         fetched = true;
+    } else {
+        connection.note_pack_cache_hit();
     }
     let bytes = packs
         .get(&pack_id)
