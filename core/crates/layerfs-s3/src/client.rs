@@ -1,0 +1,174 @@
+//! Three C2 calls, conditional creation and terminal transport uncertainty.
+use crate::{
+    config::S3Config,
+    counters::S3Diagnostics,
+    http::{parse_length, Http, Reply},
+    sign,
+};
+use layerfs_storage::port::{ByteRange, ObjectError, ObjectKey, ObjectStore, Put};
+use std::sync::Mutex;
+struct Connection {
+    http: Option<Http>,
+    counts: S3Diagnostics,
+    completed_close: bool,
+    prior: S3Diagnostics,
+}
+/// MinIO client with one active connection. Failed requests are terminal.
+/// A new operation may connect once after a prior acknowledged normal close.
+pub struct S3Objects {
+    config: S3Config,
+    connection: Mutex<Connection>,
+}
+impl S3Objects {
+    /// Connects once to the existing service and namespace. No bucket/bootstrap I/O.
+    pub fn connect(config: S3Config) -> Result<Self, ObjectError> {
+        config.validate()?;
+        let http = Http::connect(&config)?;
+        let counts = http.diagnostics();
+        Ok(Self {
+            config,
+            connection: Mutex::new(Connection {
+                http: Some(http),
+                counts,
+                completed_close: false,
+                prior: S3Diagnostics::default(),
+            }),
+        })
+    }
+    /// Actual request and byte counts for this client, labelled diagnostics.
+    pub fn diagnostics(&self) -> Result<S3Diagnostics, ObjectError> {
+        Ok(self
+            .connection
+            .lock()
+            .map_err(|_| ObjectError::Uncertain)?
+            .counts)
+    }
+    fn request(
+        &self,
+        method: &str,
+        key: ObjectKey,
+        body: &[u8],
+        extra: Option<(&str, String)>,
+    ) -> Result<Reply, ObjectError> {
+        let (_, _, host) = self.config.address()?;
+        let path = self.config.path(key);
+        let payload = if method == "PUT" {
+            *key.as_bytes()
+        } else {
+            *ObjectKey::for_bytes(&[]).as_bytes()
+        };
+        let headers = sign::headers(&self.config, method, &path, &host, payload, extra)?;
+        let mut connection = self.connection.lock().map_err(|_| ObjectError::Uncertain)?;
+        if connection.http.is_none() {
+            if !connection.completed_close {
+                return Err(ObjectError::Uncertain);
+            }
+            // This is the first connection of a new operation after a successful
+            // response explicitly closed the prior one. Failure never enters here.
+            connection.completed_close = false;
+            connection.http = Some(Http::connect(&self.config)?);
+        }
+        let http = connection.http.as_mut().ok_or(ObjectError::Uncertain)?;
+        let result = http.request(&self.config, method, &path, &headers, body);
+        let counts = http.diagnostics();
+        connection.counts = connection.prior;
+        connection.counts.accumulate(counts);
+        if matches!(result, Err(ObjectError::Uncertain | ObjectError::Malformed)) {
+            connection.http = None;
+            connection.completed_close = false;
+        } else if let Ok(reply) = &result {
+            if reply.close {
+                connection.http = None;
+                connection.completed_close =
+                    (200..300).contains(&reply.status) || reply.status == 412;
+                connection.prior = connection.counts;
+            }
+        }
+        result
+    }
+}
+impl ObjectStore for S3Objects {
+    fn put_if_absent(&self, key: ObjectKey, body: &[u8]) -> Result<Put, ObjectError> {
+        if body.len() > self.config.max_body_bytes || ObjectKey::for_bytes(body) != key {
+            return Err(ObjectError::Malformed);
+        }
+        let reply = self.request("PUT", key, body, Some(("if-none-match", "*".to_owned())))?;
+        match reply.status {
+            200 | 201 => Ok(Put::Created),
+            412 => Ok(Put::AlreadyPresent),
+            status => Err(ObjectError::Refused { status }),
+        }
+    }
+    fn read(
+        &self,
+        key: ObjectKey,
+        range: Option<ByteRange>,
+        out: &mut Vec<u8>,
+    ) -> Result<(), ObjectError> {
+        out.clear();
+        let extra = range
+            .map(|range| {
+                let end = range
+                    .start
+                    .checked_add(range.length)
+                    .and_then(|n| n.checked_sub(1))
+                    .filter(|_| {
+                        range.length > 0 && range.length <= self.config.max_body_bytes as u64
+                    })
+                    .ok_or(ObjectError::Malformed)?;
+                Ok::<_, ObjectError>(("range", format!("bytes={}-{}", range.start, end)))
+            })
+            .transpose()?;
+        let reply = self.request("GET", key, &[], extra)?;
+        match reply.status {
+            404 => return Err(ObjectError::Missing),
+            200 if range.is_none() => {}
+            206 if range.is_some() => {}
+            status => return Err(ObjectError::Refused { status }),
+        }
+        let length = reply
+            .headers
+            .get("content-length")
+            .map(|value| parse_length(value))
+            .transpose()?;
+        if length.is_some_and(|length| length != reply.body.len()) {
+            return Err(ObjectError::Malformed);
+        }
+        if let Some(range) = range {
+            if reply.body.len() as u64 != range.length {
+                return Err(ObjectError::Malformed);
+            }
+            let expected = format!("bytes {}-{}/", range.start, range.start + range.length - 1);
+            let total = reply
+                .headers
+                .get("content-range")
+                .and_then(|value| value.strip_prefix(&expected))
+                .ok_or(ObjectError::Malformed)?;
+            let total = parse_length(total)?;
+            if (total as u64) < range.start + range.length {
+                return Err(ObjectError::Malformed);
+            }
+        }
+        *out = reply.body;
+        Ok(())
+    }
+    fn head(&self, key: ObjectKey) -> Result<Option<u64>, ObjectError> {
+        let reply = self.request("HEAD", key, &[], None)?;
+        match reply.status {
+            404 => Ok(None),
+            200 => {
+                let length = parse_length(
+                    reply
+                        .headers
+                        .get("content-length")
+                        .ok_or(ObjectError::Malformed)?,
+                )?;
+                if length > self.config.max_body_bytes {
+                    return Err(ObjectError::Malformed);
+                }
+                Ok(Some(length as u64))
+            }
+            status => Err(ObjectError::Refused { status }),
+        }
+    }
+}

@@ -1,0 +1,28 @@
+   Compiling layerfs-s3 v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-s3)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.13s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_s3-6b4a39e77e67cd61)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/minio_contract.rs (core/target/debug/deps/minio_contract-52feed9fa90af846)
+
+running 6 tests
+test bad_credentials_are_a_definite_refusal_without_resend ... ok
+test missing_is_a_single_request_and_head_reports_absence ... ok
+test a_persisted_put_with_a_dropped_reply_is_uncertain_and_never_reconnected ... ok
+test a_malformed_real_reply_is_refused_once_with_no_alternate_request ... ok
+DIAGNOSTIC conditional-create S3Diagnostics { connections: 2, requests: 5, interim_responses: 1, puts: 2, gets: 2, heads: 1, wire_sent: 34895, wire_received: 35955, body_sent: 32000, body_received: 33078 }
+test conditional_create_reads_head_and_exact_ranges_on_the_pinned_service ... ok
+DIAGNOSTIC opaque-body size=262144 S3Diagnostics { connections: 1, requests: 3, interim_responses: 1, puts: 1, gets: 1, heads: 1, wire_sent: 263863, wire_received: 263802, body_sent: 262144, body_received: 262144 }
+DIAGNOSTIC opaque-body size=16777216 S3Diagnostics { connections: 1, requests: 3, interim_responses: 1, puts: 1, gets: 1, heads: 1, wire_sent: 16778937, wire_received: 16778878, body_sent: 16777216, body_received: 16777216 }
+test labelled_body_size_diagnostics_have_no_timer_or_repeated_sample ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+   Doc-tests layerfs_s3
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

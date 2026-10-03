@@ -308,8 +308,11 @@ core/crates/
 │  ├─ sql/
 │  │  ├─ storage.sql                      store_policy, pack, object, metadata_value_group,
 │  │  │                                   content_signature, pack id sequence
-│  │  └─ history.sql                      history_meta, layer_stack, layer, commit, branch,
-│  │                                      workspace_stage, scope_allocator
+│  │  ├─ history.sql                      history_meta, layer_stack, layer, commit, branch,
+│  │  │                                   workspace_stage, scope_allocator
+│  │  └─ queries/
+│  │     ├─ storage/                      operational policy/locate/read_packs/value_groups/signatures/reserve/register SQL
+│  │     └─ history/                      operational SQL for HistoryCatalog methods and necessary variants
 │  ├─ src/
 │  │  ├─ lib.rs                           declarations
 │  │  ├─ config.rs                        local/cloud endpoint, database, schema, credentials, TLS, timeouts
@@ -608,6 +611,39 @@ further questions. Run that single case once with `--exact --ignored` at this
 source identity to close the M1 gap; do not alter the annotation, cluster 2 source
 or historical receipts. It passed (1 test, 0 failed, 0 ignored). This is correctness
 verification, not a timed sample or permission to repeat an unchanged benchmark.
+
+**Step 5 transport correction (2026-10-03).** The live pinned MinIO accepts
+`If-None-Match: *` and returns 412 without accepting the request body when the key
+exists. Its acknowledged response explicitly closes that HTTP connection. The
+first implementation correctly returned AlreadyPresent but the next independent
+HEAD found the closed connection. Keep at most one active persistent connection;
+when a successful completed operation explicitly announces a normal close, the
+next operation opens its first connection once. This is a new operation, not a
+second attempt for the completed request. Failed/malformed requests poison the
+client; they never reopen, resend or try another address. Counts include every
+successfully opened connection. Each operation still has one request attempt.
+
+Conditional PUT uses HTTP `Expect: 100-continue`, so a definitive refusal can be
+read before a large body is sent. Interim 100 replies are counted separately from
+HTTP requests; they are protocol framing within the one attempt. The absolute
+wire deadline covers header/interim/body/final processing. The selected local
+profile is plain HTTP over one chosen IPv4 address, with two-second connection
+and request bounds and the existing C2 singleton-body ceiling. HTTPS/alternate
+profiles are explicitly unsupported; no transport fallback. The production
+signer uses the already-locked sha2 and its own standard HMAC, as approved in Q2.
+Primary protocol references: [conditional writes](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html)
+and [SigV4 header signing](https://docs.aws.amazon.com/AmazonS3/latest/developerguide/sig-v4-header-based-auth.html).
+Actual MinIO acceptance is established by the live tests, not inferred from those
+AWS documents. Request-count diagnostics have no timer or performance claim.
+
+**PostgreSQL query-layout amendment (2026-10-03).** The owner-notified side
+conversation recommends dedicated operational files under
+`layerfs-metadata/sql/queries/{storage,history}/`, alongside the two schema files.
+Adopt that layout. Rust embeds the query files with `include_str!` and owns
+binding, execution, row decoding and error classification. Exact operation/variant
+filenames follow the implementation. All SQL stays in the metadata engine and is
+shipped production source under the same LOC/999-line guard. No query-directory
+scaffold is added before step 6 implements its contents.
 
 **Coexistence.** `layerfs-server` and `layerfs-sdk` are the only product
 consumers of C2's `Store` and C5's SQLite provider (`grep` of every

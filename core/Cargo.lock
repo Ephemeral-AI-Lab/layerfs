@@ -536,6 +536,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-s3"
+version = "0.1.6"
+dependencies = [
+ "layerfs-storage",
+ "sha2",
+]
+
+[[package]]
 name = "layerfs-sandbox"
 version = "0.1.6"
 dependencies = [

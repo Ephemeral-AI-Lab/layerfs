@@ -448,3 +448,34 @@ usually produces one write of the whole pack.
 - **The FFI inventory is a reading, not an audit.** §18.2.4 lists what the module
   imports and states why two entries matter. It is not a memory-safety argument;
   that belongs to the boundary guard and to semantic review.
+
+
+### #302 MinIO engine boundary (2026-10-03)
+
+Described against parent `8730ff801` and the step 5 implementation.
+`layerfs-s3` owns opaque immutable object I/O through C2's `ObjectStore`.
+It has no canonical codec, history or application dependency. `config.rs`
+validates the explicit local HTTP/IPv4 profile, namespace, credentials and bounds;
+`sign.rs` constructs a SHA-256 SigV4 request with the approved HMAC implementation;
+`http.rs` handles bounded framing and observed socket bytes; `client.rs` maps the
+three calls to conditional PUT, full/exact-range GET and HEAD.
+
+One persistent connection is active at a time. A wire request has one attempt and
+an absolute two-second default deadline across its partial I/O. PUT uses
+`If-None-Match: *` and `Expect: 100-continue`: an acknowledged refusal can avoid
+sending the body, with interim replies counted separately from requests. A
+successful completed response that explicitly closes the connection permits the
+next independent operation to open its first connection. Unknown/malformed
+responses permanently poison that client; no failed request reconnects or resends.
+A chosen address is not replaced after failure. Framing supports declared lengths
+and bounded chunked replies, and opaque bodies use C2's existing singleton ceiling.
+Configuration Debug redacts credentials; bootstrap and bucket creation remain
+outside the engine.
+
+Conditional creation returns Created/AlreadyPresent; absence, definite HTTP
+refusal, malformed protocol and unknown acknowledgement preserve the four port
+classes. Diagnostics count actual requests, interim replies, connections and
+socket/entity bytes. They are not a timing or admission claim. Service tests use
+external response interception to drop an acknowledged PUT reply and damage a
+real GET header; product source contains no fault hook or alternate path.
+The complete sealed bytes supplied by C2 are unchanged by this transport.

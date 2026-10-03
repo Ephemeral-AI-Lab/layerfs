@@ -1,0 +1,70 @@
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-telemetry)
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-content)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-api-core v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-api/core)
+    Checking layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-sandbox)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-history)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-server)
+    Checking layerfs-s3 v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-s3)
+error: unnecessary `>= y + 1` or `x - 1 >=`
+   --> crates/layerfs-s3/src/client.rs:127:16
+    |
+127 |             if total as u64 <= range.start + range.length - 1 {
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: change it to: `total as u64 < range.start + range.length`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#int_plus_one
+    = note: `-D clippy::int-plus-one` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::int_plus_one)]`
+
+error: use of `format!` to build up a string from an iterator
+   --> crates/layerfs-s3/src/sign.rs:105:21
+    |
+105 |       let canonical = values
+    |  _____________________^
+106 | |         .iter()
+107 | |         .map(|(name, value)| format!("{name}:{value}\n"))
+108 | |         .collect::<String>();
+    | |____________________________^
+    |
+help: call `fold` instead
+   --> crates/layerfs-s3/src/sign.rs:107:10
+    |
+107 |         .map(|(name, value)| format!("{name}:{value}\n"))
+    |          ^^^
+help: ... and use the `write!` macro here
+   --> crates/layerfs-s3/src/sign.rs:107:30
+    |
+107 |         .map(|(name, value)| format!("{name}:{value}\n"))
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: this can be written more efficiently by appending to a `String` directly
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#format_collect
+    = note: `-D clippy::format-collect` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::format_collect)]`
+
+error: use of `format!` to build up a string from an iterator
+   --> crates/layerfs-s3/src/sign.rs:131:22
+    |
+131 |       let mut output = values
+    |  ______________________^
+132 | |         .iter()
+133 | |         .map(|(name, value)| format!("{name}: {value}\r\n"))
+134 | |         .collect::<String>();
+    | |____________________________^
+    |
+help: call `fold` instead
+   --> crates/layerfs-s3/src/sign.rs:133:10
+    |
+133 |         .map(|(name, value)| format!("{name}: {value}\r\n"))
+    |          ^^^
+help: ... and use the `write!` macro here
+   --> crates/layerfs-s3/src/sign.rs:133:30
+    |
+133 |         .map(|(name, value)| format!("{name}: {value}\r\n"))
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: this can be written more efficiently by appending to a `String` directly
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#format_collect
+
+error: could not compile `layerfs-s3` (lib) due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...
