@@ -1374,3 +1374,25 @@ still including freshcreate/import/checkpoint/close. External child/envelope
 remain reported/bounded. This tightens qualification after v1 startup hid a44%
 product regression; old v1PASS/FAIL rows unchanged. History storage ceilings
 retain their original strict< semantics. History deadline/driver remain pending.
+
+## 2026-10-04 — transaction treatment: all four Init tiers FAIL retained
+
+One matchedv2 pair per100/1000/10000/100000 at75a. Product timesreference/current
+41570583/95885000,130144458/227274084,1590900959/2614821875,
+5518847875/9201830208ns. All roots/proof/cache/cleanup PASS; all speed FAIL.
+Final allocations7372800/5251072,23101440/20557824,314605568/314642432,
+518029312/520343552B: large-tier allocation FAIL.100000 envelopes19301947333/
+21727073917ns exceed15s, nonchild terms13774041458/12512674792ns. Never waive.
+
+Write commits11/20/135/402; commit ns50726958/127525834/1207574352/2783380893.
+Fewer commits15->11/28->20, but no latency win in this window.100000 payload
+acquisition4597 reads/1079610281B plus270179431 batched B needs attribution.
+RSS146800640 vs137887744B; entry/job/path capacities grow with count, no total
+bound claim. Captured EXPLAIN/plans/inventory for all eight retained dbs, hashes
+unchanged, diagnostics populated/warm. All detailed arithmetic and nonpass lines
+inSQLITE-STEP10-TX-TREATMENT.md; rawanalysis/comparison JSON retained.
+
+Next: bounded allocation/publication composition, repeated payload acquisition,
+cold-preconditioning envelope cause and namespace-count qualification; actual
+history driver/proof/deadline still pending. All-seven goal ACTIVE; no unchanged
+arm replay or deadline/worker/buffer/durability relaxation.
