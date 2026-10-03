@@ -135,3 +135,37 @@ fn dropping_unfinished_save_does_not_return_consumed_ids_to_the_unused_tail() {
         .unwrap();
     assert_eq!(rows, distinct);
 }
+
+#[test]
+fn reader_reuses_authenticated_pack_within_one_operation() {
+    let t = support::Temp::new("reader-pack-lifetime");
+    let h = create(&t.join("db"));
+    let storage = Storage::new(h.storage.clone()).unwrap();
+    let o = object(987, 46000);
+    let save = storage.begin_save().unwrap();
+    save.accept(o.clone()).unwrap();
+    save.finish().unwrap();
+    let reader = storage.reader().unwrap();
+    assert_eq!(
+        reader.read_objects(&[o.id()]).unwrap(),
+        vec![o.canonical().to_vec()]
+    );
+    let acquired = storage.diagnostics();
+    assert_eq!(
+        reader.read_objects(&[o.id(), o.id()]).unwrap(),
+        vec![o.canonical().to_vec(); 2]
+    );
+    let reused = storage.diagnostics();
+    assert_eq!(reused.read_packs, acquired.read_packs);
+    assert_eq!(reused.payload_reads, acquired.payload_reads);
+    assert_eq!(reused.pack_read_bytes, acquired.pack_read_bytes);
+    assert_eq!(reused.payload_read_bytes, acquired.payload_read_bytes);
+    // A new operation owns an empty cache and must pay for acquisition again.
+    drop(reader);
+    assert_eq!(
+        storage.reader().unwrap().read_objects(&[o.id()]).unwrap(),
+        vec![o.canonical().to_vec()]
+    );
+    let fresh = storage.diagnostics();
+    assert!(fresh.read_packs + fresh.payload_reads > reused.read_packs + reused.payload_reads);
+}

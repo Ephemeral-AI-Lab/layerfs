@@ -790,3 +790,15 @@ chunk-wide barrier. The same body ownership and byte limits hold; every admitted
 attempt joins before any registration, and failure stops new admission without
 retry or orphan deletion. S3 leases a free member of its existing socket window
 before I/O; ordinary callers exceeding that fixed window wait, not expand it.
+
+
+### Operation-owned immutable pack reuse
+
+This change is based on source fd65493c1. `Reader` retains its authenticated
+sealed-pack map between demands, alongside its existing decode workspace and
+group/pool caches. Acquisitions still pass through the same digest, framing,
+domain and reconstruction checks. The existing aggregate4MiB eviction rule and
+single oversize-pack exception apply; no cache budget is enlarged. A fresh
+Reader starts empty. Published packs are immutable and pack IDs are never reused,
+so retaining an authenticated body within the operation does not reinterpret a
+later publication. Results remain in demand order, including duplicate IDs.

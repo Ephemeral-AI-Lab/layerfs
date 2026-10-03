@@ -19,6 +19,7 @@ pub(crate) struct ReadState {
     workspace: DecompressionWorkspace,
     groups: GroupCache,
     pool: PoolReader,
+    packs: BTreeMap<i64, Vec<u8>>,
 }
 impl ReadState {
     pub(crate) fn new() -> StorageResult<Self> {
@@ -26,6 +27,7 @@ impl ReadState {
             workspace: DecompressionWorkspace::new()?,
             groups: GroupCache::new(),
             pool: PoolReader::new(),
+            packs: BTreeMap::new(),
         })
     }
     pub(crate) fn read(
@@ -63,8 +65,7 @@ impl ReadState {
                 actual: bytes as u64,
             });
         }
-        let mut packs = BTreeMap::new();
-        prefetch::chains(source, &roots, &mut packs, &mut self.workspace)?;
+        prefetch::chains(source, &roots, &mut self.packs, &mut self.workspace)?;
         prefetch::values(
             source,
             &roots,
@@ -80,7 +81,7 @@ impl ReadState {
                 i64::MAX,
                 capacities,
                 BodyCaches {
-                    packs: &mut packs,
+                    packs: &mut self.packs,
                     pool: &mut self.pool,
                 },
                 &mut self.groups,
