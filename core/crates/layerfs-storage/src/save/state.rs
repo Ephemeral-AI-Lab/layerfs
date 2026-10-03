@@ -104,8 +104,16 @@ impl<'a> State<'a> {
             delta: DeltaCounters::default(),
             profile: SaveProfile::default(),
             outcome: WriteOutcome::default(),
-            next_pack: 0,
-            pack_end: 0,
+            next_pack: storage.pack_ids.get().0,
+            pack_end: storage.pack_ids.get().1,
         })
+    }
+}
+
+impl Drop for State<'_> {
+    fn drop(&mut self) {
+        // Only the acknowledged unused tail transfers. Consumed IDs are never
+        // recycled, even if a later publication/operation failed.
+        self.storage.pack_ids.set((self.next_pack, self.pack_end));
     }
 }

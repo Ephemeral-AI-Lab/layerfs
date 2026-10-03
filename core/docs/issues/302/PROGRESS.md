@@ -1347,3 +1347,30 @@ comparison.json underissue302-sqlite-analysis-c80a26567. No resample or warming
 of later timed Stores. Final-row status and all unrun work in
 SQLITE-STEP10-FIRST-PAIRS.md. Finer reference count diagnostic and bounded
 transaction-charge/reservation treatment pending. All-seven goal remainsACTIVE.
+
+## 2026-10-04 — count diagnostics and bounded transaction treatment
+
+Distinct count-driven1000 diagnostics atba7 use existing sealed reference/current
+binaries and external first-party SQLite observer; no PG/MinIO, no speed resample.
+Both root/proof/cold/cleanup PASS, no observer omissions. Reference operational
+classes3542 statements/323375 VM; current whole-lifecycle classes1307/210246.
+Scopes differ explicitly (reference creation outside operation counter); reference
+records detailed timing tree. Raw receipts remain underissue302-sqlite-count1000-
+{baseline,candidate}-ba7a27d02. Plans/inventories and first speed failures retained.
+
+Implement independent canonical/physical4MiB-minus1 charges without added body
+copy or changed wave/row/worker/cache bound. Carry acknowledged unused pack-ID
+range between exclusive saves; consumed IDs never recycle on failure. Demand
+counts actual unfinished groups, preserving worst-case construction coverage.
+New bounds/reuse/abandonment tests and full100/1000 namespace oracle cover it.
+Initial test fixture offered oversized ordinary FileState records, correctly
+rejected by unchanged64KiB bound; corrected to legal46KiB records. The next
+assertion incorrectly omitted the final-open-group publication; preserve that
+failure and source-grounded correction. No gate or product bound was changed
+for a test. Final proof result is retained separately.
+
+Before this treatment's samples, Initv2 compares the complete product clock,
+still including freshcreate/import/checkpoint/close. External child/envelope
+remain reported/bounded. This tightens qualification after v1 startup hid a44%
+product regression; old v1PASS/FAIL rows unchanged. History storage ceilings
+retain their original strict< semantics. History deadline/driver remain pending.

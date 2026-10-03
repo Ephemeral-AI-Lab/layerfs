@@ -25,7 +25,7 @@ def dewarm_tree(root):
             'method':'msync-invalidate followed by whole-input mincore; no payload reads',
             'scope':'regular-file content pages; filesystem metadata residency not directly observed'}
 
-def gate(candidate,baseline,storage_limit):
+def gate(candidate,baseline,storage_limit,exclusive_storage=False):
     for row in (candidate,baseline):
         if row.get('cache_status')!='PASS': return 'INELIGIBLE'
         if row.get('status')!='COMPLETE' or row.get('verification_status')!='PASS' or row.get('cleanup',{}).get('status')!='PASS': return 'INCOMPLETE'
@@ -33,7 +33,8 @@ def gate(candidate,baseline,storage_limit):
         if type(row.get('comparison_ns')) is not int or row['comparison_ns']<=0:return 'INCOMPLETE'
     if 10*candidate['comparison_ns']>11*baseline['comparison_ns']:return 'FAIL'
     if storage_limit is None or type(candidate.get('storage_bytes')) is not int:return 'INCOMPLETE'
-    return 'PASS' if candidate['storage_bytes']<=storage_limit else 'FAIL'
+    fits=candidate['storage_bytes']<storage_limit if exclusive_storage else candidate['storage_bytes']<=storage_limit
+    return 'PASS' if fits else 'FAIL'
 
 def allocations(paths):
     items=[]

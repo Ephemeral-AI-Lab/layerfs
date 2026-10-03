@@ -62,7 +62,7 @@ impl State<'_> {
         drop(membership);
         let admission = self.storage.work.span(super::Stage::Admission);
         // One possible payload pack per object, plus one possible pooled-value
-        // pack per inode leaf, and the five preceding open lane groups. Keep
+        // pack per inode leaf, and the actual preceding open/queued groups. Keep
         // the original allocation block; only the reuse test needs this bound.
         let pooled = objects
             .iter()
@@ -72,7 +72,7 @@ impl State<'_> {
             + pooled
                 * layerfs_content::inode_leaf::MAXIMUM_LEAF_ROWS
                     .div_ceil(crate::policy::VALUES_PER_GROUP)
-            + 5;
+            + self.packer.finish_pack_bound();
         let mut reserved = false;
         let mut prepared = BTreeMap::<ObjectId, usize>::new();
         for (index, object) in objects.iter().enumerate() {

@@ -115,7 +115,8 @@ impl State<'_> {
         }
         let limits = self.storage.capacities();
         let mut batch = Publication::default();
-        let mut bytes = 0_u64;
+        let mut canonical_bytes = 0_u64;
+        let mut physical_bytes = 0_u64;
         let mut packs = BTreeSet::new();
         let pool_packs: Vec<_> = self
             .packer
@@ -129,13 +130,14 @@ impl State<'_> {
             let size = pack.body.len() as u64;
             let rows = pack.value_groups.len();
             if !batch.packs.is_empty()
-                && (bytes.saturating_add(size) > limits.transaction_bytes
+                && (physical_bytes.saturating_add(size) > limits.transaction_physical_bytes
                     || batch.packs.len() + batch.value_groups.len() + rows + 1
                         > limits.transaction_rows as usize)
             {
                 self.acknowledge(&mut batch, &members)?;
                 batch = Publication::default();
-                bytes = 0;
+                canonical_bytes = 0;
+                physical_bytes = 0;
             }
             let pack = &self.packer.ready[index];
             batch.packs.push(PublishedPack {
@@ -143,7 +145,7 @@ impl State<'_> {
                 body: pack.body.clone(),
             });
             batch.value_groups.extend_from_slice(&pack.value_groups);
-            bytes += size;
+            physical_bytes += size;
             packs.insert(pack.info.pack_id);
         }
         for id in order {
@@ -157,9 +159,11 @@ impl State<'_> {
             let info = pack.info;
             let added_pack = !packs.contains(&location.pack_id);
             let body_bytes = if added_pack { info.length as u64 } else { 0 };
-            let cost = location.canonical_length as u64 + body_bytes;
+            let canonical_cost = location.canonical_length as u64;
             if (!batch.objects.is_empty() || !batch.packs.is_empty())
-                && (bytes.saturating_add(cost) > limits.transaction_bytes
+                && (canonical_bytes.saturating_add(canonical_cost) > limits.transaction_bytes
+                    || physical_bytes.saturating_add(body_bytes)
+                        > limits.transaction_physical_bytes
                     || batch.objects.len()
                         + batch.packs.len()
                         + batch.value_groups.len()
@@ -169,7 +173,8 @@ impl State<'_> {
             {
                 self.acknowledge(&mut batch, &members)?;
                 batch = Publication::default();
-                bytes = 0;
+                canonical_bytes = 0;
+                physical_bytes = 0;
             }
             if added_pack {
                 let pack = self
@@ -184,7 +189,8 @@ impl State<'_> {
                 });
                 packs.insert(location.pack_id);
             }
-            bytes += cost;
+            canonical_bytes += canonical_cost;
+            physical_bytes += body_bytes;
             batch.objects.push(*location);
         }
         let pending_signatures: Vec<_> = self.signatures.borrow().values().copied().collect();

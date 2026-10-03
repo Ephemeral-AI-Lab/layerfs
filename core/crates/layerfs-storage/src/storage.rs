@@ -10,7 +10,10 @@ use crate::{
     port::PackPersistence,
     read::{Diagnostics, Fetch, Reader},
 };
-use std::{cell::RefCell, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    sync::Arc,
+};
 
 /// C2's immutable-body path, independent of engines and history.
 pub struct Storage {
@@ -20,6 +23,7 @@ pub struct Storage {
     capacities: StorageCapacities,
     pub(crate) candidates: RefCell<Candidates>,
     pub(crate) pool_index: RefCell<PoolIndex>,
+    pub(crate) pack_ids: Cell<(i64, i64)>,
 }
 impl Storage {
     /// Opens one handle with an acknowledged persisted policy. No service bootstrap.
@@ -35,6 +39,7 @@ impl Storage {
             capacities,
             candidates: RefCell::new(Candidates::new()?),
             pool_index: RefCell::new(PoolIndex::new()),
+            pack_ids: Cell::new((0, 0)),
         })
     }
     /// Persisted, validated storage policy.

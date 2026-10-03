@@ -60,6 +60,8 @@ pub const WAVE_CANONICAL_BYTES_LIMIT: u64 = TRANSACTION_CANONICAL_BYTES_LIMIT;
 pub const TRANSACTION_ROW_LIMIT: u64 = 8_191;
 /// Canonical bytes submitted in one open transaction.
 pub const TRANSACTION_CANONICAL_BYTES_LIMIT: u64 = 4 * 1024 * 1024 - 1;
+/// Sealed physical bytes per ordinary atomic publication, charged separately.
+pub const TRANSACTION_PHYSICAL_BYTES_LIMIT: u64 = TRANSACTION_CANONICAL_BYTES_LIMIT;
 /// Canonical bytes one group may hold before its lane seals it.
 ///
 /// The group's own bound, and deliberately **not** the wave's. A group is a
@@ -344,6 +346,8 @@ pub struct StorageCapacities {
     pub transaction_rows: u64,
     /// Canonical bytes per open transaction.
     pub transaction_bytes: u64,
+    /// Sealed physical bytes per open publication; no second body copy is owned.
+    pub transaction_physical_bytes: u64,
     /// Objects one authenticated read wave may demand.
     ///
     /// A read wave is one grouped query with one decode workspace, so its size is
@@ -377,6 +381,7 @@ impl StorageCapacities {
             batch_bytes: WAVE_CANONICAL_BYTES_LIMIT,
             transaction_rows: TRANSACTION_ROW_LIMIT,
             transaction_bytes: TRANSACTION_CANONICAL_BYTES_LIMIT,
+            transaction_physical_bytes: TRANSACTION_PHYSICAL_BYTES_LIMIT,
             read_objects: READ_OBJECT_LIMIT,
         })
     }

@@ -18,6 +18,7 @@ class SqliteStep10(unittest.TestCase):
         self.assertEqual(c.gate(self.row(110),self.row(100),100),'PASS')
         self.assertEqual(c.gate(self.row(111),self.row(100),100),'FAIL')
         self.assertEqual(c.gate(self.row(110,101),self.row(100),100),'FAIL')
+        self.assertEqual(c.gate(self.row(110),self.row(100),100,exclusive_storage=True),'FAIL')
         self.assertEqual(c.gate(self.row(110),self.row(100),None),'INCOMPLETE')
         row=self.row(99);row['cache_status']='INELIGIBLE';self.assertEqual(c.gate(row,self.row(100),100),'INELIGIBLE')
         row=self.row(99);row['verification_status']='FAIL';self.assertEqual(c.gate(row,self.row(100),100),'INCOMPLETE')

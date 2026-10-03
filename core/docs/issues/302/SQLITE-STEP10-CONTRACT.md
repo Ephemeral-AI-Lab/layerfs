@@ -10,13 +10,13 @@ NOT_RUN or a small-case PASS is not terminal success.
 
 | Case ID | Workload | Complete performance command | Independent proof | Allocation gate |
 | --- | --- | --- | --- | --- |
-| phase7-sqlite-init-100-v1 | namespace-100-compact-v3, 100 files /5,000,000 logical B | <=15s | <=9.5s | final SQLite total<=matched final Phase4.5 total |
-| phase7-sqlite-init-1000-v1 | namespace-1000-compact-v3,1000 files /20,000,000B | <=15s | <=9.5s | same |
-| phase7-sqlite-init-10000-v1 | namespace-10000,10000 files /300,000,000B | <=15s | <=9.5s | same |
-| phase7-sqlite-init-100000-v1 | namespace-100000,100000 files /500,000,000B | <=15s | <=9.5s | same |
-| phase7-sqlite-history-stride10-v1 | 17 retained states, original producer/corpus | PENDING: reconcile original60s with current15/25s rule | <=9.5s; actual bounded proof binding pending | <=54,278,964B |
-| phase7-sqlite-history-stride3-v1 | 53 retained states | PENDING: original170s | <=9.5s; binding pending | <=70,427,034B |
-| phase7-sqlite-history-stride1-v1 | 157 retained states | PENDING: original170s | <=9.5s; binding pending | <=92,342,273B |
+| phase7-sqlite-init-100-v2 | namespace-100-compact-v3, 100 files /5,000,000 logical B | <=15s | <=9.5s | final SQLite total<=matched final Phase4.5 total |
+| phase7-sqlite-init-1000-v2 | namespace-1000-compact-v3,1000 files /20,000,000B | <=15s | <=9.5s | same |
+| phase7-sqlite-init-10000-v2 | namespace-10000,10000 files /300,000,000B | <=15s | <=9.5s | same |
+| phase7-sqlite-init-100000-v2 | namespace-100000,100000 files /500,000,000B | <=15s | <=9.5s | same |
+| phase7-sqlite-history-stride10-v1 | 17 retained states, original producer/corpus | PENDING: reconcile original60s with current15/25s rule | <=9.5s; actual bounded proof binding pending | <54,278,964B |
+| phase7-sqlite-history-stride3-v1 | 53 retained states | PENDING: original170s | <=9.5s; binding pending | <70,427,034B |
+| phase7-sqlite-history-stride1-v1 | 157 retained states | PENDING: original170s | <=9.5s; binding pending | <92,342,273B |
 
 Competitive time per required case: **10*candidate_ns<=11*baseline_ns**.
 This is the complete total 10% margin, not a second discretionary waiver.
@@ -29,7 +29,7 @@ owner direction; unrun/over-budget work cannot pass.
 
 ## Init comparison scope
 
-The comparison is external measured-child launch-to-exit, including fresh
+The new v2 comparison is the driver's complete-product clock, including fresh
 Store database creation/opening, the real namespace import, required final
 checkpoint and final connection close. All candidate WAL/FULL/fullfsync work
 is inside the measured child. The phase4.5 arm runs unmodified product at
@@ -102,3 +102,22 @@ parallel wall spans overlap. If extra execution is required, freeze a labelled
 count-driven cause diagnostic, not another unchanged-arm speed sample. Case
 failures stay FAIL; required admission/proof/accounting work remains incomplete
 until actually satisfied.
+
+## Prospective v2 scope correction and bounded transaction treatment
+
+The v1 external100 PASS masks a44% product regression behind first-execution
+startup. Keep that row/status intact; do not claim competitive product speed.
+Before the changed bounded treatment, v2 now compares the same complete-product
+clock already captured by both drivers, from before database creation until
+after final checkpoint/close. Required work stays inside; process launch/exit
+and complete command remain separately reported and bounded. This is a tighter
+new criterion/identity, not subtraction or relabeling of v1 data.
+
+The treatment fixes independent canonical and sealed-physical charges at the
+same4MiB-minus1 limits, shared Arc body ownership, original8191-row bound and
+singleton exception. No queue/cache/worker/buffer/durability limit increases.
+A bounded unit need not add two representations of the same bytes into a
+canonical-only charge. Unused acknowledged pack-ID tails transfer between saves
+of one exclusive Storage handle; consumed IDs never recycle on failure. Required
+reservation demand uses actual preceding groups, without lowering construction
+bounds. Unknown/malformed unacknowledged reservations are never inferred.

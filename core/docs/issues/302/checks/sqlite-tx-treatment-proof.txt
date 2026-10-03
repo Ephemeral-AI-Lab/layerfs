@@ -1,0 +1,32 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-project)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.70s
+     Running tests/sqlite_transaction_units.rs (core/target/debug/deps/sqlite_transaction_units-b2df721b5db1e8ab)
+
+running 3 tests
+test canonical_and_shared_physical_bytes_are_bounded_independently_in_one_ack ... FAILED
+test unused_pack_ids_transfer_across_saves_without_recycling_used_ids ... ok
+test dropping_unfinished_save_does_not_return_consumed_ids_to_the_unused_tail ... FAILED
+
+failures:
+
+---- canonical_and_shared_physical_bytes_are_bounded_independently_in_one_ack stdout ----
+
+thread 'canonical_and_shared_physical_bytes_are_bounded_independently_in_one_ack' panicked at crates/layerfs-persistence/tests/sqlite_transaction_units.rs:46:30:
+called `Result::unwrap()` on an `Err` value: CapacityExceeded { what: "owner.record_body", limit: 65536, actual: 1400022 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- dropping_unfinished_save_does_not_return_consumed_ids_to_the_unused_tail stdout ----
+
+thread 'dropping_unfinished_save_does_not_return_consumed_ids_to_the_unused_tail' panicked at crates/layerfs-persistence/tests/sqlite_transaction_units.rs:113:41:
+called `Result::unwrap()` on an `Err` value: CapacityExceeded { what: "owner.record_body", limit: 65536, actual: 1400022 }
+
+
+failures:
+    canonical_and_shared_physical_bytes_are_bounded_independently_in_one_ack
+    dropping_unfinished_save_does_not_return_consumed_ids_to_the_unused_tail
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+error: test failed, to rerun pass `-p layerfs-persistence --test sqlite_transaction_units`

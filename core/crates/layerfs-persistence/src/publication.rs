@@ -18,18 +18,25 @@ pub(crate) fn validate(batch: &Publication) -> Result<(), PersistenceError> {
     if count > policy::TRANSACTION_ROW_LIMIT as usize {
         return Err(PersistenceError::Malformed);
     }
-    let bytes = batch
+    let physical_bytes = batch
         .packs
         .iter()
-        .map(|row| &row.body)
-        .map(|body| body.len())
-        .chain(batch.objects.iter().map(|row| row.canonical_length))
+        .map(|row| row.body.len())
+        .try_fold(0usize, |total, n| total.checked_add(n))
+        .ok_or(PersistenceError::Malformed)?;
+    let canonical_bytes = batch
+        .objects
+        .iter()
+        .map(|row| row.canonical_length)
         .try_fold(0usize, |total, n| total.checked_add(n))
         .ok_or(PersistenceError::Malformed)?;
     let singleton = batch.objects.len() == 1
         && batch.packs.len() == 1
         && batch.packs[0].info.domain == PackDomain::Payload;
-    if bytes > policy::TRANSACTION_CANONICAL_BYTES_LIMIT as usize && !singleton {
+    if (canonical_bytes > policy::TRANSACTION_CANONICAL_BYTES_LIMIT as usize
+        || physical_bytes > policy::TRANSACTION_PHYSICAL_BYTES_LIMIT as usize)
+        && !singleton
+    {
         return Err(PersistenceError::Malformed);
     }
     let mut packs = BTreeSet::new();

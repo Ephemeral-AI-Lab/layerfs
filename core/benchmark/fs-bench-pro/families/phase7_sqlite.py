@@ -14,7 +14,7 @@ class Case:
     command_budget_ns:int|None
     verification_budget_ns:int=9_500_000_000
 CASES={c.id:c for c in (
-    *(Case(f'phase7-sqlite-init-{n}-v1',f.id,None,None,15_000_000_000) for n,f in zip((100,1000,10000,100000),init.CASES.values())),
+    *(Case(f'phase7-sqlite-init-{n}-v2',f.id,None,None,15_000_000_000) for n,f in zip((100,1000,10000,100000),init.CASES.values())),
     Case('phase7-sqlite-history-stride10-v1',None,17,54_278_964,None),
     Case('phase7-sqlite-history-stride3-v1',None,53,70_427_034,None),
     Case('phase7-sqlite-history-stride1-v1',None,157,92_342_273,None),
@@ -85,7 +85,7 @@ def run(selection,output,arm,baseline_root,common):
     if arm=='baseline' and (not root.is_relative_to(common.ROOT/'target/phase7-baseline') or subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()!=BASE or subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True)):
         raise ValueError('reference requires clean pinned owned checkout')
     out=common.owned(output);out.mkdir(parents=True)
-    record={'schema':'phase7-sqlite-step10-v1','case':case.id,'arm':arm,'status':'NOT_RUN','sample_count':0,'verification_status':'NOT_RUN','cache_status':'INCOMPLETE','cleanup':{'status':'NOT_RUN'},'comparison_scope':'complete child launch-to-exit, fresh database create/open, real Init, required checkpoint and final close','margin_arithmetic':'10*candidate_ns<=11*baseline_ns','cache_contract':contract.CACHE,'profile':contract.PROFILE if arm=='candidate' else 'Phase4.5 MEMORY/OFF disclosed','command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'construction_workers':4,'environment_workers':1,'required_case_ids':REQUIRED,'allocation_rule':INIT_ALLOCATION_RULE}
+    record={'schema':'phase7-sqlite-step10-v1','case':case.id,'arm':arm,'status':'NOT_RUN','sample_count':0,'verification_status':'NOT_RUN','cache_status':'INCOMPLETE','cleanup':{'status':'NOT_RUN'},'comparison_scope':'inner complete product clock including fresh database create/open, real Init, required checkpoint and final close; external child wall reported separately','margin_arithmetic':'10*candidate_ns<=11*baseline_ns','cache_contract':contract.CACHE,'profile':contract.PROFILE if arm=='candidate' else 'Phase4.5 MEMORY/OFF disclosed','command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'construction_workers':4,'environment_workers':1,'required_case_ids':REQUIRED,'allocation_rule':INIT_ALLOCATION_RULE}
     locks=[]
     try:
         for p in [common.RESULTS/'phase7-sqlite.lock']+([root/'target/phase7-sqlite.lock'] if arm=='baseline' else []):
@@ -118,7 +118,7 @@ def run(selection,output,arm,baseline_root,common):
         with claim.open('x') as h:h.write(str(out)+'\n')
         perf_start=time.monotonic_ns();record['residency']=contract.dewarm_tree(fixture['source']);record['cache_status']=record['residency']['status']
         if record['cache_status']!='PASS':record['status']='INELIGIBLE';return out
-        sample=invoke(command,out,'driver',case.command_budget_ns,env,root);record['sample_count']=1;record['performance']=sample;record['comparison_ns']=sample['wall_ns']
+        sample=invoke(command,out,'driver',case.command_budget_ns,env,root);record['sample_count']=1;record['performance']=sample;record['comparison_ns']=sample['child'].get('operation_ns') if isinstance(sample['child'],dict) else None
         record['storage']=contract.allocations([db] if arm=='candidate' else [db,history]);record['storage_bytes']=record['storage']['total_bytes'];record['cleanup']={'status':'PASS' if not list(scratch.iterdir()) else 'FAIL','scope':'measured child exited, ordering scratch empty, database evidence retained'};record['command_wall_ns']=time.monotonic_ns()-perf_start
         child=sample['child']
         if sample['exit_code']!=0 or sample['timed_out'] or not isinstance(child,dict) or child.get('status')!='COMPLETE':record['status']='FAIL';return out
