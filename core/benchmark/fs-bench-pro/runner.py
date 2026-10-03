@@ -90,7 +90,7 @@ def identities():
     product += list((CORE / "crates/layerfs-api").glob("*/examples/*.rs"))
     product += list((CORE / "crates/layerfs-api").glob("*/Cargo.toml"))
     product += [CORE / "Cargo.toml", CORE / "Cargo.lock", ROOT / ".cargo/config.toml"]
-    harness = list(HERE.glob("**/*.py"))
+    harness = list(HERE.glob("**/*.py")) + list(HERE.glob("**/*.c"))
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True)

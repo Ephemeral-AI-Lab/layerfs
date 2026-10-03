@@ -4,6 +4,7 @@ from pathlib import Path
 import fcntl,hashlib,json,os,resource,shutil,subprocess,time,threading
 from families import init_namespace as init
 from shared import sqlite_contract as contract
+from shared import cold_native
 BASE='7edddbdb8e8512627aed0ed42533ef099d802384'
 @dataclass(frozen=True)
 class Case:
@@ -103,11 +104,13 @@ def run(selection,output,arm,baseline_root,common):
         record['shipped_sql_seal']=scope_seal(list(crates.glob('*/sql/**/*.sql')))
         compilation=product+list(crates.glob('*/Cargo.toml'))+list((crates/'layerfs-api').glob('*/Cargo.toml'))+list(crates.glob('*/examples/**/*.rs'))+list((crates/'layerfs-api').glob('*/examples/**/*.rs'))+[root/'core/Cargo.toml',root/'core/Cargo.lock',root/'.cargo/config.toml']
         record['compilation_seal']=scope_seal(compilation)
+        record['cold_source_sha256']=common.digest(cold_native.SOURCE)
         record['reference_driver_source_sha256']=common.digest(common.ROOT/'core/benchmark/fs-bench-pro/diagnostics/sqlite_reference_init.rs')
         record['setup_method']='fresh output; database creation is measured; identity-checked prepared source fixture reuse only'
         record['identity']=identity;record['measured_source_commit']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip();record['root_cargo_config_sha256']=common.digest(root/'.cargo/config.toml');record['dependency_seal']=common.digest(root/'core/Cargo.lock');record['competing_work']=common.competing_work()
         record['build']=build(root,arm,out,common)
         if record['build']['status']!='PASS':record['reason']='build failed or exceeded fixed bound';return out
+        record['cold_helper']=cold_native.build(common.ROOT,out,invoke)
         fixture_case=init.CASES[case.fixture];fixture=init.prepare(fixture_case,common.RESULTS/'sdk-prepared');record['fixture']=fixture
         scratch=out/'scratch';scratch.mkdir();env={**os.environ,'LAYERFS_CONSTRUCTION_WORKERS':'1','LAYERFS_HISTORY_CURSOR_KEY':'28'*32,'TMPDIR':str(scratch)}
         db=out/'store.sqlite';history=out/'history.sqlite'
@@ -116,9 +119,11 @@ def run(selection,output,arm,baseline_root,common):
         claim=common.RESULTS/'phase7-sqlite-sample-claims'/hashlib.sha256(json.dumps([case.id,arm,identity['source_tree'],identity['harness_seal'],record['measured_source_commit'],fixture['manifest_sha256']],sort_keys=True).encode()).hexdigest()
         claim.parent.mkdir(parents=True,exist_ok=True)
         with claim.open('x') as h:h.write(str(out)+'\n')
-        perf_start=time.monotonic_ns();record['residency']=contract.dewarm_tree(fixture['source']);record['cache_status']=record['residency']['status']
+        perf_start=time.monotonic_ns();record['residency']=cold_native.attest(fixture['source'],record['cold_helper'],out,case.command_budget_ns,invoke,common.ROOT);record['cache_status']=record['residency']['status']
         if record['cache_status']!='PASS':record['status']='INELIGIBLE';return out
-        sample=invoke(command,out,'driver',case.command_budget_ns,env,root);record['sample_count']=1;record['performance']=sample;record['comparison_ns']=sample['child'].get('operation_ns') if isinstance(sample['child'],dict) else None
+        remaining=case.command_budget_ns-(time.monotonic_ns()-perf_start)
+        if remaining<=0:record['status']='NOT_RUN';record['reason']='cold attestation exhausted complete performance command budget';return out
+        sample=invoke(command,out,'driver',remaining,env,root);record['sample_count']=1;record['performance']=sample;record['comparison_ns']=sample['child'].get('operation_ns') if isinstance(sample['child'],dict) else None
         record['storage']=contract.allocations([db] if arm=='candidate' else [db,history]);record['storage_bytes']=record['storage']['total_bytes'];record['cleanup']={'status':'PASS' if not list(scratch.iterdir()) else 'FAIL','scope':'measured child exited, ordering scratch empty, database evidence retained'};record['command_wall_ns']=time.monotonic_ns()-perf_start
         child=sample['child']
         if sample['exit_code']!=0 or sample['timed_out'] or not isinstance(child,dict) or child.get('status')!='COMPLETE':record['status']='FAIL';return out
