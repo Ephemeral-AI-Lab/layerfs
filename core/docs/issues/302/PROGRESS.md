@@ -1329,3 +1329,21 @@ build FAIL because verify_namespace is owned by layerfs-server, not SDK. Raw
 receipt/build stdout/stderr retained. Fix the reference build to select both
 packages before any performance sample; a new harness seal/matched pair follows.
 No old row is promoted and no speed sample is repeated.
+
+## 2026-10-04 — first durable SQLite pairs; no competitive closure
+
+First100/1000 matched arm each atc80a. Root/proof/cache/cleanup PASS; final
+allocations5246976/20557824 versus7372800/23101440B. External100626732000
+versus905740083ns passes frozen arithmetic but startup masks internal75.93
+versus52.59ms (44.39% gap).1000217724792 versus140899000ns FAIL; internal
+208.57 versus134.59ms. Do not claim Phase4.5-like speed. Current write commits
+15/28, commit wall34774082/104273083ns; statements285/1308, VM37861/210182.
+Read/write/SQL/save stages overlap; fsync syscall count UNAVAILABLE.
+
+Retained systemSQLite3.51.0 EXPLAIN/plans and dbstat inventory captured under
+declared populated diagnostic state, main hashes unchanged. Primary-key plans;
+canonical346/5028076B and2003/20187652B exactmatches. Rawsql-explain.json and
+comparison.json underissue302-sqlite-analysis-c80a26567. No resample or warming
+of later timed Stores. Final-row status and all unrun work in
+SQLITE-STEP10-FIRST-PAIRS.md. Finer reference count diagnostic and bounded
+transaction-charge/reservation treatment pending. All-seven goal remainsACTIVE.
