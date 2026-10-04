@@ -255,3 +255,35 @@ small within-cohort directory sharing remains, without a cross-request memo.
 Checkpoint6 production LOC: 140,213 → 140,304 (delta +91), reference 65,417
 unchanged, core 74,796 → 74,887. Exact first-parent/staged full-counter snapshots
 and counter SHA are in checks/locator-clock1/production-loc.json.
+
+## Checkpoint7 — second-chance stride 10 qualification
+
+[Audited pair](checks/locator-clock-final10/comparison.json), product freeze
+`ba6499a61`: candidate 30989778083 ns vs reference 32365454042 ns
+(−4.250445420%). Complete command 44295895208 / 45366977375 ns;
+separate proof 3961798750 / 2914908041 ns, PASS.
+Cold/residency, cleanup, exact roots/inventory, 10% margin and strictly faster
+PASS. Allocation remains 50,692,096 bytes for shared C2/C5: original target
+49,344,512 FAIL +1,347,584 / +2.730970366%; approved 54,278,964 ceiling PASS.
+Reference C2 52,428,800 + C5 45,056 = 52,473,856 bytes.
+
+Against the retained pre-pressure-treatment candidate's count work, locator
+requests 75,326 → 68,836 (−8.615882962%), transactions 94,788 → 88,298
+(−6.846858252%), statements 312,253 → 292,783 (−6.235328404%). Pack acquisitions,
+BLOB calls/bytes, canonical outputs and Store bytes are identical. Actual clock
+selection: 99,329 removals, 216,950 probes, 117,400 second chances, 32,808 fixed/
+live field-byte peak (not heap/RSS). This is count continuity, not an isolated
+old/new clock effect. All 17 states / 101,477 paths / 67 bounded content paths
+are proved; the separate proof is not an exhaustive payload audit.
+
+| Family 2, Disposable | Status |
+| --- | --- |
+| Stride 10 / 17 | PASS with original-target storage FAIL preserved |
+| Stride 3 / 53 | NOT_RUN; same product/harness/binaries promoted next |
+| Stride 1 / 157 | NOT_RUN; follows stride 3 |
+
+Durable separate / NOT_RUN; SDK/server/daemon/FUSE N/A. Evidence-only checkpoints
+may change the documentation commit/tree; product/compilation/dependency/harness
+seals remain fixed and every new pair pins its exact committed identity. No new
+source treatment, unchanged performance repeat, budget increase or migration.
+Production LOC 140,304 → 140,304 (delta 0), reference 65,417/core 74,887.
