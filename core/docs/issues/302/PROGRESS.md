@@ -2122,3 +2122,14 @@ PASS. No newcache/extraresources/weakerchecks; freeze/countdiag next,goalACTIVE.
   prospective physical fanout/bytes under existing caps implemented.509Coretests/
   97targets,Clippy/fmt,453file boundary/23selftestsPASS; new count/qualification
   pending. PostgreSQL/MinIO M4pause and release/all-seven gaps unchanged.
+
+- 2026-10-04 final isolated Save/group-row evidence: Disposable17/53/157-state
+  histories have passing independent proofs, cold/cleanup and unchanged numeric
+  speed/storage guards. Save VFS requested bytes are below reference in each.
+  Owner-requested proof extension preserves12s/15s failures; prospective30s
+  reference/candidate proofs pass16.664784125/17.779967792s. Reference performance
+  is immutable shared control, zero new samples; candidate runs once. Product
+  frozen ed6807c6f, final measurement harness009fe8770. See
+  [SAVE-READ-AMPLIFICATION-FINAL-REPORT.md](SAVE-READ-AMPLIFICATION-FINAL-REPORT.md)
+  and append-only final2 index. Durable/Init/all-seven/full-audit omissions and
+  PostgreSQL/MinIO M4pause remain explicit.

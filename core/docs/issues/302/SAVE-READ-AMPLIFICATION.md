@@ -355,3 +355,14 @@ the fresh-output guard. No output/build/proof child existed. Corrected to an
 owned existing-directory guard plus immutable receipt/request manifest checks;
 a focused path/symlink guard test covers it. Retainreprove-launch.log; next
 launch usesfreshproof15-2output. No performance or proof sample is discarded.
+
+- 2026-10-04 final isolated Save/group-row evidence: Disposable17/53/157-state
+  histories have passing independent proofs, cold/cleanup and unchanged numeric
+  speed/storage guards. Save VFS requested bytes are below reference in each.
+  Owner-requested proof extension preserves12s/15s failures; prospective30s
+  reference/candidate proofs pass16.664784125/17.779967792s. Reference performance
+  is immutable shared control, zero new samples; candidate runs once. Product
+  frozen ed6807c6f, final measurement harness009fe8770. See
+  [SAVE-READ-AMPLIFICATION-FINAL-REPORT.md](SAVE-READ-AMPLIFICATION-FINAL-REPORT.md)
+  and append-only final2 index. Durable/Init/all-seven/full-audit omissions and
+  PostgreSQL/MinIO M4pause remain explicit.
