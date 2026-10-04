@@ -273,11 +273,25 @@ impl PoolReader {
         ceiling: i64,
         workspace: &mut DecompressionWorkspace,
         root: ObjectLocation,
-        mut groups: Option<&mut GroupCache>,
+        groups: Option<&mut GroupCache>,
     ) -> StorageResult<Vec<u8>> {
+        self.reconstruct_leaf(connection, capacities, ceiling, workspace, root, groups)
+            .map(|(body, _)| body)
+    }
+
+    fn reconstruct_leaf(
+        &mut self,
+        connection: &dyn Source,
+        capacities: &StorageCapacities,
+        ceiling: i64,
+        workspace: &mut DecompressionWorkspace,
+        root: ObjectLocation,
+        mut groups: Option<&mut GroupCache>,
+    ) -> StorageResult<(Vec<u8>, Vec<u8>)> {
         if root.role != layerfs_content::ObjectRole::InodeLeaf {
             return Err(StorageError::Integrity("pooled record role"));
         }
+        self.begin_chain();
         self.chain_encoded = 0;
         self.chain_canonical = 0;
         let mut chain: Vec<ObjectLocation> =
@@ -320,6 +334,7 @@ impl PoolReader {
             current = location;
         }
         let mut body: Option<Vec<u8>> = None;
+        let mut canonical_root = None;
         // Identity of the element decoded immediately before this one, which is
         // this element's base whenever the record says it has one. The record's
         // own base identity is checked against it, so the edge the walk followed
@@ -359,22 +374,26 @@ impl PoolReader {
                     delta::apply(base_body, instructions, count, output_length)?
                 }
             });
-            if location.object_id != root.object_id {
-                // A dependent may overwrite corrupt base bytes. Authenticate the
-                // complete canonical base before it is used by the next delta.
-                self.canonical_from_body(
-                    connection,
-                    capacities,
-                    ceiling,
-                    workspace,
-                    *location,
-                    body.as_deref()
-                        .ok_or(StorageError::Integrity("pooled base body"))?,
-                )?;
+            // Authenticate every physical reconstruction, including a root that
+            // a Save caller will use directly as its next delta's base.
+            let canonical = self.canonical_from_body(
+                connection,
+                capacities,
+                ceiling,
+                workspace,
+                *location,
+                body.as_deref()
+                    .ok_or(StorageError::Integrity("pooled base body"))?,
+            )?;
+            if location.object_id == root.object_id {
+                canonical_root = Some(canonical);
             }
             decoded_id = Some(location.object_id);
         }
-        body.ok_or(StorageError::Integrity("pooled chain empty"))
+        Ok((
+            body.ok_or(StorageError::Integrity("pooled chain empty"))?,
+            canonical_root.ok_or(StorageError::Integrity("pooled canonical root"))?,
+        ))
     }
 
     /// The direct base identity one stored pooled locator names.
@@ -496,10 +515,8 @@ impl PoolReader {
             });
         }
         self.counters.leaf_requests = self.counters.leaf_requests.saturating_add(1);
-        self.begin_chain();
-        let body =
-            self.leaf_body_with_groups(connection, capacities, ceiling, workspace, root, groups)?;
-        self.canonical_from_body(connection, capacities, ceiling, workspace, root, &body)
+        self.reconstruct_leaf(connection, capacities, ceiling, workspace, root, groups)
+            .map(|(_, canonical)| canonical)
     }
     fn canonical_from_body(
         &mut self,

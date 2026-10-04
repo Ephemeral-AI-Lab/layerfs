@@ -2060,3 +2060,12 @@ PASS. No newcache/extraresources/weakerchecks; freeze/countdiag next,goalACTIVE.
   and bounded representative content proof/12s. Localized physical port and
   pooled intermediate CID validation implemented; focused storage/persistence
   and corruption/base fixtures PASS. Frozen final checks/campaign still pending.
+
+
+-2026-10-04: proof-launch observer/TSV binding defects repaired, all prior
+  ordinary FAIL/NOT_RUN and157supervision INCOMPLETE preserved. Corrected proof
+  diagnostics17/53 CHECKED5.679/8.311s;15712sTIMEOUT, count cause reaches132states
+  with namespace walk dominant. No limit/cache inflation. Save physical-root
+  canonical validation gap reproduced/fixed; one reconstruction authenticates
+  all nodes, resets chain work and returns both forms. Final Core501/95targets
+  plusClippy/fmt/boundary PASS; frozen final matched campaign next, goalACTIVE.

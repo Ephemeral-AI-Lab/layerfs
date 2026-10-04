@@ -44,7 +44,17 @@ class CauseDiagnostics(unittest.TestCase):
             flags = ['clang','-O2','-std=c11','-Wall','-Wextra','-Werror']
             subprocess.run(flags+['-dynamiclib',str(source/'sqlite_history_observer.c'),'-lsqlite3','-o',str(lib)],check=True,capture_output=True)
             subprocess.run(flags+[str(source/'sqlite_history_probe.c'),'-lsqlite3','-o',str(probe)],check=True,capture_output=True)
-            result = subprocess.run([str(probe)],check=True,capture_output=True,text=True,env={**os.environ,'DYLD_INSERT_LIBRARIES':str(lib)})
+            from shared.phase7_history_proof import native_environment, LITE_POLICY, digest
+            request = {'proof_policy': LITE_POLICY, 'observer': {'path': str(lib), 'sha256': digest(lib)}}
+            env = native_environment(request, folder)
+            result = subprocess.run([str(probe)],check=True,capture_output=True,text=True,env=env)
+            self.assertEqual(env['DYLD_INSERT_LIBRARIES'], str(lib))
+            self.assertEqual(env['LAYERFS_SQLITE_WORK_OUTPUT'], str(folder/'proof-sql-work.json'))
+            with self.assertRaisesRegex(ValueError,'pinned acquisition observer'):
+                native_environment({'proof_policy': LITE_POLICY}, folder)
+            request['observer']['sha256'] = '0'*64
+            with self.assertRaisesRegex(ValueError,'pinned acquisition observer'):
+                native_environment(request, folder)
             self.assertIn('BLOB attempts/returned bytes/errors',result.stdout)
 
     def test_runner_dispatch_does_not_use_speed_arm(self):

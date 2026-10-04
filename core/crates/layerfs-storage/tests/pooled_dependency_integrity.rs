@@ -115,6 +115,20 @@ fn literal_delta_cannot_hide_a_wrong_canonical_base() {
             ..Publication::default()
         })
         .unwrap();
+    let input = PooledInput(metadata.clone());
+    let root = metadata.state.lock().unwrap().objects[&objects[0].id()];
+    let capacities = layerfs_storage::policy::StorageCapacities::from_policy(
+        layerfs_storage::StoragePolicy::frozen_default(),
+    )
+    .unwrap();
+    let mut workspace = layerfs_storage::encoding::DecompressionWorkspace::new().unwrap();
+    let body_error = layerfs_storage::encoding::pool::PoolReader::new()
+        .leaf_body(&input, &capacities, i64::MAX, &mut workspace, root)
+        .unwrap_err();
+    assert!(
+        body_error.to_string().contains("pooled canonical identity"),
+        "{body_error}"
+    );
     let storage = Storage::new(metadata).unwrap();
     let error = storage
         .reader()
@@ -125,4 +139,70 @@ fn literal_delta_cannot_hide_a_wrong_canonical_base() {
         error.to_string().contains("pooled canonical identity"),
         "{error}"
     );
+}
+
+struct PooledInput(Arc<metadata::MemoryMetadata>);
+impl layerfs_storage::source::Source for PooledInput {
+    fn location(
+        &self,
+        id: ObjectId,
+        ceiling: i64,
+    ) -> layerfs_storage::StorageResult<Option<ObjectLocation>> {
+        Ok(self
+            .0
+            .state
+            .lock()
+            .unwrap()
+            .objects
+            .get(&id)
+            .copied()
+            .filter(|row| row.pack_id <= ceiling))
+    }
+    fn pack_bytes(&self, id: i64) -> layerfs_storage::StorageResult<Vec<u8>> {
+        Ok(self.0.state.lock().unwrap().packs[&id]
+            .body
+            .as_ref()
+            .clone())
+    }
+    fn value_group(&self, ordinal: u32) -> layerfs_storage::StorageResult<Option<ValueGroupRow>> {
+        Ok(self
+            .0
+            .state
+            .lock()
+            .unwrap()
+            .groups
+            .values()
+            .find(|row| {
+                ordinal >= row.first_ordinal
+                    && u64::from(ordinal) < u64::from(row.first_ordinal) + row.count as u64
+            })
+            .copied())
+    }
+    fn value_groups(
+        &self,
+        _: Option<u32>,
+        _: &mut dyn FnMut(ValueGroupRow) -> layerfs_storage::StorageResult<()>,
+    ) -> layerfs_storage::StorageResult<()> {
+        Err(layerfs_storage::StorageError::Integrity(
+            "unused catalogue scan",
+        ))
+    }
+    fn window_start(&self) -> layerfs_storage::StorageResult<u32> {
+        Err(layerfs_storage::StorageError::Integrity("unused window"))
+    }
+    fn signatures(
+        &self,
+    ) -> layerfs_storage::StorageResult<Vec<layerfs_storage::location::SignatureRow>> {
+        Err(layerfs_storage::StorageError::Integrity(
+            "unused signatures",
+        ))
+    }
+    fn write_signatures(
+        &self,
+        _: &[layerfs_storage::location::SignatureRow],
+    ) -> layerfs_storage::StorageResult<usize> {
+        Err(layerfs_storage::StorageError::Integrity(
+            "unused signatures",
+        ))
+    }
 }

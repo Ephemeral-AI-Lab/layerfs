@@ -1,0 +1,160 @@
+{
+  "schema": "issue302-localized-launch-repair-v1",
+  "rows": [
+    {
+      "run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-localized-lite-baseline1",
+      "receipt_sha256": "d9e4508e67d76c2aae9d45f1f8683fd8a2da8c458895791dee01e765bdaa357f",
+      "manifest_sha256": "cb16988c9fa06081bcebccfa24fd4a623b9cf59e0788bec3530515dc5f1accb7",
+      "status": "COMPLETE",
+      "command_wall_ns": 52687591041,
+      "verification_status": "FAIL",
+      "scope": null,
+      "reason": null,
+      "proof_wall_ns": 2039166583,
+      "proof_child": null
+    },
+    {
+      "run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-localized-lite-candidate-notrun1",
+      "receipt_sha256": "a0b15b04c61cdb291ddf0288e86931e9ecd1566cbaa65cfaa84e942312c07ceb",
+      "manifest_sha256": "127ded840848d04b8e1f2eb590924f0afc57d570ae6130cab4d75b528e7b57f1",
+      "status": "NOT_RUN",
+      "command_wall_ns": null,
+      "verification_status": "NOT_RUN",
+      "scope": null,
+      "reason": "Same-identity reference lacks qualified complete producer/census/proof and root-pins.json; candidate precondition refuses sampling. No retry or fabricated comparison.",
+      "proof_wall_ns": null,
+      "proof_child": null
+    },
+    {
+      "run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-localized-lite-baseline1",
+      "receipt_sha256": "f1718c8707e6430f0a9ef0f8761a3bbf4c8cc849098aef593a67fb485d764562",
+      "manifest_sha256": "3b79ab8e878c0ef1642aa3396a511be737a8b8e9d438e13e9f7c7c4f52ba2d8d",
+      "status": "COMPLETE",
+      "command_wall_ns": 84776994875,
+      "verification_status": "FAIL",
+      "scope": null,
+      "reason": null,
+      "proof_wall_ns": 1414441625,
+      "proof_child": null
+    },
+    {
+      "run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-localized-lite-candidate-notrun1",
+      "receipt_sha256": "edc87d37a8e3dd5f32070fe1c12bd35234be4eec4aca3903abdf1e885de7a0ff",
+      "manifest_sha256": "ac188da5d072bc1864128df01380510339ad8d029146b301206164603efca3ca",
+      "status": "NOT_RUN",
+      "command_wall_ns": null,
+      "verification_status": "NOT_RUN",
+      "scope": null,
+      "reason": "Same-identity reference lacks qualified complete producer/census/proof and root-pins.json; candidate precondition refuses sampling. No retry or fabricated comparison.",
+      "proof_wall_ns": null,
+      "proof_child": null
+    },
+    {
+      "run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-localized-lite-baseline1",
+      "receipt_sha256": "6491473f1e9446649ece38b82f6759a07eaeca61ee21d86462f54e7e18989bd6",
+      "manifest_sha256": "9c3cc09470abef4145caec144ec635aaffba2d402df2ac8f4fa75c0f4ed4149e",
+      "status": "INCOMPLETE",
+      "command_wall_ns": null,
+      "verification_status": "NOT_RUN",
+      "scope": null,
+      "reason": "Driver completed naturally, but loss of supervisor prevents qualified complete command/wait4/budget/cleanup/census/proof receipt; never promote or fabricate a comparison.",
+      "proof_wall_ns": null,
+      "proof_child": null
+    },
+    {
+      "run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-localized-lite-candidate-notrun1",
+      "receipt_sha256": "0df96747d92dfc42bdde8339284665d23cfb235e835dfb36a0d1000d041b2392",
+      "manifest_sha256": "13589958373deded6a54633153c99371cf34a5166ab9f26f9ce775f486de08ee",
+      "status": "NOT_RUN",
+      "command_wall_ns": null,
+      "verification_status": "NOT_RUN",
+      "scope": null,
+      "reason": "Reference supervision lost; no qualified pins. All raw driver evidence retained; no candidate sample.",
+      "proof_wall_ns": null,
+      "proof_child": null
+    },
+    {
+      "run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-localized-launch-proof-diagnostic1",
+      "receipt_sha256": "19986fcd01a925508fb03ad118710aa6d595b379803692f4e11422e6bac22bb0",
+      "manifest_sha256": "6b84dc37cad405609b6b180511c4d050919613e45f6e67dedfeabfe933ae1a9a",
+      "status": "FAIL",
+      "command_wall_ns": null,
+      "verification_status": null,
+      "scope": null,
+      "reason": null,
+      "proof_wall_ns": 1091906875,
+      "proof_child": null
+    },
+    {
+      "run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-localized-launch-proof-diagnostic2",
+      "receipt_sha256": "7458a86b5ac7a34d80c96f893e1b865768bcdd69a4527186cd030960c7d650bd",
+      "manifest_sha256": "fe69871917dc34b85fb1972ce832fe81bb176656bf8014bcbef24a3cfcda3812",
+      "status": "PASS",
+      "command_wall_ns": null,
+      "verification_status": null,
+      "scope": null,
+      "reason": null,
+      "proof_wall_ns": 5678975917,
+      "proof_child": {
+        "acquired_content_bytes": 16578959,
+        "admission": "NOT_RUN",
+        "authenticated_bytes": 970326,
+        "custody_states": 17,
+        "independent_root_pins": "NOT_CHECKED",
+        "paths": 101477,
+        "sample_policy": "all-state-structure-five-anchor-bounded-content-v1",
+        "sampled_content_paths": 67,
+        "states": 17,
+        "status": "CHECKED"
+      }
+    },
+    {
+      "run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-localized-launch-proof-history53-diagnostic1",
+      "receipt_sha256": "4248a22ca78f87bdeb7cb43ff3e190b111aa0cb908ce1c4b844199d93bc35cde",
+      "manifest_sha256": "2909d8ea164ad544b996266cccf9295339d986a2fbf4c921fe694a81c6347558",
+      "status": "PASS",
+      "command_wall_ns": null,
+      "verification_status": null,
+      "scope": "one required proof check for remaining workload shapes, retained closed data; no speed sample or old admission promotion",
+      "reason": null,
+      "proof_wall_ns": 8311247042,
+      "proof_child": {
+        "acquired_content_bytes": 14474270,
+        "admission": "NOT_RUN",
+        "authenticated_bytes": 921174,
+        "custody_states": 53,
+        "independent_root_pins": "NOT_CHECKED",
+        "paths": 306861,
+        "sample_policy": "all-state-structure-five-anchor-bounded-content-v1",
+        "sampled_content_paths": 66,
+        "states": 53,
+        "status": "CHECKED"
+      }
+    },
+    {
+      "run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-localized-launch-proof-history157-diagnostic1",
+      "receipt_sha256": "496b7d0aa0f6131eb532ee8aea1110ccc84ef2b14c0ee65b88b75c6b5830dfb9",
+      "manifest_sha256": "5e4e0cd587b8a5a124968af356e1f952594091eaf514f14c4dad167301097aa5",
+      "status": "FAIL",
+      "command_wall_ns": null,
+      "verification_status": null,
+      "scope": "one required proof check for remaining workload shapes, retained closed data; no speed sample or old admission promotion",
+      "reason": null,
+      "proof_wall_ns": 12006769334,
+      "proof_child": null
+    },
+    {
+      "run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-localized-launch-proof-history157-phase-cause1",
+      "receipt_sha256": "af34d386a09796b1683f0c846203adcca7da19ea6c67c84bf19cc22cb51ba744",
+      "manifest_sha256": "38fdb5025bc053a8c3b4af3dfd7b588fa66067f8718e5685ac4debd1d2c71399",
+      "status": "FAIL",
+      "command_wall_ns": null,
+      "verification_status": null,
+      "scope": "count-driven cause diagnosis of the12s157proof miss; changed phase instrumentation, not a repeat speed sample or admission proof",
+      "reason": null,
+      "proof_wall_ns": 12007248250,
+      "proof_child": null
+    }
+  ],
+  "disposition": "Failed ordinary proofs/supervision-loss arm retained; corrected proofs diagnostic only, never prior-row promotion. 15712s cause reaches132states, later walk dominates."
+}

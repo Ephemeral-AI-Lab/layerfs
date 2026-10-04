@@ -156,7 +156,7 @@ def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pi
             expected={'identity':PROFILE_IDS[case.profile],'journal_mode':'wal' if case.profile=='durable' else 'memory','synchronous':2 if case.profile=='durable' else 0,'foreign_keys':1,'fullfsync':1 if case.profile=='durable' else 0,'checkpoint_fullfsync':1,'page_size':4096,'cache_size':-2048,'mmap_size':0,'temp_store':2,'wal_checkpoint_performed':case.profile=='durable'}
             if settings!=[expected]:raise ValueError('history actual profile/completion mismatch')
             record['effective_profile']=settings[0]
-        request={'proof_policy':case.proof_policy,'out':str(out),'arm':arm,'producer':child,'db':str(db),'row':row,'verifier':binaries['verify_history' if arm=='candidate' else 'history_reference_verify']['path'],'corpus':str(corpus),'profile':case.profile,'identity':identity,'pins':str(out/'reference-pins.json')}
+        request={'observer':record['observer'],'proof_policy':case.proof_policy,'out':str(out),'arm':arm,'producer':child,'db':str(db),'row':row,'verifier':binaries['verify_history' if arm=='candidate' else 'history_reference_verify']['path'],'corpus':str(corpus),'profile':case.profile,'identity':identity,'pins':str(out/'reference-pins.json')}
         common.write_json(out/'proof-request.json',request)
         proof_env={**os.environ,**history.ENV,'LAYERFS_HISTORY_CURSOR_KEY':'28'*32,'TMPDIR':str(scratch)}
         verification=invoke([sys.executable,str(common.ROOT/'core/benchmark/fs-bench-pro/shared/phase7_history_proof.py'),'--request',str(out/'proof-request.json')],out,'verifier',case.verification_budget_ns,proof_env,common.ROOT)

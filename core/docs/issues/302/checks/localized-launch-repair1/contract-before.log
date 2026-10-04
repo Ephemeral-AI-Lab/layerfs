@@ -1,0 +1,22 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.94s
+     Running tests/pooled_dependency_integrity.rs (core/target/debug/deps/pooled_dependency_integrity-0d8ae1806db79685)
+
+running 1 test
+test literal_delta_cannot_hide_a_wrong_canonical_base ... FAILED
+
+failures:
+
+---- literal_delta_cannot_hide_a_wrong_canonical_base stdout ----
+
+thread 'literal_delta_cannot_hide_a_wrong_canonical_base' panicked at crates/layerfs-storage/tests/pooled_dependency_integrity.rs:123:73:
+called `Result::unwrap_err()` on an `Ok` value: [76, 70, 83, 79, 1, 0, 0, 0, 116, 0, 0, 0, 112, 76, 70, 83, 54, 73, 78, 84, 0, 0, 1, 7, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 81, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    literal_delta_cannot_hide_a_wrong_canonical_base
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p layerfs-storage --test pooled_dependency_integrity`

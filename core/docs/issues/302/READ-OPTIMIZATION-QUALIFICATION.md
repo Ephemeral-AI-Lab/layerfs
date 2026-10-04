@@ -732,3 +732,47 @@ counters include dependency reads and conservatively include mapping metadata;
 missing coverage/8MiB logical/32MiB acquired excess fails. Old proof scopes and
 9.5s failures remain historical. Freeze, final checks, then one matched10,3,1
 campaign with qualified reference pins; no repeated unchanged arm.
+
+
+### Proof launcher/corpus binding repair and save-base integrity completion
+
+First ordinary766ec016f proofs failed closed because the normal launcher did
+not pass the pinned acquisition observer to the native child. Reference17
+performance COMPLETE52.687591041s, product34.168605083s; reference53 COMPLETE
+84.776994875s, product68.203340458s. Both proofs FAIL, candidates NOT_RUN.
+The sequencer had advanced to157 before the hold took effect; its supervisor
+was lost when sequencing ended. The driver finished naturally and retained all
+157cold boundaries, but the arm is INCOMPLETE and cannot supply qualified wall,
+wait4, cleanup/census/proof or pins. Inner182.560018916s is not a qualified
+comparison. Recovery timer was conservative wall-clock supervision only.
+Every failed/incomplete/unrun record remains; [sealed index](checks/localized-launch-repair1/comparison.json).
+
+The normal proof request now includes the sealed observer, hashes it before
+native launch, sets only native-child instrumentation and separate proof outputs.
+The actualSQLite probe uses this exact environment builder and verifies bytes/
+failures plus missing/substituted observer refusal. A retained-data diagnostic
+caught the next verifier defect: upstream checkpoint manifest hash is not the
+materialized TSV hash. Read/bind the TSV against its prepared receipt instead.
+Source discovery is bounded to157checkpoint directories and selected OID probes,
+not a filename inventory of every blob. These change neither selected scope nor
+product format. Historical rows are not promoted.
+
+Corrected required proof diagnostics:17 CHECKED5.678975917s,101477paths,67content
+paths,970326logicalB/16578959acquiredB;53 CHECKED8.311247042s,306861paths,
+66content paths,921174logicalB/14474270acquiredB.157 TIMEOUT12.006769334s.
+A distinct count-driven157cause diagnostic times out12.007248250s after132states;
+late state132 walk111.103625ms vsfile-roots4.162500ms/digest1.727750ms.
+Cumulative metadata memo53337hits/8095misses/7668evictions,2MiB peak; no cache
+increase or deadline relaxation. These are cause/functional checks, not admission
+or repeated speed samples. Final frozen proof may remain a nonpassing gate.
+
+Integrity review found Save's direct pooled physical-body entry point had
+validated intermediate bases but deferred its own root to a canonical caller.
+A Save caller uses that root as a base, so deferment is invalid. A meaningful
+fixture returns an incorrect physical root before fix and refuses after fix.
+One reconstruction now validates every node and returns physical/canonical root
+forms without a duplicate root rebuild. Decoded work resets per chain under the
+same bound. No new cache, worker, format or fallback. Final Core all-target501/
+95targets, Clippy, fmt,449-file boundary/23selftests PASS. Fix covering checks
+and failed fixture are retained. Freeze then one final10,3,1 matched campaign;
+all failures/omissions will be explicit, no sequencer interruption.

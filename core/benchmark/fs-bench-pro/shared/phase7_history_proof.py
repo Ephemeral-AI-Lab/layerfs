@@ -198,6 +198,26 @@ def validate_pins(pins, matched_identity):
     return records
 
 
+def native_environment(request, out):
+    """Load the pinned observer in the native verifier, not the Python census.
+
+    Keep native output separate from performance files and the parent process.
+    A lite proof cannot run with missing or substituted acquisition counters.
+    """
+    import os
+    env = os.environ.copy()
+    if request.get('proof_policy') == LITE_POLICY:
+        observer = request.get('observer', {})
+        path = observer.get('path')
+        if not path or digest(path) != observer.get('sha256'):
+            raise ValueError('lite proof requires the pinned acquisition observer')
+        env.update(DYLD_INSERT_LIBRARIES=path,
+                   LAYERFS_SQLITE_WORK_OUTPUT=str(out/'proof-sql-work.json'),
+                   LAYERFS_CAUSE_VFS_LOG=str(out/'proof-vfs.json'),
+                   LAYERFS_CLOSE_OBSERVER_OUTPUT=str(out/'proof-close.json'))
+    return env
+
+
 def main():
     """One bounded proof child owns census/export, native proof and preservation."""
     import argparse
@@ -208,6 +228,7 @@ def main():
     request = json.loads(Path(args.request).read_text())
     out = Path(request['out'])
     child = request['producer']
+    native_env = native_environment(request, out)
     if request['arm'] == 'candidate':
         validate_pins(json.loads(Path(request['pins']).read_text()), request['identity'])
     metadata = out/'reference-metadata.tsv' if request['arm'] == 'baseline' else None
@@ -220,7 +241,7 @@ def main():
     # Stream to exclusively created files so a bounded parent timeout retains
     # native progress instead of losing a captured pipe when the group is killed.
     with (out/'namespace-proof.stdout').open('x') as stdout, (out/'namespace-proof.stderr').open('x') as stderr:
-        result = subprocess.run(command, stdout=stdout, stderr=stderr, check=False)
+        result = subprocess.run(command, stdout=stdout, stderr=stderr, check=False, env=native_env)
     if result.returncode: raise ValueError('independent namespace/custody proof failed; see retained output')
     native = json.loads((out/'namespace-proof.stdout').read_text())
     if native.get('status') != 'CHECKED' or native.get('states') != child['states'] or native.get('custody_states') != child['states']:

@@ -1236,3 +1236,11 @@ canonical output bounds, singleton exception, chain/work/visibility/private
 ownership/publication rules and workers remain. Telemetry separates acquired
 range bytes from returned/retained units; `range_scan_bytes` stays zero on the
 scoped path. This describes the implementation, not measured speed or admission.
+
+
+Localized-read follow-up against766ec016f: pooled reconstruction authenticates
+all nodes, including a root physical body requested by Save as its next base.
+One internal reconstruction returns both validated physical and canonical root
+forms; read callers avoid rebuilding the root twice, and write callers receive
+only a validated physical form. Each new reconstruction resets the existing
+per-chain decoded allowance. No base memo/cache or larger limit is introduced.
