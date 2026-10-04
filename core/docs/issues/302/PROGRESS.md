@@ -1807,3 +1807,12 @@ candidate SQLstep0.422s vsref1.938s but whole6.752s vs4.506s; save candidate
 2.815GBVFSreads vsref0.812GB and31155body acquisitions vs16484. Actual per-state
 prepare/reset/VM/reprepare/sort/first-seen-pack scopes retained. No admission or
 redundancy inference. Next pooled/canonical reconstruction/save read-lifetime work.
+
+
+-2026-10-04: pooled leaf duplicate reconstruction confirmed by public64-row fixture:
+4physical record extractions before vs2walk/decode required. Moved advisory bounded
+catalogue prefetch into the checked canonical-body pass; no buffer/cache/chain or
+authentication relaxation. Public operation-reader pooled counters added to both
+benchmark arms. Correct bytes/missing-catalogue refusal/locator regression PASS;
+owningClippy/boundary442/23self-tests PASS. Freeze changed ordinary17pair next;
+prior receipts retained and goal ACTIVE. See SQLITE-POOLED-DEMAND-RECONSTRUCTION.md.

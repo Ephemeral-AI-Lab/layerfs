@@ -1022,3 +1022,25 @@ will immediately need. The original full-cache guard still bounds larger interna
 frontiers; capacity and physical/decoded byte caches do not grow. Reply membership
 uses binary search over the already sorted miss page. Identity/role/length/pack,
 cardinality, duplicate, reference-cycle and authentication checks remain.
+
+
+### One pooled body reconstruction per canonical demand
+
+The C2 reader no longer reconstructs pooled leaf bodies in a wave-wide ordinal
+prefetch pass and then reconstructs them again in `Resolver`. `PoolReader`
+reconstructs and checks one leaf body, decodes its rows, sorts ordinal positions,
+and asks the source to prepare catalogue rows before the existing value lookup
+and canonical reconstruction. The two-pass dependency walk/decode, chronology or
+cycle checks, work charges, visibility, group digest, canonical length and final
+object authentication remain in their existing paths. The temporary ordinal
+vector is bounded by `MAXIMUM_LEAF_ROWS`, is released after the prefetch call,
+and replaces the former whole-demand ordinal set/vector; no body cache or buffer
+ceiling grows. Fetch uses its existing bounded set-query port. Scalar sources
+explicitly perform no advisory prefetch and retain required scalar lookups.
+
+`Reader::pooled_read_counters` reports actual cumulative operation-reader work,
+including prefetch work, rather than inferring it from SQL or cache size. A public
+64-row FULL-leaf fixture returned identical canonical bytes but extracted four
+physical records before this change; the retained walk/decode now extracts two,
+with one physical-group decode. Missing catalogue data still refuses the read.
+This fixture is a count result, not a retained-history latency claim.

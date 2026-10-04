@@ -182,6 +182,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             position + 1,
             storage.diagnostics()
         );
+        eprintln!(
+            "HISTORY_POOLED_WORK state={} stage=construction scope=operation-reader-only cumulative={:?}",
+            position + 1,
+            reader.pooled_read_counters()
+        );
         engine = observer::snapshot();
         let start = Instant::now();
         let mut directories = Vec::new();
@@ -218,6 +223,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "HISTORY_PROVIDER_WORK state={} stage=filesystem cumulative={:?}",
             position + 1,
             storage.diagnostics()
+        );
+        eprintln!(
+            "HISTORY_POOLED_WORK state={} stage=filesystem scope=operation-reader-only cumulative={:?}",
+            position + 1,
+            reader.pooled_read_counters()
         );
         engine = observer::snapshot();
         let start = Instant::now();
@@ -265,6 +275,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "HISTORY_PROVIDER_WORK state={} stage=save_custody cumulative={:?}",
             position + 1,
             storage.diagnostics()
+        );
+        eprintln!(
+            "HISTORY_POOLED_WORK state={} stage=save_custody scope=operation-reader-only cumulative={:?}",
+            position + 1,
+            reader.pooled_read_counters()
         );
         previous_root = Some(built.root);
         roots.push(built.root.0);

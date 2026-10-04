@@ -30,6 +30,9 @@ impl ReadState {
             packs: BTreeMap::new(),
         })
     }
+    pub(crate) fn pooled_read_counters(&self) -> crate::encoding::pool::PoolReadCounters {
+        self.pool.counters()
+    }
     pub(crate) fn read(
         &mut self,
         source: &Fetch,
@@ -66,13 +69,6 @@ impl ReadState {
             });
         }
         prefetch::chains(source, &roots, &mut self.packs, &mut self.workspace)?;
-        prefetch::values(
-            source,
-            &roots,
-            capacities,
-            &mut self.pool,
-            &mut self.workspace,
-        )?;
         let mut counters = ChainCounters::default();
         let mut out = Vec::with_capacity(ids.len());
         for root in roots {

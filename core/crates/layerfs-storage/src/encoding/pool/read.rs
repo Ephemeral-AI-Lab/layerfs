@@ -455,6 +455,16 @@ impl PoolReader {
         // are unchanged.
         let mut order: Vec<usize> = (0..rows.len()).collect();
         order.sort_unstable_by_key(|position| rows[*position].ordinal);
+        // Catalogue acquisition uses this already checked body, rather than
+        // rebuilding every leaf in a separate wave-wide ordinal prepass.
+        // The temporary ordinals are bounded by MAXIMUM_LEAF_ROWS and released
+        // before reconstruction; no physical body is retained beyond this leaf.
+        connection.prepare_value_groups(
+            &order
+                .iter()
+                .map(|position| rows[*position].ordinal)
+                .collect::<Vec<_>>(),
+        )?;
         let mut covering: Option<ValueGroupRow> = None;
         for position in order {
             let row = &rows[position];

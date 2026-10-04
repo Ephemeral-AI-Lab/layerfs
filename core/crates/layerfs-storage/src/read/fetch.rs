@@ -307,6 +307,9 @@ impl Source for Fetch {
             .remove(&id)
             .ok_or(StorageError::Integrity("metadata pack missing"))
     }
+    fn prepare_value_groups(&self, ordinals: &[u32]) -> StorageResult<()> {
+        self.prefetch_values(ordinals)
+    }
     fn value_group(&self, ordinal: u32) -> StorageResult<Option<ValueGroupRow>> {
         if ordinal == 0 {
             return Err(StorageError::Integrity("metadata ordinal"));

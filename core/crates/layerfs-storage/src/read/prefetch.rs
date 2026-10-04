@@ -2,17 +2,12 @@
 
 use super::Fetch;
 use crate::{
-    encoding::{
-        codec::DecompressionWorkspace,
-        delta::read::ChainBases,
-        pool::{leaf, PoolReader},
-    },
+    encoding::{codec::DecompressionWorkspace, delta::read::ChainBases},
     error::{StorageError, StorageResult},
     location::ObjectLocation,
-    policy::StorageCapacities,
     source::Source,
 };
-use layerfs_content::{ObjectId, ObjectRole};
+use layerfs_content::ObjectId;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) fn chains(
@@ -58,19 +53,4 @@ pub(crate) fn chains(
     } else {
         Err(StorageError::Integrity("prefetch dependency depth"))
     }
-}
-
-pub(crate) fn values(
-    source: &Fetch,
-    roots: &[ObjectLocation],
-    capacities: &StorageCapacities,
-    pool: &mut PoolReader,
-    workspace: &mut DecompressionWorkspace,
-) -> StorageResult<()> {
-    let mut ordinals = BTreeSet::new();
-    for root in roots.iter().filter(|row| row.role == ObjectRole::InodeLeaf) {
-        let body = pool.leaf_body(source, capacities, i64::MAX, workspace, *root)?;
-        ordinals.extend(leaf::ordinals(&body)?);
-    }
-    source.prefetch_values(&ordinals.into_iter().collect::<Vec<_>>())
 }

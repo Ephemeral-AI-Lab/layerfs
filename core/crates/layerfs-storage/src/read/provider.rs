@@ -17,6 +17,10 @@ impl<'a> Reader<'a> {
             state: RefCell::new(ReadState::new()?),
         })
     }
+    /// Actual pooled reconstruction work across this operation’s read demands.
+    pub fn pooled_read_counters(&self) -> crate::encoding::pool::PoolReadCounters {
+        self.state.borrow().pooled_read_counters()
+    }
     /// Reconstructs and authenticates a bounded demand, in demand order.
     pub fn read_objects(&self, ids: &[ObjectId]) -> StorageResult<Vec<Vec<u8>>> {
         self.state

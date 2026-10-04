@@ -15,6 +15,12 @@ pub trait Source {
     fn location(&self, id: ObjectId, ceiling: i64) -> StorageResult<Option<ObjectLocation>>;
     /// Complete declared pack bytes, without capacity padding.
     fn pack_bytes(&self, pack_id: i64) -> StorageResult<Vec<u8>>;
+    /// Advisory catalogue prefetch for one bounded pooled leaf, before value reads.
+    /// Scalar sources deliberately do no prefetch; `value_group` remains the
+    /// required lookup and missing values still fail during reconstruction.
+    fn prepare_value_groups(&self, _ordinals: &[u32]) -> StorageResult<()> {
+        Ok(())
+    }
     /// Pooled catalogue row covering one ordinal.
     fn value_group(&self, ordinal: u32) -> StorageResult<Option<ValueGroupRow>>;
     /// Streams catalogue rows in ordinal order without an unbounded allocation.
