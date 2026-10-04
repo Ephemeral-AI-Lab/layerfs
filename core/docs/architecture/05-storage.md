@@ -844,3 +844,17 @@ Checkpoint wall includes this work; before/after main allocation is reported.
 WAL/FULL/fullfsync/page/cache/worker/canonical/physical policies remain unchanged.
 Process-crash tests cover acknowledged content after completed cleanup; physical
 power-loss behavior and atomic in-syscall crash interruption are not claimed.
+
+
+### Partial immutable pack queues across input waves
+
+This change is based on8d4775e33. An input-wave boundary no longer alone drains
+partially filled lane queues. Queues retain the existing aggregate256KiB charge
+including lane framing and512-row limit. Pressure seals them through the same
+packer. Dependency/advisory closure and same-save reads force needed queues to
+seal, while ready packs remain published at each wave. Finish drains every group/
+queue and completes reference-closed acknowledgements. No published BLOB append,
+new producer, buffer/row/byte/cache expansion or changed failure policy is used.
+Mixed-lane physical grouping can differ; canonical identities and wire grammar
+remain unchanged. Private pending signatures remain unregistered until their
+object is ready, under the existing bounded ring.

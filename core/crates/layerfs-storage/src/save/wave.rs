@@ -126,7 +126,8 @@ impl State<'_> {
         }
         drop(admission);
         let flush = self.storage.work.span(super::Stage::Flush);
-        self.packer.flush(&mut self.next_pack, self.pack_end)?;
+        // Keep the existing bounded partial queues until pressure, dependency
+        // closure or finish requires them. Ready packs still publish this wave.
         self.flush_signatures()?;
         drop(flush);
         self.register_ready()

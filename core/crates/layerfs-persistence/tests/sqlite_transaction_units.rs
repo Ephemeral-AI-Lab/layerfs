@@ -169,3 +169,70 @@ fn reader_reuses_authenticated_pack_within_one_operation() {
     let fresh = storage.diagnostics();
     assert!(fresh.read_packs + fresh.payload_reads > reused.read_packs + reused.payload_reads);
 }
+
+#[test]
+fn partial_pack_queue_survives_wave_boundary_within_existing_budget() {
+    let t = support::Temp::new("pack-wave-utilization");
+    let h = create(&t.join("db"));
+    let storage = Storage::new(h.storage.clone()).unwrap();
+    let objects = (1..=1536).map(|seed| object(seed, 500)).collect::<Vec<_>>();
+    let before = h.diagnostics().unwrap();
+    let save = storage.begin_save().unwrap();
+    for o in &objects {
+        save.accept(o.clone()).unwrap();
+    }
+    save.finish().unwrap();
+    let after = h.diagnostics().unwrap();
+    eprintln!(
+        "DIAGNOSTIC sealed packs={} publications={}",
+        after.sealed_inserts - before.sealed_inserts,
+        storage.diagnostics().publish
+    );
+    assert_eq!(after.sealed_inserts - before.sealed_inserts, 4);
+    for ids in objects.chunks(128) {
+        assert_eq!(
+            storage
+                .reader()
+                .unwrap()
+                .read_objects(&ids.iter().map(FinalizedObject::id).collect::<Vec<_>>())
+                .unwrap(),
+            ids.iter()
+                .map(|o| o.canonical().to_vec())
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn same_save_read_and_dependency_force_closure_of_carried_queue() {
+    let t = support::Temp::new("pack-carry-closure");
+    let h = create(&t.join("db"));
+    let storage = Storage::new(h.storage.clone()).unwrap();
+    let children = (1..=513).map(|seed| object(seed, 500)).collect::<Vec<_>>();
+    let save = storage.begin_save().unwrap();
+    for child in &children {
+        save.accept(child.clone()).unwrap();
+    }
+    assert_eq!(
+        save.read_objects(&[children[0].id(), children[511].id()])
+            .unwrap(),
+        vec![
+            children[0].canonical().to_vec(),
+            children[511].canonical().to_vec()
+        ]
+    );
+    let parent = object(9001, 500).with_references(vec![children[0].id(), children[511].id()]);
+    save.accept(parent.clone()).unwrap();
+    save.finish().unwrap();
+    assert_eq!(
+        storage
+            .reader()
+            .unwrap()
+            .read_objects(&[parent.id(), children[511].id()])
+            .unwrap(),
+        vec![
+            parent.canonical().to_vec(),
+            children[511].canonical().to_vec()
+        ]
+    );
+}
