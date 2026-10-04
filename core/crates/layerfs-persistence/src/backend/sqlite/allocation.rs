@@ -9,8 +9,10 @@ use std::{
     },
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
+    time::Instant,
 };
 static NEXT: AtomicU64 = AtomicU64::new(0);
+use super::connection::AllocationRelease as Release;
 pub(crate) struct AllocationFile {
     file: File,
     parent: PathBuf,
@@ -39,14 +41,26 @@ impl AllocationFile {
             parent: path.parent().ok_or(BackendError::Integrity)?.to_owned(),
         })
     }
-    pub(crate) fn release(&self) -> Result<(u64, u64), BackendError> {
+    pub(crate) fn release(&self) -> Result<Release, BackendError> {
         let before = self.file.metadata().map_err(error)?;
         let allocated = before
             .blocks()
             .checked_mul(512)
             .ok_or(BackendError::Capacity)?;
+        let source = super::connection::AllocationIdentity {
+            descriptor: self.file.as_raw_fd(),
+            device: before.dev(),
+            inode: before.ino(),
+            logical_bytes: before.len(),
+        };
         if allocated <= before.len() {
-            return Ok((allocated, allocated));
+            return Ok(Release {
+                before: allocated,
+                after: allocated,
+                source,
+                transfer_ns: 0,
+                scratch_close_ns: 0,
+            });
         }
         // No payload is copied. The kernel transfers only unused extra extents;
         // this operation never changes the source's logical length or bytes.
@@ -62,10 +76,14 @@ impl AllocationFile {
             .mode(0o600)
             .open(&path)
             .map_err(error)?;
+        let transfer = Instant::now();
         let result = fcntl(&self.file, FcntlArg::F_TRANSFEREXTENTS(sink.as_raw_fd()));
+        let transfer_ns = transfer.elapsed().as_nanos() as u64;
         // This exclusively created scratch contains no logical Store data, even
         // on an unsuccessful transfer. Cleanup has its own definite outcome.
+        let close = Instant::now();
         let closed = nix::unistd::close(sink);
+        let scratch_close_ns = close.elapsed().as_nanos() as u64;
         let cleanup = std::fs::remove_file(&path);
         if closed.is_err() {
             return Err(BackendError::Unknown);
@@ -91,12 +109,15 @@ impl AllocationFile {
         if after.len() != before.len() {
             return Err(BackendError::Busy);
         }
-        Ok((
-            allocated,
-            after
+        Ok(Release {
+            before: allocated,
+            after: after
                 .blocks()
                 .checked_mul(512)
                 .ok_or(BackendError::Capacity)?,
-        ))
+            source,
+            transfer_ns,
+            scratch_close_ns,
+        })
     }
 }

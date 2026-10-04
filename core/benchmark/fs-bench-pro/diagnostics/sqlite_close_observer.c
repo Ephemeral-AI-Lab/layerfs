@@ -6,6 +6,13 @@
 #include <limits.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#define FD_ROWS 64
+struct FdRow { int fd; unsigned long long device,inode,calls,wall_ns; int last_rc,last_errno; };
+static struct FdRow fd_rows[FD_ROWS];
+static unsigned fd_used;
+static unsigned long long fd_omitted;
+static pthread_mutex_t fd_guard=PTHREAD_MUTEX_INITIALIZER;
 static pthread_once_t initialization = PTHREAD_ONCE_INIT;
 static int initialize_result;
 static _Atomic unsigned long long sql_calls[2],sql_ns[2],fd_calls[3],fd_ns[3],changed;
@@ -26,8 +33,15 @@ static int observed_close_v2(sqlite3 *db){
 static int observed_fd_close(int fd){
  int prior=errno;char path[PATH_MAX];int kind=-1;
  if(!fcntl(fd,F_GETPATH,path))kind=strstr(path,".layerfs-allocation-")?2:strstr(path,"history.sqlite")?1:strstr(path,"store.sqlite")?0:-1;
- errno=prior;uint64_t start=now();int rc=close(fd);int after=errno;
- if(kind>=0){atomic_fetch_add(&fd_calls[kind],1);atomic_fetch_add(&fd_ns[kind],now()-start);}errno=after;return rc;
+ struct stat identity;int known=kind>=0&&!fstat(fd,&identity);
+ errno=prior;uint64_t start=now();int rc=close(fd);int after=errno;uint64_t elapsed=now()-start;
+ if(known){pthread_mutex_lock(&fd_guard);unsigned i;
+  for(i=0;i<fd_used;i++)if(fd_rows[i].fd==fd&&fd_rows[i].device==(unsigned long long)identity.st_dev&&fd_rows[i].inode==(unsigned long long)identity.st_ino)break;
+  if(i==fd_used&&fd_used<FD_ROWS){fd_rows[fd_used++]=(struct FdRow){.fd=fd,.device=identity.st_dev,.inode=identity.st_ino};}
+  if(i<FD_ROWS){fd_rows[i].calls++;fd_rows[i].wall_ns+=elapsed;fd_rows[i].last_rc=rc;fd_rows[i].last_errno=rc<0?after:0;}else fd_omitted++;
+  pthread_mutex_unlock(&fd_guard);
+ }
+ if(kind>=0){atomic_fetch_add(&fd_calls[kind],1);atomic_fetch_add(&fd_ns[kind],elapsed);}errno=after;return rc;
 }
 struct Binding{const void *replacement;const void *original;};
 __attribute__((used,section("__DATA,__interpose,interposing")))
@@ -42,5 +56,7 @@ __attribute__((destructor))static void close_report(void){
  FILE *out=fopen(path,"wx");if(!out){fprintf(stderr,"close observer output refused\n");return;}
  fprintf(out,"{\"kind\":\"close-mechanism-diagnostic-v1\",\"mutating_connection_closes\":%llu,\"sqlite_close_calls\":%llu,\"sqlite_close_ns\":%llu,\"sqlite_close_v2_calls\":%llu,\"sqlite_close_v2_ns\":%llu,\"fd_closes\":[",atomic_load(&changed),atomic_load(&sql_calls[0]),atomic_load(&sql_ns[0]),atomic_load(&sql_calls[1]),atomic_load(&sql_ns[1]));
  for(int i=0;i<3;i++){if(i)fputc(',',out);fprintf(out,"{\"class\":\"%s\",\"calls\":%llu,\"wall_ns\":%llu}",i==0?"main":i==1?"history":"allocation-scratch",atomic_load(&fd_calls[i]),atomic_load(&fd_ns[i]));}
+ fprintf(out,"],\"descriptor_identity_omitted\":%llu,\"descriptor_identities\":[",fd_omitted);
+ for(unsigned i=0;i<fd_used;i++){struct FdRow*r=&fd_rows[i];if(i)fputc(',',out);fprintf(out,"{\"descriptor\":%d,\"device\":%llu,\"inode\":%llu,\"calls\":%llu,\"wall_ns\":%llu,\"last_result\":%d,\"last_error\":%d}",r->fd,r->device,r->inode,r->calls,r->wall_ns,r->last_rc,r->last_errno);}
  fprintf(out,"]}\n");fclose(out);
 }

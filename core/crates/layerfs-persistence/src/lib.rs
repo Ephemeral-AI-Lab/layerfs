@@ -8,7 +8,7 @@ mod history;
 mod open;
 mod publication;
 mod storage_provider;
-pub use backend::sqlite::connection::{Checkpoint, ConnectionProfile, SqlWork};
+pub use backend::sqlite::connection::{AllocationIdentity, Checkpoint, ConnectionProfile, SqlWork};
 pub use backend::sqlite::statement_work::StatementPhaseWork;
 pub use config::{BackendSelection, PersistenceConfig, SqlitePersistenceProfile};
 pub use handles::Handles;

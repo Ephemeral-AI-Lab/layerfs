@@ -1,0 +1,57 @@
+{
+  "durable": "NOT_RUN; follows all-seven Disposable qualification",
+  "history": "NOT_RUN",
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "d859508e3607f39b013c918c9486cbf73ff8f8e801f6087d753af1bd44b38081",
+    "product_seal": "df42897b637ee16ab4138a3f6350c8b97cf127b974f12dad62139abe03dc22ae",
+    "source_commit": "76c0661387d630f06b0e57db57a0958aa5828b49",
+    "source_dirty": false,
+    "source_tree": "1e51879f8cad03da8a328d412533afaf57959526"
+  },
+  "rows": [
+    {
+      "baseline_ns": 46436000,
+      "baseline_storage": 7372800,
+      "candidate_ns": 45053500,
+      "candidate_storage": 5214208,
+      "case": "phase7-sqlite-disposable-init-100-v1",
+      "ratio": 0.970227840468602,
+      "roots_equal": true,
+      "status": "PASS"
+    },
+    {
+      "baseline_ns": 129185750,
+      "baseline_storage": 23101440,
+      "candidate_ns": 137608708,
+      "candidate_storage": 20525056,
+      "case": "phase7-sqlite-disposable-init-1000-v1",
+      "ratio": 1.065200364591296,
+      "roots_equal": true,
+      "status": "PASS"
+    },
+    {
+      "baseline_ns": 1633508334,
+      "baseline_storage": 319848448,
+      "candidate_ns": 1822394458,
+      "candidate_storage": 305029120,
+      "case": "phase7-sqlite-disposable-init-10000-v1",
+      "ratio": 1.1156321765053205,
+      "roots_equal": true,
+      "status": "FAIL"
+    },
+    {
+      "baseline_ns": 5604959333,
+      "baseline_storage": 518029312,
+      "candidate_ns": 5445364958,
+      "candidate_storage": 514916352,
+      "case": "phase7-sqlite-disposable-init-100000-v1",
+      "ratio": 0.9715262207059442,
+      "roots_equal": true,
+      "status": "PASS"
+    }
+  ]
+}

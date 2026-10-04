@@ -1744,3 +1744,11 @@ power-of-two INSERT pages capped512 within one original transaction.30 covering
 checks, owning all-target Clippy and boundary441 PASS; profile/bounds/close scope
 unchanged. Tracked four-case campaign orchestration added. No new speed arm yet.
 See SQLITE-DISPOSABLE-INIT-STATEMENT-SHAPES.md.
+
+-2026-10-04: statement-shape campaign2 at76c066138 completes all four rows:
+100PASS0.970227840x/1000PASS1.065200365x/10000FAIL1.115632177x/
+100000PASS0.971526221x. All cold/root/proof/storage/cleanup/budgets PASS;10k exact
+miss25.5352906ms, close231.007667ms. Preserve implementation/evidence. Owner
+prioritizes exact allocation-close identity and Phase4.5 temporary lifecycle.
+Added genuine completion telemetry for source fd/dev/inode and transfer/scratch
+close (no lifecycle change yet); five allocation checks/owning Clippy/boundary PASS.

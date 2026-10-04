@@ -973,3 +973,14 @@ Canonical/physical transaction-byte and 8191-row publication bounds, pack
 layout, schema, profile settings and all other cache/queue/worker bounds remain
 unchanged. Performance benefit requires a new matched measurement; no speed
 claim follows from this algorithm change.
+
+
+### Allocation completion observations (based on76c066138)
+
+Checkpoint exposes the actual allocation-source descriptor/device/inode/logical
+length observed during release, and nested extent-transfer/scratch-close wall.
+The descriptor number is an observation, not a stable ownership capability.
+Source lifetime, release algorithm, checked scratch-close outcome and total
+completion timing remain unchanged at this observation-only step. These fields
+permit matching public OS-close diagnostics to the exact owned allocation file;
+they do not establish kernel writeback/device latency or physical sync count.

@@ -90,6 +90,26 @@ pub struct SqlWork {
     /// Explicit checkpoint wall, outside SQL statement spans.
     pub checkpoint_ns: u64,
 }
+/// Actual allocation descriptor identity observed during completion; not ownership.
+#[derive(Clone, Copy, Debug)]
+pub struct AllocationIdentity {
+    /// Descriptor number at this observation; never a stable handle capability.
+    pub descriptor: i32,
+    /// Filesystem device identity.
+    pub device: u64,
+    /// File inode identity.
+    pub inode: u64,
+    /// Logical bytes observed before release.
+    pub logical_bytes: u64,
+}
+#[derive(Clone, Copy)]
+pub(crate) struct AllocationRelease {
+    pub before: u64,
+    pub after: u64,
+    pub source: super::connection::AllocationIdentity,
+    pub transfer_ns: u64,
+    pub scratch_close_ns: u64,
+}
 /// One explicit checkpoint result; pending frames remain visible.
 #[derive(Clone, Copy, Debug)]
 pub struct Checkpoint {
@@ -109,6 +129,12 @@ pub struct Checkpoint {
     pub allocation_before_bytes: Option<u64>,
     /// Physical main-file allocation after unused-extents release; absent when busy.
     pub allocation_after_bytes: Option<u64>,
+    /// Exact descriptor/file identity used for unused-extents release.
+    pub allocation_source: Option<AllocationIdentity>,
+    /// F_TRANSFEREXTENTS call wall, nested in completion.
+    pub allocation_transfer_ns: u64,
+    /// Scratch descriptor close wall, nested in completion.
+    pub allocation_scratch_close_ns: u64,
 }
 pub(crate) struct State {
     pub(crate) connection: Connection,
@@ -240,7 +266,7 @@ impl Session {
             } else {
                 (false, -1, -1)
             };
-            let allocation = if busy {
+            let allocation: Option<AllocationRelease> = if busy {
                 None
             } else {
                 #[cfg(target_os = "macos")]
@@ -264,8 +290,11 @@ impl Session {
                 log_frames,
                 checkpointed_frames,
                 wall_ns: 0,
-                allocation_before_bytes: allocation.map(|p| p.0),
-                allocation_after_bytes: allocation.map(|p| p.1),
+                allocation_before_bytes: allocation.map(|p| p.before),
+                allocation_after_bytes: allocation.map(|p| p.after),
+                allocation_source: allocation.map(|p| p.source),
+                allocation_transfer_ns: allocation.map_or(0, |p| p.transfer_ns),
+                allocation_scratch_close_ns: allocation.map_or(0, |p| p.scratch_close_ns),
             })
         })();
         let wall_ns = start.elapsed().as_nanos() as u64;

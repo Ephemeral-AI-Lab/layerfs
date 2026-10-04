@@ -43,3 +43,35 @@ passing rows and the failing10k arm are not relabeled or pooled with it.
 All three history selections and Durable remain NOT_RUN. The immediate milestone
 is all four supported Disposable Init joint gates, then the history selections;
 Durable gap follows all-seven Disposable qualification at the same implementation.
+
+## Campaign2 at76c066138
+
+All four changed-source matched rows completed through the tracked sole-runner
+orchestration, one declared sample per arm. Do not pool with campaign1.
+
+|Files|Phase4.5 ms|Candidate ms|Ratio|Joint gate|Reference allocated B|Candidate allocated B|
+|---:|---:|---:|---:|---|---:|---:|
+|100|46.436000|45.053500|0.970227840|PASS|7,372,800|5,214,208|
+|1,000|129.185750|137.608708|1.065200365|PASS|23,101,440|20,525,056|
+|10,000|1633.508334|1822.394458|1.115632177|FAIL|319,848,448|305,029,120|
+|100,000|5604.959333|5445.364958|0.971526221|PASS|518,029,312|514,916,352|
+
+All eight cold0/root/independent sampled proof/storage/cleanup/budget checks PASS.
+The full family remains unqualified:10k exact time miss25.5352906ms (not PASS).
+Candidate10k Init1587.272708ms/close231.007667ms/checkpoint0.243000ms. Native
+prepare/cache-checkout25.107640ms,5177statements/2,526,232VM steps/989transactions/
+133write commits.100k10587statements/14,769,582VM/1015transactions/430write commits,
+prepare50.627710ms. More statements and different read/packing schedules are
+visible; no causal cross-window speed claim or unchanged resampling is allowed.
+Raw identity/binary/settings/fixtures/cold/proof/limits in receipts; compact copies
+omit large DBs, whose original raw manifests remain authoritative.
+
+Owner now prioritizes exact allocation handle teardown attribution and adapting
+Phase4.5's temporary allocation lifecycle, before another unrelated SQL change.
+The statement-shape implementation and all its evidence stay intact. Next cause
+instrument records actual allocation descriptor/device/inode and separates
+F_TRANSFEREXTENTS/scratch close from source close. A synthetic current-runtime
+external writer probe stays SQLITE_BUSY after an extra writable fd closes while
+another connection holds BEGIN IMMEDIATE. This is a scoped capability check,
+not universal locking proof or a speed arm. No timing work is moved outside the
+complete operation; any mere relocation of close cost is reported as such.
