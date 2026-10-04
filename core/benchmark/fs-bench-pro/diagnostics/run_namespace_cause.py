@@ -9,7 +9,7 @@ from shared import cold_native
 from cause_reference_vehicle import generate,BASE
 
 def write(path,value):path.write_text(json.dumps(value,indent=2,sort_keys=True)+'\n')
-def run(arm,output,api_observer=False):
+def run(arm,output,api_observer=False,vfs_observer=False):
     if arm not in ('baseline','candidate'):raise ValueError('baseline or candidate required')
     out=common.owned(output);out.mkdir()
     base=ROOT/'target/phase7-baseline/layerfs';owner=base if arm=='baseline' else ROOT
@@ -24,6 +24,7 @@ def run(arm,output,api_observer=False):
     source,seals=generate(ROOT)
     prospective={'kind':'paired-cold-namespace-small-step-cause-diagnostic','arm':arm,'admission':'NOT_RUN','product_speed_sample_count':0,'declared_diagnostic_children':1,'identity':identity,'shared_source_sha256':seals,'command_budget_ns':15000000000,'verification_budget_ns':9500000000,'scope':'shared namespace caller through public C1/C2/C5; Service envelope omitted; fixed observers and canonical census added; not an admission clock','native_vm_counter_qualified':False,'trace_vm_scope':'prepared statements exposing STMT/PROFILE events; status reset at PROFILE; opaque blob/VFS/internal operations not inferred','required_root_equivalence':'both frozen production Init1000 roots and eachother','required_canonical_equivalence':'2003ID role/length inventory and identical digest; independently sampled byte/tree proof'}
     prospective['api_observer_enabled']=api_observer
+    prospective['vfs_observer_enabled']=vfs_observer
     write(out/'prospective.json',prospective)
     temporary=None
     if arm=='baseline':
@@ -49,6 +50,15 @@ def run(arm,output,api_observer=False):
         api=sqlite.archive(binary,ROOT,common)
         identity['api_observer']=api
         identity['api_source_sha256']=common.digest(ROOT/'core/benchmark/fs-bench-pro/diagnostics/sqlite_api_observer.c')
+    vfs=None
+    if vfs_observer:
+        binary=out/'sqlite-vfs-observer.dylib'
+        vfs_build=sqlite.invoke(['clang','-O2','-Wall','-Wextra','-Werror','-dynamiclib',str(ROOT/'core/benchmark/fs-bench-pro/diagnostics/sqlite_vfs_observer.c'),'-lsqlite3','-o',str(binary)],out,'vfs-build',30000000000,os.environ.copy(),ROOT)
+        write(out/'vfs-build.json',vfs_build)
+        if vfs_build['exit_code']!=0 or vfs_build['timed_out']:raise ValueError('required VFS observer build failed')
+        vfs=sqlite.archive(binary,ROOT,common)
+        identity['vfs_observer']=vfs
+        identity['vfs_source_sha256']=common.digest(ROOT/'core/benchmark/fs-bench-pro/diagnostics/sqlite_vfs_observer.c')
     helper=cold_native.build(ROOT,out,sqlite.invoke)
     case=init.CASES[sqlite.CASES['phase7-sqlite-init-1000-v2'].fixture]
     fixture=init.prepare(case,common.RESULTS/'sdk-prepared')
@@ -64,6 +74,9 @@ def run(arm,output,api_observer=False):
     if cold['status']!='PASS' or remaining<=0:write(out/'receipt.json',{**prospective,'cold':cold,'status':'INELIGIBLE','child':'NOT_RUN','diagnostic_child_count':0});raise ValueError('cold contract/budget failed')
     env={**os.environ,'LAYERFS_CONSTRUCTION_WORKERS':'1','LAYERFS_HISTORY_CURSOR_KEY':'28'*32,'TMPDIR':str(scratch)}
     if api is not None:env.update({'DYLD_INSERT_LIBRARIES':api['path'],'LAYERFS_CAUSE_API_LOG':str(out/'sqlite-api.json')})
+    if vfs is not None:
+        libraries=[x['path'] for x in [api,vfs] if x is not None]
+        env.update({'DYLD_INSERT_LIBRARIES':':'.join(libraries),'LAYERFS_CAUSE_VFS_ENABLED':'1','LAYERFS_CAUSE_VFS_LOG':str(out/'sqlite-vfs.json')})
     child=sqlite.invoke([driver['path'],fixture['source'],str(out/'store.sqlite'),str(scratch),'phase7-sqlite-init-1000-v2'],out,'driver',remaining,env,owner)
     wall=time.monotonic_ns()-start
     result={**prospective,'frozen':identity,'fixture':fixture,'cold':cold,'run':child,'diagnostic_child_count':1,'command_wall_ns':wall,'cleanup':'PASS' if not list(scratch.iterdir()) else 'FAIL','status':'DIAGNOSTIC','verification':'NOT_RUN'}
@@ -75,8 +88,11 @@ def run(arm,output,api_observer=False):
     if api is not None:
         log=out/'sqlite-api.json'
         result['api_observer']=json.loads(log.read_text()) if log.exists() else {'status':'UNAVAILABLE','reason':'interposed observer did not emit its fixed report'}
+    if vfs is not None:
+        log=out/'sqlite-vfs.json'
+        result['vfs_observer']=json.loads(log.read_text()) if log.exists() else {'status':'UNAVAILABLE','reason':'delegated VFS report missing'}
     write(out/'receipt.json',result);common.manifest_run(out)
     return out
 if __name__=='__main__':
-    if len(sys.argv) not in (3,4) or len(sys.argv)==4 and sys.argv[3]!='--api':raise SystemExit('ARM FRESH_OUTPUT [--api] required')
-    print(run(sys.argv[1],sys.argv[2],len(sys.argv)==4))
+    if len(sys.argv) not in (3,4) or len(sys.argv)==4 and sys.argv[3] not in ('--api','--vfs'):raise SystemExit('ARM FRESH_OUTPUT [--api|--vfs] required')
+    print(run(sys.argv[1],sys.argv[2],len(sys.argv)==4,len(sys.argv)==4 and sys.argv[3]=='--vfs'))

@@ -14,7 +14,7 @@ def generate(root: Path):
         nonlocal text
         if text.count(old)!=1: raise ValueError(f'expected one exact reference API seam: {old}')
         text=text.replace(old,new)
-    for name in ['batch','engine','error','init','metadata','namespace','namespace_work','observer','scan','sql_observer']:
+    for name in ['batch','engine','error','init','metadata','namespace','namespace_work','observer','scan','sql_observer','vfs_observer']:
         p=source.parent/f'cause_support/{name}.rs'
         if name=='engine':p=root/'core/benchmark/fs-bench-pro/diagnostics/cause_engine_reference.rs'
         replace(f'#[path = "cause_support/{name}.rs"]',f'#[path = "{p}"]')

@@ -20,6 +20,8 @@ mod observer;
 mod scan;
 #[path = "cause_support/sql_observer.rs"]
 mod sql_observer;
+#[path = "cause_support/vfs_observer.rs"]
+mod vfs_observer;
 #[rustfmt::skip]
 #[allow(clippy::needless_range_loop)]
 #[path="../../../benchmark/fs-bench-pro-storage-content/src/workload/digest.rs"]mod digest;
@@ -42,6 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("required construction worker env1; Init constructors4".into());
     }
     sql_observer::initialize()?;
+    vfs_observer::initialize()?;
     let started = Instant::now();
     let config = HistoryCatalogConfig {
         binding_key: b"layerfs-bench-pro".to_vec(),

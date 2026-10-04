@@ -1599,3 +1599,12 @@ ActualSQLite_stepdominates,notmapping/reset/cache-drop. Tracecallsagree;same
 args/return/one-delegate. [Lifetime/APIresults](SQLITE-STATEMENT-LIFETIME-RESULTS.md)
 retainsrevision2/3scope/data/limits. NextqualifiedVFSwrite/syncobserverneeded,not
 weakerdurabilityorselectedoptimizer. No admission/allsevenPASS,goalACTIVE.
+
+### Delegated VFS diagnostic revision4 (prospective)
+
+PublicAPIstep dominatesrevision3, resetminor. Addfirst-partywholeVFS/IO delegation
+toactualpriorunix default, samearguments/return/options; observer176B/fileheader,
+fixedclass/flags/call/byte/ns counters. TinyWAL/FULLtransaction/checkpoint/read42
+probePASS,live0/errors0. No product/dependency/profilebufferchange; nameddefault
+isinstrumentedwrapperandunderlyingidentityreported. Onefreshpaired--vfschild/arm
+next,samecold/budgets/proofs. [VFScontract](SQLITE-VFS-CAUSE-CONTRACT.md).
