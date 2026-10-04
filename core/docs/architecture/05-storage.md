@@ -959,3 +959,17 @@ reports frame counts-1 without issuing a WAL-specific command. Both retain
 measured unused-allocation release and real final connection close. Read-only
 completion/mutation is refused before SQL. No named buffer/transaction/worker
 bound changes and no performance claim follows from the profile API.
+
+
+### SQLite locator statement shapes (based on ec4c12a66)
+
+Publication keeps its original transaction, object order, first-wins conflict
+handling and caller-order lost-ID result. Locator INSERTs use ordered subpages
+whose row counts are powers of two, capped by the existing 512-object batch
+limit and actual SQL/bind limits. This bounds prepared-statement shapes without
+padding fake rows, raising statement-cache capacity or adding acknowledgements.
+Any later subpage failure rolls back bodies and all earlier locator subpages.
+Canonical/physical transaction-byte and 8191-row publication bounds, pack
+layout, schema, profile settings and all other cache/queue/worker bounds remain
+unchanged. Performance benefit requires a new matched measurement; no speed
+claim follows from this algorithm change.

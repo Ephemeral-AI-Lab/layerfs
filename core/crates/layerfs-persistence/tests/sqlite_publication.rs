@@ -595,3 +595,57 @@ fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
         );
     }
 }
+
+#[test]
+fn multi_page_publication_preserves_first_wins_loss_order_and_late_failure_atomicity() {
+    for profile in [
+        layerfs_persistence::SqlitePersistenceProfile::Durable,
+        layerfs_persistence::SqlitePersistenceProfile::Disposable,
+    ] {
+        let temp = Temp::new("publication-subpages");
+        let h = Handles::create(
+            PersistenceConfig::sqlite(temp.join("db")).with_sqlite_profile(profile),
+            StoragePolicy::frozen_default(),
+            &config(),
+        )
+        .unwrap();
+        let block = h
+            .storage
+            .reserve(Reserve {
+                packs: 3,
+                ordinals: 0,
+            })
+            .unwrap();
+        let first = unit(block.first_pack_id, 1025);
+        let before = h.diagnostics().unwrap();
+        assert!(h.storage.publish(&first).unwrap().lost.is_empty());
+        let after = h.diagnostics().unwrap();
+        assert_eq!(after.transactions - before.transactions, 1);
+        assert_eq!(after.write_commits - before.write_commits, 1);
+        let mut conflict = unit(block.first_pack_id + 1, 1025);
+        conflict.objects.reverse();
+        assert_eq!(
+            h.storage.publish(&conflict).unwrap().lost,
+            conflict
+                .objects
+                .iter()
+                .map(|o| o.object_id)
+                .collect::<Vec<_>>()
+        );
+        let mut failing = unit(block.first_pack_id + 2, 1537);
+        failing.objects.last_mut().unwrap().pack_id += 1000;
+        let absent = failing.objects[1200].object_id;
+        let before = h.diagnostics().unwrap();
+        assert!(h.storage.publish(&failing).is_err());
+        assert_eq!(h.diagnostics().unwrap().rollbacks - before.rollbacks, 1);
+        let mut located = Vec::new();
+        h.storage.locate(&[absent], &mut located).unwrap();
+        assert!(located.is_empty());
+        let mut bodies = Vec::new();
+        assert_eq!(
+            h.storage
+                .read_packs(&[block.first_pack_id + 2], &mut bodies),
+            Err(PersistenceError::Missing)
+        );
+    }
+}

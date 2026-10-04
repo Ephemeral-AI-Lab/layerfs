@@ -8,8 +8,16 @@ pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published
     write_packs(tx, &batch.packs)?;
     let mut inserted = BTreeSet::new();
     // Both actual limits constrain one statement. SQL size is bounded conservatively.
-    let limit = tx.input_limit(6, 192, 32)?;
-    for page in batch.objects.chunks(limit) {
+    let limit = tx
+        .input_limit(6, 192, 32)?
+        .min(layerfs_storage::policy::BATCH_OBJECT_LIMIT);
+    let mut remaining = batch.objects.as_slice();
+    while !remaining.is_empty() {
+        // Stable powers of two reuse prepared statements without padding rows.
+        // Every subpage remains ordered inside the same atomic publication.
+        let count = 1usize << remaining.len().min(limit).ilog2();
+        let (page, tail) = remaining.split_at(count);
+        remaining = tail;
         let sql=format!("INSERT INTO object_location(object_id,role,canonical_length,pack_id,group_number,record_number) VALUES {} ON CONFLICT(object_id) DO NOTHING RETURNING object_id",std::iter::repeat_n("(?,?,?,?,?,?)",page.len()).collect::<Vec<_>>().join(","));
         let params = page
             .iter()

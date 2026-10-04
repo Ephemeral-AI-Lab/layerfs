@@ -1738,3 +1738,9 @@ late-close owner (inference; OS close-symbol coverage incomplete). Candidate VFS
 reads97,088,501B/reference47,038,183B, writes352,403,456/342,647,808B. Populated
 EXPLAIN shows indexed locators/pack join; no missing-index claim. Historical10k
 FAIL retained. Next: bounded statement-shape treatment, then new matched gates.
+
+-2026-10-04: bounded locator statement-shape treatment ready for freeze: ordered
+power-of-two INSERT pages capped512 within one original transaction.30 covering
+checks, owning all-target Clippy and boundary441 PASS; profile/bounds/close scope
+unchanged. Tracked four-case campaign orchestration added. No new speed arm yet.
+See SQLITE-DISPOSABLE-INIT-STATEMENT-SHAPES.md.
