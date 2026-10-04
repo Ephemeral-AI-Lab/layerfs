@@ -1,0 +1,73 @@
+{
+  "schema": "issue302-payload-coverage-disposition-v1",
+  "source": "68ed100de",
+  "rows": [
+    {
+      "raw_run": "benchmark-results/fs-bench-pro/issue302-history157-payload-coverage-baseline1",
+      "receipt": "core/docs/issues/302/checks/payload-coverage-history1/issue302-history157-payload-coverage-baseline1/receipt.json",
+      "case": "phase7-sqlite-disposable-history-stride1-v3",
+      "arm": "baseline",
+      "status": "FAIL",
+      "command_wall_ns": 190011649375,
+      "command_budget_ns": 190000000000,
+      "verification_status": "NOT_RUN",
+      "storage_bytes": 79888384
+    },
+    {
+      "raw_run": "benchmark-results/fs-bench-pro/issue302-history157-payload-coverage-candidate-notrun1",
+      "receipt": "core/docs/issues/302/checks/payload-coverage-history1/issue302-history157-payload-coverage-candidate-notrun1/receipt.json",
+      "case": "phase7-sqlite-disposable-history-stride1-v3",
+      "arm": "candidate",
+      "status": "NOT_RUN",
+      "command_wall_ns": null,
+      "command_budget_ns": 190000000000,
+      "verification_status": "NOT_RUN",
+      "storage_bytes": null
+    },
+    {
+      "raw_run": "benchmark-results/fs-bench-pro/issue302-history17-payload-coverage-baseline1",
+      "receipt": "core/docs/issues/302/checks/payload-coverage-history1/issue302-history17-payload-coverage-baseline1/receipt.json",
+      "case": "phase7-sqlite-disposable-history-stride10-v2",
+      "arm": "baseline",
+      "status": "COMPLETE",
+      "command_wall_ns": 52628317041,
+      "command_budget_ns": 60000000000,
+      "verification_status": "PASS",
+      "storage_bytes": 52473856
+    },
+    {
+      "raw_run": "benchmark-results/fs-bench-pro/issue302-history17-payload-coverage-candidate1",
+      "receipt": "core/docs/issues/302/checks/payload-coverage-history1/issue302-history17-payload-coverage-candidate1/receipt.json",
+      "case": "phase7-sqlite-disposable-history-stride10-v2",
+      "arm": "candidate",
+      "status": "COMPLETE",
+      "command_wall_ns": 49291546750,
+      "command_budget_ns": 60000000000,
+      "verification_status": "PASS",
+      "storage_bytes": 49594368
+    },
+    {
+      "raw_run": "benchmark-results/fs-bench-pro/issue302-history53-payload-coverage-baseline1",
+      "receipt": "core/docs/issues/302/checks/payload-coverage-history1/issue302-history53-payload-coverage-baseline1/receipt.json",
+      "case": "phase7-sqlite-disposable-history-stride3-v2",
+      "arm": "baseline",
+      "status": "COMPLETE",
+      "command_wall_ns": 88300243708,
+      "command_budget_ns": 170000000000,
+      "verification_status": "PASS",
+      "storage_bytes": 65142784
+    },
+    {
+      "raw_run": "benchmark-results/fs-bench-pro/issue302-history53-payload-coverage-candidate1",
+      "receipt": "core/docs/issues/302/checks/payload-coverage-history1/issue302-history53-payload-coverage-candidate1/receipt.json",
+      "case": "phase7-sqlite-disposable-history-stride3-v2",
+      "arm": "candidate",
+      "status": "COMPLETE",
+      "command_wall_ns": 83425574125,
+      "command_budget_ns": 170000000000,
+      "verification_status": "FAIL",
+      "storage_bytes": 62611456
+    }
+  ],
+  "disposition": "stride10 PASS; stride3 proof TIMEOUT; stride1 reference 190s TIMEOUT and candidate NOT_RUN. Historical limits unchanged."
+}

@@ -45,10 +45,20 @@ LEGACY_HISTORY+=RETIRED_STRIDE1
 REQUIRED=tuple(name.rsplit('-v',1)[0]+'-v3' if name in RETIRED_STRIDE1 else name for name in REQUIRED)
 REQUIRED_BY_PROFILE={profile:tuple(name.rsplit('-v',1)[0]+'-v3' if name in RETIRED_STRIDE1 else name for name in names)
                      for profile,names in REQUIRED_BY_PROFILE.items()}
+# Owner explicitly sets 300s after the 190.012s reference timeout. New v4
+# identities apply equally to both arms/profiles; preserve all v3/190s evidence.
+RETIRED_STRIDE1_V3=tuple(name for name,c in CASES.items() if c.states==157 and name.endswith('-v3'))
+for name in RETIRED_STRIDE1_V3:
+    c=CASES[name];new=name.rsplit('-v',1)[0]+'-v4'
+    CASES[new]=Case(new,c.fixture,c.states,c.storage_ceiling,300_000_000_000,c.verification_budget_ns,c.profile)
+LEGACY_HISTORY+=RETIRED_STRIDE1_V3
+REQUIRED=tuple(name.rsplit('-v',1)[0]+'-v4' if name in RETIRED_STRIDE1_V3 else name for name in REQUIRED)
+REQUIRED_BY_PROFILE={profile:tuple(name.rsplit('-v',1)[0]+'-v4' if name in RETIRED_STRIDE1_V3 else name for name in names)
+                     for profile,names in REQUIRED_BY_PROFILE.items()}
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"
-HISTORY_BUDGET_RULE='owner-2026-10-04-60-170-190-performance-only-v2'
+HISTORY_BUDGET_RULE='owner-2026-10-04-60-170-300-performance-only-v3'
 
 def invoke(command,folder,label,budget_ns,env,cwd):
     start=time.monotonic_ns();timeout=False

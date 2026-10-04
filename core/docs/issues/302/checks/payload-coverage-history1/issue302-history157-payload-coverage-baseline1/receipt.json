@@ -1,0 +1,306 @@
+{
+  "allocation_ceiling": 92342273,
+  "arm": "baseline",
+  "build": {
+    "binaries": {
+      "history_reference": {
+        "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-baseline/layerfs/benchmark-results/fs-bench-pro/binary-archive/aa3a11b9e5e258165920b78593ceeb5f1907894c059a33b935e61be41d0becba/history_reference",
+        "sha256": "aa3a11b9e5e258165920b78593ceeb5f1907894c059a33b935e61be41d0becba"
+      },
+      "history_reference_verify": {
+        "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-baseline/layerfs/benchmark-results/fs-bench-pro/binary-archive/ada77bd330f35e99a14448907e8ba2498615743960e82bea72caeb419cf2478a/history_reference_verify",
+        "sha256": "ada77bd330f35e99a14448907e8ba2498615743960e82bea72caeb419cf2478a"
+      }
+    },
+    "budget_ns": 30000000000,
+    "child": null,
+    "command": null,
+    "compilation_seal": "bad0c8b2925f813c902fbecab08ba4236dbb5c2560ce028866cd43ad0a57316e",
+    "cpu_ns": 12706334000,
+    "dependency_reuse": "worktree-local target",
+    "exit_code": 0,
+    "mode": "sealed-binary-reuse",
+    "peak_rss_bytes": 291913728,
+    "profile": "release/locked",
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "status": "PASS",
+    "timed_out": false,
+    "wall_ns": 0
+  },
+  "cache_contract": "history-source-cold-and-database-state-boundaries-v1",
+  "cache_status": "INCOMPLETE",
+  "case": "phase7-sqlite-disposable-history-stride1-v3",
+  "cleanup": {
+    "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+    "status": "PASS"
+  },
+  "cold_helper": {
+    "binary": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+    "binary_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+    "build": {
+      "budget_ns": 30000000000,
+      "child": null,
+      "command": [
+        "/usr/bin/clang",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/benchmark/fs-bench-pro/shared/cold_native.c",
+        "-o",
+        "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold"
+      ],
+      "cpu_ns": 179277000,
+      "exit_code": 0,
+      "peak_rss_bytes": 49446912,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "timed_out": false,
+      "wall_ns": 151642334
+    },
+    "build_wall_ns": 48574959,
+    "inputs": {
+      "architecture": "arm64",
+      "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+      "flags": [
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror"
+      ],
+      "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+      "source_sha256": "cb87d6136140eaa5f99afac19db0dcf11b88413e60030009895faacdb53c8883"
+    },
+    "mode": "sealed-binary-reuse",
+    "seal": "6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87"
+  },
+  "command_budget_ns": 190000000000,
+  "command_wall_ns": 190011649375,
+  "comparison_scope": "Corpus open through all real retained-state construction/save/C5, measured cold boundaries, final custody/checkpoint/close and canonical census",
+  "competing_work": [
+    "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+  ],
+  "compilation_seal": "bad0c8b2925f813c902fbecab08ba4236dbb5c2560ce028866cd43ad0a57316e",
+  "construction_workers": 1,
+  "dependency_seal": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+  "fixture": {
+    "checkpoints": 157,
+    "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+    "reachable_commits": 15632,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+    "total_logical_bytes": 4936693030,
+    "unique_blob_bytes": 891893320
+  },
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "8e8df10184e144e521d57898c2f2a8d331b81eb928c5206488f3654e9bd62aeb",
+    "product_seal": "08edbe8f29fbcc7472522bd8cbbf8a14201b62f21993406244317aa34b9146e1",
+    "source_commit": "68ed100de0b1a1b0c77d70c1eda5bc9c98053f4a",
+    "source_dirty": false,
+    "source_tree": "98b82b4b31606523787d968ec2a6b94e69924231"
+  },
+  "margin_arithmetic": "10*candidate_ns<=11*baseline_ns",
+  "measured_source_commit": "7edddbdb8e8512627aed0ed42533ef099d802384",
+  "observer": {
+    "build": {
+      "budget_ns": 30000000000,
+      "child": null,
+      "command": [
+        "/usr/bin/clang",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-dynamiclib",
+        "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/benchmark/fs-bench-pro/diagnostics/sqlite_history_observer.c",
+        "-lsqlite3",
+        "-o",
+        "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/history-observer-archive/063ee7ea02c57fdba1708a88160d285c582161ddba0b4b4892e53bcdfba082eb/history-observer.dylib"
+      ],
+      "cpu_ns": 200357000,
+      "exit_code": 0,
+      "peak_rss_bytes": 54034432,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "timed_out": false,
+      "wall_ns": 157349708
+    },
+    "coverage": "trace statements/VM plus delegated BLOB open/read/close and VFS read/write/sync/close; native VM reset counters unqualified; no device-byte/syscall claim",
+    "inputs": {
+      "architecture": "arm64",
+      "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+      "flags": [
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-dynamiclib"
+      ],
+      "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+      "sources": {
+        "sqlite_close_observer.c": "f1075ec9294b86fedf9b662bf5a040a03db530cdf332d5873055561a946a1aa7",
+        "sqlite_history_observer.c": "56d3e1ce3df99aaee0111dfc5a79bdd9035be92dcc2d6841ed4518dc1ca3cc28",
+        "sqlite_vfs_observer.c": "40559848d8988307e7f034beabde54f3f49d8f6c7210c93627932303e1a9f944",
+        "sqlite_work.c": "925daf0a74f4506a1958ca6a3b674c3e4d21525a8d4fb6e1d770b177d34fbc9f"
+      },
+      "sqlite_link": "unmodified system -lsqlite3"
+    },
+    "mode": "sealed-binary-reuse",
+    "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/history-observer-archive/063ee7ea02c57fdba1708a88160d285c582161ddba0b4b4892e53bcdfba082eb/history-observer.dylib",
+    "seal": "063ee7ea02c57fdba1708a88160d285c582161ddba0b4b4892e53bcdfba082eb",
+    "sha256": "9e4dbd7ad8ba8bc4dd0db429c3a9a1041de30f007ed033a48161b1b898308134"
+  },
+  "observer_status": "NOT_RUN",
+  "performance": {
+    "budget_ns": 173458141500,
+    "child": null,
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-baseline/layerfs/benchmark-results/fs-bench-pro/binary-archive/aa3a11b9e5e258165920b78593ceeb5f1907894c059a33b935e61be41d0becba/history_reference",
+      "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+      "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-payload-coverage-baseline1/store.sqlite",
+      "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-payload-coverage-baseline1/scratch/ordering",
+      "history-stride1",
+      "complete",
+      "disposable"
+    ],
+    "cpu_ns": 124813842000,
+    "exit_code": -9,
+    "peak_rss_bytes": 302825472,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "timed_out": true,
+    "wall_ns": 173467720042
+  },
+  "product_seal": "783958dc877c95e4e863ce9a606ed43ba8f6a0f0f6d2ce95a79e43342aefb82f",
+  "profile": "phase4.5-memory-off",
+  "requested_profile": "disposable",
+  "required_case_ids": [
+    "phase7-sqlite-disposable-init-100-v1",
+    "phase7-sqlite-disposable-init-1000-v1",
+    "phase7-sqlite-disposable-init-10000-v1",
+    "phase7-sqlite-disposable-init-100000-v1",
+    "phase7-sqlite-disposable-history-stride10-v2",
+    "phase7-sqlite-disposable-history-stride3-v2",
+    "phase7-sqlite-disposable-history-stride1-v3"
+  ],
+  "residency": {
+    "attestation_ns": 8008500000,
+    "files": 180444,
+    "first_pass_ns": 8527639000,
+    "fstats": 361525,
+    "helper_binary_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+    "helper_seal": "6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87",
+    "invalidated_files": 637,
+    "inventory_entries": 362152,
+    "invocation": {
+      "budget_ns": 190000000000,
+      "child": {
+        "attestation_ns": 8008500000,
+        "files": 180444,
+        "first_pass_ns": 8527639000,
+        "fstats": 361525,
+        "invalidated_files": 637,
+        "inventory_entries": 362152,
+        "length_bytes": 2254684026,
+        "mincore_calls": 361511,
+        "mmap_calls": 360874,
+        "msync_calls": 637,
+        "munmap_calls": 360874,
+        "opens": 361525,
+        "page_size_bytes": 16384,
+        "resident_after": 0,
+        "resident_first": 1176,
+        "total_pages": 264706,
+        "vector_peak_bytes": 140
+      },
+      "command": [
+        "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+        "--paths",
+        "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data/checkpoint-manifest.json",
+        "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data/inputs",
+        "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data/oracles"
+      ],
+      "cpu_ns": 14078379000,
+      "exit_code": 0,
+      "peak_rss_bytes": 2818048,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "timed_out": false,
+      "wall_ns": 16541129250
+    },
+    "length_bytes": 2254684026,
+    "method": "native two-pass msync-invalidate and whole-input mincore; no payload reads",
+    "mincore_calls": 361511,
+    "mmap_calls": 360874,
+    "msync_calls": 637,
+    "munmap_calls": 360874,
+    "opens": 361525,
+    "page_size_bytes": 16384,
+    "resident_after": 0,
+    "resident_first": 1176,
+    "scope": "regular-file content pages; filesystem metadata residency not directly observed",
+    "status": "PASS",
+    "total_pages": 264706,
+    "vector_peak_bytes": 140
+  },
+  "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "sample_count": 1,
+  "schema": "phase7-sqlite-history-v1",
+  "setup_method": "reuse original pinned immutable corpus; no prepared Store or product work shifted to setup",
+  "status": "FAIL",
+  "storage": {
+    "files": [
+      {
+        "allocated_bytes": 79691776,
+        "length_bytes": 77012992,
+        "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-payload-coverage-baseline1/store.sqlite"
+      },
+      {
+        "allocated_bytes": 196608,
+        "length_bytes": 178176,
+        "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-payload-coverage-baseline1/store.sqlite.history.sqlite"
+      }
+    ],
+    "scope": "database/WAL/SHM at this observation; not an unobserved peak",
+    "total_bytes": 79888384
+  },
+  "storage_bytes": 79888384,
+  "vehicle": {
+    "driver_seals": {
+      "core/crates/layerfs-project/examples/benchmark_history.rs": "b88c6233507ddc0b580eda2d1f5d62efca7bc6bea5de9520351d6e92cb0ac74b",
+      "core/crates/layerfs-project/examples/history_support/cold.rs": "78be74765e992bbd2c84391c1748efa979a75c93c250e53857c28aedeecd2039",
+      "core/crates/layerfs-project/examples/history_support/observer.rs": "c8d5d49510b126f76028f635c0e532df780391338e505b30d10691fe040c5635",
+      "core/crates/layerfs-project/examples/history_support/producer.rs": "d247193b6e33b7b58899d07595c721d9733f5cad95255ed56836ff5b347c5361",
+      "core/crates/layerfs-project/examples/history_support/retained.rs": "53b79a02d56dbf0af754469756429b8e586c855676d701b1e6b7b702f0c79790",
+      "core/crates/layerfs-project/examples/history_support/support.rs": "38d8737f6dd643dee9a7452d6a82aea26b37ebb5c67d2868095b644a634adcbf",
+      "core/crates/layerfs-project/examples/history_support/workload.rs": "cb01e98bea3a3b7bb936686d9aa50658785d9345246d452bd5f598830b7529d6"
+    },
+    "verifier_seals": {
+      "core/crates/layerfs-project/examples/history_support/canonical_memo.rs": "a197d2beb1e37841ff0058de1ee540b42230cc83bc902c2e36abeaa4630e0e03",
+      "core/crates/layerfs-project/examples/history_support/observer.rs": "c8d5d49510b126f76028f635c0e532df780391338e505b30d10691fe040c5635",
+      "core/crates/layerfs-project/examples/history_support/producer.rs": "d247193b6e33b7b58899d07595c721d9733f5cad95255ed56836ff5b347c5361",
+      "core/crates/layerfs-project/examples/history_support/retained.rs": "53b79a02d56dbf0af754469756429b8e586c855676d701b1e6b7b702f0c79790",
+      "core/crates/layerfs-project/examples/history_support/support.rs": "38d8737f6dd643dee9a7452d6a82aea26b37ebb5c67d2868095b644a634adcbf",
+      "core/crates/layerfs-project/examples/history_support/verify.rs": "afdb9f74ea5b20972d3df2da3d8c37c2fbe2610091d6f8d144786c9863d6af1a",
+      "core/crates/layerfs-project/examples/history_support/workload.rs": "cb01e98bea3a3b7bb936686d9aa50658785d9345246d452bd5f598830b7529d6",
+      "core/crates/layerfs-project/examples/verify_history.rs": "32f11f521233ee8828d95e51a6a77ccca0bbb6cb7b7e2ee9b69aa17d2477378e"
+    }
+  },
+  "verification_budget_ns": 9500000000,
+  "verification_status": "NOT_RUN",
+  "workload_row": "history-stride1"
+}

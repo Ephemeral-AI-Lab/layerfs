@@ -40,3 +40,17 @@ remain unchanged. Historical v1/v2 records and case definitions retain170s and
 their original failures; old stride1-v2 selection refuses another sample.
 The next changed implementation/harness needs new matched v3 evidence.
 Registry rule: `owner-2026-10-04-60-170-190-performance-only-v2`.
+
+## Explicit 300-second stride1 budget, owner follow-up 2026-10-04
+
+The owner quotes the reference timeout at190.012s and directs: **“give them
+300s budget to finish”**. New `history-stride1-v4` cases therefore use a
+300,000,000,000ns complete performance-command limit for both reference and
+candidate, in both supported profiles. Stride10/3 remain60/170s. The separate
+verification limit remains9.5s; this instruction does not change proof coverage,
+storage limits, workers, cache state or the10% comparison margin.
+
+Preserve historical v3/190s failures with their original identities and limits;
+v3 selections are retired. The new version receives one prospectively declared
+sample per arm, with an unchanged reference product and newly matched harness.
+Registry rule: `owner-2026-10-04-60-170-300-performance-only-v3`.

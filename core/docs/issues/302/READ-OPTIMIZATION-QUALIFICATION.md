@@ -646,3 +646,41 @@ confirms eventualwholepromotion once and later siblinghits. Fullworkspace
 checks then final newdense externaltarget9tests/ClippyPASS; exactcounts
 checks/payload-coverage-functional1. Currentalgorithmfreeze/changednative
 phase-count next; no belief that unitfixture guarantees a9.5s proof.
+
+
+### Frozen coverage policy68ed100de: final current-work disposition
+
+All six raw manifests checked, original evidence retained; compact receipts,
+logs, custody and proof inputs: [comparison](checks/payload-coverage-history1/comparison.json).
+One performance sample per case/arm, ordered stride10,3,1; no unchanged retries.
+
+| Stride | Reference complete command | Candidate complete command | Separate proof, reference/candidate | Disposition |
+| --- | ---: | ---: | --- | --- |
+| 10 | 52.628317041s | 49.291546750s | 3.046791958s PASS / 4.050975167s PASS | PASS |
+| 3 | 88.300243708s | 83.425574125s | 8.921965041s PASS / 9.506060541s TIMEOUT | INCOMPLETE admission |
+| 1 | 190.011649375s TIMEOUT | NOT_RUN | NOT_RUN / NOT_RUN | Reference FAIL; no qualified pins |
+
+Product lifecycle reference/candidate: stride10 35.698069416/32.615333292s;
+stride3 72.640613542/67.380527750s. Integer10% time margin passes both completed
+pairs; storage52,473,856/49,594,368B and65,142,784/62,611,456B stays within their
+54,278,964/70,427,034B ceilings. Missing proof prevents stride3 admission.
+Stride1 partial79,888,384B is not a completed storage claim. Every sampled row
+has cold/cleanup PASS. Original60/170/190s and9.5s proof limits remain recorded.
+
+Coverage native count diagnostic completes44states before9.505189166s timeout,
+complete27.645254791s, source/database cold and owner preservation PASS.
+Completed-prefix40 file-root phase:22,709 acquisitions,2,615,235,009 VFS requested
+bytes,2,510,583,278 BLOB bytes,66,396 reads,653,576,513ns BLOB read wall.
+Compared with earlier23,265 acquisitions/2,482,379,134 BLOB bytes, fewer
+acquisitions did not suppress bytes; this is diagnosis, not admission or a
+performance sample. Stop retention-policy experiments. Current implementation
+preserves full-packSHA integrity but ranges still scan all pack bytes.
+
+Current work is finished with this explicit non-admission disposition. The
+reviewable [localized Stage2 design](STAGE2-LOCALIZED-ACQUISITION-DESIGN.md)
+addresses actual acquisition and authentication suppression with explicit
+integrity scope and bounded proof coverage. Its scoped integrity/proof proposal
+is not implemented or silently substituted for existing guarantees.
+The owner separately grants300s to stride1: new v4 matched arms use that limit;
+historical190s failures stay unchanged. Stride10/3 are not resampled for this
+budget-only follow-up; new stride1 reference precedes any candidate.

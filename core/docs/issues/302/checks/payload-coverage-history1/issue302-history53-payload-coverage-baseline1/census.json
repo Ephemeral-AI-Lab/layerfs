@@ -1,0 +1,48 @@
+{
+  "canonical_bytes": 589480854,
+  "canonical_objects": 73447,
+  "inventory_sha256": "de9a85025bbd10c907e9b5aab67a3d69bd72ee7da8c0a3d2bb12cac6c415972b",
+  "owners": [
+    {
+      "allocated_bytes": 65011712,
+      "application_id": 1279677261,
+      "immutable_read": true,
+      "length_bytes": 62668800,
+      "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-payload-coverage-baseline1/store.sqlite",
+      "rows": {
+        "content_signatures": 6788,
+        "metadata_value_groups": 4107,
+        "object_packs": 988,
+        "objects": 73447,
+        "saves": 53,
+        "store_policy": 1
+      },
+      "sha256_after": "f9bae0734ac0f8139dc032362223e822493029ac9344ac00087519a6a009f00e",
+      "sha256_before": "f9bae0734ac0f8139dc032362223e822493029ac9344ac00087519a6a009f00e",
+      "user_version": 10
+    },
+    {
+      "allocated_bytes": 131072,
+      "application_id": 1279677256,
+      "immutable_read": true,
+      "length_bytes": 79872,
+      "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-payload-coverage-baseline1/store.sqlite.history.sqlite",
+      "rows": {
+        "branches": 53,
+        "commits": 52,
+        "history_meta": 1,
+        "layer_stacks": 1,
+        "layers": 53,
+        "scope_allocator": 0,
+        "workspace_stages": 0
+      },
+      "sha256_after": "40272d1827e80f3ffaa9fbf7c629962f0a1fc809fa481ae8c0289501a0a5bb10",
+      "sha256_before": "40272d1827e80f3ffaa9fbf7c629962f0a1fc809fa481ae8c0289501a0a5bb10",
+      "user_version": 1
+    }
+  ],
+  "pack_bodies_bytes": 57146716,
+  "scope": "closed-owner schema/integrity, canonical IDs/roles/lengths and C5 roots/counts; namespace oracle separate",
+  "status": "CHECKED",
+  "storage_bytes": 65142784
+}

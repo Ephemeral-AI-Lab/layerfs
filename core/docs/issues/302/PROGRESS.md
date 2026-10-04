@@ -2043,3 +2043,12 @@ pressurefixture27vs18FAIL confirmsretentionpressure. Restoreselectedfirst;
 payloadpromotiononlyat>=half retainedencodedcoverage, metadataunchanged.
 Fixture18/zeroeviction/exactbytesPASS; fullCorechecks +finaldense9testtarget
 PASS. No newcache/extraresources/weakerchecks; freeze/countdiag next,goalACTIVE.
+
+
+- 2026-10-04: frozen68ed100de current work disposed: stride10 PASS;
+  stride3 candidate proof TIMEOUT9.506060541s despite completed performance;
+  stride1 reference TIMEOUT190.011649375s, candidate NOT_RUN. All six manifests
+  checked, evidence retained. Localized Stage2 design now concrete; integrity
+  scope remains an explicit decision. Owner grants prospective300s to stride1
+  both arms/profiles in v4, seven focused registry tests PASS, proof stays9.5s.
+  Next one matched stride1-v4 pair; no stride10/3 resampling, goal ACTIVE.
