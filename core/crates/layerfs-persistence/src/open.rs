@@ -29,11 +29,16 @@ impl Handles {
             .map_err(|e| PersistenceError::Refused {
                 status: e.kind().to_string(),
             })?;
-        let session = Arc::new(Session::connect(&config.path, true, true)?);
+        let session = Arc::new(Session::connect(
+            &config.path,
+            true,
+            true,
+            config.sqlite_profile,
+        )?);
         session.initialize(policy, history, catalog_id)?;
         Self::validated(session, &history.binding_key, history.cursor_key)
     }
-    /// Opens validated durable authority explicitly; acknowledged reservations persist.
+    /// Opens validated authority with the explicitly selected profile; acknowledged reservations persist.
     pub fn open_writable(
         config: PersistenceConfig,
         binding: &[u8],
@@ -59,7 +64,12 @@ impl Handles {
             return Err(PersistenceError::BackendUnavailable);
         }
         Self::validated(
-            Arc::new(Session::connect(&config.path, writable, false)?),
+            Arc::new(Session::connect(
+                &config.path,
+                writable,
+                false,
+                config.sqlite_profile,
+            )?),
             binding,
             cursor_key,
         )

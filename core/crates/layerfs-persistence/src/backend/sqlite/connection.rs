@@ -1,11 +1,14 @@
 //! Durable host connection and recorded work; no busy retry or fallback.
-use super::{query, rows};
+use super::{profile, query, rows};
 use crate::backend::records::BackendError;
+use crate::SqlitePersistenceProfile;
 use rusqlite::{limits::Limit, Connection, OpenFlags};
 use std::{cell::RefCell, path::Path, sync::Mutex, time::Instant};
 /// The selected SQLite settings and actual runtime capabilities.
 #[derive(Clone, Debug)]
 pub struct ConnectionProfile {
+    /// Explicit selected completion/durability contract.
+    pub persistence: SqlitePersistenceProfile,
     /// Immutable profile identity.
     pub identity: &'static str,
     /// Linked engine version.
@@ -18,7 +21,7 @@ pub struct ConnectionProfile {
     pub compile_options: Vec<String>,
     /// Selected journal mode, checked on every relevant connection.
     pub journal_mode: String,
-    /// FULL is 2.
+    /// FULL is 2; OFF is 0 for Disposable.
     pub synchronous: i64,
     /// Foreign keys must be enabled.
     pub foreign_keys: i64,
@@ -38,6 +41,8 @@ pub struct ConnectionProfile {
     pub busy_timeout: i64,
     /// Memory-map window, zero.
     pub mmap_size: i64,
+    /// Memory temporary storage selection, 2.
+    pub temp_store: i64,
     /// Actual bind-variable limit.
     pub variable_limit: usize,
     /// Actual SQL-byte limit.
@@ -88,6 +93,10 @@ pub struct SqlWork {
 /// One explicit checkpoint result; pending frames remain visible.
 #[derive(Clone, Copy, Debug)]
 pub struct Checkpoint {
+    /// Profile whose completion work was performed.
+    pub persistence: SqlitePersistenceProfile,
+    /// Whether the selected profile required an actual WAL checkpoint.
+    pub wal_checkpoint_performed: bool,
     /// SQLite reported an obstructed checkpoint.
     pub busy: bool,
     /// WAL frames before checkpoint, -1 when no WAL exists.
@@ -114,7 +123,12 @@ pub(crate) struct Session {
     allocation: Option<super::allocation::AllocationFile>,
 }
 impl Session {
-    pub(crate) fn connect(path: &Path, writable: bool, create: bool) -> Result<Self, BackendError> {
+    pub(crate) fn connect(
+        path: &Path,
+        writable: bool,
+        create: bool,
+        selected: SqlitePersistenceProfile,
+    ) -> Result<Self, BackendError> {
         if !cfg!(target_os = "macos") {
             return Err(BackendError::Integrity);
         }
@@ -131,47 +145,7 @@ impl Session {
         connection
             .set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
             .map_err(rows::error)?;
-        if create {
-            query::run(&connection, "PRAGMA page_size=4096", vec![], &work)?;
-        }
-        if writable && create {
-            let values = query::run(&connection, "PRAGMA journal_mode=WAL", vec![], &work)?;
-            if values
-                .first()
-                .ok_or(BackendError::Integrity)?
-                .get::<String>(0)?
-                != "wal"
-            {
-                return Err(BackendError::Integrity);
-            }
-        }
-        if !create {
-            let mode = query::run(&connection, "PRAGMA journal_mode", vec![], &work)?
-                .first()
-                .ok_or(BackendError::Integrity)?
-                .get::<String>(0)?;
-            if mode != "wal" {
-                return Err(BackendError::Integrity);
-            }
-        }
-        for (name, value) in [
-            ("synchronous", 2),
-            ("foreign_keys", 1),
-            ("fullfsync", 1),
-            ("checkpoint_fullfsync", 1),
-            ("wal_autocheckpoint", 1000),
-            ("journal_size_limit", 4194304),
-            ("cache_size", -2048),
-            ("mmap_size", 0),
-            ("temp_store", 2),
-        ] {
-            query::run(
-                &connection,
-                &format!("PRAGMA {name}={value}"),
-                vec![],
-                &work,
-            )?;
-        }
+        profile::apply(&connection, create, selected, &work)?;
         let integer = |name| {
             query::run(&connection, &format!("PRAGMA {name}"), vec![], &work)?
                 .first()
@@ -187,7 +161,8 @@ impl Session {
             .map(|r| r.get::<String>(0))
             .collect::<Result<Vec<_>, _>>()?;
         let profile = ConnectionProfile {
-            identity: "sqlite-wal-full-macos-fullfsync-v1",
+            persistence: selected,
+            identity: selected.identity(),
             sqlite_version: rusqlite::version().to_owned(),
             platform: "macos",
             vfs_selection: "SQLite default; name not directly observed",
@@ -203,6 +178,7 @@ impl Session {
             cache_size: integer("cache_size")?,
             busy_timeout: integer("busy_timeout")?,
             mmap_size: integer("mmap_size")?,
+            temp_store: integer("temp_store")?,
             variable_limit: connection
                 .limit(Limit::SQLITE_LIMIT_VARIABLE_NUMBER)
                 .map_err(rows::error)? as usize,
@@ -216,24 +192,7 @@ impl Session {
                 .limit(Limit::SQLITE_LIMIT_LENGTH)
                 .map_err(rows::error)? as usize,
         };
-        if profile.journal_mode != "wal"
-            || profile.synchronous != 2
-            || profile.foreign_keys != 1
-            || profile.fullfsync != 1
-            || profile.checkpoint_fullfsync != 1
-            || profile.page_size != 4096
-            || profile.wal_autocheckpoint != 1000
-            || profile.journal_size_limit != 4194304
-            || profile.cache_size != -2048
-            || profile.busy_timeout != 0
-            || profile.mmap_size != 0
-            || profile.column_limit < 13
-            || profile.length_limit < layerfs_storage::policy::SINGLETON_PACK_LIMIT + 1024
-            || profile.sql_length_limit < 4096
-            || profile.variable_limit < 6
-        {
-            return Err(BackendError::Integrity);
-        }
+        profile::check(&profile)?;
         #[cfg(target_os = "macos")]
         let allocation = if writable {
             Some(super::allocation::AllocationFile::open(path)?)
@@ -267,14 +226,20 @@ impl Session {
         }
         let start = Instant::now();
         let result = (|| {
-            let rows = query::run(
-                &s.connection,
-                "PRAGMA wal_checkpoint(TRUNCATE)",
-                vec![],
-                &s.work,
-            )?;
-            let r = rows.first().ok_or(BackendError::Integrity)?;
-            let busy = r.get::<i64>(0)? != 0;
+            let wal_checkpoint_performed =
+                self.profile.persistence == SqlitePersistenceProfile::Durable;
+            let (busy, log_frames, checkpointed_frames) = if wal_checkpoint_performed {
+                let rows = query::run(
+                    &s.connection,
+                    "PRAGMA wal_checkpoint(TRUNCATE)",
+                    vec![],
+                    &s.work,
+                )?;
+                let r = rows.first().ok_or(BackendError::Integrity)?;
+                (r.get::<i64>(0)? != 0, r.get::<i64>(1)?, r.get::<i64>(2)?)
+            } else {
+                (false, -1, -1)
+            };
             let allocation = if busy {
                 None
             } else {
@@ -293,9 +258,11 @@ impl Session {
                 }
             };
             Ok(Checkpoint {
+                persistence: self.profile.persistence,
+                wal_checkpoint_performed,
                 busy,
-                log_frames: r.get(1)?,
-                checkpointed_frames: r.get(2)?,
+                log_frames,
+                checkpointed_frames,
                 wall_ns: 0,
                 allocation_before_bytes: allocation.map(|p| p.0),
                 allocation_after_bytes: allocation.map(|p| p.1),

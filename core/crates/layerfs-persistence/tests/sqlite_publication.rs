@@ -509,3 +509,89 @@ fn pack_insert_pages_keep_large_blob_binding_ownership_separate() {
     assert_eq!(read.len(), 3);
     assert!(read.iter().all(|p| p.body == body));
 }
+
+#[test]
+fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
+    use layerfs_persistence::SqlitePersistenceProfile::{Disposable, Durable};
+    for selected in [Durable, Disposable] {
+        let t = Temp::new("explicit-profile");
+        let path = t.join("db");
+        let cfg = PersistenceConfig::sqlite(&path).with_sqlite_profile(selected);
+        let h = Handles::create(cfg.clone(), StoragePolicy::frozen_default(), &config()).unwrap();
+        let profile = h.profile();
+        assert_eq!(profile.persistence, selected);
+        assert_eq!(
+            profile.journal_mode,
+            if selected == Durable { "wal" } else { "memory" }
+        );
+        assert_eq!(profile.synchronous, if selected == Durable { 2 } else { 0 });
+        assert_eq!(profile.fullfsync, i64::from(selected == Durable));
+        assert_eq!((profile.checkpoint_fullfsync, profile.temp_store), (1, 2));
+        assert_eq!(
+            (profile.page_size, profile.cache_size, profile.mmap_size),
+            (4096, -2048, 0)
+        );
+        let storage = Storage::new(h.storage.clone()).unwrap();
+        let object = FinalizedObject::new(
+            ObjectRole::FileState,
+            layerfs_content::object::codec::encode_bytes_object(&[17; 4096]).unwrap(),
+        )
+        .unwrap();
+        let save = storage.begin_save().unwrap();
+        save.accept(object.clone()).unwrap();
+        assert_eq!(save.finish().unwrap().inserted, 1);
+        // Failure after a new body INSERT must abort the whole unit in both profiles.
+        let mut invalid = unit(9999, 1);
+        invalid.objects[0].pack_id = 9998;
+        assert!(h.storage.publish(&invalid).is_err());
+        let mut absent = Vec::new();
+        assert_eq!(
+            h.storage.read_packs(&[9999], &mut absent),
+            Err(PersistenceError::Missing)
+        );
+        let completed = h.checkpoint().unwrap();
+        assert_eq!(completed.persistence, selected);
+        assert_eq!(completed.wal_checkpoint_performed, selected == Durable);
+        assert!(!completed.busy);
+        assert!(completed.allocation_before_bytes.is_some());
+        if selected == Disposable {
+            assert_eq!(
+                (completed.log_frames, completed.checkpointed_frames),
+                (-1, -1)
+            );
+            assert!(!t.join("db-wal").exists());
+        }
+        drop(storage);
+        drop(h);
+        let mismatched = cfg.clone().with_sqlite_profile(if selected == Durable {
+            Disposable
+        } else {
+            Durable
+        });
+        assert!(Handles::open_writable(mismatched, b"durable-publication", [71; 32]).is_err());
+        let reopened =
+            Handles::open_writable(cfg.clone(), b"durable-publication", [71; 32]).unwrap();
+        let read = Storage::new(reopened.storage.clone()).unwrap();
+        assert_eq!(
+            read.reader().unwrap().read_objects(&[object.id()]).unwrap(),
+            vec![object.canonical().to_vec()]
+        );
+        drop(read);
+        drop(reopened);
+        let readonly = Handles::open_read_only(cfg, b"durable-publication", [71; 32]).unwrap();
+        assert_eq!(readonly.profile().persistence, selected);
+        let before = readonly.diagnostics().unwrap();
+        assert!(readonly
+            .storage
+            .reserve(Reserve {
+                packs: 1,
+                ordinals: 0
+            })
+            .is_err());
+        assert!(readonly.checkpoint().is_err());
+        assert_eq!(
+            readonly.diagnostics().unwrap().statements,
+            before.statements
+        );
+    }
+}

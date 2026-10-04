@@ -6,7 +6,7 @@ use layerfs_content::{
     read_all, FilesystemRead, LogicalPath, ObjectId,
 };
 use layerfs_history::{HistoryCatalog, LayerStackId};
-use layerfs_persistence::{Handles, PersistenceConfig};
+use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::{Reader, Storage};
 use layerfs_telemetry::timer::Timing;
 use sha2::{Digest, Sha256};
@@ -219,9 +219,9 @@ fn verify_files(
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
-    if args.len() != 7 {
+    if !matches!(args.len(), 7 | 8) {
         return Err(
-            "store history root-hex stack-body-hex manifest-tsv manifest-sha256 required".into(),
+            "store history root-hex stack-body-hex manifest-tsv manifest-sha256 [durable|disposable] required".into(),
         );
     }
     let raw = fs::read(&args[5])?;
@@ -244,7 +244,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cursor: [u8; 32] = unhex(&std::env::var("LAYERFS_HISTORY_CURSOR_KEY")?)?
         .try_into()
         .map_err(|_| "cursor key width")?;
-    let config = PersistenceConfig::sqlite(&args[1]);
+    let selected = match args.get(7).map(String::as_str).unwrap_or("durable") {
+        "durable" => SqlitePersistenceProfile::Durable,
+        "disposable" => SqlitePersistenceProfile::Disposable,
+        _ => return Err("explicit durable/disposable profile required".into()),
+    };
+    let config = PersistenceConfig::sqlite(&args[1]).with_sqlite_profile(selected);
     let handles = Handles::open_read_only(config.clone(), b"layerfs-bench-pro", cursor)?;
     let history = &handles.history;
     let record = history

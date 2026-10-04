@@ -165,3 +165,55 @@ fn scratch_creation_refusal_is_explicit_and_leaves_store_data_intact() {
         })
         .is_ok());
 }
+
+#[test]
+fn disposable_finalization_releases_extents_without_wal_and_preserves_bytes() {
+    let t = support::Temp::new("disposable-release");
+    let path = t.join("db");
+    let cfg = PersistenceConfig::sqlite(&path)
+        .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Disposable);
+    let h = Handles::create(
+        cfg.clone(),
+        StoragePolicy::frozen_default(),
+        &HistoryCatalogConfig {
+            binding_key: b"allocation-release".to_vec(),
+            cursor_key: [71; 32],
+            incarnation: 1,
+        },
+    )
+    .unwrap();
+    let storage = Storage::new(h.storage.clone()).unwrap();
+    let object = FinalizedObject::new(
+        ObjectRole::FileState,
+        layerfs_content::object::codec::encode_bytes_object(b"disposable-preserved").unwrap(),
+    )
+    .unwrap();
+    let save = storage.begin_save().unwrap();
+    save.accept(object.clone()).unwrap();
+    save.finish().unwrap();
+    preallocate(&path);
+    let before = path.metadata().unwrap();
+    assert!(before.blocks() * 512 > before.len() + 8 * 1024 * 1024);
+    let completion = h.checkpoint().unwrap();
+    assert!(!completion.wal_checkpoint_performed);
+    let after = path.metadata().unwrap();
+    assert_eq!(after.len(), before.len());
+    assert!(after.blocks() * 512 <= after.len() + 4096);
+    drop(storage);
+    drop(h);
+    let reopened = Handles::open_read_only(cfg, b"allocation-release", [71; 32]).unwrap();
+    let storage = Storage::new(reopened.storage.clone()).unwrap();
+    assert_eq!(
+        storage
+            .reader()
+            .unwrap()
+            .read_objects(&[object.id()])
+            .unwrap(),
+        vec![object.canonical().to_vec()]
+    );
+    assert!(std::fs::read_dir(t.path()).unwrap().all(|e| !e
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .starts_with(".layerfs-allocation-")));
+}

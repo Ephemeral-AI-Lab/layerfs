@@ -1,6 +1,6 @@
-//! One complete durable direct-API Init; fresh database creation belongs to work.
+//! One complete selected-profile Init; fresh database creation belongs to work.
 use layerfs_history::{HistoryCatalogConfig, HistoryName, LayerStackId};
-use layerfs_persistence::{Handles, PersistenceConfig};
+use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_project::{init, InitRequest};
 use layerfs_storage::{Storage, StoragePolicy};
 use layerfs_telemetry::timer::Timing;
@@ -37,12 +37,17 @@ fn allocated(_path: &Path) -> Result<u64, Box<dyn std::error::Error>> {
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Vec<_>>();
-    if args.len() != 5 {
-        return Err("source fresh-database scratch name required".into());
+    if !matches!(args.len(), 5 | 6) {
+        return Err("source fresh-database scratch name [durable|disposable] required".into());
     }
+    let selected = match args.get(5).map(String::as_str).unwrap_or("durable") {
+        "durable" => SqlitePersistenceProfile::Durable,
+        "disposable" => SqlitePersistenceProfile::Disposable,
+        _ => return Err("explicit durable/disposable profile required".into()),
+    };
     let start = Instant::now();
     let handles = Handles::create(
-        PersistenceConfig::sqlite(&args[2]),
+        PersistenceConfig::sqlite(&args[2]).with_sqlite_profile(selected),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: b"layerfs-bench-pro".to_vec(),
@@ -85,6 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let allocation_after_close = allocated(Path::new(&args[2]))?;
     let complete_product_ns = start.elapsed().as_nanos();
     println!("{{\"status\":\"COMPLETE\",\"operation_ns\":{complete_product_ns},\"bootstrap_ns\":{bootstrap_ns},\"init_ns\":{init_ns},\"checkpoint_ns\":{},\"close_ns\":{close_ns},\"root\":\"{}\",\"stack\":\"{}\",\"root_serial\":{},\"entries\":{}}}",checkpoint.wall_ns,hex(result.root.as_bytes()),hex(&[0x41;16]),result.root_serial,result.entries);
+    eprintln!("EFFECTIVE_PROFILE {{\"identity\":\"{}\",\"journal_mode\":\"{}\",\"synchronous\":{},\"foreign_keys\":{},\"fullfsync\":{},\"checkpoint_fullfsync\":{},\"page_size\":{},\"cache_size\":{},\"mmap_size\":{},\"temp_store\":{},\"wal_checkpoint_performed\":{}}}",profile.identity,profile.journal_mode,profile.synchronous,profile.foreign_keys,profile.fullfsync,profile.checkpoint_fullfsync,profile.page_size,profile.cache_size,profile.mmap_size,profile.temp_store,checkpoint.wal_checkpoint_performed);
     eprintln!("DIAGNOSTIC profile={profile:?} allocation_before_checkpoint={allocation_before_checkpoint} allocation_after_close={allocation_after_close}");
     eprintln!("DIAGNOSTIC sqlite={work:?} checkpoint={checkpoint:?} storage={:?} saves={save_work:?} namespace={:?}",result.diagnostics,result.namespace_work);
     Ok(())

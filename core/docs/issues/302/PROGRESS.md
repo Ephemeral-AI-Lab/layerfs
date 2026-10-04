@@ -1676,3 +1676,17 @@ Proofcopy originalSHAunchanged; library source/flags/code sections match despite
 arm-specific install-name hashes. [Full comparison](SQLITE-MEMORY-OFF-COMPARISON.md).
 Ordinary durable1.819920557xFAIL remains; allsevenACTIVE/notadmission. Next actual
 publication occupancy count before any durable-boundary change.
+
+### Supported Durable/Disposable profiles; Disposable qualification first
+
+Explicit config-selected profiles now apply/readback before schema/first mutation.
+Durable defaults unchanged; DisposableMEMORY/OFF shares all schema/SQL/algorithms
+and keeps runtime atomicity, with documented crash/data-loss risk. Mismatched
+Store opens refuse; no live/automatic conversion. Completion remains measured,
+with Disposable allocation release and no WAL command. Both-profile publication/
+reopen/readonly/rollback and full100/1000namespace proof PASS; Disposable extra
+extent release/readback PASS.29covering checks, owningClippy/fmt,441boundary/
+23guard and4registry checksPASS. Separate seven-case Disposable registry and
+actual profile recording are implemented; allnew speed rowsNOT_RUN. Qualifyall
+seven Disposable first, then samefrozen Durable; existing history budget/vehicle
+binding remainspending. [Plan/contract](SQLITE-SUPPORTED-PROFILES.md).

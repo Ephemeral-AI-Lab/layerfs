@@ -8,6 +8,7 @@ pub(crate) mod metadata_policy;
 pub(crate) mod metadata_pooling;
 pub(crate) mod metadata_signatures;
 pub(crate) mod objects_read;
+mod profile;
 pub(crate) mod publish;
 pub(crate) mod query;
 pub(crate) mod rows;

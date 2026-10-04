@@ -1,4 +1,4 @@
-//! Shared persistence adapter; durable embedded SQLite is the available engine.
+//! Shared SQLite adapter with explicit Durable and disk-backed Disposable profiles.
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 mod backend;
@@ -10,7 +10,7 @@ mod publication;
 mod storage_provider;
 pub use backend::sqlite::connection::{Checkpoint, ConnectionProfile, SqlWork};
 pub use backend::sqlite::statement_work::StatementPhaseWork;
-pub use config::{BackendSelection, PersistenceConfig};
+pub use config::{BackendSelection, PersistenceConfig, SqlitePersistenceProfile};
 pub use handles::Handles;
 pub use history::HistoryProvider;
 pub use storage_provider::StorageProvider;

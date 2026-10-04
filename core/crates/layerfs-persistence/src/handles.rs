@@ -18,7 +18,8 @@ impl Handles {
     pub fn diagnostics(&self) -> Result<SqlWork, PersistenceError> {
         self.storage.session.diagnostics().map_err(Into::into)
     }
-    /// Explicit checkpoint and unused allocation release; caller times both.
+    /// Completes the selected profile and releases unused allocation, within caller timing.
+    /// Durable checkpoints WAL; Disposable has no WAL and retains allocation release.
     pub fn checkpoint(&self) -> Result<Checkpoint, PersistenceError> {
         self.storage.session.checkpoint().map_err(Into::into)
     }

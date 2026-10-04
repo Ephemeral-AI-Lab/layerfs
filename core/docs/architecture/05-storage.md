@@ -920,3 +920,42 @@ library performs reset within it. The arrays are nested within inclusive stateme
 transaction clocks and cover the ordinary query wrapper; schema batch execution
 is separately timed and not silently included. No payload/cache/worker bound or
 journal/synchronization change is introduced.
+
+
+### Explicit SQLite persistence profiles
+
+Source: this commit, based on `ab9932295`. Active `layerfs-persistence` exposes
+`SqlitePersistenceProfile::{Durable, Disposable}` through `PersistenceConfig`.
+`PersistenceConfig::sqlite` defaults to Durable; `with_sqlite_profile` selects
+before creation/open. No environment selection, live mode-switching API, retry
+or automatic Store conversion is added. A pre-existing Store's journal family
+must match the selected profile before applying connection-local settings.
+WAL Stores require Durable; rollback-header Stores require Disposable. SQLite's
+MEMORY journal is connection-local, so a closed Disposable Store reopens with a
+DELETE header and explicitly reselects MEMORY. Incompatible opens fail before
+schema/history operations rather than converting a Store. An operator cannot
+use the open call as a closed-Store conversion; no conversion workflow is offered.
+
+Durable retains WAL/FULL, fullfsync1 and checkpoint_fullfsync1. Disposable selects
+MEMORY/OFF, fullfsync0 and checkpoint_fullfsync1 before schema creation/first
+mutation. The latter unused checkpoint flag matches the recorded native reference
+ancillary value. Both keep foreign keys1, page size4096, cache-2048KiB, mmap0,
+temp_store2, busy timeout0, journal limit4MiB and WAL checkpoint threshold1000.
+Readback checks settings and required SQL capabilities on every connection.
+Existing native reference page/cache geometry is not changed to match these
+bounds. Both current profiles require the existing macOS capability boundary;
+PostgreSQL remains explicitly unavailable.
+
+Objects, metadata and history retain one schema and the same publication,
+reservation, conflict, rollback and unknown-outcome algorithms. Disposable is
+still a disk-backed Store: process crash or power loss can corrupt it and lose
+acknowledged data. Immutable CAS does not restore crash durability. Its MEMORY
+journal preserves runtime rollback while the process remains alive; it is not
+an in-memory database or a durability promise.
+
+Completion reports the selected profile and whether a WAL checkpoint occurred.
+Durable performs its existing final WAL checkpoint. Disposable has no WAL and
+reports frame counts-1 without issuing a WAL-specific command. Both retain
+measured unused-allocation release and real final connection close. Read-only
+completion/mutation is refused before SQL. No named buffer/transaction/worker
+bound changes and no performance claim follows from the profile API.

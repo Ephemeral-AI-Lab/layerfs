@@ -14,6 +14,7 @@ class Case:
     storage_ceiling:int|None
     command_budget_ns:int|None
     verification_budget_ns:int=9_500_000_000
+    profile:str="durable"
 CASES={c.id:c for c in (
     *(Case(f'phase7-sqlite-init-{n}-v2',f.id,None,None,15_000_000_000) for n,f in zip((100,1000,10000,100000),init.CASES.values())),
     Case('phase7-sqlite-history-stride10-v1',None,17,54_278_964,None),
@@ -21,6 +22,13 @@ CASES={c.id:c for c in (
     Case('phase7-sqlite-history-stride1-v1',None,157,92_342_273,None),
 )}
 REQUIRED=tuple(CASES)
+# Supported direct-open Disposable is a separate seven-case identity, never a
+# relabeling of Durable or the earlier intervention diagnostic.
+DISPOSABLE={c.id.replace('phase7-sqlite-','phase7-sqlite-disposable-').rsplit('-v',1)[0]+'-v1':c for c in CASES.values()}
+for name,c in DISPOSABLE.items():
+    CASES[name]=Case(name,c.fixture,c.states,c.storage_ceiling,c.command_budget_ns,c.verification_budget_ns,'disposable')
+REQUIRED_BY_PROFILE={'durable':REQUIRED,'disposable':tuple(DISPOSABLE)}
+PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"
 HISTORY_BUDGET_RULE=None
@@ -86,7 +94,7 @@ def run(selection,output,arm,baseline_root,common):
     if arm=='baseline' and (not root.is_relative_to(common.ROOT/'target/phase7-baseline') or subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()!=BASE or subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True)):
         raise ValueError('reference requires clean pinned owned checkout')
     out=common.owned(output);out.mkdir(parents=True)
-    record={'schema':'phase7-sqlite-step10-v1','case':case.id,'arm':arm,'status':'NOT_RUN','sample_count':0,'verification_status':'NOT_RUN','cache_status':'INCOMPLETE','cleanup':{'status':'NOT_RUN'},'comparison_scope':'inner complete product clock including fresh database create/open, real Init, required checkpoint and final close; external child wall reported separately','margin_arithmetic':'10*candidate_ns<=11*baseline_ns','cache_contract':contract.CACHE,'profile':contract.PROFILE if arm=='candidate' else 'Phase4.5 MEMORY/OFF disclosed','command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'construction_workers':4,'environment_workers':1,'required_case_ids':REQUIRED,'allocation_rule':INIT_ALLOCATION_RULE}
+    record={'schema':'phase7-sqlite-step10-v2','case':case.id,'arm':arm,'status':'NOT_RUN','sample_count':0,'verification_status':'NOT_RUN','cache_status':'INCOMPLETE','cleanup':{'status':'NOT_RUN'},'comparison_scope':'inner complete product clock including fresh database create/open, real Init, required checkpoint and final close; external child wall reported separately','margin_arithmetic':'10*candidate_ns<=11*baseline_ns','cache_contract':contract.CACHE,'requested_profile':case.profile,'profile':PROFILE_IDS[case.profile] if arm=='candidate' else 'Phase4.5 MEMORY/OFF disclosed','command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'construction_workers':4,'environment_workers':1,'required_case_ids':REQUIRED_BY_PROFILE[case.profile],'allocation_rule':INIT_ALLOCATION_RULE}
     locks=[]
     try:
         for p in [common.RESULTS/'phase7-sqlite.lock']+([root/'target/phase7-sqlite.lock'] if arm=='baseline' else []):
@@ -115,7 +123,7 @@ def run(selection,output,arm,baseline_root,common):
         scratch=out/'scratch';scratch.mkdir();env={**os.environ,'LAYERFS_CONSTRUCTION_WORKERS':'1','LAYERFS_HISTORY_CURSOR_KEY':'28'*32,'TMPDIR':str(scratch)}
         db=out/'store.sqlite';history=out/'history.sqlite'
         binaries=record['build']['binaries'];driver=binaries['benchmark_init' if arm=='candidate' else 'sqlite_reference_init']['path']
-        command=[driver,fixture['source'],str(db),str(scratch if arm=='candidate' else history),case.id]
+        command=[driver,fixture['source'],str(db),str(scratch if arm=='candidate' else history),case.id]+([case.profile] if arm=='candidate' else [])
         claim=common.RESULTS/'phase7-sqlite-sample-claims'/hashlib.sha256(json.dumps([case.id,arm,identity['source_tree'],identity['harness_seal'],record['measured_source_commit'],fixture['manifest_sha256']],sort_keys=True).encode()).hexdigest()
         claim.parent.mkdir(parents=True,exist_ok=True)
         with claim.open('x') as h:h.write(str(out)+'\n')
@@ -128,7 +136,14 @@ def run(selection,output,arm,baseline_root,common):
         child=sample['child']
         if sample['exit_code']!=0 or sample['timed_out'] or not isinstance(child,dict) or child.get('status')!='COMPLETE':record['status']='FAIL';return out
         record['status']='COMPLETE'
-        proof=invoke([binaries['verify_namespace']['path'],str(db),str(db if arm=='candidate' else history),child['root'],child['stack'],fixture['manifest'],fixture['manifest_sha256']],out,'verifier',case.verification_budget_ns,env,root)
+        if arm=='candidate':
+            prefix='EFFECTIVE_PROFILE '
+            matches=[line[len(prefix):] for line in (out/'driver.stderr').read_text().splitlines() if line.startswith(prefix)]
+            if len(matches)!=1:raise ValueError('actual selected-profile readback missing or ambiguous')
+            effective=json.loads(matches[0]);record['effective_profile']=effective
+            expected={'identity':PROFILE_IDS[case.profile],'journal_mode':'wal' if case.profile=='durable' else 'memory','synchronous':2 if case.profile=='durable' else 0,'foreign_keys':1,'fullfsync':1 if case.profile=='durable' else 0,'checkpoint_fullfsync':1,'page_size':4096,'cache_size':-2048,'mmap_size':0,'temp_store':2,'wal_checkpoint_performed':case.profile=='durable'}
+            if effective!=expected:raise ValueError('actual selected-profile settings/completion mismatch')
+        proof=invoke([binaries['verify_namespace']['path'],str(db),str(db if arm=='candidate' else history),child['root'],child['stack'],fixture['manifest'],fixture['manifest_sha256']]+([case.profile] if arm=='candidate' else []),out,'verifier',case.verification_budget_ns,env,root)
         record['verification']=proof;record['verification_wall_ns']=proof['wall_ns'];record['verification_status']='PASS' if proof['exit_code']==0 and not proof['timed_out'] and common.lite_verification_pass(proof['child'],fixture_case,child,fixture) else 'FAIL'
         return out
     except Exception as e:

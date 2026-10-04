@@ -9,11 +9,16 @@ class SqliteStep10(unittest.TestCase):
     def row(self,n,storage=100):
         return dict(cache_status='PASS',status='COMPLETE',verification_status='PASS',cleanup={'status':'PASS'},command_wall_ns=1,command_budget_ns=15,verification_wall_ns=1,verification_budget_ns=2,comparison_ns=n,storage_bytes=storage)
     def test_seven_required_selections_and_original_history_gates(self):
-        cases=list(f.CASES.values());self.assertEqual(len(cases),7)
+        cases=[f.CASES[x] for x in f.REQUIRED];self.assertEqual(len(cases),7)
         self.assertEqual([f.init.CASES[x.fixture].files for x in cases[:4]],[100,1000,10000,100000])
         self.assertEqual([x.states for x in cases[4:]],[17,53,157])
         self.assertEqual([x.storage_ceiling for x in cases[4:]],[54278964,70427034,92342273])
-        self.assertTrue(all(x.verification_budget_ns==9500000000 for x in cases));self.assertEqual(tuple(f.CASES),f.REQUIRED)
+        self.assertTrue(all(x.verification_budget_ns==9500000000 for x in cases));self.assertEqual(f.REQUIRED_BY_PROFILE["durable"],f.REQUIRED)
+        disposable=[f.CASES[x] for x in f.REQUIRED_BY_PROFILE["disposable"]]
+        self.assertEqual(len(disposable),7)
+        self.assertTrue(all(x.profile=="disposable" for x in disposable))
+        self.assertEqual([(x.fixture,x.states,x.storage_ceiling,x.command_budget_ns) for x in disposable],[(x.fixture,x.states,x.storage_ceiling,x.command_budget_ns) for x in cases])
+        self.assertEqual(len(f.CASES),14)
     def test_margin_is_integer_total_bound_and_joint_gate_cannot_waive_missing_proof(self):
         self.assertEqual(c.gate(self.row(110),self.row(100),100),'PASS')
         self.assertEqual(c.gate(self.row(111),self.row(100),100),'FAIL')
