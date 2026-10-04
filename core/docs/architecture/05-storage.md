@@ -1322,7 +1322,7 @@ cache increase or durability claim. Row/index/free-page overhead and extra SQL/
 BLOB calls require new count/performance/storage qualification.
 
 
-### Indexed embedded group rows and exact mapping reservation (against d9da19ecf)
+### Indexed embedded group rows and exact mapping reservation (against6e143ac60)
 
 Owner-approved creation-only `SqlitePackLayout::GroupRowsIndexed` creates schema3.
 It keeps schema2's exact control/group rows and uniqueness constraint, adding
@@ -1342,7 +1342,7 @@ and worker count remain. Index pages and maintenance are real storage/publicatio
 work; this source description does not claim a measured speed or storage result.
 
 
-### Same-acquisition unit cursor moves (against9847f0f9c)
+### Same-acquisition unit cursor moves (against6e143ac60)
 
 A group-row offset acquisition opens one read-only unit BLOB cursor, then uses
 SQLite's `blob_reopen` to move it to each subsequent intersecting immutable unit.

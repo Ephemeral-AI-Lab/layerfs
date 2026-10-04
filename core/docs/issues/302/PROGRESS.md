@@ -2144,3 +2144,20 @@ PASS. No newcache/extraresources/weakerchecks; freeze/countdiag next,goalACTIVE.
   See [SQLITE-GROUP-ROW-METADATA-TREATMENT.md](SQLITE-GROUP-ROW-METADATA-TREATMENT.md).
   17/53/Durable/Init/all-seven/full-audit NOT_RUN at this artifact; prior evidence
   and PostgreSQL/MinIO M4pause unchanged. No claim of complete slowdown removal.
+
+
+- 2026-10-04 isolated SQL EXPLAIN/profile follow-up: owner-approved schema3
+  covering index and exact mapping reservation at9847f0f9c preserve all mapping
+  validation; first matched pair+1.172835%strict-fasterFAIL remains sealed.
+  Further count/cause diagnostic supports one checked cursor per acquisition;
+  final6e143ac60candidate174.139903416svsnewreference179.235178500s,
+  strict faster2.842787407%. Complete194.681262208/186.557009666s and separate
+  proof17.205021208/17.541908375s bothPASS; cold/cleanupPASS. Candidate85172224B
+  passes approved92342273Bceiling, fails original83947520Btarget(+1.458892413%).
+  3122460fewerBLOBopens/closes each; all3452679reads/5905886097B preserved.
+  Core516/98targets,Clippy/fmt,455-fileboundary/23selftests/6observertestsPASS.
+  Save/custody remains11.164842236%slower; full pipeline faster for this pair.
+  Source/identity/count/reproduction/custody/LOC and all unrun scopes are in
+  [SQLITE-INDEXED-CURSOR-FINAL-REPORT.md](SQLITE-INDEXED-CURSOR-FINAL-REPORT.md).
+  17/53,Durable,Init,all-seven/full-payloadauditNOT_RUN at this artifact;
+  historical receipts and PostgreSQL/MinioM4pause unchanged. No push/merge/PR/release.

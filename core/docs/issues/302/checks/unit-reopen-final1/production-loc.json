@@ -1,0 +1,31 @@
+{
+  "parent": "6e143ac6013eb6338193d35805307aa5ecebcd94",
+  "before": 140081,
+  "after": 140081,
+  "delta": 0,
+  "reference_before": 65417,
+  "reference_after": 65417,
+  "core_before": 74664,
+  "core_after": 74664,
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "exact first-parent/staged source scope from same production_loc.py counter/version; every classified product blob identical; inherit validated parent counts; no tests/docs/tooling/examples counted",
+  "scopes": {
+    "core": {
+      "product_files": 455,
+      "parent_staged_product_blobs_equal": true,
+      "blob_identity_set_sha256": "6988be9bdbdb4df792f34ae67ff44e001b88ff4d0305195f41d314633bc6b29b"
+    },
+    "reference": {
+      "product_files": 193,
+      "parent_staged_product_blobs_equal": true,
+      "blob_identity_set_sha256": "eac7a29ba6ee468c739972e975c0ab0b63755d37a3429fbeded6bfdddd476b4d"
+    }
+  },
+  "changed_documentation_paths": [
+    "core/docs/architecture/05-storage.md",
+    "core/docs/issues/302/PROGRESS.md",
+    "core/docs/issues/302/SQLITE-INDEXED-CURSOR-FINAL-REPORT.md",
+    "core/docs/issues/302/SQLITE-PLAN-PROFILE-20261004.md",
+    "core/docs/issues/302/checks/unit-reopen-final1/comparison.json"
+  ]
+}

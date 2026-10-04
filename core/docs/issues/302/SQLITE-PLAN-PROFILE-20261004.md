@@ -226,3 +226,32 @@ index in[checks/indexed-mapping-final1/comparison.json](checks/indexed-mapping-f
 The earlier +1.172835% result stays unchanged and remains a numeric-margin PASS,
 not a strict-faster PASS. Raw check stdout is preserved separately where the
 tracked presentation removes trailing EOF whitespace; custody records bind both.
+
+
+## Final6e143ac60 matched result
+
+Final newly matched Disposable157pair: reference179235178500ns, candidate
+174139903416ns(**−5095275084ns /2.842787407%, strict faster PASS**). Complete
+commands194681262208/186557009666ns; independent proofs17205021208/17541908375ns
+PASS, cold/cleanupPASS. Candidateallocated85172224B remains unchanged from the
+first indexed candidate; approved92342273Bstrict ceilingPASS, original83947520B
+strict targetFAIL(+1224704B /1.458892413%). Canonical104618/871337620B, all157roots,
+904143paths and bounded921174logicalB/5347088candidateacquiredBmatch.
+
+Actual unit work330219opens/3122460reopens/3452679reads/330219closes; all5905886097
+read B retained exactly. Mapping330219queries/13364974rows/110881822VMsteps retained,
+no mappingfullscan/sort/reprepare. SaveVFS7077823070Bvs11939753738Breference;
+Save/custody83518657418vs75130460079nsstill11.164842236%slower. Filesystem
+38216449293vs51378662327nssaves25.618053172%. Whole-childCPU122274757000vs
+129573219000ns; lifetimeRSS333905920vs343638016B(notphase-only memory).
+This artifact removes the full pipeline slowdown in its own matched pair, while
+residualSave/validation/transaction/publication/observercosts remain explicit.
+
+[SQLITE-INDEXED-CURSOR-FINAL-REPORT.md](SQLITE-INDEXED-CURSOR-FINAL-REPORT.md)
+records reproduction, arithmetic, every identity, bounds/omissions and per-commit
+LOC. [checks/unit-reopen-final1/comparison.json](checks/unit-reopen-final1/comparison.json)
+fully audits25reference/21candidatefile lengths/SHA including immutable closed
+Stores. Both complete pairs remain; no warm credit, unchanged sample replacement,
+relaxed budget/buffer, new worker/cache or ignored failure.17/53,Durable,Init,
+all-seven and exhaustive retained-store payloadauditNOT_RUN. PostgreSQL/MinioM4pause
+unchanged. No push/PR/merge/release or other-chat message.
