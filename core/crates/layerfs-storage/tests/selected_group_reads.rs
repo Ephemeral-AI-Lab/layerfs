@@ -256,12 +256,13 @@ fn a_sparse_prefix_target_reconstructs_its_required_base_exactly() {
             .unwrap()[0],
         objects[1].canonical()
     );
-    assert_eq!(storage.diagnostics().range_selected, 1);
-    assert_eq!(storage.diagnostics().whole_due_density, 1);
+    assert_eq!(storage.diagnostics().range_selected, 0);
+    assert_eq!(storage.diagnostics().whole_due_payload, 1);
+    assert_eq!(storage.diagnostics().read_pack_selections, 1);
 }
 
 #[test]
-fn sparse_native_records_reconstruct_canonical_chunk_bytes() {
+fn payload_siblings_reuse_one_complete_acquisition_with_exact_native_bytes() {
     use layerfs_storage::{
         encoding::{encode_full, CompressionWorkspace},
         policy::{StorageCapacities, StoragePolicy},
@@ -331,13 +332,16 @@ fn sparse_native_records_reconstruct_canonical_chunk_bytes() {
         })
         .unwrap();
     let storage = Storage::new(metadata).unwrap();
+    let reader = storage.reader().unwrap();
     assert_eq!(
-        storage
-            .reader()
-            .unwrap()
-            .read_objects(&[objects[7].id()])
-            .unwrap()[0],
+        reader.read_objects(&[objects[7].id()]).unwrap()[0],
         objects[7].canonical()
     );
-    assert_eq!(storage.diagnostics().range_selected, 1);
+    assert_eq!(
+        reader.read_objects(&[objects[0].id()]).unwrap()[0],
+        objects[0].canonical()
+    );
+    assert_eq!(storage.diagnostics().range_selected, 0);
+    assert_eq!(storage.diagnostics().whole_due_payload, 1);
+    assert_eq!(storage.diagnostics().read_pack_selections, 1);
 }

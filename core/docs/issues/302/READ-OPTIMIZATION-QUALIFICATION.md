@@ -593,3 +593,29 @@ retains fullphase arrays/field schemas/proof scopes/identities. Reproduce:
 --candidate-run issue302-history53-value-retention-candidate1`.
 Product830 unchanged; current551harness ordinary matched performance/combined
 proofNOT_RUN. Limits/resources/cold/wholeSHA unchanged,goalACTIVE.
+
+
+## Payload first-demand acquisition test after356b04dff
+
+Previous goal turn made progress through file-root phase attribution. Current
+clean tree revalidated. Deterministic public native-payload fixture reads two
+sibling groups through one reader; before policy,2complete acquisitions for
+expected1FAIL (first selected scan, later whole promotion). Failure retained.
+A prospective domain policy now chooses whole payload materialization after
+validating full directory/requested groups. Singleton/small/density reasons
+retain precedence; sparse metadata units and same-owner reuse promotion remain.
+No range port/canonical codec removed; native/PREFIX reconstruction exact.
+
+Every strict selected acquisition already scans fullSHA256. Whole payload
+retention avoids paying that scan again for a sibling group, under the same
+2MiB/4096body cache,512KiBdecoded caches, singleton/output/chain/private/
+publication bounds. No new cache/base memo, workers, weaker authentication or
+error-driven alternate path. Actual whole_due_payload counter records choices.
+Fixture now1acquisition/exactbytesPASS. FullCoreworkspace/alltargets tests,
+Clippy-Dwarnings,fmt-all/check,boundary448/23PASS; raw checks
+checks/payload-first-functional1. Sparse metadata coalescing/density/random/
+corruption tests remain; payload path intentionally chooses whole, not a false
+sparse-I/O claim. This is a cost policy, not proof admission.
+Freeze then one prospective native53phase-count child on original closed
+store; compare completed-prefix acquisition/byte counts, no unchanged speed
+retry or historicalrow promotion. Existing limits190s/9.5s remain.

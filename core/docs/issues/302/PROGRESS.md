@@ -2026,3 +2026,11 @@ notaddedtoparent; closecallsallinvocations inclnull,notresourcecount. Next
 explicit hypothesisfirstselectedpayload+wholepromotion duplicatesfullscans;
 publicreadfixture/countdiagnosis beforepolicychange. Product830unchanged,
 newharnessqualNOT_RUN,190s/9.5s unchanged,goalACTIVE.
+
+
+-2026-10-04: payload-first hypothesis publicfixture confirms2fullacquisitions
+for2siblinggroups beforepolicyFAIL. Whole-first payload afterdirectory/request
+validation fixes1/exactnative+PREFIXbytes; sparsemetadata remainsselected. Same
+body/decode/count/chain/output/privatebounds+fullSHA,nonewcache/baseMemo.
+FullCorechecksPASS;freeze thennative53phasecounts. Previousphaseattribution
+progress,notadmission;oldrows/190s/9.5s unchanged,goalACTIVE.

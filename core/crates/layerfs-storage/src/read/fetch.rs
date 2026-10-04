@@ -341,6 +341,7 @@ impl Source for Fetch {
                         Some("density") => c.whole_due_density += 1,
                         Some("small") => c.whole_due_small += 1,
                         Some("reuse") => c.whole_due_reuse += 1,
+                        Some("payload") => c.whole_due_payload += 1,
                         _ => {}
                     }
                     if info.domain == PackDomain::Payload {

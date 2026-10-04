@@ -1182,3 +1182,17 @@ Private ownership reviewed: ordinary pending members seal and flush into ready
 immutable packs before locators are exposed. Mutable pooled tails use their
 separate PooledMetadata body view; appending still releases pooled pack bodies
 and does not enter ordinary GroupCache. No private invalidation removed.
+
+
+### Payload first-demand whole selection (against356b04dff)
+
+Strict selected acquisition already scans all pack bytes for the complete
+digest. C2 chooses whole materialization on first payload demand to avoid a
+selected scan followed by whole promotion when sibling groups/dependencies are
+needed. Singleton/small/density decisions retain precedence; sparse metadata
+units and reuse promotion remain supported. This is a prospective domain policy
+after full directory validation, never an error-driven retry. Same2MiB owner
+cache/count, singleton exception, decoded/output/chain/private/publication bounds
+and descriptor/fullSHA/frame/canonical checks remain. whole_due_payload reports
+actual choices. The backend-neutral selected-read port and checked BLOB path
+still serve both whole and sparse metadata strategies.

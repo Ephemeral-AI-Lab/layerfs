@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "source_parent": "356b04dff",
+  "workspace_tests": 497,
+  "targets": 94,
+  "before": "public payload sibling fixture fails2acquisitions vs1expected",
+  "after": "one complete payload acquisition, exact native/PREFIXbytes, sparse metadata selection remains",
+  "clippy": "workspace/all-targets/-Dwarnings PASS",
+  "fmt": "all/check PASS",
+  "boundary_files": 448,
+  "guard_selftests": 23,
+  "limits": "same2MiBbody/512KiBdecoded and existing singleton/count/output/chain bounds"
+}
