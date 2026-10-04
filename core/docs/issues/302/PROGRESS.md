@@ -1662,3 +1662,17 @@ candidate4KiB and budgets; proofcopy retains empty WAL/SHM via publicfilecontrol
 2KiB/1KiB/4KiB capability and unchanged sampled native verifier PASS on fresh
 proofcopy, original measured hash unchanged. One new corrected observer pair
 next; no production speed replay/profile weakening. See [contract](SQLITE-MEMORY-OFF-DIAGNOSTIC-CONTRACT.md).
+
+### Qualified MEMORY/OFF revision2 comparison
+
+At96327681f both actual mutation profiles read back MEMORY/0 before first main
+mutation and close; root/inventory/proof/cold0/cleanup/budgets/observer PASS.
+Init reference140,552,500ns/candidate133,230,042ns (0.947902328x); complete
+operation145,632,458/151,535,000ns (1.040530402x), diagnostic-only. COMMIT step
+35,457,916/37,528,708ns; trace3644/297statements and327348/203659VM. VFS write
+21,423,104/21,283,340B; WAL0both; sync0/3 initial-profile operations. Native
+page/cache differences and candidate initialWAL validation/transition disclosed.
+Proofcopy originalSHAunchanged; library source/flags/code sections match despite
+arm-specific install-name hashes. [Full comparison](SQLITE-MEMORY-OFF-COMPARISON.md).
+Ordinary durable1.819920557xFAIL remains; allsevenACTIVE/notadmission. Next actual
+publication occupancy count before any durable-boundary change.

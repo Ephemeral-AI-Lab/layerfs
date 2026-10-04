@@ -1,0 +1,115 @@
+{
+  "parent": "9150e761219a38792251460c759fbd616e1f467d",
+  "staged_tree": "aeae2328233f3ef449f4b47905b4d48085ab0c1b",
+  "before": {
+    "combined": 137867,
+    "root": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-agent/parent",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 796,
+          "layerfs-bridge": 6834,
+          "layerfs-content": 13500,
+          "layerfs-daemon": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 811,
+          "layerfs-persistence": 3560,
+          "layerfs-project": 799,
+          "layerfs-s3": 879,
+          "layerfs-sandbox": 1106,
+          "layerfs-server": 3996,
+          "layerfs-storage": 7479,
+          "layerfs-telemetry": 2257,
+          "layerfs-workspace": 26835
+        },
+        "files": 440,
+        "lines": 72450
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    },
+    "active_core": 28406,
+    "inactive_core_reference": 44044,
+    "migration": {
+      "old_path": 191,
+      "new_path": 7996,
+      "rest_core": 64263,
+      "reference": 65417
+    }
+  },
+  "after": {
+    "combined": 137867,
+    "root": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-agent/staged",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 796,
+          "layerfs-bridge": 6834,
+          "layerfs-content": 13500,
+          "layerfs-daemon": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 811,
+          "layerfs-persistence": 3560,
+          "layerfs-project": 799,
+          "layerfs-s3": 879,
+          "layerfs-sandbox": 1106,
+          "layerfs-server": 3996,
+          "layerfs-storage": 7479,
+          "layerfs-telemetry": 2257,
+          "layerfs-workspace": 26835
+        },
+        "files": 440,
+        "lines": 72450
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    },
+    "active_core": 28406,
+    "inactive_core_reference": 44044,
+    "migration": {
+      "old_path": 191,
+      "new_path": 7996,
+      "rest_core": 64263,
+      "reference": 65417
+    }
+  },
+  "committed_scope_identity_confirmation": {
+    "commit": "96327681f7a7aacd1bb318aa24bb7717e309489e",
+    "counted_staged_tree": "aeae2328233f3ef449f4b47905b4d48085ab0c1b",
+    "exact_scope_blob_ids": {
+      "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+      "core/crates": "996225b72fe34ace3c57af81909f97cf8e3c224e",
+      "core/Cargo.toml": "e9f169b66993e58bdadb49a556653ca7ab66ffcc",
+      "tools/production_loc.py": "c7dd2b9c6aa9db63393a4ff3ebca9327529d146e"
+    },
+    "note": "Initial whole-report-dict equality assertion included snapshot-specific paths; commit proceeded before final-tree assertion. Exact unchanged counted scope/counter identity confirmed on committed snapshot; production total/delta correct."
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "budget_ns": 30000000000,
+  "child": null,
+  "command": [
+    "clang",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/benchmark/fs-bench-pro/diagnostics/sqlite_proof_journal.c",
+    "-lsqlite3",
+    "-o",
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-memoryoff1000-baseline-diagnostic2/sqlite-proof-journal"
+  ],
+  "cpu_ns": 114622000,
+  "exit_code": 0,
+  "peak_rss_bytes": 42745856,
+  "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+  "timed_out": false,
+  "wall_ns": 80928209
+}
