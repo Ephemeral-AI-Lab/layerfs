@@ -14,10 +14,6 @@
 struct row { uint64_t id,calls,steps,scans,sorts,reprepare,profile_ns,step_calls,step_ns,exec_calls,exec_ns; int phase,owner; char sql[SQL_TEXT]; };
 static struct row rows[CLASSES];
 static size_t used;
-#define CLASS_SLOTS (CLASSES * 2)
-/* Counter-key navigation only: no object/result data, fixed32KiB at4096classes. */
-static uint32_t class_slots[CLASS_SLOTS];
-static uint64_t class_lookup_calls,class_lookup_probes;
 static uint64_t omitted, opens;
 static pthread_mutex_t guard=PTHREAD_MUTEX_INITIALIZER;
 static uint64_t now_ns(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC,&t); return (uint64_t)t.tv_sec*1000000000+(uint64_t)t.tv_nsec; }
@@ -27,19 +23,9 @@ static struct row *get_sql(const char *sql,int ow) {
  if(!sql) sql="";
  uint64_t h=UINT64_C(14695981039346656037); for(const unsigned char *p=(const unsigned char*)sql;*p;p++) h=(h^*p)*UINT64_C(1099511628211);
  int ph=phase();
- size_t slot=(size_t)((h ^ (uint64_t)ow*UINT64_C(0x9e3779b97f4a7c15) ^ (uint64_t)ph*UINT64_C(0x517cc1b727220a95)) % CLASS_SLOTS);
- class_lookup_calls++;
- for(size_t searched=0;searched<CLASS_SLOTS;searched++){
-  class_lookup_probes++;uint32_t index=class_slots[slot];
-  if(index){struct row *r=&rows[index-1];if(r->id==h&&r->phase==ph&&r->owner==ow)return r;}
-  else{
-   if(used==CLASSES){omitted++;return NULL;}
-   struct row *r=&rows[used];class_slots[slot]=(uint32_t)++used;
-   r->id=h;r->phase=ph;r->owner=ow;snprintf(r->sql,SQL_TEXT,"%s",sql);return r;
-  }
-  slot=(slot+1)%CLASS_SLOTS;
- }
- omitted++;return NULL;
+ for(size_t i=0;i<used;i++) if(rows[i].id==h && rows[i].phase==ph && rows[i].owner==ow) return &rows[i];
+ if(used==CLASSES) { omitted++; return NULL; }
+ struct row *r=&rows[used++]; r->id=h;r->phase=ph;r->owner=ow;snprintf(r->sql,SQL_TEXT,"%s",sql);return r;
 }
 static struct row *get(sqlite3_stmt *s) { return get_sql(sqlite3_sql(s),owner(s)); }
 #ifdef LAYERFS_COMBINED_OBSERVER
@@ -88,7 +74,7 @@ static void finish(void) {
  FILE *f=fopen(path,"wx");if(!f){perror("SQLite observer output");return;}
  fprintf(f,"{\"schema\":\"sqlite-work-v1\",\"opens\":%llu,\"omitted\":%llu,\"classes\":[",(unsigned long long)opens,(unsigned long long)omitted);
  for(size_t i=0;i<used;i++){struct row *r=&rows[i];if(i)fputc(',',f);fprintf(f,"{\"sql_id\":\"%016llx\",\"phase\":%d,\"owner\":%d,\"calls\":%llu,\"vm_steps\":%llu,\"fullscan_steps\":%llu,\"sorts\":%llu,\"reprepare\":%llu,\"profile_ns\":%llu,\"step_calls\":%llu,\"step_ns\":%llu,\"exec_calls\":%llu,\"exec_ns\":%llu,\"sql_prefix\":",(unsigned long long)r->id,r->phase,r->owner,(unsigned long long)r->calls,(unsigned long long)r->steps,(unsigned long long)r->scans,(unsigned long long)r->sorts,(unsigned long long)r->reprepare,(unsigned long long)r->profile_ns,(unsigned long long)r->step_calls,(unsigned long long)r->step_ns,(unsigned long long)r->exec_calls,(unsigned long long)r->exec_ns);quoted(f,r->sql);fputc('}',f);}
- fprintf(f,"],\"class_lookup\":{\"kind\":\"fixed-index-over-existing-counter-rows\",\"slots\":%d,\"index_bytes\":%zu,\"calls\":%llu,\"probes\":%llu}}\n",CLASS_SLOTS,sizeof(class_slots),(unsigned long long)class_lookup_calls,(unsigned long long)class_lookup_probes);fclose(f);
+ fprintf(f,"]}\n");fclose(f);
 }
 
 __attribute__((constructor)) static void register_output(void) { atexit(finish); }

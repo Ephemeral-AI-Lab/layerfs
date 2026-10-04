@@ -68,3 +68,35 @@ Every subsequent checkpoint records commit/LOC, mechanism counts, case verdicts,
 limits/identities/reproduction and unresolved contract questions here or linked
 append-only evidence. Issue#302receives a checkpoint comment, not a rewrite of
 historical receipt status or the PostgreSQL/MinIO milestone checklist.
+
+
+## Checkpoint1 — bounded observer class navigation
+
+Owner selects Disposable iterations, Durable separate. The observer now indexes
+its existing counter rows using a fixed32768B/8192slot table at4096classes. No
+product/object/result data is cached. Full fingerprint/phase/owner matching,
+mutex, output order, counts/status reset and bounded omission behavior remain.
+Additive class_lookup calls/probes report actual bookkeeping work. Retained157
+count replay changes1775113020linear comparisons to20258390slot probes across
+20251289lookups (98.858754920%fewer comparisons), with no new speed sample.
+
+[Cause record](checks/observer-index-cause1/README.md) and
+[checks](checks/observer-index1/checks.json) retain7native calibrations, differential
+bucket-collision/phase/owner/reused-statement tests, identical class arrays/order/
+VM/counts at512classes and saturated16classes with matching omissions, plus11
+history registry/proof checks. A self-contained original first-party fixture
+replaces a Git-history access requirement; only that changed differential test
+is checked again. Current Rust product/SQL/example inputs are unchanged, so
+edcfae4ac519/99Core checks/Clippy/fmt/boundary455/23selftests are reused explicitly.
+
+Six indexed cases now register10/3/1per profile. Complete performance60/170/300s,
+separate proof12/12/30s, ceilings54278964/70427034/92342273B and original targets
+49344512/64024576/83947520B remain. Normal runner, one fresh paired17-state row
+first, outputs `issue302-opportunity-observer-history17-reference1` and
+`issue302-opportunity-observer-history17-candidate1`; new reference pins mandatory.
+All3/1/Durable remain NOT_RUN at this artifact until actually executed. Mechanism
+cost reduction is observer overhead improvement, not a changed product algorithm.
+Checkpoint commit production LOC140138→140138(delta0), reference65417/core74721,
+with exact parent/staged product/SQL blobs equal. No failure or gate relaxation.
+Request sharing and mapping validation investigations continue after this frozen
+stride10receipt. The active goal is not complete at this checkpoint.

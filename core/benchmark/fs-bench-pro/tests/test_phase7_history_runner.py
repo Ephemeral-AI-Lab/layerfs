@@ -27,12 +27,12 @@ class HistoryRunner(unittest.TestCase):
 
     def test_indexed_selection_keeps_the_approved_stride1_envelope(self):
         from families.phase7_sqlite import CASES, INDEXED_GROUP_ROW_CASES, LITE_PROOF_POLICY
-        self.assertEqual(len(INDEXED_GROUP_ROW_CASES),2)
+        self.assertEqual(len(INDEXED_GROUP_ROW_CASES),6)
         for name in INDEXED_GROUP_ROW_CASES:
             c=CASES[name]
             self.assertEqual(c.pack_layout,'group-rows-indexed')
-            self.assertEqual(c.states,157)
-            self.assertEqual(c.command_budget_ns,300_000_000_000)
-            self.assertEqual(c.verification_budget_ns,30_000_000_000)
-            self.assertEqual(c.storage_ceiling,92_342_273)
+            self.assertIn(c.states,(17,53,157))
+            self.assertEqual(c.command_budget_ns,{17:60_000_000_000,53:170_000_000_000,157:300_000_000_000}[c.states])
+            self.assertEqual(c.verification_budget_ns,30_000_000_000 if c.states==157 else 12_000_000_000)
+            self.assertEqual(c.storage_ceiling,{17:54_278_964,53:70_427_034,157:92_342_273}[c.states])
             self.assertEqual(c.proof_policy,LITE_PROOF_POLICY)

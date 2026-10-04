@@ -1,0 +1,14 @@
+{
+  "kind": "count-cause-replay-of-retained-class-keys",
+  "receipt_sql_work": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-typed-descriptor-history157-candidate1/sql-work.json",
+  "receipt_sha256": "2442c2620174f204d6f9b5ea2509ff3b86188e817f0027ef6f8b5073fdf3451b",
+  "classes": 790,
+  "known_lookup_calls": 20251289,
+  "linear_class_comparisons": 1775113020,
+  "indexed_slot_probes": 20258390,
+  "reduction_percent": 98.85875492029234,
+  "index_slots": 8192,
+  "index_bytes": 32768,
+  "scope": "exact lookup-count algebra from calls/profile+step+exec, with one first-class miss per emitted class; no omissions; no product performance sample or clock claim",
+  "counts_preserved": true
+}

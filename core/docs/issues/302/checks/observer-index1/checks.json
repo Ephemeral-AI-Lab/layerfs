@@ -1,0 +1,29 @@
+{
+  "first_party_linear_fixture_sha256": "925daf0a74f4506a1958ca6a3b674c3e4d21525a8d4fb6e1d770b177d34fbc9f",
+  "checks": [
+    {
+      "command": "python3 -m unittest discover -s core/benchmark/fs-bench-pro/tests -p test_diagnostics.py",
+      "status": "PASS",
+      "tests": 7,
+      "wall_seconds_from_unittest": 8.363
+    },
+    {
+      "command": "PYTHONPATH=core/benchmark/fs-bench-pro/tests python3 -m unittest test_diagnostics.CauseDiagnostics.test_counter_index_matches_linear_rows_and_saturation_behavior",
+      "status": "PASS",
+      "scope": "changed fixture access at final test identity"
+    },
+    {
+      "command": "python3 -m unittest discover -s core/benchmark/fs-bench-pro/tests -p test_phase7_history*.py",
+      "status": "PASS",
+      "scope": "indexed stride10/3/1registration and existing proof/vehicle guards"
+    }
+  ],
+  "product_verification_reuse": {
+    "source": "edcfae4ac3292b88d6929190b2cb89b72d79c68a",
+    "product_paths_unchanged": true,
+    "core_tests": 519,
+    "targets": 99,
+    "ignored": 0,
+    "clippy_fmt_boundary_tool_tests": "PASS at identical scope; no product/example edits"
+  }
+}

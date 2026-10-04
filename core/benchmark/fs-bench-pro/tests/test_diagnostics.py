@@ -26,6 +26,30 @@ class CauseDiagnostics(unittest.TestCase):
             select=next(row for row in value['classes'] if row['phase']==1)
             self.assertEqual(select['calls'],1);self.assertEqual(select['step_calls'],3);self.assertGreater(select['vm_steps'],0)
             self.assertEqual(sum(row['step_calls'] for row in value['classes'] if row['phase']==0),0)
+    def test_counter_index_matches_linear_rows_and_saturation_behavior(self):
+        source=runner.HERE/'diagnostics'
+        linear=(Path(__file__).parent/'fixtures/sqlite_work_linear.c').read_bytes()
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);old=root/'linear.c';old.write_bytes(linear);probe=root/'probe'
+            flags=['clang','-O2','-std=c11','-Wall','-Wextra','-Werror']
+            subprocess.run(flags+[str(source/'sqlite_class_index_probe.c'),'-lsqlite3','-o',str(probe)],check=True,capture_output=True)
+            for limit in (512,16):
+                results=[]
+                for name,file in [('linear',old),('indexed',source/'sqlite_work.c')]:
+                    folder=root/f'{name}-{limit}';folder.mkdir();lib=folder/'observer.dylib';output=folder/'work.json'
+                    subprocess.run(flags+[f'-DCLASSES={limit}','-dynamiclib',str(file),'-lsqlite3','-o',str(lib)],check=True,capture_output=True)
+                    result=subprocess.run([str(probe),str(folder)],check=True,capture_output=True,text=True,env={**os.environ,'DYLD_INSERT_LIBRARIES':str(lib),'LAYERFS_SQLITE_WORK_OUTPUT':str(output)})
+                    self.assertIn('PASS bucket collisions',result.stdout)
+                    value=json.loads(output.read_text())
+                    rows=[{k:v for k,v in row.items() if not k.endswith('_ns')} for row in value['classes']]
+                    results.append((value['opens'],value['omitted'],rows))
+                    if name=='indexed':
+                        self.assertEqual(value['class_lookup']['slots'],limit*2)
+                        self.assertGreater(value['class_lookup']['probes'],value['class_lookup']['calls'])
+                self.assertEqual(results[0],results[1])
+                self.assertEqual(len(results[1][2]),108 if limit==512 else 16)
+                self.assertEqual(results[1][1],0) if limit==512 else self.assertGreater(results[1][1],0)
+
     def test_history_phase_rows_are_associated_without_parent_double_counting(self):
         from diagnostics.run_history_proof_mechanism import read_phases
         row = dict(stage='file-roots', available=True, sql_values=[0]*19, blob_values=[0]*11)
