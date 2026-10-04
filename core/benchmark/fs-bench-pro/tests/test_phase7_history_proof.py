@@ -52,7 +52,7 @@ class HistoryProof(unittest.TestCase):
                        'cache_status': 'PASS', 'cleanup': {'status': 'PASS'}, 'sample_count': 1,
                        'verification_status': 'PASS', 'command_wall_ns': 1, 'command_budget_ns': 60_000_000_000,
                        'verification_wall_ns': 1, 'performance': {'child': child}, 'workload_row': 'history-stride10',
-                       'identity': {'harness_seal': 'unit-fixture'}, 'build': {'binaries': {'driver': 'unit-fixture'}}}
+                       'required_case_ids': ('unit-case',), 'identity': {'harness_seal': 'unit-fixture'}, 'build': {'binaries': {'driver': 'unit-fixture'}}}
             census = {'status': 'CHECKED', 'canonical_objects': 51689, 'canonical_bytes': 380559460}
             proof = {'status': 'CHECKED', 'states': 17, 'custody_states': 17}
             paths = [folder / f'{name}.json' for name in ('receipt', 'census', 'proof')]

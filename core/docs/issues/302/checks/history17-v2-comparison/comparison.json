@@ -1,0 +1,10 @@
+{
+  "status": "INCOMPLETE",
+  "timing_gate": "FAIL",
+  "verification_gate": "FAIL",
+  "ratio": 1.1769520087841427,
+  "baseline_ns": 33770167166,
+  "candidate_ns": 39745866083,
+  "candidate_allowed_ns": 37147183882.6,
+  "proof_timeout": true
+}

@@ -1783,3 +1783,11 @@ cold0/boundaries/51689canonical objects380559460B, but proofFAIL due completed-s
 misclassification. Retained-data proof repair PASS7.113652792s without speed rerun.
 Original receipt not promoted. Prospective historyv2proof-corrected IDs registered;
 6legacyv1 remain visible/refused; original workloads/budgets/ceilings unchanged.
+
+-2026-10-04: corrected history17v2 matched pair atc58cd91aa completes cold/root/
+canonical/storage/cleanup, but timingFAIL1.176952009x and candidate proofTIMEOUT
+9.506742375s. Reference proof4.862578167s. Candidate53350read transactions and
+1.70GBpayload/1.05GBpack reads for45.56MBinserted bodies; lower SQL/VM counts than
+reference still slower. Pin bookkeeping tuple/list defect repaired offline from
+immutable records without rerun; source normalization next. Hist53/157/Durable
+NOT_RUN. See SQLITE-HISTORY17-V2-COMPARISON.md.

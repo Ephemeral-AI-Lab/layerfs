@@ -157,7 +157,7 @@ def root_pins(receipt, census, proof, receipt_path, census_path, proof_path):
         raise ValueError('reference canonical census mismatch')
     evidence = {}
     for label, path, expected in [('receipt', receipt_path, receipt), ('census', census_path, census), ('proof', proof_path, proof)]:
-        if json.loads(Path(path).read_text()) != expected:
+        if json.loads(Path(path).read_text()) != json.loads(json.dumps(expected)):
             raise ValueError('reference evidence file disagrees with qualified record')
         evidence[label] = {'path': str(Path(path).resolve()), 'sha256': digest(path)}
     return {'kind': 'matched-phase4.5-root-pins-v1', 'source_commit': BASE,

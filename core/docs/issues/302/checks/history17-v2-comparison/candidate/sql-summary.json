@@ -1,0 +1,20 @@
+{
+  "0": {
+    "statements": 65,
+    "vm_steps": 2053,
+    "step_ns": 1112000,
+    "exec_ns": 0
+  },
+  "1": {
+    "statements": 199949,
+    "vm_steps": 9405799,
+    "step_ns": 3759851000,
+    "exec_ns": 0
+  },
+  "2": {
+    "statements": 111,
+    "vm_steps": 808,
+    "step_ns": 566000,
+    "exec_ns": 0
+  }
+}
