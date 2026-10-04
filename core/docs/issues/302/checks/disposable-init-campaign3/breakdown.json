@@ -1,0 +1,174 @@
+[
+  {
+    "files": 100,
+    "baseline_stages": {
+      "bootstrap_ns": 6153208,
+      "close_ns": 88541,
+      "init_ns": 33388958,
+      "operation_ns": 39631208,
+      "root": "ca1c20f806277e3fb0447ef526a5ca8d298753d01667f501e8b58b6350cd86f1",
+      "root_serial": 1,
+      "stack": "41414141414141414141414141414141",
+      "status": "COMPLETE"
+    },
+    "candidate_stages": {
+      "bootstrap_ns": 3448792,
+      "checkpoint_ns": 208583,
+      "close_ns": 835041,
+      "entries": 102,
+      "init_ns": 30817916,
+      "operation_ns": 35346792,
+      "root": "ca1c20f806277e3fb0447ef526a5ca8d298753d01667f501e8b58b6350cd86f1",
+      "root_serial": 1,
+      "stack": "41414141414141414141414141414141",
+      "status": "COMPLETE"
+    },
+    "candidate_work": {
+      "statements": 166,
+      "vm_steps": 37013,
+      "transactions": 20,
+      "write_transactions": 10,
+      "write_commits": 10,
+      "preallocation_calls": 2,
+      "preallocation_bytes": 6262784,
+      "preallocation_ns": 1438665,
+      "preallocation_close_ns": 8375,
+      "allocation_transfer_ns": 13583,
+      "allocation_scratch_close_ns": 1459,
+      "allocation_source_close_ns": 667
+    },
+    "baseline_command_ns": 64670708,
+    "candidate_command_ns": 59507333,
+    "baseline_proof_ns": 36108250,
+    "candidate_proof_ns": 1003909208
+  },
+  {
+    "files": 1000,
+    "baseline_stages": {
+      "bootstrap_ns": 5737417,
+      "close_ns": 316541,
+      "init_ns": 129012709,
+      "operation_ns": 135067167,
+      "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+      "root_serial": 1,
+      "stack": "41414141414141414141414141414141",
+      "status": "COMPLETE"
+    },
+    "candidate_stages": {
+      "bootstrap_ns": 3466750,
+      "checkpoint_ns": 2377833,
+      "close_ns": 6115250,
+      "entries": 1011,
+      "init_ns": 113200250,
+      "operation_ns": 125199666,
+      "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+      "root_serial": 1,
+      "stack": "41414141414141414141414141414141",
+      "status": "COMPLETE"
+    },
+    "candidate_work": {
+      "statements": 326,
+      "vm_steps": 204110,
+      "transactions": 31,
+      "write_transactions": 16,
+      "write_commits": 16,
+      "preallocation_calls": 7,
+      "preallocation_bytes": 17100800,
+      "preallocation_ns": 4357584,
+      "preallocation_close_ns": 20959,
+      "allocation_transfer_ns": 28542,
+      "allocation_scratch_close_ns": 2417,
+      "allocation_source_close_ns": 1292
+    },
+    "baseline_command_ns": 215119125,
+    "candidate_command_ns": 226340833,
+    "baseline_proof_ns": 54944625,
+    "candidate_proof_ns": 41737875
+  },
+  {
+    "files": 10000,
+    "baseline_stages": {
+      "bootstrap_ns": 5973000,
+      "close_ns": 208708,
+      "init_ns": 1875002958,
+      "operation_ns": 1881185208,
+      "root": "0907bdcd8aa52fbc350058f8edffa5a634757952cda77f27c70e1ca28c79ab1b",
+      "root_serial": 1,
+      "stack": "41414141414141414141414141414141",
+      "status": "COMPLETE"
+    },
+    "candidate_stages": {
+      "bootstrap_ns": 4014791,
+      "checkpoint_ns": 333875,
+      "close_ns": 195943625,
+      "entries": 10101,
+      "init_ns": 1567200583,
+      "operation_ns": 1767602375,
+      "root": "0907bdcd8aa52fbc350058f8edffa5a634757952cda77f27c70e1ca28c79ab1b",
+      "root_serial": 1,
+      "stack": "41414141414141414141414141414141",
+      "status": "COMPLETE"
+    },
+    "candidate_work": {
+      "statements": 4015,
+      "vm_steps": 2521969,
+      "transactions": 597,
+      "write_transactions": 135,
+      "write_commits": 135,
+      "preallocation_calls": 54,
+      "preallocation_bytes": 127385600,
+      "preallocation_ns": 31926608,
+      "preallocation_close_ns": 100207,
+      "allocation_transfer_ns": 20833,
+      "allocation_scratch_close_ns": 3042,
+      "allocation_source_close_ns": 833
+    },
+    "baseline_command_ns": 2602312334,
+    "candidate_command_ns": 2700763750,
+    "baseline_proof_ns": 608628541,
+    "candidate_proof_ns": 512212000
+  },
+  {
+    "files": 100000,
+    "baseline_stages": {
+      "bootstrap_ns": 6305625,
+      "close_ns": 587917,
+      "init_ns": 5627660583,
+      "operation_ns": 5634554834,
+      "root": "6401f9bdd86784b9992ab4c3ce7f5e8984c2c6271d13e4e5af6cb8913f62d0ef",
+      "root_serial": 1,
+      "stack": "41414141414141414141414141414141",
+      "status": "COMPLETE"
+    },
+    "candidate_stages": {
+      "bootstrap_ns": 4366167,
+      "checkpoint_ns": 341250,
+      "close_ns": 235590542,
+      "entries": 101001,
+      "init_ns": 5104319792,
+      "operation_ns": 5344745417,
+      "root": "6401f9bdd86784b9992ab4c3ce7f5e8984c2c6271d13e4e5af6cb8913f62d0ef",
+      "root_serial": 1,
+      "stack": "41414141414141414141414141414141",
+      "status": "COMPLETE"
+    },
+    "candidate_work": {
+      "statements": 9861,
+      "vm_steps": 14767419,
+      "transactions": 773,
+      "write_transactions": 429,
+      "write_commits": 429,
+      "preallocation_calls": 66,
+      "preallocation_bytes": 116932608,
+      "preallocation_ns": 32455995,
+      "preallocation_close_ns": 91753,
+      "allocation_transfer_ns": 20333,
+      "allocation_scratch_close_ns": 3333,
+      "allocation_source_close_ns": 1083
+    },
+    "baseline_command_ns": 12922452250,
+    "candidate_command_ns": 12518515000,
+    "baseline_proof_ns": 1850066250,
+    "candidate_proof_ns": 2627415792
+  }
+]

@@ -1764,3 +1764,10 @@ moves to SQLite/VFS close693.790375/693.529958ms; no improvement claimed. Apply
 user-authorized bounded Phase4.5-style Disposable preallocation-before-body INSERT,
 retain required final release and all closes in timing. Headroom fixture initially
 exceeded FileState64KiB; fixed fixture,33covering checks/Clippy PASS. Freeze/measure.
+
+-2026-10-04: bounded preallocation cause confirms source/transfer/scratch fast
+with SQLite close163.115125ms; no diagnostic admission. Full tracked matched
+campaign3 at0d72ca72b PASS all4Disposable Init joint gates:0.891892874x/
+0.926943748x/0.939621664x/0.948565694x.8single samples/cold0/root/proof/storage/
+cleanup/budgets and original manifests/binaries audit PASS. Histories/Durable
+NOT_RUN; resume history integration next. See SQLITE-DISPOSABLE-INIT-CAMPAIGN3.md.

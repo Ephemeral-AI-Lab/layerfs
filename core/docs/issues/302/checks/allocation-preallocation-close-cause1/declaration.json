@@ -1,0 +1,42 @@
+{
+  "budget_ns": 15000000000,
+  "driver": {
+    "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/binary-archive/3b394416275acdd498b4084cca068ce2292f5fe5278e4182291a87e208f0b84c/benchmark_init",
+    "sha256": "3b394416275acdd498b4084cca068ce2292f5fe5278e4182291a87e208f0b84c"
+  },
+  "fixture": {
+    "case": "namespace-10000",
+    "directories": 101,
+    "files": 10000,
+    "logical_bytes": 300000000,
+    "manifest": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-10000-edd2a0ddbfc8fab0/manifest.tsv",
+    "manifest_sha256": "878f44e10303cc43f5f202a4cf59e817316b16cee153fb70f8bf389ade6253ab",
+    "preparation_wall_ns": 176598125,
+    "profile": "core-sdk-init-fixture-v2",
+    "reused": true,
+    "route": "host-direct-sdk-v2",
+    "seed": 1,
+    "source": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-10000-edd2a0ddbfc8fab0/payload"
+  },
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "5c8f4e8146568f862e51c6f3690596cf68f1afec9d169b4f247c50435f141d14",
+    "product_seal": "a774c90e70ede71bc8b6fa755f096e5e24d3f4ec1915d052ef269c503c9111ad",
+    "source_commit": "0d72ca72b57df1953af23531a8a41734677c7d0c",
+    "source_dirty": false,
+    "source_tree": "2cbfcf9ff4b20ace33eec3a7590631964455e181"
+  },
+  "kind": "allocation-descriptor-identity-cause-v1",
+  "observer": {
+    "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/binary-archive/19ebccbc0c1a28c966602df48cb277eb13cdaed192293234539a046ae1eacaba/sqlite-close-observer-identity.dylib",
+    "sha256": "19ebccbc0c1a28c966602df48cb277eb13cdaed192293234539a046ae1eacaba"
+  },
+  "orchestrator_sha256": "ea78d4148437e014673fae30a14cc86115c0c02ba36fcd56823075fb18503685",
+  "purpose": "match real allocation fd/device/inode to actual close; separate transfer/scratch close",
+  "samples": 1,
+  "speed_admission": "NOT_APPLICABLE",
+  "verification": "SKIPPED; original qualified namespace proof plus expected-root cross-check; cause only"
+}

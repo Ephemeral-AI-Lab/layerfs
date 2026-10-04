@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "scope": "all4matched gate arithmetic,8single samples/cold0/proof/cleanup, source/harness identity match, original manifests and archived binary hashes",
+  "candidate_driver_sha256": "3b394416275acdd498b4084cca068ce2292f5fe5278e4182291a87e208f0b84c",
+  "implementation_commit": "0d72ca72b57df1953af23531a8a41734677c7d0c",
+  "history": "NOT_RUN",
+  "durable": "NOT_RUN"
+}
