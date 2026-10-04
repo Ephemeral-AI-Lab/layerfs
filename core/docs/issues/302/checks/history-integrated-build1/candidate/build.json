@@ -1,0 +1,42 @@
+{
+  "binaries": {
+    "benchmark_history": {
+      "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/binary-archive/6079b32907e27a7125cccdadaed649b226b15466dde5a10bd40c51140966773d/benchmark_history",
+      "sha256": "6079b32907e27a7125cccdadaed649b226b15466dde5a10bd40c51140966773d"
+    },
+    "verify_history": {
+      "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec71a95d5e7a5247e5c7520c2a0435baec789a77119a9661967e015cbe06608c/verify_history",
+      "sha256": "ec71a95d5e7a5247e5c7520c2a0435baec789a77119a9661967e015cbe06608c"
+    }
+  },
+  "budget_ns": 30000000000,
+  "child": null,
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--release",
+    "--locked",
+    "-p",
+    "layerfs-project",
+    "--example",
+    "benchmark_history",
+    "--example",
+    "verify_history"
+  ],
+  "compilation_seal": "350473548b1d640a010309140e1bdf33dfdca3d5e00ace6cb54262f9c615bc66",
+  "cpu_ns": 11599253000,
+  "dependency_reuse": "worktree-local target",
+  "exit_code": 0,
+  "mode": "incremental-build",
+  "peak_rss_bytes": 296992768,
+  "profile": "release/locked",
+  "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+  "sample_count": 0,
+  "status": "PASS",
+  "timed_out": false,
+  "vehicle": {},
+  "wall_ns": 2202156125
+}

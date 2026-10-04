@@ -7,7 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifndef CLASSES
 #define CLASSES 512
+#endif
 #define SQL_TEXT 512
 struct row { uint64_t id,calls,steps,scans,sorts,reprepare,profile_ns,step_calls,step_ns,exec_calls,exec_ns; int phase,owner; char sql[SQL_TEXT]; };
 static struct row rows[CLASSES];
@@ -33,17 +35,25 @@ static int profile(unsigned event,void *ctx,void *statement,void *time) {
  if(r) {r->calls++;r->steps+=sqlite3_stmt_status(s,SQLITE_STMTSTATUS_VM_STEP,1);r->scans+=sqlite3_stmt_status(s,SQLITE_STMTSTATUS_FULLSCAN_STEP,1);r->sorts+=sqlite3_stmt_status(s,SQLITE_STMTSTATUS_SORT,1);r->reprepare+=sqlite3_stmt_status(s,SQLITE_STMTSTATUS_REPREPARE,1);r->profile_ns+=*(sqlite3_uint64*)time;}
  pthread_mutex_unlock(&guard);return 0;
 }
+void cause_sqlite_trace_attach(sqlite3 *db) {
+ sqlite3_trace_v2(db,SQLITE_TRACE_PROFILE,profile,NULL);pthread_mutex_lock(&guard);opens++;pthread_mutex_unlock(&guard);
+}
+#ifndef LAYERFS_COMBINED_OBSERVER
 static int observed_open(const char *name,sqlite3 **out,int flags,const char *vfs) {
  int result=sqlite3_open_v2(name,out,flags,vfs);
- if(result==SQLITE_OK) {sqlite3_trace_v2(*out,SQLITE_TRACE_PROFILE,profile,NULL);pthread_mutex_lock(&guard);opens++;pthread_mutex_unlock(&guard);}
+ if(result==SQLITE_OK) cause_sqlite_trace_attach(*out);
  return result;
 }
+#endif
 static int observed_step(sqlite3_stmt *s) {
  uint64_t start=now_ns();int result=sqlite3_step(s);uint64_t duration=now_ns()-start;
  pthread_mutex_lock(&guard);struct row *r=get(s);if(r){r->step_calls++;r->step_ns+=duration;}pthread_mutex_unlock(&guard);return result;
 }
-#define INTERPOSE(replacement, original) __attribute__((used)) static struct { const void *replace;const void *replacee; } replacement##_binding __attribute__((section("__DATA,__interpose"))) = { (const void*)(uintptr_t)&replacement,(const void*)(uintptr_t)&original };
+#define INTERPOSE(replacement, original) __attribute__((used)) static const struct { const void *replace;const void *replacee; } replacement##_binding __attribute__((section("__DATA,__interpose,interposing"))) = { (const void*)(uintptr_t)&replacement,(const void*)(uintptr_t)&original };
+
+#ifndef LAYERFS_COMBINED_OBSERVER
 INTERPOSE(observed_open,sqlite3_open_v2)
+#endif
 INTERPOSE(observed_step,sqlite3_step)
 static int observed_exec(sqlite3 *db,const char *sql,int (*callback)(void*,int,char**,char**),void *ctx,char **error) {
  uint64_t start=now_ns();int result=sqlite3_exec(db,sql,callback,ctx,error);uint64_t duration=now_ns()-start;

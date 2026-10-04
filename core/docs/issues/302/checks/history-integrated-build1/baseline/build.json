@@ -1,0 +1,59 @@
+{
+  "binaries": {
+    "history_reference": {
+      "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-baseline/layerfs/benchmark-results/fs-bench-pro/binary-archive/d324cf8d06fdaaff2115983c9f0621c34d6fa5afdc7ff00eb700b7b23e92d287/history_reference",
+      "sha256": "d324cf8d06fdaaff2115983c9f0621c34d6fa5afdc7ff00eb700b7b23e92d287"
+    },
+    "history_reference_verify": {
+      "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-baseline/layerfs/benchmark-results/fs-bench-pro/binary-archive/535eb05d5932400b64bd4723917799c5e015dfefe114597be43237c35c97fc31/history_reference_verify",
+      "sha256": "535eb05d5932400b64bd4723917799c5e015dfefe114597be43237c35c97fc31"
+    }
+  },
+  "budget_ns": 30000000000,
+  "child": null,
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--release",
+    "--locked",
+    "-p",
+    "layerfs-sdk",
+    "--example",
+    "history_reference",
+    "--example",
+    "history_reference_verify"
+  ],
+  "compilation_seal": "0b9a453663944c7421b1314127d85b5e1f8bfa18290837101f390c5d147e0ec0",
+  "cpu_ns": 11939050000,
+  "dependency_reuse": "worktree-local target",
+  "exit_code": 0,
+  "mode": "incremental-build",
+  "peak_rss_bytes": 290816000,
+  "profile": "release/locked",
+  "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+  "sample_count": 0,
+  "status": "PASS",
+  "timed_out": false,
+  "vehicle": {
+    "driver_seals": {
+      "core/crates/layerfs-project/examples/benchmark_history.rs": "4ddd57951b23bcf14f25a55b8ce172c73f3b69ec41f00636fbae8ae84ec0194c",
+      "core/crates/layerfs-project/examples/history_support/cold.rs": "78be74765e992bbd2c84391c1748efa979a75c93c250e53857c28aedeecd2039",
+      "core/crates/layerfs-project/examples/history_support/producer.rs": "d247193b6e33b7b58899d07595c721d9733f5cad95255ed56836ff5b347c5361",
+      "core/crates/layerfs-project/examples/history_support/retained.rs": "53b79a02d56dbf0af754469756429b8e586c855676d701b1e6b7b702f0c79790",
+      "core/crates/layerfs-project/examples/history_support/support.rs": "38d8737f6dd643dee9a7452d6a82aea26b37ebb5c67d2868095b644a634adcbf",
+      "core/crates/layerfs-project/examples/history_support/workload.rs": "cb01e98bea3a3b7bb936686d9aa50658785d9345246d452bd5f598830b7529d6"
+    },
+    "verifier_seals": {
+      "core/crates/layerfs-project/examples/history_support/producer.rs": "d247193b6e33b7b58899d07595c721d9733f5cad95255ed56836ff5b347c5361",
+      "core/crates/layerfs-project/examples/history_support/retained.rs": "53b79a02d56dbf0af754469756429b8e586c855676d701b1e6b7b702f0c79790",
+      "core/crates/layerfs-project/examples/history_support/support.rs": "38d8737f6dd643dee9a7452d6a82aea26b37ebb5c67d2868095b644a634adcbf",
+      "core/crates/layerfs-project/examples/history_support/verify.rs": "2324fea30e6fce26d6144304a06b9d94a7f6ee3d41c05cecb9e0a2a1c974acb7",
+      "core/crates/layerfs-project/examples/history_support/workload.rs": "cb01e98bea3a3b7bb936686d9aa50658785d9345246d452bd5f598830b7529d6",
+      "core/crates/layerfs-project/examples/verify_history.rs": "28fee6dcbb8eda8e5f8196fab57f6360b09d263ca5f52af23978ecfd3a7c1fa4"
+    }
+  },
+  "wall_ns": 2417667583
+}

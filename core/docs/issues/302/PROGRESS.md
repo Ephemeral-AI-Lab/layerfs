@@ -1771,3 +1771,9 @@ campaign3 at0d72ca72b PASS all4Disposable Init joint gates:0.891892874x/
 0.926943748x/0.939621664x/0.948565694x.8single samples/cold0/root/proof/storage/
 cleanup/budgets and original manifests/binaries audit PASS. Histories/Durable
 NOT_RUN; resume history integration next. See SQLITE-DISPOSABLE-INIT-CAMPAIGN3.md.
+
+-2026-10-04: history sole-runner integration ready for freeze: actual source/state
+cold checks, supported profile readbacks, same fixed SQL/VM/VFS observer, sealed
+reference pins, combined9.5s proof and append-only claims.12focused checks/example
+Clippy and combined-observer capability PASS; reference/candidate release build
+2.417667583/2.202156125s. Product unchanged, Init receipts remain pinned. Next17pair.

@@ -9,7 +9,7 @@ import sys
 import time
 from diagnostics.history_reference_vehicle import generate, generate_verifier
 from families import history_retention as history
-from shared import cold_native, phase7_history_proof as proof
+from shared import cold_native, history_observer, phase7_history_proof as proof
 
 
 def build(root, arm, out, common, vehicle):
@@ -89,7 +89,7 @@ def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pi
               'required_case_ids':REQUIRED_BY_PROFILE[case.profile],'construction_workers':1,
               'comparison_scope':'Corpus open through all real retained-state construction/save/C5, measured cold boundaries, final custody/checkpoint/close and canonical census',
               'margin_arithmetic':'10*candidate_ns<=11*baseline_ns','allocation_ceiling':case.storage_ceiling,
-              'observer_status':'PENDING; no admission freeze until matched SQL/VM/VFS binding', 'cache_contract':'history-source-cold-and-database-state-boundaries-v1'}
+              'observer_status':'NOT_RUN', 'cache_contract':'history-source-cold-and-database-state-boundaries-v1'}
     locks=[]
     try:
         for path in [common.RESULTS/'phase7-sqlite.lock'] + ([root/'target/phase7-sqlite.lock'] if arm == 'baseline' else []):
@@ -112,11 +112,65 @@ def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pi
         if record['build']['status'] != 'PASS': record['reason']='release build failed/exceeded30s';return out
         if arm == 'baseline' and subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True): raise ValueError('reference checkout mutated')
         record['cold_helper']=cold_native.build(common.ROOT,out,invoke)
-        # Keep observer integration an explicit pre-sample gate, not an omission
-        # discovered after spending the one eligible arm.
-        raise ValueError('history runner binding installed; matched SQL/VM/VFS observer freeze pending; no substitute sample')
+        record['observer']=history_observer.build(common.ROOT,out,invoke,common)
+        record['compilation_seal']=record['build']['compilation_seal']
+        source_files=list((root/'core/crates').glob('**/src/**/*.rs'))+list((root/'core/crates').glob('**/sql/**/*.sql'))
+        value=hashlib.sha256()
+        for path in sorted(source_files):value.update(str(path.relative_to(root)).encode()+b"\0"+path.read_bytes())
+        record['product_seal']=value.hexdigest()
+        scratch=out/'scratch';scratch.mkdir();db=out/'store.sqlite'
+        env={**os.environ,**history.ENV,'TMPDIR':str(scratch),'LAYERFS_HISTORY_CURSOR_KEY':'28'*32,
+             'LAYERFS_HISTORY_COLD_HELPER':record['cold_helper']['binary'],
+             'DYLD_INSERT_LIBRARIES':record['observer']['path'],'LAYERFS_SQLITE_WORK_OUTPUT':str(out/'sql-work.json'),
+             'LAYERFS_CAUSE_VFS_LOG':str(out/'vfs.json'),'LAYERFS_CLOSE_OBSERVER_OUTPUT':str(out/'close.json')}
+        binaries=record['build']['binaries']
+        driver=binaries['benchmark_history' if arm=='candidate' else 'history_reference']['path']
+        command=[driver,str(corpus),str(db),str(scratch/'ordering'),row,'complete',case.profile]
+        key=hashlib.sha256(json.dumps([case.id,arm,identity['source_tree'],identity['harness_seal'],record['measured_source_commit'],record['fixture']['manifest_sha256'],record['observer']['seal']],sort_keys=True).encode()).hexdigest()
+        claim=common.RESULTS/'phase7-history-sample-claims'/key;claim.parent.mkdir(parents=True,exist_ok=True)
+        with claim.open('x') as file:file.write(str(out)+'\n')
+        start=time.monotonic_ns()
+        record['residency']=cold_native.attest_paths([corpus/'checkpoint-manifest.json',corpus/'inputs',corpus/'oracles'],record['cold_helper'],out,case.command_budget_ns,invoke,common.ROOT)
+        if record['residency']['status']!='PASS':record.update(status='INELIGIBLE',cache_status='INELIGIBLE');return out
+        remaining=case.command_budget_ns-(time.monotonic_ns()-start)
+        if remaining<=0:record['reason']='cold attestation exhausted command budget';return out
+        record['performance']=invoke(command,out,'driver',remaining,env,root);record['sample_count']=1
+        sample=record['performance'];child=sample['child']
+        stderr=(out/'driver.stderr').read_text()
+        from shared.sqlite_contract import allocations
+        record['storage']=allocations([db] if arm=='candidate' else [db,Path(str(db)+'.history.sqlite')]);record['storage_bytes']=record['storage']['total_bytes']
+        ordering=scratch/'ordering'
+        clean=(not ordering.exists() or not list(ordering.iterdir())) and not list(out.glob('.layerfs-allocation-*'))
+        record['cleanup']={'status':'PASS' if clean else 'FAIL','scope':'child exited; ordering/allocation scratch empty; original databases retained'}
+        record['command_wall_ns']=time.monotonic_ns()-start
+        if sample['exit_code'] or sample['timed_out'] or not isinstance(child,dict) or child.get('status')!='COMPLETE':
+            record['status']='INELIGIBLE' if 'INELIGIBLE' in stderr else 'FAIL';return out
+        record['comparison_ns']=child['operation_ns'];record['status']='COMPLETE'
+        record['database_cold']=boundaries(stderr,case.states,arm);record['cache_status']='PASS'
+        record['observations']=history_observer.collect(out);record['observer_status']='CHECKED'
+        stages=[json.loads(line.removeprefix('HISTORY_STATE_WORK ')) for line in stderr.splitlines() if line.startswith('HISTORY_STATE_WORK ')]
+        if len(stages)!=case.states:raise ValueError('history state work receipt incomplete')
+        record['state_work']=stages
+        if arm=='candidate':
+            settings=[json.loads(line.removeprefix('EFFECTIVE_PROFILE ')) for line in stderr.splitlines() if line.startswith('EFFECTIVE_PROFILE ')]
+            expected={'identity':PROFILE_IDS[case.profile],'journal_mode':'wal' if case.profile=='durable' else 'memory','synchronous':2 if case.profile=='durable' else 0,'foreign_keys':1,'fullfsync':1 if case.profile=='durable' else 0,'checkpoint_fullfsync':1,'page_size':4096,'cache_size':-2048,'mmap_size':0,'temp_store':2,'wal_checkpoint_performed':case.profile=='durable'}
+            if settings!=[expected]:raise ValueError('history actual profile/completion mismatch')
+            record['effective_profile']=settings[0]
+        request={'out':str(out),'arm':arm,'producer':child,'db':str(db),'row':row,'verifier':binaries['verify_history' if arm=='candidate' else 'history_reference_verify']['path'],'corpus':str(corpus),'profile':case.profile,'identity':identity,'pins':str(out/'reference-pins.json')}
+        common.write_json(out/'proof-request.json',request)
+        proof_env={**os.environ,**history.ENV,'LAYERFS_HISTORY_CURSOR_KEY':'28'*32,'TMPDIR':str(scratch)}
+        verification=invoke([sys.executable,str(common.ROOT/'core/benchmark/fs-bench-pro/shared/phase7_history_proof.py'),'--request',str(out/'proof-request.json')],out,'verifier',case.verification_budget_ns,proof_env,common.ROOT)
+        record['verification']=verification;record['verification_wall_ns']=verification['wall_ns']
+        record['verification_status']='PASS' if verification['exit_code']==0 and not verification['timed_out'] and isinstance(verification['child'],dict) and verification['child'].get('status')=='CHECKED' else 'FAIL'
+        return out
     except Exception as error:
         record['status']='INCOMPLETE'; record['reason']=str(error); raise
     finally:
-        common.write_json(out/'receipt.json',record);common.manifest_run(out)
+        common.write_json(out/'receipt.json',record)
+        if arm=='baseline' and record.get('verification_status')=='PASS' and record.get('status')=='COMPLETE' and record.get('command_wall_ns',case.command_budget_ns+1)<=case.command_budget_ns and record.get('cleanup',{}).get('status')=='PASS':
+            census=json.loads((out/'census.json').read_text()); native=record['verification']['child']
+            common.write_json(out/'proof.json',native)
+            pins=proof.root_pins(record,census,native,out/'receipt.json',out/'census.json',out/'proof.json')
+            common.write_json(out/'root-pins.json',pins)
+        common.manifest_run(out)
         for handle in reversed(locks):handle.close()

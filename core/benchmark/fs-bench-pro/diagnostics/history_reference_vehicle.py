@@ -61,6 +61,9 @@ def generate(root: Path) -> tuple[str, dict[str, str]]:
                 scope,''')
     replace('let custody = retained::verify(&handles.history, scope, &roots)?;',
             'let custody = retained::verify(&history, scope, &roots)?;')
+    replace('let profile = handles.profile();', '// Native reference settings remain original.')
+    replace('eprintln!("EFFECTIVE_PROFILE {{\\"identity\\":\\"{}\\",\\"journal_mode\\":\\"{}\\",\\"synchronous\\":{},\\"foreign_keys\\":{},\\"fullfsync\\":{},\\"checkpoint_fullfsync\\":{},\\"page_size\\":{},\\"cache_size\\":{},\\"mmap_size\\":{},\\"temp_store\\":{},\\"wal_checkpoint_performed\\":{}}}",profile.identity,profile.journal_mode,profile.synchronous,profile.foreign_keys,profile.fullfsync,profile.checkpoint_fullfsync,profile.page_size,profile.cache_size,profile.mmap_size,profile.temp_store,checkpoint.wal_checkpoint_performed);', '// Reference effective profile remains native MEMORY/OFF.')
+    replace('if checkpoint.busy {\n        return Err("final checkpoint obstructed".into());\n    }', '// Native reference has no WAL checkpoint.')
     replace('let checkpoint = handles.checkpoint()?;',
             'let checkpoint_ns = 0_u64;')
     replace('''    eprintln!(

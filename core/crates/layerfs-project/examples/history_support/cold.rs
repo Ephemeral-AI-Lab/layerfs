@@ -37,7 +37,14 @@ impl Boundary {
                 files.push(wal);
             }
         }
-        let output = Command::new(helper).arg("--files").args(&files).output()?;
+        let output = Command::new(helper)
+            .arg("--files")
+            .args(&files)
+            .env_remove("DYLD_INSERT_LIBRARIES")
+            .env_remove("LAYERFS_SQLITE_WORK_OUTPUT")
+            .env_remove("LAYERFS_CAUSE_VFS_LOG")
+            .env_remove("LAYERFS_CLOSE_OBSERVER_OUTPUT")
+            .output()?;
         let wall_ns = start.elapsed().as_nanos();
         if !output.status.success() {
             return Err(format!(

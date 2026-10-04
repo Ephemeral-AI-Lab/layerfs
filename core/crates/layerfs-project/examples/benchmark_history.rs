@@ -61,6 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err(format!("required {key}={value}").into());
         }
     }
+    std::env::set_var("LAYERFS_SQLITE_SCOPE", "bootstrap");
     let begin = Instant::now();
     let mut corpus = Corpus::open(&PathBuf::from(&args[1]), row)?;
     let scope = producer::scope_of(row);
@@ -88,6 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut stages = [0u64; 4];
     let count = probe_states.unwrap_or_else(|| row.states());
     let mut inventory = BTreeMap::<ObjectId, (u8, usize)>::new();
+    std::env::set_var("LAYERFS_SQLITE_SCOPE", "operation");
     for position in 0..count {
         if position != 0 {
             cold.check(position + 1)?;
@@ -248,12 +250,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             transition.state.ordinal, transition.state.full157_index, built.root.0
         );
     }
+    std::env::set_var("LAYERFS_SQLITE_SCOPE", "cleanup");
     cold.check(count + 1)?;
     let finalization = Instant::now();
     let custody_start = Instant::now();
     let custody = retained::verify(&handles.history, scope, &roots)?;
     let custody_ns = custody_start.elapsed().as_nanos();
     let checkpoint = handles.checkpoint()?;
+    let profile = handles.profile();
+    eprintln!("EFFECTIVE_PROFILE {{\"identity\":\"{}\",\"journal_mode\":\"{}\",\"synchronous\":{},\"foreign_keys\":{},\"fullfsync\":{},\"checkpoint_fullfsync\":{},\"page_size\":{},\"cache_size\":{},\"mmap_size\":{},\"temp_store\":{},\"wal_checkpoint_performed\":{}}}",profile.identity,profile.journal_mode,profile.synchronous,profile.foreign_keys,profile.fullfsync,profile.checkpoint_fullfsync,profile.page_size,profile.cache_size,profile.mmap_size,profile.temp_store,checkpoint.wal_checkpoint_performed);
+    if checkpoint.busy {
+        return Err("final checkpoint obstructed".into());
+    }
     eprintln!(
         "DIAGNOSTIC sqlite={:?} storage={:?} checkpoint={checkpoint:?}",
         handles.diagnostics()?,

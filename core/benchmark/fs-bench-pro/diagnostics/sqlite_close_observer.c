@@ -20,7 +20,11 @@ static void initialize_once(void){initialize_result=cause_vfs_initialize();}
 static int observed_open(const char *path,sqlite3 **db,int flag,const char *vfs){
  pthread_once(&initialization,initialize_once);
  if(initialize_result!=SQLITE_OK)return initialize_result;
- return sqlite3_open_v2(path,db,flag,vfs);
+ int rc=sqlite3_open_v2(path,db,flag,vfs);
+#ifdef LAYERFS_COMBINED_OBSERVER
+ if(rc==SQLITE_OK)cause_sqlite_trace_attach(*db);
+#endif
+ return rc;
 }
 static int observed_close(sqlite3 *db){
  int mutation=db&&sqlite3_total_changes(db)>0;uint64_t start=now();int rc=sqlite3_close(db);
