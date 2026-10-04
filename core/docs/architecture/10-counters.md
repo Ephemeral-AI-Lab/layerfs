@@ -1,5 +1,26 @@
 # Counters and receipts
 
+### #302 second-chance positive-locator selection (2026-10-05)
+
+Described against parent `65668032e` and the accompanying implementation.
+Real history counts reject fixed CID-order eviction. The same 4,096 positive
+rows now carry one reference flag, and one cursor walks their existing CID map.
+Consults set the flag; an unprotected referenced row gets one second chance;
+an unprotected unreferenced row is evicted. Requested rows remain protected.
+Selection examines at most two map cycles per attempted removal. No second
+map/index, additional locator capacity, longer trust lifetime or merged snapshot
+is added. Explicit invalidation, negative-cache reset and row validation remain.
+
+Bookkeeping is charged separately: the inline flag/padding contributes 8 bytes
+per live row and the fixed cursor contributes 40 bytes on the qualified arm64
+build, 32,808 fixed/live field bytes at capacity. This excludes BTree spare slots
+and allocator overhead; it is not a heap/RSS bound. A public-reader external
+allocator diagnostic records those costs with its entire declared fixture scope.
+Three additional u64 Diagnostics fields report actual selection probes, second
+chances and peak fixed/live bookkeeping, adding 24 bytes per Diagnostics value.
+Existing encoded/decoded/output byte allowances remain unchanged.
+
+
 ### #302 bounded positive-locator pressure admission (2026-10-05)
 
 Described against parent `22a6675d8` and the accompanying change. Locator

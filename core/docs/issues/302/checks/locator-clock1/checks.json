@@ -1,0 +1,70 @@
+{
+  "status": "PASS",
+  "unique_core_tests": 523,
+  "all_target_reports": 100,
+  "ignored": 0,
+  "remaining_all_target_tests": 522,
+  "current_source_reused_tests": 1,
+  "reused_test": "pressure_admission_preserves_an_unrequested_positive_locator passed at same product source in locator-clock-covering; filtered from final all-target command",
+  "commands": [
+    "cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test locator_pressure -- --nocapture",
+    "cargo +1.85.1 test --manifest-path core/Cargo.toml --locked --workspace --all-targets -- --skip pressure_admission_preserves_an_unrequested_positive_locator",
+    "cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --workspace --all-targets -- -D warnings",
+    "cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check",
+    "python3 core/tools/check_product_boundary.py"
+  ],
+  "boundary_files": 456,
+  "tool_selftests": "23 PASS reused from unchanged guard/test sources at cohort-directory1",
+  "logs": [
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-boundary.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-boundary.stdout",
+      "sha256": "99895c7e2b8ea5425faabcda132fa00f59eb7aa3984fd22e7242df1531f25392",
+      "bytes": 76
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-clippy.stderr",
+      "sha256": "a83cfc83c4350d06caea379af55591e56eafeac40ac4883f7a90e7af0192f79a",
+      "bytes": 467
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-clippy.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-covering.stderr",
+      "sha256": "36c71c62ad27a5e6c0f89b9344ce757cce7ca0f66874251c0b1f2ad0f00f2637",
+      "bytes": 351
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-covering.stdout",
+      "sha256": "c405278e55041b13659e33c07ad42d1bd564da6d34f9209a73ba6f9db101ac36",
+      "bytes": 185
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-final.stderr",
+      "sha256": "c78f5e260c1a6e8ff005e20543885c65a49f05d6a1d2722be9ac91162b3c27c3",
+      "bytes": 10611
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-final.stdout",
+      "sha256": "b29326f37ddbe6b50cd78dc5e8fd3635d0355483e87efd4a73eeecdedd4be765",
+      "bytes": 46898
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-fmt.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-fmt.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  ]
+}

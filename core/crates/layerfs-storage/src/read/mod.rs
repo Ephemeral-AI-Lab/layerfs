@@ -2,6 +2,7 @@
 
 mod counters;
 mod fetch;
+mod locator_cache;
 mod objects;
 mod prefetch;
 mod provider;

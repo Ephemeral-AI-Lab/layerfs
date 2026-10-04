@@ -1,0 +1,138 @@
+{
+  "schema": "locator-clock-public-cause-v1",
+  "before_post_fill_locate_requests": 34,
+  "after_post_fill_locate_requests": 3,
+  "before_capacity_evictions": 34,
+  "after_capacity_evictions": 3,
+  "after_probes": 4099,
+  "after_second_chances": 4096,
+  "after_fixed_live_bookkeeping_bytes": 32808,
+  "public_reader_fill_heap_delta_before": 2393849,
+  "public_reader_fill_heap_delta_after": 2453777,
+  "difference_bytes": 59928,
+  "heap_scope": "external GlobalAlloc live bytes after entire public-reader fill with returned outputs dropped; includes reader/decode/cache/mock port state and BTree spare capacity; not RSS, phase memory or cache-only bytes",
+  "clock_sample": "NONE; count/allocation cause diagnostic only",
+  "rlib_feature_profile_dependency_fingerprints_equal": true,
+  "attempts": {
+    "after": "WRONG_ARTIFACT: retained old workspace library linked accidentally; old output kept; initial source description intent is corrected here, not a new algorithm result",
+    "after2": "new package-only library confirms count behavior; feature/dependency fingerprint differs, not used for heap comparison",
+    "after3": "qualified diagnostic uses new workspace-feature library matching before profile/dependency fingerprint"
+  },
+  "all_raw_attempts": [
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after",
+      "sha256": "23e190e3bff87e9f9ed0d2e200814c6c4cd99948990949ac4951f7e9a9b4f9de",
+      "bytes": 2128104
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after-compile.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after-inputs.json",
+      "sha256": "a211913efebc3cf1a83dee6f652732c8d906f2575cd9a1fa362f4e53c4c4bb4e",
+      "bytes": 1811
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after.stderr",
+      "sha256": "32bcded5e26fcaa6c7dceadc53b1b9b9a8afff59c47e0e067acca9f9aeb5c5c1",
+      "bytes": 548
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after.stdout",
+      "sha256": "e67f9d5dee36fc4c264cfae809b9c9d30d1b2219f8d433911a07dd3351baee4b",
+      "bytes": 844
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after2",
+      "sha256": "2876099b8cd8228466ca227466063dbfeb6647b19db6bb16ae2c53f89ca2c224",
+      "bytes": 2128808
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after2-compile.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after2-inputs.json",
+      "sha256": "a519f8bd4be51b0291b2250c0a5a2949cfe92b5f1c46e5288ff5656868e70488",
+      "bytes": 1885
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after2.stderr",
+      "sha256": "47d517daf513d3b39955d37f3841b6d7dac22c835e49eedadd0bab76ad9c9516",
+      "bytes": 83
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after2.stdout",
+      "sha256": "10096f9185df4c75e3cf63e68cc65ac3265c0f09dcffc23d489485d78cb7f035",
+      "bytes": 947
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after3",
+      "sha256": "c37626789921e97e226199cef2711de14b2ae67daf6b2695eb613704146c192b",
+      "bytes": 2128648
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after3-compile.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after3-inputs.json",
+      "sha256": "2dfff16d95fda77f0c0454ab08f387720f1083b03018aaf2a82acfa4a9522e9f",
+      "bytes": 1837
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after3-workspace-fingerprint.json",
+      "sha256": "7163dca92268c6335739bca47a8abf8cc5f145da1c2c7870222a91e6ce66d2ef",
+      "bytes": 778
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after3.stderr",
+      "sha256": "47d517daf513d3b39955d37f3841b6d7dac22c835e49eedadd0bab76ad9c9516",
+      "bytes": 83
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/after3.stdout",
+      "sha256": "10096f9185df4c75e3cf63e68cc65ac3265c0f09dcffc23d489485d78cb7f035",
+      "bytes": 947
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/before",
+      "sha256": "b535fad634f89180cebf347702670f9945217a0339cd2736e7d7a57c61ed86bc",
+      "bytes": 2128104
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/before-compile.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/before-inputs.json",
+      "sha256": "e96307a4e41606df6cf62d009eecb964e5c2cd0fa4154eb33e3837570f030d7a",
+      "bytes": 1753
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/before-workspace-fingerprint.json",
+      "sha256": "7163dca92268c6335739bca47a8abf8cc5f145da1c2c7870222a91e6ce66d2ef",
+      "bytes": 778
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/before.stderr",
+      "sha256": "32bcded5e26fcaa6c7dceadc53b1b9b9a8afff59c47e0e067acca9f9aeb5c5c1",
+      "bytes": 548
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/before.stdout",
+      "sha256": "e67f9d5dee36fc4c264cfae809b9c9d30d1b2219f8d433911a07dd3351baee4b",
+      "bytes": 844
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/probe.rs",
+      "sha256": "b3f9df29a6c81b111c4dfc1e2a52cd959d05f76a9d2ef3da20cbf83fddbb2336",
+      "bytes": 3233
+    }
+  ]
+}

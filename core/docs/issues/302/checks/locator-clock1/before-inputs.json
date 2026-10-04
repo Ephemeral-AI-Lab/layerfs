@@ -1,0 +1,32 @@
+{
+  "source": "aa59f9384 retained public library from covering tests; current new product source not compiled into this diagnostic",
+  "storage_rlib": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/target/debug/deps/liblayerfs_storage-450925c72110963d.rlib",
+  "storage_rlib_sha256": "24c9c46d4be85d84546630c67fe421aaa9db0128046360bcd6cf9fc4e0f07c43",
+  "content_rlib_sha256": "7b2951c8436e0e8a46d3339b448e278576d0269ccad6e24da232b76e2e7b6c79",
+  "probe_sha256": "b3f9df29a6c81b111c4dfc1e2a52cd959d05f76a9d2ef3da20cbf83fddbb2336",
+  "command": [
+    "rustc",
+    "+1.85.1",
+    "--edition=2021",
+    "-C",
+    "opt-level=1",
+    "--cfg",
+    "aes_armv8",
+    "--cfg",
+    "polyval_armv8",
+    "--cfg",
+    "chacha20_force_neon",
+    "-C",
+    "target-feature=+aes,+sha2",
+    "-L",
+    "dependency=/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/target/debug/deps",
+    "--extern",
+    "layerfs_storage=/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/target/debug/deps/liblayerfs_storage-450925c72110963d.rlib",
+    "--extern",
+    "layerfs_content=/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/target/debug/deps/liblayerfs_content-91ba1750a27f5109.rlib",
+    "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/probe.rs",
+    "-o",
+    "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-clock-cause1/before"
+  ],
+  "heap_scope": "external global allocator live bytes after public-reader fill, outputs dropped; includes mocked port and reader/decode/cache data; not RSS or cache-only measurement"
+}

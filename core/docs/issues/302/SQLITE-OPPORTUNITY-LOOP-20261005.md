@@ -224,3 +224,34 @@ failure, timeout or gate relaxation. Next iteration corrects victim selection
 using bounded access bookkeeping, with its memory charged explicitly and the
 same 4,096 rows, positive-cache lifetime and snapshot scope. Current evidence
 commit is product LOC 140,213 → 140,213 (delta 0), reference 65,417/core 74,796.
+
+## Checkpoint6 — second-chance locator selection frozen
+
+[Cause/treatment](checks/locator-clock1/README.md) replaces fixed-key victim
+selection with one reference flag per existing positive row and one map cursor.
+A reproduced churn demand changes 34 post-fill requests/evictions to 3, with
+4,099 probes. No extra cache capacity, index, snapshot/transaction or trust
+lifetime. Charged bookkeeping is 32,808 fixed/live field bytes at capacity on
+arm64, excluding BTree spare capacity; matching public-reader allocator fill
+deltas increase by 59,928 bytes across the full declared fixture scope. No
+heap/RSS PASS claim is made from the field count. Every diagnostic attempt and
+its actual public-library/profile/dependency identity is retained.
+
+523 unique Core tests / 100 all-target reports / 0 ignored PASS; one unchanged
+current-source covering test is explicitly reused, not repeated. Locked all-
+target Clippy, fmt and boundary 456 PASS; guard selftests 23 reused unchanged.
+
+| Family 2, Disposable at new second-chance freeze | Status |
+| --- | --- |
+| Stride 10 / 17 | NOT_RUN; fresh matched pair next |
+| Stride 3 / 53 | NOT_RUN; follows supported stride 10 |
+| Stride 1 / 157 | NOT_RUN; follows stride 3 |
+
+Durable separate / NOT_RUN; SDK/server/daemon/FUSE N/A. The failed key-order
+receipt stays at aa59f9384 with its original verdict. No unchanged performance
+retry. SQLite mappings remain completely checked once per acquisition; the
+small within-cohort directory sharing remains, without a cross-request memo.
+
+Checkpoint6 production LOC: 140,213 → 140,304 (delta +91), reference 65,417
+unchanged, core 74,796 → 74,887. Exact first-parent/staged full-counter snapshots
+and counter SHA are in checks/locator-clock1/production-loc.json.

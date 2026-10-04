@@ -1,9 +1,9 @@
 //! Locator caching, batched metadata acquisition and complete-pack integrity.
 
-use super::Diagnostics;
+use super::{locator_cache::LocatorCache, Diagnostics};
 use crate::{
     error::{StorageError, StorageResult},
-    location::{LocatedObject, ObjectLocation, PackDomain, PackInfo, SignatureRow, ValueGroupRow},
+    location::{ObjectLocation, PackDomain, PackInfo, SignatureRow, ValueGroupRow},
     pack::layout,
     policy::{DEPENDENCY_PACK_CACHE_BYTES, READ_OBJECT_LIMIT, SINGLETON_PACK_LIMIT},
     port::{PackPersistence, ValueGroupQuery, ValueGroups},
@@ -18,7 +18,7 @@ use std::{
 
 pub(crate) struct Fetch {
     pub(crate) metadata: Arc<dyn PackPersistence>,
-    locators: RefCell<BTreeMap<ObjectId, LocatedObject>>,
+    locators: RefCell<LocatorCache>,
     absent: RefCell<BTreeSet<ObjectId>>,
     descriptors: RefCell<BTreeMap<i64, PackInfo>>,
     groups: RefCell<BTreeMap<u32, ValueGroupRow>>,
@@ -31,7 +31,7 @@ impl Fetch {
     pub(crate) fn new(metadata: Arc<dyn PackPersistence>) -> Self {
         Self {
             metadata,
-            locators: RefCell::new(BTreeMap::new()),
+            locators: RefCell::new(LocatorCache::default()),
             absent: RefCell::new(BTreeSet::new()),
             descriptors: RefCell::new(BTreeMap::new()),
             groups: RefCell::new(BTreeMap::new()),
@@ -88,21 +88,12 @@ impl Fetch {
             {
                 let mut cache = self.locators.borrow_mut();
                 if cache.len().saturating_add(rows.len()) > READ_OBJECT_LIMIT {
-                    // Keep requested hits and release only the slots this page needs.
-                    // Key order is deterministic; no additional recency index is kept.
-                    let before = cache.len();
-                    let mut excess = before
-                        .saturating_add(rows.len())
-                        .saturating_sub(READ_OBJECT_LIMIT);
-                    cache.retain(|id, _| {
-                        if excess > 0 && !ids.contains(id) {
-                            excess -= 1;
-                            false
-                        } else {
-                            true
-                        }
+                    let work = cache.make_room(rows.len(), ids);
+                    self.note(|c| {
+                        c.locator_evictions += work.removed;
+                        c.locator_eviction_probes += work.probes;
+                        c.locator_second_chances += work.second_chances;
                     });
-                    self.note(|c| c.locator_evictions += (before - cache.len()) as u64);
                 }
             }
             let mut seen = BTreeSet::new();
@@ -126,6 +117,11 @@ impl Fetch {
                     cache.clear();
                 }
                 cache.insert(location.object_id, row);
+                self.note(|c| {
+                    c.locator_bookkeeping_live_peak_bytes = c
+                        .locator_bookkeeping_live_peak_bytes
+                        .max(cache.bookkeeping_bytes() as u64);
+                });
             }
             let mut absent = self.absent.borrow_mut();
             for id in page.iter().filter(|id| !seen.contains(id)) {

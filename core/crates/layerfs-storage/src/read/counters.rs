@@ -59,6 +59,13 @@ pub struct Diagnostics {
     pub locator_misses: u64,
     /// Positive locators released for capacity, excluding explicit invalidation.
     pub locator_evictions: u64,
+    /// Actual second-chance victim-selection probes, including protected hits.
+    pub locator_eviction_probes: u64,
+    /// Referenced unprotected entries granted one second chance.
+    pub locator_second_chances: u64,
+    /// Peak fixed/live locator bookkeeping field bytes; excludes BTree node
+    /// capacity/allocator overhead and is not a process memory measurement.
+    pub locator_bookkeeping_live_peak_bytes: u64,
     /// Cached pack consults.
     pub pack_hits: u64,
     /// Uncached pack consults.
