@@ -179,3 +179,21 @@ returned bytes. Analyze existing receipts first; compare prospective trace count
 with earlier retained counts only as mechanism diagnosis. No physical-device-byte
 claim, larger cache, base memo, cross-write handle retention, workers or proof
 relaxation. Required product checks and new matched qualification are pending.
+
+The first trace at2b39dfe50 completed all17states, reproducing prior phase counts
+exactly: Save1,798,505,411VFS requested B/25,989acquisitions; filesystem
+28,142,041B/679. Source/per-state DBcoldPASS. Version18 grouped whole-file
+sparse acquisitions8362 returned335,745,568B and requested665,542,917B inside
+BLOB read calls;4321 repeated identical range demands within a state. Version18
+whole acquisitions10257 returned660,142,543B, VFS639,484,716B;6905 identical
+reacquisitions. These counts establish repeated demand and requested-byte
+amplification, not device traffic or the reason for each cache miss.
+Raw:`benchmark-results/fs-bench-pro/issue302-save-vfs-trace-cause1/`.
+
+A separate prospective caller-cause instrument records at most32 backtrace
+addresses at each BLOB open, relative to the producing sealed executable's image
+base. Offline symbolization assigns discovery versus selection/reconstruction;
+no product hook, alternative operation or data pre-read. Same one fresh17state
+count child,60s cold envelope, no speed/admission claim. This differs from the
+first cause instrument by observing the callers needed to settle the remaining
+mechanism hypothesis; it is not a second performance sample.
