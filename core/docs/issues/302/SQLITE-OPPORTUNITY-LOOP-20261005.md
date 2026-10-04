@@ -319,3 +319,50 @@ Durable separate / NOT_RUN; SDK/server/daemon/FUSE N/A. Every pair pins its
 documentation commit/tree; product/compilation/dependency/harness identities are
 fixed. No performance repeat or budget change. Evidence commit product LOC
 140,304 → 140,304 (delta 0), reference 65,417/core 74,887.
+
+## Checkpoint9 — complete Disposable 10 → 3 → 1 ladder
+
+[Stride 1 audited pair](checks/locator-clock-final1/comparison.json), source
+`a340aba3b`, same product freeze ba6499a61: candidate 169221686000 ns vs
+reference 176928075958 ns (−4.355662557%). Complete command
+180657216208 / 188824599750 ns under 300 s; separate proof
+16128925042 / 16433059583 ns under 30 s, PASS.
+Cold, cleanup, roots, canonical inventory, margin and strict faster PASS.
+Shared C2/C5 allocation 85,172,224 bytes: original 83,947,520 target FAIL
++1,224,704 / +1.458892413%; approved 92,342,273 ceiling PASS.
+
+[Exact work continuity](checks/locator-clock-final1/count-continuity.json):
+locators 469,825 → 390,193 (−16.949289629%), transactions 815,043 → 735,411
+(−9.770282059%), statements 2,827,545 → 2,588,649 (−8.448884103%). This eliminates
+79,632 lookup snapshots/transactions and 238,896 statements. Physical selections
+330,219, BLOB calls/5,905,886,097 bytes, all other provider work and Store SHA
+`0871680ffd8d28695a3a689b54a7597a64b9d48143642f9e9b064567cf5234de` are unchanged.
+Read-transaction origins remain exact: 390,193 locate + 330,219 scoped + 11,983
+catalogue + 475 other = 732,870 read transactions; plus 2,541 writes = 735,411.
+No whole-transaction lifetime is attributed to BEGIN/COMMIT overhead.
+
+Actual directory sharing removes 7,930 of 6,116,206 equivalent walks
+(0.129655541%): a small supported opportunity, not a large query saving. All
+SQLite mapping validation remains. Clock work is 635,373 removals / 1,441,964
+probes / 796,680 second chances; fixed/live fields peak 32,808 bytes, not RSS.
+The 157-state bounded proof covers 904,143 paths and 66 selected content paths;
+canonical inventory 104,618 objects / 871,337,620 bytes matches. Exhaustive
+payload audit remains NOT_RUN. The driver's operation timer is direct Instant
+elapsed from before Corpus::open through final close/canonical census, not the
+historically clipped SDK nested timer.
+
+| Family 2, Disposable | Candidate / reference product s | Complete candidate / reference s | Separate proof candidate / reference s | Allocation / approved ceiling B | Status |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Stride 10 / 17 | 30.989778083 / 32.365454042 | 44.295895208 / 45.366977375 | 3.961798750 / 2.914908041 | 50,692,096 / 54,278,964 | PASS, original target FAIL retained |
+| Stride 3 / 53 | 63.645626250 / 66.640188041 | 75.851236375 / 79.085111917 | 6.318967292 / 6.299983958 | 64,245,760 / 70,427,034 | PASS, original target FAIL retained |
+| Stride 1 / 157 | 169.221686000 / 176.928075958 | 180.657216208 / 188.824599750 | 16.128925042 / 16.433059583 | 85,172,224 / 92,342,273 | PASS, original target FAIL retained |
+
+Every row has source/per-state cold and cleanup PASS. SDK/server/daemon/FUSE N/A.
+[Artifact continuity](checks/locator-clock-final1/ladder-artifact-continuity.json)
+confirms identical product/compilation/dependency/harness/observer seals across
+these evidence-only commit changes. Row receipt identities are not rewritten.
+Durable remains separate, NOT_RUN until the next declared stride 10 pair;
+its candidate profile is WAL/FULL/fullfsync against the registered original
+phase4.5-memory-off reference, not a claim of equal durability between arms.
+Init, all-seven admission and PostgreSQL/MinIO M4 pause remain unchanged.
+Production LOC 140,304 → 140,304 (delta 0), reference 65,417/core 74,887.

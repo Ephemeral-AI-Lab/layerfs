@@ -1,0 +1,9 @@
+{
+  "parent": "a340aba3b2e40dd7837e2e9eb3c9d9a27906d39e",
+  "before": 140304,
+  "after": 140304,
+  "delta": 0,
+  "reference": 65417,
+  "core": 74887,
+  "method": "unchanged production counter/version; exact first-parent/staged product src/runtime SQL equality; docs/evidence only; validated full totals inherited"
+}
