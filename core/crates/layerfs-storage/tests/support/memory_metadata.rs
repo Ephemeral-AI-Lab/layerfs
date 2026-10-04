@@ -45,6 +45,7 @@ impl Default for MetadataState {
 pub struct MemoryMetadata {
     pub state: Mutex<MetadataState>,
     pub calls: Mutex<Vec<(&'static str, usize)>>,
+    pub acquired_pack_ids: Mutex<Vec<i64>>,
 }
 impl PackPersistence for MemoryMetadata {
     fn policy(&self) -> Result<StoragePolicy, PersistenceError> {
@@ -100,6 +101,7 @@ impl PackPersistence for MemoryMetadata {
         plan: &mut dyn PackReadPlan,
     ) -> Result<AcquiredPackRead, PersistenceError> {
         self.calls.lock().unwrap().push(("read_scoped_pack", 1));
+        self.acquired_pack_ids.lock().unwrap().push(id);
         let state = self.state.lock().unwrap();
         let pack = state.packs.get(&id).ok_or(PersistenceError::Missing)?;
         if pack.info.length != pack.body.len() {

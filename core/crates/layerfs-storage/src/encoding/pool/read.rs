@@ -25,6 +25,13 @@ use crate::location::ValueGroupRow;
 use crate::pack::layout::{GroupCodec, PackLane};
 use crate::policy::{StorageCapacities, METADATA_DECODED_WORK_LIMIT, METADATA_RECORD_LIMIT};
 
+/// Existing owner caches borrowed together for immutable ordinary groups.
+/// Mutable pooled-value groups retain the reader's separate invalidated cache.
+pub(crate) struct PooledCaches<'a> {
+    pub(crate) encoded: &'a mut crate::encoding::PackCache,
+    pub(crate) decoded: &'a mut GroupCache,
+}
+
 #[derive(Debug)]
 struct ValueEntry {
     values: Vec<[u8; INODE_VALUE_BYTES]>,
@@ -263,19 +270,19 @@ impl PoolReader {
         workspace: &mut DecompressionWorkspace,
         root: ObjectLocation,
     ) -> StorageResult<Vec<u8>> {
-        self.leaf_body_with_groups(connection, capacities, ceiling, workspace, root, None)
+        self.leaf_body_with_caches(connection, capacities, ceiling, workspace, root, None)
     }
 
-    pub(crate) fn leaf_body_with_groups(
+    pub(crate) fn leaf_body_with_caches(
         &mut self,
         connection: &dyn Source,
         capacities: &StorageCapacities,
         ceiling: i64,
         workspace: &mut DecompressionWorkspace,
         root: ObjectLocation,
-        groups: Option<&mut GroupCache>,
+        caches: Option<PooledCaches<'_>>,
     ) -> StorageResult<Vec<u8>> {
-        self.reconstruct_leaf(connection, capacities, ceiling, workspace, root, groups)
+        self.reconstruct_leaf(connection, capacities, ceiling, workspace, root, caches)
             .map(|(body, _)| body)
     }
 
@@ -286,7 +293,7 @@ impl PoolReader {
         ceiling: i64,
         workspace: &mut DecompressionWorkspace,
         root: ObjectLocation,
-        mut groups: Option<&mut GroupCache>,
+        mut caches: Option<PooledCaches<'_>>,
     ) -> StorageResult<(Vec<u8>, Vec<u8>)> {
         if root.role != layerfs_content::ObjectRole::InodeLeaf {
             return Err(StorageError::Integrity("pooled record role"));
@@ -308,7 +315,7 @@ impl PoolReader {
                 return Err(StorageError::Integrity("pooled dependency cycle"));
             }
             chain.push(current);
-            let record = self.record(connection, workspace, &current, groups.as_deref_mut())?;
+            let record = self.record(connection, workspace, &current, caches.as_mut())?;
             let Some(base) = pooled_base(&record)? else {
                 break;
             };
@@ -343,7 +350,7 @@ impl PoolReader {
         let mut canonical_work = 0_u64;
         let mut encoded_work = 0_u64;
         for location in chain.iter().rev() {
-            let record = self.record(connection, workspace, location, groups.as_deref_mut())?;
+            let record = self.record(connection, workspace, location, caches.as_mut())?;
             canonical_work = canonical_work.saturating_add(location.canonical_length as u64);
             encoded_work = encoded_work.saturating_add(record.len() as u64);
             if canonical_work > capacities.metadata_chain_canonical_limit
@@ -407,16 +414,16 @@ impl PoolReader {
         workspace: &mut DecompressionWorkspace,
         location: &ObjectLocation,
     ) -> StorageResult<Option<ObjectId>> {
-        self.stored_base_with_groups(connection, workspace, location, None)
+        self.stored_base_with_caches(connection, workspace, location, None)
     }
-    pub(crate) fn stored_base_with_groups(
+    pub(crate) fn stored_base_with_caches(
         &mut self,
         connection: &dyn Source,
         workspace: &mut DecompressionWorkspace,
         location: &ObjectLocation,
-        groups: Option<&mut GroupCache>,
+        mut caches: Option<PooledCaches<'_>>,
     ) -> StorageResult<Option<ObjectId>> {
-        let record = self.record(connection, workspace, location, groups)?;
+        let record = self.record(connection, workspace, location, caches.as_mut())?;
         pooled_base(&record)
     }
 
@@ -425,7 +432,7 @@ impl PoolReader {
         connection: &dyn Source,
         workspace: &mut DecompressionWorkspace,
         location: &ObjectLocation,
-        groups: Option<&mut GroupCache>,
+        caches: Option<&mut PooledCaches<'_>>,
     ) -> StorageResult<Vec<u8>> {
         self.counters.physical_record_calls = self.counters.physical_record_calls.saturating_add(1);
         if location.canonical_length > crate::policy::INODE_LEAF_LIMIT {
@@ -433,7 +440,19 @@ impl PoolReader {
         }
         let mut work = PoolReadCounters::default();
         let result = (|| {
-            let selected = self.group(connection, location.pack_id, location.group_number)?;
+            let (packs, groups) = match caches {
+                Some(caches) => (&mut *caches.encoded, Some(&mut *caches.decoded)),
+                None => (&mut self.packs, None),
+            };
+            let (fetched, bytes) =
+                packs.acquire_groups(connection, location.pack_id, &[location.group_number])?;
+            if fetched {
+                self.counters.pack_fetches = self.counters.pack_fetches.saturating_add(1);
+                self.counters.pack_bytes = self.counters.pack_bytes.saturating_add(bytes as u64);
+            }
+            let selected = packs
+                .group(connection, location.pack_id, location.group_number)?
+                .ok_or(StorageError::Integrity("encoded pooled group cache"))?;
             let crate::encoding::GroupSlice {
                 header,
                 view,
@@ -494,28 +513,28 @@ impl PoolReader {
         workspace: &mut DecompressionWorkspace,
         root: ObjectLocation,
     ) -> StorageResult<Vec<u8>> {
-        self.leaf_canonical_with_groups(connection, capacities, ceiling, workspace, root, None)
+        self.leaf_canonical_with_caches(connection, capacities, ceiling, workspace, root, None)
     }
 
-    /// Borrows the read session's physical-group cache without retaining pooled values.
-    /// Save callers keep using the uncached entry point because their pack bodies mutate.
-    pub(crate) fn leaf_canonical_with_groups(
+    /// Shares the owner's immutable ordinary encoded and decoded groups.
+    /// Mutable pooled-value input stays reader-local and is invalidated after writes.
+    pub(crate) fn leaf_canonical_with_caches(
         &mut self,
         connection: &dyn Source,
         capacities: &StorageCapacities,
         ceiling: i64,
         workspace: &mut DecompressionWorkspace,
         root: ObjectLocation,
-        groups: Option<&mut GroupCache>,
+        caches: Option<PooledCaches<'_>>,
     ) -> StorageResult<Vec<u8>> {
-        if groups.is_some() && root.pack_id > ceiling {
+        if caches.is_some() && root.pack_id > ceiling {
             return Err(StorageError::VisibilityCeiling {
                 pack_id: root.pack_id,
                 ceiling,
             });
         }
         self.counters.leaf_requests = self.counters.leaf_requests.saturating_add(1);
-        self.reconstruct_leaf(connection, capacities, ceiling, workspace, root, groups)
+        self.reconstruct_leaf(connection, capacities, ceiling, workspace, root, caches)
             .map(|(_, canonical)| canonical)
     }
     fn canonical_from_body(

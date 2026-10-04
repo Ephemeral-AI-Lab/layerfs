@@ -2077,3 +2077,12 @@ PASS. No newcache/extraresources/weakerchecks; freeze/countdiag next,goalACTIVE.
   proof12.006836416sTIMEOUT/candidateNOT_RUN. All six manifests/cold/cleanup
   checked. Finalreport records every scope/limit/failure/omission. Implementation
   and requested verification evaluation complete; release admission incomplete.
+
+
+-2026-10-04: owner-directed Save VFS follow-up validates existing disjoint phase
+  counts: filesystem reductions coexist with Save1.873/7.137GB vsref0.812/3.140GB.
+  Exact reuse fixture reproduces duplicate ordinary acquisition[2,1,2]. Share
+  existing encoded/decoded ordinary owner caches in pooled depth/reconstruction;
+  mutable value-input cache/invalidation stays local. Covering checksPASS, no
+  larger cache/buffer/prefetch/worker or promotion-policy change. Freeze and one
+  history17count cause next; no new performance/admission claim yet.

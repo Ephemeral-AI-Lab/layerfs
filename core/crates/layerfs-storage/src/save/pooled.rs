@@ -190,12 +190,21 @@ impl State<'_> {
             }
             let reader = &mut self.pool;
             let groups = &mut self.groups;
+            let packs = &mut self.packs;
             let Some(cost) = self.depths.cost_of(
                 &source,
                 &mut self.decode,
                 *id,
                 |source, workspace, location| {
-                    reader.stored_base_with_groups(source, workspace, location, Some(groups))
+                    reader.stored_base_with_caches(
+                        source,
+                        workspace,
+                        location,
+                        Some(crate::encoding::pool::read::PooledCaches {
+                            encoded: &mut *packs,
+                            decoded: &mut *groups,
+                        }),
+                    )
                 },
             )?
             else {
@@ -209,13 +218,16 @@ impl State<'_> {
                 self.pool_stats.work_exceeded += 1;
                 continue;
             }
-            let body = self.pool.leaf_body_with_groups(
+            let body = self.pool.leaf_body_with_caches(
                 &source,
                 &capacities,
                 i64::MAX,
                 &mut self.decode,
                 location,
-                Some(&mut self.groups),
+                Some(crate::encoding::pool::read::PooledCaches {
+                    encoded: &mut self.packs,
+                    decoded: &mut self.groups,
+                }),
             )?;
             if self.pool.chain_encoded_bytes().saturating_add(encoded)
                 > capacities.metadata_chain_encoded_limit

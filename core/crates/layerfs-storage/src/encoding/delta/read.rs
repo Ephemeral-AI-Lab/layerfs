@@ -188,13 +188,16 @@ impl<'a> Resolver<'a> {
             // pack this one read. Its counters are cumulative over that wider
             // lifetime, so this chain reports the difference it made.
             let before = self.caches.pool.counters();
-            let canonical = self.caches.pool.leaf_canonical_with_groups(
+            let canonical = self.caches.pool.leaf_canonical_with_caches(
                 self.connection,
                 self.capacities,
                 self.ceiling,
                 self.workspace,
                 root,
-                Some(self.groups),
+                Some(crate::encoding::pool::read::PooledCaches {
+                    encoded: self.caches.packs,
+                    decoded: self.groups,
+                }),
             )?;
             if ObjectId::for_bytes(&canonical) != id {
                 return Err(StorageError::Integrity("pooled leaf identity"));

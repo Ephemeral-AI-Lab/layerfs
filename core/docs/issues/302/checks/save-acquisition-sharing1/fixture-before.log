@@ -1,0 +1,24 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.63s
+     Running tests/pooled_demand_work.rs (core/target/debug/deps/pooled_demand_work-528bc79d04e12ec0)
+
+running 1 test
+test save_exact_reuse_consumes_the_group_already_acquired_by_discovery ... FAILED
+
+failures:
+
+---- save_exact_reuse_consumes_the_group_already_acquired_by_discovery stdout ----
+
+thread 'save_exact_reuse_consumes_the_group_already_acquired_by_discovery' panicked at crates/layerfs-storage/tests/pooled_demand_work.rs:125:5:
+assertion `left == right` failed: discovery and reconstruction acquired the same immutable ordinary pack: [2, 1, 2]
+  left: 2
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    save_exact_reuse_consumes_the_group_already_acquired_by_discovery
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-storage --test pooled_demand_work`

@@ -1,0 +1,15 @@
+{
+  "schema": "save-acquisition-sharing-functional-v1",
+  "status": "PASS",
+  "full_core_tests": 502,
+  "targets": 95,
+  "affected_tests": 118,
+  "affected_targets": 29,
+  "counter_scope_tests": 2,
+  "clippy": "workspace/alltargets-Dwarnings PASS",
+  "fmt": "PASS",
+  "boundary": 449,
+  "boundary_selftests": 23,
+  "mechanism": "one ordinary acquisition in exact reuse instead of two; no capacity or promotion change",
+  "measurement": "NOT_RUN pending frozen count diagnostic"
+}

@@ -1244,3 +1244,16 @@ One internal reconstruction returns both validated physical and canonical root
 forms; read callers avoid rebuilding the root twice, and write callers receive
 only a validated physical form. Each new reconstruction resets the existing
 per-chain decoded allowance. No base memo/cache or larger limit is introduced.
+
+
+### Ordinary pooled input shared across discovery/reconstruction (against5d894e1f1)
+
+`PooledCaches` borrows the existing owner's encoded and decoded ordinary caches.
+Save exact reuse, physical base-depth discovery and pooled leaf reconstruction
+consume the same immutable acquisitions rather than reacquiring ordinary input
+through the pooled value reader's cache. Public standalone pooled calls still
+own their input cache. Mutable pooled value groups stay reader-local and retain
+explicit private-write invalidation. Cache capacities, cohorts, framing/identity/
+dependency/visibility/private/publication/transaction checks are unchanged.
+This removes a reproduced duplicate acquisition; no workload speed/VFS result
+is claimed until the count diagnostic and qualification provide evidence.

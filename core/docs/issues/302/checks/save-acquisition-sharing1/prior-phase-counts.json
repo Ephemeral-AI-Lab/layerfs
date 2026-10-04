@@ -1,0 +1,114 @@
+{
+  "schema": "save-vfs-existing-phase-deltas-v1",
+  "rows": [
+    {
+      "states": 17,
+      "arm": "baseline",
+      "raw": "benchmark-results/fs-bench-pro/issue302-history17-localized-final-baseline1",
+      "phases": {
+        "acquisition": {
+          "states": 17,
+          "vfs_requested_bytes": 0,
+          "pack_acquisitions": 0
+        },
+        "construction": {
+          "states": 17,
+          "vfs_requested_bytes": 10727151,
+          "pack_acquisitions": 172
+        },
+        "filesystem": {
+          "states": 17,
+          "vfs_requested_bytes": 400667566,
+          "pack_acquisitions": 16903
+        },
+        "save_custody": {
+          "states": 17,
+          "vfs_requested_bytes": 812164935,
+          "pack_acquisitions": 16484
+        }
+      }
+    },
+    {
+      "states": 17,
+      "arm": "candidate",
+      "raw": "benchmark-results/fs-bench-pro/issue302-history17-localized-final-candidate1",
+      "phases": {
+        "acquisition": {
+          "states": 17,
+          "vfs_requested_bytes": 0,
+          "pack_acquisitions": 0
+        },
+        "construction": {
+          "states": 17,
+          "vfs_requested_bytes": 3843996,
+          "pack_acquisitions": 62
+        },
+        "filesystem": {
+          "states": 17,
+          "vfs_requested_bytes": 43003671,
+          "pack_acquisitions": 1177
+        },
+        "save_custody": {
+          "states": 17,
+          "vfs_requested_bytes": 1873421324,
+          "pack_acquisitions": 27722
+        }
+      }
+    },
+    {
+      "states": 53,
+      "arm": "baseline",
+      "raw": "benchmark-results/fs-bench-pro/issue302-history53-localized-final-baseline1",
+      "phases": {
+        "acquisition": {
+          "states": 53,
+          "vfs_requested_bytes": 0,
+          "pack_acquisitions": 0
+        },
+        "construction": {
+          "states": 53,
+          "vfs_requested_bytes": 21636642,
+          "pack_acquisitions": 470
+        },
+        "filesystem": {
+          "states": 53,
+          "vfs_requested_bytes": 935582284,
+          "pack_acquisitions": 36992
+        },
+        "save_custody": {
+          "states": 53,
+          "vfs_requested_bytes": 3140227191,
+          "pack_acquisitions": 70527
+        }
+      }
+    },
+    {
+      "states": 53,
+      "arm": "candidate",
+      "raw": "benchmark-results/fs-bench-pro/issue302-history53-localized-final-candidate1",
+      "phases": {
+        "acquisition": {
+          "states": 53,
+          "vfs_requested_bytes": 0,
+          "pack_acquisitions": 0
+        },
+        "construction": {
+          "states": 53,
+          "vfs_requested_bytes": 5334157,
+          "pack_acquisitions": 135
+        },
+        "filesystem": {
+          "states": 53,
+          "vfs_requested_bytes": 395619626,
+          "pack_acquisitions": 14375
+        },
+        "save_custody": {
+          "states": 53,
+          "vfs_requested_bytes": 7137391744,
+          "pack_acquisitions": 119524
+        }
+      }
+    }
+  ],
+  "scope": "disjoint phase differences from final7230d62f1, not cumulative provider counters or device bytes"
+}
