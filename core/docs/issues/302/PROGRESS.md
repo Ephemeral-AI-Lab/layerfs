@@ -2069,3 +2069,11 @@ PASS. No newcache/extraresources/weakerchecks; freeze/countdiag next,goalACTIVE.
   canonical validation gap reproduced/fixed; one reconstruction authenticates
   all nodes, resets chain work and returns both forms. Final Core501/95targets
   plusClippy/fmt/boundary PASS; frozen final matched campaign next, goalACTIVE.
+
+
+-2026-10-04: final7230d62f1 paired evaluation complete:10/3jointPASS,
+  candidateproduct32.017/64.646s vsref35.251/69.866s; identical-scope acquired
+  bytes79.76%/74.06%lower.1reference187.341product/205.452command within300s,
+  proof12.006836416sTIMEOUT/candidateNOT_RUN. All six manifests/cold/cleanup
+  checked. Finalreport records every scope/limit/failure/omission. Implementation
+  and requested verification evaluation complete; release admission incomplete.

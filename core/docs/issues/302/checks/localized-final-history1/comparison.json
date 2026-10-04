@@ -1,0 +1,253 @@
+{
+  "schema": "issue302-localized-final-qualification-v1",
+  "source_commit": "7230d62f12348ed0ca2ec6ca0be972ecf3d9210b",
+  "outcomes": {
+    "stride10": "PASS",
+    "stride3": "PASS",
+    "stride1": "INCOMPLETE: reference proof TIMEOUT; candidate NOT_RUN"
+  },
+  "rows": [
+    {
+      "raw_run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-localized-final-baseline1",
+      "receipt_sha256": "c397795d31dc269c568891f71fa5337698a1b3354b4c0f5f68e511ddb8c67c27",
+      "manifest_sha256": "e514683bd727d750523013945dca92ca83b84a49f7078a53cb87ca01f20c4724",
+      "stride": 10,
+      "arm": "baseline",
+      "source_identity": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "db7f05a937076831e1c2e56d8a4672faaae26ecd3aa8db7456307cd2054fbe0b",
+        "product_seal": "822adf8a84ef81d7e6ac7c3de93e1ac6ad691ad3d9924c1e70ec71b06b0fabad",
+        "source_commit": "7230d62f12348ed0ca2ec6ca0be972ecf3d9210b",
+        "source_dirty": false,
+        "source_tree": "951cea33ef4a923c760c0dda5c3de3168ea1a49d"
+      },
+      "case": "phase7-sqlite-disposable-history-stride10-v3",
+      "status": "COMPLETE",
+      "product_ns": 35250872542,
+      "command_wall_ns": 53974006375,
+      "command_budget_ns": 60000000000,
+      "verification_status": "PASS",
+      "verification_wall_ns": 3302526458,
+      "verification_budget_ns": 12000000000,
+      "storage_bytes": 52473856,
+      "proof": {
+        "acquired_content_bytes": 16578959,
+        "admission": "NOT_RUN",
+        "authenticated_bytes": 970326,
+        "custody_states": 17,
+        "independent_root_pins": "NOT_CHECKED",
+        "paths": 101477,
+        "sample_policy": "all-state-structure-five-anchor-bounded-content-v1",
+        "sampled_content_paths": 67,
+        "states": 17,
+        "status": "CHECKED"
+      },
+      "cleanup": {
+        "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+        "status": "PASS"
+      },
+      "cache_status": "PASS"
+    },
+    {
+      "raw_run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-localized-final-candidate1",
+      "receipt_sha256": "93f78120123e10ace045ebca8148d1aec081098169e0e7f64f6e2af08752ccec",
+      "manifest_sha256": "e9f0ff8a3abcecfbde6684d6b4165ed81681a1aca0a5dc5ba0865cafd515a799",
+      "stride": 10,
+      "arm": "candidate",
+      "source_identity": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "db7f05a937076831e1c2e56d8a4672faaae26ecd3aa8db7456307cd2054fbe0b",
+        "product_seal": "822adf8a84ef81d7e6ac7c3de93e1ac6ad691ad3d9924c1e70ec71b06b0fabad",
+        "source_commit": "7230d62f12348ed0ca2ec6ca0be972ecf3d9210b",
+        "source_dirty": false,
+        "source_tree": "951cea33ef4a923c760c0dda5c3de3168ea1a49d"
+      },
+      "case": "phase7-sqlite-disposable-history-stride10-v3",
+      "status": "COMPLETE",
+      "product_ns": 32017440125,
+      "command_wall_ns": 50184649042,
+      "command_budget_ns": 60000000000,
+      "verification_status": "PASS",
+      "verification_wall_ns": 3952038583,
+      "verification_budget_ns": 12000000000,
+      "storage_bytes": 49594368,
+      "proof": {
+        "acquired_content_bytes": 3355533,
+        "admission": "NOT_RUN",
+        "authenticated_bytes": 970326,
+        "custody_states": 17,
+        "independent_root_pins": "CHECKED",
+        "paths": 101477,
+        "sample_policy": "all-state-structure-five-anchor-bounded-content-v1",
+        "sampled_content_paths": 67,
+        "states": 17,
+        "status": "CHECKED"
+      },
+      "cleanup": {
+        "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+        "status": "PASS"
+      },
+      "cache_status": "PASS"
+    },
+    {
+      "raw_run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-localized-final-baseline1",
+      "receipt_sha256": "729e0ad2b8f57805a088a8aa70908eecb5187c868b1ae874dcc6081fef4de2ef",
+      "manifest_sha256": "190ff1105c59d3824d95eeb10eaf5834b6a5270662a076d35a481cb806c9f274",
+      "stride": 3,
+      "arm": "baseline",
+      "source_identity": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "db7f05a937076831e1c2e56d8a4672faaae26ecd3aa8db7456307cd2054fbe0b",
+        "product_seal": "822adf8a84ef81d7e6ac7c3de93e1ac6ad691ad3d9924c1e70ec71b06b0fabad",
+        "source_commit": "7230d62f12348ed0ca2ec6ca0be972ecf3d9210b",
+        "source_dirty": false,
+        "source_tree": "951cea33ef4a923c760c0dda5c3de3168ea1a49d"
+      },
+      "case": "phase7-sqlite-disposable-history-stride3-v3",
+      "status": "COMPLETE",
+      "product_ns": 69865540167,
+      "command_wall_ns": 87608914959,
+      "command_budget_ns": 170000000000,
+      "verification_status": "PASS",
+      "verification_wall_ns": 6763287041,
+      "verification_budget_ns": 12000000000,
+      "storage_bytes": 65142784,
+      "proof": {
+        "acquired_content_bytes": 14474270,
+        "admission": "NOT_RUN",
+        "authenticated_bytes": 921174,
+        "custody_states": 53,
+        "independent_root_pins": "NOT_CHECKED",
+        "paths": 306861,
+        "sample_policy": "all-state-structure-five-anchor-bounded-content-v1",
+        "sampled_content_paths": 66,
+        "states": 53,
+        "status": "CHECKED"
+      },
+      "cleanup": {
+        "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+        "status": "PASS"
+      },
+      "cache_status": "PASS"
+    },
+    {
+      "raw_run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-localized-final-candidate1",
+      "receipt_sha256": "c497698917714224d9c8a4a578090fdcf1f86a25fce93ef137560816441f77fa",
+      "manifest_sha256": "673c35d7f501f1689cbd8131dc3c4504650ff95902e4541df0ec43d575d9d266",
+      "stride": 3,
+      "arm": "candidate",
+      "source_identity": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "db7f05a937076831e1c2e56d8a4672faaae26ecd3aa8db7456307cd2054fbe0b",
+        "product_seal": "822adf8a84ef81d7e6ac7c3de93e1ac6ad691ad3d9924c1e70ec71b06b0fabad",
+        "source_commit": "7230d62f12348ed0ca2ec6ca0be972ecf3d9210b",
+        "source_dirty": false,
+        "source_tree": "951cea33ef4a923c760c0dda5c3de3168ea1a49d"
+      },
+      "case": "phase7-sqlite-disposable-history-stride3-v3",
+      "status": "COMPLETE",
+      "product_ns": 64646124250,
+      "command_wall_ns": 82398316709,
+      "command_budget_ns": 170000000000,
+      "verification_status": "PASS",
+      "verification_wall_ns": 6587442083,
+      "verification_budget_ns": 12000000000,
+      "storage_bytes": 62611456,
+      "proof": {
+        "acquired_content_bytes": 3754649,
+        "admission": "NOT_RUN",
+        "authenticated_bytes": 921174,
+        "custody_states": 53,
+        "independent_root_pins": "CHECKED",
+        "paths": 306861,
+        "sample_policy": "all-state-structure-five-anchor-bounded-content-v1",
+        "sampled_content_paths": 66,
+        "states": 53,
+        "status": "CHECKED"
+      },
+      "cleanup": {
+        "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+        "status": "PASS"
+      },
+      "cache_status": "PASS"
+    },
+    {
+      "raw_run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-localized-final-baseline1",
+      "receipt_sha256": "747181110e9d7bb124c604afef88755424463ac047564a33d47cdf158cf9d951",
+      "manifest_sha256": "d161eb69cd00f0438b5a3c253cd9ecb518c9a3314bb5a11674b81ed2d4492288",
+      "stride": 1,
+      "arm": "baseline",
+      "source_identity": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "db7f05a937076831e1c2e56d8a4672faaae26ecd3aa8db7456307cd2054fbe0b",
+        "product_seal": "822adf8a84ef81d7e6ac7c3de93e1ac6ad691ad3d9924c1e70ec71b06b0fabad",
+        "source_commit": "7230d62f12348ed0ca2ec6ca0be972ecf3d9210b",
+        "source_dirty": false,
+        "source_tree": "951cea33ef4a923c760c0dda5c3de3168ea1a49d"
+      },
+      "case": "phase7-sqlite-disposable-history-stride1-v5",
+      "status": "COMPLETE",
+      "product_ns": 187341269417,
+      "command_wall_ns": 205451676833,
+      "command_budget_ns": 300000000000,
+      "verification_status": "FAIL",
+      "verification_wall_ns": 12006836416,
+      "verification_budget_ns": 12000000000,
+      "storage_bytes": 86179840,
+      "proof": {},
+      "cleanup": {
+        "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+        "status": "PASS"
+      },
+      "cache_status": "PASS"
+    },
+    {
+      "raw_run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-localized-final-candidate-notrun1",
+      "receipt_sha256": "35a1b6597bd58c401743e0d8035b4298b73b29d0f5c3e61b12ab72fe3aec7042",
+      "manifest_sha256": "acc55f277ea1cfef73ad7c3dbd7f27157e809b827b589426829dfaec6dae3286",
+      "stride": 1,
+      "arm": "candidate",
+      "source_identity": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "db7f05a937076831e1c2e56d8a4672faaae26ecd3aa8db7456307cd2054fbe0b",
+        "product_seal": "822adf8a84ef81d7e6ac7c3de93e1ac6ad691ad3d9924c1e70ec71b06b0fabad",
+        "source_commit": "7230d62f12348ed0ca2ec6ca0be972ecf3d9210b",
+        "source_dirty": false,
+        "source_tree": "951cea33ef4a923c760c0dda5c3de3168ea1a49d"
+      },
+      "case": "phase7-sqlite-disposable-history-stride1-v5",
+      "status": "NOT_RUN",
+      "product_ns": null,
+      "command_wall_ns": null,
+      "command_budget_ns": 300000000000,
+      "verification_status": "NOT_RUN",
+      "verification_wall_ns": null,
+      "verification_budget_ns": 12000000000,
+      "storage_bytes": null,
+      "proof": {},
+      "cleanup": null,
+      "cache_status": null
+    }
+  ],
+  "comparison_scope": "product lifecycle; complete performance command and separate combined proof reported separately",
+  "integrity_scope": "canonical objects/dependencies; separate whole-pack audit available but NOT_RUN",
+  "reuse": "identity-sealed release builds and prepared corpus; fresh measured database outputs, no performance receipt reuse"
+}

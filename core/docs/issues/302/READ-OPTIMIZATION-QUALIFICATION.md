@@ -776,3 +776,18 @@ same bound. No new cache, worker, format or fallback. Final Core all-target501/
 95targets, Clippy, fmt,449-file boundary/23selftests PASS. Fix covering checks
 and failed fixture are retained. Freeze then one final10,3,1 matched campaign;
 all failures/omissions will be explicit, no sequencer interruption.
+
+
+### Final7230d62f1 campaign disposition
+
+One matched Disposable campaign10,3,1:10jointPASS (product35.250872542/
+32.017440125s,proof3.302526458/3.952038583s);3jointPASS (product69.865540167/
+64.646124250s,proof6.763287041/6.587442083s). Product ratios0.9082736913/
+0.9252934150; identical-content acquired-byte ratios0.2023970866/0.2594016140.
+Stride1reference product187.341269417s,complete205.451676833s within300s;
+proofTIMEOUT12.006836416s,candidateNOT_RUN without qualified pins. All six
+manifests checked, every sampled cold/cleanupPASS. No old row promotion,
+unchanged rerun or omitted failure. [Final report](LOCALIZED-READ-FINAL-REPORT.md)
+keeps all clocks/scopes/resources/identities/reproduction/LOC comparisons separate.
+Current all-seven/release admission remains incomplete; requested implementation
+and qualification evaluation finished with this explicit remaining gate.
