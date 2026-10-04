@@ -502,3 +502,7 @@ existing oversized singleton is isolated, with no companion bodies. Large packs
 therefore keep separate INSERTs; batching targets small packs without increasing
 payload binding ownership. A three192KiB-pack count/readback check confirms three
 INSERTs within one transaction. This deliberately limits potential speed savings.
+
+## Shared SQLite main-file allocation, 2026-10-05
+
+Adjustment against parent64b5f9e3f: both profiles call the same bounded next-pack main-file reservation and share path/device/inode/exclusive-link custody, unchanged-logical-length primitive, counters, and unused-extent release. Disposable uses checked temporary allocation handles; Durable retains its allocation handle and WAL/FULL/fullfsync/checkpoint lifecycle. WAL growth remains SQLite-owned; main-file reservations can benefit later checkpoints and do not reserve WAL space or reduce required synchronization. Final release follows successful checkpoint for Durable. No performance claim follows from this implementation change.

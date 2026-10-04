@@ -1422,3 +1422,7 @@ Directory/unit validation still precedes BLOB acquisition. Query, VM-step,
 binding-byte and transaction accounting, failures/quarantine and all schema/cache/
 worker/publication/output limits remain. Fixed IDs/digests are copied directly
 from borrowed row bytes into fixed-width types. No new cache or fallback exists.
+
+## Shared SQLite main-file allocation, 2026-10-05
+
+Adjustment against parent64b5f9e3f: both profiles call the same bounded next-pack main-file reservation and share path/device/inode/exclusive-link custody, unchanged-logical-length primitive, counters, and unused-extent release. Disposable uses checked temporary allocation handles; Durable retains its allocation handle and WAL/FULL/fullfsync/checkpoint lifecycle. WAL growth remains SQLite-owned; main-file reservations can benefit later checkpoints and do not reserve WAL space or reduce required synchronization. Final release follows successful checkpoint for Durable. No performance claim follows from this implementation change.

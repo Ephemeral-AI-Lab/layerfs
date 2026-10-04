@@ -1,0 +1,13 @@
+{
+  "source_parent": "64b5f9e3f",
+  "test_reports": 100,
+  "tests_passed": 523,
+  "failed": 0,
+  "ignored": 0,
+  "clippy": "PASS",
+  "fmt": "PASS",
+  "boundary": "PASS: scanned 456 production Rust/SQL files; semantic review still required",
+  "guard_tests": 23,
+  "harness_tests": 9,
+  "initial_validation": "First Core run passed before a source-review correction preserving Unknown outcome priority over subsequent custody errors. Final full Core run and covering commands pass at adjusted source. Both logs retained."
+}

@@ -103,7 +103,7 @@ pub struct SqlWork {
     pub blob_read_ns: u64,
     /// Attempted checked closes of incremental BLOB handles.
     pub blob_close_calls: u64,
-    /// Successful Disposable bounded physical reservations (not SQL statements).
+    /// Successful shared bounded main-file physical reservations (not SQL statements).
     pub preallocation_calls: u64,
     /// Bytes reserved without changing logical length.
     pub preallocation_bytes: u64,

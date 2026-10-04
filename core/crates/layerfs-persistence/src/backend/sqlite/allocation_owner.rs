@@ -6,13 +6,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(crate) enum AllocationOwner {
-    Retained(AllocationFile),
-    OnDemand {
-        path: PathBuf,
-        device: u64,
-        inode: u64,
-    },
+pub(crate) struct AllocationOwner {
+    path: PathBuf,
+    device: u64,
+    inode: u64,
+    retained: Option<AllocationFile>,
 }
 fn metadata(path: &Path, device: u64, inode: u64) -> Result<std::fs::Metadata, BackendError> {
     let m = std::fs::symlink_metadata(path).map_err(|e| BackendError::Filesystem(e.kind()))?;
@@ -23,9 +21,6 @@ fn metadata(path: &Path, device: u64, inode: u64) -> Result<std::fs::Metadata, B
 }
 impl AllocationOwner {
     pub(crate) fn open(path: &Path, temporary: bool) -> Result<Self, BackendError> {
-        if !temporary {
-            return AllocationFile::open(path).map(Self::Retained);
-        }
         let path = if path.is_absolute() {
             path.to_owned()
         } else {
@@ -35,26 +30,23 @@ impl AllocationOwner {
         };
         let m = std::fs::symlink_metadata(&path).map_err(|e| BackendError::Filesystem(e.kind()))?;
         metadata(&path, m.dev(), m.ino())?;
-        Ok(Self::OnDemand {
+        Ok(Self {
+            retained: if temporary {
+                None
+            } else {
+                Some(AllocationFile::open(&path)?)
+            },
             path,
             device: m.dev(),
             inode: m.ino(),
         })
     }
     pub(crate) fn before_pack(&self, capacity: usize) -> Result<(u64, u64), BackendError> {
-        let Self::OnDemand {
-            path,
-            device,
-            inode,
-        } = self
-        else {
-            return Err(BackendError::Integrity);
-        };
         if capacity > layerfs_storage::policy::SINGLETON_PACK_LIMIT {
             return Err(BackendError::Capacity);
         }
         const MIB: u64 = 1 << 20;
-        let before = metadata(path, *device, *inode)?;
+        let before = metadata(&self.path, self.device, self.inode)?;
         let allocated = before
             .blocks()
             .checked_mul(512)
@@ -73,30 +65,38 @@ impl AllocationOwner {
         if amount > layerfs_storage::policy::SINGLETON_PACK_LIMIT as u64 + 3 * MIB {
             return Err(BackendError::Capacity);
         }
-        let file = AllocationFile::open(path)?;
-        let result = file.preallocate_checked(*device, *inode, amount);
-        let close = file.close_checked()?;
-        metadata(path, *device, *inode)?;
-        result.map(|()| (amount, close))
+        let (_, close) =
+            self.with_file(|file| file.preallocate_checked(self.device, self.inode, amount))?;
+        Ok((amount, close))
+    }
+    fn with_file<T>(
+        &self,
+        operation: impl FnOnce(&AllocationFile) -> Result<T, BackendError>,
+    ) -> Result<(T, u64), BackendError> {
+        metadata(&self.path, self.device, self.inode)?;
+        let (result, close) = if let Some(file) = &self.retained {
+            (operation(file), 0)
+        } else {
+            let file = AllocationFile::open(&self.path)?;
+            let result = operation(&file);
+            // Always close the temporary descriptor, including on operation failure.
+            let close = file.close_checked()?;
+            (result, close)
+        };
+        let custody = metadata(&self.path, self.device, self.inode);
+        if result.as_ref().err() == Some(&BackendError::Unknown) {
+            return Err(BackendError::Unknown);
+        }
+        custody?;
+        result.map(|value| (value, close))
     }
     pub(crate) fn release(&self) -> Result<AllocationRelease, BackendError> {
-        let Self::OnDemand {
-            path,
-            device,
-            inode,
-        } = self
-        else {
-            let Self::Retained(file) = self else {
-                unreachable!()
-            };
-            return file.release();
-        };
-        let before = metadata(path, *device, *inode)?;
+        let before = metadata(&self.path, self.device, self.inode)?;
         let allocated = before
             .blocks()
             .checked_mul(512)
             .ok_or(BackendError::Capacity)?;
-        if allocated <= before.len() {
+        if self.retained.is_none() && allocated <= before.len() {
             return Ok(AllocationRelease {
                 before: allocated,
                 after: allocated,
@@ -106,14 +106,9 @@ impl AllocationOwner {
                 source_close_ns: 0,
             });
         }
-        let file = AllocationFile::open(path)?;
-        let result = file.release_checked(*device, *inode);
-        // Always close this owned descriptor; close failure has unknown outcome.
-        let closed = file.close_checked()?;
-        metadata(path, *device, *inode)?;
-        result.map(|mut release| {
-            release.source_close_ns = closed;
-            release
-        })
+        let (mut release, closed) =
+            self.with_file(|file| file.release_checked(self.device, self.inode))?;
+        release.source_close_ns = closed;
+        Ok(release)
     }
 }

@@ -274,50 +274,56 @@ fn disposable_completion_refuses_new_hardlink_ownership() {
 }
 
 #[test]
-fn disposable_pack_headroom_is_bounded_and_final_release_preserves_canonical_bytes() {
-    use layerfs_persistence::SqlitePersistenceProfile;
-    let t = support::Temp::new("bounded-headroom");
-    let path = t.join("db");
-    let h = Handles::create(
-        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
-        StoragePolicy::frozen_default(),
-        &HistoryCatalogConfig {
-            binding_key: b"headroom".to_vec(),
-            cursor_key: [71; 32],
-            incarnation: 1,
-        },
-    )
-    .unwrap();
-    let storage = Storage::new(h.storage.clone()).unwrap();
-    let object = FinalizedObject::new(
-        ObjectRole::FileState,
-        layerfs_content::object::codec::encode_bytes_object(&vec![37; 32_000]).unwrap(),
-    )
-    .unwrap();
-    let save = storage.begin_save().unwrap();
-    save.accept(object.clone()).unwrap();
-    save.finish().unwrap();
-    let work = h.diagnostics().unwrap();
-    assert!(work.preallocation_calls > 0);
-    assert!(
-        work.preallocation_bytes
-            <= work.preallocation_calls
-                * (layerfs_storage::policy::SINGLETON_PACK_LIMIT as u64 + 3 * 1024 * 1024)
-    );
-    let before = path.metadata().unwrap();
-    assert!(before.blocks() * 512 > before.len());
-    let completion = h.checkpoint().unwrap();
-    let source = completion.allocation_source.unwrap();
-    assert_eq!((source.device, source.inode), (before.dev(), before.ino()));
-    assert_eq!(source.logical_bytes, before.len());
-    assert_eq!(path.metadata().unwrap().len(), before.len());
-    assert!(path.metadata().unwrap().blocks() * 512 <= before.len() + 4096);
-    assert_eq!(
-        storage
-            .reader()
-            .unwrap()
-            .read_objects(&[object.id()])
-            .unwrap(),
-        vec![object.canonical().to_vec()]
-    );
+fn shared_pack_headroom_is_bounded_and_final_release_preserves_canonical_bytes() {
+    for profile in [
+        layerfs_persistence::SqlitePersistenceProfile::Durable,
+        layerfs_persistence::SqlitePersistenceProfile::Disposable,
+    ] {
+        let t = support::Temp::new("bounded-headroom");
+        let path = t.join("db");
+        let h = Handles::create(
+            PersistenceConfig::sqlite(&path).with_sqlite_profile(profile),
+            StoragePolicy::frozen_default(),
+            &HistoryCatalogConfig {
+                binding_key: b"headroom".to_vec(),
+                cursor_key: [71; 32],
+                incarnation: 1,
+            },
+        )
+        .unwrap();
+        let storage = Storage::new(h.storage.clone()).unwrap();
+        let object = FinalizedObject::new(
+            ObjectRole::FileState,
+            layerfs_content::object::codec::encode_bytes_object(&vec![37; 32_000]).unwrap(),
+        )
+        .unwrap();
+        let save = storage.begin_save().unwrap();
+        save.accept(object.clone()).unwrap();
+        save.finish().unwrap();
+        let work = h.diagnostics().unwrap();
+        assert!(work.preallocation_calls > 0);
+        assert!(
+            work.preallocation_bytes
+                <= work.preallocation_calls
+                    * (layerfs_storage::policy::SINGLETON_PACK_LIMIT as u64 + 3 * 1024 * 1024)
+        );
+        let before = path.metadata().unwrap();
+        assert!(before.blocks() * 512 > before.len());
+        let completion = h.checkpoint().unwrap();
+        let source = completion.allocation_source.unwrap();
+        assert_eq!((source.device, source.inode), (before.dev(), before.ino()));
+        assert_eq!(source.logical_bytes, path.metadata().unwrap().len());
+        if profile == layerfs_persistence::SqlitePersistenceProfile::Disposable {
+            assert_eq!(path.metadata().unwrap().len(), before.len());
+        }
+        assert!(path.metadata().unwrap().blocks() * 512 <= path.metadata().unwrap().len() + 4096);
+        assert_eq!(
+            storage
+                .reader()
+                .unwrap()
+                .read_objects(&[object.id()])
+                .unwrap(),
+            vec![object.canonical().to_vec()]
+        );
+    }
 }

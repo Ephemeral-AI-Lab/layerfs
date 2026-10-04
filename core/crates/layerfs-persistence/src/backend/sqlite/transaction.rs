@@ -21,9 +21,6 @@ impl Transaction<'_> {
         self.owner.layout
     }
     pub(crate) fn before_pack(&self, capacity: usize) -> Result<(), BackendError> {
-        if self.owner.profile.persistence != crate::SqlitePersistenceProfile::Disposable {
-            return Ok(());
-        }
         #[cfg(target_os = "macos")]
         {
             let start = Instant::now();
