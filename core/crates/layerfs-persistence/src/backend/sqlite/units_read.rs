@@ -52,6 +52,7 @@ impl Input {
             "SELECT unit_id,group_number,offset,length FROM pack_unit WHERE pack_id=?1 ORDER BY group_number LIMIT 257",
             &[&id],
             8,
+            views.len(),
             |row| {
                 let view = views.get(number).ok_or(BackendError::Integrity)?;
                 let id: i64 = row.get(0).map_err(rows::error)?;

@@ -24,3 +24,15 @@ class HistoryRunner(unittest.TestCase):
         self.assertEqual(boundaries(self.text(rows),17,'candidate')['status'],'PASS')
         rows[0]['wall_ns']=11
         with self.assertRaisesRegex(ValueError,'total mismatch'):boundaries(self.text(rows),17,'candidate')
+
+    def test_indexed_selection_keeps_the_approved_stride1_envelope(self):
+        from families.phase7_sqlite import CASES, INDEXED_GROUP_ROW_CASES, LITE_PROOF_POLICY
+        self.assertEqual(len(INDEXED_GROUP_ROW_CASES),2)
+        for name in INDEXED_GROUP_ROW_CASES:
+            c=CASES[name]
+            self.assertEqual(c.pack_layout,'group-rows-indexed')
+            self.assertEqual(c.states,157)
+            self.assertEqual(c.command_budget_ns,300_000_000_000)
+            self.assertEqual(c.verification_budget_ns,30_000_000_000)
+            self.assertEqual(c.storage_ceiling,92_342_273)
+            self.assertEqual(c.proof_policy,LITE_PROOF_POLICY)

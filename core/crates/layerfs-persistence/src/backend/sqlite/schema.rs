@@ -7,15 +7,17 @@ pub(crate) const APPLICATION_ID: i64 = 1279677264;
 pub(crate) const OBJECTS: &str = include_str!("../../../sql/sqlite/objects.sql");
 pub(crate) const METADATA: &str = include_str!("../../../sql/sqlite/metadata.sql");
 pub(crate) const HISTORY: &str = include_str!("../../../sql/sqlite/history.sql");
+const UNIT_INDEX: &str = include_str!("../../../sql/sqlite/objects_units_index.sql");
 const UNITS: &str = include_str!("../../../sql/sqlite/objects_units.sql");
 fn scripts(layout: crate::SqlitePackLayout) -> [String; 3] {
     let objects = match layout {
-        crate::SqlitePackLayout::Monolithic => OBJECTS,
-        crate::SqlitePackLayout::GroupRows => UNITS,
+        crate::SqlitePackLayout::Monolithic => OBJECTS.to_owned(),
+        crate::SqlitePackLayout::GroupRows => UNITS.to_owned(),
+        crate::SqlitePackLayout::GroupRowsIndexed => format!("{UNITS}{UNIT_INDEX}"),
     };
     let version = format!("schema_version={}", layout.version());
     [
-        objects.to_owned(),
+        objects,
         METADATA.replace("schema_version=1", &version),
         HISTORY.replace("schema_version=1", &version),
     ]
@@ -77,7 +79,7 @@ pub(crate) fn check(
         "store_policy",
         "workspace_stage",
     ];
-    if layout == crate::SqlitePackLayout::GroupRows {
+    if layout.uses_units() {
         expected.push("pack_unit");
         expected.sort_unstable();
     }

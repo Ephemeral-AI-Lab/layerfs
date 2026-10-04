@@ -1320,3 +1320,23 @@ failure/quarantine semantics. Unit INSERT binding is one existing bounded group;
 singleton remains isolated. No new dependencies, retries, formats, base memo,
 cache increase or durability claim. Row/index/free-page overhead and extra SQL/
 BLOB calls require new count/performance/storage qualification.
+
+
+### Indexed embedded group rows and exact mapping reservation (against d9da19ecf)
+
+Owner-approved creation-only `SqlitePackLayout::GroupRowsIndexed` creates schema3.
+It keeps schema2's exact control/group rows and uniqueness constraint, adding
+`pack_unit_mapping(pack_id,group_number,offset,length)`. SQLite indexes carry the
+integer rowid (`unit_id`), so bounded ordered mapping retrieval can validate all
+fields through a covering index before group BLOB acquisition. Missing/changed
+schema definitions are refused; open does not add or repair an index. Versions1/2
+retain their exact source/definition identities and original readers; default
+creation stays monolithic. Version3 dispatch is explicit, with no migration.
+
+Typed mapping retrieval reserves the already validated directory's exact bounded
+group count. It still checks every returned ID/ordinal/extent and final count,
+keeps LIMIT257, and refuses malformed rows before any group BLOB opens. Generic
+query result capacity stays zero. Statement lifecycle/error quarantine, read
+transaction extent, publication row/binding charges, body/output/cache/depth caps
+and worker count remain. Index pages and maintenance are real storage/publication
+work; this source description does not claim a measured speed or storage result.

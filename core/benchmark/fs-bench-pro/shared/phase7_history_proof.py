@@ -72,7 +72,7 @@ def collect(db_path, arm, child, row, metadata_output=None, sqlite_schema_versio
     """
     if arm not in ('baseline', 'candidate') or row not in CANONICAL:
         raise ValueError('explicit history census arm and row required')
-    if sqlite_schema_version not in (1,2):raise ValueError('unsupported declared SQLite schema')
+    if sqlite_schema_version not in (1,2,3):raise ValueError('unsupported declared SQLite schema')
     n = {'history-stride10': 17, 'history-stride3': 53, 'history-stride1': 157}[row]
     if child.get('states') != n or child.get('selected_states') != n or len(child.get('roots', [])) != n:
         raise ValueError('complete history census state count mismatch')
@@ -80,7 +80,7 @@ def collect(db_path, arm, child, row, metadata_output=None, sqlite_schema_versio
     opened = []
     records = []
     try:
-        for p, tables, app, version in ([(paths[0], COMBINED | ({'pack_unit'} if sqlite_schema_version==2 else set()), 1279677264, sqlite_schema_version)] if arm == 'candidate' else
+        for p, tables, app, version in ([(paths[0], COMBINED | ({'pack_unit'} if sqlite_schema_version in (2,3) else set()), 1279677264, sqlite_schema_version)] if arm == 'candidate' else
                                       [(paths[0], C2, 1279677261, 10), (paths[1], C5, 1279677256, 1)]):
             connection, record = owner(p, tables, app, version)
             opened.append(connection); records.append(record)
@@ -90,7 +90,7 @@ def collect(db_path, arm, child, row, metadata_output=None, sqlite_schema_versio
             counts = {'history_meta': 1, 'layer_stack': 1, 'branch': n, 'layer': n,
                       'commit': n - 1, 'workspace_stage': 0, 'scope_allocator': 0}
             root_query = 'SELECT hex(root_id) FROM layer'
-            pack_bytes = c2.execute('SELECT COALESCE(SUM(length(control)),0)+(SELECT COALESCE(SUM(length(body)),0) FROM pack_unit) FROM pack' if sqlite_schema_version==2 else 'SELECT COALESCE(SUM(length(body)),0) FROM pack').fetchone()[0]
+            pack_bytes = c2.execute('SELECT COALESCE(SUM(length(control)),0)+(SELECT COALESCE(SUM(length(body)),0) FROM pack_unit) FROM pack' if sqlite_schema_version in (2,3) else 'SELECT COALESCE(SUM(length(body)),0) FROM pack').fetchone()[0]
         else:
             inconsistent = c2.execute('SELECT 1 FROM objects GROUP BY object_id HAVING MIN(object_role)!=MAX(object_role) OR MIN(canonical_length)!=MAX(canonical_length) LIMIT 1').fetchone()
             unfinished = unfinished_saves(c2)

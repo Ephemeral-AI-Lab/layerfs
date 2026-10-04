@@ -12,7 +12,7 @@ pub(crate) fn read(
     id: i64,
     plan: &mut dyn PackReadPlan,
 ) -> Result<PersistedPackRead, PersistenceError> {
-    if tx.layout() == crate::SqlitePackLayout::GroupRows {
+    if tx.layout().uses_units() {
         return super::units_read::strict(tx, id, plan);
     }
     read_with(tx, id, |descriptor, read_at| {
@@ -24,7 +24,7 @@ pub(crate) fn read_scoped(
     id: i64,
     plan: &mut dyn PackReadPlan,
 ) -> Result<AcquiredPackRead, PersistenceError> {
-    if tx.layout() == crate::SqlitePackLayout::GroupRows {
+    if tx.layout().uses_units() {
         return super::units_read::scoped(tx, id, plan);
     }
     read_with(tx, id, |descriptor, read_at| {

@@ -93,6 +93,14 @@ for name in tuple(GROUP_ROW_CASES):
         new=name.rsplit('-v',1)[0]+'-v3'
         CASES[new]=Case(new,c.fixture,c.states,c.storage_ceiling,c.command_budget_ns,30_000_000_000,c.profile,c.proof_policy,c.pack_layout,'owner-stride1-proof30-v3')
         GROUP_ROW_CASES.append(new)
+# Owner-approved2026-10-04 schema3 covering index, fresh matched selection.
+INDEXED_GROUP_ROW_CASES=[]
+for name in tuple(GROUP_ROW_CASES):
+    c=CASES[name]
+    if c.states==157 and name.endswith('-v3'):
+        new=name.replace('-group-rows-v3','-group-rows-indexed-v1')
+        CASES[new]=Case(new,c.fixture,c.states,c.storage_ceiling,c.command_budget_ns,c.verification_budget_ns,c.profile,c.proof_policy,'group-rows-indexed',c.proof_envelope)
+        INDEXED_GROUP_ROW_CASES.append(new)
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"

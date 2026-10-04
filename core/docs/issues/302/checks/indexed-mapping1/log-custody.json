@@ -1,0 +1,65 @@
+[
+  {
+    "tracked": "core/docs/issues/302/checks/sqlite-plan-profile1/control.plan",
+    "raw": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-indexed-functional1/raw/sqlite-plan-profile1/control.plan",
+    "raw_sha256": "00ced1e711274cc77616d51d399ff72c4ca171ab27c3c767f7d971dc1a20cea3",
+    "normalized_sha256": "3b90fd3ff5f4063d1302f7dc7f75742f670b0106b9dc779151870ab0ba605efc",
+    "normalization": "trailing whitespace/EOF blank lines only; raw preserved"
+  },
+  {
+    "tracked": "core/docs/issues/302/checks/sqlite-plan-profile1/locator.plan",
+    "raw": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-indexed-functional1/raw/sqlite-plan-profile1/locator.plan",
+    "raw_sha256": "ec5685666f7e1fa0101cf45de5861fd9de7e0c7329e1a419b90df6ca95b3f00e",
+    "normalized_sha256": "121e18a404e6a95d6f5730a56addcfefe43005c298baf174c0529bc53765e23c",
+    "normalization": "trailing whitespace/EOF blank lines only; raw preserved"
+  },
+  {
+    "tracked": "core/docs/issues/302/checks/sqlite-plan-profile1/unit_insert.plan",
+    "raw": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-indexed-functional1/raw/sqlite-plan-profile1/unit_insert.plan",
+    "raw_sha256": "db88597a9bef7d5220c762bad603bda86433915a1b30ced36ae1a3822dcfd7bf",
+    "normalized_sha256": "c17a84e30e6130fefd9f8c464c30d2248159b1000828a59e9b3e3415cecef39c",
+    "normalization": "trailing whitespace/EOF blank lines only; raw preserved"
+  },
+  {
+    "tracked": "core/docs/issues/302/checks/sqlite-plan-profile1/mapping.plan",
+    "raw": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-indexed-functional1/raw/sqlite-plan-profile1/mapping.plan",
+    "raw_sha256": "3927ae513fcca1eb05ba408d00ff1beadeff9b20294b9fd3ec6e3fa93f05a41f",
+    "normalized_sha256": "b31604b72bc4a843cbbefc342c4bc955a9325b42c605f22b3d4659f5bdb50527",
+    "normalization": "trailing whitespace/EOF blank lines only; raw preserved"
+  },
+  {
+    "tracked": "core/docs/issues/302/checks/sqlite-plan-profile1/commit.plan",
+    "raw": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-indexed-functional1/raw/sqlite-plan-profile1/commit.plan",
+    "raw_sha256": "fc162d21c387d914b725bb318103cf85c5b54b0e28ff1b284599ca662b613a3c",
+    "normalized_sha256": "9155eb6ddf23a9c5976fdfb8f30470e814617b36f564a3ab1e6dcb731ba6b7dc",
+    "normalization": "trailing whitespace/EOF blank lines only; raw preserved"
+  },
+  {
+    "tracked": "core/docs/issues/302/checks/sqlite-plan-profile1/metadata.plan",
+    "raw": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-indexed-functional1/raw/sqlite-plan-profile1/metadata.plan",
+    "raw_sha256": "293f93ca89162d9649d947d03554f13c760d72f9d4dfe91ce4ee428514dec182",
+    "normalized_sha256": "1768aa436ff4171049539eb2098c97c83722bde0c2eda2be2a97bb107c491eb7",
+    "normalization": "trailing whitespace/EOF blank lines only; raw preserved"
+  },
+  {
+    "tracked": "core/docs/issues/302/checks/sqlite-plan-profile1/begin.plan",
+    "raw": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-indexed-functional1/raw/sqlite-plan-profile1/begin.plan",
+    "raw_sha256": "8838f17df100d46e451278c60e7a060c2c2552fb39b0d3c2245cb1c0b7405cc7",
+    "normalized_sha256": "129e84abd2ddf190c3d141e85a89825f859d849d8cffb048f4450380224aa0a6",
+    "normalization": "trailing whitespace/EOF blank lines only; raw preserved"
+  },
+  {
+    "tracked": "core/docs/issues/302/checks/indexed-mapping1/tests.stdout",
+    "raw": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-indexed-functional1/raw/indexed-mapping1/tests.stdout",
+    "raw_sha256": "e2bb3aa8754e01584657bf2037876a787a6c28feced9b0996940db10dbadf574",
+    "normalized_sha256": "3d86693ce746872a0f9e031b7e02e4df07c68c3104b67b6feb0e30e9b585320d",
+    "normalization": "trailing whitespace/EOF blank lines only; raw preserved"
+  },
+  {
+    "tracked": "core/docs/issues/302/checks/unit-reservation1/focused.stdout",
+    "raw": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-indexed-functional1/raw/unit-reservation1/focused.stdout",
+    "raw_sha256": "96b769f8628076061e3a957eb55a8e4d2f97565aeac81ea66e600bca09dff436",
+    "normalized_sha256": "17db7fb409e4090233a55f3e2149295ba86a71fbf2961aaa0b0393ef9ba23971",
+    "normalization": "trailing whitespace/EOF blank lines only; raw preserved"
+  }
+]

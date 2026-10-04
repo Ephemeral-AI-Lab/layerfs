@@ -70,12 +70,14 @@ impl PackPersistence for StorageProvider {
     ) -> Result<(usize, u64), PersistenceError> {
         match self.session.layout {
             crate::SqlitePackLayout::Monolithic => Ok((1, pack.body.len() as u64)),
-            crate::SqlitePackLayout::GroupRows => crate::backend::sqlite::unit_layout::cost(pack),
+            crate::SqlitePackLayout::GroupRows | crate::SqlitePackLayout::GroupRowsIndexed => {
+                crate::backend::sqlite::unit_layout::cost(pack)
+            }
         }
     }
     fn publish(&self, batch: &Publication) -> Result<Published, PersistenceError> {
         publication::validate(batch)?;
-        if self.session.layout == crate::SqlitePackLayout::GroupRows {
+        if self.session.layout.uses_units() {
             crate::backend::sqlite::unit_layout::validate_batch(batch)?;
         }
         self.session.run(true, |tx| publication::publish(tx, batch))

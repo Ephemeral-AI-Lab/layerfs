@@ -1,0 +1,1 @@
+SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN(X'000002140c99649c35b5f18717dfca2d465427cadbd4cf5a171e7d1ca71274a5')

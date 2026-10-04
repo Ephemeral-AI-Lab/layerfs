@@ -1,0 +1,11 @@
+
+running 7 tests
+test late_locator_failure_rolls_back_control_and_every_unit ... ok
+test complete_reads_reassemble_exact_bytes_and_digest_for_every_lane ... ok
+test exact_physical_fanout_refuses_over_budget_batch_before_begin ... ok
+test unread_corruption_is_scoped_and_whole_audit_refuses_it ... ok
+test explicit_creation_reopens_declared_units_and_keeps_sparse_canonical_order ... ok
+test oversized_control_is_rejected_before_group_blob_acquisition ... ok
+test malformed_unit_extent_is_refused_before_any_unit_blob_read ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s

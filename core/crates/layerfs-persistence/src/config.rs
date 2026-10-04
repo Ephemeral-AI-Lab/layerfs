@@ -26,12 +26,18 @@ pub enum SqlitePackLayout {
     Monolithic,
     /// Schema2 complete encoded groups in independent immutable rows.
     GroupRows,
+    /// Schema3 group rows with a covering index for bounded mapping validation.
+    GroupRowsIndexed,
 }
 impl SqlitePackLayout {
+    pub(crate) const fn uses_units(self) -> bool {
+        matches!(self, Self::GroupRows | Self::GroupRowsIndexed)
+    }
     pub(crate) const fn version(self) -> i64 {
         match self {
             Self::Monolithic => 1,
             Self::GroupRows => 2,
+            Self::GroupRowsIndexed => 3,
         }
     }
 }

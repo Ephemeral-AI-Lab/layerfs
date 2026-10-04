@@ -48,7 +48,7 @@ pub(crate) fn read(
         return Err(BackendError::Capacity.into());
     }
     for info in descriptors {
-        if tx.layout() == crate::SqlitePackLayout::GroupRows {
+        if tx.layout().uses_units() {
             out.push(super::units_read::whole(tx, info)?);
             continue;
         }

@@ -1,0 +1,24 @@
+VERSION	3.51.0
+SECTION	EXPLAIN QUERY PLAN
+5	0	62	SEARCH pack_unit USING INDEX sqlite_autoindex_pack_unit_1 (pack_id=?)
+SECTION	EXPLAIN
+0	Init	0	18	0	NULL	0	NULL
+1	Noop	1	6	0	NULL	0	NULL
+2	Integer	257	1	0	NULL	0	NULL
+3	OpenRead	0	3	0	5	0	NULL
+4	OpenRead	2	4	0	k(2,,)	2	NULL
+5	Explain	5	0	62	SEARCH pack_unit USING INDEX sqlite_autoindex_pack_unit_1 (pack_id=?)	0	NULL
+6	Integer	1	2	0	NULL	0	NULL
+7	SeekGE	2	17	2	1	0	NULL
+8	IdxGT	2	17	2	1	0	NULL
+9	DeferredSeek	2	0	0	NULL	0	NULL
+10	IdxRowid	2	3	0	NULL	0	NULL
+11	Column	2	1	4	NULL	0	NULL
+12	Column	0	3	5	NULL	0	NULL
+13	Column	0	4	6	NULL	0	NULL
+14	ResultRow	3	4	0	NULL	0	NULL
+15	DecrJumpZero	1	17	0	NULL	0	NULL
+16	Next	2	8	0	NULL	0	NULL
+17	Halt	0	0	0	NULL	0	NULL
+18	Transaction	0	0	27	0	1	NULL
+19	Goto	0	1	0	NULL	0	NULL

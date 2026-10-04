@@ -111,9 +111,18 @@ impl Transaction<'_> {
         sql: &str,
         values: &[&dyn rusqlite::ToSql],
         bytes: u64,
+        capacity: usize,
         decode: impl FnMut(&rusqlite::Row<'_>) -> Result<T, BackendError>,
     ) -> Result<Vec<T>, BackendError> {
-        let result = query::mapped(self.connection, sql, values, bytes, self.work, decode);
+        let result = query::mapped(
+            self.connection,
+            sql,
+            values,
+            bytes,
+            capacity,
+            self.work,
+            decode,
+        );
         if result.as_ref().err() == Some(&BackendError::Unknown) {
             self.uncertain.set(true);
         }

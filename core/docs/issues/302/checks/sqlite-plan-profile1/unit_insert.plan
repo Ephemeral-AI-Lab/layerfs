@@ -1,0 +1,40 @@
+VERSION	3.51.0
+SECTION	EXPLAIN QUERY PLAN
+SECTION	EXPLAIN
+0	Init	0	35	0	NULL	0	NULL
+1	OpenWrite	0	3	0	6	0	NULL
+2	OpenWrite	1	4	0	k(2,,)	0	NULL
+3	SoftNull	2	0	0	NULL	0	NULL
+4	Integer	1	3	0	NULL	0	NULL
+5	Integer	0	4	0	NULL	0	NULL
+6	Integer	24	5	0	NULL	0	NULL
+7	Integer	1	6	0	NULL	0	NULL
+8	Blob	1	7	0	x	0	NULL
+9	NewRowid	0	1	0	NULL	0	NULL
+10	HaltIfNull	1299	2	3	pack_unit.pack_id	1	NULL
+11	HaltIfNull	1299	2	4	pack_unit.group_number	1	NULL
+12	HaltIfNull	1299	2	5	pack_unit.offset	1	NULL
+13	HaltIfNull	1299	2	6	pack_unit.length	1	NULL
+14	HaltIfNull	1299	2	7	pack_unit.body	1	NULL
+15	Integer	0	13	0	NULL	0	NULL
+16	TypeCheck	2	6	0	pack_unit	0	NULL
+17	SCopy	3	9	0	NULL	0	NULL
+18	SCopy	4	10	0	NULL	0	NULL
+19	IntCopy	1	11	0	NULL	0	NULL
+20	MakeRecord	9	3	8	NULL	0	NULL
+21	NoConflict	1	23	9	2	0	NULL
+22	Halt	2067	2	0	pack_unit.pack_id, pack_unit.group_number	2	NULL
+23	MakeRecord	2	6	12	NULL	0	NULL
+24	IsNull	3	31	0	NULL	0	NULL
+25	SCopy	3	14	0	NULL	0	NULL
+26	MustBeInt	14	30	0	NULL	0	NULL
+27	OpenRead	2	2	0	5	0	NULL
+28	NotExists	2	30	14	NULL	0	NULL
+29	Goto	0	31	0	NULL	0	NULL
+30	Halt	787	2	0	NULL	4	NULL
+31	Close	2	0	0	NULL	0	NULL
+32	IdxInsert	1	8	9	2	16	NULL
+33	Insert	0	12	1	pack_unit	57	NULL
+34	Halt	0	0	0	NULL	0	NULL
+35	Transaction	0	1	27	0	1	NULL
+36	Goto	0	1	0	NULL	0	NULL

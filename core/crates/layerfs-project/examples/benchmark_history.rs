@@ -53,7 +53,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let selected_layout = match args.get(7).map(String::as_str).unwrap_or("monolithic") {
         "monolithic" => SqlitePackLayout::Monolithic,
         "group-rows" => SqlitePackLayout::GroupRows,
-        _ => return Err("explicit monolithic/group-rows layout required".into()),
+        "group-rows-indexed" => SqlitePackLayout::GroupRowsIndexed,
+        _ => {
+            return Err("explicit monolithic/group-rows/group-rows-indexed layout required".into())
+        }
     };
     for (key, value) in [
         ("LAYERFS_CONSTRUCTION_WORKERS", "1"),

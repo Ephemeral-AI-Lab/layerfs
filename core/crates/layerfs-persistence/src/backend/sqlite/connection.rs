@@ -209,6 +209,7 @@ impl Session {
             {
                 1 => crate::SqlitePackLayout::Monolithic,
                 2 => crate::SqlitePackLayout::GroupRows,
+                3 => crate::SqlitePackLayout::GroupRowsIndexed,
                 _ => return Err(BackendError::Integrity),
             }
         };

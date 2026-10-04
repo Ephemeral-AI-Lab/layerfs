@@ -1,0 +1,80 @@
+{
+  "parent": "d9da19ecf0657fa6afa14494ada791e4072ab322",
+  "before": 140045,
+  "after": 140069,
+  "delta": 24,
+  "reference_before": 65417,
+  "reference_after": 65417,
+  "core_before": 74628,
+  "core_after": 74652,
+  "changed_files": {
+    "core/crates/layerfs-persistence/sql/sqlite/objects_units_index.sql": {
+      "before": 0,
+      "before_blob_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "after": 1,
+      "after_blob_sha256": "d888eeaeadf65e5845483c39ca7a2af007b0a7950a4d94b4d71184b061222d46"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/connection.rs": {
+      "before": 284,
+      "before_blob_sha256": "d345067853279444d2564db321c80143c524d0cb64f0dba738028331a8523fa9",
+      "after": 285,
+      "after_blob_sha256": "142a4f0c74532d249054fd4449a4f56c257d02e87a7f7c5a697623f4ecee3164"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/objects_read.rs": {
+      "before": 65,
+      "before_blob_sha256": "06cd2e47c7ffa75577ca55b0b146f324a620fa7697a7fc8e17e0b88885fc266f",
+      "after": 65,
+      "after_blob_sha256": "ec28f087cde6501be0e2e92bfa3a9e8eb8226de7f203186eb8622f2d34a79eea"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/objects_selection.rs": {
+      "before": 82,
+      "before_blob_sha256": "90eff56e2a7c9dae4ca4c316d1446e58bf2a435e4fdc376d3b9d3404bc98e3ac",
+      "after": 82,
+      "after_blob_sha256": "3ab311fbe1389b5bb4e77468c374b50fa4d2a7578a12a25f841f50fe3f595b87"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/publish.rs": {
+      "before": 120,
+      "before_blob_sha256": "2301b343014b8786c8396f96a5db6633a33a793ef289e6c17d271872f8aea0e0",
+      "after": 122,
+      "after_blob_sha256": "762c638a9674284360071a4388b661a10e4ed3232de2b461b21efb9082ebddff"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/query.rs": {
+      "before": 217,
+      "before_blob_sha256": "016925b59df410825fd64d5e761528a9e81901753363a0b353547d2ad393c719",
+      "after": 218,
+      "after_blob_sha256": "34a176dd524bf963b9822d640bbb7b3652d8a4896e8b58de9bec933d00f9f87c"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/schema.rs": {
+      "before": 121,
+      "before_blob_sha256": "e09fafd05c499ad2a177a54cc19ed1317c598216c2781aca1f255eca548c095e",
+      "after": 123,
+      "after_blob_sha256": "de92c999c5dbf8d07d3bd0b0ffb2aac8966713ebdfaec353cd9b61c4b95b0cd8"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/transaction.rs": {
+      "before": 217,
+      "before_blob_sha256": "326083392adfa6b4fdb1520e2158b19e45ef74529fb519613895d9ee544c2269",
+      "after": 226,
+      "after_blob_sha256": "fd7258771e6efaf267290d62111df521ab4488886ba62c8d94d849d021d5ca6c"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/units_read.rs": {
+      "before": 186,
+      "before_blob_sha256": "ca89089f4c3fd3f1f765cdb9d3df2f3612c3a3ac733c454983f3718457c9115d",
+      "after": 187,
+      "after_blob_sha256": "0a47603cbec7c0b9557d248c08529100690c7b8d10b54c5f127992747c267f7a"
+    },
+    "core/crates/layerfs-persistence/src/config.rs": {
+      "before": 51,
+      "before_blob_sha256": "be621f1872e6575bc1ab42f1bc549a7c3f4effb74b618aa5f88f7bc052dfeb41",
+      "after": 56,
+      "after_blob_sha256": "7edd97af933f2d9ce19d0bf36f6d003e3215d736425b37b5efcad5d8ed78f827"
+    },
+    "core/crates/layerfs-persistence/src/storage_provider.rs": {
+      "before": 81,
+      "before_blob_sha256": "fbf44be45906b30b7f5903e34f47db07fdb69e6cadea53acb0f943324825eac1",
+      "after": 83,
+      "after_blob_sha256": "559f267e5f1c73be6ab23f224fe354a8897de3628fd7e9482fd53f1d71b2a0aa"
+    }
+  },
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "exact first-parent/final staged changed production blobs; unchanged scope totals inherited from counted parent; independent full same-counter scan confirms; nonblank/noncomment Rust src/runtime SQL excluding tests/docs/tools/examples"
+}

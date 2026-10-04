@@ -38,7 +38,10 @@ def generate(root: Path) -> tuple[str, dict[str, str]]:
     replace('''    let selected_layout = match args.get(7).map(String::as_str).unwrap_or("monolithic") {
         "monolithic" => SqlitePackLayout::Monolithic,
         "group-rows" => SqlitePackLayout::GroupRows,
-        _ => return Err("explicit monolithic/group-rows layout required".into()),
+        "group-rows-indexed" => SqlitePackLayout::GroupRowsIndexed,
+        _ => {
+            return Err("explicit monolithic/group-rows/group-rows-indexed layout required".into())
+        }
     };''', '')
     replace('use layerfs_storage::{Storage, StoragePolicy};',
             'use layerfs_storage::{Store, StoreProvider, StoragePolicy};')

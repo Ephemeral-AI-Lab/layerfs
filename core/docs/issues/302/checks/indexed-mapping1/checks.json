@@ -1,0 +1,89 @@
+[
+  {
+    "name": "tests",
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "--workspace",
+      "--all-targets"
+    ],
+    "wall_ns": 31447028541,
+    "exit_code": 0
+  },
+  {
+    "name": "clippy",
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "clippy",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "--workspace",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "wall_ns": 1545572958,
+    "exit_code": 0
+  },
+  {
+    "name": "fmt",
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "fmt",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "wall_ns": 1025004791,
+    "exit_code": 0
+  },
+  {
+    "name": "boundary",
+    "command": [
+      "python3",
+      "core/tools/check_product_boundary.py"
+    ],
+    "wall_ns": 373912667,
+    "exit_code": 0
+  },
+  {
+    "name": "tools",
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "core/tools",
+      "-p",
+      "test_*.py"
+    ],
+    "wall_ns": 173842750,
+    "exit_code": 0
+  },
+  {
+    "name": "harness",
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "core/benchmark/fs-bench-pro/tests",
+      "-p",
+      "test_phase7_history*.py"
+    ],
+    "wall_ns": 237778666,
+    "exit_code": 0
+  }
+]

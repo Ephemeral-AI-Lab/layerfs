@@ -7,7 +7,9 @@ use std::collections::BTreeSet;
 pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published, BackendError> {
     match tx.layout() {
         crate::SqlitePackLayout::Monolithic => write_packs(tx, &batch.packs)?,
-        crate::SqlitePackLayout::GroupRows => super::units_publish::write(tx, &batch.packs)?,
+        crate::SqlitePackLayout::GroupRows | crate::SqlitePackLayout::GroupRowsIndexed => {
+            super::units_publish::write(tx, &batch.packs)?
+        }
     }
     let mut inserted = BTreeSet::new();
     // Both actual limits constrain one statement. SQL size is bounded conservatively.
