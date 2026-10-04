@@ -49,6 +49,7 @@ pub(super) struct Packer {
     queued: [Queue; 5],
     pub(super) ready: Vec<Sealed>,
     pub(super) pooled: Option<PooledTail>,
+    pub(super) group_ns: u64,
 }
 impl Packer {
     pub(super) fn new() -> Self {
@@ -57,6 +58,7 @@ impl Packer {
             queued: std::array::from_fn(|_| Queue::default()),
             ready: Vec::new(),
             pooled: None,
+            group_ns: 0,
         }
     }
     pub(super) fn unfinished(&self) -> bool {
@@ -92,7 +94,10 @@ impl Packer {
             return Ok(());
         }
         let pending = std::mem::take(&mut self.groups[lane.index()]);
-        let group = build_group(lane, &pending.records, Some(codec))?;
+        let started = std::time::Instant::now();
+        let group = build_group(lane, &pending.records, Some(codec));
+        self.group_ns += started.elapsed().as_nanos() as u64;
+        let group = group?;
         let bytes = group.body_size(lane)?;
         let rows = pending.members.len();
         let queueable = matches!(

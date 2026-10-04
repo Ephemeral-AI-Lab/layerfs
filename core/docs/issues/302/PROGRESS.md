@@ -1550,3 +1550,14 @@ PREREQUISITE paired small-step cause diagnostic with baseline publicSaveOutcome
 profiles and equivalentcandidatework observations, SQLplans/counts and missing
 observations explicit, beforeanotherproductoptimization. Scope/route equivalence
 andobserverfreeze required; current speed receipts unchanged,all-sevenACTIVE.
+
+### Paired cause diagnostic vehicle and observer (prospective)
+
+Shared snapshot of real bounded namespace caller through publicC1/C2/C5, narrow
+unmodifiedPhase4.5 facade capturesSaveOutcome profiles; candidate retains final
+drain selection/group telemetry. Fixed source-stage and publicSQLite trace observers
+(rawprofilequantization separate; nativeVM reset/unqualified), representative
+native readonlySQLplan tool. Capability3.51.0 configPASS/oneSELECT6VM, notproduct
+sample. Build adapters compile after lifetime/error-conversion fixes;18C2checks/
+full100/1000oracle,Clippy/fmt/boundary439/guard23PASS. Cause child execution still
+pending; [prospectivecontract](SQLITE-PAIRED-CAUSE-CONTRACT.md), all-sevenACTIVE.

@@ -15,6 +15,9 @@ pub struct StageWork {
 pub struct SaveWork {
     /// Fixed nine-stage aggregate.
     pub stages: [StageWork; 9],
+    /// Codec selection observations for acknowledged saves only; nested times overlap.
+    /// In a recent row this is the complete save, including its final drain.
+    pub selection: super::SaveProfile,
 }
 impl SaveWork {
     fn difference(self, earlier: Self) -> Self {
@@ -66,10 +69,12 @@ impl Work {
     pub(crate) fn snapshot(&self) -> SaveHistory {
         self.0.get()
     }
-    pub(crate) fn close(&self, start: SaveWork) {
+    pub(crate) fn close(&self, start: SaveWork, selection: super::SaveProfile) {
         let mut value = self.0.get();
         let index = (value.completed % 4) as usize;
         value.recent[index] = value.total.difference(start);
+        value.recent[index].selection = selection;
+        value.total.selection.accumulate(selection);
         value.completed += 1;
         self.0.set(value);
     }

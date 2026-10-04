@@ -90,7 +90,8 @@ impl<'a> Save<'a> {
         drop(closing);
         state.register_ready()?;
         state.outcome.pool = state.pool_stats;
-        state.storage.work.close(self.work_start);
+        state.profile.group_ns += state.packer.group_ns;
+        state.storage.work.close(self.work_start, state.profile);
         self.finished.set(true);
         Ok(state.outcome)
     }

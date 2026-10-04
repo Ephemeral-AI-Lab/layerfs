@@ -112,7 +112,10 @@ impl State<'_> {
                     .iter()
                     .map(value_group::canonical_value)
                     .collect::<StorageResult<Vec<_>>>()?;
-                let group = value_group::build(&canonical, &mut self.compression)?;
+                let started = std::time::Instant::now();
+                let group = value_group::build(&canonical, &mut self.compression);
+                super::SaveProfile::charge(&mut self.profile.group_ns, started);
+                let group = group?;
                 self.packer
                     .add_values(first, group, &mut self.next_pack, self.pack_end)?;
                 self.pool.release_packs();
@@ -121,14 +124,20 @@ impl State<'_> {
             }
         }
         let body = input.body(&ordinals)?;
-        let full = leaf::encode_full(&body)?;
+        let started = std::time::Instant::now();
+        let full = leaf::encode_full(&body);
+        super::SaveProfile::charge(&mut self.profile.full_ns, started);
+        let full = full?;
         self.pool_stats.leaves += 1;
         if let Some((id, base)) =
             self.pooled_base(advisory, object.canonical_len() as u64, full.len() as u64)?
         {
             self.pool_stats.trials += 1;
             let mut budget = crate::policy::METADATA_MATCH_BUDGET_BYTES;
-            if let Some(program) = delta::build(id, &base, &body, &mut budget)? {
+            let started = std::time::Instant::now();
+            let program = delta::build(id, &base, &body, &mut budget);
+            super::SaveProfile::charge(&mut self.profile.delta_ns, started);
+            if let Some(program) = program? {
                 if program.len() < full.len() {
                     self.pool_stats.delta_leaves += 1;
                     return Ok((

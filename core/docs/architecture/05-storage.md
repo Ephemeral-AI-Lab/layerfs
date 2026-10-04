@@ -890,3 +890,20 @@ This replaces a whole-wave speculative check that could discard a small tail
 before a larger small-record wave which used only a few packs. No consumed-ID
 recycling, buffer/cache/worker/profile/port-bound change or retry is added.
 Physical pack IDs can change; canonical identities do not.
+
+### Retained selection observations
+
+Based on0e32111e3. The fixed four-entry successful-save history now retains the
+already collected codec selection profile, including final-drain work. Its
+cumulative selection fields cover acknowledged saves only; inclusive stage
+counters still include attempted work. The profile contains FULL/delta/candidate
+cost/eligibility/acquisition and compression-probe observations. Nested spans
+remain overlapping, not additive. This exports actual runtime telemetry without
+a test-only product path, changed selection, timer policy or payload owner.
+
+The observed FULL/delta fields now also cover pooled leaf encoding, alongside
+ordinary record selection; a group field covers ordinary group framing/codec
+and pooled value-group compression. These are actual fixed aggregate clocks
+around those unchanged operations. The runtime has no benchmark-selected route.
+Group counters also charge failed calls internally; acknowledged-save history
+only exports successful saves. Duration fields do not choose representations.

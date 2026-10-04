@@ -7,6 +7,8 @@ pub struct SaveProfile {
     pub full_ns: u64,
     /// Delta trials wall.
     pub delta_ns: u64,
+    /// Group codec/framing wall, including pooled value-group compression.
+    pub group_ns: u64,
     /// Non-native records selected.
     pub stored_records: u64,
     /// Dependency selection work.
@@ -31,6 +33,17 @@ pub struct DiagnosticProfile {
     pub probe_ns: u64,
 }
 impl SaveProfile {
+    pub(crate) fn accumulate(&mut self, other: Self) {
+        self.full_ns += other.full_ns;
+        self.delta_ns += other.delta_ns;
+        self.group_ns += other.group_ns;
+        self.stored_records += other.stored_records;
+        self.resolve.cost_ns += other.resolve.cost_ns;
+        self.resolve.eligible_ns += other.resolve.eligible_ns;
+        self.resolve.acquire_ns += other.resolve.acquire_ns;
+        self.diag.probe_ns += other.diag.probe_ns;
+    }
+
     /// Charges an inclusive elapsed span.
     pub fn charge(slot: &mut u64, start: Instant) {
         *slot = slot.saturating_add(start.elapsed().as_nanos() as u64);

@@ -324,3 +324,40 @@ fn allocation_replenishes_before_pressure_seals_when_the_tail_is_consumed() {
     );
     assert_eq!(rows, distinct);
 }
+
+#[test]
+fn successful_save_history_retains_selection_and_group_work_from_final_drain() {
+    let t = support::Temp::new("selection-final-drain");
+    let h = create(&t.join("db"));
+    let storage = Storage::new(h.storage.clone()).unwrap();
+    let raw = object(9001, 4000);
+    let whole = FinalizedObject::new(
+        ObjectRole::WholeFile,
+        layerfs_content::file::encode_whole_file_payload(
+            layerfs_content::object::codec::decode_bytes_object(raw.canonical()).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let save = storage.begin_save().unwrap();
+    save.accept(whole.clone()).unwrap();
+    assert_eq!(storage.save_work().completed, 0);
+    assert_eq!(storage.save_work().total.selection.full_ns, 0);
+    save.finish().unwrap();
+    let observed = storage.save_work();
+    assert_eq!(observed.completed, 1);
+    assert!(observed.recent[0].selection.full_ns > 0);
+    assert!(observed.recent[0].selection.group_ns > 0);
+    assert_eq!(
+        observed.total.selection.full_ns,
+        observed.recent[0].selection.full_ns
+    );
+    assert_eq!(
+        storage
+            .reader()
+            .unwrap()
+            .read_objects(&[whole.id()])
+            .unwrap(),
+        vec![whole.canonical().to_vec()]
+    );
+}
