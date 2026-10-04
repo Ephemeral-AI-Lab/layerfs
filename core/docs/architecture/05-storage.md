@@ -1,5 +1,20 @@
 # Storage (C2, `layerfs-storage`)
 
+### #302 within-cohort directory validation (2026-10-05)
+
+Described against parent `2c766b1e6` and the accompanying implementation.
+A whole encoded pack's full directory is validated once per `acquire_groups`
+cohort boundary, including admission and post-admission presence checks. Every
+requested group's descriptor eligibility and recency consult remains separate.
+Single-group access still validates the complete directory; selected units retain
+existing authenticated views. No directory view or trust memo survives the cohort,
+no snapshot/transaction changes, and the 2 MiB / 4,096 encoded-cache bounds remain.
+Actual Source diagnostics count full-directory validation attempts, equivalent
+single-group walks for those demands, and declared entry bounds. Declared bounds
+are not visited-entry counts on failure. The three u64 counters add 24 bytes per
+existing Diagnostics value; they retain no source/result data and claim no timing.
+
+
 > **Status:** Research; informative and not a product contract.
 
 The pending issue #192 schema 7 changes are described in

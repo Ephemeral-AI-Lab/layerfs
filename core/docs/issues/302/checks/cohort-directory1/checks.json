@@ -1,0 +1,83 @@
+{
+  "status": "PASS",
+  "tests_passed": 464,
+  "test_targets": 75,
+  "tests_ignored": 0,
+  "commands": [
+    "cargo +1.85.1 test --manifest-path core/Cargo.toml --locked",
+    "cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings",
+    "cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check",
+    "python3 core/tools/check_product_boundary.py",
+    "python3 -m unittest discover -s core/tools -p 'test_*.py'",
+    "cargo +1.85.1 test --manifest-path core/Cargo.toml --locked --workspace --examples"
+  ],
+  "raw_logs": [
+    {
+      "file": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/cohort-directory-checks1/boundary.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/cohort-directory-checks1/boundary.stdout",
+      "sha256": "cffe3914b9828f495b052f79833dfeb47ed9e9a8b1899fb8471149ce5b27027b",
+      "bytes": 76
+    },
+    {
+      "file": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/cohort-directory-checks1/clippy.stderr",
+      "sha256": "4d4b93f71182c2d7f0f27fb7f9182f0715d62d58787fa8e41189728df73643e1",
+      "bytes": 467
+    },
+    {
+      "file": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/cohort-directory-checks1/clippy.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/cohort-directory-checks1/fmt.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/cohort-directory-checks1/fmt.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/cohort-directory-checks1/test.stderr",
+      "sha256": "ed55cc192887ee32946c5ff94123289191032f50bf60bdd408839ebf7fee7826",
+      "bytes": 9396
+    },
+    {
+      "file": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/cohort-directory-checks1/test.stdout",
+      "sha256": "3d02d9783e52b12ca95ad34093d9b128e63c9d980963fb651182fbc0bdb4323c",
+      "bytes": 41181
+    },
+    {
+      "file": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/cohort-directory-checks1/tooltests.stderr",
+      "sha256": "4cdae0d2419bfacdf12a9e078c39c4b65396c10aaa5c9a79cfdf7e336f48036f",
+      "bytes": 122
+    },
+    {
+      "file": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/cohort-directory-checks1/tooltests.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/cohort-directory-checks1/examples.stdout",
+      "sha256": "fdd5cf00e549150abc03b968615cf47808203802b1a7e9935c6e163fc61d2192",
+      "bytes": 6220
+    },
+    {
+      "file": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/cohort-directory-checks1/examples.stderr",
+      "sha256": "58c28d4991d4bc916a7e8bef521a93f1d18daaedea2fbedb61d1a02b183e4f88",
+      "bytes": 1896
+    }
+  ],
+  "boundary_files": 455,
+  "tooltests": 23,
+  "initial_format_command": "cargo fmt without --all refused virtual workspace before formatting; corrected --all invocation passed",
+  "examples_tests_passed": 57,
+  "examples_targets": 13,
+  "combined_tests_passed": 521,
+  "combined_targets": 88
+}

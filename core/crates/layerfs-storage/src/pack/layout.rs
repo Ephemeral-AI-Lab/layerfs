@@ -539,6 +539,21 @@ pub fn directory_group_views(bytes: &[u8], header: PackHeader) -> StorageResult<
     visit_directory(bytes, header, &mut |_, view| views.push(view))?;
     Ok(views)
 }
+/// Validates every directory extent once for one bounded whole-body demand.
+pub(crate) fn validate_group_demand(
+    bytes: &[u8],
+    header: PackHeader,
+    groups: &std::collections::BTreeSet<usize>,
+) -> StorageResult<()> {
+    if bytes.len() != header.used {
+        return Err(StorageError::Integrity("pack length"));
+    }
+    if groups.iter().any(|group| *group >= header.group_count) {
+        return Err(StorageError::Integrity("group ordinal"));
+    }
+    visit_directory(bytes, header, &mut |_, _| {})
+}
+
 fn visit_directory(
     bytes: &[u8],
     header: PackHeader,

@@ -138,3 +138,22 @@ multiple full-directory walks inside one whole-pack group cohort; that is a
 contained next candidate, requiring count/cause evidence and unchanged integrity
 checks. No cross-request memo, larger snapshot or cache allowance is approved by
 this checkpoint. Production LOC remains 140,138 (reference 65,417; core 74,721).
+
+## Checkpoint3 — within-cohort directory treatment frozen
+
+[Cause and treatment](checks/cohort-directory1/README.md) remove repeated full
+encoded-directory walks within one immutable whole-pack cohort. Fresh admission
+requires two walks rather than 2N; a cached cohort requires one rather than N.
+Per-group descriptor checks, all-directory corruption refusal, single-group
+validation and selected-unit authentication remain. No new cache or snapshot
+lifetime is introduced. Three actual work counters add 24 bytes per Diagnostics
+value and retain no input/result data. This is adjacent encoded-pack validation,
+not removal of SQLite mapping validation or mapping-query executions.
+
+Covering Core tests plus examples, locked all-target Clippy, fmt, boundary and
+tool selftests pass; exact commands/counts/log custody are in
+[checks.json](checks/cohort-directory1/checks.json). Production LOC
+140,138 → 140,199 (delta +61), reference 65,417 unchanged, core 74,721 → 74,782.
+Exact first-parent/staged full scans use the unchanged production counter.
+A fresh matched stride 10 pair follows this freeze. Stride 3 / 1 and Durable
+remain NOT_RUN at this treatment; no timing benefit is assumed from the count.

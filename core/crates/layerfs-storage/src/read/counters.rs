@@ -65,6 +65,12 @@ pub struct Diagnostics {
     pub pack_evictions: u64,
     /// Body bytes released by selective capacity eviction.
     pub pack_evicted_bytes: u64,
+    /// Full-directory validation attempts in the encoded body cache.
+    pub directory_validations: u64,
+    /// Equivalent single-group walks for those same demands.
+    pub directory_unshared_walks: u64,
+    /// Sum of declared directory entry bounds, not entries visited on failure.
+    pub directory_entry_bounds: u64,
     /// Actual group decompressions during dependency prefetch.
     pub prefetch_group_decodes: u64,
     /// Lanes sealed because registration requires reference closure.

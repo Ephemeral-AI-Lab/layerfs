@@ -53,6 +53,9 @@ pub trait Source {
     fn signatures(&self) -> StorageResult<Vec<SignatureRow>>;
     /// Records a real cache consult for operation-count diagnostics.
     fn note_pack_cache_hit(&self) {}
+    /// Records a full-directory validation attempt and its declared entry bound.
+    /// `groups` counts the single-group walks the same cohort would require.
+    fn note_pack_directory_validation(&self, _groups: usize, _entries: usize) {}
     /// Records capacity eviction of real acquired bodies, never private invalidation.
     fn note_pack_evictions(&self, _entries: u64, _bytes: u64) {}
     /// Stores the bounded signature changes in the caller's transaction.

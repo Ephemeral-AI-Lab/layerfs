@@ -189,6 +189,7 @@ impl PackCache {
             }))
         } else {
             let header = crate::pack::layout::parse_header(&entry.body)?;
+            source.note_pack_directory_validation(1, header.group_count);
             let view = crate::pack::layout::group_view(&entry.body, header, number)?;
             let bytes = entry
                 .body
@@ -200,6 +201,33 @@ impl PackCache {
                 bytes,
             }))
         }
+    }
+    // A whole body's immutable directory is shared only within this cohort.
+    // Descriptor eligibility and recency still apply separately to every hit.
+    fn whole_cohort(
+        &self,
+        source: &dyn crate::source::Source,
+        id: i64,
+        wanted: &BTreeSet<usize>,
+    ) -> StorageResult<bool> {
+        let Some(entry) = self.entries.get(&(id, None)) else {
+            return Ok(false);
+        };
+        let header = crate::pack::layout::parse_header(&entry.body)?;
+        for &group in wanted {
+            if let Some(info) = entry.info {
+                source.validate_cached_pack(info)?;
+            }
+            let next = self.clock.get().saturating_add(1);
+            self.clock.set(next);
+            entry.touched.set(next);
+            if group >= header.group_count {
+                return Err(StorageError::Integrity("group ordinal"));
+            }
+        }
+        source.note_pack_directory_validation(wanted.len(), header.group_count);
+        crate::pack::layout::validate_group_demand(&entry.body, header, wanted)?;
+        Ok(true)
     }
     /// Acquires one deduplicated physical pack's missing groups into the same
     /// byte/count allowance as whole bodies. Reports real acquired source bytes,
@@ -218,6 +246,12 @@ impl PackCache {
             return Ok((false, 0));
         }
         let wanted: BTreeSet<_> = groups.iter().copied().collect();
+        if self.whole_cohort(source, id, &wanted)? {
+            for _ in &wanted {
+                source.note_pack_cache_hit();
+            }
+            return Ok((false, 0));
+        }
         let mut missing = Vec::new();
         for &group in &wanted {
             if self.group(source, id, group)?.is_some() {
@@ -263,9 +297,8 @@ impl PackCache {
                 }) {
                     return Err(StorageError::Integrity("cached whole domain"));
                 }
-                for &group in &wanted {
-                    crate::pack::layout::group_view(&body, header, group)?;
-                }
+                source.note_pack_directory_validation(wanted.len(), header.group_count);
+                crate::pack::layout::validate_group_demand(&body, header, &wanted)?;
                 let bytes = body.len();
                 let keys: Vec<_> = self
                     .entries
@@ -338,6 +371,9 @@ impl PackCache {
             self.work.evictions - before.evictions,
             self.work.evicted_bytes - before.evicted_bytes,
         );
+        if self.whole_cohort(source, id, &wanted)? {
+            return Ok((true, bytes));
+        }
         for group in wanted {
             if self.group(source, id, group)?.is_none() {
                 return Err(StorageError::Integrity("cohort evicted required group"));

@@ -449,6 +449,13 @@ impl Source for Fetch {
             c.pack_evicted_bytes += bytes;
         });
     }
+    fn note_pack_directory_validation(&self, groups: usize, entries: usize) {
+        self.note(|c| {
+            c.directory_validations += 1;
+            c.directory_unshared_walks += groups as u64;
+            c.directory_entry_bounds += entries as u64;
+        });
+    }
     fn note_pack_cache_hit(&self) {
         self.note(|c| c.pack_hits += 1);
     }
