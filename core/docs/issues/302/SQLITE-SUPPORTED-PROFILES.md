@@ -63,15 +63,15 @@ Disposable selections are registered:
 | phase7-sqlite-disposable-init-1000-v1 | NOT_RUN |
 | phase7-sqlite-disposable-init-10000-v1 | NOT_RUN |
 | phase7-sqlite-disposable-init-100000-v1 | NOT_RUN |
-| phase7-sqlite-disposable-history-stride10-v1 | NOT_RUN; history budget/driver/proof binding pending |
+| phase7-sqlite-disposable-history-stride10-v1 | NOT_RUN; history driver/proof/cold binding pending |
 | phase7-sqlite-disposable-history-stride3-v1 | NOT_RUN; same pending requirements |
 | phase7-sqlite-disposable-history-stride1-v1 | NOT_RUN; same pending requirements |
 
 All preserve the original corpus/state counts, integer10% time margin, allocation
 ceilings, source-content cold contract, prepared-fixture reuse outside timing,
 release/locked worktree-local artifacts, workers/bounds,15s Init complete command
-and9.5s separate verifier. Existing history budget rulings remain pending; no
-60/170s or timeout extension is silently adopted. Missing contracts fail closed
+and9.5s separate verifier. The owner explicitly restored60/170/170s history performance bounds in the
+[scoped ruling](HISTORY-BUDGET-RULING-20261004.md); separate proof remains9.5s. Missing contracts fail closed
 before build/setup/sample. Per-profile required-case lists prevent a Disposable
 row from supplying Durable admission. Fresh case IDs/append-only outputs and
 one sample per frozen case/arm remain mandatory. Existing intervention diagnostic
@@ -84,7 +84,7 @@ measure the durable gap. Any new matched reference/observer identity must obey
 existing sampling rules. A Disposable PASS qualifies only Disposable; the
 all-seven durable competitive terminal objective remains outstanding.
 
-Before that campaign, finish the profile-aware history vehicle/proof/budget
+Before that campaign, finish the profile-aware history vehicle/proof/cold
 binding and measurement observer recording so a later harness change does not
 invalidate an early partial pair. Required side-by-side evidence includes
 bootstrap/operation/finalization/close/complete command, comparable internal

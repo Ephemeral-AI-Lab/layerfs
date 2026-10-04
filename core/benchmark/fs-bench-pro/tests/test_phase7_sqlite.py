@@ -13,6 +13,8 @@ class SqliteStep10(unittest.TestCase):
         self.assertEqual([f.init.CASES[x.fixture].files for x in cases[:4]],[100,1000,10000,100000])
         self.assertEqual([x.states for x in cases[4:]],[17,53,157])
         self.assertEqual([x.storage_ceiling for x in cases[4:]],[54278964,70427034,92342273])
+        self.assertEqual([x.command_budget_ns for x in cases[4:]],[60000000000,170000000000,170000000000])
+        self.assertIn("owner-2026-10-04",f.HISTORY_BUDGET_RULE)
         self.assertTrue(all(x.verification_budget_ns==9500000000 for x in cases));self.assertEqual(f.REQUIRED_BY_PROFILE["durable"],f.REQUIRED)
         disposable=[f.CASES[x] for x in f.REQUIRED_BY_PROFILE["disposable"]]
         self.assertEqual(len(disposable),7)

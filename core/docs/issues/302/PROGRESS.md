@@ -1690,3 +1690,15 @@ extent release/readback PASS.29covering checks, owningClippy/fmt,441boundary/
 actual profile recording are implemented; allnew speed rowsNOT_RUN. Qualifyall
 seven Disposable first, then samefrozen Durable; existing history budget/vehicle
 binding remainspending. [Plan/contract](SQLITE-SUPPORTED-PROFILES.md).
+
+### Supported-profile history vehicle and owner budget ruling
+
+Owner explicitly restored60/170/170s retained-history performance bounds;
+separate proofs9.5s and other gates unchanged. Registry records scopedruling;
+old25s timeout remainsFAIL. Historyproducer/verifier nowselect supportedprofiles,
+reportbootstrap/state/finalization/close; completeproofrequiresindependent
+reference roots and exactcanonical counts. Missing/wrong roots/profile/census/
+provenance refusebeforeI/O (fivecases), facade/profile-aware release buildsPASS.
+No productchild sampled. [Binding](SQLITE-HISTORY-PROFILE-BINDING.md) and
+[budgetruling](HISTORY-BUDGET-RULING-20261004.md) recordremainingcold/reference
+proof/accounting integration. AllsevenDisposableNOT_RUN, durableobjectiveACTIVE.

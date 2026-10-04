@@ -17,9 +17,9 @@ class Case:
     profile:str="durable"
 CASES={c.id:c for c in (
     *(Case(f'phase7-sqlite-init-{n}-v2',f.id,None,None,15_000_000_000) for n,f in zip((100,1000,10000,100000),init.CASES.values())),
-    Case('phase7-sqlite-history-stride10-v1',None,17,54_278_964,None),
-    Case('phase7-sqlite-history-stride3-v1',None,53,70_427_034,None),
-    Case('phase7-sqlite-history-stride1-v1',None,157,92_342_273,None),
+    Case('phase7-sqlite-history-stride10-v1',None,17,54_278_964,60_000_000_000),
+    Case('phase7-sqlite-history-stride3-v1',None,53,70_427_034,170_000_000_000),
+    Case('phase7-sqlite-history-stride1-v1',None,157,92_342_273,170_000_000_000),
 )}
 REQUIRED=tuple(CASES)
 # Supported direct-open Disposable is a separate seven-case identity, never a
@@ -31,7 +31,7 @@ REQUIRED_BY_PROFILE={'durable':REQUIRED,'disposable':tuple(DISPOSABLE)}
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"
-HISTORY_BUDGET_RULE=None
+HISTORY_BUDGET_RULE='owner-2026-10-04-restored-original-60-170-170-performance-only-v1'
 
 def invoke(command,folder,label,budget_ns,env,cwd):
     start=time.monotonic_ns();timeout=False
@@ -86,7 +86,7 @@ def build(root,arm,out,common):
 def run(selection,output,arm,baseline_root,common):
     case=CASES[selection]
     if case.fixture is None:
-        raise ValueError('registered history selection awaits budget ruling and actual port-driver/proof binding; no substitute sample')
+        raise ValueError('registered history selection awaits actual profile-aware driver/proof/cold binding; owner60/170/170 performance budgets restored; no substitute sample')
     if INIT_ALLOCATION_RULE is None:
         raise ValueError('prospective Init allocation contract is pending; no admission arm is authorized under a guessed gate')
     if os.uname().sysname!='Darwin':raise ValueError('required SQLite full-sync profile and wait4 accounting are macOS-only')

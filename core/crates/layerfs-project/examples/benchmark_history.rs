@@ -18,7 +18,7 @@ use layerfs_content::{
     construct_bytes, construct_bytes_with_predecessor, AdvisoryPredecessors, ConstructionPolicy,
     ObjectId, PredecessorBase, PredecessorProvenance,
 };
-use layerfs_persistence::{Handles, PersistenceConfig};
+use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::{Storage, StoragePolicy};
 use layerfs_telemetry::timer::Timing;
 use std::{collections::BTreeMap, path::PathBuf, time::Instant};
@@ -28,9 +28,9 @@ use workload::{
 };
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Vec<_>>();
-    if args.len() != 6 {
+    if !matches!(args.len(), 6 | 7) {
         return Err(
-            "usage: benchmark_history CORPUS DB SCRATCH history-stride{10,3,1} complete|probe|probe-transition"
+            "usage: benchmark_history CORPUS DB SCRATCH history-stride{10,3,1} complete|probe|probe-transition [durable|disposable]"
                 .into(),
         );
     }
@@ -40,6 +40,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "probe" => Some(1),
         "probe-transition" => Some(2),
         _ => return Err("invalid operation mode".into()),
+    };
+    let selected_profile = match args.get(6).map(String::as_str).unwrap_or("durable") {
+        "durable" => SqlitePersistenceProfile::Durable,
+        "disposable" => SqlitePersistenceProfile::Disposable,
+        _ => return Err("explicit durable/disposable profile required".into()),
     };
     for (key, value) in [
         ("LAYERFS_CONSTRUCTION_WORKERS", "1"),
@@ -60,11 +65,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let policy = ConstructionPolicy::frozen_default();
     let caps = policy.capacities();
     let handles = Handles::create(
-        PersistenceConfig::sqlite(&args[2]),
+        PersistenceConfig::sqlite(&args[2]).with_sqlite_profile(selected_profile),
         StoragePolicy::frozen_default(),
         &retained::config(),
     )?;
     let storage = Storage::new(handles.storage.clone())?;
+    let profile_identity = handles.profile().identity;
+    let bootstrap_ns = begin.elapsed().as_nanos();
     let mut held = None;
     let mut previous_root = None;
     let mut previous_content = BTreeMap::<Vec<u8>, ObjectId>::new();
@@ -79,6 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let count = probe_states.unwrap_or_else(|| row.states());
     let mut inventory = BTreeMap::<ObjectId, (u8, usize)>::new();
     for position in 0..count {
+        let state_stages_before = stages;
         let acquire = Instant::now();
         let transition = corpus.transition(position)?;
         stages[0] += acquire.elapsed().as_nanos() as u64;
@@ -227,20 +235,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         stages[3] += start.elapsed().as_nanos() as u64;
         previous_root = Some(built.root);
         roots.push(built.root.0);
+        let state_stages = std::array::from_fn::<_, 4, _>(|i| stages[i] - state_stages_before[i]);
+        eprintln!("HISTORY_STATE_WORK {{\"state\":{},\"full157\":{},\"changed_paths\":{},\"offered_objects\":{},\"acquire_ns\":{},\"construct_ns\":{},\"filesystem_ns\":{},\"save_custody_ns\":{}}}", transition.state.ordinal, transition.state.full157_index, transition.changed.len(), consumer.insertion_order().len(), state_stages[0], state_stages[1], state_stages[2], state_stages[3]);
         eprintln!(
             "DIAGNOSTIC state={} full157={} root={:?}",
             transition.state.ordinal, transition.state.full157_index, built.root.0
         );
     }
+    let finalization = Instant::now();
+    let custody_start = Instant::now();
     let custody = retained::verify(&handles.history, scope, &roots)?;
+    let custody_ns = custody_start.elapsed().as_nanos();
     let checkpoint = handles.checkpoint()?;
     eprintln!(
         "DIAGNOSTIC sqlite={:?} storage={:?} checkpoint={checkpoint:?}",
         handles.diagnostics()?,
         storage.diagnostics()
     );
+    let checkpoint_ns = checkpoint.wall_ns;
+    let finalization_ns = finalization.elapsed().as_nanos();
+    let close = Instant::now();
     drop(storage);
     drop(handles);
+    let close_ns = close.elapsed().as_nanos();
     if std::fs::read_dir(&scratch)?.next().is_some() {
         return Err("ordering scratch not empty".into());
     }
@@ -259,6 +276,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         census.update(&[*role]);
         census.update(&(*bytes as u64).to_le_bytes());
     }
-    println!("{{\"status\":\"{}\",\"selected_states\":{},\"states\":{},\"custody_states\":{},\"operation_ns\":{},\"stages_ns\":{:?},\"roots\":[{}],\"canonical_objects\":{},\"canonical_bytes\":{},\"canonical_inventory_sha256\":\"{}\"}}",if probe_states.is_some(){"DIAGNOSTIC"}else{"COMPLETE"},row.states(),count,custody,begin.elapsed().as_nanos(),stages,list,inventory.len(),canonical_bytes,workload::digest::hex(&census.finish()));
+    println!("{{\"status\":\"{}\",\"selected_states\":{},\"states\":{},\"custody_states\":{},\"operation_ns\":{},\"profile_identity\":\"{}\",\"bootstrap_ns\":{},\"custody_ns\":{},\"checkpoint_ns\":{},\"finalization_ns\":{},\"close_ns\":{},\"stages_ns\":{:?},\"roots\":[{}],\"canonical_objects\":{},\"canonical_bytes\":{},\"canonical_inventory_sha256\":\"{}\"}}",if probe_states.is_some(){"DIAGNOSTIC"}else{"COMPLETE"},row.states(),count,custody,begin.elapsed().as_nanos(),profile_identity,bootstrap_ns,custody_ns,checkpoint_ns,finalization_ns,close_ns,stages,list,inventory.len(),canonical_bytes,workload::digest::hex(&census.finish()));
     Ok(())
 }

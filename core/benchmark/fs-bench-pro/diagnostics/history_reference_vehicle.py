@@ -26,12 +26,19 @@ def generate(root: Path) -> tuple[str, dict[str, str]]:
             raise ValueError(f'expected one reference API seam: {old}')
         text = text.replace(old, new)
 
-    replace('use layerfs_persistence::{Handles, PersistenceConfig};',
+    replace('use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};',
             'use layerfs_history::sqlite;')
+    replace('''    let selected_profile = match args.get(6).map(String::as_str).unwrap_or("durable") {
+        "durable" => SqlitePersistenceProfile::Durable,
+        "disposable" => SqlitePersistenceProfile::Disposable,
+        _ => return Err("explicit durable/disposable profile required".into()),
+    };''','''    if !matches!(args.get(6).map(String::as_str).unwrap_or("durable"), "durable" | "disposable") {
+        return Err("explicit durable/disposable profile required".into());
+    }''')
     replace('use layerfs_storage::{Storage, StoragePolicy};',
             'use layerfs_storage::{Store, StoreProvider, StoragePolicy};')
     replace('''    let handles = Handles::create(
-        PersistenceConfig::sqlite(&args[2]),
+        PersistenceConfig::sqlite(&args[2]).with_sqlite_profile(selected_profile),
         StoragePolicy::frozen_default(),
         &retained::config(),
     )?;
@@ -44,20 +51,22 @@ def generate(root: Path) -> tuple[str, dict[str, str]]:
             storage.begin_save(timer.child("save"))).0?;''')
     replace('save.finish()?;', '''Timing::disabled("history.finish", |timer|
             save.finish(timer.child("save"))).0?;''')
-    # Two public C5 call sites and the diagnostic/close tail, never altered C5 logic.
+    # Public C5 calls and profile-aware lifecycle seams; product code is unchanged.
+    replace('let profile_identity = handles.profile().identity;',
+            'let profile_identity = "phase4.5-memory-off";')
     replace('''                &handles.history,
-                scope,''', '''                &history,
+                scope,''','''                &history,
                 scope,''')
-    replace('''    let custody = retained::verify(&handles.history, scope, &roots)?;
-    let checkpoint = handles.checkpoint()?;
-    eprintln!(
+    replace('let custody = retained::verify(&handles.history, scope, &roots)?;',
+            'let custody = retained::verify(&history, scope, &roots)?;')
+    replace('let checkpoint = handles.checkpoint()?;',
+            'let checkpoint_ns = 0_u64;')
+    replace('''    eprintln!(
         "DIAGNOSTIC sqlite={:?} storage={:?} checkpoint={checkpoint:?}",
         handles.diagnostics()?,
         storage.diagnostics()
-    );
-    drop(storage);
-    drop(handles);''', '''    let custody = retained::verify(&history, scope, &roots)?;
-    // Phase4.5 retains its original MEMORY/OFF profile; no WAL checkpoint exists.
-    drop(storage);
-    drop(history);''')
+    );''', '    // Original MEMORY/OFF engine has no shared-persistence/WAL diagnostics.')
+    replace('let checkpoint_ns = checkpoint.wall_ns;',
+            '// Reference retains original MEMORY/OFF completion semantics.')
+    replace('drop(handles);','drop(history);')
     return text, seals

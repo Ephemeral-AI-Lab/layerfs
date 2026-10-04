@@ -1,0 +1,25 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--release",
+    "--locked",
+    "-p",
+    "layerfs-project",
+    "--example",
+    "benchmark_history",
+    "--example",
+    "verify_history"
+  ],
+  "wall_ns": 4198978375,
+  "budget_ns": 30000000000,
+  "exit_code": 0,
+  "timed_out": false,
+  "child": null,
+  "cpu_ns": 18326294000,
+  "peak_rss_bytes": 280264704,
+  "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution"
+}
