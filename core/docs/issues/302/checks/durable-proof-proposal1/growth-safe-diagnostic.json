@@ -1,0 +1,8 @@
+{
+  "status": "DIAGNOSTIC_PASS",
+  "wall_ns": 3280341583,
+  "bound_ns": 12000000000,
+  "exit_code": 0,
+  "prototype_sha256": "ae7e0eb23bd446f111701d539513fe42caee430f4a74d07dacfdd5f6484fbe1b",
+  "not_admission": "inactive growth-safe copy prototype; original failed receipt unchanged"
+}

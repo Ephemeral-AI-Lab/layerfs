@@ -76,7 +76,7 @@ def uncached_digest(path):
 
 
 def proof_copy(source, target, limit_bytes):
-    import shutil, fcntl, platform
+    import fcntl, platform
     length = Path(source).stat().st_size
     if type(limit_bytes) is not int or limit_bytes <= 0 or length > limit_bytes:
         raise ValueError('proof copy exceeds existing Store ceiling')
@@ -85,7 +85,15 @@ def proof_copy(source, target, limit_bytes):
     with Path(source).open('rb') as inp, Path(target).open('xb') as out:
         fcntl.fcntl(inp.fileno(), fcntl.F_NOCACHE, 1)
         fcntl.fcntl(out.fileno(), fcntl.F_NOCACHE, 1)
-        shutil.copyfileobj(inp, out, 65536)
+        copied = 0
+        while True:
+            block = inp.read(min(65536, limit_bytes - copied + 1))
+            if not block:
+                break
+            if copied + len(block) > limit_bytes:
+                raise ValueError('proof copy grew beyond existing Store ceiling')
+            out.write(block)
+            copied += len(block)
     target_hash = uncached_digest(target)
     if digest(source) != target_hash:
         raise ValueError('independent proof byte copy differs')

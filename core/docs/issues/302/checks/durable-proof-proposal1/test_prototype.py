@@ -76,6 +76,37 @@ class ClosedSidecars(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'changed original owner'):
                 p.unchanged_owner(record)
 
+    def test_source_growth_cannot_write_beyond_copy_ceiling(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); main = root/'source'; target = root/'copy'
+            main.write_bytes(bytes(65536))
+            original_open = Path.open
+            class Growing:
+                def __init__(self, file):
+                    self.file = file
+                    self.grown = False
+                def __enter__(self):
+                    return self
+                def __exit__(self, *args):
+                    self.file.close()
+                def fileno(self):
+                    return self.file.fileno()
+                def read(self, count):
+                    block = self.file.read(count)
+                    if not self.grown:
+                        self.grown = True
+                        with original_open(main, 'ab') as writer:
+                            writer.write(b'x')
+                    return block
+            def opened(path, mode='r', *args, **kwargs):
+                file = original_open(path, mode, *args, **kwargs)
+                return Growing(file) if path == main and mode == 'rb' else file
+            with patch.object(Path, 'open', opened):
+                with self.assertRaisesRegex(ValueError, 'grew beyond'):
+                    p.proof_copy(main, target, 65536)
+            self.assertLessEqual(target.stat().st_size, 65536)
+
     def test_copy_is_independent_and_exact(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); main = self.fixture(root); target=root/'copy.sqlite'

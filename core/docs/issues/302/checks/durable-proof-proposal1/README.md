@@ -61,7 +61,7 @@ hashes remain unchanged. This diagnostic cannot promote the original failed
 receipt or serve as release admission. Its main/WAL/SHM byte copy is 50,724,864
 bytes, separate from the native bounded content-acquisition counter.
 
-Five rejection/custody/copy tests and the five existing proof-helper tests against
+Six rejection/custody/copy tests and the five existing proof-helper tests against
 the prototype pass. [Custody](custody.json) retains all failed prototype attempts:
 first an incorrect main-header byte offset, then a copy missing WAL read-side
 auxiliaries, followed by the complete byte-copy treatment. A subsequent bounded
@@ -78,3 +78,13 @@ and take fresh matched Durable 10 → 3 → 1 pairs. Keep 60/170/300 s performan
 12/12/30 s proof and 54,278,964 / 70,427,034 / 92,342,273 byte ceilings unchanged.
 No prior pair is rewritten or promoted; a harness change requires new matched
 arms. The existing Disposable receipts retain their original qualified identities.
+
+## Follow-up audit — growing source, checkpoint11
+
+The inactive copy now counts every chunk and refuses excess bytes before writing
+when the source grows after its initial stat. No output can exceed the registered
+Store ceiling. The new source-growth rejection test and the changed positive
+exact-copy test pass; unchanged rejection tests are carried from their previous
+run. The complete diagnostic is repeated only for this changed copy algorithm,
+with a fresh output and source SHA; all previous results remain immutable.
+Active product, verifier and case registry are unchanged pending approval.

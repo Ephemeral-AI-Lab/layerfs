@@ -455,19 +455,105 @@
       "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype5/namespace-proof.stderr",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/request.json",
+      "sha256": "ffc4524d8d13640d5171cf808ab4cf24a703a5834de3a568d5faf1fce1b010e3",
+      "bytes": 7630
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/proof-copy-cold.json",
+      "sha256": "0b85d0bae51fc402901b627cccebfb7eda41cefb57b55494ac49d87952403494",
+      "bytes": 391
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/proof-sql-work.json",
+      "sha256": "26dada6ed3060a3b3fcd681d68c661eb1c5989ab157de3ef6fdb4f2828201d19",
+      "bytes": 110377
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/proof-copy-cold.stdout",
+      "sha256": "53e1c616ccd01f319c8464a1b4449cb7c49e6ac2ee0626da5c3c919e577e520f",
+      "bytes": 322
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/independent-proof.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/producer-proof-input.json",
+      "sha256": "639e3d39b35ddbc59b096635cc3478982e35d5114cd460f980f45987093a9d08",
+      "bytes": 1702
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/stdout",
+      "sha256": "386bc8fecbd7499739aabc660b7a755398e340e77edfddedc63d790feb1b5d58",
+      "bytes": 301
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/independent-proof.sqlite-shm",
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "bytes": 32768
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/proof-copy-cold.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/proof-vfs.json",
+      "sha256": "4608ff95f9d2305d8dea51866136068ac1de70dee52fcf2d4aa5177307595426",
+      "bytes": 1009
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/proof-copy.json",
+      "sha256": "037557f8314c898e26016cb75517d151166ca13b14296a4ca6df0a201d622c37",
+      "bytes": 1568
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/independent-proof.sqlite",
+      "sha256": "27e40011ae1fbe026da6c391a12f929d856c695b98ecf9ed6f213890d5357a54",
+      "bytes": 50692096
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/census.json",
+      "sha256": "20725de2d8d5ec1ae38b12fab3f52a3d2ccbb15fc6c0f900079b8f4e433c69a4",
+      "bytes": 2244
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/diagnostic.json",
+      "sha256": "8ec76f0173a862b0541a7a0a3821962c3e2ac598320213ceacf2484b41897ca9",
+      "bytes": 287
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/namespace-proof.stdout",
+      "sha256": "a6900eb80c612d9e16739a0dd68887cedcd2c6d19fab7edd3c15ffcb1c354667",
+      "bytes": 282
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype6/namespace-proof.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
     }
   ],
   "prototype_execution_source_sha256": "66ab18de81911c8b9d38b4e9a8914189d7367904a37ffb930620c2fac7732479",
   "current_prototype_source_sha256": "a7cd11d5d33614442ba12c67c7f48a5661eac8d609a6fdfa4cbed768fd168ae9",
   "message_only_change_after_success": "pluralize rejection wording to retain existing helper tests; acceptance logic unchanged",
-  "new_rejection_tests": 5,
+  "new_rejection_tests": 6,
   "existing_proof_tests_against_prototype": 5,
   "attempts": {
     "prototype1": "FAIL: header mode offset used page-size bytes; diagnosed from actual header; corrected to offsets18/19",
     "prototype2": "FAIL: native read-only WAL requires retained auxiliary pair in independent copy; original unchanged",
     "prototype3": "DIAGNOSTIC_PASS: independent main/WAL/SHM byte copy, complete bounded namespace/custody/root proof, original main and auxiliary hashes stable",
     "prototype4": "DIAGNOSTIC_PASS with source Store ceiling, F_NOCACHE and whole-copy invalidation/attestation; checksum re-read initially warmed destination, detected by resident_first",
-    "prototype5": "DIAGNOSTIC_PASS: bounded uncached checksum reads, 0 initial and final resident copied pages before native verification; complete cold-copy proof 3.318778667 s, original unchanged"
+    "prototype5": "DIAGNOSTIC_PASS: bounded uncached checksum reads, 0 initial and final resident copied pages before native verification; complete cold-copy proof 3.318778667 s, original unchanged",
+    "prototype6": "DIAGNOSTIC_PASS after copy growth audit: counted writes enforce Store ceiling even if source grows; original files unchanged"
   },
   "bounded_prototype_source_sha256": "3c34a723ee4ff8cc8f1617210965739fc9fe042593adf3613bd1ca3e03e8f3bc",
   "bounded_copy": {
@@ -476,5 +562,6 @@
     "buffer_bytes": 65536,
     "cache_hint": "F_NOCACHE both copy descriptors and destination checksum; hints are not memory bounds",
     "residency_contract": "sealed native whole-copy msync-invalidate/mincore before native proof; resident_first 0 / resident_after 0 / 3096 pages"
-  }
+  },
+  "growth_safe_prototype_source_sha256": "ae7e0eb23bd446f111701d539513fe42caee430f4a74d07dacfdd5f6484fbe1b"
 }

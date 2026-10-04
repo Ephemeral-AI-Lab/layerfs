@@ -408,3 +408,21 @@ PostgreSQL/MinIO M4 remain unqualified/paused as recorded. Production source
 proposal/diagnostic evidence are staged; product and active harness blobs match
 the parent exactly. Required owner review is the proof-admission extension,
 not a request to relax any time, bytes, cold or publication limit.
+
+## Checkpoint11 — pending proof review, growth-bound audit
+
+Owner approval for the concrete Durable v2 proof treatment is still pending.
+Previous goal turn made progress; this continuation audits the inactive proposal
+and discovers that an initial stat plus an EOF stream did not enforce a byte
+ceiling if the source grew. A counted loop now refuses excess bytes before
+writing. New growth rejection and changed exact-copy tests PASS; unchanged tests
+are explicitly carried. Full 17-state diagnostic at the new prototype SHA passes
+in 3280341583 ns under unchanged 12,000,000,000 ns, with original main/auxiliary
+files unchanged and cold-copy attestation preserved. This is not a performance
+resample or promotion of the original failed Durable proof receipt.
+
+Disposable 10/3/1 remain PASS at their recorded identities; Durable17 remains
+proof FAIL / admission INCOMPLETE; Durable3/1 NOT_RUN. Active product/harness
+are unchanged. Approval is still required before active integration and fresh
+matched Durable v2 qualification. Production LOC 140,304 → 140,304 (delta 0),
+reference 65,417/core 74,887. Documentation/inactive prototype/tests only.
