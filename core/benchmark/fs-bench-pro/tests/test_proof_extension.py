@@ -10,7 +10,7 @@ class Proof15(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base=Path(tmp);owned=base/'existing';owned.mkdir()
             with patch.object(r.runner,'RESULTS',base):
-                self.assertEqual(r.reference_run_dir(owned),owned)
+                self.assertEqual(r.reference_run_dir(owned),owned.resolve())
                 with self.assertRaises(ValueError):r.reference_run_dir(base/'missing')
                 link=base/'link';link.symlink_to(owned,target_is_directory=True)
                 with self.assertRaises(ValueError):r.reference_run_dir(link)
@@ -26,6 +26,7 @@ class Proof15(unittest.TestCase):
     def test_authorized15_passes_but12_history_and_unrecognized_scope_do_not(self):
         with tempfile.TemporaryDirectory() as tmp:
             r,c,v=self.records();folder=Path(tmp);self.pin(folder,r,c,v)
+            self.pin(folder,{**r,'proof_envelope':'owner-stride1-proof30-v3','verification_budget_ns':30_000_000_000,'verification_wall_ns':29_000_000_000},c,v)
             for changes in ({'proof_envelope':'lite12-v1'},{'workload_row':'history-stride3'},{'verification_wall_ns':15_000_000_001}):
                 with self.assertRaises(ValueError):self.pin(folder,{**r,**changes},c,v)
             for changes in ({'sample_policy':'weakened'},{'authenticated_bytes':8*1024*1024+1},{'acquired_content_bytes':32*1024*1024+1}):

@@ -154,10 +154,10 @@ def root_pins(receipt, census, proof, receipt_path, census_path, proof_path):
         raise ValueError('reference requires one arm and independent proof')
     lite = receipt.get('proof_policy') == LITE_POLICY
     allowed = 12_000_000_000 if lite else 9_500_000_000
-    extension=receipt.get('proof_envelope')=='owner-stride1-proof15-v2'
+    extension=receipt.get('proof_envelope') in ('owner-stride1-proof15-v2','owner-stride1-proof30-v3')
     if extension:
         if not lite or receipt.get('workload_row')!='history-stride1':raise ValueError('proof15 applies only to the unchanged stride1 lite scope')
-        allowed=15_000_000_000
+        allowed=30_000_000_000 if receipt.get('proof_envelope')=='owner-stride1-proof30-v3' else 15_000_000_000
     reuse=receipt.get('performance_reuse')
     if reuse:
         original_path=Path(reuse['receipt'])

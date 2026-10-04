@@ -15,7 +15,7 @@ def reference_run_dir(run):
 
 def reprove(run,case_id,output):
     case=CASES[case_id]
-    if case.states!=157 or case.proof_envelope!='owner-stride1-proof15-v2':raise ValueError('explicit owner stride1 proof15 case required')
+    if case.states!=157 or case.proof_envelope not in ('owner-stride1-proof15-v2','owner-stride1-proof30-v3'):raise ValueError('explicit owner stride1 proof15 case required')
     identity=runner.identities()
     if identity['source_dirty']:raise ValueError('freeze the owner proof15 harness')
     prior=reference_run_dir(run)

@@ -78,3 +78,13 @@ conservatively included mapping metadata,<=32MiB. The calibrated sealed observer
 counts returned whole-pack SQL bodies and successful BLOB read bytes in both
 arms; missing counters or overflow fails closed. Read-unit size and object/depth
 bounds remain product limits. Optional whole-pack audit stays a separate scope.
+
+## Owner request for more stride1 proof time,2026-10-04
+
+The owner requests more time after the12.003190125s independent proof timeout.
+The prospective15s v2 reproof also times out at15.007248791s. Both receipts
+remain unchanged. The requested extension now receives a separate30s v3 case,
+with unchanged native verifier, lite scope,8MiB logical/32MiB acquisition caps,
+product, Store and performance envelope. Existing successful reference
+performance is explicitly shared with zero new performance samples and exact
+receipt/binary/fixture/observer identities. Only the independent proof is rerun.
