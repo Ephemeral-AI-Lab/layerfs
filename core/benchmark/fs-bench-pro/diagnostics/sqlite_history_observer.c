@@ -27,22 +27,43 @@ static void history_note_pack_id(sqlite3_int64 id){
  * handles; matched opens cover read-only main.pack.body. No payload inspection. */
 static _Atomic uint64_t blob_work[11];
 static _Atomic uint64_t pack_materialized_bytes;
+/* Optional bounded external acquisition trace. No product bytes inspected. */
+static FILE *acquisition_trace;
+static int acquisition_trace_initialized;
+static sqlite3_blob *trace_handles[64];
+static sqlite3_int64 trace_ids[64];
+static uint64_t trace_sequence;
+static uint64_t trace_vfs_bytes(void){
+ uint64_t bytes=0;for(int i=0;i<4;i++)bytes+=atomic_load(&read_bytes[i]);return bytes;
+}
+static void trace_event(const char *event,sqlite3_int64 id,int offset,int bytes,int result,uint64_t before){
+ if(!acquisition_trace_initialized){
+  acquisition_trace_initialized=1;const char *path=getenv("LAYERFS_ACQUISITION_TRACE");
+  if(path){acquisition_trace=fopen(path,"wx");if(!acquisition_trace){fprintf(stderr,"acquisition trace open refused\n");abort();}}
+ }
+ if(acquisition_trace&&fprintf(acquisition_trace,"{\"seq\":%llu,\"event\":\"%s\",\"pack\":%lld,\"offset\":%d,\"bytes\":%d,\"result\":%d,\"vfs_before\":%llu,\"vfs_after\":%llu}\n",(unsigned long long)++trace_sequence,event,(long long)id,offset,bytes,result,(unsigned long long)before,(unsigned long long)trace_vfs_bytes())<0)abort();
+}
+static int trace_slot(sqlite3_blob *blob){for(int i=0;i<64;i++)if(trace_handles[i]==blob)return i;return -1;}
+__attribute__((destructor)) static void trace_finish(void){if(acquisition_trace&&fclose(acquisition_trace))abort();}
 static int history_blob_open(sqlite3*db,const char*database,const char*table,const char*column,sqlite3_int64 row,int writable,sqlite3_blob**out){
  int matched=!writable&&database&&table&&column&&!strcmp(database,"main")&&!strcmp(table,"pack")&&!strcmp(column,"body");
- uint64_t start=now();int result=sqlite3_blob_open(db,database,table,column,row,writable,out);
+ uint64_t before=trace_vfs_bytes();uint64_t start=now();int result=sqlite3_blob_open(db,database,table,column,row,writable,out);
  if(matched){atomic_fetch_add(&blob_work[0],1);atomic_fetch_add(&blob_work[1],now()-start);if(result!=SQLITE_OK)atomic_fetch_add(&blob_work[2],1);else history_note_pack_id(row);}
+ if(matched){trace_event("open",row,0,0,result,before);if(result==SQLITE_OK){int slot=trace_slot(NULL);if(slot<0)abort();trace_handles[slot]=*out;trace_ids[slot]=row;}}
  return result;
 }
 static int history_blob_read(sqlite3_blob*blob,void*buffer,int bytes,int offset){
- uint64_t start=now();int result=sqlite3_blob_read(blob,buffer,bytes,offset);
+ uint64_t before=trace_vfs_bytes();int slot=trace_slot(blob);uint64_t start=now();int result=sqlite3_blob_read(blob,buffer,bytes,offset);
  atomic_fetch_add(&blob_work[3],1);if(bytes>0)atomic_fetch_add(&blob_work[4],(uint64_t)bytes);
  atomic_fetch_add(&blob_work[6],now()-start);
  if(result==SQLITE_OK){if(bytes>0){atomic_fetch_add(&blob_work[5],(uint64_t)bytes);atomic_fetch_add(&pack_materialized_bytes,(uint64_t)bytes);}}else atomic_fetch_add(&blob_work[7],1);
+ if(slot>=0)trace_event("read",trace_ids[slot],offset,bytes,result,before);
  return result;
 }
 static int history_blob_close(sqlite3_blob*blob){
- uint64_t start=now();int result=sqlite3_blob_close(blob);
+ uint64_t before=trace_vfs_bytes();int slot=blob?trace_slot(blob):-1;uint64_t start=now();int result=sqlite3_blob_close(blob);
  atomic_fetch_add(&blob_work[8],1);atomic_fetch_add(&blob_work[9],now()-start);if(result!=SQLITE_OK)atomic_fetch_add(&blob_work[10],1);
+ if(slot>=0){trace_event("close",trace_ids[slot],0,0,result,before);trace_handles[slot]=NULL;}
  return result;
 }
 INTERPOSE(history_blob_open,sqlite3_blob_open)
@@ -73,6 +94,7 @@ void cause_history_note_pack(sqlite3_stmt*statement){
  sqlite3_free(text);
 }
 void cause_history_snapshot(uint64_t*out){
+ trace_event("snapshot",0,0,0,0,trace_vfs_bytes());
  for(int i=0;i<20;i++)out[i]=0;
  pthread_mutex_lock(&guard);
  for(size_t i=0;i<used;i++){out[0]+=rows[i].calls;out[1]+=rows[i].steps;out[2]+=rows[i].step_ns;out[3]+=rows[i].exec_ns;out[4]+=rows[i].scans;out[5]+=rows[i].sorts;out[6]+=rows[i].reprepare;if(!strcmp(rows[i].sql,"BEGIN"))out[18]+=rows[i].calls;}

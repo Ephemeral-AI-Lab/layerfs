@@ -155,3 +155,27 @@ inline-test/nonproduct exclusions. This result-only commit has unchanged139635
 (delta0). [Count confirmation](checks/format-directory1/production-loc.json).
 
 Issue updated with implementation/count result: https://github.com/Ephemeral-AI-Lab/layerfs/issues/302#issuecomment-5980190482
+
+## Isolated remaining-amplification investigation (2026-10-04)
+
+Worktree `save-vfs-amplification/layerfs`, starting at4032cfe75. Prior owner
+checkouts are read-only references. PostgreSQL/MinIO M4 pause is unchanged.
+One prospective labeled count diagnostic extends the existing history17 cause
+vehicle with external SQLite BLOB acquisition events: pack ID, offset, requested
+length, result and delegated VFS request counter before/after each call. Snapshot
+events bind the existing disjoint construction/filesystem/Save phase boundaries.
+Final retained DB descriptors allow untimed domain/lane classification; no body
+is inspected or prefetched by the observer. At most64 live handle identities are
+tracked; streamed JSONL avoids workload-sized retained telemetry memory. The
+single construction producer and original60s complete diagnostic budget remain.
+Real SQLite observer calibration covers successful/error read/open attribution.
+This is a cause instrument, not an unchanged performance sample or admission.
+First-use worktree-local release/locked preparation finished in15.82s. The
+runner records its incremental build/sealed executable custody independently.
+
+Hypotheses to distinguish before implementation: repeated demand after the
+wave-wide discovery pass versus per-handle overflow navigation and whole-choice
+returned bytes. Analyze existing receipts first; compare prospective trace counts
+with earlier retained counts only as mechanism diagnosis. No physical-device-byte
+claim, larger cache, base memo, cross-write handle retention, workers or proof
+relaxation. Required product checks and new matched qualification are pending.

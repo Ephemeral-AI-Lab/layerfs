@@ -51,7 +51,7 @@ def main():
         env={**os.environ,**history.ENV,'TMPDIR':str(scratch),'LAYERFS_HISTORY_CURSOR_KEY':'28'*32,
              'LAYERFS_HISTORY_COLD_HELPER':helper['binary'],'DYLD_INSERT_LIBRARIES':observer['path'],
              'LAYERFS_SQLITE_WORK_OUTPUT':str(out/'sql-work.json'),'LAYERFS_CAUSE_VFS_LOG':str(out/'vfs.json'),
-             'LAYERFS_CLOSE_OBSERVER_OUTPUT':str(out/'close.json')}
+             'LAYERFS_CLOSE_OBSERVER_OUTPUT':str(out/'close.json'),'LAYERFS_ACQUISITION_TRACE':str(out/'acquisitions.jsonl')}
         start=time.monotonic_ns();cold=cold_native.attest_paths([corpus/'checkpoint-manifest.json',corpus/'inputs',corpus/'oracles'],helper,out,60000000000,invoke,ROOT)
         record['cold']=cold
         if cold['status']!='PASS':raise ValueError('cold source ineligible')
