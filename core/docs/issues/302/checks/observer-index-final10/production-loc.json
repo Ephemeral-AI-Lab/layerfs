@@ -1,0 +1,24 @@
+{
+  "parent": "46ed169ae773b75f703826f9c8a70557b82aa031",
+  "before": 140138,
+  "after": 140138,
+  "delta": 0,
+  "reference_before": 65417,
+  "reference_after": 65417,
+  "core_before": 74721,
+  "core_after": 74721,
+  "method": "Same production_loc.py version; exact first-parent/staged product src/runtime SQL blob equality; unchanged totals inherited from validated count",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "scopes": {
+    "core": {
+      "all_src_sql_parent_staged_blobs_equal": true,
+      "blob_set_sha256": "35f52fc195e2b11922cad1f34be457917ed59b5da35544567a1293f90a51727a",
+      "includes_extra_test_source_for_stronger_equality_only": true
+    },
+    "reference": {
+      "all_src_sql_parent_staged_blobs_equal": true,
+      "blob_set_sha256": "11a7f87937e761bd4cf55092ff7f0a3197a00e2e818bcdd39218d3d831407abb",
+      "includes_extra_test_source_for_stronger_equality_only": true
+    }
+  }
+}

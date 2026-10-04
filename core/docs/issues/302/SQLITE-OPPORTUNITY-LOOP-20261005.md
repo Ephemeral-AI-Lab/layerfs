@@ -100,3 +100,41 @@ Checkpoint commit production LOC140138→140138(delta0), reference65417/core7472
 with exact parent/staged product/SQL blobs equal. No failure or gate relaxation.
 Request sharing and mapping validation investigations continue after this frozen
 stride10receipt. The active goal is not complete at this checkpoint.
+
+## Checkpoint2 — first Disposable stride 10 pair
+
+Frozen source `46ed169ae773b75f703826f9c8a70557b82aa031`, one cold matched
+pair; [audited comparison](checks/observer-index-final10/comparison.json) pins
+all receipt files, build/product/dependency/observer identities and exact commands.
+
+| Family 2, Disposable | Reference product | Candidate product | Complete command, reference / candidate | Separate proof, reference / candidate | Status |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Stride 10, 17 states | 32.882200167 s | 32.018236667 s | 47.699741500 / 44.536591791 s | 2.920998458 / 3.107104500 s | PASS: cold, cleanup, proof, time and approved storage |
+| Stride 3, 53 states | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN at this artifact |
+| Stride 1, 157 states | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN at this artifact |
+
+Candidate is 0.863963500 s (2.627450401%) faster than the newly matched
+reference. This is the accumulated candidate versus original reference; it does
+not isolate the observer index's clock effect. Candidate Store allocation is
+50,692,096 bytes for combined C2/C5: approved 54,278,964-byte ceiling PASS;
+original 49,344,512-byte target FAIL by 1,347,584 bytes (2.730970366%).
+Reference allocation is 52,473,856 bytes (C2 52,428,800; C5 45,056).
+Canonical inventory matches: 51,689 objects / 380,559,460 bytes. The separate
+17-state namespace proof covers 101,477 paths and bounded selected content;
+it is not an exhaustive payload audit. Server/daemon/FUSE/SDK attribution is N/A
+for this direct C1/C2/C5 lane. Durable, Init and all-seven admission remain NOT_RUN.
+
+Actual candidate observer bookkeeping: 1,163,186 lookups / 1,163,685 probes;
+linear replay of those same counter keys requires 102,395,651 comparisons,
+98.863540601% more comparison work removed by indexing. Native work includes
+312,253 statements, 94,788 transactions, 17,203 BLOB opens / 68,218 reopens,
+85,421 reads / 557,775,664 bytes. Provider counts include 75,326 locate requests
+and 17,203 scoped acquisitions. These are measured counts, not predicted speed.
+All cold/residency and cleanup gates pass; every original-target miss is retained.
+
+Observer opportunity is implemented and stride 10 qualified. Request sharing and
+repeated validation remain active investigations. Source inspection identifies
+multiple full-directory walks inside one whole-pack group cohort; that is a
+contained next candidate, requiring count/cause evidence and unchanged integrity
+checks. No cross-request memo, larger snapshot or cache allowance is approved by
+this checkpoint. Production LOC remains 140,138 (reference 65,417; core 74,721).
