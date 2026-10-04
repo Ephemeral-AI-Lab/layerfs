@@ -35,10 +35,20 @@ for name in LEGACY_HISTORY:
     CASES[new]=Case(new,c.fixture,c.states,c.storage_ceiling,c.command_budget_ns,c.verification_budget_ns,c.profile)
 REQUIRED=tuple(name if CASES[name].states is None else name.rsplit('-v',1)[0]+'-v2' for name in REQUIRED)
 REQUIRED_BY_PROFILE={'durable':REQUIRED,'disposable':tuple(name if CASES[name].states is None else name.rsplit('-v',1)[0]+'-v2' for name in DISPOSABLE)}
+# Owner 2026-10-04: modest prospective stride1 increase only. Preserve v2/170s
+# receipts and registry values; new v3 selections carry 190s in both profiles.
+RETIRED_STRIDE1=tuple(name for name,c in CASES.items() if c.states==157 and name.endswith('-v2'))
+for name in RETIRED_STRIDE1:
+    c=CASES[name];new=name.rsplit('-v',1)[0]+'-v3'
+    CASES[new]=Case(new,c.fixture,c.states,c.storage_ceiling,190_000_000_000,c.verification_budget_ns,c.profile)
+LEGACY_HISTORY+=RETIRED_STRIDE1
+REQUIRED=tuple(name.rsplit('-v',1)[0]+'-v3' if name in RETIRED_STRIDE1 else name for name in REQUIRED)
+REQUIRED_BY_PROFILE={profile:tuple(name.rsplit('-v',1)[0]+'-v3' if name in RETIRED_STRIDE1 else name for name in names)
+                     for profile,names in REQUIRED_BY_PROFILE.items()}
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"
-HISTORY_BUDGET_RULE='owner-2026-10-04-restored-original-60-170-170-performance-only-v1'
+HISTORY_BUDGET_RULE='owner-2026-10-04-60-170-190-performance-only-v2'
 
 def invoke(command,folder,label,budget_ns,env,cwd):
     start=time.monotonic_ns();timeout=False
@@ -93,7 +103,7 @@ def build(root,arm,out,common):
 def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pins=None):
     case=CASES[selection]
     if selection in LEGACY_HISTORY:
-        raise ValueError('historical history v1 retired after completed-save proof correction; original receipts preserved; use registered v2')
+        raise ValueError('historical history selection retired; original receipts preserved; use current required case version')
     if case.fixture is None:
         from families import phase7_history
         return phase7_history.run(case,output,arm,baseline_root,common,corpus_root,reference_pins)

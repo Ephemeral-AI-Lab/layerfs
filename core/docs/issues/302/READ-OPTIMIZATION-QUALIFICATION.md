@@ -100,3 +100,12 @@ Production implementation LOC138233->138465(+232), reference65417 unchanged,
 core72816->73048. Earlier Init/history17passes stay pinned older identities;
 this is Stage1 only, not all-seven/current-Durable admission. Stage2 remains
 implementation work; goalACTIVE.
+
+## Owner follow-up: stride1 prospective 190s
+
+The owner requests a modest increase after Stage1's170s reference timeout.
+Future stride1-v3 selections use190s complete performance in both arms/profiles.
+Stride10/3 stay60/170s; proof9.5s and all other gates remain. This supersedes
+the plan's original prospective stride1 cap only. Stage1-v2 receipts above
+remain170s FAIL/NOT_RUN; they are not relabelled. See the
+[budget ruling](HISTORY-BUDGET-RULING-20261004.md).

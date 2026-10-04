@@ -27,3 +27,16 @@ frozen source/harness/observer/corpus identity and one sample per declared arm.
 Registry rule identity: owner-2026-10-04-restored-original-60-170-170-performance-only-v1.
 History driver/proof/cold integration remains necessary before admission; a
 budget ruling alone does not qualify a row.
+
+## Prospective stride1 extension, owner follow-up 2026-10-04
+
+Owner asks to increase stride1's limit a bit after the frozen Stage1 reference
+times out at170,014,270,917ns after143/157states. Set the next stride1 complete
+performance envelope to **190s** (+20s, +11.76%), for both reference/candidate
+and Disposable/Durable. This applies only to new `history-stride1-v3` case IDs.
+Stride10/3 retain60/170s, every separate proof retains9.5s, Init retains15/9.5s.
+Storage, workload/state selection, workers, buffers, cache and time-margin gates
+remain unchanged. Historical v1/v2 records and case definitions retain170s and
+their original failures; old stride1-v2 selection refuses another sample.
+The next changed implementation/harness needs new matched v3 evidence.
+Registry rule: `owner-2026-10-04-60-170-190-performance-only-v2`.

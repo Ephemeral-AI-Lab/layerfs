@@ -13,16 +13,27 @@ class SqliteStep10(unittest.TestCase):
         self.assertEqual([f.init.CASES[x.fixture].files for x in cases[:4]],[100,1000,10000,100000])
         self.assertEqual([x.states for x in cases[4:]],[17,53,157])
         self.assertEqual([x.storage_ceiling for x in cases[4:]],[54278964,70427034,92342273])
-        self.assertEqual([x.command_budget_ns for x in cases[4:]],[60000000000,170000000000,170000000000])
+        self.assertEqual([x.command_budget_ns for x in cases[4:]],[60000000000,170000000000,190000000000])
         self.assertIn("owner-2026-10-04",f.HISTORY_BUDGET_RULE)
         self.assertTrue(all(x.verification_budget_ns==9500000000 for x in cases));self.assertEqual(f.REQUIRED_BY_PROFILE["durable"],f.REQUIRED)
         disposable=[f.CASES[x] for x in f.REQUIRED_BY_PROFILE["disposable"]]
         self.assertEqual(len(disposable),7)
         self.assertTrue(all(x.profile=="disposable" for x in disposable))
         self.assertEqual([(x.fixture,x.states,x.storage_ceiling,x.command_budget_ns) for x in disposable],[(x.fixture,x.states,x.storage_ceiling,x.command_budget_ns) for x in cases])
-        self.assertEqual(len(f.CASES),20)
-        self.assertEqual(len(f.LEGACY_HISTORY),6)
+        self.assertEqual(len(f.CASES),22)
+        self.assertEqual(len(f.LEGACY_HISTORY),8)
         self.assertTrue(all(f.CASES[name].states for name in f.LEGACY_HISTORY))
+    def test_stride1_increase_is_prospective_and_does_not_change_proof_or_old_cases(self):
+        self.assertEqual(len(f.RETIRED_STRIDE1),2)
+        for old in f.RETIRED_STRIDE1:
+            new=old.rsplit('-v',1)[0]+'-v3'
+            self.assertEqual(f.CASES[old].command_budget_ns,170000000000)
+            self.assertEqual(f.CASES[new].command_budget_ns,190000000000)
+            self.assertEqual(f.CASES[new].verification_budget_ns,9500000000)
+            self.assertEqual(f.CASES[old].storage_ceiling,f.CASES[new].storage_ceiling)
+            self.assertIn(new,f.REQUIRED_BY_PROFILE[f.CASES[new].profile])
+            with self.assertRaisesRegex(ValueError,'historical history selection'):
+                f.run(old,None,'baseline',None,None)
     def test_margin_is_integer_total_bound_and_joint_gate_cannot_waive_missing_proof(self):
         self.assertEqual(c.gate(self.row(110),self.row(100),100),'PASS')
         self.assertEqual(c.gate(self.row(111),self.row(100),100),'FAIL')
