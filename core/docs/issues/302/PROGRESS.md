@@ -1887,3 +1887,11 @@ corruption refusal while Fetch consumes verifiedpair and retains allframe/domain
 canon checks. Active callers/getters updated, rawpublicationAPI untouched.
 2new/5existingread tests,22persistence/initprofileoracle/owningClippy/boundary443/
 23selftests PASS. Freeze changed53matchedpair; no latency/pass claim yet.
+
+
+-2026-10-04: verifiedcarrier6b631aad2 matched53timePASS1.081504471904x:
+74.695010625s vs69.065836125s, save36.364801786s vs27.804237295s. Cold/root/census/
+storage/cleanup PASS; proofTIMEOUT9.507007292s =>jointINCOMPLETE. Freshnativecause
+candidate44states/timeouts9.50818025s,44lengths332ms vswalk82ms and2231bodyacqs/
+280MBVFS, typedauth/frame checks preserved. Next dependency/file acquisition work;
+157/DurableNOT_RUN, historicalpasses/failures untouched. GoalACTIVE.

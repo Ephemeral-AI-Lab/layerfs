@@ -35,3 +35,32 @@ release/locked binaries, current cold contracts,170s complete/9.5s proof, strict
 storage<70427034B, <=1.10 time. All earlier failures/pass artifacts remain their
 original identities; no unchanged speed retry or receipt promotion. New verified
 carrier does not itself prove latency benefit; measure before claiming it.
+
+
+## Matched53v2 at6b631aad2
+
+| Scope | Reference | Candidate Disposable |
+| --- | ---: | ---: |
+| Product lifecycle |69.065836125s|74.695010625s|
+| Complete performance command |86.579863250s|93.272690833s|
+| Full independent proof |8.539828542s PASS|9.507007292s TIMEOUT|
+| Acquisition |23.061718212s|23.622823708s|
+| Construction |3.209201083s|3.138084211s|
+| Filesystem |14.337590080s|10.730440788s|
+| Save/custody |27.804237295s|36.364801786s|
+
+TimePASS1.081504471904x, integer746950106250<=759724197375. Storage candidate
+62611456B<70427034B, source/statecold/root/canonical/cleanup PASS; original manifests
+rechecked. JointINCOMPLETE because candidate proof times out; no root/census
+substitute or original failure promotion. Returned-read/encoding work preserved;
+source authentication now once per acquired pack. Historical d8candidate save
+43.393351043s is a different source/window, not a pooled speed comparison.
+
+Fresh labelled candidate native53count diagnostic on retained closed store at same
+product completes44states thenTIMEOUT9.508180250s (observers/cold/native-only scope),
+owner preservation/cold PASS.44walk82.309916ms versus lengths/sample332.275792ms;
+2231body acquisitions/280255666requestedVFSbytes/107.567ms SQLstep in44. Metadata
+memo18259hits/3120misses, peak2MiB/437rows. File/dependency acquisition remains
+next mechanism; no additional hash or frame check removed. Ordinary shared proof
+is unchanged in scope; diagnostic cannot promote it.157/DurableNOT_RUN; prior
+Init/17qualifications remain separate pinned identities. Goal ACTIVE.

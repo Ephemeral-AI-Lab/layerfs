@@ -1,0 +1,1 @@
+{"admission": "NOT_RUN", "authenticated_bytes": 127050040, "custody_states": 53, "independent_root_pins": "NOT_CHECKED", "paths": 306861, "sample_policy": "every-tenth-content-path-and-final", "sampled_content_paths": 26052, "states": 53, "status": "CHECKED"}

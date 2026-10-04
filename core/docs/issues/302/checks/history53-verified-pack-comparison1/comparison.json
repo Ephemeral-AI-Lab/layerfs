@@ -1,0 +1,48 @@
+{
+  "source_commit": "6b631aad2",
+  "joint_gate": "INCOMPLETE",
+  "time_gate": "PASS",
+  "ratio": 1.0815044719043427,
+  "time_arithmetic": {
+    "10_candidate": 746950106250,
+    "11_reference": 759724197375
+  },
+  "arms": {
+    "baseline": {
+      "comparison_ns": 69065836125,
+      "command_wall_ns": 86579863250,
+      "verification_wall_ns": 8539828542,
+      "verification_status": "PASS",
+      "storage_bytes": 65142784,
+      "cache_status": "PASS",
+      "cleanup": {
+        "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+        "status": "PASS"
+      },
+      "stages_ns": [
+        23061718212,
+        3209201083,
+        14337590080,
+        27804237295
+      ]
+    },
+    "candidate": {
+      "comparison_ns": 74695010625,
+      "command_wall_ns": 93272690833,
+      "verification_wall_ns": 9507007292,
+      "verification_status": "FAIL",
+      "storage_bytes": 62611456,
+      "cache_status": "PASS",
+      "cleanup": {
+        "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+        "status": "PASS"
+      },
+      "stages_ns": [
+        23622823708,
+        3138084211,
+        10730440788,
+        36364801786
+      ]
+    }
+  }
+}
