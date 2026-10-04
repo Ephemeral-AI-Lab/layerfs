@@ -1592,3 +1592,10 @@ next(step+DONEreset)102,118,960ns; remainingnamedprepare/bind/drop/status~29us,
 map0. Trace57,301,376ns narrower; no inventedpure-reset/syncresidual. Revision3
 prospectiveAPIdelegationstep/reset observer,4fixedrows,capability2steps/1reset,
 no dependency/VFS/policy changes. Newpairedone-child/arm identitynext.
+
+Revision3qualifiedAPIcalls/root/inventory/proof/cold/budgets:referenceCOMMITstep
+27calls52,099,082ns/reset0;candidate31step113,223,999ns/reset193,791ns.
+ActualSQLite_stepdominates,notmapping/reset/cache-drop. Tracecallsagree;same
+args/return/one-delegate. [Lifetime/APIresults](SQLITE-STATEMENT-LIFETIME-RESULTS.md)
+retainsrevision2/3scope/data/limits. NextqualifiedVFSwrite/syncobserverneeded,not
+weakerdurabilityorselectedoptimizer. No admission/allsevenPASS,goalACTIVE.
