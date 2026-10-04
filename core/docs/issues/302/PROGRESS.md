@@ -1577,3 +1577,12 @@ hashesunchanged. [Fullpairedreport](SQLITE-PAIRED-SMALL-STEP-COMPARISON.md) incl
 comparablework,distinctinclusive/unequalscopes,SQLcounts/plans/missingobservations.
 No furtheroptimization selected beforereport; nextmeasurementacknowledgement
 prepare/step/reset/VFSpath, noWALweakening. All-sevenACTIVE/notadmission.
+
+### Statement lifetime diagnostic revision2 (prospective)
+
+Add seven fixedordinarystatement/COMMIT phase counters around samecalls/order:
+prepare,bind,next(step+DONEreset),map,cursordrop,status,statementdrop. No query/
+retry/policy/limitschange. Publishedrusqlite inspection showsnextincludesreset;
+no dependency edits.18coveringC2checks,Clippy/fmt,boundary440/guard23PASS;
+namespaceoracle coversunchangedoutput. Onefreshpairedcold diagnostic perarm next,
+revision1 retained. See [lifetimecontract](SQLITE-STATEMENT-LIFETIME-CONTRACT.md).

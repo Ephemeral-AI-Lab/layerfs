@@ -12,4 +12,5 @@ pub(crate) mod publish;
 pub(crate) mod query;
 pub(crate) mod rows;
 pub(crate) mod schema;
+pub(crate) mod statement_work;
 pub(crate) mod transaction;

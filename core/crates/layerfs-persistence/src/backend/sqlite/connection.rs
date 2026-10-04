@@ -58,6 +58,12 @@ pub struct SqlWork {
     pub bound_bytes: u64,
     /// Inclusive statement execution wall.
     pub statement_ns: u64,
+    /// Prepare/cache checkout, bind/query creation, next (step plus DONE reset),
+    /// row mapping, explicit cursor drop, status counters, cached statement drop.
+    /// Only the ordinary measured query wrapper populates these seven phases.
+    pub statement_phases: [super::statement_work::StatementPhaseWork; 7],
+    /// The same seven phase observations restricted to COMMIT statements.
+    pub commit_phases: [super::statement_work::StatementPhaseWork; 7],
     /// Commit statement wall, nested within statement and transaction wall.
     pub commit_ns: u64,
     /// Successfully begun logical transactions.

@@ -907,3 +907,16 @@ and pooled value-group compression. These are actual fixed aggregate clocks
 around those unchanged operations. The runtime has no benchmark-selected route.
 Group counters also charge failed calls internally; acknowledged-save history
 only exports successful saves. Duration fields do not choose representations.
+
+### Statement lifetime observations
+
+Based on3cf8fd6ff. Shared SQLite diagnostics keep seven fixed per-statement phase
+aggregates and a second COMMIT-only array: prepare/cache checkout, binding/query
+creation, next (SQLite step plus rusqlite's DONE reset), row mapping, explicit
+cursor drop, VM/status accounting and cached statement drop. These clocks surround
+the same ordered calls, including failed attempts. They do not replace statements,
+retry or choose a route. Next cannot be labeled pure step because the pinned
+library performs reset within it. The arrays are nested within inclusive statement/
+transaction clocks and cover the ordinary query wrapper; schema batch execution
+is separately timed and not silently included. No payload/cache/worker bound or
+journal/synchronization change is introduced.

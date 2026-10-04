@@ -128,23 +128,53 @@ pub(crate) fn borrowed(
     work: &RefCell<SqlWork>,
 ) -> Result<Vec<Record>, BackendError> {
     let start = Instant::now();
+    let commit = sql == "COMMIT";
     let result = (|| {
-        let mut statement = connection.prepare_cached(sql).map_err(rows::error)?;
+        let mut statement = {
+            let _phase = super::statement_work::phase(work, 0, commit);
+            connection.prepare_cached(sql).map_err(rows::error)?
+        };
         let count = statement.column_count();
         let result = (|| {
-            let mut cursor = statement.query(values).map_err(rows::error)?;
-            let mut result = Vec::new();
-            while let Some(row) = cursor.next().map_err(rows::error)? {
-                result.push(rows::record(row, count)?);
+            let mut cursor = {
+                let _phase = super::statement_work::phase(work, 1, commit);
+                statement.query(values).map_err(rows::error)?
+            };
+            let result = (|| {
+                let mut result = Vec::new();
+                loop {
+                    let next = {
+                        let _phase = super::statement_work::phase(work, 2, commit);
+                        cursor.next().map_err(rows::error)
+                    };
+                    let Some(row) = next? else { break };
+                    let _phase = super::statement_work::phase(work, 3, commit);
+                    result.push(rows::record(row, count)?);
+                }
+                Ok(result)
+            })();
+            {
+                let _phase = super::statement_work::phase(work, 4, commit);
+                drop(cursor);
             }
-            Ok(result)
+            result
         })();
-        let steps = statement.get_status(StatementStatus::VmStep).max(0) as u64;
-        statement.reset_status(StatementStatus::VmStep);
-        let mut w = work.borrow_mut();
-        w.statements += 1;
-        w.vm_steps += steps;
-        w.bound_bytes += bytes;
+        let steps = {
+            let _phase = super::statement_work::phase(work, 5, commit);
+            let steps = statement.get_status(StatementStatus::VmStep).max(0) as u64;
+            statement.reset_status(StatementStatus::VmStep);
+            steps
+        };
+        {
+            let mut w = work.borrow_mut();
+            w.statements += 1;
+            w.vm_steps += steps;
+            w.bound_bytes += bytes;
+        }
+        {
+            let _phase = super::statement_work::phase(work, 6, commit);
+            drop(statement);
+        }
         result
     })();
     let elapsed = start.elapsed().as_nanos() as u64;
