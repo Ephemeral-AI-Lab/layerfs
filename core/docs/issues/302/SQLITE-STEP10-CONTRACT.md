@@ -121,3 +121,15 @@ canonical-only charge. Unused acknowledged pack-ID tails transfer between saves
 of one exclusive Storage handle; consumed IDs never recycle on failure. Required
 reservation demand uses actual preceding groups, without lowering construction
 bounds. Unknown/malformed unacknowledged reservations are never inferred.
+
+## Prospective owner budget ruling,2026-10-04
+
+The explicit owner reply restores60/170/170-second performance command bounds
+for17/53/157 states respectively; see
+[the ruling](HISTORY-BUDGET-RULING-20261004.md). This resolves the earlier table's
+budget PENDING entries prospectively. The9.5-second separate verification bound
+remains unchanged. Actual history cold/proof/runner binding remains pending.
+Historical25-second failures and original evidence retain their recorded limits.
+Supported Disposable is a separate profile/selection group and cannot qualify
+Durable. All-seven Disposable qualification precedes measurement of the same
+implementation/artifacts under Durable.

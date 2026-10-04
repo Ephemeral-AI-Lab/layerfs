@@ -1,0 +1,10 @@
+{
+  "binary": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-baseline/layerfs/benchmark-results/fs-bench-pro/binary-archive/2dc28fb94c76bb1e009f3f2deff1074aff657778dc3b290317da5aad36c476ee/history_reference_verify",
+  "sha256": "2dc28fb94c76bb1e009f3f2deff1074aff657778dc3b290317da5aad36c476ee",
+  "profile": "release/locked",
+  "reference_product_unmodified": true,
+  "source_commit": "7edddbdb8e8512627aed0ed42533ef099d802384",
+  "generated_helper_sha256": "a4bb461e3dbdd074cbfe122937bcc66b1986a7b070042390426f7fded095e1cf",
+  "build_receipt_sha256": "b60acba2605a1e10a6ce7f184d6774102df102cc937d457e037537b7b2500323",
+  "sample_count": 0
+}

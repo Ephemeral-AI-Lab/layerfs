@@ -8,7 +8,7 @@ import tempfile
 import unittest
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / 'core/benchmark/fs-bench-pro/diagnostics'))
-from history_reference_vehicle import generate, BASE
+from history_reference_vehicle import generate, generate_verifier, BASE
 
 class HistoryVehicle(unittest.TestCase):
     def test_reference_facade_uses_unmodified_memory_engine_and_same_state_stages(self):
@@ -51,3 +51,14 @@ class HistoryVehicle(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(message, result.stderr)
                 self.assertFalse((folder/'absent-db').exists())
+
+    def test_reference_proof_facade_seals_readback_and_removes_candidate_ports(self):
+        source, helper, seals = generate_verifier(ROOT, Path('/sealed/reference-helper.rs'))
+        self.assertEqual(len(seals), 6)
+        self.assertNotIn('handles.', source)
+        self.assertNotIn('layerfs_persistence', source)
+        self.assertNotIn('PackPersistence', helper)
+        self.assertIn('closed reference census disagrees with producer', source)
+        self.assertIn('sqlite::open_read_only', source)
+        self.assertIn('StoreProvider::new(&storage)', source)
+        self.assertIn('self.persistence.get(id)', helper)

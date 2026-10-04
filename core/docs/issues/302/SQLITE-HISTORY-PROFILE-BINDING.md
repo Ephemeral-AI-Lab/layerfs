@@ -51,3 +51,34 @@ observer identities; enforce watchdog/cleanup and separate proof envelope; then
 freeze the complete campaign. Durable runs follow all-seven Disposable
 qualification at the same implementation identity. No source/profile/budget
 relaxation beyond the explicit scoped owner ruling.
+
+Independent-reference proof prerequisite added after the budget ruling:
+`generate_verifier` seals six shared inputs, opens original C5 read-only and
+reads original Store through its public provider. Only its benchmark facade
+adapts candidate metadata access to an independently exported closed-Store TSV;
+no reference product/dependency/manifest is changed. The verifier checks actual
+TSV counts against producer census before namespace proof. It retains full
+path/kind/size and declared sampled-byte coverage, never claiming all-content
+verification. The release/locked example built in2.610918958s within30s; its
+immutable binary/source/helper seals and clean-reference check are retained in
+checks/reference-history-proof-build1. No product/performance child ran.
+
+`shared/phase7_history_proof.py` now provides immutable closed-owner census for
+both schemas, checks exact table/app/version identities, SQLite integrity and
+foreign keys, C5 counts/roots, and actual sorted C2 ID/role/length inventory
+against producer and frozen canonical totals. It rejects outstanding sidecars,
+nonexclusive owners, unfinished reference saves, inconsistent identities and
+changed original files. Export and census must stay inside the separate9.5s
+proof envelope. Reference pins require complete cold/cleanup/single-arm/budget
+and independent namespace/custody/census evidence; candidate integration must
+rederive pins from sealed evidence and matching paired harness identity.
+These helpers are not yet connected to the qualification runner. They must not
+be treated as an admission proof based on a caller-provided CHECKED status.
+
+Two focused census/provenance tests use explicitly synthetic small SQLite and
+JSON fixtures. Initial fixture omitted the pack body's column and failed; the
+fixture was repaired and the two checks pass. Three adapter/negative-proof tests
+pass. This is a harness check, not a full-history sample or production proof.
+Remaining: cold handling across retained states and predecessor reads, bounded
+combined proof invocation, profile readbacks, matched runner/observer seals and
+all-seven qualification. No numerical result promoted.

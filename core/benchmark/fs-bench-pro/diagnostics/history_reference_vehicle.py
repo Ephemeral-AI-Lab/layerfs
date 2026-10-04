@@ -70,3 +70,48 @@ def generate(root: Path) -> tuple[str, dict[str, str]]:
             '// Reference retains original MEMORY/OFF completion semantics.')
     replace('drop(handles);','drop(history);')
     return text, seals
+
+
+def generate_verifier(root: Path, helper_path: Path) -> tuple[str, str, dict[str, str]]:
+    """Reference read-back over original APIs and independently exported C2 metadata.
+
+    The TSV is an actual closed-Store census, not expected-result data. Its export
+    and validation belong to the separate proof budget. No product is modified.
+    """
+    source = root / 'core/crates/layerfs-project/examples/verify_history.rs'
+    helper = source.parent / 'history_support/verify.rs'
+    text = source.read_text()
+    verification = helper.read_text()
+    seals = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
+             for p in [source, helper] + [source.parent / f'history_support/{n}.rs'
+                                        for n in ('producer', 'retained', 'support', 'workload')]}
+
+    def replace(old, new):
+        nonlocal text
+        if text.count(old) != 1:
+            raise ValueError(f'expected one reference proof seam: {old}')
+        text = text.replace(old, new)
+
+    for name in ('producer', 'retained', 'support', 'workload'):
+        replace(f'#[path = "history_support/{name}.rs"]',
+                f'#[path = "{source.parent / f"history_support/{name}.rs"}"]')
+    replace('#[path = "history_support/verify.rs"]', f'#[path = "{helper_path}"]')
+    replace('use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};',
+            'use layerfs_history::sqlite;\nuse layerfs_telemetry::timer::Timing;')
+    replace('use layerfs_storage::Storage;', 'use layerfs_storage::{Store, StoreProvider};')
+    replace('if !matches!(args.len(), 6..=8)', 'if args.len() != 9')
+    replace('    let selected_profile = match args.get(6).map(String::as_str).unwrap_or("durable") {\n        "durable" => SqlitePersistenceProfile::Durable,\n        "disposable" => SqlitePersistenceProfile::Disposable,\n        _ => return Err("explicit durable/disposable profile required".into()),\n    };', '    if args[6] != "reference" || args[7] != "independent-reference" {\n        return Err("explicit independent-reference proof required".into());\n    }')
+    begin = text.index('    let profile_identity = match selected_profile')
+    end = text.index('    if probe_states.is_none() {', begin)
+    text = text[:begin] + '    if child.get("profile_identity").and_then(json::Value::as_str) != Some("phase4.5-memory-off") {\n        return Err("reference effective profile identity mismatch".into());\n    }\n    let independent_pins = false;\n' + text[end:]
+    replace('        if !independent_pins {\n            return Err("complete proof requires independent root pins".into());\n        }\n', '')
+    replace('    let handles = Handles::open_read_only(\n        PersistenceConfig::sqlite(&args[2]).with_sqlite_profile(selected_profile),\n        &config.binding_key,\n        config.cursor_key,\n    )?;\n    let custody = retained::verify(&handles.history, producer::scope_of(row), &roots)?;\n    let storage = Storage::new(handles.storage.clone())?;\n    let reader = storage.reader()?;', '    let history_path = std::path::PathBuf::from(format!("{}.history.sqlite", args[2]));\n    let history = sqlite::open_read_only(&history_path, &config.binding_key, config.cursor_key)?;\n    let custody = retained::verify(&history, producer::scope_of(row), &roots)?;\n    let storage = Timing::disabled("reference.verify.open", |scope| Store::open(&args[2], scope.child("store"))).0?;\n    let reader = StoreProvider::new(&storage);\n    let mut metadata = std::collections::BTreeMap::new();\n    for line in std::fs::read_to_string(&args[8])?.lines() {\n        let fields: Vec<_> = line.split(\'\\t\').collect();\n        if fields.len() != 3 { return Err("reference metadata row shape".into()); }\n        let bytes = workload::digest::unhex(fields[0]).ok_or("reference metadata id hex")?;\n        let id = ObjectId::from_bytes(&bytes)?;\n        let role = fields[1].parse::<u8>()?;\n        let length = fields[2].parse::<u64>()?;\n        if metadata.insert(id, (role, length)).is_some() { return Err("duplicate reference metadata id".into()); }\n    }\n    let actual_bytes: u64 = metadata.values().map(|(_, length)| *length).sum();\n    if child.get("canonical_objects").and_then(json::Value::as_i64) != Some(metadata.len() as i64)\n        || child.get("canonical_bytes").and_then(json::Value::as_i64) != Some(actual_bytes as i64) {\n        return Err("closed reference census disagrees with producer".into());\n    }')
+    replace('handles.storage.as_ref()', '&metadata')
+    verification = verification.replace('dyn layerfs_storage::port::PackPersistence',
+                                        'BTreeMap<ObjectId, (u8, u64)>')
+    start = verification.index('        for chunk in ids.chunks(512) {')
+    end = verification.index('        for (_, id, kind, _, _, _) in &file_entries {', start)
+    verification = verification[:start] + '        for id in &ids {\n            let value = self.persistence.get(id)\n                .ok_or_else(|| OpError::Io(format!("reference metadata missing {id}")))?;\n            metadata.insert(*id, *value);\n        }\n' + verification[end:]
+    if 'handles.' in text or 'layerfs_persistence' in text or 'PackPersistence' in verification:
+        raise ValueError('reference proof adapter left candidate API behind')
+    return text, verification, seals

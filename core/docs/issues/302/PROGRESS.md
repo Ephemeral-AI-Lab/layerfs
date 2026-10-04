@@ -1702,3 +1702,11 @@ provenance refusebeforeI/O (fivecases), facade/profile-aware release buildsPASS.
 No productchild sampled. [Binding](SQLITE-HISTORY-PROFILE-BINDING.md) and
 [budgetruling](HISTORY-BUDGET-RULING-20261004.md) recordremainingcold/reference
 proof/accounting integration. AllsevenDisposableNOT_RUN, durableobjectiveACTIVE.
+
+-2026-10-04: reference-history verifier facade release/locked build PASS
+(2.610918958s/30s, no product sample), with shared source and immutable binary
+seals; original reference remains clean. Added closed C2/C5 census and
+hash-bound reference-root evidence helpers; focused tests pass after fixing a
+synthetic fixture's missing pack body column. Runner/cold/combined proof binding
+still pending; all seven supported Disposable measurements NOT_RUN, no durable
+parity/admission claim. See SQLITE-HISTORY-PROFILE-BINDING.md.
