@@ -1,0 +1,28 @@
+{
+  "case": "Init10000",
+  "gate": "NOT_APPLICABLE; historical gate FAIL preserved",
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "9bf621868e9b44600dbcaf255f4faefabdcab90212e79b9f44772f736242fd8d",
+    "product_seal": "56c9707a446fa85479f474c5a170a2ab30e8e350b147152d3c6d6dc75992f2a5",
+    "source_commit": "3d8110cb05780a45115a34cad820d85de25fa168",
+    "source_dirty": false,
+    "source_tree": "7188d9e4cdb4c6da5578402f5a31a1a145822901"
+  },
+  "kind": "count-driven-close-mechanism-diagnostic-v1",
+  "observer": {
+    "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/binary-archive/efc7417d27eb1e73b7c3e787b0546c90bc0a4b38fc94c8ed5d013393dc963f03/sqlite-close-observer.dylib",
+    "sha256": "efc7417d27eb1e73b7c3e787b0546c90bc0a4b38fc94c8ed5d013393dc963f03"
+  },
+  "performance_budget_ns": 15000000000,
+  "purpose": "attribute VFS write/sync/close, SQLite close and OS-close term; no retry/admission speed number",
+  "samples_per_arm": 1,
+  "source_seals": {
+    "core/benchmark/fs-bench-pro/diagnostics/sqlite_close_observer.c": "48f2fc3e3995bc6ae38c66cd6daefe6b941c7613037e41883e580aa8b70868e5",
+    "core/benchmark/fs-bench-pro/diagnostics/sqlite_vfs_observer.c": "40559848d8988307e7f034beabde54f3f49d8f6c7210c93627932303e1a9f944"
+  },
+  "verification": "SKIPPED; same archived vehicles, original matching roots retained; diagnostic root cross-check only"
+}

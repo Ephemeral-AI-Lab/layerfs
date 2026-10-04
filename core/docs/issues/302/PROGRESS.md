@@ -1730,3 +1730,11 @@ cleanup/budgets pass;10k exact time gate miss2.7308122ms. Existing breakdown sho
 candidate final-close227.109458ms vs2.703458ms while Init itself is faster.
 No unchanged rerun; next is labelled close/write/sync mechanism attribution.
 See SQLITE-DISPOSABLE-INIT-CAMPAIGN1.md and checks/disposable-init-campaign1.
+
+-2026-10-04: labelled10k close diagnostic at3d8110cb0 completes both arms with
+original roots/cold0 and zero VFS sync. Candidate SQLite close0.174541ms versus
+observed main OS close206.517458ms; extra AllocationFile descriptor is the likely
+late-close owner (inference; OS close-symbol coverage incomplete). Candidate VFS
+reads97,088,501B/reference47,038,183B, writes352,403,456/342,647,808B. Populated
+EXPLAIN shows indexed locators/pack join; no missing-index claim. Historical10k
+FAIL retained. Next: bounded statement-shape treatment, then new matched gates.

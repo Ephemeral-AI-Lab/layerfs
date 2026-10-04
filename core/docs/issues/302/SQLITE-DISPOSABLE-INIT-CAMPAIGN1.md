@@ -95,3 +95,55 @@ archived release vehicles and original cold fixture, no numerical admission.
 Compact copies in checks/disposable-init-campaign1 omit large owned databases;
 original per-run manifests apply to the original raw run paths, not the compact
 subsets. Raw complete evidence remains retained and immutable.
+
+## Labelled10k close mechanism diagnostic
+
+Frozen observer source3d8110cb0; original archived release drivers and original
+fixture reused with fresh Stores and zero source residency. One count-driven
+invocation per arm,15s bound; diagnostic only, separate verifier SKIPPED with
+original expected-root cross-check. Both complete with matching original roots,
+zero live/error VFS files and no unknown sync flags. No diagnostic time ratio is
+an admission number; the original10k FAIL remains unchanged.
+
+Candidate sqlite3_close1call/0.174541ms, delegated VFS xClose1call/0.013834ms;
+observed matching-main OS closes2calls/206.517458ms. Reference SQLite close7calls/
+142.543415ms; VFS main closes6calls/141.784293ms, matching-main OS closes1361calls/
+0.947228ms. OS interception sees the public close symbol and filenames containing
+store.sqlite/history.sqlite, not all internal close variants or per-inode file
+identity; it is not a complete syscall census. Thus baseline VFS close can exceed
+intercepted OS close, and these nested spans must not be summed. Candidate
+Session source has a separate writable AllocationFile whose field drops after
+the SQLite state; evidence points to that final descriptor as the expensive
+candidate close outside SQLite. This is an attribution inference, not proof of
+kernel writeback/device latency or permission to move close outside the timer.
+
+Main VFS writes: reference167350calls/342,647,808submitted B/514.537593ms;
+candidate86036calls/352,403,456B/436.389080ms. Reads: reference23498calls/
+47,038,183requested B/28.421414ms; candidate24718calls/97,088,501B/27.182848ms.
+Both zero VFS sync, WAL and journal-body calls. These are submitted/requested VFS
+bytes, not physical device bytes; no generic physical fsync count claim.
+Combined candidate authority and original split authority/cache/page geometry
+remain disclosed. No trace-status reset interferes with native candidate VM work.
+
+Populated retained-database EXPLAIN diagnostic shows indexed object-ID search
+in both arms and indexed pack rowid join for candidate, rather than a missing
+locator index/full scan. EXPLAIN programs are kept separate from actual executed
+VM counts. dbstat also records actual pack/locator page/payload geometry. Readonly
+immutable access after the proof is explicitly diagnostic, not another cold arm.
+Raw diagnostic declaration/receipts/traces/observer/roots and populated EXPLAIN
+are retained in checks/disposable-init10000-close-diagnostic1 (large DBs omitted
+from compact copy; original raw paths/manifests remain authoritative).
+
+Next bounded product treatment will target unnecessary SQL preparation/statement
+shape work before any new gate campaign. Keep final descriptor close in scope,
+profile/cache/worker limits and atomic publication/conflict/lost-ID semantics.
+Do not rerun unchanged arms, alter page-cache size, subtract close, or promote
+this count diagnostic into a speed PASS.
+
+Orchestration custody limitation: the count diagnostic used an unchanged local
+script outside the tracked harness scope. Exact code/SHA is preserved afterward
+as orchestration.py/orchestration-custody.json; this post-run preservation is not
+a prospective orchestration seal. Observer/driver/helper/fixture/source seals
+were declared before invocation. Counts remain labelled mechanism observations,
+never admission evidence or a replacement speed arm. Original numerical campaign
+used the sole tracked runner with its prospective matched harness identity.

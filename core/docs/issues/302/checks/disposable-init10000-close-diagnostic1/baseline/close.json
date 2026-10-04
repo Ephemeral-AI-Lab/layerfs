@@ -1,0 +1,1 @@
+{"kind":"close-mechanism-diagnostic-v1","mutating_connection_closes":6,"sqlite_close_calls":7,"sqlite_close_ns":142543415,"sqlite_close_v2_calls":0,"sqlite_close_v2_ns":0,"fd_closes":[{"class":"main","calls":1361,"wall_ns":947228},{"class":"history","calls":0,"wall_ns":0},{"class":"allocation-scratch","calls":0,"wall_ns":0}]}
