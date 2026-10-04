@@ -1,0 +1,33 @@
+{
+  "parent": "edcfae4ac3292b88d6929190b2cb89b72d79c68a",
+  "before": 140138,
+  "after": 140138,
+  "delta": 0,
+  "reference_before": 65417,
+  "reference_after": 65417,
+  "core_before": 74721,
+  "core_after": 74721,
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "same production_loc.py scope/version; exact first-parent/staged classified product blobs all equal, inherit validated parent counts; exclude tests/docs/tools/examples",
+  "scopes": {
+    "core": {
+      "product_files": 455,
+      "parent_staged_product_blobs_equal": true,
+      "blob_identity_set_sha256": "35f52fc195e2b11922cad1f34be457917ed59b5da35544567a1293f90a51727a"
+    },
+    "reference": {
+      "product_files": 193,
+      "parent_staged_product_blobs_equal": true,
+      "blob_identity_set_sha256": "eac7a29ba6ee468c739972e975c0ab0b63755d37a3429fbeded6bfdddd476b4d"
+    }
+  },
+  "changed_documentation_paths": [
+    "core/docs/architecture/05-storage.md",
+    "core/docs/issues/302/PROGRESS.md",
+    "core/docs/issues/302/SQLITE-TYPED-DESCRIPTOR-FINAL-REPORT.md",
+    "core/docs/issues/302/SQLITE-TYPED-DESCRIPTOR-TREATMENT.md",
+    "core/docs/issues/302/checks/typed-descriptor-final1/comparison.json",
+    "core/docs/issues/302/checks/typed-descriptor-final1/count-continuity.json",
+    "core/docs/issues/302/checks/typed-descriptor-final1/transaction-origins.json"
+  ]
+}

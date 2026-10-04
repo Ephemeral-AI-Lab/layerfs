@@ -1,0 +1,22 @@
+{
+  "prior_source": "6e143ac6013eb6338193d35805307aa5ecebcd94",
+  "prior_receipt_sha256": "81f9e7bbc6dfd7399c185ec2fb00192879ea1aba157d00556cf65a89e5d112c1",
+  "current_source": "edcfae4ac3292b88d6929190b2cb89b72d79c68a",
+  "current_receipt_sha256": "65ac91b919c338938f9441a9fa20b9888c628282ba169ef9cc83f65325115f5b",
+  "equal_native_counts": {
+    "statements": 2827545,
+    "transactions": 815043,
+    "write_transactions": 2541,
+    "blob_open_calls": 330219,
+    "blob_reopen_calls": 3122460,
+    "blob_read_calls": 3452679,
+    "blob_read_bytes": 5905886097,
+    "blob_close_calls": 330219,
+    "sealed_inserts": 13026,
+    "sealed_body_bytes": 74809772
+  },
+  "equal_store_sha256": "0871680ffd8d28695a3a689b54a7597a64b9d48143642f9e9b064567cf5234de",
+  "binary_seals_checked": true,
+  "fixture_harness_observer_match": true,
+  "note": "prior/new candidate clocks are separate windows and not an exclusive effect comparison"
+}

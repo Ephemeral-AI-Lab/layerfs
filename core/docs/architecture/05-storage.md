@@ -1356,7 +1356,7 @@ worker, transaction, SQL source, physical layout or publication limit is enlarge
 Native diagnostics distinguish actual opens, reopens, reads and closes.
 
 
-### Typed singleton locations and bounded controls (againstf3025f81e)
+### Typed singleton locations and bounded controls (against edcfae4ac)
 
 A one-ID locator request uses the same SQL and one original read transaction,
 with a borrowed fixed ID binding and direct validated LocatedObject conversion.

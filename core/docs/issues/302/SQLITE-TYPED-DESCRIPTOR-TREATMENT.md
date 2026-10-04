@@ -87,3 +87,32 @@ old speed-control reuse, warm credit or unchanged sample replacement.
 17/53,Durable,Init,all-seven and exhaustive payload audit remain NOT_RUN at the
 new artifact. PostgreSQL/MinIO M4pause remains unchanged. Final outcomes follow
 in an appended record with exact identities/arithmetic/nonpassing lines.
+
+
+## Final matched qualification, 2026-10-05
+
+Frozen product edcfae4ac: reference182385692375ns/candidate173624895625ns,
+**−8760796750ns /4.803445180%, strict faster PASS**. Complete commands
+196530167834/185722603417ns; separate proofs17056830708/18164147875nsPASS;
+source/per-state cold and cleanupPASS. Canonical104618objects/871337620B,
+all157roots/904143paths and bounded921174logicalB/5347088candidateacquiredBmatch.
+Allocated85172224Bunchanged: approved92342273BceilingPASS; original83947520Bstrict
+FAIL(+1224704B /1.458892413%). Store bytes and all prior statement/transaction/
+mapping/BLOB-read/publication counts remain identical; no work was skipped.
+
+Final Save/custody83726565663ns versus77748205867nsreference remains7.689386179%
+slower; filesystem37576296325vs51817843454nssaves27.483866907%. Whole-childCPU
+121402363000vs131034572000ns; lifetimeRSS335347712vs348160000B(notphase-only).
+Actual read transaction origins:469825locator/330219scoped-pack requests account
+for800044transactions,98.159728996%of815043. These are ordinary request snapshot
+boundaries; no accidental nested BEGIN is demonstrated and no transaction collapse
+is performed under the unchanged contract.
+
+[Final report](SQLITE-TYPED-DESCRIPTOR-FINAL-REPORT.md) records exact reproduction,
+limits/checks/LOC/nonpassing lines. [Sealed comparison](checks/typed-descriptor-final1/comparison.json)
+audits23reference/21candidatefile lengths/SHA plus archived binary hashes;
+[transaction origins](checks/typed-descriptor-final1/transaction-origins.json) and
+[count continuity](checks/typed-descriptor-final1/count-continuity.json) preserve
+scope/identity. Prior/new clocks remain separate windows; no exclusive delta is
+claimed from the old candidate clock.17/53,Durable,Init,all-seven/full-payload
+NOT_RUN; PostgreSQL/MinIO M4pause unchanged. No push/merge/PR/release/external message.

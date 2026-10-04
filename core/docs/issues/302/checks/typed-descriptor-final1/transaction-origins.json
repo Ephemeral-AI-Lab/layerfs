@@ -1,0 +1,19 @@
+{
+  "scope": "whole-driver native transactions; C2 Fetch counters adjacent to real public calls, mapped through StorageProvider::Session.run(false); counts are subset attribution, not exclusive wall",
+  "native_transactions": 815043,
+  "native_write_transactions": 2541,
+  "native_read_transactions": 812502,
+  "locator_public_calls": 469825,
+  "scoped_pack_public_calls": 330219,
+  "locator_plus_pack_transactions": 800044,
+  "fraction_of_all_transactions_percent": 98.15972899589347,
+  "value_group_public_calls": 11983,
+  "identified_C2_read_calls": 812027,
+  "remaining_read_transactions_outside_these_three_counters": 475,
+  "sources": [
+    "core/crates/layerfs-storage/src/read/fetch.rs",
+    "core/crates/layerfs-persistence/src/storage_provider.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/transaction.rs"
+  ],
+  "finding": "These are one snapshot transaction per actual port request, not demonstrated nested or duplicate BEGIN work. Combining calls would change transaction scope; current treatment preserves it."
+}

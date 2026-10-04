@@ -2161,3 +2161,19 @@ PASS. No newcache/extraresources/weakerchecks; freeze/countdiag next,goalACTIVE.
   [SQLITE-INDEXED-CURSOR-FINAL-REPORT.md](SQLITE-INDEXED-CURSOR-FINAL-REPORT.md).
   17/53,Durable,Init,all-seven/full-payloadauditNOT_RUN at this artifact;
   historical receipts and PostgreSQL/MinioM4pause unchanged. No push/merge/PR/release.
+
+
+- 2026-10-05 owner “proceed” allocation follow-up atedcfae4ac: typed singleton
+  locator/control decode and borrowed bindings retain SQL/validation/transactions.
+  Count diagnostic allocations21→7per found singleton,18→13per control/first-group,
+  checksums preserved; initial diagnostic API compile failure retained/repaired.
+  New matched Disposable157reference182.385692375s/candidate173.624895625s,
+  strict faster4.803445180%; complete196.530167834/185.722603417s and separate
+  proof17.056830708/18.164147875sPASS, cold/cleanupPASS. Store85172224Bunchanged,
+  approved92342273BceilingPASS/original83947520BstrictFAIL. All prior work counts,
+  BLOBbytes and whole-Store SHA preserved. Core519tests/99targets,Clippy/fmt,
+  455-fileboundary/23selftestsPASS. Request snapshot origins account for98.16%of
+  transactions; no scope enlargement. [SQLITE-TYPED-DESCRIPTOR-FINAL-REPORT.md](SQLITE-TYPED-DESCRIPTOR-FINAL-REPORT.md)
+  records identities/reproduction/limits/LOC and residualSave7.689386179%slowdown.
+  17/53,Durable,Init,all-seven/full-payloadauditNOT_RUN; prior evidence/M4pause
+  unchanged. No push/merge/PR/release or other-owner checkout change.
