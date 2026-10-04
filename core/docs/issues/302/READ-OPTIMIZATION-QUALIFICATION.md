@@ -515,3 +515,37 @@ phase, before another policy change. No assumption that adding more retention
 will fit9.5s, no extra cache/worker/buffer or weaker authentication. Current830
 matched performance/combined proofNOT_RUN; older8bfreeze10PASS/3proofTIMEOUT/
 1reference190sTIMEOUT retainidentity/verdict. GoalACTIVE.
+
+
+## File-root phase count attribution after56d51bcaf
+
+Previous goal turn was progress: shared decoded cache fixed and count-scope
+interpretation corrected. Current clean tree/retained phase records revalidated;
+file-root phase, not pooled per-state counts, is the larger unresolved gap.
+No new performance sample or product-policy change in this step.
+
+First-party observer now snapshots delegated BLOB opens/read/close calls,
+requested/returned bytes, operation times and failures. Open counts are matched
+read-only main.pack.body attempts; read/close counters cover all BLOB handles.
+No payload inspection, profile mutation, retry or dependency patch. VFS bytes
+remain requested/delegated bytes, not device bytes. BLOB call timing excludes
+C2SHA256/planning/reconstruction work. Calibration on realSQLite checks SQL
+and BLOB pack attribution plus valid/invalid reads, request/success byte counts
+and failure flags; separate writable/error opens do not become pack acquisitions.
+
+Native proof diagnosticv3 logs walk, file-roots and remaining-digest snapshots
+as VERIFY_PHASE_WORK. These are disjoint children of the enclosing per-state
+verification snapshot. Marker separation/parser tests prevent accidental
+parent+child summation. Pooled rows remain cumulative across reader lifetime.
+Partial final-state child phases are retained, but completed-prefix comparisons
+exclude them. Missing observer fields mark diagnosticFAIL, not a fabricated0.
+Same9.5s native/60s diagnostic envelope, source/database cold, immutable stores,
+one child per declared arm; proof scope and all path/kind/size/sample checks
+unchanged. File-root phase includes opportunistic sampled hashing.
+
+Changed examples/observer/harness are checked (realSQLite calibration,6Python
+diagnostic tests,3vehicle tests,Rustexamples/Clippy/fmt,boundary448/23). Logs
+checks/file-root-phase-functional1. Prior497Coretests cover unchanged product
+8302782a9; no product LOC change. Freeze changed diagnostic harness then one
+labelled53native-only child per arm using original closed stores. Ordinary
+performance/combined proof admission remainsNOT_RUN at this new harness.

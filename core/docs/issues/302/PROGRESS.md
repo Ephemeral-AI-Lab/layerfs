@@ -2008,3 +2008,11 @@ unchanged,earlierinterpretationcorrected. Actualprefix43file-root phase4.559s
 vsreference2.281s dominatesgap;walk1.675s vs1.928s. Needphase-specificBLOB/
 dependency/canonicalbyteattribution beforemoretuning. Currentmatchedproof/
 performanceNOT_RUN,priorqualificationhistorical,190s/9.5s unchanged,goalACTIVE.
+
+
+-2026-10-04: file-root diagnosis adds external SQL/VFS+BLOB childphase counters
+(walk/file-roots/remainingdigest), separate fromparentstate and lifetimepooled
+counts. RealSQLite byte/failure/delegation calibration,6diagnostic/3vehicle
+Pythonchecks,Rustexamples/Clippy/fmt/boundaryPASS. Product830unchanged/497
+tests retained,productionLOCdelta0. Freezev3countdiag then one53childperarm on
+originalclosedstores,9.5s/60s unchanged; no speed/proof promotion,goalACTIVE.

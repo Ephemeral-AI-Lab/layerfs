@@ -33,6 +33,8 @@ struct Sampler<'a> {
 impl Sampler<'_> {
     fn run_complete(&mut self, root: FilesystemRootId) -> Result<VerifyTally, OpError> {
         let diagnostic_start = std::time::Instant::now();
+        let diagnostic = std::env::var("LAYERFS_HISTORY_VERIFY_PROGRESS").as_deref() == Ok("1");
+        let walk_counts = diagnostic.then(super::observer::phase_start);
         let metadata_reader = MetadataReader::new(self.reader, self.metadata_memo);
         let mut read = FilesystemRead::new(&metadata_reader, root)
             .map_err(|error| OpError::Product(format!("{error:?}")))?;
@@ -161,6 +163,10 @@ impl Sampler<'_> {
             return Err(OpError::Io("missing retained paths".into()));
         }
         let walk_ns = diagnostic_start.elapsed().as_nanos();
+        if let Some(before) = walk_counts {
+            super::observer::phase_report("walk", before);
+        }
+        let file_counts = diagnostic.then(super::observer::phase_start);
         // Classify distinct file roots in bounded Store waves. Each wave's
         // declared logical bytes plus framing stay below 16 MiB, leaving ample
         // room under the Store's 32 MiB canonical-byte bound. The previous
@@ -319,6 +325,10 @@ impl Sampler<'_> {
             offset = end;
         }
         let lengths_ns = diagnostic_start.elapsed().as_nanos() - walk_ns;
+        if let Some(before) = file_counts {
+            super::observer::phase_report("file-roots", before);
+        }
+        let digest_counts = diagnostic.then(super::observer::phase_start);
         for (path, id, kind, expected_size, expected_digest, sampled) in file_entries {
             if self.lengths.get(&id).map(|(length, _)| *length) != Some(expected_size) {
                 return Err(OpError::Io(format!(
@@ -336,7 +346,10 @@ impl Sampler<'_> {
                 }
             }
         }
-        if std::env::var("LAYERFS_HISTORY_VERIFY_PROGRESS").as_deref() == Ok("1") {
+        if let Some(before) = digest_counts {
+            super::observer::phase_report("remaining-digest", before);
+        }
+        if diagnostic {
             eprintln!(
                 "verify parts: walk={walk_ns} lengths={lengths_ns} digest={}",
                 diagnostic_start.elapsed().as_nanos() - walk_ns - lengths_ns

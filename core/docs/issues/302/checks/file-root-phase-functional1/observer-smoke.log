@@ -1,0 +1,1 @@
+PASS SQL+BLOB attribution; writable/failed opens excluded; same pack counted once distinct

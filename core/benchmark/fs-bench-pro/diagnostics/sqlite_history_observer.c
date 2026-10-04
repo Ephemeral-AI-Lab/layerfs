@@ -23,12 +23,33 @@ static void history_note_pack_id(sqlite3_int64 id){
  if(id<=0||id>=65536)atomic_fetch_add(&pack_unknown,1);
  else{uint64_t bit=UINT64_C(1)<<(id%64);uint64_t old=atomic_fetch_or(&pack_seen[id/64],bit);if(!(old&bit))atomic_fetch_add(&distinct_packs,1);}
 }
+/* These counters observe delegated SQLite calls. Read/close cover all BLOB
+ * handles; matched opens cover read-only main.pack.body. No payload inspection. */
+static _Atomic uint64_t blob_work[11];
 static int history_blob_open(sqlite3*db,const char*database,const char*table,const char*column,sqlite3_int64 row,int writable,sqlite3_blob**out){
- int result=sqlite3_blob_open(db,database,table,column,row,writable,out);
- if(result==SQLITE_OK&&!writable&&database&&table&&column&&!strcmp(database,"main")&&!strcmp(table,"pack")&&!strcmp(column,"body"))history_note_pack_id(row);
+ int matched=!writable&&database&&table&&column&&!strcmp(database,"main")&&!strcmp(table,"pack")&&!strcmp(column,"body");
+ uint64_t start=now();int result=sqlite3_blob_open(db,database,table,column,row,writable,out);
+ if(matched){atomic_fetch_add(&blob_work[0],1);atomic_fetch_add(&blob_work[1],now()-start);if(result!=SQLITE_OK)atomic_fetch_add(&blob_work[2],1);else history_note_pack_id(row);}
+ return result;
+}
+static int history_blob_read(sqlite3_blob*blob,void*buffer,int bytes,int offset){
+ uint64_t start=now();int result=sqlite3_blob_read(blob,buffer,bytes,offset);
+ atomic_fetch_add(&blob_work[3],1);if(bytes>0)atomic_fetch_add(&blob_work[4],(uint64_t)bytes);
+ atomic_fetch_add(&blob_work[6],now()-start);
+ if(result==SQLITE_OK){if(bytes>0)atomic_fetch_add(&blob_work[5],(uint64_t)bytes);}else atomic_fetch_add(&blob_work[7],1);
+ return result;
+}
+static int history_blob_close(sqlite3_blob*blob){
+ uint64_t start=now();int result=sqlite3_blob_close(blob);
+ atomic_fetch_add(&blob_work[8],1);atomic_fetch_add(&blob_work[9],now()-start);if(result!=SQLITE_OK)atomic_fetch_add(&blob_work[10],1);
  return result;
 }
 INTERPOSE(history_blob_open,sqlite3_blob_open)
+INTERPOSE(history_blob_read,sqlite3_blob_read)
+INTERPOSE(history_blob_close,sqlite3_blob_close)
+void cause_history_blob_snapshot(uint64_t*out){
+ for(int i=0;i<11;i++)out[i]=atomic_load(&blob_work[i]);out[11]=1;
+}
 void cause_history_note_pack(sqlite3_stmt*statement){
  const char*sql=sqlite3_sql(statement);
  if(!sql||(strncmp(sql,"SELECT body FROM pack ",strlen("SELECT body FROM pack "))&&strncmp(sql,"SELECT p.data FROM object_packs ",strlen("SELECT p.data FROM object_packs "))))return;

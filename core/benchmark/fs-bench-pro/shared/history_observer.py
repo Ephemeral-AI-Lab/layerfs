@@ -26,7 +26,7 @@ def build(root, out, invoke, common):
     if result['exit_code'] or result['timed_out']:raise ValueError('history observer build failed; retained output')
     binary.chmod(0o555)
     record={'inputs':inputs,'seal':seal,'path':str(binary),'sha256':common.digest(binary),'build':result,'mode':'compiled',
-            'coverage':'trace statements/VM plus delegated VFS read/write/sync/close; native VM reset counters unqualified; no device-byte/syscall claim'}
+            'coverage':'trace statements/VM plus delegated BLOB open/read/close and VFS read/write/sync/close; native VM reset counters unqualified; no device-byte/syscall claim'}
     meta.write_text(json.dumps(record,sort_keys=True,indent=2)+'\n');return record
 
 

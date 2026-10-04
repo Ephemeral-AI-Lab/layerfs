@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "product_source": "8302782a9 unchanged",
+  "changed_scope": "benchmark C/Python and Rust verifier examples only",
+  "observer_calibration": "real SQLite SQL+BLOB delegation, failure/byte/pack-attribution assertions PASS",
+  "diagnostic_python_tests": 6,
+  "vehicle_python_tests": 3,
+  "example_tests": 57,
+  "example_targets": 5,
+  "clippy": "layerfs-project/all-targets/-Dwarnings PASS",
+  "format": "all/check PASS",
+  "boundary_files": 448,
+  "guard_selftests": 23,
+  "prior_full_product_tests": 497,
+  "phase_scope": "separate child phases; do not add them to outer state totals"
+}

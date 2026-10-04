@@ -26,6 +26,27 @@ class CauseDiagnostics(unittest.TestCase):
             select=next(row for row in value['classes'] if row['phase']==1)
             self.assertEqual(select['calls'],1);self.assertEqual(select['step_calls'],3);self.assertGreater(select['vm_steps'],0)
             self.assertEqual(sum(row['step_calls'] for row in value['classes'] if row['phase']==0),0)
+    def test_history_phase_rows_are_associated_without_parent_double_counting(self):
+        from diagnostics.run_history_proof_mechanism import read_phases
+        row = dict(stage='file-roots', available=True, sql_values=[0]*19, blob_values=[0]*11)
+        lines = ['VERIFY_STATE_BEGIN state=7', 'VERIFY_PHASE_WORK '+json.dumps(row),
+                 'HISTORY_ENGINE_WORK '+json.dumps(dict(state=7,stage='verification',values=[1]*19))]
+        phases = read_phases(lines)
+        self.assertEqual(len(phases),1)
+        self.assertEqual(phases[0]['state'],7)
+        with self.assertRaises(ValueError): read_phases(lines[1:])
+        with self.assertRaises(ValueError): read_phases([lines[0], 'VERIFY_PHASE_WORK '+json.dumps({**row,'blob_values':[]})])
+
+    def test_history_observer_blob_calls_bytes_failures_and_pack_attribution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory); lib = folder/'observer.dylib'; probe = folder/'probe'
+            source = runner.HERE/'diagnostics'
+            flags = ['clang','-O2','-std=c11','-Wall','-Wextra','-Werror']
+            subprocess.run(flags+['-dynamiclib',str(source/'sqlite_history_observer.c'),'-lsqlite3','-o',str(lib)],check=True,capture_output=True)
+            subprocess.run(flags+[str(source/'sqlite_history_probe.c'),'-lsqlite3','-o',str(probe)],check=True,capture_output=True)
+            result = subprocess.run([str(probe)],check=True,capture_output=True,text=True,env={**os.environ,'DYLD_INSERT_LIBRARIES':str(lib)})
+            self.assertIn('BLOB attempts/returned bytes/errors',result.stdout)
+
     def test_runner_dispatch_does_not_use_speed_arm(self):
         case='phase7-init-work-100-v1'
         with patch.object(diagnostic,'run') as call,patch.object(sys,'argv',['runner.py','run','--case',case,'--arm','baseline','--out','fresh']):

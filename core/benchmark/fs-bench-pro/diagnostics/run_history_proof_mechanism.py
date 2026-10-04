@@ -16,6 +16,29 @@ from families.phase7_sqlite import invoke
 from shared import cold_native, history_observer, phase7_history_proof as proof
 
 
+BLOB_FIELDS = ['matched_pack_open_calls','matched_pack_open_ns','matched_pack_open_failures',
+               'all_blob_read_calls','all_blob_requested_bytes','all_blob_returned_bytes',
+               'all_blob_read_ns','all_blob_read_failures','all_blob_close_calls',
+               'all_blob_close_ns','all_blob_close_failures']
+
+
+def read_phases(lines):
+    state = None
+    rows = []
+    for line in lines:
+        if line.startswith('VERIFY_STATE_BEGIN state='):
+            state = int(line.removeprefix('VERIFY_STATE_BEGIN state='))
+        if line.startswith('VERIFY_PHASE_WORK '):
+            if state is None:
+                raise ValueError('phase outside declared state')
+            row = json.loads(line.removeprefix('VERIFY_PHASE_WORK '))
+            if row['stage'] not in ('walk','file-roots','remaining-digest') or len(row['sql_values']) != 19 or len(row['blob_values']) != len(BLOB_FIELDS):
+                raise ValueError('phase counter schema mismatch')
+            row['state'] = state
+            rows.append(row)
+    return rows
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--out', required=True)
@@ -40,10 +63,11 @@ def main():
             handle = path.open('a+b')
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
             locks.append(handle)
-        declaration = {'kind': f'history{args.states}-native-proof-count-v2', 'identity': identity,
+        declaration = {'kind': f'history{args.states}-native-proof-count-v3', 'identity': identity,
                        'admission': 'NOT_APPLICABLE', 'native_budget_ns': 9_500_000_000,
                        'complete_per_arm_budget_ns': 60_000_000_000,
                        'arms': selected_arms, 'children_per_arm': 1,
+                       'blob_counter_fields': BLOB_FIELDS, 'phase_scope': 'disjoint child phases nested inside outer per-state verification; never add child counters to parent',
                        'workload_row': row, 'baseline_run': args.baseline_run, 'candidate_run': args.candidate_run,
                        'reuse': 'original closed retained stores/producer roots/census/reference metadata; no speed rerun',
                        'cache': 'whole source corpus and retained database content invalidated and mincore checked before each native child',
@@ -105,9 +129,9 @@ def main():
                       'build': compiled, 'vehicle': vehicle, 'observer': observer, 'cache': cold,
                       'owner_hashes_before': hashes, 'owners_preserved': preserved, 'native': result,
                       'complete_command_wall_ns': time.monotonic_ns()-start,
-                      'completed_states': len(states), 'progress': states,
+                      'completed_states': len(states), 'progress': states, 'phases': read_phases(lines),
                       'engine': [json.loads(line.removeprefix('HISTORY_ENGINE_WORK ')) for line in lines if line.startswith('HISTORY_ENGINE_WORK ')]}
-            if not preserved or record['complete_command_wall_ns'] > 60_000_000_000 or (result['exit_code'] and not result['timed_out']):
+            if any(not phase['available'] for phase in record['phases']) or not preserved or record['complete_command_wall_ns'] > 60_000_000_000 or (result['exit_code'] and not result['timed_out']):
                 record['status'] = 'FAIL'
             runner.write_json(folder/'receipt.json', record)
             runner.manifest_run(folder)
