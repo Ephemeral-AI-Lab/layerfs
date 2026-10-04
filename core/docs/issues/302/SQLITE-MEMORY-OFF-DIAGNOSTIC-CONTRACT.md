@@ -89,3 +89,50 @@ reference public-facade exact14-source generation, example Clippy, Core fmt and
 diff checks PASS. Product unchanged; existing22covering production checks are
 reused. Expected production LOC delta0; exact parent/staged/committed comparison
 must be confirmed before the paired diagnostic. No push/PR/merge.
+
+
+## Revision1 failures and prospective revision2 correction
+
+At9150e7612 the reference child was refused with UnknownOutcome before completing
+Init: the observer incorrectly enforced4KiB pages for the old reference's1KiB C5
+geometry. It had first observed a temporary-scope CREATE before the C2 main
+schema selected2KiB pages. No root or independent proof; reference statusFAIL.
+[Reference receipt](checks/memoryoff1000-baseline-diagnostic1/receipt.json) retains
+both real geometries and observer error1. No speed comparison is qualified.
+
+The candidate child completed with memory/0 before mutation and atclose,
+errors0, root/inventory matching2003IDs/20,187,652B. Init138,081,959ns,
+bootstrap15,724,584ns, checkpoint11,458ns, close14,619,500ns,
+operation169,696,417ns. VFS main21,262,336submitted write bytes/40,460,593ns,
+WAL0, journal524B; three sync operations occur in the initial profile transition.
+Independent proof failed with Uncertain: public readonly SQLite diagnosed
+SQLITE_CANTOPEN14 for the converted WAL-header copy lacking WAL read sidecars.
+[Candidate receipt](checks/memoryoff1000-candidate-diagnostic1/receipt.json) remains
+unqualified; no promotion, admission or matched-speed claim from these timings.
+
+Revision2 changes observer qualification, not either product. Skip initial
+CREATE TEMP/TEMPORARY and the reference's explicit temporary layerfs_read_scope
+INSERT/UPDATE operations; observe the first main mutation.
+Read the reference's actual page geometry rather than forcing the candidate's
+4KiB profile. Candidate4KiB remains required; native cache sizes and flags are
+recorded unchanged. The reference's native cache is2000pages (C2 geometry2KiB,
+C5 geometry1KiB) while candidate remains-2048KiB; this implementation/configuration
+difference is disclosed rather than described as identical database geometry.
+The shared source/channel/wave/pack/transaction limits are unchanged.
+
+Proof-copy adapter now uses public SQLITE_FCNTL_PERSIST_WAL and a readonly
+user_version query to initialize and retain the copy's empty WAL/SHM read
+sidecars before close. No application table/row mutation. Fresh copy capability
+passes the unchanged native sampled verifier and confirms the measured original
+hash unchanged. Native capability probes pass with2KiB/1KiB reference and4KiB
+candidate, final memory/0, errors0, closed/live0. The header-only predecessor's
+failure remains; it is not rewritten as passing. Final C-Werror builds/Python
+syntax checks pass; product checks are reused because production is unchanged.
+
+Next pair: one newly declared child/arm at the corrected frozen observer identity,
+fresh issue302-memoryoff1000-{baseline,candidate}-diagnostic2 outputs. All original
+budgets/cache/fixture/workers/independent proof requirements remain, including
+one9.5s copy/hash/sidecar/adapt/verification envelope. The changed observer identity
+must be matched in both arms; revision1 candidate cannot supply a qualified
+revision2 pair. Record all failures alongside this correction. No ordinary
+production speed arm is rerun and no production gate/profile changes.

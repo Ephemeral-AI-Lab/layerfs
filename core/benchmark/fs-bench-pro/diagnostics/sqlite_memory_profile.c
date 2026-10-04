@@ -36,7 +36,7 @@ static int settings(sqlite3 *db,struct Settings *s){
 }
 static int target(sqlite3 *db){const char *file=sqlite3_db_filename(db,"main"),*prefix=getenv("LAYERFS_CAUSE_MEMORY_DB");return file&&prefix&&!strncmp(file,prefix,strlen(prefix))&&(file[strlen(prefix)]==0||!strcmp(file+strlen(prefix),".history.sqlite"));}
 static const char *skip(const char *sql){for(;;){while(isspace((unsigned char)*sql))sql++;if(sql[0]=='-'&&sql[1]=='-'){while(*sql&&*sql!='\n')sql++;}else if(sql[0]=='/'&&sql[1]=='*'){const char *end=strstr(sql+2,"*/");if(!end)return sql;sql=end+2;}else return sql;}}
-static int mutation(const char *sql){if(!sql)return 0;sql=skip(sql);const char *words[]={"BEGIN IMMEDIATE","CREATE","INSERT","UPDATE","DELETE","REPLACE","ALTER","DROP"};for(int i=0;i<8;i++){size_t n=strlen(words[i]);if(!sqlite3_strnicmp(sql,words[i],(int)n)&&(!sql[n]||isspace((unsigned char)sql[n])||sql[n]==';'))return 1;}return 0;}
+static int mutation(const char *sql){if(!sql)return 0;sql=skip(sql);if(!sqlite3_strnicmp(sql,"CREATE TEMP ",12)||!sqlite3_strnicmp(sql,"CREATE TEMPORARY ",17))return 0;if(!sqlite3_strnicmp(sql,"INSERT INTO layerfs_read_scope ",31)||!sqlite3_strnicmp(sql,"UPDATE temp.layerfs_read_scope ",31))return 0;const char *words[]={"BEGIN IMMEDIATE","CREATE","INSERT","UPDATE","DELETE","REPLACE","ALTER","DROP"};for(int i=0;i<8;i++){size_t n=strlen(words[i]);if(!sqlite3_strnicmp(sql,words[i],(int)n)&&(!sql[n]||isspace((unsigned char)sql[n])||sql[n]==';'))return 1;}return 0;}
 static int before(sqlite3 *db,const char *sql,int bytes){
  char prefix[512];if(!sql)return SQLITE_OK;
  size_t bound=bytes<0?sizeof(prefix)-1:(size_t)bytes;
@@ -54,7 +54,7 @@ static int before(sqlite3 *db,const char *sql,int bytes){
    else {char mode[16];rc=scalar(db,"PRAGMA journal_mode=MEMORY",mode,sizeof(mode),0);if(rc==SQLITE_OK){profile_exec_calls++;rc=sqlite3_exec(db,"PRAGMA synchronous=OFF",0,0,0);}r->changed=1;}
   }
   if(rc==SQLITE_OK)rc=settings(db,&r->effective);r->override_ns=now()-start;
-  if(rc==SQLITE_OK&&(strcmp(r->effective.journal,"memory")||r->effective.sync!=0||r->effective.fk!=1||r->effective.page!=4096||r->effective.cache!=r->before.cache||r->effective.mmap!=r->before.mmap||r->effective.full!=r->before.full||r->effective.checkpoint!=r->before.checkpoint))rc=SQLITE_ERROR;
+  if(rc==SQLITE_OK&&(strcmp(r->effective.journal,"memory")||r->effective.sync!=0||r->effective.fk!=1||(!strcmp(arm,"candidate")&&r->effective.page!=4096)||r->effective.cache!=r->before.cache||r->effective.mmap!=r->before.mmap||r->effective.full!=r->before.full||r->effective.checkpoint!=r->before.checkpoint))rc=SQLITE_ERROR;
  }
  if(rc!=SQLITE_OK)errors++;
  pthread_mutex_unlock(&mutex);nested=0;return rc;

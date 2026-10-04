@@ -1,0 +1,32 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/binary-archive/285e550983cdcba463aa37282a77676f90950665584f3f1c66075042a0d8aba3/verify_namespace",
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-agent/memory-proof-retained.sqlite",
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-agent/memory-proof-retained.sqlite",
+    "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+    "41414141414141414141414141414141",
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9/manifest.tsv",
+    "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c"
+  ],
+  "wall_ns": 66446875,
+  "budget_ns": 9500000000,
+  "exit_code": 0,
+  "timed_out": false,
+  "child": {
+    "status": "PASS",
+    "paths": 1011,
+    "discovered_files": 1000,
+    "directories": 11,
+    "manifest_bytes": 20000000,
+    "sampled_files": 70,
+    "sampled_bytes": 6430827,
+    "sample_policy": "stride64-size-log2-endpoints-v1",
+    "workers": 4,
+    "metadata_attribute_waves": 5,
+    "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+    "manifest_sha256": "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c"
+  },
+  "cpu_ns": 68798000,
+  "peak_rss_bytes": 28344320,
+  "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution"
+}

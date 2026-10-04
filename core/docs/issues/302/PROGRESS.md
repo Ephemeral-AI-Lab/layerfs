@@ -1650,3 +1650,15 @@ measured original unchanged, within9.5s. Capability/read42/refusal/copy checks,
 C-Werror/Python/reference seams/exampleClippy/fmtPASS; product unchanged.
 [Prospective contract](SQLITE-MEMORY-OFF-DIAGNOSTIC-CONTRACT.md). One new labeled
 paired diagnostic perarm next, no production speed rerun or admission claim.
+
+### MEMORY/OFF revision1 observer/proof failures; corrected identity next
+
+ReferenceFAIL beforeInit: observer wrongly required4KiB for existing1KiB C5;
+first temporary-scope observation preceded2KiB C2 geometry. Candidate actual
+MEMORY/0 child completed root/inventory but proofcopy lacked WAL read sidecars,
+readonly native SQLITE_CANTOPEN14; pairINCOMPLETE, allreceipts retained.
+Revision2 observes main mutations, records realreferencegeometry, preserves
+candidate4KiB and budgets; proofcopy retains empty WAL/SHM via publicfilecontrol.
+2KiB/1KiB/4KiB capability and unchanged sampled native verifier PASS on fresh
+proofcopy, original measured hash unchanged. One new corrected observer pair
+next; no production speed replay/profile weakening. See [contract](SQLITE-MEMORY-OFF-DIAGNOSTIC-CONTRACT.md).
