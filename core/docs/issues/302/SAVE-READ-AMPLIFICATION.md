@@ -366,3 +366,14 @@ launch usesfreshproof15-2output. No performance or proof sample is discarded.
   [SAVE-READ-AMPLIFICATION-FINAL-REPORT.md](SAVE-READ-AMPLIFICATION-FINAL-REPORT.md)
   and append-only final2 index. Durable/Init/all-seven/full-audit omissions and
   PostgreSQL/MinIO M4pause remain explicit.
+
+- 2026-10-04 owner-authorized group-row metadata treatment at `8ddb4c8e2`:
+  bounded descriptor/control query fusion and typed validated mapping rows.
+  Exactly 330219 fewer queries; 13364974 per-row generic cell vectors removed.
+  New matched Disposable157 product181.705802667/182.770115625s; candidate
+  +0.585734%, still slower but within unchanged10% bound. Separate proofs
+  16.516482417/18.850230625s PASS. Storage84926464B unchanged, approved limitPASS.
+  Core510tests/97targets,Clippy/fmt,boundary453files,23tool and6observer testsPASS.
+  See [SQLITE-GROUP-ROW-METADATA-TREATMENT.md](SQLITE-GROUP-ROW-METADATA-TREATMENT.md).
+  17/53/Durable/Init/all-seven/full-audit NOT_RUN at this artifact; prior evidence
+  and PostgreSQL/MinIO M4pause unchanged. No claim of complete slowdown removal.
