@@ -65,8 +65,14 @@ static int observed_open(const char *name,sqlite3 **out,int flags,const char *vf
  return result;
 }
 #endif
+#ifndef LAYERFS_SQL_CALL_SCOPE
+#define LAYERFS_SQL_CALL_SCOPE 1
+static _Thread_local int cause_sql_scope;
+#endif
 static int observed_step(sqlite3_stmt *s) {
- uint64_t start=now_ns();int result=sqlite3_step(s);uint64_t duration=now_ns()-start;
+ const char *sql=sqlite3_sql(s);int previous=cause_sql_scope;
+ cause_sql_scope=sql&&!strcmp(sql,"COMMIT")?1:sql&&strstr(sql,"wal_checkpoint")?2:0;
+ uint64_t start=now_ns();int result=sqlite3_step(s);uint64_t duration=now_ns()-start;cause_sql_scope=previous;
  pthread_mutex_lock(&guard);struct row *r=get(s);if(r){r->step_calls++;r->step_ns+=duration;}pthread_mutex_unlock(&guard);return result;
 }
 #define INTERPOSE(replacement, original) __attribute__((used)) static const struct { const void *replace;const void *replacee; } replacement##_binding __attribute__((section("__DATA,__interpose,interposing"))) = { (const void*)(uintptr_t)&replacement,(const void*)(uintptr_t)&original };
