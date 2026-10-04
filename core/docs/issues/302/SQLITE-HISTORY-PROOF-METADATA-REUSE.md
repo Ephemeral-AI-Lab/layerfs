@@ -58,3 +58,31 @@ reads/listing use the original provider alongside file reads, reducing one-use
 entries without expanding any cache or dropping checks. New labelled53native
 reference count diagnostic will measure this admission-policy change, not retry
 the unchanged failed scope. Product performance still unrun at the new harness.
+
+
+Narrow-memo5250275fc diagnostic remainsTIMEOUT after48/53; original files preserved,
+coldPASS. Memo21610hits/3733misses (~85%hits),561sourcecalls, peak2097152B/437rows.
+State48 walk113.381667ms, length/sample acquisition261.798417ms with2900body
+acquisitions/306886032requestedVFS bytes. Same limits, more useful reuse, but
+file-root acquisition dominates the remaining gap. No ordinary proof promotion.
+
+Third directed mechanism change: shared verifier file roots are ordered by stored
+pack hints and split into cohorts of at most8pack hints (existing2MiB cache divided
+by256KiB pack limit), still<=512IDs and existing16MiB estimated canonical bytes.
+Every requested root and sampled byte remains; cohorting reduces cache churn in
+the unchanged reference provider without modifying its product. Candidate hints
+come from real locate rows; reference closed-census TSV adds MIN(stored pack_id)
+as an advisory fourth field, source facts only. The source still chooses eligible
+locators and authenticates canonical bytes. Hints never determine proof results.
+The canonical ID/role/length census hash stays unchanged; hints must be positive.
+Existing verified-length rows retain their pack hint (8bytes per existing row,
+no extra rows); existing pending worklists also retain one hint per requested root.
+Product buffers, memo2MiB/512/8KiB, workers and budgets unchanged.
+
+Diagnostic re-exports actual closed-reference metadata at its new schema before
+cold attestation, inside the complete diagnostic clock; native-only9.5s still
+excludes census/export and cannot admit an ordinary combined proof. Qualifying
+whole proof must later pay that work inside9.5s. No source-body prefill/cache
+warming survives cold attestation. New single native53reference child declared
+at the next frozen hint-cohort identity, not unchanged-scope retry. Example
+Clippy and8focused history tests PASS; no full-workspace claim.

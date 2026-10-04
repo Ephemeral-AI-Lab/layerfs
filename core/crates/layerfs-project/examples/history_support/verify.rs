@@ -28,7 +28,7 @@ struct Sampler<'a> {
     tally: VerifyTally,
     metadata_memo: &'a RefCell<Memo>,
     digests: BTreeMap<ObjectId, ([u8; 32], u64)>,
-    lengths: BTreeMap<ObjectId, u64>,
+    lengths: BTreeMap<ObjectId, (u64, i64)>,
 }
 impl Sampler<'_> {
     fn run_complete(&mut self, root: FilesystemRootId) -> Result<VerifyTally, OpError> {
@@ -189,6 +189,7 @@ impl Sampler<'_> {
                     (
                         row.location.role.code(),
                         row.location.canonical_length as u64,
+                        row.location.pack_id,
                     ),
                 );
             }
@@ -197,7 +198,7 @@ impl Sampler<'_> {
             if self.lengths.contains_key(id) {
                 continue;
             }
-            let (role, canonical) = metadata
+            let (role, canonical, pack) = metadata
                 .get(id)
                 .ok_or_else(|| OpError::Io(format!("file root {id} absent from C2 metadata")))?;
             let overhead = match (*kind, *role) {
@@ -214,7 +215,7 @@ impl Sampler<'_> {
                 let length = canonical
                     .checked_sub(overhead)
                     .ok_or_else(|| OpError::Io("stored file length underflow".into()))?;
-                self.lengths.insert(*id, length);
+                self.lengths.insert(*id, (length, *pack));
             }
         }
         let missing: BTreeMap<ObjectId, (InodeKind, u64)> = file_entries
@@ -225,21 +226,46 @@ impl Sampler<'_> {
             })
             .map(|(_, id, kind, size, _, _)| (*id, (*kind, *size)))
             .collect();
-        let pending: Vec<_> = missing.into_iter().collect();
+        // Attach actual pack hints before batching; this changes acquisition
+        // order only, never the requested IDs or sampled-byte comparisons.
+        let mut pending: Vec<_> = missing
+            .into_iter()
+            .map(|(id, value)| {
+                let pack = metadata
+                    .get(&id)
+                    .map(|(_, _, pack)| *pack)
+                    .or_else(|| self.lengths.get(&id).map(|(_, pack)| *pack))
+                    .expect("new or previously classified file root");
+                (id, value, pack)
+            })
+            .collect();
+        pending.sort_unstable_by_key(|(id, _, pack)| (*pack, *id));
         let mut offset = 0;
         while offset < pending.len() {
             let mut end = offset;
             let mut estimated = 0u64;
+            let mut previous_pack = None;
+            let mut packs = 0;
+            let pack_limit = layerfs_storage::policy::DEPENDENCY_PACK_CACHE_BYTES
+                / layerfs_storage::policy::PACK_LIMIT;
             while end < pending.len() && end - offset < 512 {
+                let pack = pending[end].2;
+                if previous_pack != Some(pack) && packs == pack_limit {
+                    break;
+                }
                 let next = pending[end].1 .1.saturating_add(128);
                 if end > offset && estimated.saturating_add(next) > 16 * 1024 * 1024 {
                     break;
+                }
+                if previous_pack != Some(pack) {
+                    packs += 1;
+                    previous_pack = Some(pack);
                 }
                 estimated = estimated.saturating_add(next);
                 end += 1;
             }
             let chunk = &pending[offset..end];
-            let ids: Vec<_> = chunk.iter().map(|(id, _)| *id).collect();
+            let ids: Vec<_> = chunk.iter().map(|(id, _, _)| *id).collect();
             let canonical = self
                 .reader
                 .read_canonical_batch(&ids)
@@ -247,7 +273,7 @@ impl Sampler<'_> {
             if canonical.len() != chunk.len() {
                 return Err(OpError::Io("file length batch cardinality".into()));
             }
-            for ((id, (kind, _)), bytes) in chunk.iter().zip(canonical) {
+            for ((id, (kind, _), pack), bytes) in chunk.iter().zip(canonical) {
                 let selected = selected_roots.contains(id) && !self.digests.contains_key(id);
                 let (length, digest) = if *kind == InodeKind::Symlink {
                     let target = layerfs_content::filesystem::SymlinkTarget::decode(&bytes)
@@ -271,12 +297,16 @@ impl Sampler<'_> {
                     };
                     (length, digest)
                 };
-                if self.lengths.get(id).is_some_and(|stored| *stored != length) {
+                if self
+                    .lengths
+                    .get(id)
+                    .is_some_and(|(stored, _)| *stored != length)
+                {
                     return Err(OpError::Io(format!(
                         "stored and public file length disagree: {id}"
                     )));
                 }
-                self.lengths.insert(*id, length);
+                self.lengths.insert(*id, (length, *pack));
                 if let Some(digest) = digest {
                     self.digests.insert(*id, (digest, length));
                     self.tally.files_read += 1;
@@ -290,7 +320,7 @@ impl Sampler<'_> {
         }
         let lengths_ns = diagnostic_start.elapsed().as_nanos() - walk_ns;
         for (path, id, kind, expected_size, expected_digest, sampled) in file_entries {
-            if self.lengths.get(&id) != Some(&expected_size) {
+            if self.lengths.get(&id).map(|(length, _)| *length) != Some(expected_size) {
                 return Err(OpError::Io(format!(
                     "retained file size disagrees with corpus: {}",
                     String::from_utf8_lossy(&path)
@@ -369,7 +399,7 @@ impl Sampler<'_> {
 pub struct Reuse {
     metadata_memo: RefCell<Memo>,
     digests: BTreeMap<ObjectId, ([u8; 32], u64)>,
-    lengths: BTreeMap<ObjectId, u64>,
+    lengths: BTreeMap<ObjectId, (u64, i64)>,
 }
 impl Reuse {
     pub fn metadata_counters(&self) -> super::canonical_memo::Counters {

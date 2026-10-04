@@ -103,15 +103,21 @@ def collect(db_path, arm, child, row, metadata_output=None):
             raise ValueError('closed C5 retained-state row count mismatch')
         if sorted(r[0].lower() for r in c5.execute(root_query)) != sorted(child['roots']):
             raise ValueError('closed C5 retained roots disagree with producer')
+        if metadata_output is not None:
+            query = 'SELECT object_id, MIN(object_role), MIN(canonical_length), MIN(pack_id) FROM objects GROUP BY object_id ORDER BY object_id'
         value = hashlib.sha256(); objects = total = 0
         output = Path(metadata_output).open('x') if metadata_output is not None else None
         try:
-            for oid, role, length in c2.execute(query):
+            for values in c2.execute(query):
+                oid, role, length = values[:3]
                 if not isinstance(oid, bytes) or len(oid) != 32 or not 1 <= role <= 13 or not 1 <= length <= 16777216:
                     raise ValueError('closed C2 canonical identity malformed')
                 line = f'{oid.hex()}\t{role}\t{length}\n'
                 value.update(oid); value.update(bytes([role])); value.update(length.to_bytes(8, "little")); objects += 1; total += length
-                if output is not None: output.write(line)
+                if output is not None:
+                    pack = values[3]
+                    if type(pack) is not int or pack <= 0: raise ValueError('invalid reference physical pack hint')
+                    output.write(line.removesuffix('\n') + f'\t{pack}\n')
         finally:
             if output is not None: output.close()
         if value.hexdigest() != child.get('canonical_inventory_sha256'):

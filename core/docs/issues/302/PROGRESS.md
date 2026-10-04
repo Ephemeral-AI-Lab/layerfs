@@ -1863,3 +1863,10 @@ prepared; no speed/proof admission or oldreceipt promotion. Freeze/check next.
 cold/owners preserved;20854hits/39837misses/39325evictions peak1.09MiB/512rows.
 Narrow same-bounded memo to root/inode navigation; direct directoryreads bypass
 alongside files, checks unchanged. No limitincrease/unchanged retry/proofpromotion.
+
+
+-2026-10-04: inode-only5250275fc53countdiag TIMEOUT48/53;85%memohits, same2MiB
+bound/437rows;48file acquisition261.8ms vswalk113.4ms,2900bodyacqs/306.9MBVFS.
+Thirddirected change sharedfile-root physical-hint ordering/8pack cohorts within
+old512IDs/16MiB limits; actual sourceTSVpackhint added, no proof-result influence.
+Frozen53native-only diagnostic next; all oldfailures preserved and goal ACTIVE.

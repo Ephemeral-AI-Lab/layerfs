@@ -87,6 +87,11 @@ def main():
                    'LAYERFS_CAUSE_VFS_LOG': str(folder/'vfs.json'),
                    'LAYERFS_CLOSE_OBSERVER_OUTPUT': str(folder/'close.json')}
             start = time.monotonic_ns()
+            if arm == 'baseline':
+                metadata_output = folder/'reference-metadata.tsv'
+                census = proof.collect(db, arm, receipt['performance']['child'], row, metadata_output)
+                runner.write_json(folder/'diagnostic-census.json', census)
+                command[-1] = str(metadata_output)
             cold = cold_native.attest_paths([corpus/'checkpoint-manifest.json', corpus/'inputs', corpus/'oracles', *owners], helper, folder, 60_000_000_000, invoke, ROOT)
             if cold['status'] != 'PASS':
                 raise ValueError('diagnostic cache ineligible')
