@@ -1,0 +1,12 @@
+{
+  "source_parent": "25820af5d",
+  "status": "PASS",
+  "workspace_tests": 495,
+  "targets": 93,
+  "before_regression": "FAILED:45 actual decodes vs44 distinct groups, retained unchanged",
+  "after_regression": "PASS:44decodes/1eviction, exact decoded bytes and same512KiB bound, ceiling refusal and counter composition",
+  "clippy": "workspace/all-targets/-Dwarnings PASS",
+  "format": "all/check PASS",
+  "boundary_files": 448,
+  "boundary_selftests": 23
+}

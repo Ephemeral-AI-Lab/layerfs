@@ -25,11 +25,18 @@ use crate::location::ValueGroupRow;
 use crate::pack::layout::{GroupCodec, PackLane};
 use crate::policy::{StorageCapacities, METADATA_DECODED_WORK_LIMIT, METADATA_RECORD_LIMIT};
 
+#[derive(Debug)]
+struct ValueEntry {
+    values: Vec<[u8; INODE_VALUE_BYTES]>,
+    touched: u64,
+}
+
 /// One wave's pooled reader: pack and decoded-value caches plus work counters.
 #[derive(Debug, Default)]
 pub struct PoolReader {
     packs: crate::encoding::PackCache,
-    groups: BTreeMap<u32, Vec<[u8; INODE_VALUE_BYTES]>>,
+    groups: BTreeMap<u32, ValueEntry>,
+    value_clock: u64,
     retained_bytes: usize,
     decoded_work: u64,
     chain_encoded: u64,
@@ -96,7 +103,7 @@ impl PoolReader {
         self.load_group(connection, capacities, ceiling, workspace, row)?;
         self.groups
             .get(&row.first_ordinal)
-            .cloned()
+            .map(|entry| entry.values.clone())
             .ok_or(StorageError::Integrity("metadata group cache"))
     }
 
@@ -122,7 +129,7 @@ impl PoolReader {
         self.load_group(connection, capacities, ceiling, workspace, row)?;
         self.groups
             .get(&row.first_ordinal)
-            .and_then(|values| values.get((ordinal - row.first_ordinal) as usize))
+            .and_then(|entry| entry.values.get((ordinal - row.first_ordinal) as usize))
             .copied()
             .ok_or(StorageError::Integrity("metadata ordinal range"))
     }
@@ -146,7 +153,11 @@ impl PoolReader {
                 ceiling,
             });
         }
-        if self.groups.contains_key(&row.first_ordinal) {
+        self.value_clock = self.value_clock.saturating_add(1);
+        if let Some(entry) = self.groups.get_mut(&row.first_ordinal) {
+            entry.touched = self.value_clock;
+            self.counters.value_group_cache_hits =
+                self.counters.value_group_cache_hits.saturating_add(1);
             return Ok(());
         }
         let body = self.group_body(connection, workspace, row)?;
@@ -164,11 +175,36 @@ impl PoolReader {
             values.push(layerfs_content::inode_leaf::decode_pooled_value(&value)?);
         }
         let charged = values.len() * INODE_VALUE_BYTES;
-        if self.retained_bytes + charged > crate::policy::POOLED_VALUE_CACHE_BYTES {
-            self.groups.clear();
-            self.retained_bytes = 0;
+        if charged > crate::policy::POOLED_VALUE_CACHE_BYTES {
+            return Err(StorageError::Integrity("metadata value cache bound"));
         }
-        self.groups.insert(row.first_ordinal, values);
+        while self.retained_bytes + charged > crate::policy::POOLED_VALUE_CACHE_BYTES {
+            let victim = self
+                .groups
+                .iter()
+                .min_by_key(|(ordinal, entry)| (entry.touched, **ordinal))
+                .map(|(ordinal, _)| *ordinal)
+                .ok_or(StorageError::Integrity("metadata value cache victim"))?;
+            let entry = self
+                .groups
+                .remove(&victim)
+                .ok_or(StorageError::Integrity("metadata value cache victim"))?;
+            let bytes = entry.values.len() * INODE_VALUE_BYTES;
+            self.retained_bytes -= bytes;
+            self.counters.value_group_cache_evictions =
+                self.counters.value_group_cache_evictions.saturating_add(1);
+            self.counters.value_group_evicted_bytes = self
+                .counters
+                .value_group_evicted_bytes
+                .saturating_add(bytes as u64);
+        }
+        self.groups.insert(
+            row.first_ordinal,
+            ValueEntry {
+                values,
+                touched: self.value_clock,
+            },
+        );
         self.retained_bytes += charged;
         Ok(())
     }

@@ -1956,3 +1956,12 @@ proof3.787051708/2.852601958s.3timePASS66.147117583s vs67.220889666s; proof
 limit enlargement or oldproof promotion; original170s/190s receipts retained.
 FinalREAD-OPTIMIZATION-QUALIFICATION.md/compactchecks retain exact identities
 and commands. GoalACTIVE with53proof/157reference gating; no all-seven claim.
+
+
+-2026-10-04: revalidate25820af5d; previousgoalturnprogress,53proof/157reference
+still gated. Architecture review identifies512KiB decoded-value clear-all
+overflow. External bound/hot-group fixture45decodes vs44distinctFAIL confirms
+lost reuse. Same-cache selective recency eviction fixes44decodes/1eviction;
+exactbytes/ceiling/countercompositionPASS,fullworkspace/Clippy/fmt/boundaryPASS.
+No newcache/history/bounds/authenticationstrategy. Freeze then one directed53
+native countdiag on original stores; prior qualification unchanged,goalACTIVE.

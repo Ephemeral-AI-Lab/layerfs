@@ -1,0 +1,24 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.13s
+     Running tests/pooled_value_retention.rs (core/target/debug/deps/pooled_value_retention-114d0e82d2265726)
+
+running 1 test
+test a_hot_value_group_survives_capacity_eviction_without_extra_decoding ... FAILED
+
+failures:
+
+---- a_hot_value_group_survives_capacity_eviction_without_extra_decoding stdout ----
+
+thread 'a_hot_value_group_survives_capacity_eviction_without_extra_decoding' panicked at crates/layerfs-storage/tests/pooled_value_retention.rs:116:5:
+assertion `left == right` failed
+  left: 45
+ right: 44
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_hot_value_group_survives_capacity_eviction_without_extra_decoding
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-storage --test pooled_value_retention`

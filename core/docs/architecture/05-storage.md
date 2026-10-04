@@ -1155,3 +1155,16 @@ explicit. Whole admission compares retained group bytes, removes those units,
 and evicts unrelated entries under the same2MiB/4096entry allowance. No extra
 history map, cache, workers or relaxed integrity/visibility ceiling. Diagnostics
 separate reuse-driven whole selections from small/singleton/density choices.
+
+
+### Pooled decoded-value selective retention (against25820af5d)
+
+The pooled reader's existing512KiB value cache retains each authenticated decoded
+value group with owner-local recency. A hit touches that entry after the caller's
+visibility ceiling is checked. A miss keeps all catalogue digest, grammar and
+decoded-work checks, then evicts only least-recent entries needed for admission.
+This replaces clear-all overflow; it adds no cache/history map or new byte bound.
+Ordinal identity remains immutable, and begin_chain/release_packs ownership and
+private pack invalidation are unchanged. PoolReadCounters records real decoded
+value hits, capacity evictions and evicted decoded bytes. These counts do not
+claim a memory peak or physical I/O bytes.

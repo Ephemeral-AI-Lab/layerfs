@@ -318,3 +318,30 @@ interference/cache/cleanup observations. No current-source Init/Durable/all-seve
 admission claimed. GoalACTIVE: stride3proof and stride1reference gates remain
 unfulfilled. Future work must change the measured mechanism; no unchanged retry
 or implicit further budget enlargement is authorized by this report.
+
+
+## Pooled value retention investigation after25820af5d
+
+Previous goal turn made authoritative progress (product refinement and new
+qualification). Current tree/receipts revalidated: stride3ordinaryproofTIMEOUT,
+stride1reference190sTIMEOUT/no pins remain. No live measured child remains, and
+no unchanged performance arm is retried.
+
+Architecture review: selected results still pay whole digest I/O; prior reuse
+promotion reduced same-state pooled acquisition work without a proofPASS. The
+next specific problem is the existing512KiB decoded-value owner: unlike the
+body cache, it clears all groups on overflow. A deterministic external
+PoolReader source fixture fills that exact bound while touching one hot group
+between unrelated groups. Before change45decodes for44distinct groupsFAIL;
+source path confirms overflow removed the hot group. Rawbefore.log retained.
+
+One directed change: same value cache/map owns recency per entry; selective
+least-recent eviction replaces clear-all. No new history/cache, byte/entry
+policy, workers, physical format, schema or authentication shortcut. Ceiling
+check precedes every hit; fresh decode charges/authenticates all prior work;
+private pack invalidation unchanged. Real count fields expose value-cache hits,
+evictions and evicted decoded bytes with since/accumulate semantics.
+After fixture44decodes/1eviction/exactbytes/bound and ceiling refusalPASS.
+Full workspace/alltarget tests,Clippy-Dwarnings,fmt-all/check,boundary448/23
+PASS; exact counts/logschecks/pooled-value-retention-functional1. Native count
+diagnostic at frozen source next; no proof/performance pass inferred.

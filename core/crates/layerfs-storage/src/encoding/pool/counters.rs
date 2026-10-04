@@ -17,6 +17,12 @@ pub struct PoolReadCounters {
     pub physical_group_cache_hits: u64,
     /// Value groups freshly materialized, whether raw or compressed.
     pub value_group_decodes: u64,
+    /// Authenticated decoded value-group cache hits.
+    pub value_group_cache_hits: u64,
+    /// Decoded value-group entries evicted for the existing byte allowance.
+    pub value_group_cache_evictions: u64,
+    /// Decoded value bytes evicted for capacity, not physical acquisition bytes.
+    pub value_group_evicted_bytes: u64,
     /// Real pooled source acquisitions, including private immutable views.
     pub pack_fetches: u64,
     /// Complete source body/scan bytes charged to acquisitions, not device I/O.
@@ -34,6 +40,9 @@ impl PoolReadCounters {
             physical_group_decoded_bytes: 0,
             physical_group_cache_hits: 0,
             value_group_decodes: 0,
+            value_group_cache_hits: 0,
+            value_group_cache_evictions: 0,
+            value_group_evicted_bytes: 0,
             pack_fetches: 0,
             pack_bytes: 0,
         }
@@ -64,6 +73,15 @@ impl PoolReadCounters {
             value_group_decodes: self
                 .value_group_decodes
                 .saturating_sub(before.value_group_decodes),
+            value_group_cache_hits: self
+                .value_group_cache_hits
+                .saturating_sub(before.value_group_cache_hits),
+            value_group_cache_evictions: self
+                .value_group_cache_evictions
+                .saturating_sub(before.value_group_cache_evictions),
+            value_group_evicted_bytes: self
+                .value_group_evicted_bytes
+                .saturating_sub(before.value_group_evicted_bytes),
             pack_fetches: self.pack_fetches.saturating_sub(before.pack_fetches),
             pack_bytes: self.pack_bytes.saturating_sub(before.pack_bytes),
         }
@@ -88,6 +106,15 @@ impl PoolReadCounters {
         self.value_group_decodes = self
             .value_group_decodes
             .saturating_add(other.value_group_decodes);
+        self.value_group_cache_hits = self
+            .value_group_cache_hits
+            .saturating_add(other.value_group_cache_hits);
+        self.value_group_cache_evictions = self
+            .value_group_cache_evictions
+            .saturating_add(other.value_group_cache_evictions);
+        self.value_group_evicted_bytes = self
+            .value_group_evicted_bytes
+            .saturating_add(other.value_group_evicted_bytes);
         self.pack_fetches = self.pack_fetches.saturating_add(other.pack_fetches);
         self.pack_bytes = self.pack_bytes.saturating_add(other.pack_bytes);
     }
