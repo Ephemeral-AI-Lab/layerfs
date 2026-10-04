@@ -1,0 +1,137 @@
+{
+  "status": "PASS",
+  "purpose": "synthetic close/VFS capability only; not a speed sample",
+  "observer_binary_sha256": "efc7417d27eb1e73b7c3e787b0546c90bc0a4b38fc94c8ed5d013393dc963f03",
+  "source_sha256": {
+    "core/benchmark/fs-bench-pro/diagnostics/sqlite_close_observer.c": "48f2fc3e3995bc6ae38c66cd6daefe6b941c7613037e41883e580aa8b70868e5",
+    "core/benchmark/fs-bench-pro/diagnostics/sqlite_vfs_observer.c": "40559848d8988307e7f034beabde54f3f49d8f6c7210c93627932303e1a9f944"
+  },
+  "close": {
+    "kind": "close-mechanism-diagnostic-v1",
+    "mutating_connection_closes": 1,
+    "sqlite_close_calls": 1,
+    "sqlite_close_ns": 133750,
+    "sqlite_close_v2_calls": 0,
+    "sqlite_close_v2_ns": 0,
+    "fd_closes": [
+      {
+        "class": "main",
+        "calls": 1,
+        "wall_ns": 107750
+      },
+      {
+        "class": "history",
+        "calls": 0,
+        "wall_ns": 0
+      },
+      {
+        "class": "allocation-scratch",
+        "calls": 0,
+        "wall_ns": 0
+      }
+    ]
+  },
+  "vfs": {
+    "kind": "delegated-vfs-observer",
+    "version": "3.51.0",
+    "underlying_vfs": "unix",
+    "vfs_version": 3,
+    "underlying_os_file_bytes": 192,
+    "observer_file_header_bytes": 176,
+    "live_files": 0,
+    "close_errors": 0,
+    "unknown_sync_flags": 0,
+    "files": [
+      {
+        "class": "main",
+        "opens": 1,
+        "reads": 3,
+        "read_requested_bytes": 132,
+        "read_ns": 5751,
+        "writes": 260,
+        "write_submitted_bytes": 1064960,
+        "write_ns": 1776709,
+        "syncs": 0,
+        "sync_ns": 0,
+        "closes": 1,
+        "close_ns": 19708
+      },
+      {
+        "class": "wal",
+        "opens": 0,
+        "reads": 0,
+        "read_requested_bytes": 0,
+        "read_ns": 0,
+        "writes": 0,
+        "write_submitted_bytes": 0,
+        "write_ns": 0,
+        "syncs": 0,
+        "sync_ns": 0,
+        "closes": 0,
+        "close_ns": 0
+      },
+      {
+        "class": "journal",
+        "opens": 0,
+        "reads": 0,
+        "read_requested_bytes": 0,
+        "read_ns": 0,
+        "writes": 0,
+        "write_submitted_bytes": 0,
+        "write_ns": 0,
+        "syncs": 0,
+        "sync_ns": 0,
+        "closes": 0,
+        "close_ns": 0
+      },
+      {
+        "class": "other",
+        "opens": 0,
+        "reads": 0,
+        "read_requested_bytes": 0,
+        "read_ns": 0,
+        "writes": 0,
+        "write_submitted_bytes": 0,
+        "write_ns": 0,
+        "syncs": 0,
+        "sync_ns": 0,
+        "closes": 0,
+        "close_ns": 0
+      }
+    ],
+    "sync_flags": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  }
+}

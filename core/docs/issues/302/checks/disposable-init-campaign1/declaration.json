@@ -1,0 +1,30 @@
+{
+  "allocation": "candidate-final-total<=matched-baseline-final-total",
+  "cache": "sealed native source invalidation plus whole-input mincore zero; fresh databases",
+  "cases": [
+    "phase7-sqlite-disposable-init-100-v1",
+    "phase7-sqlite-disposable-init-1000-v1",
+    "phase7-sqlite-disposable-init-10000-v1",
+    "phase7-sqlite-disposable-init-100000-v1"
+  ],
+  "command_budget_ns": 15000000000,
+  "history_status": "NOT_RUN; independent Init milestone takes priority",
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "dcbc1c14b4ac0712c21a1d8f9b6a67c57f5e3878c9b94d22f4d76d45f93a7c01",
+    "product_seal": "56c9707a446fa85479f474c5a170a2ab30e8e350b147152d3c6d6dc75992f2a5",
+    "source_commit": "7b3433afc06c8b867460d414fbda02aac82569e1",
+    "source_dirty": false,
+    "source_tree": "67007d75e67d047f07b0fe7905e4a16e8f420401"
+  },
+  "margin": "10*candidate<=11*baseline",
+  "order": "100/1000/10000/100000; baseline then candidate",
+  "profile": "supported direct-open MEMORY/OFF; baseline unmodified Phase4.5 MEMORY/OFF",
+  "samples_per_case_arm": 1,
+  "schema": "phase7-supported-disposable-init-campaign-v1",
+  "verification_budget_ns": 9500000000,
+  "workers": "Init4; environment1"
+}

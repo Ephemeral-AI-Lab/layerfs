@@ -1,0 +1,214 @@
+[
+  {
+    "files": 100,
+    "baseline": {
+      "stages": {
+        "bootstrap_ns": 6732833,
+        "close_ns": 1366000,
+        "init_ns": 37700708,
+        "operation_ns": 45800458,
+        "root": "ca1c20f806277e3fb0447ef526a5ca8d298753d01667f501e8b58b6350cd86f1",
+        "root_serial": 1,
+        "stack": "41414141414141414141414141414141",
+        "status": "COMPLETE"
+      },
+      "command_ns": 74037042,
+      "cold_ns": 15504583,
+      "proof_ns": 34399583
+    },
+    "candidate": {
+      "stages": {
+        "bootstrap_ns": 7473541,
+        "checkpoint_ns": 1875,
+        "close_ns": 1758625,
+        "entries": 102,
+        "init_ns": 39404542,
+        "operation_ns": 48748750,
+        "root": "ca1c20f806277e3fb0447ef526a5ca8d298753d01667f501e8b58b6350cd86f1",
+        "root_serial": 1,
+        "stack": "41414141414141414141414141414141",
+        "status": "COMPLETE"
+      },
+      "command_ns": 1379786875,
+      "cold_ns": 16530334,
+      "proof_ns": 516144750,
+      "sql_work": {
+        "statements": 157,
+        "vm_steps": 36866,
+        "commit_ns": 9423669,
+        "transactions": 20,
+        "write_transactions": 10,
+        "write_commits": 10,
+        "commits": 20,
+        "rollbacks": 0,
+        "transaction_ns": 16670832,
+        "sealed_inserts": 31,
+        "sealed_body_bytes": 5028394
+      }
+    },
+    "root_match": true,
+    "sample_count_per_arm": [
+      1,
+      1
+    ]
+  },
+  {
+    "files": 1000,
+    "baseline": {
+      "stages": {
+        "bootstrap_ns": 5664542,
+        "close_ns": 163083,
+        "init_ns": 130612750,
+        "operation_ns": 136441292,
+        "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+        "root_serial": 1,
+        "stack": "41414141414141414141414141414141",
+        "status": "COMPLETE"
+      },
+      "command_ns": 206117583,
+      "cold_ns": 62003834,
+      "proof_ns": 53989583
+    },
+    "candidate": {
+      "stages": {
+        "bootstrap_ns": 3478167,
+        "checkpoint_ns": 1208,
+        "close_ns": 7965459,
+        "entries": 1011,
+        "init_ns": 126884708,
+        "operation_ns": 138367042,
+        "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+        "root_serial": 1,
+        "stack": "41414141414141414141414141414141",
+        "status": "COMPLETE"
+      },
+      "command_ns": 245247334,
+      "cold_ns": 95820917,
+      "proof_ns": 42357625,
+      "sql_work": {
+        "statements": 299,
+        "vm_steps": 203505,
+        "commit_ns": 35725500,
+        "transactions": 31,
+        "write_transactions": 16,
+        "write_commits": 16,
+        "commits": 31,
+        "rollbacks": 0,
+        "transaction_ns": 53905292,
+        "sealed_inserts": 96,
+        "sealed_body_bytes": 20126157
+      }
+    },
+    "root_match": true,
+    "sample_count_per_arm": [
+      1,
+      1
+    ]
+  },
+  {
+    "files": 10000,
+    "baseline": {
+      "stages": {
+        "bootstrap_ns": 6083250,
+        "close_ns": 2703458,
+        "init_ns": 1664169250,
+        "operation_ns": 1672956458,
+        "root": "0907bdcd8aa52fbc350058f8edffa5a634757952cda77f27c70e1ca28c79ab1b",
+        "root_serial": 1,
+        "stack": "41414141414141414141414141414141",
+        "status": "COMPLETE"
+      },
+      "command_ns": 2242000792,
+      "cold_ns": 559477917,
+      "proof_ns": 607701167
+    },
+    "candidate": {
+      "stages": {
+        "bootstrap_ns": 3831333,
+        "checkpoint_ns": 224792,
+        "close_ns": 227109458,
+        "entries": 10101,
+        "init_ns": 1611702166,
+        "operation_ns": 1842982916,
+        "root": "0907bdcd8aa52fbc350058f8edffa5a634757952cda77f27c70e1ca28c79ab1b",
+        "root_serial": 1,
+        "stack": "41414141414141414141414141414141",
+        "status": "COMPLETE"
+      },
+      "command_ns": 2826447959,
+      "cold_ns": 971465083,
+      "proof_ns": 516922417,
+      "sql_work": {
+        "statements": 3981,
+        "vm_steps": 2516074,
+        "commit_ns": 414743909,
+        "transactions": 711,
+        "write_transactions": 133,
+        "write_commits": 133,
+        "commits": 711,
+        "rollbacks": 0,
+        "transaction_ns": 703554208,
+        "sealed_inserts": 1390,
+        "sealed_body_bytes": 301569299
+      }
+    },
+    "root_match": true,
+    "sample_count_per_arm": [
+      1,
+      1
+    ]
+  },
+  {
+    "files": 100000,
+    "baseline": {
+      "stages": {
+        "bootstrap_ns": 7174625,
+        "close_ns": 537375,
+        "init_ns": 6039122375,
+        "operation_ns": 6046835208,
+        "root": "6401f9bdd86784b9992ab4c3ce7f5e8984c2c6271d13e4e5af6cb8913f62d0ef",
+        "root_serial": 1,
+        "stack": "41414141414141414141414141414141",
+        "status": "COMPLETE"
+      },
+      "command_ns": 13053566042,
+      "cold_ns": 6995155667,
+      "proof_ns": 1867131667
+    },
+    "candidate": {
+      "stages": {
+        "bootstrap_ns": 4404875,
+        "checkpoint_ns": 223084,
+        "close_ns": 307590500,
+        "entries": 101001,
+        "init_ns": 5769680292,
+        "operation_ns": 6081998333,
+        "root": "6401f9bdd86784b9992ab4c3ce7f5e8984c2c6271d13e4e5af6cb8913f62d0ef",
+        "root_serial": 1,
+        "stack": "41414141414141414141414141414141",
+        "status": "COMPLETE"
+      },
+      "command_ns": 14213491333,
+      "cold_ns": 8115410916,
+      "proof_ns": 2556539792,
+      "sql_work": {
+        "statements": 9239,
+        "vm_steps": 14751737,
+        "commit_ns": 837621618,
+        "transactions": 852,
+        "write_transactions": 436,
+        "write_commits": 436,
+        "commits": 852,
+        "rollbacks": 0,
+        "transaction_ns": 1977489502,
+        "sealed_inserts": 2230,
+        "sealed_body_bytes": 506408509
+      }
+    },
+    "root_match": true,
+    "sample_count_per_arm": [
+      1,
+      1
+    ]
+  }
+]

@@ -1722,3 +1722,11 @@ See SQLITE-HISTORY-COLD-BINDING.md; actual runner/proof/observer freeze pending.
 observer pre-sample gate remains explicit. Owner prioritizes all four supported
 Disposable Init sizes independently of history integration; freeze and run
 matched one-arm-per-case campaign next. No speed result claimed at this point.
+
+-2026-10-04: independently runnable supported Disposable Init four-tier campaign
+at7b3433afc completed:100PASS1.064372544x/1000PASS1.014114129x/
+10000FAIL1.101632327x/100000PASS1.005815129x. All roots/proofs/cold/storage/
+cleanup/budgets pass;10k exact time gate miss2.7308122ms. Existing breakdown shows
+candidate final-close227.109458ms vs2.703458ms while Init itself is faster.
+No unchanged rerun; next is labelled close/write/sync mechanism attribution.
+See SQLITE-DISPOSABLE-INIT-CAMPAIGN1.md and checks/disposable-init-campaign1.
