@@ -1833,3 +1833,11 @@ files. Shared verifier corpus/open/custody/state/walk/length/digest and SQL/VM/V
 pooled diagnostics added, gatedoff ordinarily. Prospective one-native-child/arm
 retained-store diagnostic with equalcold/9.5s/native and60s/complete; no speed or
 proof promotion.8focusedchecks/exampleClippy PASS; productionunchanged. Freeze.
+
+
+-2026-10-04: native-proof cause diagnostic at0df9d7fe6: reference17complete,
+candidate15complete/timeoutsin16 at9.510799542s; cold/owners preserved. Matched
+first15VM4.227M/4.218M but bodies16821/30630,VFS1.650/3.624GB. Candidate15lengths
+1273.092ms vs287.171ms whilewalkfaster. Public hash-order256objects/37packs fixture
+proves413bodyacqs; physical frontier/root scheduling lowers111 withoutcachegrowth,
+canonical/order/custody/pooled regressionsPASS. Freeze new ordinary17pair next.

@@ -1,0 +1,25 @@
+{
+  "admission": "NOT_APPLICABLE",
+  "arms": [
+    "baseline",
+    "candidate"
+  ],
+  "cache": "whole source corpus and retained database content invalidated and mincore checked before each native child",
+  "children_per_arm": 1,
+  "complete_per_arm_budget_ns": 60000000000,
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "b1724e6d916450fbafbdaad2813f1b9e877d9e61f623db2ae9714b2aaf4c0fb8",
+    "product_seal": "b819926c9113584075eeae75bd38f0a5d65d3095bd97fb1d410443828cd395e3",
+    "source_commit": "0df9d7fe695a86838793fac76d8dfdfd78bf86d3",
+    "source_dirty": false,
+    "source_tree": "29f877de356fb4d6c23d36bc9dc6e0e57d79853b"
+  },
+  "kind": "history17-native-proof-count-v1",
+  "native_budget_ns": 9500000000,
+  "reuse": "original closed17v2 stores/producer roots/census/reference metadata; no speed rerun",
+  "scope": "native oracle/custody verification only; census/export/preservation of ordinary combined proof not included in native wall; no admission or proof promotion"
+}

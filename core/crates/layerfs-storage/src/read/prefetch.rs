@@ -26,6 +26,9 @@ pub(crate) fn chains(
             &frontier.iter().map(|row| row.pack_id).collect::<Vec<_>>(),
             packs,
         )?;
+        // A frontier can exceed the bounded body cache. Inspect its records in
+        // physical order so siblings sharing a pack do not evict each other.
+        frontier.sort_unstable_by_key(|row| (row.pack_id, row.group_number, row.record_number));
         let mut next = BTreeSet::new();
         let mut bases = ChainBases::new(packs);
         for location in frontier {

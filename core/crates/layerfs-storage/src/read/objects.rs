@@ -70,8 +70,16 @@ impl ReadState {
         }
         prefetch::chains(source, &roots, &mut self.packs, &mut self.workspace)?;
         let mut counters = ChainCounters::default();
-        let mut out = Vec::with_capacity(ids.len());
-        for root in roots {
+        // Output slots preserve demand order, including repeated identities.
+        // Only the bounded root worklist is scheduled by physical location.
+        let mut order: Vec<_> = (0..roots.len()).collect();
+        order.sort_unstable_by_key(|position| {
+            let row = roots[*position];
+            (row.pack_id, row.group_number, row.record_number)
+        });
+        let mut out = vec![Vec::new(); ids.len()];
+        for position in order {
+            let root = roots[position];
             let (canonical, _) = Resolver::new(
                 source,
                 i64::MAX,
@@ -85,7 +93,7 @@ impl ReadState {
                 &mut counters,
             )
             .resolve_at(root)?;
-            out.push(canonical);
+            out[position] = canonical;
         }
         Ok(out)
     }

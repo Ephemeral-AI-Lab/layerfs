@@ -1044,3 +1044,17 @@ including prefetch work, rather than inferring it from SQL or cache size. A publ
 physical records before this change; the retained walk/decode now extracts two,
 with one physical-group decode. Missing catalogue data still refuses the read.
 This fixture is a count result, not a retained-history latency claim.
+
+
+### Physical scheduling within a bounded canonical demand
+
+Read dependency frontiers are inspected in pack/group/record order. Canonical
+roots use a bounded permutation of at most512usize indices (4KiB on64-bit), and
+write into the original demand's existing output slots, preserving order and
+repeated identities. This reduces repeated BLOB acquisition when a wave exceeds
+the existing2MiB pack-body cache without retaining larger/more bodies. The
+existing3passes, dependency/authentication/visibility/work checks, byte/object
+budgets, queue/worker limits and definite read errors remain. No cache capacity
+increases; the index list has one demand lifetime and is released before return.
+A public256-object37-pack count fixture proves413→111body acquisitions and exact
+canonical bytes. Global history/proof speed remains separately qualified.
