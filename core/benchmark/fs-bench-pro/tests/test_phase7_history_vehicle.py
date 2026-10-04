@@ -54,7 +54,7 @@ class HistoryVehicle(unittest.TestCase):
 
     def test_reference_proof_facade_seals_readback_and_removes_candidate_ports(self):
         source, helper, seals = generate_verifier(ROOT, Path('/sealed/reference-helper.rs'))
-        self.assertEqual(len(seals), 7)
+        self.assertEqual(len(seals), 8)
         self.assertNotIn('handles.', source)
         self.assertNotIn('layerfs_persistence', source)
         self.assertNotIn('PackPersistence', helper)

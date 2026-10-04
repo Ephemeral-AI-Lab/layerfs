@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import subprocess
 import time
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT/'core/benchmark/fs-bench-pro'))
@@ -18,42 +19,56 @@ from shared import cold_native, history_observer, phase7_history_proof as proof
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--out', required=True)
+    parser.add_argument('--states', type=int, choices=(17,53,157), default=17)
+    parser.add_argument('--arm', choices=('baseline','candidate','both'), default='both')
+    parser.add_argument('--baseline-run', default='issue302-history17-pooled-baseline1')
+    parser.add_argument('--candidate-run', default='issue302-history17-pooled-candidate1')
     args = parser.parse_args()
+    row = {17:'history-stride10',53:'history-stride3',157:'history-stride1'}[args.states]
+    selected_arms = ['baseline','candidate'] if args.arm == 'both' else [args.arm]
     identity = runner.identities()
     if identity['source_dirty']:
         raise ValueError('freeze diagnostic source/harness')
     out = runner.owned(args.out)
     out.mkdir(parents=True)
     reference = ROOT/'target/phase7-baseline/layerfs'
+    if subprocess.check_output(['git','rev-parse','HEAD'],cwd=reference,text=True).strip() != proof.BASE or subprocess.check_output(['git','status','--porcelain'],cwd=reference,text=True):
+        raise ValueError('pinned clean reference checkout required')
     locks = []
     try:
         for path in (runner.RESULTS/'phase7-sqlite.lock', reference/'target/phase7-sqlite.lock'):
             handle = path.open('a+b')
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
             locks.append(handle)
-        declaration = {'kind': 'history17-native-proof-count-v1', 'identity': identity,
+        declaration = {'kind': f'history{args.states}-native-proof-count-v2', 'identity': identity,
                        'admission': 'NOT_APPLICABLE', 'native_budget_ns': 9_500_000_000,
                        'complete_per_arm_budget_ns': 60_000_000_000,
-                       'arms': ['baseline', 'candidate'], 'children_per_arm': 1,
-                       'reuse': 'original closed17v2 stores/producer roots/census/reference metadata; no speed rerun',
+                       'arms': selected_arms, 'children_per_arm': 1,
+                       'workload_row': row, 'baseline_run': args.baseline_run, 'candidate_run': args.candidate_run,
+                       'reuse': 'original closed retained stores/producer roots/census/reference metadata; no speed rerun',
                        'cache': 'whole source corpus and retained database content invalidated and mincore checked before each native child',
                        'scope': 'native oracle/custody verification only; census/export/preservation of ordinary combined proof not included in native wall; no admission or proof promotion'}
         runner.write_json(out/'declaration.json', declaration)
         for arm, root in (('baseline', reference), ('candidate', ROOT)):
+            if arm not in selected_arms: continue
             folder = out/arm
             folder.mkdir()
-            original = runner.RESULTS/f'issue302-history17-pooled-{arm}1'
+            original = runner.RESULTS/(args.baseline_run if arm == 'baseline' else args.candidate_run)
+            runner.verify_run_manifest(original)
             receipt = json.loads((original/'receipt.json').read_text())
             db = original/'store.sqlite'
             owners = [db] if arm == 'candidate' else [db, Path(str(db)+'.history.sqlite')]
             if any(not p.is_file() or any(Path(str(p)+s).exists() for s in ('-wal', '-shm', '-journal')) for p in owners):
                 raise ValueError('closed stores required')
             hashes = {str(p): runner.digest(p) for p in owners}
-            pins_path = runner.RESULTS/'issue302-history17-pooled-baseline1/root-pins.json'
-            pins = json.loads(pins_path.read_text())
-            proof.validate_pins(pins, pins['identity'])
-            if receipt['performance']['child']['roots'] != pins['roots']:
-                raise ValueError('original root vector mismatch')
+            if receipt['workload_row'] != row or receipt['performance']['child']['states'] != args.states:
+                raise ValueError('retained workload selection mismatch')
+            pins_path = runner.RESULTS/args.baseline_run/'root-pins.json'
+            if arm == 'candidate':
+                pins = json.loads(pins_path.read_text())
+                proof.validate_pins(pins, pins['identity'])
+                if receipt['performance']['child']['roots'] != pins['roots']:
+                    raise ValueError('original root vector mismatch')
             vehicle = {}
             compiled = build(root, arm, folder, runner, vehicle)
             if compiled['status'] != 'PASS':
@@ -63,7 +78,7 @@ def main():
             request = json.loads((original/'proof-request.json').read_text())
             corpus = Path(request['corpus'])
             binary = compiled['binaries']['verify_history' if arm == 'candidate' else 'history_reference_verify']['path']
-            command = [binary, str(corpus), str(db), str(original/'producer-proof-input.json'), 'history-stride10', 'complete']
+            command = [binary, str(corpus), str(db), str(original/'producer-proof-input.json'), row, 'complete']
             command += ['disposable', str(pins_path)] if arm == 'candidate' else ['reference', 'independent-reference', str(original/'reference-metadata.tsv')]
             env = {**os.environ, 'LAYERFS_CONSTRUCTION_WORKERS': '1',
                    'LAYERFS_HISTORY_CURSOR_KEY': '28'*32, 'LAYERFS_HISTORY_VERIFY_PROGRESS': '1',

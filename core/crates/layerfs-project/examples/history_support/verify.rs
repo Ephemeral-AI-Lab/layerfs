@@ -1,14 +1,18 @@
 //! Independent retained-tree read-back, adapted from the frozen v4 verifier.
 //! Complete paths/kinds/sizes; every tenth content path plus final path hashed.
 #![allow(dead_code)]
+use super::canonical_memo::{Memo, Reader as MetadataReader};
 use super::producer::{kind_of, OpError};
 use layerfs_content::{
     filesystem::{FilesystemRead, FilesystemRootId},
     inode_leaf::InodeKind,
-    ObjectId,
+    AuthenticatedObjects, ObjectId,
 };
 use layerfs_telemetry::timer::{Active, Timing, TimingScope};
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+};
 #[derive(Default, Clone, Copy)]
 struct VerifyTally {
     compared: u64,
@@ -22,13 +26,15 @@ struct Sampler<'a> {
     persistence: &'a dyn layerfs_storage::port::PackPersistence,
     oracle: &'a crate::workload::history::Oracle,
     tally: VerifyTally,
+    metadata_memo: &'a RefCell<Memo>,
     digests: BTreeMap<ObjectId, ([u8; 32], u64)>,
     lengths: BTreeMap<ObjectId, u64>,
 }
 impl Sampler<'_> {
     fn run_complete(&mut self, root: FilesystemRootId) -> Result<VerifyTally, OpError> {
         let diagnostic_start = std::time::Instant::now();
-        let mut read = FilesystemRead::new(self.reader, root)
+        let metadata_reader = MetadataReader::new(self.reader, self.metadata_memo);
+        let mut read = FilesystemRead::new(&metadata_reader, root)
             .map_err(|error| OpError::Product(format!("{error:?}")))?;
         let root_serial = read.root().root_inode().serial();
         let root_value = read
@@ -59,9 +65,11 @@ impl Sampler<'_> {
             let breadth = std::mem::take(&mut pending);
             for batch in breadth.chunks(128) {
                 let ids: Vec<_> = batch.iter().map(|(_, root)| *root).collect();
-                let pages = self.reader.read_canonical_batch(&ids).map_err(|error| {
-                    OpError::Product(format!("directory root batch: {error:?}"))
-                })?;
+                let pages = metadata_reader
+                    .read_canonical_batch(&ids)
+                    .map_err(|error| {
+                        OpError::Product(format!("directory root batch: {error:?}"))
+                    })?;
                 if pages.len() != batch.len() {
                     return Err(OpError::Io("directory root batch cardinality".into()));
                 }
@@ -82,7 +90,7 @@ impl Sampler<'_> {
                             let mut after = None;
                             loop {
                                 let page = layerfs_content::filesystem::directory::list_after(
-                                    self.reader,
+                                    &metadata_reader,
                                     layerfs_content::filesystem::DirectoryRoot(*directory_root),
                                     after.as_ref(),
                                     512,
@@ -167,6 +175,7 @@ impl Sampler<'_> {
         let ids: Vec<_> = file_entries
             .iter()
             .map(|(_, id, _, _, _, _)| *id)
+            .filter(|id| !self.lengths.contains_key(id))
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect();
@@ -360,10 +369,14 @@ impl Sampler<'_> {
 
 #[derive(Default)]
 pub struct Reuse {
+    metadata_memo: RefCell<Memo>,
     digests: BTreeMap<ObjectId, ([u8; 32], u64)>,
     lengths: BTreeMap<ObjectId, u64>,
 }
 impl Reuse {
+    pub fn metadata_counters(&self) -> super::canonical_memo::Counters {
+        self.metadata_memo.borrow().counters()
+    }
     pub fn check(
         &mut self,
         reader: &dyn layerfs_content::object::AuthenticatedObjects,
@@ -376,6 +389,7 @@ impl Reuse {
             persistence,
             oracle,
             tally: VerifyTally::default(),
+            metadata_memo: &self.metadata_memo,
             digests: std::mem::take(&mut self.digests),
             lengths: std::mem::take(&mut self.lengths),
         };

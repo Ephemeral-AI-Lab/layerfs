@@ -1849,3 +1849,11 @@ root/canonical/storage/cleanup PASS.53reference fullproducer/cold completes
 69.719104917s/83.107392291s command but independent proofTIMEOUT9.502048166s;
 noqualifiedpins,53candidate explicitNOT_RUN.157/DurableNOT_RUN. Oldfailures and
 Initpinnedpasses untouched. Next sharedproof workreuse tofit allretained sizes.
+
+
+-2026-10-04: shared proof metadata-work treatment: per-invocation empty2MiB/512row
+LRU authenticated canonical metadata memo, 8KiB entrycap, namespacewalkonly;
+file reads/oraclechecks/C5/preservation unchanged. Skip metadataqueries for
+already-checked immutable filelengths. Additional bounded verifierbuffer declared,
+productlimits unchanged. Externalhelpercontracts and new53reference countdiag
+prepared; no speed/proof admission or oldreceipt promotion. Freeze/check next.

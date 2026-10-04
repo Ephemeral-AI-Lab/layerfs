@@ -1,6 +1,8 @@
 //! Separate read-only retained-history corpus verifier.
 //! A partial probe is always DIAGNOSTIC; this vehicle alone is not admission.
 #![allow(dead_code)]
+#[path = "history_support/canonical_memo.rs"]
+mod canonical_memo;
 #[path = "history_support/observer.rs"]
 mod observer;
 #[path = "history_support/producer.rs"]
@@ -161,6 +163,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         bytes += b;
         if diagnostic {
             observer::report(position + 1, "verification", engine);
+            eprintln!(
+                "VERIFY_METADATA_MEMO state={} cumulative={:?}",
+                position + 1,
+                reuse.metadata_counters()
+            );
             eprintln!("VERIFY_STATE_WORK state={} wall_ns={} paths={} sampled={} authenticated_bytes={} pooled={:?}", position + 1, state_start.elapsed().as_nanos(), p, s, b, reader.pooled_read_counters());
         }
     }
