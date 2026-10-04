@@ -1870,3 +1870,12 @@ bound/437rows;48file acquisition261.8ms vswalk113.4ms,2900bodyacqs/306.9MBVFS.
 Thirddirected change sharedfile-root physical-hint ordering/8pack cohorts within
 old512IDs/16MiB limits; actual sourceTSVpackhint added, no proof-result influence.
 Frozen53native-only diagnostic next; all oldfailures preserved and goal ACTIVE.
+
+
+-2026-10-04: d8b1df33f file-cohort53native counts TIMEOUT52/53; ordinarychanged
+reference combinedproof PASS8.655362s (fullcensus/export/native/preservation).
+Matchedcandidate full53cold/root/storage/cleanup pass but timeFAIL1.170621697129x
+80.446455584s vs68.721138333s and proofTIMEOUT9.51200425s; jointINCOMPLETE.
+Save43.393351043s vs27.876083411s dominates; candidate13.2755GBreturned packbytes,
+174876readTX,19.09MVM vsref55.99M. Next productbody acquisition/hash attribution
+and verified-boundary reuse; no checks removed.157/DurableNOT_RUN, goal ACTIVE.

@@ -1,0 +1,48 @@
+{
+  "source_commit": "d8b1df33f",
+  "case": "phase7-sqlite-disposable-history-stride3-v2",
+  "status": "INCOMPLETE",
+  "time_gate": "FAIL",
+  "ratio": 1.1706216971288073,
+  "allowed_candidate_ns_numerator": 755932521663,
+  "allowed_candidate_ns_denominator": 10,
+  "candidate_proof": "TIMEOUT",
+  "arms": {
+    "baseline": {
+      "comparison_ns": 68721138333,
+      "command_wall_ns": 85368419334,
+      "verification_wall_ns": 8655362000,
+      "verification_status": "PASS",
+      "cache_status": "PASS",
+      "storage_bytes": 65142784,
+      "cleanup": {
+        "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+        "status": "PASS"
+      },
+      "stages_ns": [
+        22740203291,
+        3188177418,
+        14248526666,
+        27876083411
+      ]
+    },
+    "candidate": {
+      "comparison_ns": 80446455584,
+      "command_wall_ns": 96684457584,
+      "verification_wall_ns": 9512004250,
+      "verification_status": "FAIL",
+      "cache_status": "PASS",
+      "storage_bytes": 62611456,
+      "cleanup": {
+        "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+        "status": "PASS"
+      },
+      "stages_ns": [
+        22737621787,
+        3072327962,
+        10423950462,
+        43393351043
+      ]
+    }
+  }
+}

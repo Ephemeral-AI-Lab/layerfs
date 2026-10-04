@@ -86,3 +86,40 @@ whole proof must later pay that work inside9.5s. No source-body prefill/cache
 warming survives cold attestation. New single native53reference child declared
 at the next frozen hint-cohort identity, not unchanged-scope retry. Example
 Clippy and8focused history tests PASS; no full-workspace claim.
+
+
+## Ordinary53pair atd8b1df33f
+
+The third file-cohort native-only diagnostic timed out after52/53 with observers;
+retain it as DIAGNOSTIC_TIMEOUT. It did not promote the original ordinary proof.
+A new ordinary paired selection uses the changed verifier with tracing disabled
+for the separate proof and pays full census/export/native/preservation work.
+
+| Scope | Reference | Candidate Disposable |
+| --- | ---: | ---: |
+| Product lifecycle |68.721138333s|80.446455584s|
+| Complete performance command |85.368419334s|96.684457584s|
+| Independent combined proof |8.655362000s PASS|9.512004250s TIMEOUT|
+| Acquisition |22.740203291s|22.737621787s|
+| Construction |3.188177418s|3.072327962s|
+| Filesystem |14.248526666s|10.423950462s|
+| Save/custody |27.876083411s|43.393351043s|
+| Allocation |65142784B|62611456B|
+
+Ratio1.170621697129 timeFAIL (allowance75.5932521663s); combined jointINCOMPLETE
+because candidate proofFAIL. Both complete performance commands within170s,
+cold/root/canonical/storage/cleanup PASS;73447objects/589480854canonicalB match.
+Full original manifests independently verified; no runtime pass promoted from
+producer roots or census. Earlier reference proof timeout remains unchanged.
+
+Observed product trace including setup/finalization: reference1250866statements/
+55993679VM, candidate691365/19089631VM. Candidate native176104transactions with
+1228writes =>174876reads. Payload returned7653915810B plus metadata pack returned
+5621630117B; these counters have distinct overlapping work scopes, not device-byte
+claims. Save/custody+15.517267632s is the largest product gap while filesystem is
+faster. Source inspection identifies pack-body SHA256 both in SQLite objects_read
+and C2 Fetch authentication on every acquisition. Further product work must retain
+an authenticated boundary and public persistence contracts; no hash validation
+may simply be deleted on trust. Instrument/centralize that work before another
+changed-source pair.157/Durable NOT_RUN; prior17/Init passes stay pinned, no
+all-seven current-artifact qualification. Goal ACTIVE.
