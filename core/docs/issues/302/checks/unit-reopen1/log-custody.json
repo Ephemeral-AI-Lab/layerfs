@@ -1,0 +1,6 @@
+{
+  "raw": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-reopen-cause1/tests.raw.stdout",
+  "raw_sha256": "28596307904022ee343752e81b3bb66d69d84d80ec5f4047c84b602d54337bd8",
+  "tracked": "core/docs/issues/302/checks/unit-reopen1/tests.stdout",
+  "normalization": "trailing EOF whitespace only"
+}

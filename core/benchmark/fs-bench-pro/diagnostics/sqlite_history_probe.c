@@ -37,5 +37,9 @@ int main(void){
  assert(sqlite3_bind_int64(stmt,1,1)==SQLITE_OK);assert(sqlite3_bind_int64(stmt,2,4120)==SQLITE_OK);
  assert(sqlite3_step(stmt)==SQLITE_ROW);assert(sqlite3_column_type(stmt,0)==SQLITE_NULL);assert(!sqlite3_column_blob(stmt,0));assert(sqlite3_step(stmt)==SQLITE_DONE);assert(sqlite3_finalize(stmt)==SQLITE_OK);
  acquired_snapshot(acquired);assert(acquired[0]-previous_bytes==24);
+ assert(sqlite3_exec(db,"INSERT INTO pack_unit VALUES(8,zeroblob(4))",0,0,0)==SQLITE_OK);
+ assert(sqlite3_blob_open(db,"main","pack_unit","body",7,0,&blob)==SQLITE_OK);
+ assert(sqlite3_blob_reopen(blob,8)==SQLITE_OK);assert(sqlite3_blob_read(blob,unit_bytes,4,0)==SQLITE_OK);
+ assert(sqlite3_blob_reopen(blob,99)!=SQLITE_OK);assert(sqlite3_blob_close(blob)==SQLITE_OK);
  assert(sqlite3_close(db)==SQLITE_OK);puts("PASS pack attribution plus BLOB attempts/returned bytes/errors; operations delegated unchanged");
 }

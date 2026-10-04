@@ -151,3 +151,78 @@ The first formatting invocation lacked--all and refused to find workspace-root
 targets; adding the required workspace option performed formatting, then the
 frozen formatting check passed. There was no failed product test or performance
 attempt. No CI or retired aggregate preflight was run.
+
+
+## Indexed-mapping matched result at9847f0f9c
+
+One fresh matched Disposable157pair completed. Reference product183913176750ns,
+candidate186070175750ns(+2156999000ns,+1.172835%); complete commands197768933958/
+198908779084ns. Separate bounded proofs16337964875/18966352167ns both PASS,
+all cold/cleanup checks PASS. Final allocated86179840/85172224B; candidate remains
+below92342273B, but is1224704B above original83947520B. Canonical104618objects/
+871337620B and157roots match; pack bodies74809772B. Candidate proof covers157states,
+904143paths,66content paths,921174logicalB/5347088acquiredB, not exhaustive payload.
+Reference proof acquires17878185B under the same32MiB cap. Source/harness/observer
+and immutable manifests will be audited into the final comparison index.
+
+Mapping retains330219executions/13364974returned rows. Actual VM steps110881822,
+exactly13695193below earlier schema2mapping124577015(one per step/DONE). New mapping
+step span2423818000ns; earlier schema2span18067313000ns is separate-window mechanism
+evidence, not a matched speed attribution. Save/custody91041543245vs76076072373ns;
+filesystem41814624428vs54850878040ns. Whole-child CPU131924785000/131911476000ns,
+RSS336150528/349945856B(lifetime, not phase-only). Save VFS requested7082877534/
+11939753738B; acquisitions259270/271880. No full slowdown removal is demonstrated.
+
+Native final work still has3452679unit BLOB open/read/close calls,5905886097read B,
+815043transactions/2541writes,2827545statements. Statement wall41493023233ns and
+transaction wall85058540278ns overlap; BLOB read19506147688ns excludes opening and
+closing. Avoid attributing the entire remainder to a single cause. Existing
+observer classification also performs linear searches of up to790classes; its
+inclusive overhead differs with statement shape. No observer overhead speed claim
+or product-cache treatment is inferred from that observation.
+
+## Further count/cause diagnostic and authorized cursor optimization
+
+[checks/unit-reopen-cause1](checks/unit-reopen-cause1) runs native read-only SQLite
+once over each closed multi-group pack, not another product sample. Every body is
+read inside the diagnostic. Original11268open/close pairs versus784open/close pairs
+and10484reopens return identical64092418B/byte-sum7763801632. Diagnostic walls
+53690000/25408000ns have uncontrolled OS cache and are not a cold speed comparison.
+SQLite2MiB/mmap0settings and a released SQLite cache are recorded. No retained DB
+is mutated; current gate Store SHA is retained in its original manifest.
+
+The supported `rusqlite::Blob::reopen` API is used for subsequent groups within
+one acquisition callback. All metadata checks precede opening; each moved cursor
+checks BLOB length and exact offset read, then checked-close. No cursor crosses
+callbacks/requests/writes, no SQL result buffer is introduced, no cache/transaction
+or physical schema/publication bound changes. Failed moves do not retry and preserve
+uncertain-outcome quarantine. External observer delegates reopen and updates only
+its optional acquisition-trace row ID; acquired-byte accounting stays on actual
+successful reads. New tests exercise one open/seven reopens/eight reads/one close,
+separate callbacks, and wrong reopened-body length with checked close. Existing
+sparse/all-lane/misbinding/rollback coverage remains.
+
+Prospective changed product/observer requires another newly matched pair under
+`phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1`, unchanged300s/30s,
+10%margin/92342273B. Fresh outputs `issue302-unit-reopen-history157-reference1` and
+`issue302-unit-reopen-history157-candidate1`. No old performance/control reuse,
+no unchanged candidate rerun, no timeout/cache/buffer/worker relaxation. Reuse
+prepared corpus/worktree-local sealed builds only.17/53,Durable,Init,all-seven and
+exhaustive payload remain NOT_RUN at the new artifact.
+
+
+## Reopen functional freeze
+
+[checks/unit-reopen1/checks.json](checks/unit-reopen1/checks.json) records Core locked
+workspace/all-target tests516/98targets/0ignored, all-target Clippy-Dwarnings,
+fmt--all--check,455-file boundary,23tool selftests and6observer calibration tests,
+all PASS at this finalized product. New tests preserve byte-authentication/failure
+semantics while proving one cursor per callback and actual reopen work. Harness
+selection/proof scope is unchanged from the11checks at9847f0f9c; no redundant
+unchanged harness or performance rerun occurred. Native3.51.0reopen count-cause
+read-only diagnostic has no failures. Both indexed-mapping manifests pass every
+retained file length/SHA check, including the retained Stores, with the exact
+index in[checks/indexed-mapping-final1/comparison.json](checks/indexed-mapping-final1/comparison.json).
+The earlier +1.172835% result stays unchanged and remains a numeric-margin PASS,
+not a strict-faster PASS. Raw check stdout is preserved separately where the
+tracked presentation removes trailing EOF whitespace; custody records bind both.

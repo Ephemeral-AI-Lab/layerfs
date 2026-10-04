@@ -1,0 +1,15 @@
+{
+  "kind": "native-read-only-count-cause",
+  "source": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-indexed-mapping-history157-candidate1/store.sqlite",
+  "source_sha256": "0871680ffd8d28695a3a689b54a7597a64b9d48143642f9e9b064567cf5234de",
+  "source_matches_preexisting_manifest_after_diagnostics": true,
+  "source_c": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/diagnostics/sqlite_unit_reopen_profile.c",
+  "source_c_sha256": "966e2f68f703d1dc1edf9cd466107cb215fbd5f20e8b5e1daa1d4ab5ae06ec61",
+  "commands": [
+    "clang -O2 -std=c11 -Wall -Wextra -Werror <source_c> -lsqlite3 -o <owned diagnostic binary>",
+    "<binary> <source> 0",
+    "<binary> <source> 1"
+  ],
+  "gate_speed_claim": false,
+  "cache_contract": "SQLite2MiB/mmap0; SQLite cache released after metadata inventory; OS cache uncontrolled"
+}

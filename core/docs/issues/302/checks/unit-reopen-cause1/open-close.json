@@ -1,0 +1,1 @@
+{"kind":"count-cause-once-per-multigroup-pack","sqlite":"3.51.0","mode":"open-close","rows":11268,"opens":11268,"reopens":0,"closes":11268,"bytes":64092418,"byte_sum":7763801632,"wall_ns":53690000,"cache_state":"SQLite cache released; OS cache uncontrolled; diagnostic only"}

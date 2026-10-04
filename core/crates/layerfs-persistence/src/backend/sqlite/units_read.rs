@@ -1,15 +1,14 @@
 //! Logical pack offsets mapped to independent immutable unit BLOBs, one transaction.
-use super::{rows, transaction::Transaction};
+use super::{rows, transaction::Transaction, unit_io};
 use crate::backend::{
     metadata_locations::info,
     records::{BackendError, Param},
 };
 use layerfs_storage::{location::PackInfo, pack::layout, port::*};
-use std::time::Instant;
-struct Unit {
-    id: i64,
-    start: usize,
-    end: usize,
+pub(super) struct Unit {
+    pub(super) id: i64,
+    pub(super) start: usize,
+    pub(super) end: usize,
 }
 struct Input {
     info: PackInfo,
@@ -92,67 +91,10 @@ impl Input {
             bytes[..copied].copy_from_slice(&self.control[at..at + copied]);
             at += copied;
         }
-        for unit in &self.units {
-            if at >= end {
-                break;
-            }
-            if unit.end <= at {
-                continue;
-            }
-            if unit.start > at {
-                return Err(PersistenceError::Malformed);
-            }
-            let to = unit.end.min(end);
-            read_unit(
-                tx,
-                unit,
-                &mut bytes[at - offset..to - offset],
-                at - unit.start,
-            )?;
-            at = to;
-        }
-        if at != end {
-            return Err(PersistenceError::Malformed);
+        if at < end {
+            unit_io::read(tx, &self.units, at, end, &mut bytes[at - offset..])?;
         }
         Ok(())
-    }
-}
-fn read_unit(
-    tx: &Transaction<'_>,
-    unit: &Unit,
-    bytes: &mut [u8],
-    offset: usize,
-) -> Result<(), PersistenceError> {
-    tx.work.borrow_mut().blob_open_calls += 1;
-    let blob = tx
-        .connection
-        .blob_open("main", "pack_unit", "body", unit.id, true)
-        .map_err(rows::error)?;
-    let result = if blob.len() != unit.end - unit.start {
-        Err(PersistenceError::Malformed)
-    } else {
-        {
-            let mut w = tx.work.borrow_mut();
-            w.blob_read_calls += 1;
-            w.blob_requested_bytes += bytes.len() as u64;
-        }
-        let start = Instant::now();
-        let result = blob.read_at_exact(bytes, offset).map_err(rows::error);
-        let mut w = tx.work.borrow_mut();
-        w.blob_read_ns += start.elapsed().as_nanos() as u64;
-        if result.is_ok() {
-            w.blob_read_bytes += bytes.len() as u64;
-        }
-        result.map_err(Into::into)
-    };
-    tx.work.borrow_mut().blob_close_calls += 1;
-    let close: Result<(), PersistenceError> = blob.close().map_err(rows::error).map_err(Into::into);
-    match (result, close) {
-        (Err(PersistenceError::Uncertain), _) | (_, Err(PersistenceError::Uncertain)) => {
-            Err(PersistenceError::Uncertain)
-        }
-        (Err(e), _) | (_, Err(e)) => Err(e),
-        (Ok(()), Ok(())) => Ok(()),
     }
 }
 pub(crate) fn scoped(

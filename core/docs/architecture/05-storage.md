@@ -1340,3 +1340,17 @@ query result capacity stays zero. Statement lifecycle/error quarantine, read
 transaction extent, publication row/binding charges, body/output/cache/depth caps
 and worker count remain. Index pages and maintenance are real storage/publication
 work; this source description does not claim a measured speed or storage result.
+
+
+### Same-acquisition unit cursor moves (against9847f0f9c)
+
+A group-row offset acquisition opens one read-only unit BLOB cursor, then uses
+SQLite's `blob_reopen` to move it to each subsequent intersecting immutable unit.
+It validates each new BLOB length, performs the exact requested offset read and
+checks the single close before returning. Every mapping was already validated
+inside the same snapshot. The cursor exists only within one offset acquisition;
+it is not retained between callbacks, pack requests, transactions or writes.
+A reopen failure is terminal and still checks close; uncertain read/reopen/close
+outcomes retain the transaction's existing quarantine semantics. No cache, buffer,
+worker, transaction, SQL source, physical layout or publication limit is enlarged.
+Native diagnostics distinguish actual opens, reopens, reads and closes.

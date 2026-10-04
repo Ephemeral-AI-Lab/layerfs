@@ -68,6 +68,11 @@ static int history_blob_open(sqlite3*db,const char*database,const char*table,con
  if(matched){trace_event(unit?"unit_open":"open",row,0,0,result,before);trace_stack();if(result==SQLITE_OK){int slot=trace_slot(NULL);if(slot<0)abort();trace_handles[slot]=*out;trace_ids[slot]=row;trace_units[slot]=unit;}}
  return result;
 }
+static int history_blob_reopen(sqlite3_blob*blob,sqlite3_int64 row){
+ uint64_t before=trace_vfs_bytes();int slot=trace_slot(blob);int result=sqlite3_blob_reopen(blob,row);
+ if(slot>=0){trace_event(trace_units[slot]?"unit_reopen":"reopen",row,0,0,result,before);if(result==SQLITE_OK)trace_ids[slot]=row;}
+ return result;
+}
 static int history_blob_read(sqlite3_blob*blob,void*buffer,int bytes,int offset){
  uint64_t before=trace_vfs_bytes();int slot=trace_slot(blob);uint64_t start=now();int result=sqlite3_blob_read(blob,buffer,bytes,offset);
  atomic_fetch_add(&blob_work[3],1);if(bytes>0)atomic_fetch_add(&blob_work[4],(uint64_t)bytes);
@@ -83,6 +88,7 @@ static int history_blob_close(sqlite3_blob*blob){
  return result;
 }
 INTERPOSE(history_blob_open,sqlite3_blob_open)
+INTERPOSE(history_blob_reopen,sqlite3_blob_reopen)
 INTERPOSE(history_blob_read,sqlite3_blob_read)
 INTERPOSE(history_blob_close,sqlite3_blob_close)
 void cause_history_blob_snapshot(uint64_t*out){

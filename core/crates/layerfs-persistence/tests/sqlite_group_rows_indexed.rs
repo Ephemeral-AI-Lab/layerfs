@@ -195,3 +195,38 @@ fn covered_mapping_still_refuses_wrong_extents_before_blob_open() {
         before.blob_open_calls
     );
 }
+
+#[test]
+fn multigroup_read_reopens_one_cursor_and_never_retains_it_between_requests() {
+    let t = support::Temp::new("indexed-reopen");
+    let path = t.join("db");
+    let h = create(&path, SqlitePackLayout::GroupRowsIndexed);
+    fixture(&h);
+    for _ in 0..2 {
+        let before = h.diagnostics().unwrap();
+        let mut out = Vec::new();
+        h.storage.read_packs(&[1], &mut out).unwrap();
+        let after = h.diagnostics().unwrap();
+        assert_eq!(after.blob_open_calls - before.blob_open_calls, 1);
+        assert_eq!(after.blob_reopen_calls - before.blob_reopen_calls, 7);
+        assert_eq!(after.blob_read_calls - before.blob_read_calls, 8);
+        assert_eq!(after.blob_close_calls - before.blob_close_calls, 1);
+    }
+}
+#[test]
+fn wrong_reopened_body_length_is_refused_and_cursor_is_checked_closed() {
+    let t = support::Temp::new("indexed-reopen-short");
+    let path = t.join("db");
+    let h = create(&path, SqlitePackLayout::GroupRowsIndexed);
+    fixture(&h);
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch("PRAGMA ignore_check_constraints=ON;DROP TRIGGER pack_unit_immutable_update;UPDATE pack_unit SET body=X'00' WHERE group_number=7").unwrap();
+    drop(db);
+    let before = h.diagnostics().unwrap();
+    assert!(h.storage.read_packs(&[1], &mut Vec::new()).is_err());
+    let after = h.diagnostics().unwrap();
+    assert_eq!(after.blob_open_calls - before.blob_open_calls, 1);
+    assert_eq!(after.blob_reopen_calls - before.blob_reopen_calls, 7);
+    assert_eq!(after.blob_read_calls - before.blob_read_calls, 7);
+    assert_eq!(after.blob_close_calls - before.blob_close_calls, 1);
+}

@@ -91,6 +91,8 @@ pub struct SqlWork {
     pub sealed_body_bytes: u64,
     /// Attempted read-only incremental BLOB opens.
     pub blob_open_calls: u64,
+    /// Attempted moves of an owned read BLOB cursor within one acquisition call.
+    pub blob_reopen_calls: u64,
     /// Attempted exact offset/length BLOB reads, including failures.
     pub blob_read_calls: u64,
     /// Requested bytes of those reads, not VFS/device bytes.
