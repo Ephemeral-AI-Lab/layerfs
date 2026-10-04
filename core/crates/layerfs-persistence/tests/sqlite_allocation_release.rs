@@ -217,3 +217,58 @@ fn disposable_finalization_releases_extents_without_wal_and_preserves_bytes() {
         .to_string_lossy()
         .starts_with(".layerfs-allocation-")));
 }
+
+#[test]
+fn disposable_completion_refuses_replaced_path_without_touching_replacement() {
+    use layerfs_persistence::SqlitePersistenceProfile;
+    let t = support::Temp::new("allocation-original-identity");
+    let path = t.join("db");
+    let cfg =
+        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable);
+    let h = Handles::create(
+        cfg,
+        StoragePolicy::frozen_default(),
+        &HistoryCatalogConfig {
+            binding_key: b"identity".to_vec(),
+            cursor_key: [71; 32],
+            incarnation: 1,
+        },
+    )
+    .unwrap();
+    let original = t.join("original");
+    std::fs::rename(&path, &original).unwrap();
+    std::fs::write(&path, b"replacement must remain untouched").unwrap();
+    let before = std::fs::read(&path).unwrap();
+    assert!(h.checkpoint().is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    drop(h);
+    let reopened = Handles::open_read_only(
+        PersistenceConfig::sqlite(&original)
+            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        b"identity",
+        [71; 32],
+    )
+    .unwrap();
+    assert_eq!(reopened.profile().journal_mode, "memory");
+}
+
+#[test]
+fn disposable_completion_refuses_new_hardlink_ownership() {
+    use layerfs_persistence::SqlitePersistenceProfile;
+    let t = support::Temp::new("allocation-exclusive-identity");
+    let path = t.join("db");
+    let h = Handles::create(
+        PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        StoragePolicy::frozen_default(),
+        &HistoryCatalogConfig {
+            binding_key: b"exclusive".to_vec(),
+            cursor_key: [71; 32],
+            incarnation: 1,
+        },
+    )
+    .unwrap();
+    std::fs::hard_link(&path, t.join("alias")).unwrap();
+    assert!(h.checkpoint().is_err());
+    std::fs::remove_file(t.join("alias")).unwrap();
+    assert!(!h.checkpoint().unwrap().busy);
+}

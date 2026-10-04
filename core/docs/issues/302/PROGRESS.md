@@ -1752,3 +1752,9 @@ miss25.5352906ms, close231.007667ms. Preserve implementation/evidence. Owner
 prioritizes exact allocation-close identity and Phase4.5 temporary lifecycle.
 Added genuine completion telemetry for source fd/dev/inode and transfer/scratch
 close (no lifecycle change yet); five allocation checks/owning Clippy/boundary PASS.
+
+-2026-10-04: exact source-fd cause at6c83ea925 identifies allocation descriptor4/
+dev16777230/inode865860743 close239.672166ms (rc0), transfer0.032833ms, scratch
+close0.006209ms. Added Disposable on-demand allocation identity/temporary checked
+release-close, retaining Durable lifetime and all bounds.32covering tests,
+Clippy/boundary442 PASS. Freeze and diagnose relocation before claiming benefit.

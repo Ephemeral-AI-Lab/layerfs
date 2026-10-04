@@ -106,9 +106,10 @@ pub struct AllocationIdentity {
 pub(crate) struct AllocationRelease {
     pub before: u64,
     pub after: u64,
-    pub source: super::connection::AllocationIdentity,
+    pub source: Option<AllocationIdentity>,
     pub transfer_ns: u64,
     pub scratch_close_ns: u64,
+    pub source_close_ns: u64,
 }
 /// One explicit checkpoint result; pending frames remain visible.
 #[derive(Clone, Copy, Debug)]
@@ -135,6 +136,8 @@ pub struct Checkpoint {
     pub allocation_transfer_ns: u64,
     /// Scratch descriptor close wall, nested in completion.
     pub allocation_scratch_close_ns: u64,
+    /// Checked on-demand allocation descriptor close wall, nested in completion.
+    pub allocation_source_close_ns: u64,
 }
 pub(crate) struct State {
     pub(crate) connection: Connection,
@@ -146,7 +149,7 @@ pub(crate) struct Session {
     pub(crate) writable: bool,
     pub(crate) profile: ConnectionProfile,
     #[cfg(target_os = "macos")]
-    allocation: Option<super::allocation::AllocationFile>,
+    allocation: Option<super::allocation_owner::AllocationOwner>,
 }
 impl Session {
     pub(crate) fn connect(
@@ -221,7 +224,10 @@ impl Session {
         profile::check(&profile)?;
         #[cfg(target_os = "macos")]
         let allocation = if writable {
-            Some(super::allocation::AllocationFile::open(path)?)
+            Some(super::allocation_owner::AllocationOwner::open(
+                path,
+                selected == SqlitePersistenceProfile::Disposable,
+            )?)
         } else {
             None
         };
@@ -292,9 +298,10 @@ impl Session {
                 wall_ns: 0,
                 allocation_before_bytes: allocation.map(|p| p.before),
                 allocation_after_bytes: allocation.map(|p| p.after),
-                allocation_source: allocation.map(|p| p.source),
+                allocation_source: allocation.and_then(|p| p.source),
                 allocation_transfer_ns: allocation.map_or(0, |p| p.transfer_ns),
                 allocation_scratch_close_ns: allocation.map_or(0, |p| p.scratch_close_ns),
+                allocation_source_close_ns: allocation.map_or(0, |p| p.source_close_ns),
             })
         })();
         let wall_ns = start.elapsed().as_nanos() as u64;

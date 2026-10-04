@@ -1,0 +1,2 @@
+writer_rc=5
+sqlite_version=3.51.0 extra_fd_closed_writer_blocked=1

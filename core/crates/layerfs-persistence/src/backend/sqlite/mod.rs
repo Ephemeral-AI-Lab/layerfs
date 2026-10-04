@@ -1,6 +1,8 @@
 //! SQLite-only connection, transaction, query, schema and physical mechanics.
 #[cfg(target_os = "macos")]
 mod allocation;
+#[cfg(target_os = "macos")]
+mod allocation_owner;
 pub(crate) mod connection;
 pub(crate) mod metadata_allocation;
 pub(crate) mod metadata_locations;

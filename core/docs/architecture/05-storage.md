@@ -984,3 +984,16 @@ Source lifetime, release algorithm, checked scratch-close outcome and total
 completion timing remain unchanged at this observation-only step. These fields
 permit matching public OS-close diagnostics to the exact owned allocation file;
 they do not establish kernel writeback/device latency or physical sync count.
+
+
+### Disposable on-demand allocation custody (based on6c83ea925)
+
+Disposable retains path/device/inode identity instead of an extra writable file
+handle during import. Completion checks exclusive regular-file custody, opens
+O_NOFOLLOW only for required excess-extents release, validates the opened inode,
+uses unchanged F_TRANSFEREXTENTS/scratch cleanup, and checks source descriptor
+close before returning. A replaced path or hardlink ownership is refused; a close
+error has Unknown outcome and existing quarantine. Source-close wall is nested
+in completion, with no out-of-operation cleanup. Durable retains its previous
+allocation handle lifetime. No preallocation, format, durability or named buffer/
+transaction/worker bound change is implied by this lifetime adjustment.

@@ -41,6 +41,21 @@ impl AllocationFile {
             parent: path.parent().ok_or(BackendError::Integrity)?.to_owned(),
         })
     }
+    pub(crate) fn release_checked(&self, device: u64, inode: u64) -> Result<Release, BackendError> {
+        let m = self.file.metadata().map_err(error)?;
+        if m.dev() != device || m.ino() != inode || m.nlink() != 1 {
+            return Err(BackendError::Integrity);
+        }
+        self.release()
+    }
+    pub(crate) fn close_checked(self) -> Result<u64, BackendError> {
+        let Self { file, parent: _ } = self;
+        let start = Instant::now();
+        let outcome = nix::unistd::close(file);
+        let wall = start.elapsed().as_nanos() as u64;
+        outcome.map_err(|_| BackendError::Unknown)?;
+        Ok(wall)
+    }
     pub(crate) fn release(&self) -> Result<Release, BackendError> {
         let before = self.file.metadata().map_err(error)?;
         let allocated = before
@@ -57,9 +72,10 @@ impl AllocationFile {
             return Ok(Release {
                 before: allocated,
                 after: allocated,
-                source,
+                source: Some(source),
                 transfer_ns: 0,
                 scratch_close_ns: 0,
+                source_close_ns: 0,
             });
         }
         // No payload is copied. The kernel transfers only unused extra extents;
@@ -115,9 +131,10 @@ impl AllocationFile {
                 .blocks()
                 .checked_mul(512)
                 .ok_or(BackendError::Capacity)?,
-            source,
+            source: Some(source),
             transfer_ns,
             scratch_close_ns,
+            source_close_ns: 0,
         })
     }
 }
