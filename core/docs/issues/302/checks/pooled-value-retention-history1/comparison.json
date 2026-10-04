@@ -1,0 +1,351 @@
+{
+  "admission": "stride10jointPASS; stride3proofTIMEOUT; stride1referencecommandTIMEOUT/candidateNOT_RUN; no Init/Durable/all-seven admission",
+  "caps_seconds": [
+    60,
+    170,
+    190
+  ],
+  "case_order": [
+    10,
+    3,
+    1
+  ],
+  "manifest_audit": "All6raw inventories/lengths/SHA256 verified before compact copies; original manifests describe raw stores including retainedDBs",
+  "product_implementation": "9dac05a34",
+  "profile": "disposable MEMORY/OFF",
+  "proof_cap_ns": 9500000000,
+  "rows": [
+    {
+      "arithmetic": {
+        "10_candidate": 322263866670,
+        "11_reference": 371676301337
+      },
+      "arms": {
+        "baseline": {
+          "allocation_ceiling": 54278964,
+          "cache_status": "PASS",
+          "canonical_census": {
+            "canonical_bytes": 380559460,
+            "canonical_inventory_sha256": "fb5c8b1768e52ed56013c255c227f155ffe98f4cd2af7aaf5abec60471402249",
+            "canonical_objects": 51689
+          },
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "complete_budget_ns": 60000000000,
+          "complete_command_ns": 50989050667,
+          "identity": {
+            "build_profile": "release",
+            "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+            "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+            "dirty_paths": [],
+            "harness_seal": "b073f1b699ca071f7de7abbcc49c5828bb396fe23059861364b741a628e029a9",
+            "product_seal": "494729dc01a40ff16a875b7e54f6417d7ec90f4b4474b4eaca14e6b4d59a9720",
+            "source_commit": "8bfea39f8562a016d0d3b7b83660c1df0e2451be",
+            "source_dirty": false,
+            "source_tree": "d98002a2efc86da1e8a43cfe9d57810c5de9fa8f"
+          },
+          "lifecycle_ns": 33788754667,
+          "proof_scope": {
+            "admission": "NOT_RUN",
+            "authenticated_bytes": 51862943,
+            "custody_states": 17,
+            "independent_root_pins": "NOT_CHECKED",
+            "paths": 101477,
+            "sample_policy": "every-tenth-content-path-and-final",
+            "sampled_content_paths": 8631,
+            "states": 17,
+            "status": "CHECKED"
+          },
+          "proof_status": "PASS",
+          "proof_wall_ns": 2822646750,
+          "raw_folder": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-value-retention-baseline1",
+          "reason": null,
+          "receipt_sha256": "0508f40a364894ee0f9de0fd2edff3c444874e2b225d5ee55e89e51f2ce0138f",
+          "sample_count": 1,
+          "status": "COMPLETE",
+          "storage_bytes": 52473856,
+          "storage_components": [
+            {
+              "allocated_bytes": 52428800,
+              "length_bytes": 49573888,
+              "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-value-retention-baseline1/store.sqlite"
+            },
+            {
+              "allocated_bytes": 45056,
+              "length_bytes": 41984,
+              "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-value-retention-baseline1/store.sqlite.history.sqlite"
+            }
+          ]
+        },
+        "candidate": {
+          "allocation_ceiling": 54278964,
+          "cache_status": "PASS",
+          "canonical_census": {
+            "canonical_bytes": 380559460,
+            "canonical_inventory_sha256": "fb5c8b1768e52ed56013c255c227f155ffe98f4cd2af7aaf5abec60471402249",
+            "canonical_objects": 51689
+          },
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "complete_budget_ns": 60000000000,
+          "complete_command_ns": 49904542375,
+          "identity": {
+            "build_profile": "release",
+            "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+            "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+            "dirty_paths": [],
+            "harness_seal": "b073f1b699ca071f7de7abbcc49c5828bb396fe23059861364b741a628e029a9",
+            "product_seal": "494729dc01a40ff16a875b7e54f6417d7ec90f4b4474b4eaca14e6b4d59a9720",
+            "source_commit": "8bfea39f8562a016d0d3b7b83660c1df0e2451be",
+            "source_dirty": false,
+            "source_tree": "d98002a2efc86da1e8a43cfe9d57810c5de9fa8f"
+          },
+          "lifecycle_ns": 32226386667,
+          "proof_scope": {
+            "admission": "NOT_RUN",
+            "authenticated_bytes": 51862943,
+            "custody_states": 17,
+            "independent_root_pins": "CHECKED",
+            "paths": 101477,
+            "sample_policy": "every-tenth-content-path-and-final",
+            "sampled_content_paths": 8631,
+            "states": 17,
+            "status": "CHECKED"
+          },
+          "proof_status": "PASS",
+          "proof_wall_ns": 3866133709,
+          "raw_folder": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-value-retention-candidate1",
+          "reason": null,
+          "receipt_sha256": "358fe717c32a7180126055f7e09661930c2333320af45059466a7048b0f6f9be",
+          "sample_count": 1,
+          "status": "COMPLETE",
+          "storage_bytes": 49594368,
+          "storage_components": [
+            {
+              "allocated_bytes": 49594368,
+              "length_bytes": 49594368,
+              "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-value-retention-candidate1/store.sqlite"
+            }
+          ]
+        }
+      },
+      "joint": "PASS",
+      "ratio": 0.9537607107631612,
+      "states": 17,
+      "stride": 10,
+      "time_gate": "PASS"
+    },
+    {
+      "arithmetic": {
+        "10_candidate": 649351432500,
+        "11_reference": 747256670424
+      },
+      "arms": {
+        "baseline": {
+          "allocation_ceiling": 70427034,
+          "cache_status": "PASS",
+          "canonical_census": {
+            "canonical_bytes": 589480854,
+            "canonical_inventory_sha256": "de9a85025bbd10c907e9b5aab67a3d69bd72ee7da8c0a3d2bb12cac6c415972b",
+            "canonical_objects": 73447
+          },
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "complete_budget_ns": 170000000000,
+          "complete_command_ns": 83358350333,
+          "identity": {
+            "build_profile": "release",
+            "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+            "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+            "dirty_paths": [],
+            "harness_seal": "b073f1b699ca071f7de7abbcc49c5828bb396fe23059861364b741a628e029a9",
+            "product_seal": "494729dc01a40ff16a875b7e54f6417d7ec90f4b4474b4eaca14e6b4d59a9720",
+            "source_commit": "8bfea39f8562a016d0d3b7b83660c1df0e2451be",
+            "source_dirty": false,
+            "source_tree": "d98002a2efc86da1e8a43cfe9d57810c5de9fa8f"
+          },
+          "lifecycle_ns": 67932424584,
+          "proof_scope": {
+            "admission": "NOT_RUN",
+            "authenticated_bytes": 127050040,
+            "custody_states": 53,
+            "independent_root_pins": "NOT_CHECKED",
+            "paths": 306861,
+            "sample_policy": "every-tenth-content-path-and-final",
+            "sampled_content_paths": 26052,
+            "states": 53,
+            "status": "CHECKED"
+          },
+          "proof_status": "PASS",
+          "proof_wall_ns": 8241411959,
+          "raw_folder": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-value-retention-baseline1",
+          "reason": null,
+          "receipt_sha256": "e10181535bd85fac06a59f5b2559ceac3b6fc54c15e4e6666e1b4d8a7813a9fb",
+          "sample_count": 1,
+          "status": "COMPLETE",
+          "storage_bytes": 65142784,
+          "storage_components": [
+            {
+              "allocated_bytes": 65011712,
+              "length_bytes": 62668800,
+              "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-value-retention-baseline1/store.sqlite"
+            },
+            {
+              "allocated_bytes": 131072,
+              "length_bytes": 79872,
+              "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-value-retention-baseline1/store.sqlite.history.sqlite"
+            }
+          ]
+        },
+        "candidate": {
+          "allocation_ceiling": 70427034,
+          "cache_status": "PASS",
+          "canonical_census": {
+            "canonical_bytes": 589480854,
+            "canonical_inventory_sha256": "de9a85025bbd10c907e9b5aab67a3d69bd72ee7da8c0a3d2bb12cac6c415972b",
+            "canonical_objects": 73447
+          },
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "complete_budget_ns": 170000000000,
+          "complete_command_ns": 81378862709,
+          "identity": {
+            "build_profile": "release",
+            "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+            "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+            "dirty_paths": [],
+            "harness_seal": "b073f1b699ca071f7de7abbcc49c5828bb396fe23059861364b741a628e029a9",
+            "product_seal": "494729dc01a40ff16a875b7e54f6417d7ec90f4b4474b4eaca14e6b4d59a9720",
+            "source_commit": "8bfea39f8562a016d0d3b7b83660c1df0e2451be",
+            "source_dirty": false,
+            "source_tree": "d98002a2efc86da1e8a43cfe9d57810c5de9fa8f"
+          },
+          "lifecycle_ns": 64935143250,
+          "proof_scope": null,
+          "proof_status": "FAIL",
+          "proof_wall_ns": 9504936125,
+          "raw_folder": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-value-retention-candidate1",
+          "reason": null,
+          "receipt_sha256": "312e5e9b84b5da55650dc0465c1946f7e18591c86785155bee72fd23d56d7dc8",
+          "sample_count": 1,
+          "status": "COMPLETE",
+          "storage_bytes": 62611456,
+          "storage_components": [
+            {
+              "allocated_bytes": 62611456,
+              "length_bytes": 62611456,
+              "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-value-retention-candidate1/store.sqlite"
+            }
+          ]
+        }
+      },
+      "joint": "INCOMPLETE",
+      "ratio": 0.9558784873003643,
+      "states": 53,
+      "stride": 3,
+      "time_gate": "PASS"
+    },
+    {
+      "arithmetic": null,
+      "arms": {
+        "baseline": {
+          "allocation_ceiling": 92342273,
+          "cache_status": "INCOMPLETE",
+          "canonical_census": {
+            "canonical_bytes": null,
+            "canonical_inventory_sha256": null,
+            "canonical_objects": null
+          },
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "complete_budget_ns": 190000000000,
+          "complete_command_ns": 190019101500,
+          "identity": {
+            "build_profile": "release",
+            "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+            "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+            "dirty_paths": [],
+            "harness_seal": "b073f1b699ca071f7de7abbcc49c5828bb396fe23059861364b741a628e029a9",
+            "product_seal": "494729dc01a40ff16a875b7e54f6417d7ec90f4b4474b4eaca14e6b4d59a9720",
+            "source_commit": "8bfea39f8562a016d0d3b7b83660c1df0e2451be",
+            "source_dirty": false,
+            "source_tree": "d98002a2efc86da1e8a43cfe9d57810c5de9fa8f"
+          },
+          "lifecycle_ns": null,
+          "proof_scope": null,
+          "proof_status": "NOT_RUN",
+          "proof_wall_ns": null,
+          "raw_folder": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-value-retention-baseline1",
+          "reason": null,
+          "receipt_sha256": "f3d43e9a12173407fa11abb3bd377a1a01c09e9161710c8efb25838fb6408b5f",
+          "sample_count": 1,
+          "status": "FAIL",
+          "storage_bytes": 84082688,
+          "storage_components": [
+            {
+              "allocated_bytes": 83886080,
+              "length_bytes": 80791552,
+              "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-value-retention-baseline1/store.sqlite"
+            },
+            {
+              "allocated_bytes": 196608,
+              "length_bytes": 179200,
+              "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-value-retention-baseline1/store.sqlite.history.sqlite"
+            }
+          ]
+        },
+        "candidate": {
+          "allocation_ceiling": null,
+          "cache_status": null,
+          "canonical_census": {
+            "canonical_bytes": null,
+            "canonical_inventory_sha256": null,
+            "canonical_objects": null
+          },
+          "cleanup": null,
+          "complete_budget_ns": 190000000000,
+          "complete_command_ns": null,
+          "identity": {
+            "build_profile": "release",
+            "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+            "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+            "dirty_paths": [],
+            "harness_seal": "b073f1b699ca071f7de7abbcc49c5828bb396fe23059861364b741a628e029a9",
+            "product_seal": "494729dc01a40ff16a875b7e54f6417d7ec90f4b4474b4eaca14e6b4d59a9720",
+            "source_commit": "8bfea39f8562a016d0d3b7b83660c1df0e2451be",
+            "source_dirty": false,
+            "source_tree": "d98002a2efc86da1e8a43cfe9d57810c5de9fa8f"
+          },
+          "lifecycle_ns": null,
+          "proof_scope": null,
+          "proof_status": "NOT_RUN",
+          "proof_wall_ns": null,
+          "raw_folder": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-value-retention-candidate-notrun1",
+          "reason": "Same-identity reference lacks qualified complete producer/census/proof and root-pins.json; candidate precondition refuses sampling. No retry or fabricated comparison.",
+          "receipt_sha256": "f358218f93cf909337bfcbd93a3b2a69ae6a838871f98810e464a9766d5e95f7",
+          "sample_count": 0,
+          "status": "NOT_RUN",
+          "storage_bytes": null,
+          "storage_components": null
+        }
+      },
+      "joint": "INCOMPLETE",
+      "ratio": null,
+      "states": 157,
+      "stride": 1,
+      "time_gate": "NOT_RUN"
+    }
+  ],
+  "sample_policy": "one sample/case/eligible arm; current-source qualification; no unchanged retry",
+  "source_freeze": "8bfea39f8562a016d0d3b7b83660c1df0e2451be"
+}

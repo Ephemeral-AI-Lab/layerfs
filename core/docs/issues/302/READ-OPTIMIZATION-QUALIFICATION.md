@@ -387,3 +387,57 @@ necessary work from redundant decode/acquisition (including value-group
 materialization/validation) rather than repeat an unchanged arm or grow caps.
 Stride1reference stays unqualified, and it cannot be made faster by candidate
 cache code. GoalACTIVE; no further budget/workload/format ruling made.
+
+
+## Pooled value retention — source-matched qualification at8bfea39f8
+
+Previous goal turn is progress:9dac05a34 cache change/functionals/countdiagnosis.
+Clean8bfea39f8 revalidated and frozen (same9dac05a34 product), release/locked
+matched case/observer/corpus/cache identities, worktree lock, one worker, same
+source/database cold contract. Requested10->3->1-v3 sequence completed with
+one sample per eligible arm. Sealed build/corpus reuse is recorded in receipts;
+no product work shifted to setup or unchanged arm retry.
+
+|Stride/states;arm|Product lifecycle ns|Complete performance ns /cap|Separate proof ns /9.5s|C2+C5 allocated B|
+|---|---:|---:|---:|---:|
+|10/17;baseline|33788754667|50989050667 /60s|2822646750 PASS|52473856|
+|10/17;candidate|32226386667|49904542375 /60s|3866133709 PASS|49594368|
+|3/53;baseline|67932424584|83358350333 /170s|8241411959 PASS|65142784|
+|3/53;candidate|64935143250|81378862709 /170s|9504936125 FAIL|62611456|
+|1/157;baseline|UNAVAILABLE|190019101500 /190s|NOT_RUN NOT_RUN|84082688|
+|1/157;candidate|NOT_RUN|NOT_RUN /190s|NOT_RUN NOT_RUN|NOT_RUN|
+
+Stride10 ratio0.9537607107631612; integer322263866670<=371676301337 timePASS. Candidate49594368B<54278964B strictstoragePASS, cold/producerroots/census/cleanupPASS. Reference proof2822646750nsPASS; candidate3866133709nsPASS. JointPASS.
+
+Stride3 ratio0.9558784873003643; integer649351432500<=747256670424 timePASS. Candidate62611456B<70427034B strictstoragePASS, cold/producerroots/census/cleanupPASS. Reference proof8241411959nsPASS; candidate9504936125nsFAIL. JointINCOMPLETE.
+
+Reference17 C2=52428800+C5=45056=52473856B;53 C2=65011712+C5=131072=
+65142784B. Candidate17/53 singleDB contains bothC2/C5.17proof scope17custody
+states/101477paths/8631sampled-content paths/51862943authenticated bytes.
+53referenceproof covers53custody/306861paths/26052samples/127050040B. Candidate
+53proof has no complete child result; no inference of semantic/admissionPASS.
+
+Stride1-v3reference190019101500ns complete commandTIMEOUT;154complete state
+rows and filesystem work155, no completed producer/root vector/census/proof.
+Observed83886080+196608=84082688B is partial, not157storage qualification.
+CleanupPASS. Candidate explicitNOT_RUN because referencepins absent.190s
+performance and9.5s proof unchanged. Older rows keep exactlimits/identities/
+outcomes; no fabrication, relabeling, cap inflation or candidate sample.
+
+Rawissue302-history{17,53,157}-value-retention-*1; [comparison](checks/pooled-value-retention-history1/comparison.json) retains source/harness/product/compilation/dependency/binary/corpus/config identities, complete commands/proof scopes and omissions.
+All6raw manifests/lengths/SHA256 audited. Reproduce with sole runner
+`python3 core/benchmark/fs-bench-pro/runner.py run --case
+phase7-sqlite-disposable-history-stride10-v2 --arm baseline --baseline-root
+/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-baseline/layerfs
+--out <fresh-owned-output>`, thenstride3-v2 andstride1-v3; candidate samecase
+with--reference-pins fromitsqualified baseline. Actualargv/pins are in receipts.
+SDK/daemon/FUSE N/A; RSSchild-lifetime only, VFSrequestedbytes notdevicebytes.
+PriorCore495/93tests/Clippy/fmt/boundary448/23 covers this unchanged product.
+No current-source Init/Durable/all-seven admission.
+
+Completion audit remains negative for53proof/157reference. This goal turn
+completed a required qualification sequence and yielded authoritative evidence;
+it is progress, not successful admission. Next safe source investigation:
+decoded-group reuse across dependency discovery/reconstruction and explicit
+private-writer invalidation. Need concrete evidence before another retention
+change, no newcache/largerbound/format/weakerauthentication. GoalACTIVE.

@@ -1975,3 +1975,16 @@ physicalrecord/decode work unchanged. Retention defect fixed but proofgate not
 resolved. All historyrows unchanged; currentcombinedqualificationNOT_RUN.
 Remainingmetadata materialization/dependencywork requires architectural source
 review before another tuningchange. Stride1ref stillunqualified190s,goalACTIVE.
+
+
+-2026-10-04:8bfea39f8/9dac05a34 source-matched10/3/1 sequence:10jointPASS
+reference33.788754667s/candidate32.226386667s ratio0.953760710763; complete
+50.989050667/49.904542375s; proof2.822646750/3.866133709sPASS.3timePASS
+67.932424584/64.935143250s ratio0.955878487300; complete83.358350333/
+81.378862709s; proof8.241411959PASS/9.504936125TIMEOUT =>jointINCOMPLETE.
+Candidate49,594,368/62,611,456B strict/cold/producerroots/census/cleanupPASS.
+1-v3reference190.019101500sTIMEOUT after154states; candidateNOT_RUN/no pins.
+Raw/compact receipts and all6manifest/hash audits preserved. No cap/worker/
+cache/workload relaxation. Previousgoalturnprogress; currentrequiredsequence
+completedbutgoalnotachieved. Nextdependency/decoded-group ownership review,
+private-writer invalidation before any retentionchange. GoalACTIVE.
