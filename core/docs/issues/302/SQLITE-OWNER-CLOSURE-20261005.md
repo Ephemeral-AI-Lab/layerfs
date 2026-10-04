@@ -32,3 +32,7 @@ All four arms complete with PASS independent namespace proof, matching roots, co
 |1000|132358959|256686959|93.932440191|360132334|31156291|20561920|FAIL|
 |10000|1659485708|2630212625|58.495647918|3528378000|347918500|305053696|FAIL|
 |100000|6337916541|7829636333|23.536437919|14702016041|1102071417|514895872|FAIL|
+
+## Final requested round and owner ruling
+
+All11pairs/22arms complete. Owner explicitly keeps1.10x relative ceiling. Durable history3/3 PASS; Disposable Init4/4 PASS; Durable Init4/4jointFAIL only relative speed, with all proof/storage/cold/cleanup/absolute budgets PASS. All22manifests audited. [Full statistics and limitations](SQLITE-OWNER-CLOSURE-RESULTS-20261005.md), including CPU/RSS, exact identities/commands and original storage misses. Issue closes at owner request with those qualifications and PostgreSQL/MinIO still paused; no all-seven Durable or release claim.
