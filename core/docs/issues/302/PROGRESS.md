@@ -1841,3 +1841,11 @@ first15VM4.227M/4.218M but bodies16821/30630,VFS1.650/3.624GB. Candidate15length
 1273.092ms vs287.171ms whilewalkfaster. Public hash-order256objects/37packs fixture
 proves413bodyacqs; physical frontier/root scheduling lowers111 withoutcachegrowth,
 canonical/order/custody/pooled regressionsPASS. Freeze new ordinary17pair next.
+
+
+-2026-10-04: locality16ca22090 ordinary17v2jointPASS1.054728313088x:
+36.421454458s vs34.531598333s; candidate combinedproof8.357936792s PASS; cold/
+root/canonical/storage/cleanup PASS.53reference fullproducer/cold completes
+69.719104917s/83.107392291s command but independent proofTIMEOUT9.502048166s;
+noqualifiedpins,53candidate explicitNOT_RUN.157/DurableNOT_RUN. Oldfailures and
+Initpinnedpasses untouched. Next sharedproof workreuse tofit allretained sizes.

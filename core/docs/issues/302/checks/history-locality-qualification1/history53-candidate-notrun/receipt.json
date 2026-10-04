@@ -1,0 +1,35 @@
+{
+  "arm": "candidate",
+  "cache_status": "NOT_RUN",
+  "case": "phase7-sqlite-disposable-history-stride3-v2",
+  "command_budget_ns": 170000000000,
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "b1724e6d916450fbafbdaad2813f1b9e877d9e61f623db2ae9714b2aaf4c0fb8",
+    "product_seal": "7d509dc6d2024cdae36174f17735f5e4f047c7107e6791a6f7fb0e9c95404553",
+    "source_commit": "16ca22090bddbeb56a4eea921447a687e6987c6a",
+    "source_dirty": false,
+    "source_tree": "81f7c3c5359ada88263020178f5536e158298e8b"
+  },
+  "reason": "matched53reference independent proof timed out9.502048166s; no qualified reference root pins exist",
+  "reference_receipt_sha256": "a6525c8a45f500dbc48f291f27625c1cc41cf5c8722742f0fe9579ab668f8230",
+  "requested_profile": "disposable",
+  "required_case_ids": [
+    "phase7-sqlite-disposable-init-100-v1",
+    "phase7-sqlite-disposable-init-1000-v1",
+    "phase7-sqlite-disposable-init-10000-v1",
+    "phase7-sqlite-disposable-init-100000-v1",
+    "phase7-sqlite-disposable-history-stride10-v2",
+    "phase7-sqlite-disposable-history-stride3-v2",
+    "phase7-sqlite-disposable-history-stride1-v2"
+  ],
+  "sample_count": 0,
+  "schema": "phase7-sqlite-history-v1",
+  "status": "NOT_RUN",
+  "verification_budget_ns": 9500000000,
+  "verification_status": "NOT_RUN",
+  "workload_row": "history-stride3"
+}

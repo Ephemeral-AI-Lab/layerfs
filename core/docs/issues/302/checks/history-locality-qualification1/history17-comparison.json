@@ -1,0 +1,51 @@
+{
+  "arithmetic": {
+    "10_candidate": 364214544580,
+    "11_reference": 379847581663
+  },
+  "arms": {
+    "baseline": {
+      "cache_status": "PASS",
+      "cleanup": {
+        "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+        "status": "PASS"
+      },
+      "command_wall_ns": 51354581459,
+      "comparison_ns": 34531598333,
+      "processing_sum_ns": 17767582584,
+      "stages_ns": [
+        16537324959,
+        1682425501,
+        4585649500,
+        11499507583
+      ],
+      "storage_bytes": 52473856,
+      "verification_status": "PASS",
+      "verification_wall_ns": 4742192833
+    },
+    "candidate": {
+      "cache_status": "PASS",
+      "cleanup": {
+        "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+        "status": "PASS"
+      },
+      "command_wall_ns": 54250061875,
+      "comparison_ns": 36421454458,
+      "processing_sum_ns": 19624372293,
+      "stages_ns": [
+        16515294749,
+        1638287668,
+        3733132334,
+        14252952291
+      ],
+      "storage_bytes": 49594368,
+      "verification_status": "PASS",
+      "verification_wall_ns": 8357936792
+    }
+  },
+  "case": "phase7-sqlite-disposable-history-stride10-v2",
+  "ratio": 1.054728313088073,
+  "source_commit": "16ca22090",
+  "status": "PASS",
+  "storage_ceiling_exclusive": 54278964
+}

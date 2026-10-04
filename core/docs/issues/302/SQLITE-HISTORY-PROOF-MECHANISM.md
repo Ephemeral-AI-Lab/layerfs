@@ -72,3 +72,31 @@ and preserves canonical demand order. Root index worklist<=512usize/4KiB on this
 IDs receive their own output slots. Same readonly integrity/chain semantics.
 This is a count fixture, not a proof latency improvement claim. New matched
 ordinary17pair must qualify the product change and unchanged proof scope/budget.
+
+
+## Ordinary qualification at16ca22090
+
+Fresh matched17v2 pair now jointPASS: product34.531598333s reference/
+36.421454458s candidate, ratio1.054728313088; independent combined proof
+4.742192833/8.357936792s PASS, complete performance51.354581459/54.250061875s,
+strict storage52473856/49594368B<54278964B, cold/roots/canonical/cleanup PASS.
+Integer inequality364214544580<=379847581663. Candidate filesystem3.733132334s
+versus4.585649500s; save14.252952291s versus11.499507583s. Candidate processing
+19.624372293s still misses fixed contextual19.3213359625s by0.3030363305s;
+processing is not substituted for whole lifecycle. Original manifests rechecked.
+
+Required53v2 reference also ran at this source identity: producer all53states,
+73447canonical objects589480854B, cold/cleanup PASS, product69.719104917s and
+complete performance83.107392291s within170s. Closed allocation65142784B.
+Independent proofTIMEOUT9.502048166s; original closed-owner hashes still match
+census. No qualified reference pins;53candidateNOT_RUN with explicit retained
+record, not dropped. Native logs retained but normal diagnostic logging disabled,
+so no fabricated completed-native-state count.157 and Durable remainNOT_RUN.
+This reference proof scaling failure requires shared-verifier work before the
+next candidate pair. No time/buffer/workload/proof relaxation or speed rerun.
+
+Compact checks/history-locality-qualification1 omit database/build artifacts;
+raw runs issue302-history17-locality-{baseline,candidate}1,
+issue302-history53-locality-baseline1 and explicitcandidate-notrun1 remain sealed.
+Prior four Disposable Init PASS artifacts remain their original pinned source,
+not an all-seven current-artifact qualification. Goal remains ACTIVE.
