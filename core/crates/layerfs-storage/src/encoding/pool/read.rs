@@ -22,7 +22,7 @@ use crate::encoding::GroupCache;
 use crate::error::{StorageError, StorageResult};
 use crate::location::ObjectLocation;
 use crate::location::ValueGroupRow;
-use crate::pack::layout::{group_view, parse_header, GroupCodec, PackLane};
+use crate::pack::layout::{GroupCodec, PackLane};
 use crate::policy::{StorageCapacities, METADATA_DECODED_WORK_LIMIT, METADATA_RECORD_LIMIT};
 
 /// One wave's pooled reader: pack and decoded-value caches plus work counters.
@@ -179,15 +179,15 @@ impl PoolReader {
         workspace: &mut DecompressionWorkspace,
         row: &ValueGroupRow,
     ) -> StorageResult<Vec<u8>> {
-        let pack = self.pack(connection, row.pack_id)?;
-        let header = parse_header(pack)?;
+        let selected = self.group(connection, row.pack_id, row.group_number)?;
+        let crate::encoding::GroupSlice {
+            header,
+            view,
+            bytes: selected,
+        } = selected;
         if header.lane != PackLane::PooledMetadata {
             return Err(StorageError::Integrity("value group lane"));
         }
-        let view = group_view(pack, header, row.group_number)?;
-        let selected = pack
-            .get(view.start..view.end)
-            .ok_or(StorageError::Integrity("group body range"))?;
         let body = match view.codec {
             GroupCodec::Raw => selected.to_vec(),
             GroupCodec::Zstandard => workspace.decompress_group(selected, view.decoded_length)?,
@@ -202,24 +202,20 @@ impl PoolReader {
     /// cache is: the cache is selectively evicted when the next body would cross
     /// the declared bound, so a wave's retained pack bytes are a constant rather
     /// than a function of how many packs it reads.
-    fn pack(&mut self, connection: &dyn Source, pack_id: i64) -> StorageResult<&[u8]> {
-        if !self.packs.contains_key(&pack_id) {
-            let bytes = connection.pack_bytes(pack_id)?;
+    fn group(
+        &mut self,
+        connection: &dyn Source,
+        pack_id: i64,
+        number: usize,
+    ) -> StorageResult<crate::encoding::GroupSlice<'_>> {
+        let (fetched, bytes) = self.packs.acquire_groups(connection, pack_id, &[number])?;
+        if fetched {
             self.counters.pack_fetches = self.counters.pack_fetches.saturating_add(1);
-            self.counters.pack_bytes = self.counters.pack_bytes.saturating_add(bytes.len() as u64);
-            let before = self.packs.work();
-            self.packs.insert(pack_id, bytes)?;
-            connection.note_pack_evictions(
-                self.packs.work().evictions - before.evictions,
-                self.packs.work().evicted_bytes - before.evicted_bytes,
-            );
-        } else {
-            connection.note_pack_cache_hit();
+            self.counters.pack_bytes = self.counters.pack_bytes.saturating_add(bytes as u64);
         }
         self.packs
-            .get(&pack_id)
-            .map(Vec::as_slice)
-            .ok_or(StorageError::Integrity("pack cache"))
+            .group(connection, pack_id, number)?
+            .ok_or(StorageError::Integrity("encoded pooled group cache"))
     }
 
     /// Rebuilds the physical body of one pooled leaf from its delta chain.
@@ -234,7 +230,7 @@ impl PoolReader {
         self.leaf_body_with_groups(connection, capacities, ceiling, workspace, root, None)
     }
 
-    fn leaf_body_with_groups(
+    pub(crate) fn leaf_body_with_groups(
         &mut self,
         connection: &dyn Source,
         capacities: &StorageCapacities,
@@ -252,6 +248,12 @@ impl PoolReader {
             Vec::with_capacity(usize::from(capacities.metadata_delta_max_depth) + 1);
         let mut current = root;
         loop {
+            if current.pack_id > ceiling {
+                return Err(StorageError::VisibilityCeiling {
+                    pack_id: current.pack_id,
+                    ceiling,
+                });
+            }
             if chain.iter().any(|row| row.object_id == current.object_id) {
                 return Err(StorageError::Integrity("pooled dependency cycle"));
             }
@@ -337,7 +339,16 @@ impl PoolReader {
         workspace: &mut DecompressionWorkspace,
         location: &ObjectLocation,
     ) -> StorageResult<Option<ObjectId>> {
-        let record = self.record(connection, workspace, location, None)?;
+        self.stored_base_with_groups(connection, workspace, location, None)
+    }
+    pub(crate) fn stored_base_with_groups(
+        &mut self,
+        connection: &dyn Source,
+        workspace: &mut DecompressionWorkspace,
+        location: &ObjectLocation,
+        groups: Option<&mut GroupCache>,
+    ) -> StorageResult<Option<ObjectId>> {
+        let record = self.record(connection, workspace, location, groups)?;
         pooled_base(&record)
     }
 
@@ -354,15 +365,15 @@ impl PoolReader {
         }
         let mut work = PoolReadCounters::default();
         let result = (|| {
-            let pack = self.pack(connection, location.pack_id)?;
-            let header = parse_header(pack)?;
+            let selected = self.group(connection, location.pack_id, location.group_number)?;
+            let crate::encoding::GroupSlice {
+                header,
+                view,
+                bytes: selected,
+            } = selected;
             if header.lane != PackLane::Ordinary {
                 return Err(StorageError::Integrity("pooled leaf lane"));
             }
-            let view = group_view(pack, header, location.group_number)?;
-            let selected = pack
-                .get(view.start..view.end)
-                .ok_or(StorageError::Integrity("group body range"))?;
             let body: Cow<'_, [u8]> = match view.codec {
                 GroupCodec::Raw => Cow::Owned(selected.to_vec()),
                 GroupCodec::Zstandard => match groups {

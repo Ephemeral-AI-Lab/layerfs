@@ -87,6 +87,18 @@ pub struct SqlWork {
     pub sealed_inserts: u64,
     /// Body bytes submitted by those attempted final INSERTs.
     pub sealed_body_bytes: u64,
+    /// Attempted read-only incremental BLOB opens.
+    pub blob_open_calls: u64,
+    /// Attempted exact offset/length BLOB reads, including failures.
+    pub blob_read_calls: u64,
+    /// Requested bytes of those reads, not VFS/device bytes.
+    pub blob_requested_bytes: u64,
+    /// Bytes returned by successful exact reads.
+    pub blob_read_bytes: u64,
+    /// Inclusive actual BLOB read-call wall; hashing/planning are excluded.
+    pub blob_read_ns: u64,
+    /// Attempted checked closes of incremental BLOB handles.
+    pub blob_close_calls: u64,
     /// Successful Disposable bounded physical reservations (not SQL statements).
     pub preallocation_calls: u64,
     /// Bytes reserved without changing logical length.

@@ -1,6 +1,6 @@
 //! Bounded atomic physical persistence; one transaction attempt per operation.
 
-use super::PersistedPack;
+use super::{PackReadPlan, PersistedPack, PersistedPackRead};
 use crate::location::{LocatedObject, ObjectLocation, PackInfo, SignatureRow, ValueGroupRow};
 use crate::policy::StoragePolicy;
 use layerfs_content::ObjectId;
@@ -122,6 +122,16 @@ pub trait PackPersistence: Send + Sync {
     /// immutable across this boundary. C2 retains framing/binding checks.
     fn read_packs(&self, ids: &[i64], out: &mut Vec<PersistedPack>)
         -> Result<(), PersistenceError>;
+    /// Acquires one immutable pack with storage-owned range planning. Complete
+    /// SHA256 authentication is mandatory even when only selected bytes return.
+    /// Unsupported providers fail explicitly, with no error-driven whole fallback.
+    fn read_pack_selection(
+        &self,
+        _id: i64,
+        _plan: &mut dyn PackReadPlan,
+    ) -> Result<PersistedPackRead, PersistenceError> {
+        Err(PersistenceError::BackendUnavailable)
+    }
     /// Reads one bounded catalogue set or page.
     fn value_groups(&self, query: ValueGroupQuery<'_>) -> Result<ValueGroups, PersistenceError>;
     /// Reads at most 8,192 signature rows, in insertion order, once per handle.

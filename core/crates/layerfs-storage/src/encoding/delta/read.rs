@@ -13,7 +13,7 @@ use crate::source::Source;
 use layerfs_content::ObjectId;
 
 use crate::encoding::codec::DecompressionWorkspace;
-use crate::encoding::decode::{decode_canonical, GroupCache};
+use crate::encoding::decode::{decode_selected_group, GroupCache};
 use crate::encoding::full::raw_payload;
 use crate::encoding::pool::PoolReader;
 use crate::error::{StorageError, StorageResult};
@@ -171,6 +171,12 @@ impl<'a> Resolver<'a> {
     ) -> StorageResult<(Vec<u8>, ObjectId)> {
         *self.counters = ChainCounters::default();
         self.packs_read = 0;
+        if root.pack_id > self.ceiling {
+            return Err(StorageError::VisibilityCeiling {
+                pack_id: root.pack_id,
+                ceiling: self.ceiling,
+            });
+        }
         let id = root.object_id;
         if root.role == layerfs_content::ObjectRole::InodeLeaf {
             // A pooled leaf owns its whole chain: the physical body is rebuilt
@@ -263,10 +269,16 @@ impl<'a> Resolver<'a> {
     /// pass below then reuses: a chain is walked and decoded against one copy of
     /// each body, not two.
     fn base_of(&mut self, location: &ObjectLocation) -> StorageResult<Option<ObjectId>> {
+        if location.pack_id > self.ceiling {
+            return Err(StorageError::VisibilityCeiling {
+                pack_id: location.pack_id,
+                ceiling: self.ceiling,
+            });
+        }
         // The body is charged here, where it is fetched, and not inferred later
         // from the cache: the walk now reads it, so a decode that follows is a
         // cache hit and would otherwise report a read that never happened.
-        let (_, fetched) = pack_of(self.caches.packs, self.connection, location.pack_id)?;
+        let (_, fetched) = group_of(self.caches.packs, self.connection, location)?;
         if fetched {
             self.packs_read = self.packs_read.saturating_add(1);
         }
@@ -311,13 +323,11 @@ impl<'a> Resolver<'a> {
                 ceiling: self.ceiling,
             });
         }
-        let record_bytes = {
-            let (pack, fetched) = pack_of(self.caches.packs, self.connection, location.pack_id)?;
-            if fetched {
-                self.packs_read = self.packs_read.saturating_add(1);
-            }
-            record_width(pack, location)?
-        };
+        let (selected, fetched) = group_of(self.caches.packs, self.connection, location)?;
+        if fetched {
+            self.packs_read = self.packs_read.saturating_add(1);
+        }
+        let record_bytes = selected_record_width(selected, location)?;
         if charged {
             let encoded = self.counters.encoded_bytes.saturating_add(record_bytes);
             if encoded > self.capacities.chain_encoded_limit {
@@ -325,12 +335,8 @@ impl<'a> Resolver<'a> {
             }
             self.counters.encoded_bytes = encoded;
         }
-        let (pack, fetched) = pack_of(self.caches.packs, self.connection, location.pack_id)?;
-        if fetched {
-            self.packs_read = self.packs_read.saturating_add(1);
-        }
-        decode_canonical(
-            pack,
+        decode_selected_group(
+            selected,
             location,
             self.capacities,
             base,
@@ -405,15 +411,12 @@ pub fn stored_base(
     group_decodes: &mut u64,
     location: &ObjectLocation,
 ) -> StorageResult<Option<ObjectId>> {
-    let header = {
-        let (pack, _) = pack_of(packs, connection, location.pack_id)?;
-        crate::pack::layout::parse_header(pack)?
-    };
-    let (pack, _) = pack_of(packs, connection, location.pack_id)?;
-    let view = crate::pack::layout::group_view(pack, header, location.group_number)?;
-    let selected = pack
-        .get(view.start..view.end)
-        .ok_or(StorageError::Integrity("group body range"))?;
+    let (selected, _) = group_of(packs, connection, location)?;
+    let crate::encoding::GroupSlice {
+        header,
+        view,
+        bytes: selected,
+    } = selected;
     match header.lane {
         PackLane::Ordinary => {
             let body: &[u8] = match view.codec {
@@ -492,35 +495,22 @@ pub fn accumulate(total: &mut ChainCounters, chain: ChainCounters) {
     total.group_decodes = total.group_decodes.saturating_add(chain.group_decodes);
 }
 
-/// Reads one pack body through the operation's shared cache.
+/// Borrows one complete encoded group through the operation's shared cache.
 ///
 /// The cache is bounded by [`DEPENDENCY_PACK_CACHE_BYTES`]: when the next body
-/// would push the retained bytes past the bound the least-recently-used bodies are evicted, the
-/// same selective body eviction policy the pooled value cache uses, so a save can never
-/// retain a body count that grows with the number of packs it touches.
-fn pack_of<'b>(
+/// would exceed the bound, only needed encoded-body/unit victims are evicted.
+/// Decoded groups/values keep their separate existing 512 KiB policies.
+fn group_of<'b>(
     packs: &'b mut crate::encoding::PackCache,
     connection: &dyn Source,
-    pack_id: i64,
-) -> StorageResult<(&'b [u8], bool)> {
-    let mut fetched = false;
-    if !packs.contains_key(&pack_id) {
-        let bytes = connection.pack_bytes(pack_id)?;
-        let before = packs.work();
-        packs.insert(pack_id, bytes)?;
-        connection.note_pack_evictions(
-            packs.work().evictions - before.evictions,
-            packs.work().evicted_bytes - before.evicted_bytes,
-        );
-        fetched = true;
-    } else {
-        connection.note_pack_cache_hit();
-    }
-    let bytes = packs
-        .get(&pack_id)
-        .map(Vec::as_slice)
-        .ok_or(StorageError::Integrity("pack cache"))?;
-    Ok((bytes, fetched))
+    location: &ObjectLocation,
+) -> StorageResult<(crate::encoding::GroupSlice<'b>, bool)> {
+    let (fetched, _) =
+        packs.acquire_groups(connection, location.pack_id, &[location.group_number])?;
+    let selected = packs
+        .group(connection, location.pack_id, location.group_number)?
+        .ok_or(StorageError::Integrity("encoded group cache"))?;
+    Ok((selected, fetched))
 }
 
 /// Strict ordering key of one locator.
@@ -540,14 +530,28 @@ pub fn locator_key(location: &ObjectLocation) -> (i64, usize, usize) {
 pub fn record_width(pack: &[u8], location: &ObjectLocation) -> StorageResult<u64> {
     let header = crate::pack::layout::parse_header(pack)?;
     let view = crate::pack::layout::group_view(pack, header, location.group_number)?;
-    match view.codec {
-        crate::pack::layout::GroupCodec::Zstandard => Ok(view.decoded_length as u64),
-        crate::pack::layout::GroupCodec::Raw => {
-            let body = pack
-                .get(view.start..view.end)
-                .ok_or(StorageError::Integrity("group body range"))?;
-            let record = crate::encoding::decode::framed_record(body, location.record_number)?;
-            Ok(record.len() as u64)
-        }
+    let body = pack
+        .get(view.start..view.end)
+        .ok_or(StorageError::Integrity("group body range"))?;
+    selected_record_width(
+        crate::encoding::GroupSlice {
+            header,
+            view,
+            bytes: body,
+        },
+        location,
+    )
+}
+fn selected_record_width(
+    selected: crate::encoding::GroupSlice<'_>,
+    location: &ObjectLocation,
+) -> StorageResult<u64> {
+    match selected.view.codec {
+        crate::pack::layout::GroupCodec::Zstandard => Ok(selected.view.decoded_length as u64),
+        crate::pack::layout::GroupCodec::Raw => Ok(crate::encoding::decode::framed_record(
+            selected.bytes,
+            location.record_number,
+        )?
+        .len() as u64),
     }
 }

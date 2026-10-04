@@ -109,3 +109,47 @@ Stride10/3 stay60/170s; proof9.5s and all other gates remain. This supersedes
 the plan's original prospective stride1 cap only. Stage1-v2 receipts above
 remain170s FAIL/NOT_RUN; they are not relabelled. See the
 [budget ruling](HISTORY-BUDGET-RULING-20261004.md).
+
+## Stage2 strict selected reads — implementation and frozen qualification plan
+
+Implemented against parent `bac4cb1fb`: backend-neutral bounded prefix/selection
+port, private authenticated range carrier and SQLite read-only incremental BLOB
+I/O with checked close/transaction outcomes. Complete length/SHA256 is paid once
+per acquisition, even for selected output; no partial bytes assert a complete
+pack digest. C2 parses every directory extent once, coalesces adjacent requested
+complete groups and explicitly chooses whole for singleton, small, >=50%-dense
+or >4-coalesced-span demands. Descriptor/strategy/extents must match the plan.
+All ordinary/native/PREFIX/pooled consumers now use complete groups from either
+whole bodies or units. Same2MiB/4096entry body allowance and existing singleton,
+decode512KiB/value512KiB/output/chain/publication limits. Reader/save ownership,
+first-wins/winner validation and order retained. Private pooled invalidation
+retained; pooled selection walks/reconstruction share the save's existing
+512KiB group cache. No extra canonical-base memo or buffers/workers/schema.
+
+Source diagnostics now separate whole/selected decisions, complete scan bytes,
+prefix+selected materialized bytes and cache work. SQLite reports actual BLOB
+open/read/close/read-call time/requested/returned bytes; VFS/device bytes remain
+different observations. First cold acquisition does not reduce complete scan
+bytes; the hypothesis is less materialization/copying and useful bounded reuse
+avoiding subsequent complete acquisitions. Savings remain unmeasured here.
+
+Functional checks: full workspace/all-target492tests PASS, then after final
+pooled sharing and strengthened actual-acquisition assertions affected owners
+(storage/persistence/project)172tests/36targets PASS. Workspace/all-target
+Clippy-Dwarnings, fmt, boundary448files/23selftests and diff checks PASS.
+Initial reuse test counted only old read routes and failed; it now includes
+selected calls/bytes and preserves same-owner/fresh-owner assertions. Initial
+Clippy manual_inspect corrected without disabling a lint. External tests cover
+adjacent and random sparse groups, dense promotion, duplicate ordering, native
+chunks, PREFIX dependency reconstruction, unselected-byte corruption refusal,
+hash-valid malformed directories, raw range crossings/failures, actual SQLite
+BLOB work/close and the same body-byte/entry-count bounds. Existing physical
+versions and owning publication/transactions remain covered.
+Raw checks: `checks/read-ranges-functional1/`.
+
+Prospective final source-matched release pair order is stride10-v2, stride3-v2,
+stride1-v3; complete performance60/170/190s, separate proof9.5s each. One sample
+per case/arm, immutable archives/matched seals and source/database cold contract;
+new qualified reference pins required before each candidate. All incomplete and
+unrun rows stay explicit. No unchanged arm retry or old170s row promotion.
+This implementation is not all-seven/Init/Durable admission.

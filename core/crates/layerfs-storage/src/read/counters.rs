@@ -9,6 +9,22 @@ pub struct Diagnostics {
     pub locate: u64,
     /// Batched physical-body calls.
     pub read_packs: u64,
+    /// Whole/selected acquisition calls through the backend-neutral read port.
+    pub read_pack_selections: u64,
+    /// Actual whole materialization selections.
+    pub whole_selected: u64,
+    /// Whole selections for density/coalescing-call policy.
+    pub whole_due_density: u64,
+    /// Whole selections for the isolated singleton contract.
+    pub whole_due_singleton: u64,
+    /// Whole selections whose body already fits the acquired prefix.
+    pub whole_due_small: u64,
+    /// Actual selected complete-group materializations.
+    pub range_selected: u64,
+    /// Complete bytes scanned/hashed for selected acquisitions, not device bytes.
+    pub range_scan_bytes: u64,
+    /// Prefix plus selected bytes returned, separately from scanned bytes.
+    pub range_materialized_bytes: u64,
     /// Catalogue set/page calls.
     pub value_groups: u64,
     /// Signature-ring reads.

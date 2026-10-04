@@ -383,6 +383,12 @@ pub struct PackHeader {
 
 /// Reads and validates the pack header before any body is touched.
 pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
+    parse_directory_header(bytes, bytes.len())
+}
+
+/// Validates a bounded control/directory prefix against the separately declared
+/// complete physical length. This checks framing only, never pack authentication.
+pub fn parse_directory_header(bytes: &[u8], total_length: usize) -> StorageResult<PackHeader> {
     let header = bytes
         .get(..HEADER_LEN)
         .ok_or(StorageError::Integrity("pack header"))?;
@@ -432,12 +438,16 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
     if header[20..24] != [0, 0, 0, 0] {
         return Err(StorageError::Integrity("pack reserved field"));
     }
-    let used = declared_length(bytes)?;
-    if used != bytes.len() {
+    let used = u32::from_le_bytes(
+        header[USED_OFFSET..USED_OFFSET + 4]
+            .try_into()
+            .map_err(|_| StorageError::Integrity("pack length"))?,
+    ) as usize;
+    if used != total_length || bytes.len() > total_length {
         return Err(StorageError::Integrity("pack length"));
     }
     let body_offset = HEADER_LEN + directory_entry_len(lane) * slots;
-    if used < body_offset + 1 {
+    if used < body_offset + 1 || bytes.len() < body_offset {
         return Err(StorageError::Integrity("pack directory width"));
     }
     let pack_limit = match version {
@@ -445,7 +455,7 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
         VERSION_POOLED_HALF => POOLED_V22_PACK_LIMIT,
         _ => lane.pack_limit(),
     };
-    if bytes.len() > pack_limit {
+    if total_length > pack_limit {
         return Err(StorageError::Integrity("pack length"));
     }
     if lane == PackLane::Singleton && group_count != 1 {
@@ -482,20 +492,60 @@ pub struct GroupView {
 
 /// Resolves one group body, validating the whole bounded directory first.
 pub fn group_view(bytes: &[u8], header: PackHeader, group: usize) -> StorageResult<GroupView> {
+    if bytes.len() != header.used {
+        return Err(StorageError::Integrity("pack length"));
+    }
+    directory_group_view(bytes, header, group)
+}
+
+/// Resolves a complete encoded group from a full bounded directory, validating
+/// every directory extent against the header's complete pack length.
+pub fn directory_group_view(
+    bytes: &[u8],
+    header: PackHeader,
+    group: usize,
+) -> StorageResult<GroupView> {
+    if bytes.len() < header.body_offset || bytes.len() > header.used {
+        return Err(StorageError::Integrity("pack directory width"));
+    }
     if group >= header.group_count {
         return Err(StorageError::Integrity("group ordinal"));
     }
-    match header.lane {
-        PackLane::WholeFile => whole_file_group_view(bytes, header, group),
-        PackLane::Ordinary | PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton => {
-            ordinary_group_view(bytes, header, group)
+    let mut selected = None;
+    visit_directory(bytes, header, &mut |number, view| {
+        if number == group {
+            selected = Some(view);
         }
+    })?;
+    selected.ok_or(StorageError::Integrity("group ordinal"))
+}
+
+/// Validates the directory once and returns every bounded encoded-group view.
+pub fn directory_group_views(bytes: &[u8], header: PackHeader) -> StorageResult<Vec<GroupView>> {
+    if bytes.len() < header.body_offset || bytes.len() > header.used {
+        return Err(StorageError::Integrity("pack directory width"));
+    }
+    let mut views = Vec::with_capacity(header.group_count);
+    visit_directory(bytes, header, &mut |_, view| views.push(view))?;
+    Ok(views)
+}
+fn visit_directory(
+    bytes: &[u8],
+    header: PackHeader,
+    visit: &mut impl FnMut(usize, GroupView),
+) -> StorageResult<()> {
+    match header.lane {
+        PackLane::WholeFile => whole_file_directory(bytes, header, visit),
+        _ => ordinary_directory(bytes, header, visit),
     }
 }
 
-fn ordinary_group_view(bytes: &[u8], header: PackHeader, group: usize) -> StorageResult<GroupView> {
+fn ordinary_directory(
+    bytes: &[u8],
+    header: PackHeader,
+    visit: &mut impl FnMut(usize, GroupView),
+) -> StorageResult<()> {
     let mut offset = header.body_offset;
-    let mut selected = None;
     for index in 0..header.group_count {
         let start = HEADER_LEN + DIRECTORY_ENTRY_LEN * index;
         let entry = bytes
@@ -525,7 +575,7 @@ fn ordinary_group_view(bytes: &[u8], header: PackHeader, group: usize) -> Storag
         let end = body_start
             .checked_add(encoded)
             .ok_or(StorageError::Integrity("group end"))?;
-        if encoded == 0 || decoded == 0 || end > bytes.len() {
+        if encoded == 0 || decoded == 0 || end > header.used {
             return Err(StorageError::Integrity("group extent"));
         }
         let codec = match entry[12] {
@@ -543,32 +593,32 @@ fn ordinary_group_view(bytes: &[u8], header: PackHeader, group: usize) -> Storag
         if header.lane == PackLane::Singleton && header.group_count != 1 {
             return Err(StorageError::Integrity("singleton pack group count"));
         }
-        if index == group {
-            selected = Some(GroupView {
+        visit(
+            index,
+            GroupView {
                 start: body_start,
                 end,
                 decoded_length: decoded,
                 codec,
-            });
-        }
+            },
+        );
         offset = end;
     }
-    if offset != bytes.len() {
+    if offset != header.used {
         return Err(StorageError::Integrity("pack trailing bytes"));
     }
-    selected.ok_or(StorageError::Integrity("group ordinal"))
+    Ok(())
 }
 
-fn whole_file_group_view(
+fn whole_file_directory(
     bytes: &[u8],
     header: PackHeader,
-    group: usize,
-) -> StorageResult<GroupView> {
-    if bytes.len() > header.lane.pack_limit() {
+    visit: &mut impl FnMut(usize, GroupView),
+) -> StorageResult<()> {
+    if header.used > header.lane.pack_limit() {
         return Err(StorageError::Integrity("compact pack length"));
     }
     let mut start = header.body_offset;
-    let mut selected = None;
     for index in 0..header.group_count {
         let entry = bytes
             .get(
@@ -585,7 +635,7 @@ fn whole_file_group_view(
             return Err(StorageError::Integrity("compact directory continuity"));
         }
         let end = if index + 1 == header.group_count {
-            bytes.len()
+            header.used
         } else {
             let next = bytes
                 .get(
@@ -601,20 +651,21 @@ fn whole_file_group_view(
         let size = end
             .checked_sub(start)
             .ok_or(StorageError::Integrity("compact group range"))?;
-        if size < 2 || end > bytes.len() {
+        if size < 2 || end > header.used {
             return Err(StorageError::Integrity("compact group extent"));
         }
-        if index == group {
-            selected = Some(GroupView {
+        visit(
+            index,
+            GroupView {
                 start,
                 end,
                 decoded_length: size,
                 codec: GroupCodec::Raw,
-            });
-        }
+            },
+        );
         start = end;
     }
-    selected.ok_or(StorageError::Integrity("group ordinal"))
+    Ok(())
 }
 
 /// Index of the record whose end offset equals `offset` in a group directory.

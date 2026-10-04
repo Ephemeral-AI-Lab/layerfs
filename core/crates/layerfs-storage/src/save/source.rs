@@ -37,6 +37,44 @@ impl Source for WaveSource<'_> {
             None => self.fetch.pack_bytes(id),
         }
     }
+    fn validate_cached_pack(&self, info: crate::location::PackInfo) -> StorageResult<()> {
+        if let Some(pack) = self
+            .packer
+            .ready
+            .iter()
+            .find(|pack| pack.info.pack_id == info.pack_id)
+        {
+            if pack.info != info {
+                return Err(crate::StorageError::Integrity(
+                    "private sealed descriptor changed",
+                ));
+            }
+            Ok(())
+        } else {
+            self.fetch.validate_cached_pack(info)
+        }
+    }
+    fn acquire_groups(
+        &self,
+        id: i64,
+        groups: &[usize],
+    ) -> StorageResult<crate::encoding::PackAcquisition> {
+        if let Some(body) = self.packer.pooled_body(id)? {
+            return Ok(crate::encoding::PackAcquisition::Whole { info: None, body });
+        }
+        if let Some(pack) = self
+            .packer
+            .ready
+            .iter()
+            .find(|pack| pack.info.pack_id == id)
+        {
+            return Ok(crate::encoding::PackAcquisition::Whole {
+                info: Some(pack.info),
+                body: pack.body.as_ref().clone(),
+            });
+        }
+        self.fetch.acquire_groups(id, groups)
+    }
     fn value_group(&self, ordinal: u32) -> StorageResult<Option<ValueGroupRow>> {
         match self.packer.pooled_row(ordinal) {
             Some(row) => Ok(Some(row)),

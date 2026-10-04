@@ -13,6 +13,7 @@ use crate::{
     source::Source,
 };
 use layerfs_content::ObjectId;
+use std::collections::BTreeSet;
 
 pub(crate) struct ReadState {
     workspace: DecompressionWorkspace,
@@ -88,22 +89,39 @@ impl ReadState {
             (row.pack_id, row.group_number, row.record_number)
         });
         let mut out = vec![Vec::new(); ids.len()];
-        for position in order {
-            let root = roots[position];
-            let (canonical, _) = Resolver::new(
-                source,
-                i64::MAX,
-                capacities,
-                BodyCaches {
-                    packs: &mut self.packs,
-                    pool: &mut self.pool,
-                },
-                &mut self.groups,
-                &mut self.workspace,
-                &mut counters,
-            )
-            .resolve_at(root)?;
-            out[position] = canonical;
+        let mut from = 0;
+        while from < order.len() {
+            let id = roots[order[from]].pack_id;
+            let end = from
+                + order[from..]
+                    .iter()
+                    .take_while(|position| roots[**position].pack_id == id)
+                    .count();
+            let needed: Vec<_> = order[from..end]
+                .iter()
+                .map(|position| roots[*position].group_number)
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            self.packs.acquire_groups(source, id, &needed)?;
+            for &position in &order[from..end] {
+                let root = roots[position];
+                let (canonical, _) = Resolver::new(
+                    source,
+                    i64::MAX,
+                    capacities,
+                    BodyCaches {
+                        packs: &mut self.packs,
+                        pool: &mut self.pool,
+                    },
+                    &mut self.groups,
+                    &mut self.workspace,
+                    &mut counters,
+                )
+                .resolve_at(root)?;
+                out[position] = canonical;
+            }
+            from = end;
         }
         Ok(out)
     }

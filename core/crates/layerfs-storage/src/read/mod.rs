@@ -5,6 +5,7 @@ mod fetch;
 mod objects;
 mod prefetch;
 mod provider;
+mod units;
 
 pub use counters::Diagnostics;
 pub(crate) use fetch::Fetch;

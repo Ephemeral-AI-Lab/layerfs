@@ -105,13 +105,15 @@ pub const POOLED_LEAF_ROWS_LIMIT: usize = 100;
 pub const CHAIN_CANONICAL_LIMIT: u64 = 512 * 1024;
 /// Encoded bytes one dependency chain may read.
 pub const CHAIN_ENCODED_LIMIT: u64 = 256 * 1024;
-/// Pack bodies one operation's dependency cache may retain.
+/// Complete bodies or selected encoded groups one operation may retain.
 ///
 /// Owner: the save operation that fills it. Bound: this many bytes of pack bodies.
-/// Live multiplicity: one cache per save, one copy per distinct pack. Lifetime:
+/// Live multiplicity: one cache per existing reader/save/pooled owner; a pack
+/// has either one whole body or distinct encoded units in that cache. Lifetime:
 /// the operation. Release: dropped with the operation; capacity pressure releases
-/// only the least-recently-used bodies needed to admit the next body. A released body is read again if a later
-/// dependency needs it, so the bound costs reads and never correctness.
+/// only the least-recently-used bodies/units needed for admission. Count is also
+/// bounded by READ_OBJECT_LIMIT. Released bytes are acquired again when needed;
+/// the bound costs work and never correctness.
 pub const DEPENDENCY_PACK_CACHE_BYTES: usize = 2 * 1024 * 1024;
 /// Decoded values one pooled reader may retain across one wave.
 ///
@@ -127,8 +129,8 @@ pub const POOLED_VALUE_CACHE_BYTES: usize = 512 * 1024;
 /// the caller that owns the wave's pack cache and carried by every resolver in that
 /// wave. Bound: this many decoded body bytes. Live multiplicity: one copy per
 /// distinct `(pack, group)`. Lifetime: the wave; dropped with it. Release: the
-/// least-recently-used bodies are evicted when the next body would cross the bound, the
-/// discipline the pooled value cache and the dependency pack cache already use. A
+/// whole decoded cache is released when the next body crosses its bound. This
+/// policy is unchanged; selective eviction applies to encoded bodies/units. A
 /// released body is decompressed again if a later record needs it, so the bound
 /// costs work and never correctness.
 ///

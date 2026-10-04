@@ -15,6 +15,22 @@ pub trait Source {
     fn location(&self, id: ObjectId, ceiling: i64) -> StorageResult<Option<ObjectLocation>>;
     /// Complete declared pack bytes, without capacity padding.
     fn pack_bytes(&self, pack_id: i64) -> StorageResult<Vec<u8>>;
+    /// Acquires the complete encoded groups needed by this bounded physical
+    /// demand. Ordinary custom sources explicitly use their whole-body route.
+    fn acquire_groups(
+        &self,
+        pack_id: i64,
+        _groups: &[usize],
+    ) -> StorageResult<crate::encoding::PackAcquisition> {
+        Ok(crate::encoding::PackAcquisition::Whole {
+            info: None,
+            body: self.pack_bytes(pack_id)?,
+        })
+    }
+    /// Validates a retained descriptor against this Source's immutable view.
+    fn validate_cached_pack(&self, _info: crate::location::PackInfo) -> StorageResult<()> {
+        Ok(())
+    }
     /// Advisory catalogue prefetch for one bounded pooled leaf, before value reads.
     /// Scalar sources deliberately do no prefetch; `value_group` remains the
     /// required lookup and missing values still fail during reconstruction.

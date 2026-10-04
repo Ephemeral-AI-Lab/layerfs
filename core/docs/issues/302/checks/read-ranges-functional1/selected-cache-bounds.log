@@ -1,0 +1,9 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.84s
+     Running tests/selected_cache_bounds.rs (core/target/debug/deps/selected_cache_bounds-0c838157a3ff0cbd)
+
+running 2 tests
+test tiny_selected_units_still_obey_the_existing_entry_count_limit ... ok
+test selected_units_evict_selectively_under_the_same_two_mib_body_limit ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s

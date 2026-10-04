@@ -1100,3 +1100,44 @@ Whole acquired packs keep the immutable PersistedPack SHA256 boundary and C2
 framing/domain/canonical validation. No range attestation or measured speed claim
 is supplied by this change. Qualification is tracked in
 [the implementation plan](../issues/302/READ-OPTIMIZATION-QUALIFICATION.md).
+
+### Strict selected encoded-group acquisition
+
+Described against parent `bac4cb1fb`. The backend-neutral `PackReadPlan` receives
+a bounded control/directory prefix and selects whole materialization or sorted
+complete-group extents. C2 validates all directory extents in one pass, coalesces
+only adjacent requested groups, and chooses whole materialization for singleton,
+prefix-sized, >=50%-dense or >4-coalesced-range demands. Selection is before body
+I/O; no error selects an alternate route. Returned strategy, descriptor and
+exact ranges must match the plan.
+
+SQLite reads the real immutable BLOB with read-only incremental open/read/checked
+close inside one existing transaction attempt. Complete length/SHA256 validation
+is retained: selected acquisition reads/hashes every byte once into bounded
+scratch, copying selected pieces from those same observed chunks. The separate
+private-field PersistedPackRanges carrier is not a complete PersistedPack.
+Corruption in unselected bytes still fails. Whole selection keeps the unchanged
+PersistedPack constructor/guarantee. No schema/framing/canonical-identity change
+or first-touch cold-I/O byte reduction is implied.
+
+PackCache retains either a whole body or complete encoded groups under the same
+2 MiB/4,096-entry allowance, with the existing isolated singleton exception.
+Descriptors remain bound to cached units. Prefix + selected-output + scan scratch
+share the existing 2 MiB acquisition allowance; normal selected C2 packs are at
+most256KiB. Splitting a coalesced result temporarily copies at most a normal pack,
+within that allowance. Codec/output/publication/decoded-cache bounds are unchanged.
+Root/dependency work is deduplicated by physical group and output slots preserve
+original order/duplicates. Reader and Save own their caches; private pooled appends
+still release their view and sealed ordinary bodies remain reusable. Ordinary,
+PREFIX, native and pooled decoders consume the same complete group grammar from
+either representation and retain canonical/dependency/work/visibility checks.
+Pooled save-selection depth walks and physical-base reconstruction borrow the
+same save-owned512KiB decoded-group cache used by prefetch and exact reuse;
+no extra cache or canonical-base retention is introduced.
+
+Diagnostics distinguish actual whole/selected strategies, complete scan bytes,
+prefix+selected materialized bytes, cache consults/evictions and SQLite BLOB
+open/read/close calls, requested/returned bytes and read-call wall. SQL, BLOB,
+transaction and product spans overlap; they must not be summed as independent
+work. Lifetime owner peaks are not phase-local process-memory evidence.
+Qualification remains in the [read plan](../issues/302/READ-OPTIMIZATION-QUALIFICATION.md).

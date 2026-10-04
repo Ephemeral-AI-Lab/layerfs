@@ -17,9 +17,9 @@ pub struct PoolReadCounters {
     pub physical_group_cache_hits: u64,
     /// Value groups freshly materialized, whether raw or compressed.
     pub value_group_decodes: u64,
-    /// Pooled pack BLOBs fetched from SQLite.
+    /// Real pooled source acquisitions, including private immutable views.
     pub pack_fetches: u64,
-    /// Pooled pack BLOB bytes copied from SQLite, not disk I/O.
+    /// Complete source body/scan bytes charged to acquisitions, not device I/O.
     pub pack_bytes: u64,
 }
 

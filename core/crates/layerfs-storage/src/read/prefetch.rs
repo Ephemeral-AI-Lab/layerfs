@@ -31,14 +31,19 @@ pub(crate) fn chains(
         let mut from = 0;
         let mut decodes = 0;
         while from < frontier.len() {
-            let end = source.cohort_end(&frontier, from)?;
-            source.fetch_packs(
-                &frontier[from..end]
+            let id = frontier[from].pack_id;
+            let end = from
+                + frontier[from..]
                     .iter()
-                    .map(|row| row.pack_id)
-                    .collect::<Vec<_>>(),
-                packs,
-            )?;
+                    .take_while(|row| row.pack_id == id)
+                    .count();
+            let needed: Vec<_> = frontier[from..end]
+                .iter()
+                .map(|row| row.group_number)
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            packs.acquire_groups(source, id, &needed)?;
             for location in &frontier[from..end] {
                 if !visited.insert(location.object_id) {
                     continue;

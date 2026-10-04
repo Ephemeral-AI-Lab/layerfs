@@ -83,15 +83,47 @@ pub fn decode_canonical(
     groups: &mut GroupCache,
     group_decodes: &mut u64,
 ) -> StorageResult<Vec<u8>> {
-    let canonical_length = location.canonical_length;
-    if canonical_length == 0 || canonical_length > CANONICAL_LIMIT {
-        return Err(StorageError::Integrity("canonical length"));
-    }
     let header = parse_header(pack)?;
     let view = group_view(pack, header, location.group_number)?;
     let selected = pack
         .get(view.start..view.end)
         .ok_or(StorageError::Integrity("group body range"))?;
+    decode_selected_group(
+        crate::encoding::GroupSlice {
+            header,
+            view,
+            bytes: selected,
+        },
+        location,
+        capacities,
+        base,
+        workspace,
+        groups,
+        group_decodes,
+    )
+}
+
+pub(crate) fn decode_selected_group(
+    selected: crate::encoding::GroupSlice<'_>,
+    location: &ObjectLocation,
+    capacities: &StorageCapacities,
+    base: Option<&[u8]>,
+    workspace: &mut DecompressionWorkspace,
+    groups: &mut GroupCache,
+    group_decodes: &mut u64,
+) -> StorageResult<Vec<u8>> {
+    let canonical_length = location.canonical_length;
+    if canonical_length == 0 || canonical_length > CANONICAL_LIMIT {
+        return Err(StorageError::Integrity("canonical length"));
+    }
+    let crate::encoding::GroupSlice {
+        header,
+        view,
+        bytes: selected,
+    } = selected;
+    if selected.len() != view.end - view.start {
+        return Err(StorageError::Integrity("selected group length"));
+    }
     match header.lane {
         PackLane::Ordinary => {
             // A group body cached by this wave is served as it stands; otherwise it

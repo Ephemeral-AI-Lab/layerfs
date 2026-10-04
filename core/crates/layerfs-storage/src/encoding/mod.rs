@@ -17,6 +17,7 @@ pub mod pool;
 mod decode;
 mod full;
 mod pack_cache;
+mod pack_units;
 
 pub use codec::{
     CodecProfile, CompressionWorkspace, DecompressionWorkspace, DECODE_WORKSPACE_BYTES,
@@ -25,3 +26,4 @@ pub use codec::{
 pub use decode::{decode_canonical, framed_record, group_records, GroupCache};
 pub use full::{encode_full, encode_prefix, lane_body_limit, raw_payload, EncodedRecord};
 pub use pack_cache::{PackCache, PackCacheWork};
+pub use pack_units::{GroupSlice, PackAcquisition, PackUnit};

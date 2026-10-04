@@ -1895,3 +1895,28 @@ storage/cleanup PASS; proofTIMEOUT9.507007292s =>jointINCOMPLETE. Freshnativecau
 candidate44states/timeouts9.50818025s,44lengths332ms vswalk82ms and2231bodyacqs/
 280MBVFS, typedauth/frame checks preserved. Next dependency/file acquisition work;
 157/DurableNOT_RUN, historicalpasses/failures untouched. GoalACTIVE.
+
+
+-2026-10-04: owner-directed read optimization Stage1 at82dd31b24 uses selective
+2MiB caches, bounded physical cohorts and sealed body reuse. Stride10 jointPASS:
+reference35.039103292s/candidate33.306699875s ratio0.950557997944; proof2.968669542/
+5.073271209s, command53.129534542/50.671928209s, candidate49,594,368B strictPASS.
+Stride3 timePASS71.288805958/69.873888833s ratio0.980152323973, command86.535392041/
+86.882979333s; proof8.616643417sPASS/9.507661125sTIMEOUT =>jointINCOMPLETE.
+Candidate62,611,456B strict/cold/roots/census/cleanupPASS. Stride1 reference
+170.014270917sTIMEOUT after143/157; no complete lifecycle/root vector/proof.
+Candidate explicitlyNOT_RUN without qualified pins. No unchanged retry or
+promotion; raw and compact receipts in READ-OPTIMIZATION-QUALIFICATION.md.
+
+-2026-10-04: owner requests modest stride1 extension; bac4cb1fb registers new
+stride1-v3 with190s performance (+20s), keeps9.5s proof and other gates unchanged.
+Old170s definitions/failure remain. Six registry checksPASS; productionLOCdelta0.
+
+-2026-10-04: Stage2 strict range port/SQLite/C2 selected-group integration
+implemented againstbac4cb1fb. Full scan/SHA256 retained; selected units share
+existing2MiB/4096body allowance, no first-touch cold-I/O saving claim. Full492
+workspace tests then final affected owners172tests PASS, all-targetClippy/fmt/
+boundary448/23selftests/diffPASS. Sparse/dense/native/PREFIX/order/corruption and
+body/count bounds checked. Pooled save walk/reconstruction borrows existing
+512KiB group cache. Freeze then stride10/3/1-v3 matched qualification next.
+Earlier failures/Init pins preserved; goalACTIVE, no all-seven/Durable claim.

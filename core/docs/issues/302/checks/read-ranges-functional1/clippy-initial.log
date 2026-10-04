@@ -1,0 +1,20 @@
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+error: using `map` over `inspect`
+  --> crates/layerfs-storage/src/read/units.rs:92:14
+   |
+92 |             .map(|choice| {
+   |              ^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_inspect
+   = note: `-D clippy::manual-inspect` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::manual_inspect)]`
+help: try
+   |
+92 ~             .inspect(|choice| {
+93 |                 self.selected_info = Some(info);
+94 ~                 self.selected_choice = Some(choice.clone());
+   |
+
+error: could not compile `layerfs-storage` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-storage` (lib test) due to 1 previous error

@@ -162,3 +162,17 @@ The bridge/service still require their separate concurrency, memory and actual
 Docker acceptance. A C2 functional PASS alone does not enable a writer budget
 above two in the service or qualify O01–O11 as a group, and no budget has a
 performance qualification.
+
+## Phase7 port-path selected reads
+
+Described against parent `bac4cb1fb`; this paragraph applies to the active
+DB-only PackPersistence path, not the older schema8 API described above.
+Save WaveSource delegates acknowledged group acquisition to Fetch's strict
+whole/selected reader. Private pooled tails and sealed-ready bodies are served
+through their explicit private whole-body view, never an error fallback.
+Published units bind pack descriptor/domain/length/digest and original group
+coordinates. They share the existing operation-owned2MiB body allowance;
+private pooled appends still invalidate their cache. First-wins validation,
+locator/depth invalidation, publication closure and output/lost-ID ordering
+remain. SQLite holds the read snapshot through complete authentication and
+checked BLOB close; uncertainty follows the existing quarantine path.

@@ -56,7 +56,7 @@ fn bounded_hash_order_demand_does_not_reacquire_one_pack_for_each_object() {
         .lock()
         .unwrap()
         .iter()
-        .filter(|(name, _)| *name == "read_packs")
+        .filter(|(name, _)| *name == "read_packs" || *name == "read_pack_selection")
         .map(|(_, count)| count)
         .sum();
     // Bounded acquisition consumes each cohort during dependency inspection;

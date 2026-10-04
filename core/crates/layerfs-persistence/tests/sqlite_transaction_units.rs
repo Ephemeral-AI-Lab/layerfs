@@ -158,6 +158,12 @@ fn reader_reuses_authenticated_pack_within_one_operation() {
     let reused = storage.diagnostics();
     assert_eq!(reused.read_packs, acquired.read_packs);
     assert_eq!(reused.payload_reads, acquired.payload_reads);
+    assert_eq!(reused.read_pack_selections, acquired.read_pack_selections);
+    assert_eq!(reused.range_scan_bytes, acquired.range_scan_bytes);
+    assert_eq!(
+        reused.range_materialized_bytes,
+        acquired.range_materialized_bytes
+    );
     assert_eq!(reused.pack_read_bytes, acquired.pack_read_bytes);
     assert_eq!(reused.payload_read_bytes, acquired.payload_read_bytes);
     // A new operation owns an empty cache and must pay for acquisition again.
@@ -167,7 +173,10 @@ fn reader_reuses_authenticated_pack_within_one_operation() {
         vec![o.canonical().to_vec()]
     );
     let fresh = storage.diagnostics();
-    assert!(fresh.read_packs + fresh.payload_reads > reused.read_packs + reused.payload_reads);
+    assert!(
+        fresh.read_packs + fresh.payload_reads + fresh.read_pack_selections
+            > reused.read_packs + reused.payload_reads + reused.read_pack_selections
+    );
 }
 
 #[test]

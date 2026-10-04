@@ -135,77 +135,6 @@ impl Fetch {
         cache.insert(info.pack_id, info);
         Ok(())
     }
-    pub(crate) fn fetch_packs(
-        &self,
-        ids: &[i64],
-        packs: &mut crate::encoding::PackCache,
-    ) -> StorageResult<()> {
-        let ids: BTreeSet<_> = ids.iter().copied().collect();
-        let wanted = ids
-            .iter()
-            .map(|id| {
-                let info = self
-                    .descriptors
-                    .borrow()
-                    .get(id)
-                    .copied()
-                    .ok_or(StorageError::Integrity("pack descriptor missing"))?;
-                Ok((*id, info.length))
-            })
-            .collect::<StorageResult<Vec<_>>>()?;
-        let before = packs.work();
-        packs.reserve(&wanted)?;
-        self.note(|c| {
-            c.pack_evictions += packs.work().evictions - before.evictions;
-            c.pack_evicted_bytes += packs.work().evicted_bytes - before.evicted_bytes;
-        });
-        let mut metadata = Vec::new();
-        let mut bytes = 0;
-        for id in ids {
-            if packs.contains_key(&id) {
-                self.note(|c| c.pack_hits += 1);
-                continue;
-            }
-            let info = self
-                .descriptors
-                .borrow()
-                .get(&id)
-                .copied()
-                .ok_or(StorageError::Integrity("pack descriptor missing"))?;
-            if bytes + info.length > DEPENDENCY_PACK_CACHE_BYTES {
-                self.metadata_packs(&metadata, packs)?;
-                metadata.clear();
-                bytes = 0;
-            }
-            bytes += info.length;
-            metadata.push(id);
-        }
-        self.metadata_packs(&metadata, packs)
-    }
-    pub(crate) fn cohort_end(&self, rows: &[ObjectLocation], from: usize) -> StorageResult<usize> {
-        let mut end = from;
-        let mut bytes = 0usize;
-        let mut prior = None;
-        while let Some(row) = rows.get(end) {
-            if prior != Some(row.pack_id) {
-                let length = self
-                    .descriptors
-                    .borrow()
-                    .get(&row.pack_id)
-                    .ok_or(StorageError::Integrity("pack descriptor missing"))?
-                    .length;
-                if end > from && bytes.saturating_add(length) > DEPENDENCY_PACK_CACHE_BYTES {
-                    break;
-                }
-                bytes = bytes
-                    .checked_add(length)
-                    .ok_or(StorageError::Integrity("cohort bytes"))?;
-                prior = Some(row.pack_id);
-            }
-            end += 1;
-        }
-        Ok(end)
-    }
     fn metadata_packs(
         &self,
         ids: &[i64],
@@ -356,6 +285,94 @@ impl Source for Fetch {
     }
     fn prepare_value_groups(&self, ordinals: &[u32]) -> StorageResult<()> {
         self.prefetch_values(ordinals)
+    }
+    fn validate_cached_pack(&self, info: PackInfo) -> StorageResult<()> {
+        self.remember_pack(info)
+    }
+    fn acquire_groups(
+        &self,
+        id: i64,
+        groups: &[usize],
+    ) -> StorageResult<crate::encoding::PackAcquisition> {
+        self.note(|c| {
+            c.read_pack_selections += 1;
+            c.pack_misses += 1;
+        });
+        let mut plan = super::units::GroupPlan::new(id, groups);
+        let reply = self.metadata.read_pack_selection(id, &mut plan);
+        if let Some(error) = plan.error {
+            return Err(error);
+        }
+        let reply = reply?;
+        let info = match &reply {
+            crate::port::PersistedPackRead::Whole(row) => row.info(),
+            crate::port::PersistedPackRead::Ranges(row) => row.info(),
+        };
+        if plan.selected_info != Some(info) {
+            return Err(StorageError::Integrity("selected descriptor binding"));
+        }
+        match (&plan.selected_choice, &reply) {
+            (
+                Some(crate::port::PackReadChoice::Whole),
+                crate::port::PersistedPackRead::Whole(_),
+            ) => {}
+            (
+                Some(crate::port::PackReadChoice::Ranges(wanted)),
+                crate::port::PersistedPackRead::Ranges(row),
+            ) if wanted
+                .iter()
+                .copied()
+                .eq(row.ranges().iter().map(|(range, _)| *range)) => {}
+            _ => return Err(StorageError::Integrity("selected strategy/extent reply")),
+        }
+        match reply {
+            crate::port::PersistedPackRead::Whole(row) => {
+                let (info, body) = row.into_parts();
+                if info.pack_id != id {
+                    return Err(StorageError::Integrity("selected whole binding"));
+                }
+                self.remember_pack(info)?;
+                validate_frame(info, &body)?;
+                self.note(|c| {
+                    c.whole_selected += 1;
+                    match plan.whole_reason {
+                        Some("singleton") => c.whole_due_singleton += 1,
+                        Some("density") => c.whole_due_density += 1,
+                        Some("small") => c.whole_due_small += 1,
+                        _ => {}
+                    }
+                    if info.domain == PackDomain::Payload {
+                        c.payload_reads += 1;
+                        c.payload_read_bytes += body.len() as u64;
+                    } else {
+                        c.pack_read_bytes += body.len() as u64;
+                    }
+                });
+                Ok(crate::encoding::PackAcquisition::Whole {
+                    info: Some(info),
+                    body,
+                })
+            }
+            crate::port::PersistedPackRead::Ranges(row) => {
+                if row.info().pack_id != id {
+                    return Err(StorageError::Integrity("selected pack binding"));
+                }
+                self.remember_pack(row.info())?;
+                self.note(|c| {
+                    c.range_selected += 1;
+                    c.range_scan_bytes += row.info().length as u64;
+                    c.range_materialized_bytes += row.prefix().len() as u64
+                        + row
+                            .ranges()
+                            .iter()
+                            .map(|(_, body)| body.len() as u64)
+                            .sum::<u64>();
+                });
+                Ok(crate::encoding::PackAcquisition::Units(
+                    crate::encoding::PackUnit::from_ranges(row)?,
+                ))
+            }
+        }
     }
     fn value_group(&self, ordinal: u32) -> StorageResult<Option<ValueGroupRow>> {
         if ordinal == 0 {

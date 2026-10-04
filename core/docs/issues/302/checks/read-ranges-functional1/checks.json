@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "source_parent": "bac4cb1fb",
+  "full_workspace_before_final_pooled_sharing": {
+    "tests": 492,
+    "targets": 92,
+    "status": "PASS"
+  },
+  "final_affected_owners": {
+    "packages": [
+      "layerfs-storage",
+      "layerfs-persistence",
+      "layerfs-project"
+    ],
+    "tests": 172,
+    "targets": 36,
+    "status": "PASS"
+  },
+  "clippy": "workspace/all-targets/-Dwarnings PASS",
+  "boundary_files": 448,
+  "boundary_self_tests": 23,
+  "formatting": "PASS",
+  "diff_check": "PASS",
+  "retained_failures": [
+    "initial workspace reader reuse assertion omitted the new selected port; corrected all acquisition counts",
+    "initial Clippy manual_inspect; use inspect to record plan binding"
+  ],
+  "scope": "Functional/code checks only, no speed/proof/admission; logs normalize final whitespace only."
+}

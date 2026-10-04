@@ -1,0 +1,141 @@
+//! The same byte/count allowance bounds complete bodies and selected units.
+use layerfs_content::ObjectId;
+use layerfs_storage::{
+    encoding::{PackAcquisition, PackCache, PackUnit},
+    location::{ObjectLocation, PackDomain, PackInfo, SignatureRow, ValueGroupRow},
+    pack::{
+        assemble, build_group,
+        layout::{self, PackLane},
+    },
+    policy,
+    port::*,
+    source::Source,
+    StorageError, StorageResult,
+};
+use std::cell::Cell;
+struct Plan<'a>(&'a [usize]);
+impl PackReadPlan for Plan<'_> {
+    fn select(
+        &mut self,
+        info: PackInfo,
+        prefix: &[u8],
+    ) -> Result<PackReadChoice, PersistenceError> {
+        let header = layout::parse_directory_header(prefix, info.length).unwrap();
+        let views = layout::directory_group_views(prefix, header).unwrap();
+        Ok(PackReadChoice::Ranges(
+            self.0
+                .iter()
+                .map(|number| {
+                    let view = views[*number];
+                    PackRange {
+                        offset: view.start,
+                        length: view.end - view.start,
+                    }
+                })
+                .collect(),
+        ))
+    }
+}
+struct Input {
+    body: Vec<u8>,
+    key: ObjectKey,
+    calls: Cell<usize>,
+}
+impl Input {
+    fn new(record_bytes: usize) -> Self {
+        let groups: Vec<_> = (0..8)
+            .map(|_| build_group(PackLane::Ordinary, &[vec![0; record_bytes]], None).unwrap())
+            .collect();
+        let body = assemble(PackLane::Ordinary, &groups).unwrap();
+        let key = ObjectKey::for_bytes(&body);
+        Self {
+            body,
+            key,
+            calls: Cell::new(0),
+        }
+    }
+    fn info(&self, id: i64) -> PackInfo {
+        PackInfo {
+            pack_id: id,
+            domain: PackDomain::Metadata,
+            key: self.key,
+            length: self.body.len(),
+        }
+    }
+}
+impl Source for Input {
+    fn location(&self, _: ObjectId, _: i64) -> StorageResult<Option<ObjectLocation>> {
+        Err(StorageError::Integrity("unexpected fixture query"))
+    }
+    fn pack_bytes(&self, _: i64) -> StorageResult<Vec<u8>> {
+        Err(StorageError::Integrity("unexpected whole route"))
+    }
+    fn acquire_groups(&self, id: i64, groups: &[usize]) -> StorageResult<PackAcquisition> {
+        self.calls.set(self.calls.get() + 1);
+        let acquired =
+            PersistedPackRead::acquire(self.info(id), &mut Plan(groups), |offset, out| {
+                out.copy_from_slice(&self.body[offset..offset + out.len()]);
+                Ok(())
+            })?;
+        let PersistedPackRead::Ranges(row) = acquired else {
+            panic!("strategy changed")
+        };
+        Ok(PackAcquisition::Units(PackUnit::from_ranges(row)?))
+    }
+    fn validate_cached_pack(&self, info: PackInfo) -> StorageResult<()> {
+        if info != self.info(info.pack_id) {
+            return Err(StorageError::Integrity("fixture descriptor"));
+        }
+        Ok(())
+    }
+    fn value_group(&self, _: u32) -> StorageResult<Option<ValueGroupRow>> {
+        Err(StorageError::Integrity("unexpected fixture query"))
+    }
+    fn value_groups(
+        &self,
+        _: Option<u32>,
+        _: &mut dyn FnMut(ValueGroupRow) -> StorageResult<()>,
+    ) -> StorageResult<()> {
+        Err(StorageError::Integrity("unexpected fixture query"))
+    }
+    fn window_start(&self) -> StorageResult<u32> {
+        Err(StorageError::Integrity("unexpected fixture query"))
+    }
+    fn signatures(&self) -> StorageResult<Vec<SignatureRow>> {
+        Err(StorageError::Integrity("unexpected fixture query"))
+    }
+    fn write_signatures(&self, _: &[SignatureRow]) -> StorageResult<usize> {
+        Err(StorageError::Integrity("unexpected fixture query"))
+    }
+}
+#[test]
+fn selected_units_evict_selectively_under_the_same_two_mib_body_limit() {
+    let source = Input::new(32_000);
+    let mut cache = PackCache::new();
+    for id in 1..=80 {
+        cache.acquire_groups(&source, id, &[0]).unwrap();
+        assert!(cache.retained_bytes() <= policy::DEPENDENCY_PACK_CACHE_BYTES);
+    }
+    assert!(cache.work().evictions > 0);
+    assert!(cache.work().peak_bytes <= policy::DEPENDENCY_PACK_CACHE_BYTES);
+    assert!(cache.group(&source, 31, 0).unwrap().is_some());
+    assert_eq!(cache.acquire_groups(&source, 31, &[0]).unwrap(), (false, 0));
+    cache.acquire_groups(&source, 81, &[0]).unwrap();
+    assert!(cache.group(&source, 31, 0).unwrap().is_some());
+    assert_eq!(source.calls.get(), 81);
+}
+#[test]
+fn tiny_selected_units_still_obey_the_existing_entry_count_limit() {
+    let source = Input::new(32);
+    let mut cache = PackCache::new();
+    for id in 1..=policy::READ_OBJECT_LIMIT as i64 + 1 {
+        cache.acquire_groups(&source, id, &[0]).unwrap();
+    }
+    assert!(cache.retained_bytes() < policy::DEPENDENCY_PACK_CACHE_BYTES);
+    assert_eq!(cache.work().evictions, 1);
+    assert!(cache.group(&source, 1, 0).unwrap().is_none());
+    assert!(cache
+        .group(&source, policy::READ_OBJECT_LIMIT as i64 + 1, 0)
+        .unwrap()
+        .is_some());
+}
