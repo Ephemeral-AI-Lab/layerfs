@@ -1,0 +1,8 @@
+{
+  "prospective.json": "0a88d2155af6a44256ebbcdf5f9e40c099a124ad55f96af181d279ac9a64ff69",
+  "build.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "build.stderr": "eb09a89da5ec22d476565e881013841e7ab6ed6efe366f130779ed359c55a87a",
+  "benchmark-report-contract-read.txt": "bf9009234bf0c0692a3913bb0626543d2dbd60a897c8a52f31eef2976456e263",
+  "generated-reference.rs": "1d760230299195bdab20a7fffa6dbce9ce9eaa4dd4b00fcd2a67b4301ea51f82",
+  "receipt.json": "f09a1c94a0901e681edcce715ace3cac428424f2ffa148908f503fa4b2b10bb7"
+}

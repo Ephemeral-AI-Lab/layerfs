@@ -1,0 +1,30 @@
+{
+  "kind": "count-and-identity-functional-comparison",
+  "status": "DIAGNOSTIC",
+  "admission": "NOT_RUN",
+  "numeric_speed_eligibility": false,
+  "reason": "two of seventeen states; uncontrolled cache; no full baseline independent proof",
+  "equivalence": {
+    "roots": true,
+    "canonical_objects": true,
+    "canonical_bytes": true,
+    "canonical_inventory_sha256": true,
+    "states": true,
+    "custody_states": true
+  },
+  "expected_equal": {
+    "roots": [
+      "ff484f8d92f57413ee83e7201fb04c8512ffd7bed3083471713db4e8e17c70d3",
+      "2906f3669420afb3ec336bc5d87856328371db4e9ad644ced4224cc8d3cd75ab"
+    ],
+    "canonical_objects": 1447,
+    "canonical_bytes": 8207253,
+    "canonical_inventory_sha256": "6e93471da148f2bfc36938d217acdc590bc42898699b93b4547299a6fc0dcb64",
+    "states": 2,
+    "custody_states": 2
+  },
+  "source_receipts": {
+    "baseline": "0cfd5f8c21fee3a79163b68f78bd18ed465f7603a25289fc0431f8ea22436b83",
+    "candidate": "677a06e5f4541d6aea04a477d6a8f519b5e78fc9a5ddeace156c9fb5ce30ffaf"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "kind": "full-stride10-reference-root-and-inventory-count-diagnostic",
+  "product_sample_count": 0,
+  "required_states": 17,
+  "expected_canonical_objects": 51689,
+  "expected_canonical_bytes": 380559460,
+  "baseline_commit": "7edddbdb8e8512627aed0ed42533ef099d802384",
+  "baseline_product_unmodified": true,
+  "binary": {
+    "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/binary-archive/fe292bcc54e36f64cde866aa2d74daaf67d748b96cfc92bafd548648a4d555f5/history_reference",
+    "sha256": "fe292bcc54e36f64cde866aa2d74daaf67d748b96cfc92bafd548648a4d555f5"
+  },
+  "build_receipt_sha256": "f09a1c94a0901e681edcce715ace3cac428424f2ffa148908f503fa4b2b10bb7",
+  "budget_ns": 25000000000,
+  "exception": "prospectively declared diagnostic-only25s for count-driven original17-state corpus; no budget extension or speed sample",
+  "cache_contract": "uncontrolled original read-probe; no numeric speed eligibility",
+  "admission": "NOT_RUN"
+}

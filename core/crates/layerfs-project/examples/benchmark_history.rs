@@ -30,14 +30,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Vec<_>>();
     if args.len() != 6 {
         return Err(
-            "usage: benchmark_history CORPUS DB SCRATCH history-stride{10,3,1} complete|probe"
+            "usage: benchmark_history CORPUS DB SCRATCH history-stride{10,3,1} complete|probe|probe-transition"
                 .into(),
         );
     }
     let row = Row::from_id(&args[4]).ok_or("invalid history selection")?;
-    let probe = match args[5].as_str() {
-        "complete" => false,
-        "probe" => true,
+    let probe_states = match args[5].as_str() {
+        "complete" => None,
+        "probe" => Some(1),
+        "probe-transition" => Some(2),
         _ => return Err("invalid operation mode".into()),
     };
     for (key, value) in [
@@ -75,7 +76,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let scratch = PathBuf::from(&args[3]);
     std::fs::create_dir(&scratch)?;
     let mut stages = [0u64; 4];
-    let count = if probe { 1 } else { row.states() };
+    let count = probe_states.unwrap_or_else(|| row.states());
+    let mut inventory = BTreeMap::<ObjectId, (u8, usize)>::new();
     for position in 0..count {
         let acquire = Instant::now();
         let transition = corpus.transition(position)?;
@@ -196,6 +198,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 object = object.with_predecessors(list);
             }
+            let descriptor = (object.role().code(), object.canonical_len());
+            if inventory
+                .insert(*id, descriptor)
+                .is_some_and(|previous| previous != descriptor)
+            {
+                return Err("canonical inventory descriptor mismatch".into());
+            }
             save.accept(object)?;
         }
         for (path, root) in &constructed {
@@ -240,6 +249,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|id| format!("\"{}\"", workload::digest::hex(id.as_bytes())))
         .collect::<Vec<_>>()
         .join(",");
-    println!("{{\"status\":\"{}\",\"selected_states\":{},\"states\":{},\"custody_states\":{},\"operation_ns\":{},\"stages_ns\":{:?},\"roots\":[{}]}}",if probe{"DIAGNOSTIC"}else{"COMPLETE"},row.states(),count,custody,begin.elapsed().as_nanos(),stages,list);
+    let canonical_bytes = inventory
+        .values()
+        .map(|(_, bytes)| *bytes as u64)
+        .sum::<u64>();
+    let mut census = workload::digest::Sha256::new();
+    for (id, (role, bytes)) in &inventory {
+        census.update(id.as_bytes());
+        census.update(&[*role]);
+        census.update(&(*bytes as u64).to_le_bytes());
+    }
+    println!("{{\"status\":\"{}\",\"selected_states\":{},\"states\":{},\"custody_states\":{},\"operation_ns\":{},\"stages_ns\":{:?},\"roots\":[{}],\"canonical_objects\":{},\"canonical_bytes\":{},\"canonical_inventory_sha256\":\"{}\"}}",if probe_states.is_some(){"DIAGNOSTIC"}else{"COMPLETE"},row.states(),count,custody,begin.elapsed().as_nanos(),stages,list,inventory.len(),canonical_bytes,workload::digest::hex(&census.finish()));
     Ok(())
 }

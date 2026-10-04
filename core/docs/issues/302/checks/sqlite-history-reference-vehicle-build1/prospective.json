@@ -1,0 +1,16 @@
+{
+  "kind": "reference-harness-build",
+  "baseline": "7edddbdb8e8512627aed0ed42533ef099d802384",
+  "profile": "release/locked",
+  "budget_ns": 30000000000,
+  "shared_driver_sources": {
+    "core/crates/layerfs-project/examples/benchmark_history.rs": "df9ded6f89a897bf68d68cd72067c7b5800273af48594131b7c2abe017225cbc",
+    "core/crates/layerfs-project/examples/history_support/producer.rs": "d247193b6e33b7b58899d07595c721d9733f5cad95255ed56836ff5b347c5361",
+    "core/crates/layerfs-project/examples/history_support/retained.rs": "53b79a02d56dbf0af754469756429b8e586c855676d701b1e6b7b702f0c79790",
+    "core/crates/layerfs-project/examples/history_support/support.rs": "38d8737f6dd643dee9a7452d6a82aea26b37ebb5c67d2868095b644a634adcbf",
+    "core/crates/layerfs-project/examples/history_support/workload.rs": "cb01e98bea3a3b7bb936686d9aa50658785d9345246d452bd5f598830b7529d6"
+  },
+  "generated_source_sha256": "1d760230299195bdab20a7fffa6dbce9ce9eaa4dd4b00fcd2a67b4301ea51f82",
+  "product_modified": false,
+  "sample_count": 0
+}

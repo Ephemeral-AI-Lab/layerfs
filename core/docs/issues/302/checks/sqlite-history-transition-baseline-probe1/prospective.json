@@ -1,0 +1,54 @@
+{
+  "kind": "two-state-functional-history-transition-diagnostic",
+  "product_sample_count": 0,
+  "arm": "baseline",
+  "identity": {
+    "source_commit": "b2d67754c62c79fc92fe95ee1d8ea2144ff18bbf",
+    "source_tree": "d9565ec4f71991eae0773f509af92d67f9394737",
+    "source_dirty": true,
+    "dirty_paths": [
+      " M core/crates/layerfs-project/examples/benchmark_history.rs",
+      " M core/crates/layerfs-project/examples/verify_history.rs",
+      "?? core/benchmark/fs-bench-pro/diagnostics/history_reference_vehicle.py"
+    ],
+    "product_seal": "3ad00e46cea41175536ccc1029efdb49862eeff1f8f8c202edfb0aee6ed74f54",
+    "harness_seal": "e4e26f2800f237ed0eeaaad5b22e9bf97a27985bbc8a8578b84147dea9d7a64a",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "build_profile": "release",
+    "history_shared_source_sha256": {
+      "core/crates/layerfs-project/examples/history_support/producer.rs": "d247193b6e33b7b58899d07595c721d9733f5cad95255ed56836ff5b347c5361",
+      "core/crates/layerfs-project/examples/history_support/workload.rs": "cb01e98bea3a3b7bb936686d9aa50658785d9345246d452bd5f598830b7529d6",
+      "core/crates/layerfs-project/examples/history_support/support.rs": "38d8737f6dd643dee9a7452d6a82aea26b37ebb5c67d2868095b644a634adcbf",
+      "core/crates/layerfs-project/examples/history_support/retained.rs": "53b79a02d56dbf0af754469756429b8e586c855676d701b1e6b7b702f0c79790",
+      "core/crates/layerfs-project/examples/history_support/verify.rs": "2324fea30e6fce26d6144304a06b9d94a7f6ee3d41c05cecb9e0a2a1c974acb7",
+      "core/benchmark/fs-bench-pro-storage-content/src/workload/stream.rs": "1291cfc3471c7c0ba012e1b16c1cb84075312c025934dcf82d2e0a377b9d48df",
+      "core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs": "a6b7d5670043511b737c94f28ae6f735db0fc935b57e9473a4c977c6462da9c0",
+      "core/benchmark/fs-bench-pro-storage-content/src/workload/digest.rs": "2dc5f726e4adf5d75174a76027d595005e7606a6edb329c370cf277700bdfb1c",
+      "core/benchmark/fs-bench-pro-storage-content/src/workload/json.rs": "bc0657e07119c9789a32f264045611c7398a70405fa085a3d95babcd3d06dab8",
+      "core/benchmark/fs-bench-pro-storage-content/src/workload/mod.rs": "43871f7b19fa8c3dc54198a538f033a3bf6738456044dc97b8d9af8ca8363fd4",
+      "core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs": "87fc829e5bc0692ce602842047349cc2657905da39a9f486a68d477999279bf9",
+      "core/benchmark/fs-bench-pro-storage-content/src/workload/oracle.rs": "a611c2f52353a26d601230c1a46351afff5461fc1e763ae0da6c98f2b855be55",
+      "core/benchmark/fs-bench-pro-storage-content/src/workload/gitoid.rs": "45873ec8ef4e95a467c52f8741db26fa5110c51898ba67be892b665848b774ac",
+      "core/benchmark/fs-bench-pro-storage-content/src/workload/expected.rs": "45bfa41f29b7e20f7830940971e69a4ac21aa4fe5ae63e0950e64d9cef3e2587",
+      "core/benchmark/fs-bench-pro-storage-content/src/workload/providers.rs": "b53c28ccbe65f294cd75cb82421f5264797fe19c7b44dd69af342e4d8725890b",
+      "core/benchmark/fs-bench-pro-storage-content/src/workload/edits.rs": "b8025d8b7779a365359be61b730bfbafc5a984c1c18e341059c59593dfdfdfc0",
+      "core/benchmark/fs-bench-pro-storage-content/src/support/window.rs": "9970d29ea63756e47289e960d502338fffff96191cd3ee2d95728a8ce28c384e",
+      "core/benchmark/fs-bench-pro-storage-content/src/support/trace.rs": "ab03e07f78fbd6aa2df4277726426466ee90745c8cfbfb568fd347cf86d7fb4a",
+      "core/benchmark/fs-bench-pro-storage-content/src/support/mod.rs": "b7f99ee331504f4fff22fc67e7e6966aa22f96758f57457895f0b8f0eff82bfd",
+      "core/benchmark/fs-bench-pro-storage-content/src/support/instruments.rs": "1b182d8a8515f8b02db2b92afe8098f2bfcfcf3e3389fdfe6008edee093a7aaf",
+      "core/benchmark/fs-bench-pro-storage-content/src/support/phases.rs": "c88a80d895f01d0cd76981cab053156e834a1fdfe594410dee6f2256baf45469"
+    }
+  },
+  "binary": {
+    "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/binary-archive/fe292bcc54e36f64cde866aa2d74daaf67d748b96cfc92bafd548648a4d555f5/history_reference",
+    "sha256": "fe292bcc54e36f64cde866aa2d74daaf67d748b96cfc92bafd548648a4d555f5"
+  },
+  "required_states": 17,
+  "executed_states": 2,
+  "budget_ns": 25000000000,
+  "exception": "prospective diagnostic-only25s full-corpus identity/open and first transition; no speed/admission claim",
+  "cache_contract": "original read-probe only; no cold claim; diagnostic arms not eligible for numeric speed comparison",
+  "gate": "NOT_RUN",
+  "baseline_commit": "7edddbdb8e8512627aed0ed42533ef099d802384"
+}

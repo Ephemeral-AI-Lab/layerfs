@@ -1,0 +1,10 @@
+{
+  "kind": "independent-two-state-history-verifier-diagnostic",
+  "product_sample_count": 0,
+  "budget_ns": 9500000000,
+  "binary_sha256": "a4a33237903cd351de221669736c07b9fa26144125413611a6a6f3910c9eddc4",
+  "source_dirty": true,
+  "root_pins": "NOT_CHECKED_BY_VERIFIER",
+  "admission": "NOT_RUN",
+  "scope": "all paths/kinds/sizes and every-tenth-plus-final content digest for both states; independent readonly reopen"
+}

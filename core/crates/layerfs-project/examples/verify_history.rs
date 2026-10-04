@@ -22,13 +22,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Vec<_>>();
     if args.len() != 6 {
         return Err(
-            "verify_history CORPUS DB RECEIPT history-stride{10,3,1} complete|probe".into(),
+            "verify_history CORPUS DB RECEIPT history-stride{10,3,1} complete|probe|probe-transition".into(),
         );
     }
     let row = Row::from_id(&args[4]).ok_or("history selection")?;
-    let probe = match args[5].as_str() {
-        "probe" => true,
-        "complete" => false,
+    let probe_states = match args[5].as_str() {
+        "probe" => Some(1),
+        "probe-transition" => Some(2),
+        "complete" => None,
         _ => return Err("operation mode".into()),
     };
     let value = json::parse(&std::fs::read_to_string(&args[3])?)?;
@@ -36,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get("run")
         .and_then(|run| run.get("child"))
         .ok_or("missing producer child receipt")?;
-    let count = if probe { 1 } else { row.states() };
+    let count = probe_states.unwrap_or_else(|| row.states());
     if child.get("selected_states").and_then(json::Value::as_i64) != Some(row.states() as i64)
         || child.get("states").and_then(json::Value::as_i64) != Some(count as i64)
     {
@@ -80,6 +81,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sampled += s;
         bytes += b;
     }
-    println!("{{\"status\":\"{}\",\"states\":{},\"custody_states\":{},\"paths\":{},\"sampled_content_paths\":{},\"authenticated_bytes\":{},\"sample_policy\":\"every-tenth-content-path-and-final\",\"independent_root_pins\":\"NOT_CHECKED\",\"admission\":\"NOT_RUN\"}}",if probe{"DIAGNOSTIC"}else{"CHECKED"},count,custody,paths,sampled,bytes);
+    println!("{{\"status\":\"{}\",\"states\":{},\"custody_states\":{},\"paths\":{},\"sampled_content_paths\":{},\"authenticated_bytes\":{},\"sample_policy\":\"every-tenth-content-path-and-final\",\"independent_root_pins\":\"NOT_CHECKED\",\"admission\":\"NOT_RUN\"}}",if probe_states.is_some(){"DIAGNOSTIC"}else{"CHECKED"},count,custody,paths,sampled,bytes);
     Ok(())
 }

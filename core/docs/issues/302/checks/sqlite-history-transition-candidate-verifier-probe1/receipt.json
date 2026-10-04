@@ -1,0 +1,38 @@
+{
+  "kind": "independent-two-state-history-verifier-diagnostic",
+  "product_sample_count": 0,
+  "budget_ns": 9500000000,
+  "binary_sha256": "a4a33237903cd351de221669736c07b9fa26144125413611a6a6f3910c9eddc4",
+  "source_dirty": true,
+  "root_pins": "NOT_CHECKED_BY_VERIFIER",
+  "admission": "NOT_RUN",
+  "scope": "all paths/kinds/sizes and every-tenth-plus-final content digest for both states; independent readonly reopen",
+  "run": {
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/binary-archive/a4a33237903cd351de221669736c07b9fa26144125413611a6a6f3910c9eddc4/verify_history",
+      "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+      "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history-transition-candidate-probe1/store.sqlite",
+      "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history-transition-candidate-probe1/receipt.json",
+      "history-stride10",
+      "probe-transition"
+    ],
+    "wall_ns": 1532000583,
+    "budget_ns": 9500000000,
+    "exit_code": 0,
+    "timed_out": false,
+    "child": {
+      "status": "DIAGNOSTIC",
+      "states": 2,
+      "custody_states": 2,
+      "paths": 1502,
+      "sampled_content_paths": 118,
+      "authenticated_bytes": 846229,
+      "sample_policy": "every-tenth-content-path-and-final",
+      "independent_root_pins": "NOT_CHECKED",
+      "admission": "NOT_RUN"
+    },
+    "cpu_ns": 75783000,
+    "peak_rss_bytes": 20496384,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution"
+  }
+}

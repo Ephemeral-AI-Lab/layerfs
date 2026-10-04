@@ -1499,3 +1499,16 @@ complete diagnostic; corrected verifier544,587,084ns,359paths/29content samples/
 independent root pins unchecked, no speed sample/admission. All historiesNOT_RUN,
 matched baseline/cold/timing/budget still required. See
 [vehicle report](SQLITE-HISTORY-VEHICLE-PORT.md); all-seven goal ACTIVE.
+
+### Phase4.5 history reference transition diagnostics
+
+Generated strict public-API baseline adapter, original7edddbdb8 product/manifest
+unchanged and clean before/after release/locked build. Two states agree on both
+roots and1,447distinct canonical identities /8,207,253B /same inventory digest.
+Separate candidate readonly proof checks1,502paths and118samples/846,229B.
+Candidate counts46publications/65write commits/1,978statements/161,159VM steps.
+Full17-state baseline count diagnostic hits25s cap (25,014,771,375ns), SIGKILL
+after15published roots; full roots/inventory INCOMPLETE, no cleanup admission.
+No controlled-cache speed sample or full-history PASS; all historiesNOT_RUN.
+No unchanged-arm retry or deadline extension. See
+[reference/transition report](SQLITE-HISTORY-REFERENCE-TRANSITION.md).
