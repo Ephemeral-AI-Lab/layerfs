@@ -287,3 +287,35 @@ may change the documentation commit/tree; product/compilation/dependency/harness
 seals remain fixed and every new pair pins its exact committed identity. No new
 source treatment, unchanged performance repeat, budget increase or migration.
 Production LOC 140,304 → 140,304 (delta 0), reference 65,417/core 74,887.
+
+## Checkpoint8 — stride 3 qualification
+
+[Audited pair](checks/locator-clock-final3/comparison.json), documentation source
+`3d0e2a752`, same product freeze ba6499a61. Candidate 63645626250 ns vs
+reference 66640188041 ns (−4.493627463%). Complete command
+75851236375 / 79085111917 ns; separate proof
+6318967292 / 6299983958 ns, PASS under 12 s.
+Cold, cleanup, independent roots and canonical inventory PASS; strict faster and
+10% margin PASS. Candidate shared C2/C5 allocation 64,245,760 bytes: original
+64,024,576 target FAIL +221,184 / +0.345467341%; 70,427,034 ceiling PASS.
+
+[Provider count continuity](checks/locator-clock-final3/count-continuity.json)
+compares the retained schema2 pre-treatment provider workload, not its clocks,
+SQL statements or storage: locate 172,376 → 145,821 (−15.405276837%). Physical
+selections 76,568, BLOB/materialized provider bytes, payload/pack bytes, cache
+evictions and prefetch decodes match. Actual new native transactions 227,859;
+locator removals/probes/second chances 225,451 / 507,717 / 280,643. Directory
+sharing removes 3,031 of 2,171,317 equivalent walks (0.139592699%). Field-byte
+bookkeeping peak remains 32,808; no heap/RSS claim. The bounded 53-state proof
+covers 306,861 paths and 66 selected content paths, not all payload bytes.
+
+| Family 2, Disposable | Candidate / reference product s | Status |
+| --- | ---: | --- |
+| Stride 10 / 17 | 30.989778083 / 32.365454042 | PASS; original storage target FAIL retained |
+| Stride 3 / 53 | 63.645626250 / 66.640188041 | PASS; original storage target FAIL retained |
+| Stride 1 / 157 | NOT_RUN | Next, same product/harness/binaries |
+
+Durable separate / NOT_RUN; SDK/server/daemon/FUSE N/A. Every pair pins its
+documentation commit/tree; product/compilation/dependency/harness identities are
+fixed. No performance repeat or budget change. Evidence commit product LOC
+140,304 → 140,304 (delta 0), reference 65,417/core 74,887.
