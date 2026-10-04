@@ -1561,3 +1561,19 @@ native readonlySQLplan tool. Capability3.51.0 configPASS/oneSELECT6VM, notproduc
 sample. Build adapters compile after lifetime/error-conversion fixes;18C2checks/
 full100/1000oracle,Clippy/fmt/boundary439/guard23PASS. Cause child execution still
 pending; [prospectivecontract](SQLITE-PAIRED-CAUSE-CONTRACT.md), all-sevenACTIVE.
+
+### Paired small-step cause report at e5163f151
+
+Onecold diagnostic child perarm qualified:root/inventory2003IDs/20,187,652B/
+samedigestmatchbothproductionroots;independentproof/cold/budgets/cleanupPASS.
+Init140,896,750/229,324,417ns,diagnostic extra88,427,667ns. Fileowner
+100,174,542/178,857,917ns; worker-sendΣ247,848,957/525,319,422ns backpressure,
+not isolated hashCPU. FULL5,370,878/5,927,064ns,group1,530,614/1,871,887ns.
+Trace3640/305statements,326740/203615VM;writeBEGIN28/18;COMMITtrace
+43,585,792/70,006,792ns,globalcandidatewrapper129,505,084ns broader/unpartitioned.
+NativeVMafterobserverresetUNQUALIFIED,traceused; no syscall/fsync count.
+Native3.51plansPKlookups/oldtemp-scope subqueries/newguardedFKchildscan,main
+hashesunchanged. [Fullpairedreport](SQLITE-PAIRED-SMALL-STEP-COMPARISON.md) includes
+comparablework,distinctinclusive/unequalscopes,SQLcounts/plans/missingobservations.
+No furtheroptimization selected beforereport; nextmeasurementacknowledgement
+prepare/step/reset/VFSpath, noWALweakening. All-sevenACTIVE/notadmission.

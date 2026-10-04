@@ -1,0 +1,24 @@
+[
+  {
+    "arm": "baseline",
+    "scope": "closed production admission Store readonly ID/role/canonical_length census after proof; no timed sample",
+    "sqlite_python_version": "3.51.2",
+    "main_sha256": "276d1cf48dd1f387fd9e7922e166d1a6b6ab3f5135743c5733a53ff63e456ec7",
+    "main_unchanged": true,
+    "objects": 2003,
+    "canonical_bytes": 20187652,
+    "inventory_sha256": "b997719ad382df32b053decb160b8531093fcf8685c48ad4c058ef86ed9f9b99",
+    "matches_paired_cause": true
+  },
+  {
+    "arm": "candidate",
+    "scope": "closed production admission Store readonly ID/role/canonical_length census after proof; no timed sample",
+    "sqlite_python_version": "3.51.2",
+    "main_sha256": "f32e5a522104a219eba7244789544ccd22c4012efa29b0eea65d2a6489c5a522",
+    "main_unchanged": true,
+    "objects": 2003,
+    "canonical_bytes": 20187652,
+    "inventory_sha256": "b997719ad382df32b053decb160b8531093fcf8685c48ad4c058ef86ed9f9b99",
+    "matches_paired_cause": true
+  }
+]

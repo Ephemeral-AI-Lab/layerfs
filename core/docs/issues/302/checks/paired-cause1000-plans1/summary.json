@@ -1,0 +1,139 @@
+[
+  {
+    "arm": "baseline",
+    "label": "locate-1",
+    "exit_code": 0,
+    "source_sha256": "35682e20b4f998179fca1e93663f1256d18004aac2eaa10d1a7ac707aace4982",
+    "main_db_sha256": "410fe89aae4969d0f267ffeb3ef9f67947926d6e067203ae2db1fc6561e76afa",
+    "main_unchanged": true,
+    "bytecode_rows": 42,
+    "sqlite_version": "VERSION\t3.51.0",
+    "query_plan_rows": 3,
+    "query_plan_examples": [
+      "4\t0\t56\tSEARCH o USING PRIMARY KEY (object_id=?)",
+      "11\t0\t45\tSEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+      "14\t0\t216\tSCAN r"
+    ]
+  },
+  {
+    "arm": "candidate",
+    "label": "locate-1",
+    "exit_code": 0,
+    "source_sha256": "6ae52c6b4faf615c6f1ff9e36249c0b58e33cb51eb94d5dd37bb91b89172b99c",
+    "main_db_sha256": "450aef16110d4c47167fee9a528e5eccc3fe721a2a9f737d73955058ecdfde11",
+    "main_unchanged": true,
+    "bytecode_rows": 24,
+    "sqlite_version": "VERSION\t3.51.0",
+    "query_plan_rows": 2,
+    "query_plan_examples": [
+      "3\t0\t45\tSEARCH o USING PRIMARY KEY (object_id=?)",
+      "8\t0\t45\tSEARCH p USING INTEGER PRIMARY KEY (rowid=?)"
+    ]
+  },
+  {
+    "arm": "baseline",
+    "label": "insert-objects-1",
+    "exit_code": 0,
+    "source_sha256": "70cbb0e0b24b23057d435c327a23324a89fede3e6d3ce9d465f2abb595cfe3d0",
+    "main_db_sha256": "410fe89aae4969d0f267ffeb3ef9f67947926d6e067203ae2db1fc6561e76afa",
+    "main_unchanged": true,
+    "bytecode_rows": 64,
+    "sqlite_version": "VERSION\t3.51.0",
+    "query_plan_rows": 2,
+    "query_plan_examples": [
+      "5\t0\t0\tSCALAR SUBQUERY 1",
+      "9\t5\t216\tSCAN temp.layerfs_read_scope"
+    ]
+  },
+  {
+    "arm": "candidate",
+    "label": "insert-objects-1",
+    "exit_code": 0,
+    "source_sha256": "6ecacda9efe13c2890da86395e8651035f3acf8e50cf1aeaad1a98e852662862",
+    "main_db_sha256": "450aef16110d4c47167fee9a528e5eccc3fe721a2a9f737d73955058ecdfde11",
+    "main_unchanged": true,
+    "bytecode_rows": 58,
+    "sqlite_version": "VERSION\t3.51.0",
+    "query_plan_rows": 1,
+    "query_plan_examples": [
+      "36\t0\t216\tSCAN content_signature"
+    ]
+  },
+  {
+    "arm": "baseline",
+    "label": "locate-512",
+    "exit_code": 0,
+    "source_sha256": "2fa267c9ebe7aec278eb9fe99b9733ccfa766533d129bfb42d9ca280480424ce",
+    "main_db_sha256": "410fe89aae4969d0f267ffeb3ef9f67947926d6e067203ae2db1fc6561e76afa",
+    "main_unchanged": true,
+    "bytecode_rows": 1585,
+    "sqlite_version": "VERSION\t3.51.0",
+    "query_plan_rows": 3,
+    "query_plan_examples": [
+      "4\t0\t146\tSEARCH o USING PRIMARY KEY (object_id=?)",
+      "1553\t0\t45\tSEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+      "1556\t0\t216\tSCAN r"
+    ]
+  },
+  {
+    "arm": "candidate",
+    "label": "locate-512",
+    "exit_code": 0,
+    "source_sha256": "f87cae14457d56e2f081a0db508fbba6cb956f77204b96ea3363a272c83aff71",
+    "main_db_sha256": "450aef16110d4c47167fee9a528e5eccc3fe721a2a9f737d73955058ecdfde11",
+    "main_unchanged": true,
+    "bytecode_rows": 1567,
+    "sqlite_version": "VERSION\t3.51.0",
+    "query_plan_rows": 2,
+    "query_plan_examples": [
+      "3\t0\t135\tSEARCH o USING PRIMARY KEY (object_id=?)",
+      "1550\t0\t45\tSEARCH p USING INTEGER PRIMARY KEY (rowid=?)"
+    ]
+  },
+  {
+    "arm": "baseline",
+    "label": "insert-objects-512",
+    "exit_code": 0,
+    "source_sha256": "f4c3bb05b9666c6ec0f8afcd5eee0e1fb1d84a0d7b0f7aebfe1d700497c3a1b2",
+    "main_db_sha256": "410fe89aae4969d0f267ffeb3ef9f67947926d6e067203ae2db1fc6561e76afa",
+    "main_unchanged": true,
+    "bytecode_rows": 10297,
+    "sqlite_version": "VERSION\t3.51.0",
+    "query_plan_rows": 1025,
+    "query_plan_examples": [
+      "2\t0\t0\tSCAN 512 CONSTANT ROWS",
+      "11\t0\t0\tSCALAR SUBQUERY 1",
+      "15\t11\t216\tSCAN temp.layerfs_read_scope",
+      "31\t0\t0\tSCALAR SUBQUERY 3"
+    ]
+  },
+  {
+    "arm": "candidate",
+    "label": "insert-objects-512",
+    "exit_code": 0,
+    "source_sha256": "d46e4d9f58ea6506e8b788d52f4a6f07e43c6ebcd70de2f2893c3e43a1cb1901",
+    "main_db_sha256": "450aef16110d4c47167fee9a528e5eccc3fe721a2a9f737d73955058ecdfde11",
+    "main_unchanged": true,
+    "bytecode_rows": 3654,
+    "sqlite_version": "VERSION\t3.51.0",
+    "query_plan_rows": 2,
+    "query_plan_examples": [
+      "3587\t0\t0\tSCAN 512-ROW VALUES CLAUSE",
+      "3630\t0\t216\tSCAN content_signature"
+    ]
+  },
+  {
+    "arm": "candidate",
+    "label": "reserve",
+    "exit_code": 0,
+    "source_sha256": "0e6104530f6d7a57ddfc99250848dd97c5e66550c7866aa6f937cb851f7c2bc8",
+    "main_db_sha256": "450aef16110d4c47167fee9a528e5eccc3fe721a2a9f737d73955058ecdfde11",
+    "main_unchanged": true,
+    "bytecode_rows": 29,
+    "sqlite_version": "VERSION\t3.51.0",
+    "query_plan_rows": 1,
+    "query_plan_examples": [
+      "4\t0\t33\tSEARCH store_policy USING INTEGER PRIMARY KEY (rowid=?)"
+    ]
+  }
+]
