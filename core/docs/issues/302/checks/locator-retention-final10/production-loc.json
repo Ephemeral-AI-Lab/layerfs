@@ -1,0 +1,9 @@
+{
+  "parent": "aa59f9384726fcd71c9f7e45de2a346e5d1ec758",
+  "before": 140213,
+  "after": 140213,
+  "delta": 0,
+  "reference": 65417,
+  "core": 74796,
+  "method": "same production_loc.py version; evidence-only commit with exact parent/staged product src/runtime SQL equality; validated prior full totals"
+}

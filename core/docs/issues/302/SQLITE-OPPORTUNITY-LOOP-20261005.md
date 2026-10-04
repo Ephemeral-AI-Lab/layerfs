@@ -196,3 +196,31 @@ trust-lifetime design and review; no memo or extended transaction is introduced.
 Checkpoint4 exact production LOC: 140,199 → 140,213 (delta +14), reference
 65,417 unchanged, core 74,782 → 74,796. Counter/version and first-parent/staged
 full-snapshot comparison are in checks/locator-retention1/production-loc.json.
+
+## Checkpoint5 — key-order policy rejected by real workload counts
+
+[Retained stride 10 pair](checks/locator-retention-final10/comparison.json), freeze
+`aa59f9384`: candidate 33.215570708 s vs reference 32.398692000 s, +2.521332367%.
+Complete command 46.229553792 / 45.748124500 s; separate proof PASS. Cold,
+cleanup, exact roots/inventory and approved allocation PASS. Strictly-faster
+criterion FAIL; unchanged 10% margin PASS. Storage remains 50,692,096 bytes,
+original target FAIL +2.730970366%, approved 54,278,964 ceiling PASS.
+
+Against retained pre-key-order candidate work counts, locate requests increase
+75,326 → 120,741 (+60.291267292%), transactions 94,788 → 140,203 (+47.912182977%),
+statements 312,253 → 448,498 (+43.632887434%). Pack acquisitions, BLOB reads,
+canonical outputs and Store allocation are unchanged. This is reproducible
+count evidence rejecting key-order victim selection; the simple one-miss fixture
+was insufficient. These are not an old/new isolated clock estimate.
+
+| Family 2, Disposable at aa59f9384 | Status |
+| --- | --- |
+| Stride 10 / 17 | Margin / proof / cold / allocation PASS; strict faster FAIL |
+| Stride 3 / 53 | NOT_RUN; rejected victim policy does not advance |
+| Stride 1 / 157 | NOT_RUN; rejected victim policy does not advance |
+
+Durable NOT_RUN, SDK/server/daemon/FUSE N/A. No unchanged sample retry, hidden
+failure, timeout or gate relaxation. Next iteration corrects victim selection
+using bounded access bookkeeping, with its memory charged explicitly and the
+same 4,096 rows, positive-cache lifetime and snapshot scope. Current evidence
+commit is product LOC 140,213 → 140,213 (delta 0), reference 65,417/core 74,796.
