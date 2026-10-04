@@ -468,3 +468,50 @@ invalid admission preservation. Fullworkspace/alltarget tests,Clippy-Dwarnings,
 fmt-all/check,boundary448/23PASS; logschecks/decoded-group-retention-functional1.
 Freeze then one native-only53count diagnostic on original retained store; no
 proof/performance pass inferred. Existing qualifiedrows stay historical.
+
+
+###8302782a9 frozen decoded-group diagnostic and counter-scope correction
+
+ProductionLOC139358->139408(+50), reference65417unchanged, core73941->73991.
+Samecounter/version/exclusions; exact parent8b325c561/staged
+dc56e9eafb20ac33a1e1aff9fa0b29a4dcada31e changed-source counts, remaining scope
+source-equal to verified9dac05a34. Committedtreeconfirmed.497tests/94targets,
+Clippy/fmt/boundary448/23PASS.
+
+Native53countdiagTIMEOUT9,512,102,083ns after45states, whole26,001,995,791ns
+within60s diagnosticbound; source/databasecold and ownerpreservationPASS.
+Prior/value and current/decoded diagnostics read byte-identical62,611,456B stores:
+SHA256cc3c207215d55f2db963a592279cae241dbf1212f517b1f4387956de8216e45f.
+Across completedprefix43, physicalgroup decodes3144->1900 and decodedbytes
+119619946->69491331;18540physicalrecord calls/19928value decodes unchanged.
+Prefix40=2765->1669/104094401->60296801B. This confirms less decompression,
+not an overall latency/proof pass; full diagnostic coverage44/45 differs.
+Rawissue302-history53-decoded-group-retention-native-cause1, compact
+[comparison](checks/decoded-group-retention-native1/comparison.json).
+
+**Counter-scope correction for earlier discussion:** VERIFY_STATE_WORK's
+pooled=reader.pooled_read_counters() uses the same reader across all states.
+Those pooled counts are cumulative through that state, not the individual
+state's work. Earlier wording/interpretation suggesting per-state pooled
+counts was inaccurate. Same-prefix count differences remain valid; raw
+receipts/counters unchanged. Only wall_ns/paths/sampled/authenticated_bytes in
+that line are per-state. HISTORY_ENGINE_WORK verification rows use explicit
+snapshot differences and are per-state. Never sum cumulative pooled rows.
+
+Existing disjoint verify-parts spans show the actual remaining cost through
+the same43completed states: referencewalk1927503667ns/file-root2280977128ns/
+remainingdigest63251375ns; valuecachewalk1760420416ns/file-root4535651711ns/
+remainingdigest68545330ns; currentdecodedcachewalk1674827913ns/file-root
+4559273459ns/remainingdigest70322083ns. The file-root span includes acquisition,
+classification and opportunistic sampled hashing, not just metadata/size SQL.
+These sums exclude corpus/oracle/custody/wrapper overhead and cannot manufacture
+a complete proof wall. Source-scope metadataMemo counts atprefix43 are identical
+17445hits/2997misses/462sourcecalls/2997objects. Shared-group retention addresses
+a real defect but file-root acquisition/classification is the larger gap.
+
+Next source/count investigation should distinguish file-root BLOB scan/read
+work, dependency reconstruction and actual returned canonical bytes within that
+phase, before another policy change. No assumption that adding more retention
+will fit9.5s, no extra cache/worker/buffer or weaker authentication. Current830
+matched performance/combined proofNOT_RUN; older8bfreeze10PASS/3proofTIMEOUT/
+1reference190sTIMEOUT retainidentity/verdict. GoalACTIVE.

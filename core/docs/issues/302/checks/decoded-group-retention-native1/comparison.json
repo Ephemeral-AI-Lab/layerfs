@@ -1,0 +1,858 @@
+{
+  "actual_phase_spans": [
+    {
+      "completed_prefix": 43,
+      "label": "reference",
+      "records": [
+        {
+          "file_roots_ns": 6267291,
+          "remaining_digest_ns": 1680167,
+          "state": 1,
+          "walk_ns": 16486709
+        },
+        {
+          "file_roots_ns": 7578583,
+          "remaining_digest_ns": 36709,
+          "state": 2,
+          "walk_ns": 15086250
+        },
+        {
+          "file_roots_ns": 10733917,
+          "remaining_digest_ns": 60375,
+          "state": 3,
+          "walk_ns": 10330375
+        },
+        {
+          "file_roots_ns": 14606000,
+          "remaining_digest_ns": 77792,
+          "state": 4,
+          "walk_ns": 9416083
+        },
+        {
+          "file_roots_ns": 18642458,
+          "remaining_digest_ns": 101667,
+          "state": 5,
+          "walk_ns": 10749375
+        },
+        {
+          "file_roots_ns": 20506625,
+          "remaining_digest_ns": 969459,
+          "state": 6,
+          "walk_ns": 11614250
+        },
+        {
+          "file_roots_ns": 22409000,
+          "remaining_digest_ns": 139459,
+          "state": 7,
+          "walk_ns": 11474708
+        },
+        {
+          "file_roots_ns": 26402542,
+          "remaining_digest_ns": 214458,
+          "state": 8,
+          "walk_ns": 12467917
+        },
+        {
+          "file_roots_ns": 18644333,
+          "remaining_digest_ns": 153792,
+          "state": 9,
+          "walk_ns": 10874667
+        },
+        {
+          "file_roots_ns": 21913792,
+          "remaining_digest_ns": 146917,
+          "state": 10,
+          "walk_ns": 10734583
+        },
+        {
+          "file_roots_ns": 20465375,
+          "remaining_digest_ns": 1235375,
+          "state": 11,
+          "walk_ns": 12566084
+        },
+        {
+          "file_roots_ns": 24634541,
+          "remaining_digest_ns": 1085709,
+          "state": 12,
+          "walk_ns": 14665167
+        },
+        {
+          "file_roots_ns": 32137833,
+          "remaining_digest_ns": 250583,
+          "state": 13,
+          "walk_ns": 15580584
+        },
+        {
+          "file_roots_ns": 30817584,
+          "remaining_digest_ns": 281125,
+          "state": 14,
+          "walk_ns": 20101375
+        },
+        {
+          "file_roots_ns": 31704708,
+          "remaining_digest_ns": 2591083,
+          "state": 15,
+          "walk_ns": 20739167
+        },
+        {
+          "file_roots_ns": 40928875,
+          "remaining_digest_ns": 374042,
+          "state": 16,
+          "walk_ns": 27215625
+        },
+        {
+          "file_roots_ns": 38309792,
+          "remaining_digest_ns": 401875,
+          "state": 17,
+          "walk_ns": 30019000
+        },
+        {
+          "file_roots_ns": 50632959,
+          "remaining_digest_ns": 547500,
+          "state": 18,
+          "walk_ns": 36163083
+        },
+        {
+          "file_roots_ns": 49678375,
+          "remaining_digest_ns": 598416,
+          "state": 19,
+          "walk_ns": 39021125
+        },
+        {
+          "file_roots_ns": 52556833,
+          "remaining_digest_ns": 603875,
+          "state": 20,
+          "walk_ns": 41863625
+        },
+        {
+          "file_roots_ns": 64693375,
+          "remaining_digest_ns": 619750,
+          "state": 21,
+          "walk_ns": 45106584
+        },
+        {
+          "file_roots_ns": 50310083,
+          "remaining_digest_ns": 638667,
+          "state": 22,
+          "walk_ns": 42565750
+        },
+        {
+          "file_roots_ns": 53316459,
+          "remaining_digest_ns": 759166,
+          "state": 23,
+          "walk_ns": 52840708
+        },
+        {
+          "file_roots_ns": 58784625,
+          "remaining_digest_ns": 752375,
+          "state": 24,
+          "walk_ns": 57223208
+        },
+        {
+          "file_roots_ns": 66943875,
+          "remaining_digest_ns": 865583,
+          "state": 25,
+          "walk_ns": 58690709
+        },
+        {
+          "file_roots_ns": 36086125,
+          "remaining_digest_ns": 697333,
+          "state": 26,
+          "walk_ns": 40055333
+        },
+        {
+          "file_roots_ns": 51786083,
+          "remaining_digest_ns": 724333,
+          "state": 27,
+          "walk_ns": 48219917
+        },
+        {
+          "file_roots_ns": 55890292,
+          "remaining_digest_ns": 4261375,
+          "state": 28,
+          "walk_ns": 49477708
+        },
+        {
+          "file_roots_ns": 71578792,
+          "remaining_digest_ns": 8810625,
+          "state": 29,
+          "walk_ns": 71355792
+        },
+        {
+          "file_roots_ns": 60418000,
+          "remaining_digest_ns": 6879958,
+          "state": 30,
+          "walk_ns": 60414583
+        },
+        {
+          "file_roots_ns": 61947834,
+          "remaining_digest_ns": 895083,
+          "state": 31,
+          "walk_ns": 72934708
+        },
+        {
+          "file_roots_ns": 64856167,
+          "remaining_digest_ns": 5939000,
+          "state": 32,
+          "walk_ns": 67408125
+        },
+        {
+          "file_roots_ns": 87558708,
+          "remaining_digest_ns": 981625,
+          "state": 33,
+          "walk_ns": 74265750
+        },
+        {
+          "file_roots_ns": 89485292,
+          "remaining_digest_ns": 964958,
+          "state": 34,
+          "walk_ns": 80554625
+        },
+        {
+          "file_roots_ns": 93322834,
+          "remaining_digest_ns": 962750,
+          "state": 35,
+          "walk_ns": 79935541
+        },
+        {
+          "file_roots_ns": 70181458,
+          "remaining_digest_ns": 1005084,
+          "state": 36,
+          "walk_ns": 78875292
+        },
+        {
+          "file_roots_ns": 35162542,
+          "remaining_digest_ns": 4069250,
+          "state": 37,
+          "walk_ns": 63686041
+        },
+        {
+          "file_roots_ns": 117846292,
+          "remaining_digest_ns": 2077416,
+          "state": 38,
+          "walk_ns": 76290708
+        },
+        {
+          "file_roots_ns": 111703083,
+          "remaining_digest_ns": 1177208,
+          "state": 39,
+          "walk_ns": 82354875
+        },
+        {
+          "file_roots_ns": 119127625,
+          "remaining_digest_ns": 1187958,
+          "state": 40,
+          "walk_ns": 86206375
+        },
+        {
+          "file_roots_ns": 80356667,
+          "remaining_digest_ns": 1443542,
+          "state": 41,
+          "walk_ns": 86494083
+        },
+        {
+          "file_roots_ns": 131834167,
+          "remaining_digest_ns": 4400042,
+          "state": 42,
+          "walk_ns": 86152500
+        },
+        {
+          "file_roots_ns": 108215334,
+          "remaining_digest_ns": 1587916,
+          "state": 43,
+          "walk_ns": 89225000
+        }
+      ],
+      "totals": {
+        "file_roots_ns": 2280977128,
+        "remaining_digest_ns": 63251375,
+        "walk_ns": 1927503667
+      }
+    },
+    {
+      "completed_prefix": 43,
+      "label": "value-retention",
+      "records": [
+        {
+          "file_roots_ns": 22123084,
+          "remaining_digest_ns": 1459000,
+          "state": 1,
+          "walk_ns": 14776291
+        },
+        {
+          "file_roots_ns": 15388750,
+          "remaining_digest_ns": 36458,
+          "state": 2,
+          "walk_ns": 10976334
+        },
+        {
+          "file_roots_ns": 13584042,
+          "remaining_digest_ns": 60083,
+          "state": 3,
+          "walk_ns": 6708167
+        },
+        {
+          "file_roots_ns": 12600167,
+          "remaining_digest_ns": 78083,
+          "state": 4,
+          "walk_ns": 5914708
+        },
+        {
+          "file_roots_ns": 15404333,
+          "remaining_digest_ns": 107167,
+          "state": 5,
+          "walk_ns": 6811417
+        },
+        {
+          "file_roots_ns": 19957791,
+          "remaining_digest_ns": 794209,
+          "state": 6,
+          "walk_ns": 7241375
+        },
+        {
+          "file_roots_ns": 28995917,
+          "remaining_digest_ns": 148875,
+          "state": 7,
+          "walk_ns": 7880792
+        },
+        {
+          "file_roots_ns": 35379500,
+          "remaining_digest_ns": 187459,
+          "state": 8,
+          "walk_ns": 8941416
+        },
+        {
+          "file_roots_ns": 30143458,
+          "remaining_digest_ns": 164000,
+          "state": 9,
+          "walk_ns": 6074583
+        },
+        {
+          "file_roots_ns": 36105291,
+          "remaining_digest_ns": 150500,
+          "state": 10,
+          "walk_ns": 6597542
+        },
+        {
+          "file_roots_ns": 28926833,
+          "remaining_digest_ns": 1555042,
+          "state": 11,
+          "walk_ns": 7632000
+        },
+        {
+          "file_roots_ns": 34550917,
+          "remaining_digest_ns": 883250,
+          "state": 12,
+          "walk_ns": 10619333
+        },
+        {
+          "file_roots_ns": 53186584,
+          "remaining_digest_ns": 248666,
+          "state": 13,
+          "walk_ns": 9552208
+        },
+        {
+          "file_roots_ns": 51562542,
+          "remaining_digest_ns": 315208,
+          "state": 14,
+          "walk_ns": 18090750
+        },
+        {
+          "file_roots_ns": 53383708,
+          "remaining_digest_ns": 3227125,
+          "state": 15,
+          "walk_ns": 12614709
+        },
+        {
+          "file_roots_ns": 69150792,
+          "remaining_digest_ns": 416583,
+          "state": 16,
+          "walk_ns": 23167417
+        },
+        {
+          "file_roots_ns": 66911917,
+          "remaining_digest_ns": 425375,
+          "state": 17,
+          "walk_ns": 24006333
+        },
+        {
+          "file_roots_ns": 89430084,
+          "remaining_digest_ns": 563916,
+          "state": 18,
+          "walk_ns": 32812291
+        },
+        {
+          "file_roots_ns": 90146250,
+          "remaining_digest_ns": 634416,
+          "state": 19,
+          "walk_ns": 39772542
+        },
+        {
+          "file_roots_ns": 101554750,
+          "remaining_digest_ns": 636583,
+          "state": 20,
+          "walk_ns": 36242459
+        },
+        {
+          "file_roots_ns": 124440042,
+          "remaining_digest_ns": 609000,
+          "state": 21,
+          "walk_ns": 40647875
+        },
+        {
+          "file_roots_ns": 97798333,
+          "remaining_digest_ns": 721000,
+          "state": 22,
+          "walk_ns": 39999375
+        },
+        {
+          "file_roots_ns": 100454584,
+          "remaining_digest_ns": 729750,
+          "state": 23,
+          "walk_ns": 49184958
+        },
+        {
+          "file_roots_ns": 134273667,
+          "remaining_digest_ns": 824750,
+          "state": 24,
+          "walk_ns": 48728333
+        },
+        {
+          "file_roots_ns": 139345292,
+          "remaining_digest_ns": 1023791,
+          "state": 25,
+          "walk_ns": 56572583
+        },
+        {
+          "file_roots_ns": 70273125,
+          "remaining_digest_ns": 791667,
+          "state": 26,
+          "walk_ns": 33799750
+        },
+        {
+          "file_roots_ns": 104950000,
+          "remaining_digest_ns": 822875,
+          "state": 27,
+          "walk_ns": 45558750
+        },
+        {
+          "file_roots_ns": 111932542,
+          "remaining_digest_ns": 5051583,
+          "state": 28,
+          "walk_ns": 46829750
+        },
+        {
+          "file_roots_ns": 137292250,
+          "remaining_digest_ns": 9152459,
+          "state": 29,
+          "walk_ns": 63866708
+        },
+        {
+          "file_roots_ns": 120848042,
+          "remaining_digest_ns": 7535708,
+          "state": 30,
+          "walk_ns": 51546083
+        },
+        {
+          "file_roots_ns": 128507500,
+          "remaining_digest_ns": 884375,
+          "state": 31,
+          "walk_ns": 70109834
+        },
+        {
+          "file_roots_ns": 125792125,
+          "remaining_digest_ns": 6757583,
+          "state": 32,
+          "walk_ns": 54865500
+        },
+        {
+          "file_roots_ns": 179427708,
+          "remaining_digest_ns": 1003625,
+          "state": 33,
+          "walk_ns": 73216583
+        },
+        {
+          "file_roots_ns": 195005875,
+          "remaining_digest_ns": 971041,
+          "state": 34,
+          "walk_ns": 75622625
+        },
+        {
+          "file_roots_ns": 203090458,
+          "remaining_digest_ns": 1177209,
+          "state": 35,
+          "walk_ns": 75797042
+        },
+        {
+          "file_roots_ns": 149907833,
+          "remaining_digest_ns": 1080125,
+          "state": 36,
+          "walk_ns": 65617833
+        },
+        {
+          "file_roots_ns": 66384500,
+          "remaining_digest_ns": 4211541,
+          "state": 37,
+          "walk_ns": 61731542
+        },
+        {
+          "file_roots_ns": 253284583,
+          "remaining_digest_ns": 2488459,
+          "state": 38,
+          "walk_ns": 78553833
+        },
+        {
+          "file_roots_ns": 249126750,
+          "remaining_digest_ns": 1473875,
+          "state": 39,
+          "walk_ns": 85443292
+        },
+        {
+          "file_roots_ns": 281317791,
+          "remaining_digest_ns": 1344000,
+          "state": 40,
+          "walk_ns": 85912334
+        },
+        {
+          "file_roots_ns": 173351959,
+          "remaining_digest_ns": 1450416,
+          "state": 41,
+          "walk_ns": 79908583
+        },
+        {
+          "file_roots_ns": 282281125,
+          "remaining_digest_ns": 4568792,
+          "state": 42,
+          "walk_ns": 92408541
+        },
+        {
+          "file_roots_ns": 238078917,
+          "remaining_digest_ns": 1779708,
+          "state": 43,
+          "walk_ns": 88066042
+        }
+      ],
+      "totals": {
+        "file_roots_ns": 4535651711,
+        "remaining_digest_ns": 68545330,
+        "walk_ns": 1760420416
+      }
+    },
+    {
+      "completed_prefix": 43,
+      "label": "decoded-retention",
+      "records": [
+        {
+          "file_roots_ns": 22477500,
+          "remaining_digest_ns": 1333792,
+          "state": 1,
+          "walk_ns": 14821041
+        },
+        {
+          "file_roots_ns": 15308042,
+          "remaining_digest_ns": 37916,
+          "state": 2,
+          "walk_ns": 11041875
+        },
+        {
+          "file_roots_ns": 13584333,
+          "remaining_digest_ns": 56583,
+          "state": 3,
+          "walk_ns": 6638875
+        },
+        {
+          "file_roots_ns": 12283625,
+          "remaining_digest_ns": 76250,
+          "state": 4,
+          "walk_ns": 6090542
+        },
+        {
+          "file_roots_ns": 14822625,
+          "remaining_digest_ns": 107125,
+          "state": 5,
+          "walk_ns": 7367042
+        },
+        {
+          "file_roots_ns": 20004417,
+          "remaining_digest_ns": 727250,
+          "state": 6,
+          "walk_ns": 7426083
+        },
+        {
+          "file_roots_ns": 29261000,
+          "remaining_digest_ns": 146042,
+          "state": 7,
+          "walk_ns": 7478500
+        },
+        {
+          "file_roots_ns": 33981250,
+          "remaining_digest_ns": 184417,
+          "state": 8,
+          "walk_ns": 9089041
+        },
+        {
+          "file_roots_ns": 29046083,
+          "remaining_digest_ns": 159958,
+          "state": 9,
+          "walk_ns": 5750417
+        },
+        {
+          "file_roots_ns": 35758000,
+          "remaining_digest_ns": 150083,
+          "state": 10,
+          "walk_ns": 6443792
+        },
+        {
+          "file_roots_ns": 28463459,
+          "remaining_digest_ns": 1250000,
+          "state": 11,
+          "walk_ns": 7723166
+        },
+        {
+          "file_roots_ns": 34388625,
+          "remaining_digest_ns": 885584,
+          "state": 12,
+          "walk_ns": 10576125
+        },
+        {
+          "file_roots_ns": 54453750,
+          "remaining_digest_ns": 253750,
+          "state": 13,
+          "walk_ns": 11191750
+        },
+        {
+          "file_roots_ns": 52059125,
+          "remaining_digest_ns": 301083,
+          "state": 14,
+          "walk_ns": 17336083
+        },
+        {
+          "file_roots_ns": 54938667,
+          "remaining_digest_ns": 3160666,
+          "state": 15,
+          "walk_ns": 11843208
+        },
+        {
+          "file_roots_ns": 71619417,
+          "remaining_digest_ns": 390000,
+          "state": 16,
+          "walk_ns": 19736666
+        },
+        {
+          "file_roots_ns": 69583208,
+          "remaining_digest_ns": 450708,
+          "state": 17,
+          "walk_ns": 21947375
+        },
+        {
+          "file_roots_ns": 93878667,
+          "remaining_digest_ns": 596500,
+          "state": 18,
+          "walk_ns": 30480250
+        },
+        {
+          "file_roots_ns": 96412833,
+          "remaining_digest_ns": 634667,
+          "state": 19,
+          "walk_ns": 38981208
+        },
+        {
+          "file_roots_ns": 105212792,
+          "remaining_digest_ns": 623875,
+          "state": 20,
+          "walk_ns": 34554833
+        },
+        {
+          "file_roots_ns": 119543250,
+          "remaining_digest_ns": 656250,
+          "state": 21,
+          "walk_ns": 38624750
+        },
+        {
+          "file_roots_ns": 97208375,
+          "remaining_digest_ns": 646875,
+          "state": 22,
+          "walk_ns": 37124375
+        },
+        {
+          "file_roots_ns": 102113375,
+          "remaining_digest_ns": 834584,
+          "state": 23,
+          "walk_ns": 42606666
+        },
+        {
+          "file_roots_ns": 133343541,
+          "remaining_digest_ns": 763292,
+          "state": 24,
+          "walk_ns": 46477875
+        },
+        {
+          "file_roots_ns": 135922333,
+          "remaining_digest_ns": 1156042,
+          "state": 25,
+          "walk_ns": 53723750
+        },
+        {
+          "file_roots_ns": 69968709,
+          "remaining_digest_ns": 790791,
+          "state": 26,
+          "walk_ns": 31844916
+        },
+        {
+          "file_roots_ns": 108144333,
+          "remaining_digest_ns": 872250,
+          "state": 27,
+          "walk_ns": 40800333
+        },
+        {
+          "file_roots_ns": 115375958,
+          "remaining_digest_ns": 5348042,
+          "state": 28,
+          "walk_ns": 45079875
+        },
+        {
+          "file_roots_ns": 140038709,
+          "remaining_digest_ns": 8920041,
+          "state": 29,
+          "walk_ns": 60359958
+        },
+        {
+          "file_roots_ns": 122919792,
+          "remaining_digest_ns": 7701500,
+          "state": 30,
+          "walk_ns": 48183500
+        },
+        {
+          "file_roots_ns": 126959375,
+          "remaining_digest_ns": 1113375,
+          "state": 31,
+          "walk_ns": 66112625
+        },
+        {
+          "file_roots_ns": 125782833,
+          "remaining_digest_ns": 7015917,
+          "state": 32,
+          "walk_ns": 55513042
+        },
+        {
+          "file_roots_ns": 179328375,
+          "remaining_digest_ns": 1151875,
+          "state": 33,
+          "walk_ns": 68361875
+        },
+        {
+          "file_roots_ns": 198301875,
+          "remaining_digest_ns": 1267250,
+          "state": 34,
+          "walk_ns": 72284083
+        },
+        {
+          "file_roots_ns": 207903917,
+          "remaining_digest_ns": 1088750,
+          "state": 35,
+          "walk_ns": 75441917
+        },
+        {
+          "file_roots_ns": 147394416,
+          "remaining_digest_ns": 1316042,
+          "state": 36,
+          "walk_ns": 62057625
+        },
+        {
+          "file_roots_ns": 67520417,
+          "remaining_digest_ns": 4343291,
+          "state": 37,
+          "walk_ns": 61494292
+        },
+        {
+          "file_roots_ns": 247050583,
+          "remaining_digest_ns": 2311250,
+          "state": 38,
+          "walk_ns": 72367625
+        },
+        {
+          "file_roots_ns": 248352333,
+          "remaining_digest_ns": 1697084,
+          "state": 39,
+          "walk_ns": 76444292
+        },
+        {
+          "file_roots_ns": 272704459,
+          "remaining_digest_ns": 1285333,
+          "state": 40,
+          "walk_ns": 81333125
+        },
+        {
+          "file_roots_ns": 179517833,
+          "remaining_digest_ns": 1639250,
+          "state": 41,
+          "walk_ns": 73548709
+        },
+        {
+          "file_roots_ns": 282811791,
+          "remaining_digest_ns": 4689084,
+          "state": 42,
+          "walk_ns": 93976500
+        },
+        {
+          "file_roots_ns": 243529459,
+          "remaining_digest_ns": 2187666,
+          "state": 43,
+          "walk_ns": 84548333
+        }
+      ],
+      "totals": {
+        "file_roots_ns": 4559273459,
+        "remaining_digest_ns": 70322083,
+        "walk_ns": 1674827913
+      }
+    }
+  ],
+  "complete_command_wall_ns": 26001995791,
+  "completed_states": 45,
+  "coverage": "prior44/current45states; cumulative pooled totals compared only through equal43prefix; no overall window speed claim",
+  "cumulative_prefix_comparisons": [
+    {
+      "current": {
+        "physical_group_decoded_bytes": 60296801,
+        "physical_group_decodes": 1669,
+        "physical_record_calls": 16418,
+        "value_group_decodes": 16511
+      },
+      "prefix_through_state": 40,
+      "prior": {
+        "physical_group_decoded_bytes": 104094401,
+        "physical_group_decodes": 2765,
+        "physical_record_calls": 16418,
+        "value_group_decodes": 16511
+      },
+      "scope": "cumulative pooled-reader totals, not per-state"
+    },
+    {
+      "current": {
+        "physical_group_decoded_bytes": 69491331,
+        "physical_group_decodes": 1900,
+        "physical_record_calls": 18540,
+        "value_group_decodes": 19928
+      },
+      "prefix_through_state": 43,
+      "prior": {
+        "physical_group_decoded_bytes": 119619946,
+        "physical_group_decodes": 3144,
+        "physical_record_calls": 18540,
+        "value_group_decodes": 19928
+      },
+      "scope": "cumulative pooled-reader totals, not per-state"
+    }
+  ],
+  "identical_store": {
+    "bytes": 62611456,
+    "sha256": "cc3c207215d55f2db963a592279cae241dbf1212f517b1f4387956de8216e45f"
+  },
+  "kind": "native-only count diagnosis, not proof/speed admission",
+  "native_wall_ns": 9512102083,
+  "owners_preserved": true,
+  "phase_scope": "walk and file-root acquisition/classification incl opportunistic selected hashing and remaining digest checks are disjoint spans inside Sampler.run_complete; exclude corpus/oracle/custody/proof-wrapper overhead; no overall admission",
+  "product_source": "8302782a91f3f40ed4be60271ba0122116bee7a6",
+  "status": "DIAGNOSTIC_TIMEOUT"
+}

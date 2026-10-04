@@ -1997,3 +1997,14 @@ overflowFAIL. Selective same-cache eviction fixesrecentgroup/coldvictim/bound;
 checked/idempotent immutable admission with errors propagated by3callers.
 FullCorechecksPASS; freeze/countdiag next. No newcache/workers/bounds or
 weakerhash/frame/ceiling checks; earlierqualification unchanged,goalACTIVE.
+
+
+-2026-10-04:8302782a9 decodedGroupCache497tests/94targets andCorechecksPASS,
+productionLOC139358->139408(+50),ref65417/core73991. Native53countdiagTIMEOUT
+9.512102083s after45,whole26.001995791s,cold/ownersPASS. SamebyteStoreprefix43
+physicaldecodes3144->1900/decoded119.6MB->69.5MB; record/valueworkunchanged.
+Correctscope:pooledcounterscumulative throughstate,notper-state; oldrawcounts
+unchanged,earlierinterpretationcorrected. Actualprefix43file-root phase4.559s
+vsreference2.281s dominatesgap;walk1.675s vs1.928s. Needphase-specificBLOB/
+dependency/canonicalbyteattribution beforemoretuning. Currentmatchedproof/
+performanceNOT_RUN,priorqualificationhistorical,190s/9.5s unchanged,goalACTIVE.
