@@ -1,0 +1,32 @@
+{
+  "parent": "f3025f81eb046746b3bada2114ae1e93edf46a6b",
+  "before": 140081,
+  "after": 140138,
+  "delta": 57,
+  "reference_before": 65417,
+  "reference_after": 65417,
+  "core_before": 74664,
+  "core_after": 74721,
+  "changed_files": {
+    "core/crates/layerfs-persistence/src/backend/sqlite/metadata_locations.rs": {
+      "before": 86,
+      "before_blob_sha256": "4a1c4e9b830c193508c1e070f4dd0279fbf6fbaed7952aa0b504e46b34ec920c",
+      "after": 138,
+      "after_blob_sha256": "4fd3ba54d883cde6020e69b186fdbb7b23272fdac528a0445dce8eec2017593d"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/rows.rs": {
+      "before": 48,
+      "before_blob_sha256": "cd7669b8c20574ee528b992cb1189c821b7e19e8100aa8de7b46fb041017b0b4",
+      "after": 54,
+      "after_blob_sha256": "1fbee2b33fc586f78ea32cd9e650c6f42a02d309a2d33cb9168747c0c08052c5"
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/units_read.rs": {
+      "before": 129,
+      "before_blob_sha256": "aa4ad51449a13ae16ee5194158c7c0ab03b68a35656af233ccb415b62ace4a7a",
+      "after": 128,
+      "after_blob_sha256": "7dcb0ea088c0fb91385eb3aad04c33e74a0d56293abb212faf094dcfe93661aa"
+    }
+  },
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "exact first-parent/final staged production blobs; independent full same-counter count; nonblank/noncomment Rust src/runtime SQL excluding tests/docs/tools/examples"
+}

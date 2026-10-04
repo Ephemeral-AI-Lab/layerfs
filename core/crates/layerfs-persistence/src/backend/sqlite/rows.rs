@@ -12,6 +12,12 @@ pub(crate) fn bind(p: Param) -> SqlValue {
         Param::OptionalBytes(v) => v.map(SqlValue::Blob).unwrap_or(SqlValue::Null),
     }
 }
+pub(crate) fn blob<'a>(row: &'a Row<'_>, index: usize) -> Result<&'a [u8], BackendError> {
+    row.get_ref(index)
+        .map_err(error)?
+        .as_blob()
+        .map_err(|_| BackendError::Integrity)
+}
 pub(crate) fn record(row: &Row<'_>, count: usize) -> Result<Record, BackendError> {
     let mut cells = Vec::with_capacity(count);
     for index in 0..count {

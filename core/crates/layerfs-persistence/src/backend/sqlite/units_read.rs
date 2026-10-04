@@ -1,9 +1,6 @@
 //! Logical pack offsets mapped to independent immutable unit BLOBs, one transaction.
 use super::{rows, transaction::Transaction, unit_io};
-use crate::backend::{
-    metadata_locations::info,
-    records::{BackendError, Param},
-};
+use crate::backend::{metadata_locations::typed_info, records::BackendError};
 use layerfs_storage::{location::PackInfo, pack::layout, port::*};
 pub(super) struct Unit {
     pub(super) id: i64,
@@ -21,19 +18,21 @@ impl Input {
             return Err(PersistenceError::Malformed);
         }
         // CASE bounds extraction inside SQLite, even if stored constraints were bypassed.
-        let mut descriptors = tx.query(
+        let prefix_limit = PACK_READ_PREFIX_BYTES as i64;
+        let mut descriptors = tx.mapped(
             "SELECT CASE WHEN length(control) BETWEEN 24 AND ?2 THEN control END AS control,pack_id,domain,digest,length,length(control) FROM pack WHERE pack_id=?1",
-            vec![Param::I64(id), Param::I64(PACK_READ_PREFIX_BYTES as i64)],
+            &[&id, &prefix_limit], 16, 1,
+            |row| {
+                let info = typed_info(row, 1)?;
+                let length = row.get::<_, i64>(5).map_err(rows::error)?;
+                if !(24..=prefix_limit).contains(&length) { return Err(BackendError::Integrity); }
+                let control = rows::blob(row, 0)?;
+                if control.len() != length as usize { return Err(BackendError::Integrity); }
+                Ok((info, control.to_vec()))
+            },
         )?;
-        let row = descriptors.first_mut().ok_or(PersistenceError::Missing)?;
-        let info = info(row, 1)?;
-        let control_length = row.get::<i64>(5)?;
-        if descriptors.len() != 1 || !(24..=PACK_READ_PREFIX_BYTES as i64).contains(&control_length)
-        {
-            return Err(PersistenceError::Malformed);
-        }
-        let control = descriptors[0].take_bytes(0)?;
-        if control.len() != control_length as usize {
+        let (info, control) = descriptors.pop().ok_or(PersistenceError::Missing)?;
+        if !descriptors.is_empty() {
             return Err(PersistenceError::Malformed);
         }
         drop(descriptors);

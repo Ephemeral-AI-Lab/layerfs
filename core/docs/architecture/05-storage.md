@@ -1354,3 +1354,23 @@ A reopen failure is terminal and still checks close; uncertain read/reopen/close
 outcomes retain the transaction's existing quarantine semantics. No cache, buffer,
 worker, transaction, SQL source, physical layout or publication limit is enlarged.
 Native diagnostics distinguish actual opens, reopens, reads and closes.
+
+
+### Typed singleton locations and bounded controls (againstf3025f81e)
+
+A one-ID locator request uses the same SQL and one original read transaction,
+with a borrowed fixed ID binding and direct validated LocatedObject conversion.
+It avoids temporary deduplication/SQL construction and generic cells for that
+known input cardinality. Multi-ID lookup keeps its original bounded batch path.
+Descriptor validation is shared by typed and generic decoding, retaining exact
+BLOB widths, domain/length/positive-ID checks and signed numeric conversions.
+The typed result remains owned by the measured query wrapper until SQLite DONE
+and lifecycle cleanup succeed; errors cannot publish a partially decoded page.
+
+Group-row control retrieval uses borrowed stack integer bindings and a typed
+PackInfo/control pair. The existing SQL CASE bounds extraction to24..=4120B,
+then typed conversion rechecks length and takes one necessary owned control copy.
+Directory/unit validation still precedes BLOB acquisition. Query, VM-step,
+binding-byte and transaction accounting, failures/quarantine and all schema/cache/
+worker/publication/output limits remain. Fixed IDs/digests are copied directly
+from borrowed row bytes into fixed-width types. No new cache or fallback exists.

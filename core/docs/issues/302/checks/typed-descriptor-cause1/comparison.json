@@ -1,0 +1,79 @@
+{
+  "status": "PASS",
+  "kind": "public-port-Rust-allocation-count-cause",
+  "original_product_freeze": "6e143ac6013eb6338193d35805307aa5ecebcd94",
+  "source_store": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-unit-reopen-history157-candidate1/store.sqlite",
+  "source_sha256": "0871680ffd8d28695a3a689b54a7597a64b9d48143642f9e9b064567cf5234de",
+  "source_preserved_against_original_manifest": true,
+  "before": [
+    {
+      "kind": "public-port-allocation-count-cause",
+      "path": "singleton-locator",
+      "calls": 1024,
+      "rust_allocations": 21504,
+      "rust_reallocations": 0,
+      "rust_requested_allocation_bytes": 2616320,
+      "checksum": 118302818,
+      "wall_ns": 21604666,
+      "cache_state": "uncontrolled; diagnostic only",
+      "scope": "Rust global allocator requests within public calls; excludes C malloc, RSS, live memory and setup"
+    },
+    {
+      "kind": "public-port-allocation-count-cause",
+      "path": "control-plus-first-group",
+      "calls": 128,
+      "rust_allocations": 2304,
+      "rust_reallocations": 128,
+      "rust_requested_allocation_bytes": 2928969,
+      "checksum": 324587421,
+      "wall_ns": 13215209,
+      "cache_state": "uncontrolled; diagnostic only",
+      "scope": "Rust global allocator requests within public calls; excludes C malloc, RSS, live memory and setup"
+    }
+  ],
+  "after": [
+    {
+      "kind": "public-port-allocation-count-cause",
+      "path": "singleton-locator",
+      "calls": 1024,
+      "rust_allocations": 7168,
+      "rust_reallocations": 0,
+      "rust_requested_allocation_bytes": 1187840,
+      "checksum": 118302818,
+      "wall_ns": 20465375,
+      "cache_state": "uncontrolled; diagnostic only",
+      "scope": "Rust global allocator requests within public calls; excludes C malloc, RSS, live memory and setup"
+    },
+    {
+      "kind": "public-port-allocation-count-cause",
+      "path": "control-plus-first-group",
+      "calls": 128,
+      "rust_allocations": 1664,
+      "rust_reallocations": 128,
+      "rust_requested_allocation_bytes": 2881865,
+      "checksum": 324587421,
+      "wall_ns": 12975917,
+      "cache_state": "uncontrolled; diagnostic only",
+      "scope": "Rust global allocator requests within public calls; excludes C malloc, RSS, live memory and setup"
+    }
+  ],
+  "binary_sha256": {
+    "before": "469cb0be2ad93ae9024726f9afcf652b0b07830bc33cff157c3cb7cfdabf18d0",
+    "after": "eefce04966d8e3bb8b58118167f4d6bcecf0ddc140ec4e0044d914034bda6f09"
+  },
+  "vehicle": "core/crates/layerfs-persistence/examples/metadata_allocation_probe.rs",
+  "scope": "1024 distinct first-sorted CIDs and128 distinct first-sorted pack IDs once each; public read-only calls; same counters/inputs; Rustfmt only changes vehicle formatting; excludes C malloc, setup/RSS/live-memory; uncontrolled caches, no speed claim",
+  "failure": "first vehicle build E0599 assumed into_parts on enum; repaired explicit Units arm before any successful diagnostic call; failed build/native-launch logs retained; no performance attempt",
+  "allocation_changes": {
+    "locator_per_existing_row": {
+      "before": 21,
+      "after": 7,
+      "delta": -14
+    },
+    "control_plus_first_group_per_call": {
+      "before": 18,
+      "after": 13,
+      "delta": -5
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "combined": 140138,
+  "root": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs",
+  "scopes": {
+    "core": {
+      "crates": {
+        "layerfs-api": 796,
+        "layerfs-bridge": 6834,
+        "layerfs-content": 13500,
+        "layerfs-daemon": 2151,
+        "layerfs-fuse": 1447,
+        "layerfs-history": 811,
+        "layerfs-persistence": 4494,
+        "layerfs-project": 799,
+        "layerfs-s3": 879,
+        "layerfs-sandbox": 1106,
+        "layerfs-server": 3996,
+        "layerfs-storage": 8816,
+        "layerfs-telemetry": 2257,
+        "layerfs-workspace": 26835
+      },
+      "files": 455,
+      "lines": 74721
+    },
+    "reference": {
+      "crates": {
+        "layerfs-cli": 1142,
+        "layerfs-content": 15701,
+        "layerfs-daemon": 3233,
+        "layerfs-fuse": 10986,
+        "layerfs-layerstack-store": 18376,
+        "layerfs-materialization": 358,
+        "layerfs-monitor": 414,
+        "layerfs-sdk": 979,
+        "layerfs-workspace": 11776,
+        "layerfs-workspace-core": 2452
+      },
+      "files": 193,
+      "lines": 65417
+    }
+  }
+}

@@ -230,3 +230,112 @@ fn wrong_reopened_body_length_is_refused_and_cursor_is_checked_closed() {
     assert_eq!(after.blob_read_calls - before.blob_read_calls, 7);
     assert_eq!(after.blob_close_calls - before.blob_close_calls, 1);
 }
+
+#[test]
+fn typed_singleton_matches_batch_results_missing_ids_and_statement_boundary() {
+    for layout in [
+        SqlitePackLayout::Monolithic,
+        SqlitePackLayout::GroupRows,
+        SqlitePackLayout::GroupRowsIndexed,
+    ] {
+        let t = support::Temp::new("typed-locator");
+        let h = create(&t.join("db"), layout);
+        let objects = fixture(&h);
+        let mut batch = Vec::new();
+        h.storage
+            .locate(
+                &[objects[2].id(), objects[0].id(), objects[2].id()],
+                &mut batch,
+            )
+            .unwrap();
+        assert_eq!(batch.len(), 2);
+        for object in [&objects[0], &objects[2]] {
+            let mut single = batch.clone();
+            let before = h.diagnostics().unwrap();
+            h.storage.locate(&[object.id()], &mut single).unwrap();
+            assert_eq!(single.len(), 1);
+            assert_eq!(
+                single[0],
+                *batch
+                    .iter()
+                    .find(|r| r.location.object_id == object.id())
+                    .unwrap()
+            );
+            let after = h.diagnostics().unwrap();
+            assert_eq!(after.statements - before.statements, 3);
+            assert_eq!(after.transactions - before.transactions, 1);
+            assert_eq!(after.blob_open_calls, before.blob_open_calls);
+            h.storage
+                .locate(
+                    &[layerfs_content::ObjectId::for_bytes(
+                        b"missing typed locator",
+                    )],
+                    &mut single,
+                )
+                .unwrap();
+            assert!(single.is_empty());
+        }
+    }
+}
+struct WholePlan;
+impl PackReadPlan for WholePlan {
+    fn select(&mut self, _: PackInfo, _: &[u8]) -> Result<PackReadChoice, PersistenceError> {
+        Ok(PackReadChoice::Whole)
+    }
+}
+#[test]
+fn typed_descriptor_rejects_invalid_domain_digest_and_length_before_blob_open() {
+    for mutation in ["domain=9", "digest=zeroblob(31)", "length=31"] {
+        let t = support::Temp::new("typed-descriptor-invalid");
+        let path = t.join("db");
+        let h = create(&path, SqlitePackLayout::GroupRowsIndexed);
+        let objects = fixture(&h);
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute_batch(&format!("PRAGMA ignore_check_constraints=ON;DROP TRIGGER pack_immutable_update;UPDATE pack SET {mutation} WHERE pack_id=1")).unwrap();
+        drop(db);
+        let before = h.diagnostics().unwrap();
+        let mut out = Vec::new();
+        assert_eq!(
+            h.storage.locate(&[objects[0].id()], &mut out),
+            Err(PersistenceError::Malformed)
+        );
+        assert!(out.is_empty());
+        assert_eq!(
+            h.storage.read_scoped_pack(1, &mut WholePlan),
+            Err(PersistenceError::Malformed)
+        );
+        assert_eq!(
+            h.diagnostics().unwrap().blob_open_calls,
+            before.blob_open_calls
+        );
+    }
+}
+#[test]
+fn typed_singleton_rejects_invalid_role_and_signed_coordinates() {
+    for mutation in [
+        "role=0",
+        "canonical_length=-1",
+        "group_number=-1",
+        "record_number=-1",
+    ] {
+        let t = support::Temp::new("typed-locator-invalid");
+        let path = t.join("db");
+        let h = create(&path, SqlitePackLayout::GroupRowsIndexed);
+        let objects = fixture(&h);
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute_batch("PRAGMA ignore_check_constraints=ON")
+            .unwrap();
+        db.execute(
+            &format!("UPDATE object_location SET {mutation} WHERE object_id=?1"),
+            [objects[0].id().as_bytes().as_slice()],
+        )
+        .unwrap();
+        drop(db);
+        let mut out = Vec::new();
+        assert_eq!(
+            h.storage.locate(&[objects[0].id()], &mut out),
+            Err(PersistenceError::Malformed)
+        );
+        assert!(out.is_empty());
+    }
+}

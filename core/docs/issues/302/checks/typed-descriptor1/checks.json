@@ -1,0 +1,74 @@
+[
+  {
+    "name": "tests",
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "--workspace",
+      "--all-targets"
+    ],
+    "wall_ns": 33904931042,
+    "exit_code": 0
+  },
+  {
+    "name": "clippy",
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "clippy",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "--workspace",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "wall_ns": 1146534417,
+    "exit_code": 0
+  },
+  {
+    "name": "fmt",
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "fmt",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "wall_ns": 989773708,
+    "exit_code": 0
+  },
+  {
+    "name": "boundary",
+    "command": [
+      "python3",
+      "core/tools/check_product_boundary.py"
+    ],
+    "wall_ns": 364303709,
+    "exit_code": 0
+  },
+  {
+    "name": "tools",
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "core/tools",
+      "-p",
+      "test_*.py"
+    ],
+    "wall_ns": 225295750,
+    "exit_code": 0
+  }
+]
