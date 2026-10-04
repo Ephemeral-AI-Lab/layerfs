@@ -1,0 +1,1 @@
+{"kind":"sqlite-public-api-delegation-observer","sqlite_version":"3.51.0","clock":"CLOCK_MONOTONIC_RAW","step_calls":5840,"step_ns":49589100,"reset_calls":3508,"reset_ns":12654905,"commit_step_calls":27,"commit_step_ns":34544209,"commit_reset_calls":0,"commit_reset_ns":0}

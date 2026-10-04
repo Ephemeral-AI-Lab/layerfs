@@ -1,0 +1,43 @@
+{
+  "admission": "NOT_RUN",
+  "api_observer_enabled": true,
+  "arm": "baseline",
+  "command_budget_ns": 15000000000,
+  "declared_diagnostic_children": 1,
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "4ef2b1378e26c7989cf5e65b49dc35ef181e17a3bd0fa9b02114deebbae2aeb8",
+    "product_seal": "5d392a4f3e2a033699e0fb45dc63bbe166243cbadb814943a277caf6484de128",
+    "source_commit": "890ecb2d4b90bcca684a5e03a63f11708ed06ca9",
+    "source_dirty": false,
+    "source_tree": "c7f77d21d53c187abf5a9b2bb755de232d9e7cec"
+  },
+  "kind": "paired-cold-namespace-small-step-cause-diagnostic",
+  "native_vm_counter_qualified": false,
+  "product_speed_sample_count": 0,
+  "required_canonical_equivalence": "2003ID role/length inventory and identical digest; independently sampled byte/tree proof",
+  "required_root_equivalence": "both frozen production Init1000 roots and eachother",
+  "scope": "shared namespace caller through public C1/C2/C5; Service envelope omitted; fixed observers and canonical census added; not an admission clock",
+  "shared_source_sha256": {
+    "core/benchmark/fs-bench-pro-storage-content/src/workload/digest.rs": "2dc5f726e4adf5d75174a76027d595005e7606a6edb329c370cf277700bdfb1c",
+    "core/benchmark/fs-bench-pro/diagnostics/cause_engine_reference.rs": "a88a4c047466fefb4b02d65e23d2315d9b5fc089ce33d4eba99671bf4c480ace",
+    "core/crates/layerfs-project/examples/cause_namespace.rs": "722d60d7cf8635e41efd87f706b9c3f4fd3593deb56f757b6f6b4829f93e16a8",
+    "core/crates/layerfs-project/examples/cause_support/batch.rs": "f0ac6a3702436ec4bcf8fd9a52c564ae527021ebb1fb2af35af7a4cfd029e708",
+    "core/crates/layerfs-project/examples/cause_support/engine.rs": "6ce4d2e3f04628c9bae781a8f4879bc659fa3f195045592014abcf14d70f4ee9",
+    "core/crates/layerfs-project/examples/cause_support/error.rs": "a130bd819aac5a3faa4ae28baf8ac3bd023cdfcf74c34bde92e466a8b3844102",
+    "core/crates/layerfs-project/examples/cause_support/init.rs": "9c7c74e18c6d60fd3e5e866783954f2c4461102ce5795b0bc3e0cbf32ca233eb",
+    "core/crates/layerfs-project/examples/cause_support/metadata.rs": "a034cd78f8d1632c91ee96e313c9dbf2ee7ad5f7cf503c2395e765fe80e4799f",
+    "core/crates/layerfs-project/examples/cause_support/namespace.rs": "fbba36604d2b6dc77f13e7161fd6afb81ae6bed39ee9cf512677261421ce6f17",
+    "core/crates/layerfs-project/examples/cause_support/namespace_work.rs": "ea373031d179d1629135f02fd6a1335e710f76c5dcd6e217ebba5d3658105231",
+    "core/crates/layerfs-project/examples/cause_support/observer.rs": "d1e4b022c9e9eb1187e809e8ed972873cfd44da4a0bfe0a0e8ab3a1a570b9861",
+    "core/crates/layerfs-project/examples/cause_support/scan.rs": "11600b75dfe2f9f3381c887124f9e67796a5322e17dfb806f8ddccfc44b634ee",
+    "core/crates/layerfs-project/examples/cause_support/sql_observer.rs": "c9dadd9802c714175a8f54cc71655a44847061a92046e276475fd3e0bfd85b2a",
+    "core/crates/layerfs-project/examples/cause_support/vfs_observer.rs": "9a3da304bbbf505acb012e55a5cca80eff811c54849c8c37b193602acb7488f7"
+  },
+  "trace_vm_scope": "prepared statements exposing STMT/PROFILE events; status reset at PROFILE; opaque blob/VFS/internal operations not inferred",
+  "verification_budget_ns": 9500000000,
+  "vfs_observer_enabled": true
+}

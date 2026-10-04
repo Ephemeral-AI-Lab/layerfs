@@ -1,0 +1,22 @@
+{
+  "budget_ns": 30000000000,
+  "child": null,
+  "command": [
+    "clang",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-dynamiclib",
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/benchmark/fs-bench-pro/diagnostics/sqlite_vfs_observer.c",
+    "-lsqlite3",
+    "-o",
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-paired-cause1000-candidate-diagnostic4/sqlite-vfs-observer.dylib"
+  ],
+  "cpu_ns": 147241000,
+  "exit_code": 0,
+  "peak_rss_bytes": 49741824,
+  "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+  "timed_out": false,
+  "wall_ns": 105481042
+}

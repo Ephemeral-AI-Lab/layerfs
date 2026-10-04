@@ -1608,3 +1608,14 @@ fixedclass/flags/call/byte/ns counters. TinyWAL/FULLtransaction/checkpoint/read4
 probePASS,live0/errors0. No product/dependency/profilebufferchange; nameddefault
 isinstrumentedwrapperandunderlyingidentityreported. Onefreshpaired--vfschild/arm
 next,samecold/budgets/proofs. [VFScontract](SQLITE-VFS-CAUSE-CONTRACT.md).
+
+### Delegated VFS revision4 results
+
+One child per arm qualified: root/inventory, independent proof, cold, cleanup,
+observer and budgets PASS. Whole-lifecycle VFS writes 21,416,960 / 42,235,980 B
+and 32,745,796 / 63,789,514 ns; sync 0 / 34 calls and 0 / 43,442,045 ns.
+Init 131,673,875 / 211,486,250 ns. Counters include bootstrap/checkpoints and
+nest in step clocks; no physical syscall/device-byte or exact partition claim.
+Publication/write work is next priority while preserving durability/limits.
+[Full report](SQLITE-VFS-CAUSE-RESULTS.md) and append-only receipts retained.
+Latest ordinary Init1000 speed FAIL; all seven selections remain active.
