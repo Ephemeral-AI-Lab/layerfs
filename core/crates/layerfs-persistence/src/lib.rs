@@ -10,7 +10,7 @@ mod publication;
 mod storage_provider;
 pub use backend::sqlite::connection::{AllocationIdentity, Checkpoint, ConnectionProfile, SqlWork};
 pub use backend::sqlite::statement_work::StatementPhaseWork;
-pub use config::{BackendSelection, PersistenceConfig, SqlitePersistenceProfile};
+pub use config::{BackendSelection, PersistenceConfig, SqlitePackLayout, SqlitePersistenceProfile};
 pub use handles::Handles;
 pub use history::HistoryProvider;
 pub use storage_provider::StorageProvider;

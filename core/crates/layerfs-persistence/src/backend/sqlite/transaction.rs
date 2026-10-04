@@ -17,6 +17,9 @@ pub(crate) struct Transaction<'a> {
     owner: &'a Session,
 }
 impl Transaction<'_> {
+    pub(crate) fn layout(&self) -> crate::SqlitePackLayout {
+        self.owner.layout
+    }
     pub(crate) fn before_pack(&self, capacity: usize) -> Result<(), BackendError> {
         if self.owner.profile.persistence != crate::SqlitePersistenceProfile::Disposable {
             return Ok(());

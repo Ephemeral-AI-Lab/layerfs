@@ -34,6 +34,7 @@ impl Handles {
             true,
             true,
             config.sqlite_profile,
+            config.sqlite_pack_layout,
         )?);
         session.initialize(policy, history, catalog_id)?;
         Self::validated(session, &history.binding_key, history.cursor_key)
@@ -69,6 +70,7 @@ impl Handles {
                 writable,
                 false,
                 config.sqlite_profile,
+                config.sqlite_pack_layout,
             )?),
             binding,
             cursor_key,

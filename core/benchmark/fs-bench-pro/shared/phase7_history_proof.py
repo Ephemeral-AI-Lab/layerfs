@@ -64,7 +64,7 @@ def unfinished_saves(db):
     return db.execute('SELECT COUNT(*) FROM saves WHERE active_slot IS NOT NULL OR publication IS NULL').fetchone()[0]
 
 
-def collect(db_path, arm, child, row, metadata_output=None):
+def collect(db_path, arm, child, row, metadata_output=None, sqlite_schema_version=1):
     """Authenticate counts/roots against actual C2/C5 rows; preserve original files.
 
     The namespace/content oracle is separate. A census does not prove that every
@@ -72,6 +72,7 @@ def collect(db_path, arm, child, row, metadata_output=None):
     """
     if arm not in ('baseline', 'candidate') or row not in CANONICAL:
         raise ValueError('explicit history census arm and row required')
+    if sqlite_schema_version not in (1,2):raise ValueError('unsupported declared SQLite schema')
     n = {'history-stride10': 17, 'history-stride3': 53, 'history-stride1': 157}[row]
     if child.get('states') != n or child.get('selected_states') != n or len(child.get('roots', [])) != n:
         raise ValueError('complete history census state count mismatch')
@@ -79,7 +80,7 @@ def collect(db_path, arm, child, row, metadata_output=None):
     opened = []
     records = []
     try:
-        for p, tables, app, version in ([(paths[0], COMBINED, 1279677264, 1)] if arm == 'candidate' else
+        for p, tables, app, version in ([(paths[0], COMBINED | ({'pack_unit'} if sqlite_schema_version==2 else set()), 1279677264, sqlite_schema_version)] if arm == 'candidate' else
                                       [(paths[0], C2, 1279677261, 10), (paths[1], C5, 1279677256, 1)]):
             connection, record = owner(p, tables, app, version)
             opened.append(connection); records.append(record)
@@ -89,7 +90,7 @@ def collect(db_path, arm, child, row, metadata_output=None):
             counts = {'history_meta': 1, 'layer_stack': 1, 'branch': n, 'layer': n,
                       'commit': n - 1, 'workspace_stage': 0, 'scope_allocator': 0}
             root_query = 'SELECT hex(root_id) FROM layer'
-            pack_bytes = c2.execute('SELECT COALESCE(SUM(length(body)),0) FROM pack').fetchone()[0]
+            pack_bytes = c2.execute('SELECT COALESCE(SUM(length(control)),0)+(SELECT COALESCE(SUM(length(body)),0) FROM pack_unit) FROM pack' if sqlite_schema_version==2 else 'SELECT COALESCE(SUM(length(body)),0) FROM pack').fetchone()[0]
         else:
             inconsistent = c2.execute('SELECT 1 FROM objects GROUP BY object_id HAVING MIN(object_role)!=MAX(object_role) OR MIN(canonical_length)!=MAX(canonical_length) LIMIT 1').fetchone()
             unfinished = unfinished_saves(c2)
@@ -232,7 +233,7 @@ def main():
     if request['arm'] == 'candidate':
         validate_pins(json.loads(Path(request['pins']).read_text()), request['identity'])
     metadata = out/'reference-metadata.tsv' if request['arm'] == 'baseline' else None
-    census = collect(request['db'], request['arm'], child, request['row'], metadata)
+    census = collect(request['db'], request['arm'], child, request['row'], metadata, request.get('sqlite_schema_version',1))
     (out/'census.json').write_text(json.dumps(census, sort_keys=True, indent=2)+'\n')
     receipt = out/'producer-proof-input.json'
     receipt.write_text(json.dumps({'run': {'child': child}})+'\n')

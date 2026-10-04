@@ -1,0 +1,86 @@
+{
+  "after": 140027,
+  "before": 139620,
+  "changed_files": {
+    "core/crates/layerfs-persistence/sql/sqlite/objects_units.sql": {
+      "after": 25,
+      "before": 0
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/connection.rs": {
+      "after": 284,
+      "before": 266
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/metadata_policy.rs": {
+      "after": 18,
+      "before": 18
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/mod.rs": {
+      "after": 22,
+      "before": 19
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/objects_read.rs": {
+      "after": 65,
+      "before": 61
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/objects_selection.rs": {
+      "after": 82,
+      "before": 76
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/publish.rs": {
+      "after": 120,
+      "before": 117
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/schema.rs": {
+      "after": 121,
+      "before": 100
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/transaction.rs": {
+      "after": 204,
+      "before": 201
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/unit_layout.rs": {
+      "after": 38,
+      "before": 0
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/units_publish.rs": {
+      "after": 34,
+      "before": 0
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/units_read.rs": {
+      "after": 192,
+      "before": 0
+    },
+    "core/crates/layerfs-persistence/src/config.rs": {
+      "after": 51,
+      "before": 31
+    },
+    "core/crates/layerfs-persistence/src/lib.rs": {
+      "after": 17,
+      "before": 17
+    },
+    "core/crates/layerfs-persistence/src/open.rs": {
+      "after": 98,
+      "before": 96
+    },
+    "core/crates/layerfs-persistence/src/storage_provider.rs": {
+      "after": 81,
+      "before": 69
+    },
+    "core/crates/layerfs-storage/src/port/persistence.rs": {
+      "after": 97,
+      "before": 91
+    },
+    "core/crates/layerfs-storage/src/save/publication.rs": {
+      "after": 347,
+      "before": 327
+    }
+  },
+  "core_after": 74610,
+  "core_before": 74203,
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "delta": 407,
+  "method": "same versioned counter, exact first-parent/staged changed Rust/runtime SQL snapshots, complete archive-counted unchanged production scope inherited; inline tests and nonproduct excluded; new unit source/SQL classified as product",
+  "parent": "509d9f164d45655d740389daf6962f8583070a96",
+  "reference": 65417,
+  "staged_product_tree": "27bdf9f47c6a58a7c645f70ea945be75cea88354"
+}

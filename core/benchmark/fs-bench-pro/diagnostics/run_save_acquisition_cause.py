@@ -28,12 +28,12 @@ def phase_counts(stderr,states):
 
 def main():
     import argparse
-    parser=argparse.ArgumentParser();parser.add_argument('--out',required=True);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--out',required=True);parser.add_argument('--pack-layout',choices=['monolithic','group-rows'],default='monolithic');args=parser.parse_args()
     (ROOT/'benchmark_agent_report.md').read_text()
     identity=runner.identities()
     if identity['source_dirty']:raise ValueError('freeze count diagnostic source/harness')
     out=runner.owned(args.out);out.mkdir()
-    record={'schema':'history17-save-acquisition-cause-v1','status':'NOT_RUN','admission':'NOT_APPLICABLE',
+    record={'pack_layout':args.pack_layout,'schema':'history17-save-acquisition-cause-v1','status':'NOT_RUN','admission':'NOT_APPLICABLE',
             'identity':identity,'children':1,'performance_samples':0,'complete_budget_ns':60000000000,
             'construction_workers':1,'scope':'counts from all real17states, fresh database, inclusive cold boundaries; no speed gate/verification/admission',
             'comparison':'disjoint phase deltas, never cumulative provider snapshots or device-byte claims',
@@ -58,7 +58,7 @@ def main():
         remaining=60000000000-(time.monotonic_ns()-start)
         if remaining<=0:raise ValueError('cold preparation exhausted diagnostic command envelope')
         binary=record['build']['binaries']['benchmark_history']['path']
-        record['child']=invoke([binary,str(corpus),str(db),str(scratch/'ordering'),'history-stride10','complete','disposable'],out,'driver',remaining,env,ROOT)
+        record['child']=invoke([binary,str(corpus),str(db),str(scratch/'ordering'),'history-stride10','complete','disposable',args.pack_layout],out,'driver',remaining,env,ROOT)
         record['complete_wall_ns']=time.monotonic_ns()-start
         child=record['child'];stderr=(out/'driver.stderr').read_text()
         if child['exit_code'] or child['timed_out'] or not child['child'] or child['child'].get('status')!='COMPLETE':raise ValueError('diagnostic producer incomplete')

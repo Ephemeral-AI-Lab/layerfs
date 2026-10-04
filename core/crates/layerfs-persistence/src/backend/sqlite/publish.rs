@@ -5,7 +5,10 @@ use layerfs_content::ObjectId;
 use layerfs_storage::{location::PackDomain, port::*};
 use std::collections::BTreeSet;
 pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published, BackendError> {
-    write_packs(tx, &batch.packs)?;
+    match tx.layout() {
+        crate::SqlitePackLayout::Monolithic => write_packs(tx, &batch.packs)?,
+        crate::SqlitePackLayout::GroupRows => super::units_publish::write(tx, &batch.packs)?,
+    }
     let mut inserted = BTreeSet::new();
     // Both actual limits constrain one statement. SQL size is bounded conservatively.
     let limit = tx

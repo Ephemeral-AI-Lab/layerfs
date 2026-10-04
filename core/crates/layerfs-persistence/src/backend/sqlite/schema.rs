@@ -4,12 +4,24 @@ use crate::backend::records::{BackendError, Param, Record};
 use rusqlite::Connection;
 use std::cell::RefCell;
 pub(crate) const APPLICATION_ID: i64 = 1279677264;
-pub(crate) const VERSION: i64 = 1;
 pub(crate) const OBJECTS: &str = include_str!("../../../sql/sqlite/objects.sql");
 pub(crate) const METADATA: &str = include_str!("../../../sql/sqlite/metadata.sql");
 pub(crate) const HISTORY: &str = include_str!("../../../sql/sqlite/history.sql");
-pub(crate) fn source() -> String {
-    format!("{OBJECTS}{METADATA}{HISTORY}")
+const UNITS: &str = include_str!("../../../sql/sqlite/objects_units.sql");
+fn scripts(layout: crate::SqlitePackLayout) -> [String; 3] {
+    let objects = match layout {
+        crate::SqlitePackLayout::Monolithic => OBJECTS,
+        crate::SqlitePackLayout::GroupRows => UNITS,
+    };
+    let version = format!("schema_version={}", layout.version());
+    [
+        objects.to_owned(),
+        METADATA.replace("schema_version=1", &version),
+        HISTORY.replace("schema_version=1", &version),
+    ]
+}
+pub(crate) fn source(layout: crate::SqlitePackLayout) -> String {
+    scripts(layout).concat()
 }
 pub(crate) fn definition(c: &Connection, w: &RefCell<SqlWork>) -> Result<String, BackendError> {
     let rows: Vec<Record> = query::run(
@@ -28,7 +40,11 @@ pub(crate) fn definition(c: &Connection, w: &RefCell<SqlWork>) -> Result<String,
     }
     Ok(s)
 }
-pub(crate) fn check(c: &Connection, w: &RefCell<SqlWork>) -> Result<(), BackendError> {
+pub(crate) fn check(
+    c: &Connection,
+    w: &RefCell<SqlWork>,
+    layout: crate::SqlitePackLayout,
+) -> Result<(), BackendError> {
     let app = query::run(c, "PRAGMA application_id", vec![], w)?
         .first()
         .ok_or(BackendError::Integrity)?
@@ -37,7 +53,7 @@ pub(crate) fn check(c: &Connection, w: &RefCell<SqlWork>) -> Result<(), BackendE
         .first()
         .ok_or(BackendError::Integrity)?
         .get::<i64>(0)?;
-    if app != APPLICATION_ID || version != VERSION {
+    if app != APPLICATION_ID || version != layout.version() {
         return Err(BackendError::Integrity);
     }
     let rows = query::run(
@@ -47,7 +63,7 @@ pub(crate) fn check(c: &Connection, w: &RefCell<SqlWork>) -> Result<(), BackendE
         w,
     )?;
     let actual: Vec<String> = rows.iter().map(|r| r.get(0)).collect::<Result<_, _>>()?;
-    let expected = [
+    let mut expected = vec![
         "branch",
         "commit",
         "content_signature",
@@ -61,6 +77,10 @@ pub(crate) fn check(c: &Connection, w: &RefCell<SqlWork>) -> Result<(), BackendE
         "store_policy",
         "workspace_stage",
     ];
+    if layout == crate::SqlitePackLayout::GroupRows {
+        expected.push("pack_unit");
+        expected.sort_unstable();
+    }
     if actual != expected {
         return Err(BackendError::Integrity);
     }
@@ -75,12 +95,13 @@ impl super::connection::Session {
         catalog_id: layerfs_history::CatalogId,
     ) -> Result<(), BackendError> {
         self.run::<_,BackendError>(true,|tx| {
-   for script in [OBJECTS,METADATA,HISTORY] { tx.bootstrap(script)?; }
+   let version=self.layout.version();
+   for script in scripts(self.layout) { tx.bootstrap(&script)?; }
    tx.query(&format!("PRAGMA application_id={APPLICATION_ID}"),vec![])?;
-   tx.query(&format!("PRAGMA user_version={VERSION}"),vec![])?;
-   tx.query("INSERT INTO store_policy(id,schema_version,format_profile,small_file_threshold_bytes,whole_file_delta_max_depth,chunk_delta_max_depth,metadata_delta_max_depth) VALUES(1,1,?1,?2,?3,?4,?5)",vec![Param::I64(i64::from(policy.format_profile())),Param::I64(policy.small_file_threshold_bytes() as i64),Param::I64(i64::from(policy.whole_file_delta_max_depth())),Param::I64(i64::from(policy.chunk_delta_max_depth())),Param::I64(i64::from(policy.metadata_delta_max_depth()))])?;
+   tx.query(&format!("PRAGMA user_version={version}"),vec![])?;
+   tx.query(&format!("INSERT INTO store_policy(id,schema_version,format_profile,small_file_threshold_bytes,whole_file_delta_max_depth,chunk_delta_max_depth,metadata_delta_max_depth) VALUES(1,{version},?1,?2,?3,?4,?5)"),vec![Param::I64(i64::from(policy.format_profile())),Param::I64(policy.small_file_threshold_bytes() as i64),Param::I64(i64::from(policy.whole_file_delta_max_depth())),Param::I64(i64::from(policy.chunk_delta_max_depth())),Param::I64(i64::from(policy.metadata_delta_max_depth()))])?;
    let definition=definition(tx.connection,tx.work)?;
-   tx.query("INSERT INTO history_meta(id,catalog_id,catalog_incarnation,binding_key,identity_format,schema_version,schema_source,schema_definition,next_stage_token) VALUES(1,?1,?2,?3,1,1,?4,?5,1)",vec![Param::Bytes(catalog_id.as_slice().to_vec()),Param::I64(history.incarnation as i64),Param::Bytes(history.binding_key.clone()),Param::Text(source()),Param::Text(definition)])?;
+   tx.query(&format!("INSERT INTO history_meta(id,catalog_id,catalog_incarnation,binding_key,identity_format,schema_version,schema_source,schema_definition,next_stage_token) VALUES(1,?1,?2,?3,1,{version},?4,?5,1)"),vec![Param::Bytes(catalog_id.as_slice().to_vec()),Param::I64(history.incarnation as i64),Param::Bytes(history.binding_key.clone()),Param::Text(source(self.layout)),Param::Text(definition)])?;
    Ok(())
   })?;
         Ok(())
@@ -91,11 +112,11 @@ impl super::connection::Session {
         binding: &[u8],
     ) -> Result<u64, BackendError> {
         self.run::<_,BackendError>(false,|tx| {
-   check(tx.connection,tx.work)?;
+   check(tx.connection,tx.work,self.layout)?;
    let rows=tx.query("SELECT catalog_id,catalog_incarnation,binding_key,identity_format,schema_version,schema_source,schema_definition,next_stage_token FROM history_meta WHERE id=1",vec![])?;
    let r=rows.first().filter(|_|rows.len()==1).ok_or(BackendError::Integrity)?;
    let incarnation:i64=r.get(1)?;
-   if r.get::<Vec<u8>>(0)?!=catalog_id.as_slice() || r.get::<Vec<u8>>(2)?!=binding || incarnation<=0 || r.get::<i64>(3)?!=1 || r.get::<i64>(4)?!=1 || r.get::<String>(5)?!=source() || r.get::<String>(6)?!=definition(tx.connection,tx.work)? || r.get::<i64>(7)?<=0 {return Err(BackendError::Integrity);}
+   if r.get::<Vec<u8>>(0)?!=catalog_id.as_slice() || r.get::<Vec<u8>>(2)?!=binding || incarnation<=0 || r.get::<i64>(3)?!=1 || r.get::<i64>(4)?!=self.layout.version() || r.get::<String>(5)?!=source(self.layout) || r.get::<String>(6)?!=definition(tx.connection,tx.work)? || r.get::<i64>(7)?<=0 {return Err(BackendError::Integrity);}
    Ok(incarnation as u64)
   })
     }

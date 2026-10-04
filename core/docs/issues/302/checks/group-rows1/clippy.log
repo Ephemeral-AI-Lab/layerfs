@@ -1,0 +1,4 @@
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-persistence v0.1.6 (/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/crates/layerfs-persistence)
+    Checking layerfs-project v0.1.6 (/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/crates/layerfs-project)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.22s

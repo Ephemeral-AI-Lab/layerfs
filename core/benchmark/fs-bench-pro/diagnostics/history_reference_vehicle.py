@@ -26,7 +26,7 @@ def generate(root: Path) -> tuple[str, dict[str, str]]:
             raise ValueError(f'expected one reference API seam: {old}')
         text = text.replace(old, new)
 
-    replace('use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};',
+    replace('use layerfs_persistence::{Handles, PersistenceConfig, SqlitePackLayout, SqlitePersistenceProfile};',
             'use layerfs_history::sqlite;')
     replace('''    let selected_profile = match args.get(6).map(String::as_str).unwrap_or("durable") {
         "durable" => SqlitePersistenceProfile::Durable,
@@ -35,10 +35,17 @@ def generate(root: Path) -> tuple[str, dict[str, str]]:
     };''','''    if !matches!(args.get(6).map(String::as_str).unwrap_or("durable"), "durable" | "disposable") {
         return Err("explicit durable/disposable profile required".into());
     }''')
+    replace('''    let selected_layout = match args.get(7).map(String::as_str).unwrap_or("monolithic") {
+        "monolithic" => SqlitePackLayout::Monolithic,
+        "group-rows" => SqlitePackLayout::GroupRows,
+        _ => return Err("explicit monolithic/group-rows layout required".into()),
+    };''', '')
     replace('use layerfs_storage::{Storage, StoragePolicy};',
             'use layerfs_storage::{Store, StoreProvider, StoragePolicy};')
     replace('''    let handles = Handles::create(
-        PersistenceConfig::sqlite(&args[2]).with_sqlite_profile(selected_profile),
+        PersistenceConfig::sqlite(&args[2])
+            .with_sqlite_profile(selected_profile)
+            .with_sqlite_pack_layout(selected_layout),
         StoragePolicy::frozen_default(),
         &retained::config(),
     )?;
@@ -69,6 +76,7 @@ def generate(root: Path) -> tuple[str, dict[str, str]]:
     replace('let custody = retained::verify(&handles.history, scope, &roots)?;',
             'let custody = retained::verify(&history, scope, &roots)?;')
     replace('let profile = handles.profile();', '// Native reference settings remain original.')
+    replace('    eprintln!(\n        "EFFECTIVE_PACK_LAYOUT {{\\"layout\\":\\"{:?}\\"}}",\n        profile.pack_layout\n    );', '// Native reference has its original monolithic representation.')
     replace('eprintln!("EFFECTIVE_PROFILE {{\\"identity\\":\\"{}\\",\\"journal_mode\\":\\"{}\\",\\"synchronous\\":{},\\"foreign_keys\\":{},\\"fullfsync\\":{},\\"checkpoint_fullfsync\\":{},\\"page_size\\":{},\\"cache_size\\":{},\\"mmap_size\\":{},\\"temp_store\\":{},\\"wal_checkpoint_performed\\":{}}}",profile.identity,profile.journal_mode,profile.synchronous,profile.foreign_keys,profile.fullfsync,profile.checkpoint_fullfsync,profile.page_size,profile.cache_size,profile.mmap_size,profile.temp_store,checkpoint.wal_checkpoint_performed);', '// Reference effective profile remains native MEMORY/OFF.')
     replace('if checkpoint.busy {\n        return Err("final checkpoint obstructed".into());\n    }', '// Native reference has no WAL checkpoint.')
     replace('let checkpoint = handles.checkpoint()?;',

@@ -16,6 +16,7 @@ class Case:
     verification_budget_ns:int=9_500_000_000
     profile:str="durable"
     proof_policy:str="every-tenth-content-path-and-final"
+    pack_layout:str="monolithic"
 CASES={c.id:c for c in (
     *(Case(f'phase7-sqlite-init-{n}-v2',f.id,None,None,15_000_000_000) for n,f in zip((100,1000,10000,100000),init.CASES.values())),
     Case('phase7-sqlite-history-stride10-v1',None,17,54_278_964,60_000_000_000),
@@ -67,6 +68,15 @@ LEGACY_HISTORY+=RETIRED_FULL_CONTENT
 REQUIRED_BY_PROFILE={profile:tuple(name.rsplit('-v',1)[0]+f'-v{int(name.rsplit("-v",1)[1])+1}' if name in RETIRED_FULL_CONTENT else name for name in names)
                      for profile,names in REQUIRED_BY_PROFILE.items()}
 REQUIRED=REQUIRED_BY_PROFILE['durable']
+# Owner-approved explicit new-store group-row schema; separate prospective IDs.
+GROUP_ROW_CASES=[]
+for profile,names in REQUIRED_BY_PROFILE.items():
+    for name in names:
+        c=CASES[name]
+        if c.states is not None:
+            new=name.rsplit('-v',1)[0]+'-group-rows-v1'
+            CASES[new]=Case(new,c.fixture,c.states,c.storage_ceiling,c.command_budget_ns,c.verification_budget_ns,c.profile,c.proof_policy,'group-rows')
+            GROUP_ROW_CASES.append(new)
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"

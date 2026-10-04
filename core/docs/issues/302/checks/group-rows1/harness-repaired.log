@@ -1,0 +1,16 @@
+.E.......
+======================================================================
+ERROR: test_group_row_census_requires_explicit_schema_and_preserves_owner (test_phase7_history_proof.HistoryProof.test_group_row_census_requires_explicit_schema_and_preserves_owner)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/tests/test_phase7_history_proof.py", line 49, in test_group_row_census_requires_explicit_schema_and_preserves_owner
+    result=p.collect(path,'candidate',child,'history-stride10',sqlite_schema_version=2)
+  File "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/shared/phase7_history_proof.py", line 93, in collect
+    pack_bytes = c2.execute('SELECT COALESCE(SUM(length(control)),0)+(SELECT COALESCE(SUM(length(body)),0) FROM pack_unit) FROM pack' if sqlite_schema_version==2 else 'SELECT COALESCE(SUM(length(body)),0) FROM pack').fetchone()[0]
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such column: control
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.059s
+
+FAILED (errors=1)

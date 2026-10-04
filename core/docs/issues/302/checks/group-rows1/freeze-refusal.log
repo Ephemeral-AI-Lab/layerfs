@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/diagnostics/run_save_acquisition_cause.py", line 77, in <module>
+    if __name__=='__main__':main()
+                            ~~~~^^
+  File "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/diagnostics/run_save_acquisition_cause.py", line 34, in main
+    if identity['source_dirty']:raise ValueError('freeze count diagnostic source/harness')
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: freeze count diagnostic source/harness

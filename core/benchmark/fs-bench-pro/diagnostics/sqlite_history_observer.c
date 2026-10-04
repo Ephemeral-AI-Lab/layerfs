@@ -34,6 +34,7 @@ static FILE *acquisition_trace;
 static int acquisition_trace_initialized;
 static sqlite3_blob *trace_handles[64];
 static sqlite3_int64 trace_ids[64];
+static int trace_units[64];
 static uint64_t trace_sequence;
 static uint64_t trace_vfs_bytes(void){
  uint64_t bytes=0;for(int i=0;i<4;i++)bytes+=atomic_load(&read_bytes[i]);return bytes;
@@ -60,10 +61,11 @@ static void trace_stack(void){
 static int trace_slot(sqlite3_blob *blob){for(int i=0;i<64;i++)if(trace_handles[i]==blob)return i;return -1;}
 __attribute__((destructor)) static void trace_finish(void){if(acquisition_trace&&fclose(acquisition_trace))abort();}
 static int history_blob_open(sqlite3*db,const char*database,const char*table,const char*column,sqlite3_int64 row,int writable,sqlite3_blob**out){
- int matched=!writable&&database&&table&&column&&!strcmp(database,"main")&&!strcmp(table,"pack")&&!strcmp(column,"body");
+ int unit=table&&!strcmp(table,"pack_unit");
+ int matched=!writable&&database&&table&&column&&!strcmp(database,"main")&&(!strcmp(table,"pack")||unit)&&!strcmp(column,"body");
  uint64_t before=trace_vfs_bytes();uint64_t start=now();int result=sqlite3_blob_open(db,database,table,column,row,writable,out);
- if(matched){atomic_fetch_add(&blob_work[0],1);atomic_fetch_add(&blob_work[1],now()-start);if(result!=SQLITE_OK)atomic_fetch_add(&blob_work[2],1);else history_note_pack_id(row);}
- if(matched){trace_event("open",row,0,0,result,before);trace_stack();if(result==SQLITE_OK){int slot=trace_slot(NULL);if(slot<0)abort();trace_handles[slot]=*out;trace_ids[slot]=row;}}
+ if(matched){atomic_fetch_add(&blob_work[0],1);atomic_fetch_add(&blob_work[1],now()-start);if(result!=SQLITE_OK)atomic_fetch_add(&blob_work[2],1);else if(!unit)history_note_pack_id(row);}
+ if(matched){trace_event(unit?"unit_open":"open",row,0,0,result,before);trace_stack();if(result==SQLITE_OK){int slot=trace_slot(NULL);if(slot<0)abort();trace_handles[slot]=*out;trace_ids[slot]=row;trace_units[slot]=unit;}}
  return result;
 }
 static int history_blob_read(sqlite3_blob*blob,void*buffer,int bytes,int offset){
@@ -71,13 +73,13 @@ static int history_blob_read(sqlite3_blob*blob,void*buffer,int bytes,int offset)
  atomic_fetch_add(&blob_work[3],1);if(bytes>0)atomic_fetch_add(&blob_work[4],(uint64_t)bytes);
  atomic_fetch_add(&blob_work[6],now()-start);
  if(result==SQLITE_OK){if(bytes>0){atomic_fetch_add(&blob_work[5],(uint64_t)bytes);atomic_fetch_add(&pack_materialized_bytes,(uint64_t)bytes);}}else atomic_fetch_add(&blob_work[7],1);
- if(slot>=0)trace_event("read",trace_ids[slot],offset,bytes,result,before);
+ if(slot>=0)trace_event(trace_units[slot]?"unit_read":"read",trace_ids[slot],offset,bytes,result,before);
  return result;
 }
 static int history_blob_close(sqlite3_blob*blob){
  uint64_t before=trace_vfs_bytes();int slot=blob?trace_slot(blob):-1;uint64_t start=now();int result=sqlite3_blob_close(blob);
  atomic_fetch_add(&blob_work[8],1);atomic_fetch_add(&blob_work[9],now()-start);if(result!=SQLITE_OK)atomic_fetch_add(&blob_work[10],1);
- if(slot>=0){trace_event("close",trace_ids[slot],0,0,result,before);trace_handles[slot]=NULL;}
+ if(slot>=0){trace_event(trace_units[slot]?"unit_close":"close",trace_ids[slot],0,0,result,before);trace_handles[slot]=NULL;}
  return result;
 }
 INTERPOSE(history_blob_open,sqlite3_blob_open)
@@ -90,7 +92,7 @@ void cause_history_blob_snapshot(uint64_t*out){
 static const void* history_column_blob(sqlite3_stmt*statement,int column){
  const void*body=sqlite3_column_blob(statement,column);
  const char*sql=sqlite3_sql(statement);
- if(body&&column==0&&sql&&(!strncmp(sql,"SELECT body FROM pack ",strlen("SELECT body FROM pack "))||!strncmp(sql,"SELECT p.data FROM object_packs ",strlen("SELECT p.data FROM object_packs ")))){
+ if(body&&column==0&&sql&&(!strncmp(sql,"SELECT control FROM pack ",strlen("SELECT control FROM pack "))||!strncmp(sql,"SELECT body FROM pack ",strlen("SELECT body FROM pack "))||!strncmp(sql,"SELECT p.data FROM object_packs ",strlen("SELECT p.data FROM object_packs ")))){
   int bytes=sqlite3_column_bytes(statement,column);if(bytes>0)atomic_fetch_add(&pack_materialized_bytes,(uint64_t)bytes);
  }
  return body;
@@ -99,7 +101,7 @@ INTERPOSE(history_column_blob,sqlite3_column_blob)
 void cause_history_acquired_snapshot(uint64_t*out){out[0]=atomic_load(&pack_materialized_bytes);out[1]=1;}
 void cause_history_note_pack(sqlite3_stmt*statement){
  const char*sql=sqlite3_sql(statement);
- if(!sql||(strncmp(sql,"SELECT body FROM pack ",strlen("SELECT body FROM pack "))&&strncmp(sql,"SELECT p.data FROM object_packs ",strlen("SELECT p.data FROM object_packs "))))return;
+ if(!sql||(strncmp(sql,"SELECT control FROM pack ",strlen("SELECT control FROM pack "))&&strncmp(sql,"SELECT body FROM pack ",strlen("SELECT body FROM pack "))&&strncmp(sql,"SELECT p.data FROM object_packs ",strlen("SELECT p.data FROM object_packs "))))return;
  char*text=sqlite3_expanded_sql(statement);
  if(!text){history_note_pack_id(0);return;}
  const char*where=strstr(text,"WHERE");const char*key=where?strstr(where,"pack_id"):0;const char*equals=key?strchr(key,'='):0;

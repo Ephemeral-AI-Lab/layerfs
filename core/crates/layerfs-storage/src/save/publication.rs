@@ -9,6 +9,17 @@ use crate::{
 use layerfs_content::ObjectId;
 use std::collections::{BTreeMap, BTreeSet};
 impl State<'_> {
+    fn pack_cost(&self, pack: PublishedPack) -> StorageResult<(usize, u64)> {
+        let cost = self.storage.source.metadata.publication_pack_cost(&pack)?;
+        if cost.0 == 0
+            || cost.0 > crate::policy::GROUP_COUNT_LIMIT + 1
+            || cost.1 < pack.body.len() as u64
+            || cost.1 > pack.body.len() as u64 + 56 + 32 * crate::policy::GROUP_COUNT_LIMIT as u64
+        {
+            return Err(StorageError::Integrity("publication pack cost"));
+        }
+        Ok(cost)
+    }
     pub(super) fn register_ready(&mut self) -> StorageResult<()> {
         let _work = self.storage.work.span(super::Stage::Publication);
         // Every reference to an unframed member forces its owning lane to seal.
@@ -117,6 +128,7 @@ impl State<'_> {
         let mut batch = Publication::default();
         let mut canonical_bytes = 0_u64;
         let mut physical_bytes = 0_u64;
+        let mut pack_rows = 0usize;
         let mut packs = BTreeSet::new();
         let pool_packs: Vec<_> = self
             .packer
@@ -127,17 +139,21 @@ impl State<'_> {
             .collect();
         for index in pool_packs {
             let pack = &self.packer.ready[index];
-            let size = pack.body.len() as u64;
+            let (added_rows, size) = self.pack_cost(PublishedPack {
+                info: pack.info,
+                body: pack.body.clone(),
+            })?;
             let rows = pack.value_groups.len();
             if !batch.packs.is_empty()
                 && (physical_bytes.saturating_add(size) > limits.transaction_physical_bytes
-                    || batch.packs.len() + batch.value_groups.len() + rows + 1
+                    || pack_rows + batch.value_groups.len() + rows + added_rows
                         > limits.transaction_rows as usize)
             {
                 self.acknowledge(&mut batch, &members)?;
                 batch = Publication::default();
                 canonical_bytes = 0;
                 physical_bytes = 0;
+                pack_rows = 0;
             }
             let pack = &self.packer.ready[index];
             batch.packs.push(PublishedPack {
@@ -146,6 +162,7 @@ impl State<'_> {
             });
             batch.value_groups.extend_from_slice(&pack.value_groups);
             physical_bytes += size;
+            pack_rows += added_rows;
             packs.insert(pack.info.pack_id);
         }
         for id in order {
@@ -158,23 +175,27 @@ impl State<'_> {
                 .ok_or(StorageError::Integrity("registered pack missing"))?;
             let info = pack.info;
             let added_pack = !packs.contains(&location.pack_id);
-            let body_bytes = if added_pack { info.length as u64 } else { 0 };
+            let (added_rows, body_bytes) = if added_pack {
+                self.pack_cost(PublishedPack {
+                    info,
+                    body: pack.body.clone(),
+                })?
+            } else {
+                (0, 0)
+            };
             let canonical_cost = location.canonical_length as u64;
             if (!batch.objects.is_empty() || !batch.packs.is_empty())
                 && (canonical_bytes.saturating_add(canonical_cost) > limits.transaction_bytes
                     || physical_bytes.saturating_add(body_bytes)
                         > limits.transaction_physical_bytes
-                    || batch.objects.len()
-                        + batch.packs.len()
-                        + batch.value_groups.len()
-                        + usize::from(added_pack)
-                        + 1
+                    || batch.objects.len() + pack_rows + batch.value_groups.len() + added_rows + 1
                         > limits.transaction_rows as usize)
             {
                 self.acknowledge(&mut batch, &members)?;
                 batch = Publication::default();
                 canonical_bytes = 0;
                 physical_bytes = 0;
+                pack_rows = 0;
             }
             if added_pack {
                 let pack = self
@@ -188,6 +209,7 @@ impl State<'_> {
                     body: pack.body.clone(),
                 });
                 packs.insert(location.pack_id);
+                pack_rows += added_rows;
             }
             canonical_bytes += canonical_cost;
             physical_bytes += body_bytes;
@@ -207,14 +229,12 @@ impl State<'_> {
             {
                 return Err(StorageError::Integrity("signature names absent object"));
             }
-            if batch.objects.len()
-                + batch.packs.len()
-                + batch.value_groups.len()
-                + batch.signatures.len()
+            if batch.objects.len() + pack_rows + batch.value_groups.len() + batch.signatures.len()
                 >= limits.transaction_rows as usize
             {
                 self.acknowledge(&mut batch, &members)?;
                 batch = Publication::default();
+                pack_rows = 0;
             }
             batch.signatures.push(row);
         }

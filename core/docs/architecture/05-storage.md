@@ -1287,3 +1287,36 @@ publication rules are unchanged. No cross-write BLOB handle, new base memo,
 cohort prefill or larger cache is introduced. Required demand-local walks share
 the existing encoded/decoded caches and their bounds. This describes the
 algorithm; workload counts and new qualification remain separate evidence.
+
+### Explicit embedded SQLite group rows (against509d9f164)
+
+Owner-approved new-store layout `SqlitePackLayout::GroupRows` creates schema2.
+Default creation keeps monolithic schema1; opening selects only its declared
+supported version, with no migration or error-driven reader selection. Profile
+observations expose actual layout separately from Durable/Disposable settings.
+Schema source/definition, C2 policy and C5 identity/binding validation pin the
+selected version. PostgreSQL/MinIO milestones are unchanged.
+
+Schema2 retains each PackInfo, serialized format and pack key, placing the exact
+complete controls in pack.control and each complete encoded group in pack_unit.
+No duplicate whole-body column exists. Immutable rows bind pack/group/original
+extent; group/count/length/directory/domain checks precede requested unit BLOB
+reads. Unit cursors read/checked-close serially inside the same transaction,
+without cross-write retention. Whole/strict reads reconstruct the original
+control+group sequence and authenticate its full SHA. Scoped reads keep accessed
+canonical/dependency/value-digest authentication and separate whole-pack audit.
+All existing byte/count/output/chain/visibility/private cache and worker bounds
+remain. Control length is checked before SQL control extraction; metadata mapping
+is capped at257rows and validated against every complete directory extent.
+
+`PackPersistence::publication_pack_cost` declares prospective physical fanout.
+Original monolithic providers retain one row/body-byte charge; group rows charge
+1+group_count rows and serialized bytes+56descriptor binding bytes+32binding
+bytes per unit. C2 validates the response against existing format bounds and
+forms pages under the original8191row/physical/canonical limits. SQLite checks
+actual group-row costs before BEGIN. Controls, all units, locators, catalogue,
+signatures and first-wins results share the original atomic publication and
+failure/quarantine semantics. Unit INSERT binding is one existing bounded group;
+singleton remains isolated. No new dependencies, retries, formats, base memo,
+cache increase or durability claim. Row/index/free-page overhead and extra SQL/
+BLOB calls require new count/performance/storage qualification.

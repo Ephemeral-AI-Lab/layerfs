@@ -13,12 +13,12 @@ from shared import phase7_history_proof as p
 
 
 class HistoryProof(unittest.TestCase):
-    def fixture(self, folder):
+    def fixture(self, folder, version=1):
         path = folder / 'fixture.sqlite'
         with sqlite3.connect(path) as db:
-            db.executescript('PRAGMA application_id=1279677264; PRAGMA user_version=1;')
-            for table in sorted(p.COMBINED):
-                columns = 'object_id BLOB, role INTEGER, canonical_length INTEGER' if table == 'object_location' else ('root_id BLOB' if table == 'layer' else ('body BLOB' if table == 'pack' else 'id INTEGER'))
+            db.executescript(f'PRAGMA application_id=1279677264; PRAGMA user_version={version};')
+            for table in sorted(p.COMBINED | ({'pack_unit'} if version==2 else set())):
+                columns = 'object_id BLOB, role INTEGER, canonical_length INTEGER' if table == 'object_location' else ('root_id BLOB' if table == 'layer' else ('control BLOB' if table=='pack' and version==2 else ('body BLOB' if table in ('pack','pack_unit') else 'id INTEGER')))
                 db.execute(f'CREATE TABLE "{table}" ({columns})')
             for table, count in {'history_meta': 1, 'layer_stack': 1, 'branch': 17, 'commit': 16}.items():
                 db.executemany(f'INSERT INTO "{table}" VALUES (?)', [(i,) for i in range(count)])
@@ -42,6 +42,14 @@ class HistoryProof(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'inventory'): p.collect(path, 'candidate', bad, 'history-stride10')
             Path(str(path) + '-wal').touch()
             with self.assertRaisesRegex(ValueError, 'sidecars'): p.collect(path, 'candidate', child, 'history-stride10')
+
+    def test_group_row_census_requires_explicit_schema_and_preserves_owner(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(p.CANONICAL, {'history-stride10':(1,7)}):
+            path,child=self.fixture(Path(tmp),2);before=p.digest(path)
+            result=p.collect(path,'candidate',child,'history-stride10',sqlite_schema_version=2)
+            self.assertEqual(result['owners'][0]['user_version'],2)
+            self.assertEqual(p.digest(path),before)
+            with self.assertRaises(ValueError):p.collect(path,'candidate',child,'history-stride10')
 
     def test_independent_pins_rederived_from_sealed_evidence_and_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:

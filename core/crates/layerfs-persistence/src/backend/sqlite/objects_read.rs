@@ -48,6 +48,10 @@ pub(crate) fn read(
         return Err(BackendError::Capacity.into());
     }
     for info in descriptors {
+        if tx.layout() == crate::SqlitePackLayout::GroupRows {
+            out.push(super::units_read::whole(tx, info)?);
+            continue;
+        }
         let mut rows = tx.query(
             "SELECT body FROM pack WHERE pack_id=?1",
             vec![Param::I64(info.pack_id)],

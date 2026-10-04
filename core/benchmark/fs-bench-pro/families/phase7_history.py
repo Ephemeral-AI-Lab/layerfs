@@ -72,7 +72,7 @@ def boundaries(stderr, states, arm):
 
 
 def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pins=None):
-    from families.phase7_sqlite import invoke, BASE, PROFILE_IDS, REQUIRED_BY_PROFILE
+    from families.phase7_sqlite import invoke, BASE, PROFILE_IDS, REQUIRED_BY_PROFILE, GROUP_ROW_CASES, CASES
     if arm not in ('baseline', 'candidate'): raise ValueError('explicit history arm required')
     if arm == 'candidate' and reference_pins is None:
         raise ValueError('history candidate requires qualified reference pins before build/setup/sample')
@@ -86,7 +86,7 @@ def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pi
               'cache_status':'INCOMPLETE','verification_status':'NOT_RUN','cleanup':{'status':'NOT_RUN'},
               'requested_profile':case.profile,'profile':PROFILE_IDS[case.profile] if arm == 'candidate' else 'phase4.5-memory-off',
               'command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'proof_policy':case.proof_policy,
-              'required_case_ids':REQUIRED_BY_PROFILE[case.profile],'construction_workers':1,
+              'required_case_ids':tuple(name for name in GROUP_ROW_CASES if CASES[name].profile==case.profile) if case.pack_layout=='group-rows' else REQUIRED_BY_PROFILE[case.profile],'construction_workers':1,
               'comparison_scope':'Corpus open through all real retained-state construction/save/C5, measured cold boundaries, final custody/checkpoint/close and canonical census',
               'margin_arithmetic':'10*candidate_ns<=11*baseline_ns','allocation_ceiling':case.storage_ceiling,
               'observer_status':'NOT_RUN', 'cache_contract':'history-source-cold-and-database-state-boundaries-v1'}
@@ -126,6 +126,7 @@ def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pi
         binaries=record['build']['binaries']
         driver=binaries['benchmark_history' if arm=='candidate' else 'history_reference']['path']
         command=[driver,str(corpus),str(db),str(scratch/'ordering'),row,'complete',case.profile]
+        if arm=='candidate' and case.pack_layout=='group-rows':command.append('group-rows')
         key=hashlib.sha256(json.dumps([case.id,arm,identity['source_tree'],identity['harness_seal'],record['measured_source_commit'],record['fixture']['manifest_sha256'],record['observer']['seal']],sort_keys=True).encode()).hexdigest()
         claim=common.RESULTS/'phase7-history-sample-claims'/key;claim.parent.mkdir(parents=True,exist_ok=True)
         with claim.open('x') as file:file.write(str(out)+'\n')
@@ -156,7 +157,10 @@ def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pi
             expected={'identity':PROFILE_IDS[case.profile],'journal_mode':'wal' if case.profile=='durable' else 'memory','synchronous':2 if case.profile=='durable' else 0,'foreign_keys':1,'fullfsync':1 if case.profile=='durable' else 0,'checkpoint_fullfsync':1,'page_size':4096,'cache_size':-2048,'mmap_size':0,'temp_store':2,'wal_checkpoint_performed':case.profile=='durable'}
             if settings!=[expected]:raise ValueError('history actual profile/completion mismatch')
             record['effective_profile']=settings[0]
-        request={'observer':record['observer'],'proof_policy':case.proof_policy,'out':str(out),'arm':arm,'producer':child,'db':str(db),'row':row,'verifier':binaries['verify_history' if arm=='candidate' else 'history_reference_verify']['path'],'corpus':str(corpus),'profile':case.profile,'identity':identity,'pins':str(out/'reference-pins.json')}
+            layouts=[json.loads(line.removeprefix('EFFECTIVE_PACK_LAYOUT ')) for line in stderr.splitlines() if line.startswith('EFFECTIVE_PACK_LAYOUT ')]
+            if layouts!=[{'layout':'GroupRows' if case.pack_layout=='group-rows' else 'Monolithic'}]:raise ValueError('actual SQLite pack layout mismatch')
+            record['effective_pack_layout']=layouts[0]
+        request={'observer':record['observer'],'proof_policy':case.proof_policy,'out':str(out),'arm':arm,'producer':child,'db':str(db),'row':row,'verifier':binaries['verify_history' if arm=='candidate' else 'history_reference_verify']['path'],'corpus':str(corpus),'profile':case.profile,'identity':identity,'pins':str(out/'reference-pins.json'),'sqlite_schema_version':2 if case.pack_layout=='group-rows' else 1}
         common.write_json(out/'proof-request.json',request)
         proof_env={**os.environ,**history.ENV,'LAYERFS_HISTORY_CURSOR_KEY':'28'*32,'TMPDIR':str(scratch)}
         verification=invoke([sys.executable,str(common.ROOT/'core/benchmark/fs-bench-pro/shared/phase7_history_proof.py'),'--request',str(out/'proof-request.json')],out,'verifier',case.verification_budget_ns,proof_env,common.ROOT)

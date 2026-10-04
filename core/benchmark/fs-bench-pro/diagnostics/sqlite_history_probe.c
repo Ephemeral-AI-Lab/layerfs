@@ -20,5 +20,11 @@ int main(void){
  blob_snapshot(work);assert(work[11]==1);assert(work[0]==3);assert(work[2]==1);assert(work[3]==2);assert(work[4]==2);assert(work[5]==1);assert(work[7]==1);assert(work[8]>=3);
  uint64_t acquired[2];void(*acquired_snapshot)(uint64_t*)=dlsym(RTLD_DEFAULT,"cause_history_acquired_snapshot");assert(acquired_snapshot);acquired_snapshot(acquired);assert(acquired[1]==1&&acquired[0]==9);
  snapshot(after);assert(after[15]-before[15]==3);assert(after[16]-before[16]==1);assert(after[17]-before[17]==0);
+ snapshot(before);acquired_snapshot(acquired);uint64_t previous_bytes=acquired[0];blob_snapshot(work);uint64_t previous_opens=work[0];
+ assert(sqlite3_exec(db,"ALTER TABLE pack ADD COLUMN control BLOB;UPDATE pack SET control=zeroblob(4);CREATE TABLE pack_unit(unit_id INTEGER PRIMARY KEY,body BLOB);INSERT INTO pack_unit VALUES(7,zeroblob(4))",0,0,0)==SQLITE_OK);
+ assert(sqlite3_prepare_v2(db,"SELECT control FROM pack WHERE pack_id=1",-1,&stmt,0)==SQLITE_OK);
+ assert(sqlite3_step(stmt)==SQLITE_ROW);assert(sqlite3_column_blob(stmt,0));assert(sqlite3_step(stmt)==SQLITE_DONE);assert(sqlite3_finalize(stmt)==SQLITE_OK);
+ assert(sqlite3_blob_open(db,"main","pack_unit","body",7,0,&blob)==SQLITE_OK);char unit_bytes[4];assert(sqlite3_blob_read(blob,unit_bytes,4,0)==SQLITE_OK);assert(sqlite3_blob_close(blob)==SQLITE_OK);
+ snapshot(after);assert(after[15]-before[15]==1);blob_snapshot(work);assert(work[0]-previous_opens==1);acquired_snapshot(acquired);assert(acquired[0]-previous_bytes==8);
  assert(sqlite3_close(db)==SQLITE_OK);puts("PASS pack attribution plus BLOB attempts/returned bytes/errors; operations delegated unchanged");
 }

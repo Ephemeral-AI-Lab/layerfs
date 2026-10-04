@@ -149,6 +149,15 @@ pub trait PackPersistence: Send + Sync {
     fn signatures(&self, out: &mut Vec<SignatureRow>) -> Result<(), PersistenceError>;
     /// Allocates one block of pack ids and/or pooled ordinals.
     fn reserve(&self, request: Reserve) -> Result<Reserved, PersistenceError>;
+    /// Prospective physical rows and submitted bytes for one immutable pack.
+    /// Monolithic providers use one row and the original body-byte charge.
+    /// Providers with unit fanout return its exact cost before publication.
+    fn publication_pack_cost(
+        &self,
+        pack: &PublishedPack,
+    ) -> Result<(usize, u64), PersistenceError> {
+        Ok((1, pack.body.len() as u64))
+    }
     /// Atomically registers at most TRANSACTION_ROW_LIMIT rows and the canonical
     /// byte budget, with first-wins object insertion. All sealed bodies, pooled
     /// rows, signature changes and ordinal/window changes belong to this unit.

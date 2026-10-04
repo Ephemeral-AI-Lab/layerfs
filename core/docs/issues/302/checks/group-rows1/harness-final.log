@@ -1,0 +1,19 @@
+......E.
+======================================================================
+ERROR: test_reference_facade_uses_unmodified_memory_engine_and_same_state_stages (test_phase7_history_vehicle.HistoryVehicle.test_reference_facade_uses_unmodified_memory_engine_and_same_state_stages)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/tests/test_phase7_history_vehicle.py", line 15, in test_reference_facade_uses_unmodified_memory_engine_and_same_state_stages
+    source, seals = generate(ROOT)
+                    ~~~~~~~~^^^^^^
+  File "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/diagnostics/history_reference_vehicle.py", line 79, in generate
+    replace('eprintln!("EFFECTIVE_PACK_LAYOUT {{\\"layout\\":\\"{:?}\\"}}", profile.pack_layout);', '// Native reference has its original monolithic representation.')
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/diagnostics/history_reference_vehicle.py", line 26, in replace
+    raise ValueError(f'expected one reference API seam: {old}')
+ValueError: expected one reference API seam: eprintln!("EFFECTIVE_PACK_LAYOUT {{\"layout\":\"{:?}\"}}", profile.pack_layout);
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.040s
+
+FAILED (errors=1)

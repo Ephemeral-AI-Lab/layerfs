@@ -9,6 +9,8 @@ use std::{cell::RefCell, path::Path, sync::Mutex, time::Instant};
 pub struct ConnectionProfile {
     /// Explicit selected completion/durability contract.
     pub persistence: SqlitePersistenceProfile,
+    /// Actual physical schema selected explicitly or from the supported stored version.
+    pub pack_layout: crate::SqlitePackLayout,
     /// Immutable profile identity.
     pub identity: &'static str,
     /// Linked engine version.
@@ -168,6 +170,7 @@ pub(crate) struct Session {
     pub(crate) state: Mutex<State>,
     pub(crate) writable: bool,
     pub(crate) profile: ConnectionProfile,
+    pub(crate) layout: crate::SqlitePackLayout,
     #[cfg(target_os = "macos")]
     pub(crate) allocation: Option<super::allocation_owner::AllocationOwner>,
 }
@@ -177,6 +180,7 @@ impl Session {
         writable: bool,
         create: bool,
         selected: SqlitePersistenceProfile,
+        creation_layout: crate::SqlitePackLayout,
     ) -> Result<Self, BackendError> {
         if !cfg!(target_os = "macos") {
             return Err(BackendError::Integrity);
@@ -195,6 +199,19 @@ impl Session {
             .set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
             .map_err(rows::error)?;
         profile::apply(&connection, create, selected, &work)?;
+        let layout = if create {
+            creation_layout
+        } else {
+            match query::run(&connection, "PRAGMA user_version", vec![], &work)?
+                .first()
+                .ok_or(BackendError::Integrity)?
+                .get::<i64>(0)?
+            {
+                1 => crate::SqlitePackLayout::Monolithic,
+                2 => crate::SqlitePackLayout::GroupRows,
+                _ => return Err(BackendError::Integrity),
+            }
+        };
         let integer = |name| {
             query::run(&connection, &format!("PRAGMA {name}"), vec![], &work)?
                 .first()
@@ -211,6 +228,7 @@ impl Session {
             .collect::<Result<Vec<_>, _>>()?;
         let profile = ConnectionProfile {
             persistence: selected,
+            pack_layout: layout,
             identity: selected.identity(),
             sqlite_version: rusqlite::version().to_owned(),
             platform: "macos",
@@ -261,6 +279,7 @@ impl Session {
             }),
             writable,
             profile,
+            layout,
         })
     }
     pub(crate) fn diagnostics(&self) -> Result<SqlWork, BackendError> {

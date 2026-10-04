@@ -2111,3 +2111,14 @@ PASS. No newcache/extraresources/weakerchecks; freeze/countdiag next,goalACTIVE.
   under original sparse/whole promotion; initial overly strict38assertion repaired
   to74after source review. Full final checks/count result pending; no new speed
   qualification. PostgreSQL/MinIO M4pause and later NOT_RUN milestones unchanged.
+
+-2026-10-04: isolated Save prewalk removal atb1151f732 reduces history17Save
+  requests1,798,505,411->1,039,486,710B,25989->16462acquisitions. Source509 matched
+  stride10/3performance+12sproof PASS, canonical inventory/storage preserved.
+  Residual27.99% above original reference is associated with high-offset sparse
+  BLOB navigation; cold publicSQLite offset fixture isolates that cause. Owner
+  approves explicit new-store group-row schema. Schema2/control+unit rows and
+  exact whole-pack reassembly, deterministic versioned open/no migration,
+  prospective physical fanout/bytes under existing caps implemented.509Coretests/
+  97targets,Clippy/fmt,453file boundary/23selftestsPASS; new count/qualification
+  pending. PostgreSQL/MinIO M4pause and release/all-seven gaps unchanged.

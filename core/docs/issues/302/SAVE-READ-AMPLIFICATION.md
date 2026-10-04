@@ -272,3 +272,57 @@ prefill or timed producer work. Returned zeros are checked inside the count
 child. These counts test offset navigation versus independent physical rows;
 they support neither a product speed nor storage/admission claim. No production
 schema change is authorized or implemented by this mechanism experiment.
+
+## Owner-approved schema2 implementation (2026-10-04)
+
+Owner explicitly approves the new-store group-row treatment after reviewing the
+physical-row design and cold offset evidence. New public creation layout is
+SqlitePackLayout::GroupRows; default creation remains schema1. Supported stored
+versions select deterministic open/read routes; unsupported versions refuse,
+without automatic migration or error-driven fallback. Schema2 stores controls
+and complete encoded groups without a duplicate whole body. Whole reads/audits
+reassemble exact bytes and validate the original SHA; scoped canonical and every
+used dependency/base authentication remain. All original bounds/workers persist.
+New group fanout/metadata binding bytes are prospectively charged to the existing
+transaction caps and independently refused before BEGIN when over budget.
+Architecture05 describes the same implementation.
+
+Six focused realSQLite testsPASS: explicit creation/versioned reopen and sparse
+canonical order/bytes, complete bytes/SHA for every lane, unread corruption scope
+and separate audit, accessed corruption refusal, malformed unit extent before
+BLOB I/O, late locator rollback and actual row-fanout refusal before BEGIN.
+Original observer calibration now counts control extraction plus unit BLOB bytes,
+with logical pack acquisition at the control SELECT and separate physical unit
+open/read/close observations. RealSQLite Cprobe and6observer testsPASS. One new
+registry guard preserves all old budgets/storage/proof scope under separate group
+row case IDs. Generated-reference harness initially failed on formatted layout
+telemetry; exact source seam repaired. The new census fixture initially retained
+schema1column names; repaired fixture tests explicit schema2 and unchanged owner.
+All failures retained; no source test hook or weakened check. Final Core checks
+and one changed-source60s history17count follow at a clean frozen identity.
+
+Prior schema1 prewalk-removal source509d9f164 matched10/3PASS: product reference/
+candidate33.544043667/31.185081333s and69.256597458/62.623280333s; separate proofs
+5.512325833/4.118420291s and6.694008333/6.443415542sPASS under12s. Original storage
+limits/cold/cleanupPASS. Schema1stride1NOT_RUN after owner approves schema2;
+new-schema final10/3/1qualification remains pending and does not inherit these
+rows. Rawissue302-save-demand-history{17,53}-{reference,candidate}1.
+
+Final group-row implementation checksPASS:509Coretests/97targets/0ignored,
+workspace all-target Clippy-Dwarnings, fmt-all/check,453production boundary files,
+23tool selftests,6realSQLite focused tests,6observer tests, generated-reference/
+proof/runner guards and explicit schema2 census preservation,1registry guard.
+Raw and normalized compact logs:checks/group-rows1. Initial harness failures
+are retained and diagnosed above. No CI/aggregate preflight or third-party change.
+ProductionLOC139620->140027(delta+407), reference65417 unchanged, core74203->74610;
+exact first-parent/final staged product snapshots with the same counter, including
+all new runtimeSQL and unit implementation. New count/schema-specific final
+qualification will be separate from older schema1rows.
+
+Freeze attempt: design-document trailing blank line stopped staged diff check.
+The shell erroneously continued to the count launcher, whose clean-source guard
+refused before output creation/build/cold/child. Retained rawcount-launch.log and
+checks/group-rows1/freeze-refusal.log; no product or performance sample ran.
+Documentation whitespace repaired, product snapshot unchanged; next launch uses
+a freshcause2output after confirming the commit. No budget/rule relaxation.
+Issue plan posted:https://github.com/Ephemeral-AI-Lab/layerfs/issues/302#issuecomment-5980662434

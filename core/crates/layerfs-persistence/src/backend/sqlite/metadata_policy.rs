@@ -9,7 +9,7 @@ pub(crate) fn read(tx: &Transaction<'_>) -> Result<StoragePolicy, PersistenceErr
         .ok_or(PersistenceError::Missing)?;
     let byte = |i| u8::try_from(r.get::<i64>(i)?).map_err(|_| BackendError::Integrity);
     let threshold = u64::try_from(r.get::<i64>(1)?).map_err(|_| BackendError::Integrity)?;
-    if r.get::<i64>(5)? != 1 {
+    if r.get::<i64>(5)? != tx.layout().version() {
         return Err(PersistenceError::Malformed);
     }
     StoragePolicy::new(byte(0)?, threshold, byte(2)?, byte(3)?)

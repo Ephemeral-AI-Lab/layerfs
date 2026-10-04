@@ -18,6 +18,23 @@ pub enum SqlitePersistenceProfile {
     /// A crash or power loss can corrupt the Store or lose acknowledged data.
     Disposable,
 }
+/// Explicit physical layout for a newly created embedded Store.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum SqlitePackLayout {
+    /// Original schema1 complete pack BLOBs.
+    #[default]
+    Monolithic,
+    /// Schema2 complete encoded groups in independent immutable rows.
+    GroupRows,
+}
+impl SqlitePackLayout {
+    pub(crate) const fn version(self) -> i64 {
+        match self {
+            Self::Monolithic => 1,
+            Self::GroupRows => 2,
+        }
+    }
+}
 /// One complete Store database path and engine selection.
 #[derive(Clone, Debug)]
 pub struct PersistenceConfig {
@@ -27,6 +44,8 @@ pub struct PersistenceConfig {
     pub path: PathBuf,
     /// Explicit SQLite profile; never selected by failure or environment.
     pub sqlite_profile: SqlitePersistenceProfile,
+    /// Creation-only layout; opens select the declared supported schema version.
+    pub sqlite_pack_layout: SqlitePackLayout,
 }
 impl PersistenceConfig {
     /// Selects the embedded durable profile at an explicit path.
@@ -35,7 +54,13 @@ impl PersistenceConfig {
             backend: BackendSelection::Sqlite,
             path: path.into(),
             sqlite_profile: SqlitePersistenceProfile::Durable,
+            sqlite_pack_layout: SqlitePackLayout::Monolithic,
         }
+    }
+    /// Selects physical group rows explicitly for creation; never migrates an open Store.
+    pub fn with_sqlite_pack_layout(mut self, layout: SqlitePackLayout) -> Self {
+        self.sqlite_pack_layout = layout;
+        self
     }
     /// Selects a profile before creation/open; incompatible Stores are refused.
     pub fn with_sqlite_profile(mut self, profile: SqlitePersistenceProfile) -> Self {

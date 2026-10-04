@@ -22,7 +22,7 @@ use layerfs_content::{
     construct_bytes, construct_bytes_with_predecessor, AdvisoryPredecessors, ConstructionPolicy,
     ObjectId, PredecessorBase, PredecessorProvenance,
 };
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{Handles, PersistenceConfig, SqlitePackLayout, SqlitePersistenceProfile};
 use layerfs_storage::{Storage, StoragePolicy};
 use layerfs_telemetry::timer::Timing;
 use std::{collections::BTreeMap, path::PathBuf, time::Instant};
@@ -32,7 +32,7 @@ use workload::{
 };
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Vec<_>>();
-    if !matches!(args.len(), 6 | 7) {
+    if !matches!(args.len(), 6..=8) {
         return Err(
             "usage: benchmark_history CORPUS DB SCRATCH history-stride{10,3,1} complete|probe|probe-transition [durable|disposable]"
                 .into(),
@@ -49,6 +49,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "durable" => SqlitePersistenceProfile::Durable,
         "disposable" => SqlitePersistenceProfile::Disposable,
         _ => return Err("explicit durable/disposable profile required".into()),
+    };
+    let selected_layout = match args.get(7).map(String::as_str).unwrap_or("monolithic") {
+        "monolithic" => SqlitePackLayout::Monolithic,
+        "group-rows" => SqlitePackLayout::GroupRows,
+        _ => return Err("explicit monolithic/group-rows layout required".into()),
     };
     for (key, value) in [
         ("LAYERFS_CONSTRUCTION_WORKERS", "1"),
@@ -70,7 +75,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let policy = ConstructionPolicy::frozen_default();
     let caps = policy.capacities();
     let handles = Handles::create(
-        PersistenceConfig::sqlite(&args[2]).with_sqlite_profile(selected_profile),
+        PersistenceConfig::sqlite(&args[2])
+            .with_sqlite_profile(selected_profile)
+            .with_sqlite_pack_layout(selected_layout),
         StoragePolicy::frozen_default(),
         &retained::config(),
     )?;
@@ -298,6 +305,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let custody_ns = custody_start.elapsed().as_nanos();
     let checkpoint = handles.checkpoint()?;
     let profile = handles.profile();
+    eprintln!(
+        "EFFECTIVE_PACK_LAYOUT {{\"layout\":\"{:?}\"}}",
+        profile.pack_layout
+    );
     eprintln!("EFFECTIVE_PROFILE {{\"identity\":\"{}\",\"journal_mode\":\"{}\",\"synchronous\":{},\"foreign_keys\":{},\"fullfsync\":{},\"checkpoint_fullfsync\":{},\"page_size\":{},\"cache_size\":{},\"mmap_size\":{},\"temp_store\":{},\"wal_checkpoint_performed\":{}}}",profile.identity,profile.journal_mode,profile.synchronous,profile.foreign_keys,profile.fullfsync,profile.checkpoint_fullfsync,profile.page_size,profile.cache_size,profile.mmap_size,profile.temp_store,checkpoint.wal_checkpoint_performed);
     if checkpoint.busy {
         return Err("final checkpoint obstructed".into());
