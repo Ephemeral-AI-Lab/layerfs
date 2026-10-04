@@ -72,3 +72,36 @@ hardlink ownership; existing forced16MiB release and matching-readonly reopen
 preserve bytes. Owning all-target Clippy PASS; fmt applied; boundary442production
 Rust/SQL files PASS. No broad CI/aggregate proof. New source must freeze before
 its cause diagnostic or matched campaign; no unchanged gate rerun is authorized.
+
+## On-demand lifetime diagnostic at676e2f948
+
+Tracked cause completes with original root, cold0, successful exact descriptor
+close and no omitted identities. Source fd4/dev16777230/inode865867585 closes
+once at0.000750ms (checked product clock0.002875ms); transfer0.016625ms/scratch
+close0.005916ms. However SQLite close693.790375ms and VFS main close693.529958ms
+now own the delay; complete close693.916667ms. This is relocation, not an
+improvement. Diagnostic complete lifecycle2.622183625s versus prior
+1.824567958s is recorded, not an admission ratio or repeatability claim; windows
+also differ in Init work. Do not promote the lifetime-only change into a speed
+PASS. No release was skipped and no close moved outside the timer.
+
+## Disposable bounded preallocation treatment
+
+Now adapt the original Phase4.5 next-pack reservation before the actual pack
+INSERT, inside the existing write transaction. Only Disposable uses this growth
+strategy; Durable retains its prior strategy. Required extent release and checked
+temporary handle close remain in final completion. The request is rounded to
+MiB from current logical bytes + next bounded pack capacity +2MiB headroom,
+minus actual allocated bytes. Each nonzero request is capped at the existing
+singleton-pack limit +3MiB, independent of Store size. F_PREALLOCATE uses original
+flags0/F_PEOFPOSMODE, verifies exact allocated amount and unchanged logical length.
+No payload copy, worker/cache/queue increase, error fallback or dependency patch.
+Actual preallocation calls/bytes/inclusive wall/source-close wall are recorded;
+these nested observations do not establish physical I/O or durability.
+
+New covering headroom test initially violated the existing FileState64KiB body
+bound with100022B; the fixture was repaired to32022B, without relaxing the bound.
+Covering allocation/ordinal/publication/transaction/full-namespace commands then
+pass (33functions total); owning Clippy PASS. Existing identity/refusal/rollback/
+read-only/forced-release checks remain. Freeze this concrete changed treatment
+before another diagnostic or matched gate; historical failures stay intact.

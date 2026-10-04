@@ -87,6 +87,14 @@ pub struct SqlWork {
     pub sealed_inserts: u64,
     /// Body bytes submitted by those attempted final INSERTs.
     pub sealed_body_bytes: u64,
+    /// Successful Disposable bounded physical reservations (not SQL statements).
+    pub preallocation_calls: u64,
+    /// Bytes reserved without changing logical length.
+    pub preallocation_bytes: u64,
+    /// Inclusive reservation/custody/source-close wall.
+    pub preallocation_ns: u64,
+    /// Checked temporary descriptor close wall nested in reservation.
+    pub preallocation_close_ns: u64,
     /// Explicit checkpoint wall, outside SQL statement spans.
     pub checkpoint_ns: u64,
 }
@@ -149,7 +157,7 @@ pub(crate) struct Session {
     pub(crate) writable: bool,
     pub(crate) profile: ConnectionProfile,
     #[cfg(target_os = "macos")]
-    allocation: Option<super::allocation_owner::AllocationOwner>,
+    pub(crate) allocation: Option<super::allocation_owner::AllocationOwner>,
 }
 impl Session {
     pub(crate) fn connect(

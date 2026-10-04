@@ -997,3 +997,17 @@ error has Unknown outcome and existing quarantine. Source-close wall is nested
 in completion, with no out-of-operation cleanup. Durable retains its previous
 allocation handle lifetime. No preallocation, format, durability or named buffer/
 transaction/worker bound change is implied by this lifetime adjustment.
+
+
+### Disposable bounded pack-growth reservation (based on676e2f948)
+
+Before each bounded body INSERT page, Disposable reserves current logical file
+length plus next body capacity plus2MiB headroom, rounded toMiB, less existing
+allocated blocks. Each request is limited to singleton-pack bytes plus3MiB.
+O_NOFOLLOW temporary handles validate original device/inode/exclusive custody;
+F_PREALLOCATE requires the exact amount and cannot change logical length. Checked
+source close remains inside that transaction. Physical preallocation counters
+are separate from SQL/VM counts. Required final unused-extents release is retained;
+no assumption that headroom is automatically discarded. Durable does not reuse
+this main-file growth strategy because WAL grows differently. No schema, canonical
+identity, publication acknowledgement or existing named byte/worker bound change.

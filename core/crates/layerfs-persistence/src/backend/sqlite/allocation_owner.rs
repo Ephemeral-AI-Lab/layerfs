@@ -41,6 +41,44 @@ impl AllocationOwner {
             inode: m.ino(),
         })
     }
+    pub(crate) fn before_pack(&self, capacity: usize) -> Result<(u64, u64), BackendError> {
+        let Self::OnDemand {
+            path,
+            device,
+            inode,
+        } = self
+        else {
+            return Err(BackendError::Integrity);
+        };
+        if capacity > layerfs_storage::policy::SINGLETON_PACK_LIMIT {
+            return Err(BackendError::Capacity);
+        }
+        const MIB: u64 = 1 << 20;
+        let before = metadata(path, *device, *inode)?;
+        let allocated = before
+            .blocks()
+            .checked_mul(512)
+            .ok_or(BackendError::Capacity)?;
+        let wanted = before
+            .len()
+            .checked_add(capacity as u64)
+            .and_then(|n| n.checked_add(2 * MIB))
+            .and_then(|n| n.checked_add(MIB - 1))
+            .map(|n| n / MIB * MIB)
+            .ok_or(BackendError::Capacity)?;
+        let amount = wanted.saturating_sub(allocated);
+        if amount == 0 {
+            return Ok((0, 0));
+        }
+        if amount > layerfs_storage::policy::SINGLETON_PACK_LIMIT as u64 + 3 * MIB {
+            return Err(BackendError::Capacity);
+        }
+        let file = AllocationFile::open(path)?;
+        let result = file.preallocate_checked(*device, *inode, amount);
+        let close = file.close_checked()?;
+        metadata(path, *device, *inode)?;
+        result.map(|()| (amount, close))
+    }
     pub(crate) fn release(&self) -> Result<AllocationRelease, BackendError> {
         let Self::OnDemand {
             path,

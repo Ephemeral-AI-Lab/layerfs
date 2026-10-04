@@ -14,8 +14,42 @@ pub(crate) struct Transaction<'a> {
     pub(crate) connection: &'a Connection,
     pub(crate) work: &'a RefCell<SqlWork>,
     uncertain: Cell<bool>,
+    owner: &'a Session,
 }
 impl Transaction<'_> {
+    pub(crate) fn before_pack(&self, capacity: usize) -> Result<(), BackendError> {
+        if self.owner.profile.persistence != crate::SqlitePersistenceProfile::Disposable {
+            return Ok(());
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let start = Instant::now();
+            let result = self
+                .owner
+                .allocation
+                .as_ref()
+                .ok_or(BackendError::Integrity)?
+                .before_pack(capacity);
+            let wall = start.elapsed().as_nanos() as u64;
+            self.work.borrow_mut().preallocation_ns += wall;
+            if let Ok((bytes, close)) = result {
+                let mut work = self.work.borrow_mut();
+                work.preallocation_calls += u64::from(bytes != 0);
+                work.preallocation_bytes += bytes;
+                work.preallocation_close_ns += close;
+            }
+            if result.as_ref().err() == Some(&BackendError::Unknown) {
+                self.uncertain.set(true);
+            }
+            result.map(|_| ())
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = capacity;
+            Err(BackendError::Integrity)
+        }
+    }
+
     pub(crate) fn input_limit(
         &self,
         bindings: usize,
@@ -101,6 +135,7 @@ impl Session {
             connection: &s.connection,
             work: &s.work,
             uncertain: Cell::new(false),
+            owner: self,
         };
         if let Err(e) = tx.query(if writable { "BEGIN IMMEDIATE" } else { "BEGIN" }, vec![]) {
             if e == BackendError::Unknown {

@@ -1758,3 +1758,9 @@ dev16777230/inode865860743 close239.672166ms (rc0), transfer0.032833ms, scratch
 close0.006209ms. Added Disposable on-demand allocation identity/temporary checked
 release-close, retaining Durable lifetime and all bounds.32covering tests,
 Clippy/boundary442 PASS. Freeze and diagnose relocation before claiming benefit.
+
+-2026-10-04: on-demand cause at676e2f948 proves source-close0.000750ms but delay
+moves to SQLite/VFS close693.790375/693.529958ms; no improvement claimed. Apply
+user-authorized bounded Phase4.5-style Disposable preallocation-before-body INSERT,
+retain required final release and all closes in timing. Headroom fixture initially
+exceeded FileState64KiB; fixed fixture,33covering checks/Clippy PASS. Freeze/measure.

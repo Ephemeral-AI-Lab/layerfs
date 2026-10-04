@@ -65,9 +65,11 @@ def main():
         record.update(status='DIAGNOSTIC', allocation_source=source, allocation_close=matches[0],
                       transfer_ns=int(re.search(r'allocation_transfer_ns: (\d+)',stderr).group(1)),
                       scratch_close_ns=int(re.search(r'allocation_scratch_close_ns: (\d+)',stderr).group(1)),
+                      source_close_ns=int(re.search(r'allocation_source_close_ns: (\d+)',stderr).group(1)),
+                      preallocation={key:int(re.search(key+r': (\d+)',stderr).group(1)) for key in ('preallocation_calls','preallocation_bytes','preallocation_ns','preallocation_close_ns')},
                       close=observed, vfs=vfs, original_root_match=True,
                       cleanup='PASS' if not list(scratch.iterdir()) and not list(out.glob('.layerfs-allocation-*')) else 'FAIL')
-        print(json.dumps({k: record[k] for k in ('status','allocation_source','allocation_close','transfer_ns','scratch_close_ns')}))
+        print(json.dumps({k: record[k] for k in ('status','allocation_source','allocation_close','transfer_ns','scratch_close_ns','source_close_ns','preallocation')}))
     finally:
         runner.write_json(out/'receipt.json', record); runner.manifest_run(out); lock.close()
 

@@ -116,6 +116,7 @@ fn write_packs(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(), Back
             .iter()
             .flat_map(|r| [&r.0 as &dyn rusqlite::ToSql, &r.1, &r.2, &r.3, &r.4])
             .collect::<Vec<_>>();
+        tx.before_pack(page.iter().map(|p| p.body.len()).sum())?;
         tx.borrowed(&sql, &values, bytes)?;
         let mut w = tx.work.borrow_mut();
         w.sealed_inserts += page.len() as u64;

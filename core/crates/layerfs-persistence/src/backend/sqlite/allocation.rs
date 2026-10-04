@@ -48,6 +48,33 @@ impl AllocationFile {
         }
         self.release()
     }
+    pub(crate) fn preallocate_checked(
+        &self,
+        device: u64,
+        inode: u64,
+        amount: u64,
+    ) -> Result<(), BackendError> {
+        let before = self.file.metadata().map_err(error)?;
+        if before.dev() != device || before.ino() != inode || before.nlink() != 1 {
+            return Err(BackendError::Integrity);
+        }
+        let mut request = nix::libc::fstore_t {
+            fst_flags: 0,
+            fst_posmode: nix::libc::F_PEOFPOSMODE,
+            fst_offset: 0,
+            fst_length: amount.try_into().map_err(|_| BackendError::Capacity)?,
+            fst_bytesalloc: 0,
+        };
+        fcntl(&self.file, FcntlArg::F_PREALLOCATE(&mut request)).map_err(|e| {
+            BackendError::Filesystem(std::io::Error::from_raw_os_error(e as i32).kind())
+        })?;
+        if request.fst_bytesalloc != request.fst_length
+            || self.file.metadata().map_err(error)?.len() != before.len()
+        {
+            return Err(BackendError::Integrity);
+        }
+        Ok(())
+    }
     pub(crate) fn close_checked(self) -> Result<u64, BackendError> {
         let Self { file, parent: _ } = self;
         let start = Instant::now();
