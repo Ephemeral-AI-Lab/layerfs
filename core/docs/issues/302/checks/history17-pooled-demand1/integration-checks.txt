@@ -1,0 +1,49 @@
+COMMAND ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-persistence', '--test', 'sqlite_publication', '--test', 'sqlite_transaction_units']
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-persistence)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.46s
+     Running tests/sqlite_publication.rs (core/target/debug/deps/sqlite_publication-9a511894bc935a52)
+
+running 13 tests
+test writable_open_does_not_migrate_an_unrelated_database_journal ... ok
+test readonly_refusal_and_external_writer_busy_do_not_retry ... ok
+test wal_full_settings_and_unavailable_engine_are_explicit ... ok
+test failing_signature_page_rolls_back_prior_body_and_all_signature_rows ... ok
+test signature_pages_share_one_acknowledgement_at_the_existing_row_bound ... ok
+test failure_after_body_insert_rolls_back_the_entire_unit_and_published_body_is_immutable ... ok
+test final_body_multirow_locators_and_first_wins_have_one_atomic_ack ... ok
+test signature_publication_is_bounded_set_based_and_preserves_stamps ... ok
+test pack_insert_pages_preserve_bodies_and_atomic_conflict_refusal ... ok
+test canonical_save_read_reuse_and_persisted_reservations_survive_reopen ... ok
+test pack_insert_pages_keep_large_blob_binding_ownership_separate ... ok
+test multi_page_publication_preserves_first_wins_loss_order_and_late_failure_atomicity ... ok
+test explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/sqlite_transaction_units.rs (core/target/debug/deps/sqlite_transaction_units-96282b0e53fac360)
+
+running 9 tests
+test successful_save_history_retains_selection_and_group_work_from_final_drain ... ok
+test reader_reuses_authenticated_pack_within_one_operation ... ok
+test dropping_unfinished_save_does_not_return_consumed_ids_to_the_unused_tail ... ok
+test unused_pack_ids_transfer_across_saves_without_recycling_used_ids ... ok
+test same_save_read_and_dependency_force_closure_of_carried_queue ... ok
+test partial_pack_queue_survives_wave_boundary_within_existing_budget ... ok
+test canonical_and_shared_physical_bytes_are_bounded_independently ... ok
+test a_small_acknowledged_pack_tail_serves_a_larger_following_wave ... ok
+test allocation_replenishes_before_pressure_seals_when_the_tail_is_consumed ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+
+COMMAND ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-project', '--test', 'init_sqlite']
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-project)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.01s
+     Running tests/init_sqlite.rs (core/target/debug/deps/init_sqlite-a81263fb89d61840)
+
+running 1 test
+test selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.06s
+
+COMMAND ['cargo', '+1.85.1', 'fmt', '--manifest-path', 'core/Cargo.toml', '-p', 'layerfs-storage', '-p', 'layerfs-project', '--check']

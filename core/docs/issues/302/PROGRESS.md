@@ -1816,3 +1816,12 @@ authentication relaxation. Public operation-reader pooled counters added to both
 benchmark arms. Correct bytes/missing-catalogue refusal/locator regression PASS;
 owningClippy/boundary442/23self-tests PASS. Freeze changed ordinary17pair next;
 prior receipts retained and goal ACTIVE. See SQLITE-POOLED-DEMAND-RECONSTRUCTION.md.
+
+
+-2026-10-04: pooled-demand treatment ordinary17v2 pair at1ca759559 timePASS
+1.062282445552x (36.518927083s vs34.377794000s), cold/root/canonical/storage/cleanup
+PASS. Filesystem3.718593293s vs4.563421792s and equal comparable11926leaves/
+13373edges/50598recordcalls/2633groupdecodes. Candidate independent proof TIMEOUT
+9.507012333s =>jointINCOMPLETE. Save14.391946960s vs11.514611042s remains gap;
+processing19.752256754s contextualtargetunmet. No budgetrelaxation/rerun/promotion.
+53/157/DurableNOT_RUN; preserve Initpriorpins. Next save-reader/proofscaling.

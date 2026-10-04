@@ -1,0 +1,90 @@
+{
+  "baseline": {
+    "comparison_ns": 34377794000,
+    "command_wall_ns": 52082604750,
+    "verification_wall_ns": 4754689625,
+    "verification_status": "PASS",
+    "cache_status": "PASS",
+    "storage_bytes": 52473856,
+    "cleanup": {
+      "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+      "status": "PASS"
+    },
+    "stages_ns": [
+      16408217916,
+      1672465043,
+      4563421792,
+      11514611042
+    ],
+    "processing_ns": 17750497877,
+    "pooled_filesystem_operation_reader_sum": {
+      "leaf_requests": 11926,
+      "chain_edges": 13373,
+      "physical_record_calls": 50598,
+      "physical_group_decodes": 2633,
+      "physical_group_decoded_bytes": 119505866,
+      "physical_group_cache_hits": 47965,
+      "value_group_decodes": 33834,
+      "pack_fetches": 384,
+      "pack_bytes": 15365529
+    },
+    "sql_trace": {
+      "calls": 524829,
+      "vm_steps": 24421375,
+      "fullscan_steps": 109,
+      "sorts": 26,
+      "reprepare": 0
+    },
+    "observer_omitted": 0
+  },
+  "candidate": {
+    "comparison_ns": 36518927083,
+    "command_wall_ns": 53494491208,
+    "verification_wall_ns": 9507012333,
+    "verification_status": "FAIL",
+    "cache_status": "PASS",
+    "storage_bytes": 49594368,
+    "cleanup": {
+      "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+      "status": "PASS"
+    },
+    "stages_ns": [
+      16513819001,
+      1641716501,
+      3718593293,
+      14391946960
+    ],
+    "processing_ns": 19752256754,
+    "pooled_filesystem_operation_reader_sum": {
+      "leaf_requests": 11926,
+      "chain_edges": 13373,
+      "physical_record_calls": 50598,
+      "physical_group_decodes": 2633,
+      "physical_group_decoded_bytes": 119505866,
+      "physical_group_cache_hits": 47965,
+      "value_group_decodes": 33834,
+      "pack_fetches": 331,
+      "pack_bytes": 16011390
+    },
+    "sql_trace": {
+      "calls": 193438,
+      "vm_steps": 9339792,
+      "fullscan_steps": 72,
+      "sorts": 1460,
+      "reprepare": 34
+    },
+    "observer_omitted": 0
+  },
+  "comparison": {
+    "time_ratio": 1.0622824455519164,
+    "time_gate": "PASS",
+    "allowed_candidate_ns_numerator": 378155734000,
+    "allowed_candidate_ns_denominator": 10,
+    "joint_gate": "INCOMPLETE",
+    "reason": "candidate independent proof timed out at unchanged9.5s",
+    "storage_gate": "PASS",
+    "allocation_ceiling_exclusive": 54278964,
+    "roots_match": true,
+    "scope": "ordinary changed-source17v2 pair; not an admission PASS"
+  }
+}
