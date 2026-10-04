@@ -1475,3 +1475,17 @@ admission. Reference5509839083ns product/12519750500ns envelopePASS.
 statements/2522963VM,writecommits141. All unrun cases and priorFAIL retained,
 all7goalactive. Details SQLITE-ALLOCATION-RELEASE-TREATMENT.md.
 CodeLOC137544->137678(+134),evidencefollowup+0, no dependency version/unsafe edit.
+
+
+### Bounded pack queue carry22e5f1d3c
+
+Remove unconditional wave queue drain, keep existing256KiB/512queued-row budget,
+ready-wave publication and dependency/read/finish closure.1536small-object count
+5->4packs; fullreadback and same-save carried-data closurePASS.19unique scoped
+checks,3-package Clippy,fmt/boundary438+23PASS.
+Matched1000 product137991542/228675584ns timeFAIL; roots/cache/proof/cleanup,
+allocation23101440/20553728B and envelopes201397375/1143337458nsPASS. Current317
+statements/203876VM,writecommits20,95bodies/20125893B; pack optimization does not
+reduce acknowledgements in thisrow. Other6requiredcasesNOT_RUN at thisidentity.
+All priorFAIL retained, goalactive. SQLITE-PACK-CARRY-TREATMENT.md has arithmetic,
+raw IDs/repro; CodeLOC137678->137677(-1), evidencefollowup+0.
