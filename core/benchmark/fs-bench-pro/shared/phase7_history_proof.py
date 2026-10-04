@@ -203,10 +203,12 @@ def main():
     receipt.write_text(json.dumps({'run': {'child': child}})+'\n')
     command = [request['verifier'], request['corpus'], request['db'], str(receipt), request['row'], 'complete']
     command += ['reference', 'independent-reference', str(metadata)] if request['arm'] == 'baseline' else [request['profile'], request['pins']]
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
-    (out/'namespace-proof.stdout').write_text(result.stdout); (out/'namespace-proof.stderr').write_text(result.stderr)
+    # Stream to exclusively created files so a bounded parent timeout retains
+    # native progress instead of losing a captured pipe when the group is killed.
+    with (out/'namespace-proof.stdout').open('x') as stdout, (out/'namespace-proof.stderr').open('x') as stderr:
+        result = subprocess.run(command, stdout=stdout, stderr=stderr, check=False)
     if result.returncode: raise ValueError('independent namespace/custody proof failed; see retained output')
-    native = json.loads(result.stdout)
+    native = json.loads((out/'namespace-proof.stdout').read_text())
     if native.get('status') != 'CHECKED' or native.get('states') != child['states'] or native.get('custody_states') != child['states']:
         raise ValueError('independent namespace/custody proof incomplete')
     if request['arm'] == 'candidate' and native.get('independent_root_pins') != 'CHECKED':

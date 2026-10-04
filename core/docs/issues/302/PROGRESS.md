@@ -1825,3 +1825,11 @@ PASS. Filesystem3.718593293s vs4.563421792s and equal comparable11926leaves/
 9.507012333s =>jointINCOMPLETE. Save14.391946960s vs11.514611042s remains gap;
 processing19.752256754s contextualtargetunmet. No budgetrelaxation/rerun/promotion.
 53/157/DurableNOT_RUN; preserve Initpriorpins. Next save-reader/proofscaling.
+
+
+-2026-10-04: proof-timeout evidence gap identified: Python captured native progress
+untilexit, losing partial logs on groupkill. Native logs now stream to retained
+files. Shared verifier corpus/open/custody/state/walk/length/digest and SQL/VM/VFS/
+pooled diagnostics added, gatedoff ordinarily. Prospective one-native-child/arm
+retained-store diagnostic with equalcold/9.5s/native and60s/complete; no speed or
+proof promotion.8focusedchecks/exampleClippy PASS; productionunchanged. Freeze.

@@ -1,6 +1,8 @@
 //! Separate read-only retained-history corpus verifier.
 //! A partial probe is always DIAGNOSTIC; this vehicle alone is not admission.
 #![allow(dead_code)]
+#[path = "history_support/observer.rs"]
+mod observer;
 #[path = "history_support/producer.rs"]
 mod producer;
 #[path = "history_support/retained.rs"]
@@ -110,8 +112,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("complete canonical census mismatch".into());
         }
     }
+    let diagnostic = std::env::var("LAYERFS_HISTORY_VERIFY_PROGRESS").as_deref() == Ok("1");
+    let opening = std::time::Instant::now();
     let corpus = Corpus::open(&std::path::PathBuf::from(&args[1]), row)?;
+    if diagnostic {
+        eprintln!(
+            "VERIFY_CORPUS_OPEN_WORK wall_ns={}",
+            opening.elapsed().as_nanos()
+        );
+    }
     let config = retained::config();
+    let custody_start = std::time::Instant::now();
     let handles = Handles::open_read_only(
         PersistenceConfig::sqlite(&args[2]).with_sqlite_profile(selected_profile),
         &config.binding_key,
@@ -120,11 +131,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let custody = retained::verify(&handles.history, producer::scope_of(row), &roots)?;
     let storage = Storage::new(handles.storage.clone())?;
     let reader = storage.reader()?;
+    if diagnostic {
+        eprintln!(
+            "VERIFY_STORE_CUSTODY_WORK wall_ns={}",
+            custody_start.elapsed().as_nanos()
+        );
+    }
     let mut reuse = verify::Reuse::default();
     let mut paths = 0;
     let mut sampled = 0;
     let mut bytes = 0;
     for (position, root) in roots.iter().enumerate() {
+        let state_start = std::time::Instant::now();
+        let engine = if diagnostic {
+            observer::snapshot()
+        } else {
+            [0; 20]
+        };
+        if diagnostic {
+            eprintln!("VERIFY_STATE_BEGIN state={}", position + 1);
+        }
         let oracle = corpus.oracle(&corpus.states()[position])?;
         if oracle.is_empty() {
             return Err("empty oracle".into());
@@ -133,6 +159,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         paths += p;
         sampled += s;
         bytes += b;
+        if diagnostic {
+            observer::report(position + 1, "verification", engine);
+            eprintln!("VERIFY_STATE_WORK state={} wall_ns={} paths={} sampled={} authenticated_bytes={} pooled={:?}", position + 1, state_start.elapsed().as_nanos(), p, s, b, reader.pooled_read_counters());
+        }
     }
     println!("{{\"status\":\"{}\",\"states\":{},\"custody_states\":{},\"paths\":{},\"sampled_content_paths\":{},\"authenticated_bytes\":{},\"sample_policy\":\"every-tenth-content-path-and-final\",\"independent_root_pins\":\"{}\",\"admission\":\"NOT_RUN\"}}",if probe_states.is_some(){"DIAGNOSTIC"}else{"CHECKED"},count,custody,paths,sampled,bytes,if independent_pins {"CHECKED"} else {"NOT_CHECKED"});
     Ok(())

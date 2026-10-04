@@ -96,7 +96,7 @@ def generate_verifier(root: Path, helper_path: Path) -> tuple[str, str, dict[str
     verification = helper.read_text()
     seals = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
              for p in [source, helper] + [source.parent / f'history_support/{n}.rs'
-                                        for n in ('producer', 'retained', 'support', 'workload')]}
+                                        for n in ('observer', 'producer', 'retained', 'support', 'workload')]}
 
     def replace(old, new):
         nonlocal text
@@ -104,7 +104,7 @@ def generate_verifier(root: Path, helper_path: Path) -> tuple[str, str, dict[str
             raise ValueError(f'expected one reference proof seam: {old}')
         text = text.replace(old, new)
 
-    for name in ('producer', 'retained', 'support', 'workload'):
+    for name in ('observer', 'producer', 'retained', 'support', 'workload'):
         replace(f'#[path = "history_support/{name}.rs"]',
                 f'#[path = "{source.parent / f"history_support/{name}.rs"}"]')
     replace('#[path = "history_support/verify.rs"]', f'#[path = "{helper_path}"]')
