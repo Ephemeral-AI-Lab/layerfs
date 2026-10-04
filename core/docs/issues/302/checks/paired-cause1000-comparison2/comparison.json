@@ -1,0 +1,1056 @@
+{
+  "kind": "statement-lifetime-cause-revision2",
+  "admission": "NOT_RUN",
+  "status": "DIAGNOSTIC_EQUIVALENCE_PASS",
+  "phases": [
+    "prepare",
+    "bind",
+    "next_step_plus_done_reset",
+    "map",
+    "cursor_drop",
+    "status",
+    "statement_drop"
+  ],
+  "rows": {
+    "baseline": {
+      "run": {
+        "bootstrap_ns": 6599208,
+        "canonical_bytes": 20187652,
+        "canonical_inventory_sha256": "b997719ad382df32b053decb160b8531093fcf8685c48ad4c058ef86ed9f9b99",
+        "canonical_objects": 2003,
+        "checkpoint_ns": 0,
+        "close_ns": 112167,
+        "init_ns": 157759083,
+        "operation_ns": 164679791,
+        "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+        "root_serial": 1,
+        "route": "shared-public-C1-C2-C5-caller",
+        "saves": [
+          {
+            "acquire_ns": 0,
+            "cost_ns": 0,
+            "delta_ns": 0,
+            "eligible_ns": 0,
+            "exact_reuse_ns": 100833,
+            "full_ns": 5845153,
+            "group_ns": 1260865,
+            "inserted": 1959,
+            "object_insert_statements": 97,
+            "pack_appends": 0,
+            "pack_bytes_written": 20072769,
+            "packs": 93,
+            "placement_select_ns": 1013089,
+            "pooled_resolve_ns": 0,
+            "presence_queries": 6,
+            "reused": 18,
+            "sql_ns": 28886000,
+            "transaction_cadence_ns": 44099794,
+            "write_commits": 11
+          },
+          {
+            "acquire_ns": 0,
+            "cost_ns": 0,
+            "delta_ns": 0,
+            "eligible_ns": 0,
+            "exact_reuse_ns": 0,
+            "full_ns": 8585,
+            "group_ns": 15042,
+            "inserted": 11,
+            "object_insert_statements": 2,
+            "pack_appends": 0,
+            "pack_bytes_written": 1134,
+            "packs": 2,
+            "placement_select_ns": 1500,
+            "pooled_resolve_ns": 0,
+            "presence_queries": 1,
+            "reused": 3,
+            "sql_ns": 215376,
+            "transaction_cadence_ns": 99000,
+            "write_commits": 4
+          },
+          {
+            "acquire_ns": 0,
+            "cost_ns": 0,
+            "delta_ns": 0,
+            "eligible_ns": 0,
+            "exact_reuse_ns": 0,
+            "full_ns": 12082,
+            "group_ns": 527501,
+            "inserted": 33,
+            "object_insert_statements": 1,
+            "pack_appends": 19,
+            "pack_bytes_written": 49233,
+            "packs": 2,
+            "placement_select_ns": 9123,
+            "pooled_resolve_ns": 302710,
+            "presence_queries": 1,
+            "reused": 0,
+            "sql_ns": 862048,
+            "transaction_cadence_ns": 562417,
+            "write_commits": 10
+          }
+        ],
+        "stack": "41414141414141414141414141414141",
+        "stages": {
+          "construct_worker_sum": {
+            "bytes": 0,
+            "calls": 1000,
+            "wall_ns": 411067875
+          },
+          "file_read_worker_sum": {
+            "bytes": 20000000,
+            "calls": 2693,
+            "wall_ns": 101948212
+          },
+          "files_owner": {
+            "bytes": 0,
+            "calls": 1,
+            "wall_ns": 110816542
+          },
+          "filesystem_tree": {
+            "bytes": 0,
+            "calls": 1,
+            "wall_ns": 1241083
+          },
+          "genesis": {
+            "bytes": 0,
+            "calls": 1,
+            "wall_ns": 173917
+          },
+          "owner_receive": {
+            "bytes": 0,
+            "calls": 81,
+            "wall_ns": 18732920
+          },
+          "prerequisites": {
+            "bytes": 0,
+            "calls": 1,
+            "wall_ns": 68167
+          },
+          "producer_send_worker_sum": {
+            "bytes": 0,
+            "calls": 81,
+            "wall_ns": 276334540
+          },
+          "reserve_inodes": {
+            "bytes": 0,
+            "calls": 1,
+            "wall_ns": 131000
+          },
+          "save_begin": {
+            "bytes": 0,
+            "calls": 3,
+            "wall_ns": 3678749
+          },
+          "save_finish": {
+            "bytes": 0,
+            "calls": 3,
+            "wall_ns": 32873251
+          },
+          "scan": {
+            "bytes": 0,
+            "calls": 1,
+            "wall_ns": 5266041
+          }
+        },
+        "status": "DIAGNOSTIC"
+      },
+      "trace": {
+        "version": "3.51.0",
+        "connections": 6,
+        "errors": 0,
+        "active_statements": 0,
+        "native_vm_counter_qualified": false,
+        "vm_status_reset": true,
+        "rows": [
+          {
+            "database": "store",
+            "category": "begin_write",
+            "calls": 26,
+            "statement_lifetime_ns": 277878,
+            "vm_steps": 130,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "store",
+            "category": "begin_read",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "store",
+            "category": "commit",
+            "calls": 25,
+            "statement_lifetime_ns": 44448166,
+            "vm_steps": 75,
+            "sqlite_profile_raw_ns": 43000000
+          },
+          {
+            "database": "store",
+            "category": "rollback",
+            "calls": 1,
+            "statement_lifetime_ns": 3041,
+            "vm_steps": 3,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "store",
+            "category": "select",
+            "calls": 2147,
+            "statement_lifetime_ns": 5255945,
+            "vm_steps": 109349,
+            "sqlite_profile_raw_ns": 6000000
+          },
+          {
+            "database": "store",
+            "category": "insert",
+            "calls": 1164,
+            "statement_lifetime_ns": 9058850,
+            "vm_steps": 208945,
+            "sqlite_profile_raw_ns": 8000000
+          },
+          {
+            "database": "store",
+            "category": "update",
+            "calls": 147,
+            "statement_lifetime_ns": 317750,
+            "vm_steps": 4868,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "store",
+            "category": "delete",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "store",
+            "category": "pragma",
+            "calls": 42,
+            "statement_lifetime_ns": 259704,
+            "vm_steps": 471,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "store",
+            "category": "create",
+            "calls": 10,
+            "statement_lifetime_ns": 401418,
+            "vm_steps": 366,
+            "sqlite_profile_raw_ns": 1000000
+          },
+          {
+            "database": "store",
+            "category": "with",
+            "calls": 3,
+            "statement_lifetime_ns": 31041,
+            "vm_steps": 255,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "store",
+            "category": "other",
+            "calls": 2,
+            "statement_lifetime_ns": 34333,
+            "vm_steps": 34,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "begin_write",
+            "calls": 2,
+            "statement_lifetime_ns": 52251,
+            "vm_steps": 10,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "begin_read",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "commit",
+            "calls": 2,
+            "statement_lifetime_ns": 30875,
+            "vm_steps": 6,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "rollback",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "select",
+            "calls": 9,
+            "statement_lifetime_ns": 89585,
+            "vm_steps": 511,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "insert",
+            "calls": 4,
+            "statement_lifetime_ns": 34415,
+            "vm_steps": 326,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "update",
+            "calls": 1,
+            "statement_lifetime_ns": 2792,
+            "vm_steps": 31,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "delete",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "pragma",
+            "calls": 10,
+            "statement_lifetime_ns": 124626,
+            "vm_steps": 53,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "create",
+            "calls": 17,
+            "statement_lifetime_ns": 688751,
+            "vm_steps": 478,
+            "sqlite_profile_raw_ns": 1000000
+          },
+          {
+            "database": "history",
+            "category": "with",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "other",
+            "calls": 1,
+            "statement_lifetime_ns": 375,
+            "vm_steps": 4,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "begin_write",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "begin_read",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "commit",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "rollback",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "select",
+            "calls": 1,
+            "statement_lifetime_ns": 20167,
+            "vm_steps": 301,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "insert",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "update",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "delete",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "pragma",
+            "calls": 7,
+            "statement_lifetime_ns": 7292,
+            "vm_steps": 35,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "create",
+            "calls": 17,
+            "statement_lifetime_ns": 234334,
+            "vm_steps": 478,
+            "sqlite_profile_raw_ns": 1000000
+          },
+          {
+            "database": "other",
+            "category": "with",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "other",
+            "calls": 1,
+            "statement_lifetime_ns": 250,
+            "vm_steps": 4,
+            "sqlite_profile_raw_ns": 0
+          }
+        ]
+      },
+      "command_wall_ns": 249409667,
+      "proof_wall_ns": 63285750
+    },
+    "candidate": {
+      "run": {
+        "bootstrap_ns": 16151916,
+        "canonical_bytes": 20187652,
+        "canonical_inventory_sha256": "b997719ad382df32b053decb160b8531093fcf8685c48ad4c058ef86ed9f9b99",
+        "canonical_objects": 2003,
+        "checkpoint_ns": 1656458,
+        "close_ns": 346375,
+        "init_ns": 202226667,
+        "operation_ns": 221601708,
+        "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+        "root_serial": 1,
+        "route": "shared-public-C1-C2-C5-caller",
+        "saves": [
+          {
+            "acquire_ns": 0,
+            "canonical_bytes": 20085335,
+            "cost_ns": 0,
+            "delta_ns": 0,
+            "eligible_ns": 0,
+            "full_ns": 5699776,
+            "group_ns": 1403710,
+            "inclusive_stages": [
+              {
+                "calls": 1,
+                "wall_ns": 2093459
+              },
+              {
+                "calls": 6,
+                "wall_ns": 5115833
+              },
+              {
+                "calls": 6,
+                "wall_ns": 32579292
+              },
+              {
+                "calls": 6,
+                "wall_ns": 99292
+              },
+              {
+                "calls": 7,
+                "wall_ns": 122387376
+              },
+              {
+                "calls": 8,
+                "wall_ns": 118219168
+              },
+              {
+                "calls": 1,
+                "wall_ns": 1749792
+              },
+              {
+                "calls": 0,
+                "wall_ns": 0
+              },
+              {
+                "calls": 1,
+                "wall_ns": 208375
+              }
+            ],
+            "inserted": 1959,
+            "packs": 89,
+            "probe_ns": 3034399,
+            "reused": 18
+          },
+          {
+            "acquire_ns": 0,
+            "canonical_bytes": 939,
+            "cost_ns": 0,
+            "delta_ns": 0,
+            "eligible_ns": 0,
+            "full_ns": 9499,
+            "group_ns": 15209,
+            "inclusive_stages": [
+              {
+                "calls": 1,
+                "wall_ns": 1208625
+              },
+              {
+                "calls": 1,
+                "wall_ns": 94125
+              },
+              {
+                "calls": 1,
+                "wall_ns": 17958
+              },
+              {
+                "calls": 1,
+                "wall_ns": 291
+              },
+              {
+                "calls": 2,
+                "wall_ns": 867083
+              },
+              {
+                "calls": 1,
+                "wall_ns": 846291
+              },
+              {
+                "calls": 0,
+                "wall_ns": 0
+              },
+              {
+                "calls": 0,
+                "wall_ns": 0
+              },
+              {
+                "calls": 1,
+                "wall_ns": 21416
+              }
+            ],
+            "inserted": 11,
+            "packs": 2,
+            "probe_ns": 42,
+            "reused": 3
+          },
+          {
+            "acquire_ns": 0,
+            "canonical_bytes": 101378,
+            "cost_ns": 0,
+            "delta_ns": 0,
+            "eligible_ns": 0,
+            "full_ns": 10246,
+            "group_ns": 527502,
+            "inclusive_stages": [
+              {
+                "calls": 1,
+                "wall_ns": 106209
+              },
+              {
+                "calls": 1,
+                "wall_ns": 134542
+              },
+              {
+                "calls": 1,
+                "wall_ns": 2468042
+              },
+              {
+                "calls": 1,
+                "wall_ns": 84
+              },
+              {
+                "calls": 2,
+                "wall_ns": 1245000
+              },
+              {
+                "calls": 1,
+                "wall_ns": 1199833
+              },
+              {
+                "calls": 0,
+                "wall_ns": 0
+              },
+              {
+                "calls": 3,
+                "wall_ns": 1700208
+              },
+              {
+                "calls": 1,
+                "wall_ns": 126666
+              }
+            ],
+            "inserted": 33,
+            "packs": 2,
+            "probe_ns": 0,
+            "reused": 0
+          }
+        ],
+        "stack": "41414141414141414141414141414141",
+        "stages": {
+          "construct_worker_sum": {
+            "bytes": 0,
+            "calls": 1000,
+            "wall_ns": 585680924
+          },
+          "file_read_worker_sum": {
+            "bytes": 20000000,
+            "calls": 2693,
+            "wall_ns": 130587669
+          },
+          "files_owner": {
+            "bytes": 0,
+            "calls": 1,
+            "wall_ns": 153901208
+          },
+          "filesystem_tree": {
+            "bytes": 0,
+            "calls": 1,
+            "wall_ns": 1247709
+          },
+          "genesis": {
+            "bytes": 0,
+            "calls": 1,
+            "wall_ns": 760166
+          },
+          "owner_receive": {
+            "bytes": 0,
+            "calls": 81,
+            "wall_ns": 20258710
+          },
+          "prerequisites": {
+            "bytes": 0,
+            "calls": 1,
+            "wall_ns": 56500
+          },
+          "producer_send_worker_sum": {
+            "bytes": 0,
+            "calls": 81,
+            "wall_ns": 422889166
+          },
+          "reserve_inodes": {
+            "bytes": 0,
+            "calls": 1,
+            "wall_ns": 1442209
+          },
+          "save_begin": {
+            "bytes": 0,
+            "calls": 3,
+            "wall_ns": 3424750
+          },
+          "save_finish": {
+            "bytes": 0,
+            "calls": 3,
+            "wall_ns": 33320500
+          },
+          "scan": {
+            "bytes": 0,
+            "calls": 1,
+            "wall_ns": 7090417
+          }
+        },
+        "status": "DIAGNOSTIC"
+      },
+      "trace": {
+        "version": "3.51.0",
+        "connections": 1,
+        "errors": 0,
+        "active_statements": 0,
+        "native_vm_counter_qualified": false,
+        "vm_status_reset": true,
+        "rows": [
+          {
+            "database": "store",
+            "category": "begin_write",
+            "calls": 17,
+            "statement_lifetime_ns": 735331,
+            "vm_steps": 85,
+            "sqlite_profile_raw_ns": 1000000
+          },
+          {
+            "database": "store",
+            "category": "begin_read",
+            "calls": 15,
+            "statement_lifetime_ns": 416415,
+            "vm_steps": 45,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "store",
+            "category": "commit",
+            "calls": 32,
+            "statement_lifetime_ns": 57301376,
+            "vm_steps": 96,
+            "sqlite_profile_raw_ns": 58000000
+          },
+          {
+            "database": "store",
+            "category": "rollback",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "store",
+            "category": "select",
+            "calls": 28,
+            "statement_lifetime_ns": 2305205,
+            "vm_steps": 33504,
+            "sqlite_profile_raw_ns": 2000000
+          },
+          {
+            "database": "store",
+            "category": "insert",
+            "calls": 133,
+            "statement_lifetime_ns": 8619039,
+            "vm_steps": 167725,
+            "sqlite_profile_raw_ns": 9000000
+          },
+          {
+            "database": "store",
+            "category": "update",
+            "calls": 26,
+            "statement_lifetime_ns": 37500,
+            "vm_steps": 1121,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "store",
+            "category": "delete",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "store",
+            "category": "pragma",
+            "calls": 28,
+            "statement_lifetime_ns": 2657541,
+            "vm_steps": 299,
+            "sqlite_profile_raw_ns": 2000000
+          },
+          {
+            "database": "store",
+            "category": "create",
+            "calls": 24,
+            "statement_lifetime_ns": 641957,
+            "vm_steps": 670,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "store",
+            "category": "with",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "store",
+            "category": "other",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "begin_write",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "begin_read",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "commit",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "rollback",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "select",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "insert",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "update",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "delete",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "pragma",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "create",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "with",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "history",
+            "category": "other",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "begin_write",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "begin_read",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "commit",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "rollback",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "select",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "insert",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "update",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "delete",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "pragma",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "create",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "with",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          },
+          {
+            "database": "other",
+            "category": "other",
+            "calls": 0,
+            "statement_lifetime_ns": 0,
+            "vm_steps": 0,
+            "sqlite_profile_raw_ns": 0
+          }
+        ]
+      },
+      "command_wall_ns": 1107810625,
+      "proof_wall_ns": 535844583,
+      "phases": {
+        "statement_phases": [
+          {
+            "calls": 279,
+            "wall_ns": 4211970
+          },
+          {
+            "calls": 279,
+            "wall_ns": 1210665
+          },
+          {
+            "calls": 3352,
+            "wall_ns": 124792160
+          },
+          {
+            "calls": 3073,
+            "wall_ns": 507040
+          },
+          {
+            "calls": 279,
+            "wall_ns": 36371
+          },
+          {
+            "calls": 279,
+            "wall_ns": 9469
+          },
+          {
+            "calls": 279,
+            "wall_ns": 433171
+          }
+        ],
+        "commit_phases": [
+          {
+            "calls": 32,
+            "wall_ns": 9044
+          },
+          {
+            "calls": 32,
+            "wall_ns": 1211
+          },
+          {
+            "calls": 32,
+            "wall_ns": 102118960
+          },
+          {
+            "calls": 0,
+            "wall_ns": 0
+          },
+          {
+            "calls": 32,
+            "wall_ns": 1876
+          },
+          {
+            "calls": 32,
+            "wall_ns": 1375
+          },
+          {
+            "calls": 32,
+            "wall_ns": 15583
+          }
+        ]
+      }
+    }
+  }
+}

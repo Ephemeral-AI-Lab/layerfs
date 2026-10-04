@@ -1586,3 +1586,9 @@ retry/policy/limitschange. Publishedrusqlite inspection showsnextincludesreset;
 no dependency edits.18coveringC2checks,Clippy/fmt,boundary440/guard23PASS;
 namespaceoracle coversunchangedoutput. Onefreshpairedcold diagnostic perarm next,
 revision1 retained. See [lifetimecontract](SQLITE-STATEMENT-LIFETIME-CONTRACT.md).
+
+Revision2qualifiedroot/inventory/cold/proofs/budgets:COMMIT102,156,536ns,
+next(step+DONEreset)102,118,960ns; remainingnamedprepare/bind/drop/status~29us,
+map0. Trace57,301,376ns narrower; no inventedpure-reset/syncresidual. Revision3
+prospectiveAPIdelegationstep/reset observer,4fixedrows,capability2steps/1reset,
+no dependency/VFS/policy changes. Newpairedone-child/arm identitynext.
