@@ -1,0 +1,150 @@
+{
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "5f8a9d877189f8327adfd4b3a7488a152954fcd4e19ba86753313a9636c9d0d5",
+    "product_seal": "dbf4a91975b3f053a6afd2e72d6694802b05f6c02afd5af5d9d335f3dfd2d8cd",
+    "source_commit": "ce3c09f24ca057e0ce72375a9de96d91779ace3f",
+    "source_dirty": false,
+    "source_tree": "0fd8ea5912a9d0c508badef2f7e0efc2b245dedc"
+  },
+  "manifest_audit": "All six raw inventories, file lengths and SHA256 verified before compact copy; original manifests describe raw folders including databases, not compact inventories.",
+  "rows": [
+    {
+      "arithmetic": {
+        "10_candidate": 321464861250,
+        "11_reference": 369954454837
+      },
+      "arms": {
+        "baseline": {
+          "allocation_ceiling": 54278964,
+          "cache_status": "PASS",
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "command_wall_ns": 51377006458,
+          "comparison_ns": 33632223167,
+          "raw_folder": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-ranges-baseline1",
+          "reason": null,
+          "receipt_sha256": "bb3c6dcfb08b62375a86622e1caab52cc59f81262ffaa42c8cc37a7f2d720369",
+          "status": "COMPLETE",
+          "storage_bytes": 52473856,
+          "verification_status": "PASS",
+          "verification_wall_ns": 2824710334
+        },
+        "candidate": {
+          "allocation_ceiling": 54278964,
+          "cache_status": "PASS",
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "command_wall_ns": 47997583291,
+          "comparison_ns": 32146486125,
+          "raw_folder": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-ranges-candidate1",
+          "reason": null,
+          "receipt_sha256": "013f4a68d38710ae463c7577a2c0eb79b4c975196fb72d6ddb8a1ae2e387bba4",
+          "status": "COMPLETE",
+          "storage_bytes": 49594368,
+          "verification_status": "PASS",
+          "verification_wall_ns": 5766582375
+        }
+      },
+      "joint": "PASS",
+      "ratio": 0.9558240014457977,
+      "states": 17,
+      "time_gate": "PASS"
+    },
+    {
+      "arithmetic": {
+        "10_candidate": 668876193340,
+        "11_reference": 749154571913
+      },
+      "arms": {
+        "baseline": {
+          "allocation_ceiling": 70427034,
+          "cache_status": "PASS",
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "command_wall_ns": 84060208208,
+          "comparison_ns": 68104961083,
+          "raw_folder": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-ranges-baseline1",
+          "reason": null,
+          "receipt_sha256": "5923e8a02811d4f75250812173f6f87e2ee12ec486e8a76bd02794b6d76d4d75",
+          "status": "COMPLETE",
+          "storage_bytes": 65142784,
+          "verification_status": "PASS",
+          "verification_wall_ns": 8153758542
+        },
+        "candidate": {
+          "allocation_ceiling": 70427034,
+          "cache_status": "PASS",
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "command_wall_ns": 81908172875,
+          "comparison_ns": 66887619334,
+          "raw_folder": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-ranges-candidate1",
+          "reason": null,
+          "receipt_sha256": "633ee71fd5863abf6149dee28fa04dbce5bfb38b911f3725ba889fcdaed6ef1f",
+          "status": "COMPLETE",
+          "storage_bytes": 62611456,
+          "verification_status": "FAIL",
+          "verification_wall_ns": 9507829125
+        }
+      },
+      "joint": "INCOMPLETE",
+      "ratio": 0.9821255055484663,
+      "states": 53,
+      "time_gate": "PASS"
+    },
+    {
+      "arithmetic": null,
+      "arms": {
+        "baseline": {
+          "allocation_ceiling": 92342273,
+          "cache_status": "INCOMPLETE",
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "command_wall_ns": 190020606667,
+          "comparison_ns": null,
+          "raw_folder": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-ranges-baseline1",
+          "reason": null,
+          "receipt_sha256": "86da09c4a239a02a972cc4a99cb8ad76133a4c92f3b40dff49161e96242e0bdd",
+          "status": "FAIL",
+          "storage_bytes": 84082688,
+          "verification_status": "NOT_RUN",
+          "verification_wall_ns": null
+        },
+        "candidate": {
+          "allocation_ceiling": null,
+          "cache_status": null,
+          "cleanup": null,
+          "command_wall_ns": null,
+          "comparison_ns": null,
+          "raw_folder": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-ranges-candidate-notrun1",
+          "reason": "Same-identity stride1-v3 reference complete performance timed out at 190020606667ns; 155/157 filesystem work rows, no complete producer/root vector/census/proof or qualified reference pins. Candidate precondition refuses sampling. Old170s receipt unchanged.",
+          "receipt_sha256": "89dec8062929a4ef3c0f600c1e03b2cfa9b8c5a2122ac42d1189e8321c03e618",
+          "status": "NOT_RUN",
+          "storage_bytes": null,
+          "verification_status": "NOT_RUN",
+          "verification_wall_ns": null
+        }
+      },
+      "joint": "INCOMPLETE",
+      "ratio": null,
+      "states": 157,
+      "time_gate": "NOT_RUN"
+    }
+  ],
+  "source_commit": "ce3c09f24ca057e0ce72375a9de96d91779ace3f",
+  "stage": "strict authenticated selected-group reads; complete SHA256 scan per acquisition"
+}

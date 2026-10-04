@@ -1,0 +1,24 @@
+{
+  "arm": "candidate",
+  "case": "phase7-sqlite-disposable-history-stride1-v3",
+  "command_budget_ns": 190000000000,
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "5f8a9d877189f8327adfd4b3a7488a152954fcd4e19ba86753313a9636c9d0d5",
+    "product_seal": "dbf4a91975b3f053a6afd2e72d6694802b05f6c02afd5af5d9d335f3dfd2d8cd",
+    "source_commit": "ce3c09f24ca057e0ce72375a9de96d91779ace3f",
+    "source_dirty": false,
+    "source_tree": "0fd8ea5912a9d0c508badef2f7e0efc2b245dedc"
+  },
+  "reason": "Same-identity stride1-v3 reference complete performance timed out at 190020606667ns; 155/157 filesystem work rows, no complete producer/root vector/census/proof or qualified reference pins. Candidate precondition refuses sampling. Old170s receipt unchanged.",
+  "reference_receipt": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-ranges-baseline1/receipt.json",
+  "sample_count": 0,
+  "schema": "phase7-sqlite-history-explicit-not-run-v1",
+  "status": "NOT_RUN",
+  "verification_budget_ns": 9500000000,
+  "verification_status": "NOT_RUN",
+  "workload_row": "history-stride1"
+}

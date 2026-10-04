@@ -15,15 +15,28 @@ INTERPOSE(history_prepare_v3,sqlite3_prepare_v3)
 INTERPOSE(history_reset,sqlite3_reset)
 static _Atomic uint64_t pack_seen[1024];
 static _Atomic uint64_t pack_reads,distinct_packs,pack_unknown;
+/* SQL body reads and successful read-only BLOB opens are acquisitions; an open
+ * identifies the pack, while the product's explicit counters count BLOB bytes.
+ * Fixed bitmap attribution is shared across both routes, without a body read. */
+static void history_note_pack_id(sqlite3_int64 id){
+ atomic_fetch_add(&pack_reads,1);
+ if(id<=0||id>=65536)atomic_fetch_add(&pack_unknown,1);
+ else{uint64_t bit=UINT64_C(1)<<(id%64);uint64_t old=atomic_fetch_or(&pack_seen[id/64],bit);if(!(old&bit))atomic_fetch_add(&distinct_packs,1);}
+}
+static int history_blob_open(sqlite3*db,const char*database,const char*table,const char*column,sqlite3_int64 row,int writable,sqlite3_blob**out){
+ int result=sqlite3_blob_open(db,database,table,column,row,writable,out);
+ if(result==SQLITE_OK&&!writable&&database&&table&&column&&!strcmp(database,"main")&&!strcmp(table,"pack")&&!strcmp(column,"body"))history_note_pack_id(row);
+ return result;
+}
+INTERPOSE(history_blob_open,sqlite3_blob_open)
 void cause_history_note_pack(sqlite3_stmt*statement){
  const char*sql=sqlite3_sql(statement);
  if(!sql||(strncmp(sql,"SELECT body FROM pack ",strlen("SELECT body FROM pack "))&&strncmp(sql,"SELECT p.data FROM object_packs ",strlen("SELECT p.data FROM object_packs "))))return;
- atomic_fetch_add(&pack_reads,1);char*text=sqlite3_expanded_sql(statement);
- if(!text){atomic_fetch_add(&pack_unknown,1);return;}
+ char*text=sqlite3_expanded_sql(statement);
+ if(!text){history_note_pack_id(0);return;}
  const char*where=strstr(text,"WHERE");const char*key=where?strstr(where,"pack_id"):0;const char*equals=key?strchr(key,'='):0;
  char*end=0;long long id=equals?strtoll(equals+1,&end,10):0;
- if(!equals||end==equals+1||id<=0||id>=65536)atomic_fetch_add(&pack_unknown,1);
- else{uint64_t bit=UINT64_C(1)<<(id%64);uint64_t old=atomic_fetch_or(&pack_seen[id/64],bit);if(!(old&bit))atomic_fetch_add(&distinct_packs,1);}
+ history_note_pack_id(!equals||end==equals+1?0:id);
  sqlite3_free(text);
 }
 void cause_history_snapshot(uint64_t*out){

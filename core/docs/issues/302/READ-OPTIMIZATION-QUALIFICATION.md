@@ -153,3 +153,73 @@ per case/arm, immutable archives/matched seals and source/database cold contract
 new qualified reference pins required before each candidate. All incomplete and
 unrun rows stay explicit. No unchanged arm retry or old170s row promotion.
 This implementation is not all-seven/Init/Durable admission.
+
+
+## Stage2 ce3c09f24 qualification — stride10, then3, then1-v3
+
+Frozen source ce3c09f24ca057e0ce72375a9de96d91779ace3f, tree
+0fd8ea5912a9d0c508badef2f7e0efc2b245dedc, clean release/locked; baseline
+7edddbdb8e8512627aed0ed42533ef099d802384. Harness
+5f8a9d877189f8327adfd4b3a7488a152954fcd4e19ba86753313a9636c9d0d5;
+candidate compilation0d69549aeab252f8b320239160ebf34d5710390816a7b84ce7cba5ba224b8d4a,
+reference compilation783c7cc8fdfb7ce823d57ce6e51d9538b8ce3300f2e55d792ec431a94819f456.
+Exact binary/product/dependency/fixture/config seals, commands, interference and
+cache attestations remain in raw/compact receipts. One sample/case/arm, worktree
+lock, reused sealed release builds and immutable source corpus; no prepared
+product Store, warm credit or producer work moved outside the command.
+
+| Stride/states; arm | Complete product lifecycle ns | Complete performance ns / cap | Separate proof ns /9.5s | C2+C5 allocated B | Joint disposition |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 10/17 baseline |33632223167|51377006458 /60s|2824710334 PASS|52428800+45056=52473856|PASS|
+| 10/17 candidate |32146486125|47997583291 /60s|5766582375 PASS|49594368 combined|PASS|
+| 3/53 baseline |68104961083|84060208208 /170s|8153758542 PASS|65011712+131072=65142784|INCOMPLETE pair|
+| 3/53 candidate |66887619334|81908172875 /170s|9507829125 TIMEOUT|62611456 combined|INCOMPLETE|
+| 1/157-v3 baseline |UNAVAILABLE: producer incomplete|190020606667 /190s|NOT_RUN|83886080+196608=84082688 partial|FAIL_COMMAND_BUDGET|
+| 1/157-v3 candidate |NOT_RUN|NOT_RUN|NOT_RUN|NOT_RUN|NOT_RUN: reference unqualified|
+
+Stride10 ratio0.9558240014457977, integer321464861250<=369954454837;
+strict candidate49,594,368B<54,278,964B. Both proofs cover17custody states,
+101,477paths,8,631sampled-content paths,51,862,943authenticated bytes; independent
+reference roots checked by candidate, producer canonical census agrees.
+
+Stride3 ratio0.9821255055484663, integer668876193340<=749154571913;
+strict candidate62,611,456B<70,427,034B. Cold/producer roots/census/storage/cleanup
+PASS. Reference proof covers53custody states,306,861paths,26,052sampled-content
+paths,127,050,040authenticated bytes. Candidate proof has no complete child
+result and is not a semantic/admission PASS despite the time/storage gate.
+
+Stride1-v3 reference source cold attestation PASS (zero resident content pages),
+15,864,871,208ns, leaving174,134,608,500ns for producer. Producer ran
+174,153,568,708ns, exit-9;154completed state rows and filesystem work in state155.
+No complete root vector/census/finalization/proof. Partial84,082,688B is not
+completed157storage qualification. CleanupPASS. Candidate explicitlyNOT_RUN
+without qualified pins. Original170s rows unchanged; no further cap increase or
+unchanged performance retry. Stride1 remains unqualified at190s.
+
+Candidate17actual BLOB open/close34,408,read calls86,532,requested/success
+2,930,849,248B,read-call1,569,071,134ns (excludes hashing/planning). Selected
+acquisitions23,956scan2,330,175,477B and materialize521,728,962B (22.3901%);
+whole decisions10,452. Complete digest scan still pays all pack bytes. Body
+cache evictions18,875/916,270,436B. The existing SQL-only observer misses BLOB
+opens: its old pack-acquisition count must not be used for candidate17/53;
+explicit product BLOB counters are authoritative for that route. VFS counts
+remain delegated requests, not device bytes. Subsequent labelled count-only
+observer work will cover both routes; these historical rows retain their seals.
+
+Raw `benchmark-results/fs-bench-pro/issue302-history{17,53,157}-ranges-*1`;
+[compact comparison](checks/read-ranges-history1/comparison.json) and receipts
+retain all outcomes. All six raw inventories/lengths/SHA256 were audited before
+copy; compact manifests refer to original raw folders including retained DBs.
+Reproduce using sole runner `python3 core/benchmark/fs-bench-pro/runner.py run
+--case phase7-sqlite-disposable-history-stride10-v2 --arm baseline --baseline-root
+/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-baseline/layerfs
+--out <fresh-owned-output>`; next stride3-v2 then stride1-v3; candidate same case
+with `--reference-pins <qualified-baseline-output>/root-pins.json`. Exact argv
+and separate verifier commands remain in receipts. No SDK/daemon/FUSE scope;
+RSS per-child lifetime only. Earlier Init/Durable evidence does not qualify
+this source for all-seven admission.
+
+Implementation productionLOC138465->139279(+814); reference65417 unchanged,
+core73048->73862, same production_loc.py exact parent/staged archive method.
+Next: labelled native proof count diagnostic on retained53stores with BLOB
+acquisition attribution, no speed rerun or proof promotion. GoalACTIVE.

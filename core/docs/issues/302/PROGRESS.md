@@ -1920,3 +1920,16 @@ boundary448/23selftests/diffPASS. Sparse/dense/native/PREFIX/order/corruption an
 body/count bounds checked. Pooled save walk/reconstruction borrows existing
 512KiB group cache. Freeze then stride10/3/1-v3 matched qualification next.
 Earlier failures/Init pins preserved; goalACTIVE, no all-seven/Durable claim.
+
+
+-2026-10-04: Stage2 ce3c09f24 matched qualification in10/3/1 order:10jointPASS
+32.146486125s vs33.632223167s ratio0.955824001446; complete47.997583291/
+51.377006458s, proof5.766582375/2.824710334s.3timePASS66.887619334s vs
+68.104961083s ratio0.982125505548; candidateproof9.507829125sTIMEOUT,
+reference8.153758542sPASS =>jointINCOMPLETE. Candidate49,594,368/62,611,456B
+strict/cold/producerroots/census/cleanupPASS.1-v3reference190.020606667sTIMEOUT
+after154completed states (filesystem state155); candidateNOT_RUN withoutpins.
+Original170s evidence unchanged. SQL-onlypack observer missesnewBLOBopens;
+explicit BLOB counters authoritative, countdiagnostic extended to bothroutes
+without altering product operations. Raw/compact receipts in qualificationdoc,
+all6raw manifests/hash audited. GoalACTIVE; no all-seven/Durable claim.

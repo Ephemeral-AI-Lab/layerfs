@@ -1,0 +1,73 @@
+{
+  "files": {
+    "census.json": {
+      "bytes": 1248,
+      "sha256": "5a28d2f3aaf84dff73a4c3fb544ffd5f6d09f3f637584b3389a822fed1659e6e"
+    },
+    "close.json": {
+      "bytes": 714,
+      "sha256": "076988b26bb763206456526fe21536c0211657770e567998a1d22479669a0ef7"
+    },
+    "cold.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cold.stdout": {
+      "bytes": 378,
+      "sha256": "17125de58320fd01781ab626e38ae62edc20ae7ae00759532cf601b119d4e163"
+    },
+    "driver.stderr": {
+      "bytes": 251018,
+      "sha256": "f1bd60d99e1e27d1c8f74b2d15a4158c228afd83e71727b94c58d1e0bf8b1d4a"
+    },
+    "driver.stdout": {
+      "bytes": 4038,
+      "sha256": "4f4e2266f493ed056ce1f72d4a83ac8e4a8b58c7c998004c7006fc46b10e1ab9"
+    },
+    "namespace-proof.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "namespace-proof.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "producer-proof-input.json": {
+      "bytes": 4141,
+      "sha256": "a0fd8dbc68cce8305fb1af2609ee0fa5e276dc6e88e96fb253caf8b9f05d7cf9"
+    },
+    "proof-request.json": {
+      "bytes": 5945,
+      "sha256": "9cd55db7b1d047583a8ca308b2140fbbe37ec19016bc5f8a2709c327846cd0d8"
+    },
+    "receipt.json": {
+      "bytes": 689502,
+      "sha256": "633ee71fd5863abf6149dee28fa04dbce5bfb38b911f3725ba889fcdaed6ef1f"
+    },
+    "reference-pins.json": {
+      "bytes": 5390,
+      "sha256": "a451fa4b06d1c5d90bab29d98fe76f05bb7dc2adbf2e651225f7164146a3adae"
+    },
+    "sql-work.json": {
+      "bytes": 480803,
+      "sha256": "ca756342742cbc951d4bde4e6eb4a4e492a2691bc9ed7e9be26ed75e6ce01eae"
+    },
+    "store.sqlite": {
+      "bytes": 62611456,
+      "sha256": "cc3c207215d55f2db963a592279cae241dbf1212f517b1f4387956de8216e45f"
+    },
+    "verifier.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "verifier.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "vfs.json": {
+      "bytes": 1034,
+      "sha256": "5eb6c52f00a18382275e4f191d85530eb33505bc057acab2941b518a569ce6cd"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

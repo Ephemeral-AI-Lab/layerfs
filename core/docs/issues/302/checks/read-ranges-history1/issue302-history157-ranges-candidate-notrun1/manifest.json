@@ -1,0 +1,9 @@
+{
+  "files": {
+    "receipt.json": {
+      "bytes": 1343,
+      "sha256": "89dec8062929a4ef3c0f600c1e03b2cfa9b8c5a2122ac42d1189e8321c03e618"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}
