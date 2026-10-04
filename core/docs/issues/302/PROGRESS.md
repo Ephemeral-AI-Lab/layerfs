@@ -1458,3 +1458,20 @@ Disposable APFS transfer-extra-extents removes16MiB unused allocation, preserves
 4096logicalB; same-size truncate does not. No production trim yet or gate relabel.
 Detailed raw/diagnostic identities and all unrun work in signature treatmentreport;
 all-seven goalactive. ProductionLOC137505->137544(+39); evidencefollowup+0.
+
+
+### Explicit allocation releaseb9a31c755
+
+Safe already-locked nix API releases only physical extra EOF extents after
+unobstructed explicit checkpoint; no logical copy/truncate/new worker or profile
+relaxation.4allocation/9publication/2process-kill/namespace tests16PASS; clippy,
+fmt,boundary438+23 and4harnessPASS. Original package identities unchanged.
+Largest matched candidate times out aftercold9577450416ns, productbudget
+5421834500ns; envelope15012046292nsFAIL, proofNOT_RUN, partial341667840B not
+admission. Reference5509839083ns product/12519750500ns envelopePASS.
+10000pair completes:1561609792/2475484209ns timeFAIL; allocation308314112/
+305098752B PASS. Release main308535296->305065984B (3469312B), checkpoint/release
+6048625ns in product timer. Roots/cache/proof/cleanup/budgetsPASS. Raw counts3974
+statements/2522963VM,writecommits141. All unrun cases and priorFAIL retained,
+all7goalactive. Details SQLITE-ALLOCATION-RELEASE-TREATMENT.md.
+CodeLOC137544->137678(+134),evidencefollowup+0, no dependency version/unsafe edit.

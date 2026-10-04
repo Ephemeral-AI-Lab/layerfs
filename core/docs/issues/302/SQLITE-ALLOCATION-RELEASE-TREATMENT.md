@@ -44,3 +44,43 @@ identity, complete<=15s, separate sampled proof<=9.5s, sourcecontentcold attesta
 inside envelope, product create/import/checkpoint/release/close all timed, exact
 root comparison and allocatedDB/WAL/SHM<=matchedreference. Other tiers/history
 remain required. Previous failures/timeouts retained; no identity resampling.
+
+
+## Matched outcomes atb9a31c755
+
+Largest reference complete product5509839083ns, envelope12519750500ns, final
+518029312B and proofPASS. Candidate cold9577450416ns after126206resident pages/
+99000invalidated files, final0; only5421834500ns product remaining. Watchdog kills
+product; comparison unavailable, proofNOT_RUN, complete15012046292nsFAIL.
+Partial341667840B is not an allocation verdict; ordering/allocation scratchPASS.
+Retain timeout, no unchanged identity rerun. GateINCOMPLETE.
+
+A separately selected10000case at the same frozen product/harness completes.
+Reference1561609792/candidate2475484209ns, exact10*current24754842090>
+11*reference17177707712: timeFAIL. Exact roots match, sampled independent proof,
+cold-content attestation/cleanup/budgetsPASS. Final allocated308314112/305098752B
+passes matched no-growth. Product checkpoint/release6048625ns; main allocation
+308535296->305065984B, releases3469312B without logical payload truncation/copy.
+Performance envelopes2214978666/3414307750ns; separate proof578582167/1343118542ns.
+The release is paid inside product time, not an untimed filesystem adjustment.
+
+Current10000work3974statements/2522963executedVM,676transactions,141writecommits,
+commit1290462180ns,1408sealed bodies/301574052B. C2bodyreads4911B,zero individual
+payload reads;23reservations/115publications. Inclusive spans overlap. No physical
+sync-call or cross-window latency-delta claim. This solves this pair's allocation
+failure category, not time parity or largest admission. Other100/1000Init and
+all3historiesNOT_RUN at this identity; all7 remain required.
+
+Raw issue302-allocation{10000,100000}-{baseline,candidate}-treatment1; comparison
+JSON issue302-allocation-comparison-treatment1. Commands runner.py run --case
+phase7-sqlite-init-<size>-v2 --arm baseline --baseline-root
+target/phase7-baseline/layerfs --out <fresh-owned-output>, then --arm candidate;
+read benchmark_agent_report.md before each invocation. Identities, helper/native
+resource domains, actual cache numbers and all failures preserved in receipts.
+
+Next product focus is publication/encoding/validation work under existing byte,
+row and producer limits, plus actual history driver/proof/budget binding. Do not
+extend deadlines or turn logical bytes into a physical allocation verdict.
+Goal active. Code commit ProductionLOC137544->137678(+134),reference65417/
+core72127->72261,active28083->28217/inactive44044,old191/new7673->7807/rest64263;
+exact snapshot method in commit. Evidence-only followup+0. No CI/preflight/push/PR.
