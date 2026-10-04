@@ -1522,3 +1522,11 @@ wave/cache/transaction/worker/durability expansion. Deterministic dense assignme
 deduplication, existing acknowledged-gap tests PASS;21covering tests,all-target
 Clippy/fmt,boundary439/guard23PASS. Matched Init1000-v2 pair prospectively next;
 no speed result yet. See [treatment](SQLITE-ORDINAL-LOOKAHEAD-TREATMENT.md).
+
+Matched e0149ce56 Init1000:140,071,000/204,476,000ns,1.459802529x,timeFAIL;
+allocation23,101,440/20,561,920B,roots/cold/proof/cleanup/envelopesPASS. Actual
+reserve5/ordinal3/publication10/write commits18,307SQL/203,498VM,93bodies/
+20,125,527B. Prior counts8reserve/9pub/20commits; mechanism works but grouping
+addsone publication and target stillmissed. No cross-window causal time claim.
+Raw ordlook1000 pair/compact checks and treatment report retain exactdata; other
+3Init/3history NOT_RUN atidentity,all-seven goalACTIVE. CodeLOC+66,evidence+0.
