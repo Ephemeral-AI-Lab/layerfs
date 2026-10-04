@@ -1,0 +1,150 @@
+{
+  "status": "PASS",
+  "arms": 16,
+  "rows": [
+    {
+      "profile": "durable",
+      "files": 100,
+      "arm": "baseline",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-durable-init100-baseline1",
+      "manifest_sha256": "9d1db23be1a79c52aff274f427597a827e1d8990866f1a39254ede4632389cc5",
+      "receipt_sha256": "7b43883c2281316157bd543310467621584349d5fd7f6f568b984cae52fec772",
+      "status": "PASS"
+    },
+    {
+      "profile": "durable",
+      "files": 100,
+      "arm": "candidate",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-durable-init100-candidate1",
+      "manifest_sha256": "d421ff18d24e12ea4a988511fe86680953b83b8e9762f997b16d14440b49d3b1",
+      "receipt_sha256": "2899084e8dd0e8f8b104dc43ccdaab32db91566deea42b09689258a30ac844d6",
+      "status": "PASS"
+    },
+    {
+      "profile": "durable",
+      "files": 1000,
+      "arm": "baseline",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-durable-init1000-baseline1",
+      "manifest_sha256": "9b25b9c02fd9dda7896befbeaf9e8ef36095963bdedb4e5485f25cd690d5cc25",
+      "receipt_sha256": "d9d220ba24f9805af63516e62ae45c436438021ca00bdd4ddc1a15d1f8fd9c68",
+      "status": "PASS"
+    },
+    {
+      "profile": "durable",
+      "files": 1000,
+      "arm": "candidate",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-durable-init1000-candidate1",
+      "manifest_sha256": "8d252720b797115641465e17471fb89512623c83abc84c2c1dd9b7c2a8c73062",
+      "receipt_sha256": "2231a114b780a9d62cbf760c8247fc01155c0bc4c512bb6048d5837a99daaeb8",
+      "status": "PASS"
+    },
+    {
+      "profile": "durable",
+      "files": 10000,
+      "arm": "baseline",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-durable-init10000-baseline1",
+      "manifest_sha256": "b9de6a49818232f506736e3882b34e36061e768d23fabaa3c3ccbacdda0092d8",
+      "receipt_sha256": "80a99d35aee01146d1559e6a885217dfe60597956808e061ed775b0d54f34886",
+      "status": "PASS"
+    },
+    {
+      "profile": "durable",
+      "files": 10000,
+      "arm": "candidate",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-durable-init10000-candidate1",
+      "manifest_sha256": "30e4805f754e8c6d49d827db70975ea70fcf3a67d45d98171a900aad33fd88c3",
+      "receipt_sha256": "098a02198ec6844e2ca3d7c2059b1669a017f653f143411d19fe317036bdc5e2",
+      "status": "PASS"
+    },
+    {
+      "profile": "durable",
+      "files": 100000,
+      "arm": "baseline",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-durable-init100000-baseline1",
+      "manifest_sha256": "1b10c7ff3b24a3bc4cfdf33aad973f7b1f9abe87b0db4a45c66b1b05c591ca5e",
+      "receipt_sha256": "86a16bc3c0093578ccbae3cf46c1f2f7926302846b243537b94b7b29a58ea007",
+      "status": "PASS"
+    },
+    {
+      "profile": "durable",
+      "files": 100000,
+      "arm": "candidate",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-durable-init100000-candidate1",
+      "manifest_sha256": "3ea21012d4b011d02ffa596939e0f727f5d1af8c129b9484b78aaa52c4344d45",
+      "receipt_sha256": "5d4dc35a31e69a2dc1e4977ae8a8426008dbfef9a362fb54e195d4e9fd976f9b",
+      "status": "PASS"
+    },
+    {
+      "profile": "disposable",
+      "files": 100,
+      "arm": "baseline",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-disposable-init100-baseline1",
+      "manifest_sha256": "815fa987a764baafa2bbed7dd2a4603842445ef0b781c570f002abbfb7d2cb76",
+      "receipt_sha256": "7dc097273fdd64d6b33d2681fa8fef5ff22a7a0f0005f02b451f7c84193a45ef",
+      "status": "PASS"
+    },
+    {
+      "profile": "disposable",
+      "files": 100,
+      "arm": "candidate",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-disposable-init100-candidate1",
+      "manifest_sha256": "0d47d9e25e330f65b7240f22f4f507e3a7b4a0ec1b4efe5c4be1a5d50e4addeb",
+      "receipt_sha256": "102af3413cbbe870c4c56d960ba23989bea2f17dd80af5be8641963768b3f059",
+      "status": "PASS"
+    },
+    {
+      "profile": "disposable",
+      "files": 1000,
+      "arm": "baseline",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-disposable-init1000-baseline1",
+      "manifest_sha256": "2ec9d28f33a72212f73e69253b4a2d77fc830b5c94688f434f3f74721bdb4168",
+      "receipt_sha256": "5cd129c94a35a047f410f8a29c863dbf1719986d9fe53857d771d0e8a6ca179c",
+      "status": "PASS"
+    },
+    {
+      "profile": "disposable",
+      "files": 1000,
+      "arm": "candidate",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-disposable-init1000-candidate1",
+      "manifest_sha256": "3bb24edf42c740ad727ef9cfc538caadd65a42a19b53740f9384bab9b4cfd616",
+      "receipt_sha256": "d4e7c02872c954d7d9b639bf5b6d3ca408f6ee2594150a718ad26fa3039a8e29",
+      "status": "PASS"
+    },
+    {
+      "profile": "disposable",
+      "files": 10000,
+      "arm": "baseline",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-disposable-init10000-baseline1",
+      "manifest_sha256": "4b1f941715508302a16339f8751931eda1604d7798a727692bb4e9024b7e8ec6",
+      "receipt_sha256": "1d80c98762d7fbfd7c6bb418637bbf9cc0b1c7d09c38bf763c6abf06c4ca17e5",
+      "status": "PASS"
+    },
+    {
+      "profile": "disposable",
+      "files": 10000,
+      "arm": "candidate",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-disposable-init10000-candidate1",
+      "manifest_sha256": "655a7fe60aaffcc8181069abcf866b7fd405d5343ff2c1c745caa0592ffdc1ef",
+      "receipt_sha256": "e0a199b2cdc69d9a2b82f96db743a2dd777f6ad0704d4a5fedad64754c87261e",
+      "status": "PASS"
+    },
+    {
+      "profile": "disposable",
+      "files": 100000,
+      "arm": "baseline",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-disposable-init100000-baseline1",
+      "manifest_sha256": "c67c2f52f7926fd67936f7880bcf9d465cd0f09d9921a84014ccf35645a7a075",
+      "receipt_sha256": "a6a0e1992e733f56c95286491bd37b7cf0fc828565c492d0f7328e9aa3e0a341",
+      "status": "PASS"
+    },
+    {
+      "profile": "disposable",
+      "files": 100000,
+      "arm": "candidate",
+      "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-shared-disposable-init100000-candidate1",
+      "manifest_sha256": "6deb6cec0ed7148b4f4899931dee8e1353d8d28470f9ff2659ca4dd5d834ecf4",
+      "receipt_sha256": "98cf584020c7984ce8fd1ef5351743cc9f901b8dbe1602aaea613101064c4af0",
+      "status": "PASS"
+    }
+  ]
+}
