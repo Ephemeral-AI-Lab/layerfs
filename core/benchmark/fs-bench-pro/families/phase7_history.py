@@ -72,7 +72,7 @@ def boundaries(stderr, states, arm):
 
 
 def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pins=None):
-    from families.phase7_sqlite import invoke, BASE, PROFILE_IDS, REQUIRED_BY_PROFILE, GROUP_ROW_CASES, INDEXED_GROUP_ROW_CASES, CASES
+    from families.phase7_sqlite import invoke, BASE, PROFILE_IDS, REQUIRED_BY_PROFILE, GROUP_ROW_CASES, INDEXED_GROUP_ROW_CASES, CASES, OWNER_CLOSURE_CASES_BY_PROFILE
     if arm not in ('baseline', 'candidate'): raise ValueError('explicit history arm required')
     if arm == 'candidate' and reference_pins is None:
         raise ValueError('history candidate requires qualified reference pins before build/setup/sample')
@@ -86,7 +86,7 @@ def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pi
               'cache_status':'INCOMPLETE','verification_status':'NOT_RUN','cleanup':{'status':'NOT_RUN'},
               'requested_profile':case.profile,'profile':PROFILE_IDS[case.profile] if arm == 'candidate' else 'phase4.5-memory-off',
               'command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'proof_policy':case.proof_policy,'proof_envelope':case.proof_envelope,
-              'required_case_ids':tuple(name for name in INDEXED_GROUP_ROW_CASES if CASES[name].profile==case.profile) if case.pack_layout=='group-rows-indexed' else tuple(name for name in GROUP_ROW_CASES if CASES[name].profile==case.profile) if case.pack_layout=='group-rows' else REQUIRED_BY_PROFILE[case.profile],'construction_workers':1,
+              'required_case_ids':OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] if case.id in OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] else tuple(name for name in INDEXED_GROUP_ROW_CASES if CASES[name].profile==case.profile) if case.pack_layout=='group-rows-indexed' else tuple(name for name in GROUP_ROW_CASES if CASES[name].profile==case.profile) if case.pack_layout=='group-rows' else REQUIRED_BY_PROFILE[case.profile],'construction_workers':1,
               'comparison_scope':'Corpus open through all real retained-state construction/save/C5, measured cold boundaries, final custody/checkpoint/close and canonical census',
               'margin_arithmetic':'10*candidate_ns<=11*baseline_ns','allocation_ceiling':case.storage_ceiling,
               'observer_status':'NOT_RUN', 'cache_contract':'history-source-cold-and-database-state-boundaries-v1'}
@@ -160,7 +160,7 @@ def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pi
             layouts=[json.loads(line.removeprefix('EFFECTIVE_PACK_LAYOUT ')) for line in stderr.splitlines() if line.startswith('EFFECTIVE_PACK_LAYOUT ')]
             if layouts!=[{'layout':'GroupRowsIndexed' if case.pack_layout=='group-rows-indexed' else 'GroupRows' if case.pack_layout=='group-rows' else 'Monolithic'}]:raise ValueError('actual SQLite pack layout mismatch')
             record['effective_pack_layout']=layouts[0]
-        request={'observer':record['observer'],'proof_policy':case.proof_policy,'out':str(out),'arm':arm,'producer':child,'db':str(db),'row':row,'verifier':binaries['verify_history' if arm=='candidate' else 'history_reference_verify']['path'],'corpus':str(corpus),'profile':case.profile,'identity':identity,'pins':str(out/'reference-pins.json'),'sqlite_schema_version':3 if case.pack_layout=='group-rows-indexed' else 2 if case.pack_layout=='group-rows' else 1}
+        request={'copy_limit_bytes':case.storage_ceiling,'copy_cold_helper':record['cold_helper'],'observer':record['observer'],'proof_policy':case.proof_policy,'out':str(out),'arm':arm,'producer':child,'db':str(db),'row':row,'verifier':binaries['verify_history' if arm=='candidate' else 'history_reference_verify']['path'],'corpus':str(corpus),'profile':case.profile,'identity':identity,'pins':str(out/'reference-pins.json'),'sqlite_schema_version':3 if case.pack_layout=='group-rows-indexed' else 2 if case.pack_layout=='group-rows' else 1}
         common.write_json(out/'proof-request.json',request)
         proof_env={**os.environ,**history.ENV,'LAYERFS_HISTORY_CURSOR_KEY':'28'*32,'TMPDIR':str(scratch)}
         verification=invoke([sys.executable,str(common.ROOT/'core/benchmark/fs-bench-pro/shared/phase7_history_proof.py'),'--request',str(out/'proof-request.json')],out,'verifier',case.verification_budget_ns,proof_env,common.ROOT)

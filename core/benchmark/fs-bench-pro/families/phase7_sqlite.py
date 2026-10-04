@@ -102,6 +102,21 @@ for name in tuple(GROUP_ROW_CASES):
         new=name.rsplit('-v',1)[0].replace('-group-rows','-group-rows-indexed')+'-v1'
         CASES[new]=Case(new,c.fixture,c.states,c.storage_ceiling,c.command_budget_ns,c.verification_budget_ns,c.profile,c.proof_policy,'group-rows-indexed',c.proof_envelope)
         INDEXED_GROUP_ROW_CASES.append(new)
+# Owner2026-10-05 explicitly doubles absolute caps for a new closure round.
+OWNER_CLOSURE_CASES_BY_PROFILE={'durable':[], 'disposable':[]}
+for profile in OWNER_CLOSURE_CASES_BY_PROFILE:
+    for n in (100,1000,10000,100000):
+        old=f'phase7-sqlite-init-{n}-v2' if profile=='durable' else f'phase7-sqlite-disposable-init-{n}-v1'
+        c=CASES[old];new=old.rsplit('-v',1)[0]+('-v3' if profile=='durable' else '-v2')
+        CASES[new]=Case(new,c.fixture,None,None,2*c.command_budget_ns,2*c.verification_budget_ns,profile)
+        OWNER_CLOSURE_CASES_BY_PROFILE[profile].append(new)
+for old in INDEXED_GROUP_ROW_CASES:
+    c=CASES[old]
+    if c.profile=='durable':
+        new=old.rsplit('-v',1)[0]+'-v2'
+        CASES[new]=Case(new,None,c.states,c.storage_ceiling,2*c.command_budget_ns,2*c.verification_budget_ns,c.profile,c.proof_policy,c.pack_layout,'owner-double-caps-20261005-v2')
+        OWNER_CLOSURE_CASES_BY_PROFILE['durable'].append(new)
+
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"
@@ -171,7 +186,7 @@ def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pin
     if arm=='baseline' and (not root.is_relative_to(common.ROOT/'target/phase7-baseline') or subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()!=BASE or subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True)):
         raise ValueError('reference requires clean pinned owned checkout')
     out=common.owned(output);out.mkdir(parents=True)
-    record={'schema':'phase7-sqlite-step10-v2','case':case.id,'arm':arm,'status':'NOT_RUN','sample_count':0,'verification_status':'NOT_RUN','cache_status':'INCOMPLETE','cleanup':{'status':'NOT_RUN'},'comparison_scope':'inner complete product clock including fresh database create/open, real Init, required checkpoint and final close; external child wall reported separately','margin_arithmetic':'10*candidate_ns<=11*baseline_ns','cache_contract':contract.CACHE,'requested_profile':case.profile,'profile':PROFILE_IDS[case.profile] if arm=='candidate' else 'Phase4.5 MEMORY/OFF disclosed','command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'construction_workers':4,'environment_workers':1,'required_case_ids':REQUIRED_BY_PROFILE[case.profile],'allocation_rule':INIT_ALLOCATION_RULE}
+    record={'schema':'phase7-sqlite-step10-v2','case':case.id,'arm':arm,'status':'NOT_RUN','sample_count':0,'verification_status':'NOT_RUN','cache_status':'INCOMPLETE','cleanup':{'status':'NOT_RUN'},'comparison_scope':'inner complete product clock including fresh database create/open, real Init, required checkpoint and final close; external child wall reported separately','margin_arithmetic':'10*candidate_ns<=11*baseline_ns','cache_contract':contract.CACHE,'requested_profile':case.profile,'profile':PROFILE_IDS[case.profile] if arm=='candidate' else 'Phase4.5 MEMORY/OFF disclosed','command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'construction_workers':4,'environment_workers':1,'required_case_ids':OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] if case.id in OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] else REQUIRED_BY_PROFILE[case.profile],'allocation_rule':INIT_ALLOCATION_RULE}
     locks=[]
     try:
         for p in [common.RESULTS/'phase7-sqlite.lock']+([root/'target/phase7-sqlite.lock'] if arm=='baseline' else []):
@@ -201,6 +216,7 @@ def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pin
         db=out/'store.sqlite';history=out/'history.sqlite'
         binaries=record['build']['binaries'];driver=binaries['benchmark_init' if arm=='candidate' else 'sqlite_reference_init']['path']
         command=[driver,fixture['source'],str(db),str(scratch if arm=='candidate' else history),case.id]+([case.profile] if arm=='candidate' else [])
+        if case.id in OWNER_CLOSURE_CASES_BY_PROFILE[case.profile]: command.append(str(case.command_budget_ns//1_000_000_000))
         claim=common.RESULTS/'phase7-sqlite-sample-claims'/hashlib.sha256(json.dumps([case.id,arm,identity['source_tree'],identity['harness_seal'],record['measured_source_commit'],fixture['manifest_sha256']],sort_keys=True).encode()).hexdigest()
         claim.parent.mkdir(parents=True,exist_ok=True)
         with claim.open('x') as h:h.write(str(out)+'\n')

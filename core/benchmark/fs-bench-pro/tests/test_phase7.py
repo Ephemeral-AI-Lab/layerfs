@@ -60,10 +60,11 @@ class Phase7(unittest.TestCase):
     def test_timer_contains_engine_connections_and_creation(self):
         text = (runner.CORE/'crates/layerfs-project/examples/benchmark_init.rs').read_text()
         start = text.index('let start = Instant::now()')
-        end = text.index('let operation_ns = start.elapsed()')
-        for call in ('PgMetadata::open(', 'PgHistory::open_writable(', 'S3Objects::connect_parallel(', 'Storage::new(', '\n        init('):
+        end = text.index('let complete_product_ns = start.elapsed()')
+        for call in ('Handles::create(', 'Storage::new(', '\n        init(', 'handles.checkpoint()', 'drop(handles)'):
             self.assertTrue(start < text.index(call) < end)
-        self.assertIn('Duration::from_secs(15)',text)
+        self.assertIn('Duration::from_secs(deadline_seconds)',text)
+        self.assertIn('15 | 30',text)
         self.assertNotIn('Duration::from_secs(600)',text)
 
     def test_cache_contract_does_not_accept_existing_data(self):

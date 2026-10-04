@@ -20,9 +20,23 @@ class SqliteStep10(unittest.TestCase):
         self.assertEqual(len(disposable),7)
         self.assertTrue(all(x.profile=="disposable" for x in disposable))
         self.assertEqual([(x.fixture,x.states,x.storage_ceiling,x.command_budget_ns) for x in disposable],[(x.fixture,x.states,x.storage_ceiling,x.command_budget_ns) for x in cases])
-        self.assertEqual(len(f.CASES),30)
+        self.assertGreaterEqual(len(f.CASES),30)
         self.assertEqual(len(f.LEGACY_HISTORY),16)
         self.assertTrue(all(f.CASES[name].states for name in f.LEGACY_HISTORY))
+    def test_owner_closure_caps_are_exact_doubles_and_history_is_preserved(self):
+        for profile,names in f.OWNER_CLOSURE_CASES_BY_PROFILE.items():
+            self.assertEqual(len(names),7 if profile=='durable' else 4)
+            for name in names:
+                c=f.CASES[name]
+                if c.states is None:
+                    self.assertEqual((c.command_budget_ns,c.verification_budget_ns),(30_000_000_000,19_000_000_000))
+                else:
+                    old=f.CASES[name.rsplit('-v',1)[0]+'-v1']
+                    self.assertEqual(c.command_budget_ns,2*old.command_budget_ns)
+                    self.assertEqual(c.verification_budget_ns,2*old.verification_budget_ns)
+                    self.assertEqual(c.storage_ceiling,old.storage_ceiling)
+                    self.assertEqual(c.proof_policy,old.proof_policy)
+                    self.assertEqual(c.proof_envelope,'owner-double-caps-20261005-v2')
     def test_stride1_increase_is_prospective_and_does_not_change_proof_or_old_cases(self):
         self.assertEqual(len(f.RETIRED_STRIDE1),2)
         for old in f.RETIRED_STRIDE1:

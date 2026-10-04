@@ -32,16 +32,86 @@ def digest(path):
     return value.hexdigest()
 
 
+def closed_sidecars(path):
+    path = Path(path)
+    sides = [Path(str(path) + suffix) for suffix in ('-wal', '-shm', '-journal')]
+    present = [p for p in sides if p.exists() or p.is_symlink()]
+    if not present:
+        return []
+    if sides[2] in present or present != sides[:2]:
+        raise ValueError('closed WAL proof refuses journal or incomplete sidecars')
+    with path.open('rb') as f:
+        header = f.read(20)
+    if header[:16] != b'SQLite format 3\x00' or header[18:20] != b'\x02\x02':
+        raise ValueError('sidecars require WAL database header')
+    records = []
+    for side, length in zip(sides[:2], (0, 32768)):
+        st = side.lstat()
+        if side.is_symlink() or not side.is_file() or st.st_nlink != 1 or st.st_size != length:
+            raise ValueError('closed WAL proof refuses frames or nonexclusive sidecar')
+        records.append({'path': str(side), 'length_bytes': st.st_size,
+                        'allocated_bytes': st.st_blocks * 512, 'device': st.st_dev,
+                        'inode': st.st_ino, 'sha256': digest(side)})
+    return records
+
+
+def unchanged_owner(record):
+    main = Path(record['path']); st = main.lstat()
+    if main.is_symlink() or not main.is_file() or st.st_nlink != 1 or (st.st_dev, st.st_ino) != (record['device'], record['inode']):
+        raise ValueError('history proof changed original owner identity')
+    if digest(record['path']) != record['sha256_before']:
+        raise ValueError('history proof changed original owner')
+    if closed_sidecars(record['path']) != record.get('closed_sidecars', []):
+        raise ValueError('history proof changed original sidecars')
+
+
+def uncached_digest(path):
+    import fcntl
+    value = hashlib.sha256()
+    with Path(path).open('rb') as inp:
+        fcntl.fcntl(inp.fileno(), fcntl.F_NOCACHE, 1)
+        for block in iter(lambda: inp.read(65536), b''):
+            value.update(block)
+    return value.hexdigest()
+
+
+def proof_copy(source, target, limit_bytes):
+    import fcntl, platform
+    length = Path(source).stat().st_size
+    if type(limit_bytes) is not int or limit_bytes <= 0 or length > limit_bytes:
+        raise ValueError('proof copy exceeds existing Store ceiling')
+    if platform.system() != 'Darwin' or not hasattr(fcntl, 'F_NOCACHE'):
+        raise ValueError('bounded proof-copy cache hint requires macOS F_NOCACHE')
+    with Path(source).open('rb') as inp, Path(target).open('xb') as out:
+        fcntl.fcntl(inp.fileno(), fcntl.F_NOCACHE, 1)
+        fcntl.fcntl(out.fileno(), fcntl.F_NOCACHE, 1)
+        copied = 0
+        while True:
+            block = inp.read(min(65536, limit_bytes - copied + 1))
+            if not block:
+                break
+            if copied + len(block) > limit_bytes:
+                raise ValueError('proof copy grew beyond existing Store ceiling')
+            out.write(block)
+            copied += len(block)
+    target_hash = uncached_digest(target)
+    if digest(source) != target_hash:
+        raise ValueError('independent proof byte copy differs')
+    return {'method': 'independent read/write byte stream, not APFS clone',
+            'bytes': Path(target).stat().st_size, 'buffer_bytes': 65536, 'limit_bytes': limit_bytes,
+            'cache_io_hint': 'macOS F_NOCACHE on source/destination; hint, not a memory bound',
+            'sha256': target_hash, 'path': str(target)}
+
+
 def owner(path, tables, application, version):
     path = Path(path)
     info = path.lstat()
     if path.is_symlink() or not path.is_file() or info.st_nlink != 1:
         raise ValueError('history proof requires an exclusive regular closed owner')
-    if any(Path(str(path) + s).exists() for s in ('-wal', '-shm', '-journal')):
-        raise ValueError('history proof refuses outstanding database sidecars')
+    sidecars = closed_sidecars(path)
     before = digest(path)
-    # Immutable read is safe only for this exclusively owned, exited-child file
-    # with no outstanding sidecars. It cannot create WAL read-side sidecars.
+    # Exclusive exited-child main with independently checked zero-frame
+    # WAL and stable SHM. Immutable census cannot consult or mutate sidecars.
     db = sqlite3.connect('file:' + quote(str(path.resolve()), safe='/') + '?mode=ro&immutable=1', uri=True)
     try:
         if db.execute('PRAGMA application_id').fetchone()[0] != application or db.execute('PRAGMA user_version').fetchone()[0] != version:
@@ -52,8 +122,8 @@ def owner(path, tables, application, version):
         if db.execute('PRAGMA quick_check').fetchall() != [('ok',)] or db.execute('PRAGMA foreign_key_check').fetchall():
             raise ValueError('history closed-owner integrity mismatch')
         rows = {t: db.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0] for t in sorted(tables)}
-        return db, {'path': str(path), 'sha256_before': before, 'allocated_bytes': info.st_blocks * 512,
-                    'length_bytes': info.st_size, 'rows': rows, 'application_id': application,
+        return db, {'path': str(path), 'sha256_before': before, 'main_allocated_bytes': info.st_blocks * 512, 'allocated_bytes': info.st_blocks * 512 + sum(r['allocated_bytes'] for r in sidecars), 'closed_sidecars': sidecars,
+                    'length_bytes': info.st_size, 'device': info.st_dev, 'inode': info.st_ino, 'rows': rows, 'application_id': application,
                     'user_version': version, 'immutable_read': True}
     except BaseException:
         db.close()
@@ -134,8 +204,7 @@ def collect(db_path, arm, child, row, metadata_output=None, sqlite_schema_versio
         for connection in opened: connection.close()
     for path, record in zip(paths, records):
         after = digest(path)
-        if after != record['sha256_before'] or any(Path(str(path) + s).exists() for s in ('-wal', '-shm', '-journal')):
-            raise ValueError('history proof changed original owner or produced sidecars')
+        unchanged_owner(record)
         record['sha256_after'] = after
     return result
 
@@ -158,6 +227,9 @@ def root_pins(receipt, census, proof, receipt_path, census_path, proof_path):
     if extension:
         if not lite or receipt.get('workload_row')!='history-stride1':raise ValueError('proof15 applies only to the unchanged stride1 lite scope')
         allowed=30_000_000_000 if receipt.get('proof_envelope')=='owner-stride1-proof30-v3' else 15_000_000_000
+    if receipt.get('proof_envelope') == 'owner-double-caps-20261005-v2':
+        if not lite: raise ValueError('doubled proof requires unchanged lite scope')
+        allowed = {'history-stride10':24_000_000_000, 'history-stride3':24_000_000_000, 'history-stride1':60_000_000_000}[receipt['workload_row']]
     reuse=receipt.get('performance_reuse')
     if reuse:
         original_path=Path(reuse['receipt'])
@@ -256,7 +328,34 @@ def main():
     (out/'census.json').write_text(json.dumps(census, sort_keys=True, indent=2)+'\n')
     receipt = out/'producer-proof-input.json'
     receipt.write_text(json.dumps({'run': {'child': child}})+'\n')
-    command = [request['verifier'], request['corpus'], request['db'], str(receipt), request['row'], 'complete']
+    verify_db = request['db']
+    if request['arm'] == 'candidate' and request['profile'] == 'durable':
+        verify_db = str(out/'independent-proof.sqlite')
+        limit = request['copy_limit_bytes']
+        total_length = Path(request['db']).stat().st_size + sum(r['length_bytes'] for r in census['owners'][0]['closed_sidecars'])
+        if total_length > limit:
+            raise ValueError('proof copy total exceeds existing Store ceiling')
+        copied = proof_copy(request['db'], verify_db, limit)
+        copied['sidecars'] = []
+        remaining = limit - copied['bytes']
+        for r in census['owners'][0]['closed_sidecars']:
+            auxiliary = proof_copy(r['path'], verify_db + Path(r['path']).name.removeprefix(Path(request['db']).name), remaining)
+            copied['sidecars'].append(auxiliary)
+            remaining -= auxiliary['bytes']
+        (out/'proof-copy.json').write_text(json.dumps(copied, indent=2)+'\n')
+        helper = request['copy_cold_helper']
+        if digest(helper['binary']) != helper['binary_sha256']:
+            raise ValueError('proof-copy cold-helper identity mismatch')
+        cold_command = [helper['binary'], '--paths', verify_db] + [r['path'] for r in copied['sidecars']]
+        cold_result = subprocess.run(cold_command, capture_output=True, check=False)
+        (out/'proof-copy-cold.stdout').write_bytes(cold_result.stdout)
+        (out/'proof-copy-cold.stderr').write_bytes(cold_result.stderr)
+        cold_row = json.loads(cold_result.stdout)
+        if cold_result.returncode or cold_row['resident_after'] != 0:
+            raise ValueError('proof-copy whole-input residency INELIGIBLE')
+        (out/'proof-copy-cold.json').write_text(json.dumps(cold_row, indent=2)+'\n')
+
+    command = [request['verifier'], request['corpus'], verify_db, str(receipt), request['row'], 'complete']
     command += ['reference', 'independent-reference', str(metadata)] if request['arm'] == 'baseline' else [request['profile'], request['pins']]
     # Stream to exclusively created files so a bounded parent timeout retains
     # native progress instead of losing a captured pipe when the group is killed.
@@ -272,8 +371,7 @@ def main():
     if request['arm'] == 'candidate' and native.get('independent_root_pins') != 'CHECKED':
         raise ValueError('candidate independent roots not checked')
     for owner_record in census['owners']:
-        if digest(owner_record['path']) != owner_record['sha256_before'] or any(Path(owner_record['path']+s).exists() for s in ('-wal','-shm','-journal')):
-            raise ValueError('namespace proof changed original owner')
+        unchanged_owner(owner_record)
     print(json.dumps(native, sort_keys=True))
 
 

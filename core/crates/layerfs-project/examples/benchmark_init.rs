@@ -37,14 +37,25 @@ fn allocated(_path: &Path) -> Result<u64, Box<dyn std::error::Error>> {
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Vec<_>>();
-    if !matches!(args.len(), 5 | 6) {
-        return Err("source fresh-database scratch name [durable|disposable] required".into());
+    if !matches!(args.len(), 5..=7) {
+        return Err(
+            "source fresh-database scratch name [durable|disposable] [deadline-seconds] required"
+                .into(),
+        );
     }
     let selected = match args.get(5).map(String::as_str).unwrap_or("durable") {
         "durable" => SqlitePersistenceProfile::Durable,
         "disposable" => SqlitePersistenceProfile::Disposable,
         _ => return Err("explicit durable/disposable profile required".into()),
     };
+    let deadline_seconds = args
+        .get(6)
+        .map(|s| s.parse::<u64>())
+        .transpose()?
+        .unwrap_or(15);
+    if !matches!(deadline_seconds, 15 | 30) {
+        return Err("registered 15/30-second deadline required".into());
+    }
     let start = Instant::now();
     let handles = Handles::create(
         PersistenceConfig::sqlite(&args[2]).with_sqlite_profile(selected),
@@ -68,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 stack: LayerStackId::from_authority([0x41; 16]),
                 name: HistoryName::new(&args[4]).unwrap(),
                 scope_seed: [0x42; 32],
-                deadline: start + Duration::from_secs(15),
+                deadline: start + Duration::from_secs(deadline_seconds),
             },
             timer,
         )
