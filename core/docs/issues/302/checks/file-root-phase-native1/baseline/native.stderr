@@ -1,0 +1,397 @@
+VERIFY_CORPUS_OPEN_WORK wall_ns=108880834
+VERIFY_STORE_CUSTODY_WORK wall_ns=58836750
+VERIFY_STATE_BEGIN state=1
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[67, 4581, 14701000, 0, 0, 0, 0, 52, 583751, 62, 147546, 390380, 0, 0, 0, 9, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[28, 1848, 4630000, 0, 0, 0, 0, 21, 168832, 28, 96751, 550409, 0, 0, 0, 17, 16, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[15, 576, 1061000, 0, 0, 0, 0, 12, 41792, 15, 26252, 77594, 0, 0, 0, 3, 1, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=16794500 lengths=6331875 digest=2264542
+HISTORY_ENGINE_WORK {"state":1,"stage":"verification","available":true,"values":[110, 7005, 20392000, 0, 0, 0, 0, 85, 794375, 105, 270549, 1018383, 0, 0, 0, 29, 19, 0, 0]}
+VERIFY_METADATA_MEMO state=1 cumulative=Counters { hits: 24, misses: 9, source_calls: 5, source_objects: 9, evictions: 0, peak_bytes: 29921, peak_rows: 9 }
+VERIFY_STATE_WORK state=1 wall_ns=26372834 paths=359 sampled=29 authenticated_bytes=306296 pooled=PoolReadCounters { leaf_requests: 7, chain_edges: 0, physical_record_calls: 14, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 14, value_group_decodes: 7, pack_fetches: 2, pack_bytes: 24072 }
+VERIFY_STATE_BEGIN state=2
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[99, 8236, 13022000, 0, 0, 0, 0, 61, 372043, 99, 264627, 406020, 0, 0, 0, 15, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[58, 3465, 5098000, 0, 0, 0, 0, 35, 295708, 58, 196959, 1101823, 0, 0, 0, 28, 13, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=15200584 lengths=7989000 digest=460833
+HISTORY_ENGINE_WORK {"state":2,"stage":"verification","available":true,"values":[157, 11701, 18120000, 0, 0, 0, 0, 96, 667751, 157, 461586, 1507843, 0, 0, 0, 43, 15, 0, 0]}
+VERIFY_METADATA_MEMO state=2 cumulative=Counters { hits: 65, misses: 23, source_calls: 12, source_objects: 23, evictions: 0, peak_bytes: 80350, peak_rows: 23 }
+VERIFY_STATE_WORK state=2 wall_ns=25196958 paths=607 sampled=47 authenticated_bytes=234262 pooled=PoolReadCounters { leaf_requests: 19, chain_edges: 0, physical_record_calls: 38, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 38, value_group_decodes: 19, pack_fetches: 4, pack_bytes: 57145 }
+VERIFY_STATE_BEGIN state=3
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[132, 12383, 7667000, 0, 0, 0, 0, 68, 452297, 132, 334213, 359444, 0, 0, 0, 21, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[100, 5462, 7309000, 0, 0, 0, 0, 51, 418289, 100, 252082, 1884341, 0, 0, 0, 43, 11, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=10853459 lengths=12000000 digest=451958
+HISTORY_ENGINE_WORK {"state":3,"stage":"verification","available":true,"values":[232, 17845, 14976000, 0, 0, 0, 0, 119, 870586, 232, 586295, 2243785, 0, 0, 0, 64, 13, 0, 0]}
+VERIFY_METADATA_MEMO state=3 cumulative=Counters { hits: 121, misses: 41, source_calls: 19, source_objects: 41, evictions: 0, peak_bytes: 153957, peak_rows: 41 }
+VERIFY_STATE_WORK state=3 wall_ns=25695917 paths=889 sampled=68 authenticated_bytes=475074 pooled=PoolReadCounters { leaf_requests: 35, chain_edges: 9, physical_record_calls: 88, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 88, value_group_decodes: 35, pack_fetches: 6, pack_bytes: 91497 }
+VERIFY_STATE_BEGIN state=4
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[161, 15129, 6753000, 0, 0, 0, 0, 72, 464751, 161, 389127, 392676, 0, 0, 0, 26, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[169, 8764, 9496000, 0, 0, 0, 0, 67, 531668, 169, 398380, 2845633, 0, 0, 0, 59, 8, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=10392416 lengths=15880792 digest=341292
+HISTORY_ENGINE_WORK {"state":4,"stage":"verification","available":true,"values":[330, 23893, 16249000, 0, 0, 0, 0, 139, 996419, 330, 787507, 3238309, 0, 0, 0, 85, 10, 0, 0]}
+VERIFY_METADATA_MEMO state=4 cumulative=Counters { hits: 193, misses: 62, source_calls: 26, source_objects: 62, evictions: 0, peak_bytes: 240735, peak_rows: 62 }
+VERIFY_STATE_WORK state=4 wall_ns=29386000 paths=1098 sampled=85 authenticated_bytes=571389 pooled=PoolReadCounters { leaf_requests: 54, chain_edges: 26, physical_record_calls: 160, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 160, value_group_decodes: 54, pack_fetches: 8, pack_bytes: 129959 }
+VERIFY_STATE_BEGIN state=5
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[197, 18576, 6112000, 0, 0, 0, 0, 88, 578457, 197, 455875, 522244, 0, 0, 0, 32, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[198, 10428, 10240000, 0, 0, 0, 0, 76, 551503, 198, 443714, 4002845, 0, 0, 0, 69, 13, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=10482250 lengths=18645916 digest=359375
+HISTORY_ENGINE_WORK {"state":5,"stage":"verification","available":true,"values":[395, 29004, 16352000, 0, 0, 0, 0, 164, 1129960, 395, 899589, 4525089, 0, 0, 0, 101, 15, 0, 0]}
+VERIFY_METADATA_MEMO state=5 cumulative=Counters { hits: 280, misses: 85, source_calls: 33, source_objects: 85, evictions: 0, peak_bytes: 350523, peak_rows: 85 }
+VERIFY_STATE_WORK state=5 wall_ns=33001167 paths=1380 sampled=107 authenticated_bytes=835074 pooled=PoolReadCounters { leaf_requests: 75, chain_edges: 45, physical_record_calls: 240, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 240, value_group_decodes: 75, pack_fetches: 10, pack_bytes: 174062 }
+VERIFY_STATE_BEGIN state=6
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[259, 23159, 6253000, 0, 0, 0, 0, 104, 567329, 259, 619319, 666382, 0, 0, 0, 44, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[273, 13811, 11344000, 0, 0, 0, 0, 97, 715457, 273, 584667, 5594981, 0, 0, 0, 90, 7, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[15, 541, 361000, 0, 0, 0, 0, 12, 45290, 15, 31501, 57536, 0, 0, 0, 3, 1, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=11269750 lengths=20389750 digest=1423125
+HISTORY_ENGINE_WORK {"state":6,"stage":"verification","available":true,"values":[547, 37511, 17958000, 0, 0, 0, 0, 213, 1328076, 547, 1235487, 6318899, 0, 0, 0, 137, 10, 0, 0]}
+VERIFY_METADATA_MEMO state=6 cumulative=Counters { hits: 400, misses: 112, source_calls: 40, source_objects: 112, evictions: 0, peak_bytes: 476887, peak_rows: 112 }
+VERIFY_STATE_WORK state=6 wall_ns=37342667 paths=1630 sampled=126 authenticated_bytes=925697 pooled=PoolReadCounters { leaf_requests: 100, chain_edges: 82, physical_record_calls: 364, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 364, value_group_decodes: 100, pack_fetches: 12, pack_bytes: 218644 }
+VERIFY_STATE_BEGIN state=7
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[289, 25769, 6065000, 0, 0, 0, 0, 109, 619499, 289, 742533, 824514, 0, 0, 0, 54, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[364, 17750, 10180000, 0, 0, 0, 0, 103, 747091, 364, 689699, 5788530, 0, 0, 0, 96, 10, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=11828833 lengths=23316792 digest=475500
+HISTORY_ENGINE_WORK {"state":7,"stage":"verification","available":true,"values":[653, 43519, 16245000, 0, 0, 0, 0, 212, 1366590, 653, 1432232, 6613044, 0, 0, 0, 150, 12, 0, 0]}
+VERIFY_METADATA_MEMO state=7 cumulative=Counters { hits: 532, misses: 141, source_calls: 46, source_objects: 141, evictions: 0, peak_bytes: 622860, peak_rows: 141 }
+VERIFY_STATE_WORK state=7 wall_ns=40336083 paths=1771 sampled=137 authenticated_bytes=1038255 pooled=PoolReadCounters { leaf_requests: 127, chain_edges: 111, physical_record_calls: 476, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 476, value_group_decodes: 127, pack_fetches: 14, pack_bytes: 278741 }
+VERIFY_STATE_BEGIN state=8
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[331, 30385, 6890000, 0, 0, 0, 0, 121, 761584, 331, 963736, 925634, 0, 0, 0, 60, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[432, 20719, 13675000, 0, 0, 0, 0, 142, 1278338, 432, 922744, 8723776, 0, 0, 0, 130, 15, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=14185167 lengths=28468458 digest=492917
+HISTORY_ENGINE_WORK {"state":8,"stage":"verification","available":true,"values":[763, 51104, 20565000, 0, 0, 0, 0, 263, 2039922, 763, 1886480, 9649410, 0, 0, 0, 190, 17, 0, 0]}
+VERIFY_METADATA_MEMO state=8 cumulative=Counters { hits: 695, misses: 174, source_calls: 53, source_objects: 174, evictions: 0, peak_bytes: 796101, peak_rows: 174 }
+VERIFY_STATE_WORK state=8 wall_ns=49041542 paths=2153 sampled=167 authenticated_bytes=1015217 pooled=PoolReadCounters { leaf_requests: 158, chain_edges: 151, physical_record_calls: 618, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 618, value_group_decodes: 158, pack_fetches: 16, pack_bytes: 340258 }
+VERIFY_STATE_BEGIN state=9
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[355, 28221, 4850000, 0, 0, 0, 0, 119, 714578, 355, 917664, 721234, 0, 0, 0, 60, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[345, 16501, 8044000, 0, 0, 0, 0, 114, 853832, 345, 741339, 6850679, 0, 0, 0, 106, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=10613833 lengths=18697208 digest=429042
+HISTORY_ENGINE_WORK {"state":9,"stage":"verification","available":true,"values":[700, 44722, 12894000, 0, 0, 0, 0, 233, 1568410, 700, 1659003, 7571913, 0, 0, 0, 166, 5, 0, 0]}
+VERIFY_METADATA_MEMO state=9 cumulative=Counters { hits: 822, misses: 199, source_calls: 59, source_objects: 199, evictions: 0, peak_bytes: 931693, peak_rows: 199 }
+VERIFY_STATE_WORK state=9 wall_ns=34307000 paths=1746 sampled=135 authenticated_bytes=714846 pooled=PoolReadCounters { leaf_requests: 181, chain_edges: 211, physical_record_calls: 784, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 784, value_group_decodes: 181, pack_fetches: 18, pack_bytes: 364185 }
+VERIFY_STATE_BEGIN state=10
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[394, 29412, 4829000, 0, 0, 0, 0, 113, 618961, 394, 1011249, 691125, 0, 0, 0, 59, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[396, 18140, 9611000, 0, 0, 0, 0, 140, 1048623, 396, 907987, 8660120, 0, 0, 0, 132, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=10664083 lengths=22778334 digest=536041
+HISTORY_ENGINE_WORK {"state":10,"stage":"verification","available":true,"values":[790, 47552, 14440000, 0, 0, 0, 0, 253, 1667584, 790, 1919236, 9351245, 0, 0, 0, 191, 6, 0, 0]}
+VERIFY_METADATA_MEMO state=10 cumulative=Counters { hits: 941, misses: 224, source_calls: 65, source_objects: 224, evictions: 0, peak_bytes: 1064248, peak_rows: 224 }
+VERIFY_STATE_WORK state=10 wall_ns=38268542 paths=1659 sampled=128 authenticated_bytes=845384 pooled=PoolReadCounters { leaf_requests: 204, chain_edges: 286, physical_record_calls: 980, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 980, value_group_decodes: 203, pack_fetches: 20, pack_bytes: 393832 }
+VERIFY_STATE_BEGIN state=11
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[375, 32172, 5503000, 0, 0, 0, 0, 122, 742495, 375, 1038050, 875138, 0, 0, 0, 62, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[385, 18440, 8548000, 0, 0, 0, 0, 148, 1066795, 385, 895949, 9828889, 0, 0, 0, 136, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[22, 816, 622000, 0, 0, 0, 0, 13, 46666, 22, 39335, 158000, 0, 0, 0, 4, 1, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=12365667 lengths=20032541 digest=1908292
+HISTORY_ENGINE_WORK {"state":11,"stage":"verification","available":true,"values":[782, 51428, 14673000, 0, 0, 0, 0, 283, 1855956, 782, 1973334, 10862027, 0, 0, 0, 202, 7, 0, 0]}
+VERIFY_METADATA_MEMO state=11 cumulative=Counters { hits: 1110, misses: 255, source_calls: 72, source_objects: 255, evictions: 0, peak_bytes: 1215692, peak_rows: 255 }
+VERIFY_STATE_WORK state=11 wall_ns=40134792 paths=2148 sampled=167 authenticated_bytes=1003583 pooled=PoolReadCounters { leaf_requests: 233, chain_edges: 347, physical_record_calls: 1160, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 1160, value_group_decodes: 227, pack_fetches: 23, pack_bytes: 428362 }
+VERIFY_STATE_BEGIN state=12
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[418, 36494, 6695000, 0, 0, 0, 0, 136, 853299, 418, 1225333, 982079, 0, 0, 0, 66, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[406, 19844, 10602000, 0, 0, 0, 0, 164, 1281714, 406, 1068583, 9659233, 0, 0, 0, 152, 15, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[15, 541, 264000, 0, 0, 0, 0, 13, 76415, 15, 30375, 78016, 0, 0, 0, 3, 1, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=14854750 lengths=24825916 digest=1450709
+HISTORY_ENGINE_WORK {"state":12,"stage":"verification","available":true,"values":[839, 56879, 17561000, 0, 0, 0, 0, 313, 2211428, 839, 2324291, 10719328, 0, 0, 0, 221, 19, 0, 0]}
+VERIFY_METADATA_MEMO state=12 cumulative=Counters { hits: 1294, misses: 296, source_calls: 80, source_objects: 296, evictions: 0, peak_bytes: 1414877, peak_rows: 296 }
+VERIFY_STATE_WORK state=12 wall_ns=48232792 paths=2465 sampled=193 authenticated_bytes=1161021 pooled=PoolReadCounters { leaf_requests: 272, chain_edges: 380, physical_record_calls: 1304, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 1304, value_group_decodes: 266, pack_fetches: 26, pack_bytes: 507183 }
+VERIFY_STATE_BEGIN state=13
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[454, 37624, 8670000, 0, 0, 0, 0, 140, 955783, 454, 1514408, 984687, 0, 0, 0, 71, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[567, 26265, 13848000, 0, 0, 0, 0, 213, 1662966, 567, 1557628, 13985512, 0, 0, 0, 202, 12, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=18204292 lengths=31765958 digest=681333
+HISTORY_ENGINE_WORK {"state":13,"stage":"verification","available":true,"values":[1021, 63889, 22518000, 0, 0, 0, 0, 353, 2618749, 1021, 3072036, 14970199, 0, 0, 0, 273, 15, 0, 0]}
+VERIFY_METADATA_MEMO state=13 cumulative=Counters { hits: 1484, misses: 338, source_calls: 89, source_objects: 338, evictions: 0, peak_bytes: 1614146, peak_rows: 338 }
+VERIFY_STATE_WORK state=13 wall_ns=57815875 paths=2465 sampled=194 authenticated_bytes=1197296 pooled=PoolReadCounters { leaf_requests: 312, chain_edges: 415, physical_record_calls: 1454, physical_group_decodes: 1, physical_group_decoded_bytes: 49147, physical_group_cache_hits: 1453, value_group_decodes: 370, pack_fetches: 29, pack_bytes: 565230 }
+VERIFY_STATE_BEGIN state=14
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[528, 42558, 8055000, 0, 0, 0, 0, 150, 1139508, 528, 1644830, 1094551, 0, 0, 0, 76, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[596, 28014, 14800000, 0, 0, 0, 0, 235, 1777503, 596, 1522716, 15708350, 0, 0, 0, 219, 11, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=21202250 lengths=33591375 digest=663333
+HISTORY_ENGINE_WORK {"state":14,"stage":"verification","available":true,"values":[1124, 70572, 22855000, 0, 0, 0, 0, 385, 2917011, 1124, 3167546, 16802901, 0, 0, 0, 295, 14, 0, 0]}
+VERIFY_METADATA_MEMO state=14 cumulative=Counters { hits: 1712, misses: 387, source_calls: 98, source_objects: 387, evictions: 0, peak_bytes: 1847173, peak_rows: 387 }
+VERIFY_STATE_WORK state=14 wall_ns=64225459 paths=2825 sampled=226 authenticated_bytes=1260887 pooled=PoolReadCounters { leaf_requests: 359, chain_edges: 484, physical_record_calls: 1686, physical_group_decodes: 20, physical_group_decoded_bytes: 616120, physical_group_cache_hits: 1666, value_group_decodes: 518, pack_fetches: 32, pack_bytes: 636087 }
+VERIFY_STATE_BEGIN state=15
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[584, 44241, 7244000, 0, 0, 0, 0, 153, 979085, 584, 1744297, 1132746, 0, 0, 0, 81, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[593, 26434, 14807000, 0, 0, 0, 0, 245, 1888211, 593, 1494298, 17111685, 0, 0, 0, 233, 5, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[40, 1518, 1011000, 0, 0, 0, 0, 17, 109751, 40, 71172, 262736, 0, 0, 0, 7, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=20488583 lengths=33308084 digest=3470333
+HISTORY_ENGINE_WORK {"state":15,"stage":"verification","available":true,"values":[1217, 72193, 23062000, 0, 0, 0, 0, 415, 2977047, 1217, 3309767, 18507167, 0, 0, 0, 321, 11, 0, 0]}
+VERIFY_METADATA_MEMO state=15 cumulative=Counters { hits: 1915, misses: 428, source_calls: 107, source_objects: 428, evictions: 0, peak_bytes: 2052473, peak_rows: 428 }
+VERIFY_STATE_WORK state=15 wall_ns=65027084 paths=2590 sampled=204 authenticated_bytes=1320183 pooled=PoolReadCounters { leaf_requests: 398, chain_edges: 573, physical_record_calls: 1942, physical_group_decodes: 44, physical_group_decoded_bytes: 1337178, physical_group_cache_hits: 1898, value_group_decodes: 650, pack_fetches: 34, pack_bytes: 671811 }
+VERIFY_STATE_BEGIN state=16
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[670, 53162, 9090000, 0, 0, 0, 0, 181, 1238575, 670, 1963841, 1566095, 0, 0, 0, 105, 5, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[748, 35607, 18589000, 0, 0, 0, 0, 303, 2288325, 748, 1716499, 21482224, 0, 0, 0, 283, 24, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=27984875 lengths=42706250 digest=641042
+HISTORY_ENGINE_WORK {"state":16,"stage":"verification","available":true,"values":[1418, 88769, 27679000, 0, 0, 0, 0, 484, 3526900, 1418, 3680340, 23048319, 0, 0, 0, 388, 29, 0, 0]}
+VERIFY_METADATA_MEMO state=16 cumulative=Counters { hits: 2195, misses: 490, source_calls: 117, source_objects: 490, evictions: 66, peak_bytes: 2096844, peak_rows: 437 }
+VERIFY_STATE_WORK state=16 wall_ns=84229625 paths=3654 sampled=296 authenticated_bytes=1867927 pooled=PoolReadCounters { leaf_requests: 458, chain_edges: 676, physical_record_calls: 2268, physical_group_decodes: 69, physical_group_decoded_bytes: 2139463, physical_group_cache_hits: 2199, value_group_decodes: 928, pack_fetches: 38, pack_bytes: 777696 }
+VERIFY_STATE_BEGIN state=17
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[736, 56195, 9079000, 0, 0, 0, 0, 193, 1329379, 736, 2059241, 1651216, 0, 0, 0, 113, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[770, 35709, 16597000, 0, 0, 0, 0, 337, 2469167, 770, 1865873, 24093102, 0, 0, 0, 321, 7, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=30427083 lengths=39024375 digest=739625
+HISTORY_ENGINE_WORK {"state":17,"stage":"verification","available":true,"values":[1506, 91904, 25676000, 0, 0, 0, 0, 530, 3798546, 1506, 3925114, 25744318, 0, 0, 0, 434, 10, 0, 0]}
+VERIFY_METADATA_MEMO state=17 cumulative=Counters { hits: 2481, misses: 546, source_calls: 127, source_objects: 546, evictions: 125, peak_bytes: 2097090, peak_rows: 437 }
+VERIFY_STATE_WORK state=17 wall_ns=82760792 paths=3734 sampled=303 authenticated_bytes=1641637 pooled=PoolReadCounters { leaf_requests: 512, chain_edges: 813, physical_record_calls: 2650, physical_group_decodes: 107, physical_group_decoded_bytes: 3323221, physical_group_cache_hits: 2543, value_group_decodes: 1252, pack_fetches: 41, pack_bytes: 832110 }
+VERIFY_STATE_BEGIN state=18
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[806, 61380, 9992000, 0, 0, 0, 0, 205, 1294875, 806, 2205093, 2064437, 0, 0, 0, 106, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[924, 44323, 22487000, 0, 0, 0, 0, 382, 2806419, 924, 2142300, 29692276, 0, 0, 0, 363, 25, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=35434375 lengths=49448416 digest=847709
+HISTORY_ENGINE_WORK {"state":18,"stage":"verification","available":true,"values":[1730, 105703, 32479000, 0, 0, 0, 0, 587, 4101294, 1730, 4347393, 31756713, 0, 0, 0, 469, 29, 0, 0]}
+VERIFY_METADATA_MEMO state=18 cumulative=Counters { hits: 2839, misses: 625, source_calls: 137, source_objects: 625, evictions: 202, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=18 wall_ns=103715250 paths=4763 sampled=402 authenticated_bytes=1826678 pooled=PoolReadCounters { leaf_requests: 589, chain_edges: 927, physical_record_calls: 3032, physical_group_decodes: 164, physical_group_decoded_bytes: 5228136, physical_group_cache_hits: 2868, value_group_decodes: 1644, pack_fetches: 45, pack_bytes: 986447 }
+VERIFY_STATE_BEGIN state=19
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[888, 66305, 10724000, 0, 0, 0, 0, 210, 1261830, 888, 2426448, 2205110, 0, 0, 0, 114, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[968, 45356, 21172000, 0, 0, 0, 0, 390, 2808965, 968, 2202715, 29774526, 0, 0, 0, 371, 17, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=38510750 lengths=48970792 digest=885333
+HISTORY_ENGINE_WORK {"state":19,"stage":"verification","available":true,"values":[1856, 111661, 31896000, 0, 0, 0, 0, 600, 4070795, 1856, 4629163, 31979636, 0, 0, 0, 485, 20, 0, 0]}
+VERIFY_METADATA_MEMO state=19 cumulative=Counters { hits: 3247, misses: 704, source_calls: 147, source_objects: 704, evictions: 281, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=19 wall_ns=108433000 paths=5065 sampled=428 authenticated_bytes=1869467 pooled=PoolReadCounters { leaf_requests: 666, chain_edges: 1073, physical_record_calls: 3478, physical_group_decodes: 221, physical_group_decoded_bytes: 7099744, physical_group_cache_hits: 3257, value_group_decodes: 2080, pack_fetches: 48, pack_bytes: 1078519 }
+VERIFY_STATE_BEGIN state=20
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[998, 71403, 12859000, 0, 0, 0, 0, 224, 1686285, 998, 2798256, 2182278, 0, 0, 0, 120, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1009, 45680, 24407000, 0, 0, 0, 0, 436, 3224299, 1009, 2485980, 35967569, 0, 0, 0, 417, 6, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=45085792 lengths=52012917 digest=911041
+HISTORY_ENGINE_WORK {"state":20,"stage":"verification","available":true,"values":[2007, 117083, 37266000, 0, 0, 0, 0, 660, 4910584, 2007, 5284236, 38149847, 0, 0, 0, 537, 9, 0, 0]}
+VERIFY_METADATA_MEMO state=20 cumulative=Counters { hits: 3665, misses: 779, source_calls: 157, source_objects: 779, evictions: 363, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=20 wall_ns=118243208 paths=5140 sampled=434 authenticated_bytes=1629146 pooled=PoolReadCounters { leaf_requests: 739, chain_edges: 1251, physical_record_calls: 3980, physical_group_decodes: 295, physical_group_decoded_bytes: 9715746, physical_group_cache_hits: 3685, value_group_decodes: 2589, pack_fetches: 51, pack_bytes: 1147099 }
+VERIFY_STATE_BEGIN state=21
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1053, 75165, 13732000, 0, 0, 0, 0, 237, 1725321, 1053, 3059543, 2695142, 0, 0, 0, 131, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1225, 55739, 29035000, 0, 0, 0, 0, 524, 3939296, 1225, 3167587, 43619311, 0, 0, 0, 500, 9, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=47294833 lengths=61936917 digest=914875
+HISTORY_ENGINE_WORK {"state":21,"stage":"verification","available":true,"values":[2278, 130904, 42767000, 0, 0, 0, 0, 761, 5664617, 2278, 6227130, 46314453, 0, 0, 0, 631, 12, 0, 0]}
+VERIFY_METADATA_MEMO state=21 cumulative=Counters { hits: 4107, misses: 862, source_calls: 167, source_objects: 862, evictions: 450, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=21 wall_ns=131846375 paths=5383 sampled=455 authenticated_bytes=1966901 pooled=PoolReadCounters { leaf_requests: 820, chain_edges: 1419, physical_record_calls: 4478, physical_group_decodes: 350, physical_group_decoded_bytes: 11630695, physical_group_cache_hits: 4128, value_group_decodes: 3146, pack_fetches: 54, pack_bytes: 1236884 }
+VERIFY_STATE_BEGIN state=22
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[897, 67265, 11016000, 0, 0, 0, 0, 238, 1584626, 897, 2706749, 2618934, 0, 0, 0, 134, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1013, 45888, 23808000, 0, 0, 0, 0, 445, 3295706, 1013, 2774967, 36981101, 0, 0, 0, 425, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=43019084 lengths=49905750 digest=936583
+HISTORY_ENGINE_WORK {"state":22,"stage":"verification","available":true,"values":[1910, 113153, 34824000, 0, 0, 0, 0, 683, 4880332, 1910, 5481716, 39600035, 0, 0, 0, 559, 5, 0, 0]}
+VERIFY_METADATA_MEMO state=22 cumulative=Counters { hits: 4577, misses: 923, source_calls: 176, source_objects: 923, evictions: 516, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=22 wall_ns=115733708 paths=5399 sampled=456 authenticated_bytes=1544118 pooled=PoolReadCounters { leaf_requests: 879, chain_edges: 1579, physical_record_calls: 4916, physical_group_decodes: 404, physical_group_decoded_bytes: 13637437, physical_group_cache_hits: 4512, value_group_decodes: 3567, pack_fetches: 56, pack_bytes: 1270149 }
+VERIFY_STATE_BEGIN state=23
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1221, 83661, 13637000, 0, 0, 0, 0, 262, 1809534, 1221, 3598590, 2933334, 0, 0, 0, 152, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1010, 45648, 24512000, 0, 0, 0, 0, 466, 3344709, 1010, 2547863, 39433049, 0, 0, 0, 443, 9, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=52590417 lengths=52018333 digest=1163875
+HISTORY_ENGINE_WORK {"state":23,"stage":"verification","available":true,"values":[2231, 129309, 38149000, 0, 0, 0, 0, 728, 5154243, 2231, 6146453, 42366383, 0, 0, 0, 595, 12, 0, 0]}
+VERIFY_METADATA_MEMO state=23 cumulative=Counters { hits: 5054, misses: 1008, source_calls: 187, source_objects: 1008, evictions: 604, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=23 wall_ns=129185333 paths=5641 sampled=477 authenticated_bytes=1618347 pooled=PoolReadCounters { leaf_requests: 962, chain_edges: 1817, physical_record_calls: 5558, physical_group_decodes: 469, physical_group_decoded_bytes: 16137601, physical_group_cache_hits: 5089, value_group_decodes: 4193, pack_fetches: 58, pack_bytes: 1344891 }
+VERIFY_STATE_BEGIN state=24
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1332, 89668, 14312000, 0, 0, 0, 0, 282, 1820197, 1332, 3728827, 3383875, 0, 0, 0, 171, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1168, 52603, 26822000, 0, 0, 0, 0, 484, 3484259, 1168, 2792303, 41901435, 0, 0, 0, 465, 11, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=56915167 lengths=59940792 digest=1190000
+HISTORY_ENGINE_WORK {"state":24,"stage":"verification","available":true,"values":[2500, 142271, 41134000, 0, 0, 0, 0, 766, 5304456, 2500, 6521130, 45285310, 0, 0, 0, 636, 14, 0, 0]}
+VERIFY_METADATA_MEMO state=24 cumulative=Counters { hits: 5574, misses: 1095, source_calls: 199, source_objects: 1095, evictions: 692, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=24 wall_ns=143090084 paths=5880 sampled=497 authenticated_bytes=2067384 pooled=PoolReadCounters { leaf_requests: 1047, chain_edges: 2103, physical_record_calls: 6300, physical_group_decodes: 542, physical_group_decoded_bytes: 18892053, physical_group_cache_hits: 5758, value_group_decodes: 4863, pack_fetches: 60, pack_bytes: 1419727 }
+VERIFY_STATE_BEGIN state=25
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1344, 90564, 15553000, 0, 0, 0, 0, 294, 2204298, 1344, 4418467, 3415187, 0, 0, 0, 183, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1353, 59505, 32015000, 0, 0, 0, 0, 595, 4500830, 1353, 3539846, 51369630, 0, 0, 0, 571, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[5, 107, 56000, 0, 0, 0, 0, 4, 84166, 5, 10208, 30784, 0, 0, 0, 1, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=60374083 lengths=67828250 digest=1439125
+HISTORY_ENGINE_WORK {"state":25,"stage":"verification","available":true,"values":[2702, 150176, 47624000, 0, 0, 0, 0, 893, 6789294, 2702, 7968521, 54815601, 0, 0, 0, 755, 7, 0, 0]}
+VERIFY_METADATA_MEMO state=25 cumulative=Counters { hits: 6124, misses: 1175, source_calls: 210, source_objects: 1175, evictions: 776, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=25 wall_ns=155628084 paths=5951 sampled=503 authenticated_bytes=2203704 pooled=PoolReadCounters { leaf_requests: 1125, chain_edges: 2357, physical_record_calls: 6964, physical_group_decodes: 623, physical_group_decoded_bytes: 21953607, physical_group_cache_hits: 6341, value_group_decodes: 5579, pack_fetches: 63, pack_bytes: 1478642 }
+VERIFY_STATE_BEGIN state=26
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[884, 65798, 10189000, 0, 0, 0, 0, 236, 1565338, 884, 2454503, 2714998, 0, 0, 0, 138, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[671, 29345, 15478000, 0, 0, 0, 0, 322, 2265743, 671, 1668451, 29415321, 0, 0, 0, 306, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=40836958 lengths=35746042 digest=995958
+HISTORY_ENGINE_WORK {"state":26,"stage":"verification","available":true,"values":[1555, 95143, 25667000, 0, 0, 0, 0, 558, 3831081, 1555, 4122954, 32130319, 0, 0, 0, 444, 4, 0, 0]}
+VERIFY_METADATA_MEMO state=26 cumulative=Counters { hits: 6598, misses: 1220, source_calls: 218, source_objects: 1220, evictions: 824, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=26 wall_ns=99896125 paths=5358 sampled=453 authenticated_bytes=1284693 pooled=PoolReadCounters { leaf_requests: 1168, chain_edges: 2520, physical_record_calls: 7376, physical_group_decodes: 672, physical_group_decoded_bytes: 23713259, physical_group_cache_hits: 6704, value_group_decodes: 5964, pack_fetches: 65, pack_bytes: 1507534 }
+VERIFY_STATE_BEGIN state=27
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[964, 72840, 11427000, 0, 0, 0, 0, 265, 1659829, 964, 2954831, 2841014, 0, 0, 0, 155, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1053, 46188, 25875000, 0, 0, 0, 0, 468, 3362294, 1053, 2701009, 41703416, 0, 0, 0, 450, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=48557000 lengths=53272666 digest=1138250
+HISTORY_ENGINE_WORK {"state":27,"stage":"verification","available":true,"values":[2017, 119028, 37302000, 0, 0, 0, 0, 733, 5022123, 2017, 5655840, 44544430, 0, 0, 0, 605, 8, 0, 0]}
+VERIFY_METADATA_MEMO state=27 cumulative=Counters { hits: 7152, misses: 1272, source_calls: 229, source_objects: 1272, evictions: 877, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=27 wall_ns=128639833 paths=5987 sampled=506 authenticated_bytes=1717677 pooled=PoolReadCounters { leaf_requests: 1218, chain_edges: 2640, physical_record_calls: 7716, physical_group_decodes: 760, physical_group_decoded_bytes: 27184096, physical_group_cache_hits: 6956, value_group_decodes: 6445, pack_fetches: 68, pack_bytes: 1554470 }
+VERIFY_STATE_BEGIN state=28
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1006, 74750, 13890000, 0, 0, 0, 0, 270, 1675350, 1006, 3187588, 2958422, 0, 0, 0, 163, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1082, 47618, 28215000, 0, 0, 0, 0, 487, 3569207, 1082, 2839257, 42459062, 0, 0, 0, 467, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[41, 1651, 1586000, 0, 0, 0, 0, 21, 151207, 41, 100339, 424377, 0, 0, 0, 11, 9, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=50473250 lengths=57411916 digest=4720792
+HISTORY_ENGINE_WORK {"state":28,"stage":"verification","available":true,"values":[2129, 124019, 43691000, 0, 0, 0, 0, 778, 5395764, 2129, 6127184, 45841861, 0, 0, 0, 641, 14, 0, 0]}
+VERIFY_METADATA_MEMO state=28 cumulative=Counters { hits: 7714, misses: 1322, source_calls: 240, source_objects: 1322, evictions: 932, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=28 wall_ns=138499000 paths=6027 sampled=509 authenticated_bytes=2086673 pooled=PoolReadCounters { leaf_requests: 1266, chain_edges: 2777, physical_record_calls: 8086, physical_group_decodes: 839, physical_group_decoded_bytes: 30068691, physical_group_cache_hits: 7247, value_group_decodes: 6943, pack_fetches: 70, pack_bytes: 1589624 }
+VERIFY_STATE_BEGIN state=29
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1565, 102856, 18045000, 0, 0, 0, 0, 324, 2032636, 1565, 4624995, 4316562, 0, 0, 0, 186, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1300, 58424, 35133000, 0, 0, 0, 0, 531, 3812165, 1300, 3171032, 47221336, 0, 0, 0, 510, 25, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[90, 4085, 3966000, 0, 0, 0, 0, 41, 248165, 90, 194956, 1209315, 0, 0, 0, 22, 13, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=69359208 lengths=71676583 digest=9523667
+HISTORY_ENGINE_WORK {"state":29,"stage":"verification","available":true,"values":[2955, 165365, 57144000, 0, 0, 0, 0, 896, 6092966, 2955, 7990983, 52747213, 0, 0, 0, 718, 42, 0, 0]}
+VERIFY_METADATA_MEMO state=29 cumulative=Counters { hits: 8298, misses: 1423, source_calls: 253, source_objects: 1423, evictions: 1032, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=29 wall_ns=181171916 paths=6647 sampled=566 authenticated_bytes=3244398 pooled=PoolReadCounters { leaf_requests: 1365, chain_edges: 3070, physical_record_calls: 8870, physical_group_decodes: 975, physical_group_decoded_bytes: 35267678, physical_group_cache_hits: 7895, value_group_decodes: 7769, pack_fetches: 74, pack_bytes: 1735940 }
+VERIFY_STATE_BEGIN state=30
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1323, 90633, 15618000, 0, 0, 0, 0, 331, 1921846, 1323, 3987525, 4155270, 0, 0, 0, 194, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1160, 52570, 30055000, 0, 0, 0, 0, 475, 3526414, 1160, 2981100, 44707118, 0, 0, 0, 455, 7, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[95, 4360, 1565000, 0, 0, 0, 0, 42, 274544, 95, 192842, 899633, 0, 0, 0, 22, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=60488875 lengths=61601500 digest=7379458
+HISTORY_ENGINE_WORK {"state":30,"stage":"verification","available":true,"values":[2578, 147563, 47238000, 0, 0, 0, 0, 848, 5722804, 2578, 7161467, 49762021, 0, 0, 0, 671, 12, 0, 0]}
+VERIFY_METADATA_MEMO state=30 cumulative=Counters { hits: 8910, misses: 1498, source_calls: 265, source_objects: 1498, evictions: 1108, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=30 wall_ns=160700792 paths=6752 sampled=576 authenticated_bytes=2842031 pooled=PoolReadCounters { leaf_requests: 1438, chain_edges: 3294, physical_record_calls: 9464, physical_group_decodes: 1055, physical_group_decoded_bytes: 38044021, physical_group_cache_hits: 8409, value_group_decodes: 8430, pack_fetches: 76, pack_bytes: 1780394 }
+VERIFY_STATE_BEGIN state=31
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1661, 106590, 21561000, 0, 0, 0, 0, 340, 2248669, 1661, 4889665, 4291750, 0, 0, 0, 199, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1129, 48973, 31806000, 0, 0, 0, 0, 502, 3847948, 1129, 3243777, 51224674, 0, 0, 0, 486, 10, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=76060583 lengths=63087292 digest=1187916
+HISTORY_ENGINE_WORK {"state":31,"stage":"verification","available":true,"values":[2790, 155563, 53367000, 0, 0, 0, 0, 842, 6096617, 2790, 8133442, 55516424, 0, 0, 0, 685, 13, 0, 0]}
+VERIFY_METADATA_MEMO state=31 cumulative=Counters { hits: 9504, misses: 1590, source_calls: 277, source_objects: 1590, evictions: 1200, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=31 wall_ns=171641333 paths=6750 sampled=575 authenticated_bytes=1773917 pooled=PoolReadCounters { leaf_requests: 1528, chain_edges: 3634, physical_record_calls: 10324, physical_group_decodes: 1213, physical_group_decoded_bytes: 43794359, physical_group_cache_hits: 9111, value_group_decodes: 9296, pack_fetches: 79, pack_bytes: 1857132 }
+VERIFY_STATE_BEGIN state=32
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1390, 93174, 18405000, 0, 0, 0, 0, 340, 2297212, 1390, 4802452, 4377820, 0, 0, 0, 197, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1229, 53968, 33383000, 0, 0, 0, 0, 554, 4222257, 1229, 3497418, 50092016, 0, 0, 0, 530, 8, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[23, 2635, 1485000, 0, 0, 0, 0, 21, 175838, 23, 77292, 1083696, 0, 0, 0, 7, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=69935125 lengths=66824000 digest=8395625
+HISTORY_ENGINE_WORK {"state":32,"stage":"verification","available":true,"values":[2642, 149777, 53273000, 0, 0, 0, 0, 915, 6695307, 2642, 8377162, 55553532, 0, 0, 0, 734, 13, 0, 0]}
+VERIFY_METADATA_MEMO state=32 cumulative=Counters { hits: 10092, misses: 1672, source_calls: 290, source_objects: 1672, evictions: 1281, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=32 wall_ns=176085875 paths=6622 sampled=566 authenticated_bytes=3316962 pooled=PoolReadCounters { leaf_requests: 1608, chain_edges: 3810, physical_record_calls: 10836, physical_group_decodes: 1333, physical_group_decoded_bytes: 48186268, physical_group_cache_hits: 9503, value_group_decodes: 10053, pack_fetches: 82, pack_bytes: 1932333 }
+VERIFY_STATE_BEGIN state=33
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1632, 106462, 20761000, 0, 0, 0, 0, 359, 2403566, 1632, 5058790, 4769546, 0, 0, 0, 210, 5, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1727, 77354, 42237000, 0, 0, 0, 0, 640, 4759414, 1727, 4064698, 59656796, 0, 0, 0, 616, 23, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=78143292 lengths=88219292 digest=1357916
+HISTORY_ENGINE_WORK {"state":33,"stage":"verification","available":true,"values":[3359, 183816, 62998000, 0, 0, 0, 0, 999, 7162980, 3359, 9123488, 64426342, 0, 0, 0, 826, 28, 0, 0]}
+VERIFY_METADATA_MEMO state=33 cumulative=Counters { hits: 10706, misses: 1779, source_calls: 304, source_objects: 1779, evictions: 1384, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=33 wall_ns=202300625 paths=7057 sampled=604 authenticated_bytes=2780860 pooled=PoolReadCounters { leaf_requests: 1713, chain_edges: 4057, physical_record_calls: 11540, physical_group_decodes: 1479, physical_group_decoded_bytes: 53603575, physical_group_cache_hits: 10061, value_group_decodes: 10965, pack_fetches: 86, pack_bytes: 2098420 }
+VERIFY_STATE_BEGIN state=34
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1759, 112967, 23105000, 0, 0, 0, 0, 390, 2441658, 1759, 5890941, 5199663, 0, 0, 0, 232, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1833, 81055, 46625000, 0, 0, 0, 0, 760, 5618522, 1833, 4724451, 71347805, 0, 0, 0, 736, 14, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=83644750 lengths=95100334 digest=1377708
+HISTORY_ENGINE_WORK {"state":34,"stage":"verification","available":true,"values":[3592, 194022, 69730000, 0, 0, 0, 0, 1150, 8060180, 3592, 10615392, 76547468, 0, 0, 0, 968, 18, 0, 0]}
+VERIFY_METADATA_MEMO state=34 cumulative=Counters { hits: 11374, misses: 1889, source_calls: 317, source_objects: 1889, evictions: 1496, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=34 wall_ns=215732208 paths=7314 sampled=626 authenticated_bytes=2867435 pooled=PoolReadCounters { leaf_requests: 1821, chain_edges: 4332, physical_record_calls: 12306, physical_group_decodes: 1633, physical_group_decoded_bytes: 59367135, physical_group_cache_hits: 10673, value_group_decodes: 11936, pack_fetches: 89, pack_bytes: 2182982 }
+VERIFY_STATE_BEGIN state=35
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1823, 117951, 23910000, 0, 0, 0, 0, 405, 2468495, 1823, 6166270, 6251424, 0, 0, 0, 240, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1907, 83026, 48530000, 0, 0, 0, 0, 778, 5817892, 1907, 4698589, 74140715, 0, 0, 0, 752, 24, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=84077083 lengths=96564583 digest=1599209
+HISTORY_ENGINE_WORK {"state":35,"stage":"verification","available":true,"values":[3730, 200977, 72440000, 0, 0, 0, 0, 1183, 8286387, 3730, 10864859, 80392139, 0, 0, 0, 992, 28, 0, 0]}
+VERIFY_METADATA_MEMO state=35 cumulative=Counters { hits: 12064, misses: 2006, source_calls: 331, source_objects: 2006, evictions: 1609, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=35 wall_ns=220188625 paths=7588 sampled=651 authenticated_bytes=2702250 pooled=PoolReadCounters { leaf_requests: 1936, chain_edges: 4476, physical_record_calls: 12824, physical_group_decodes: 1729, physical_group_decoded_bytes: 63072105, physical_group_cache_hits: 11095, value_group_decodes: 13055, pack_fetches: 93, pack_bytes: 2354951 }
+VERIFY_STATE_BEGIN state=36
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1863, 118792, 23541000, 0, 0, 0, 0, 370, 2324826, 1863, 6101535, 4946756, 0, 0, 0, 222, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1467, 64060, 37744000, 0, 0, 0, 0, 602, 4456161, 1467, 3731002, 54847336, 0, 0, 0, 578, 7, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=81668292 lengths=77758333 digest=1435958
+HISTORY_ENGINE_WORK {"state":36,"stage":"verification","available":true,"values":[3330, 182852, 61285000, 0, 0, 0, 0, 972, 6780987, 3330, 9832537, 59794092, 0, 0, 0, 800, 11, 0, 0]}
+VERIFY_METADATA_MEMO state=36 cumulative=Counters { hits: 12695, misses: 2113, source_calls: 344, source_objects: 2113, evictions: 1712, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=36 wall_ns=195667500 paths=7181 sampled=613 authenticated_bytes=2374755 pooled=PoolReadCounters { leaf_requests: 2041, chain_edges: 4678, physical_record_calls: 13438, physical_group_decodes: 1838, physical_group_decoded_bytes: 67330852, physical_group_cache_hits: 11600, value_group_decodes: 14150, pack_fetches: 96, pack_bytes: 2413858 }
+VERIFY_STATE_BEGIN state=37
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1602, 102294, 21011000, 0, 0, 0, 0, 275, 1847864, 1602, 4953132, 3336631, 0, 0, 0, 159, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[658, 28865, 17267000, 0, 0, 0, 0, 302, 2167034, 658, 1744041, 24578945, 0, 0, 0, 287, 6, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[49, 1978, 1621000, 0, 0, 0, 0, 23, 155539, 49, 120541, 668015, 0, 0, 0, 14, 5, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=69760583 lengths=37917750 digest=5221958
+HISTORY_ENGINE_WORK {"state":37,"stage":"verification","available":true,"values":[2309, 133137, 39899000, 0, 0, 0, 0, 600, 4170437, 2309, 6817714, 28583591, 0, 0, 0, 460, 14, 0, 0]}
+VERIFY_METADATA_MEMO state=37 cumulative=Counters { hits: 13168, misses: 2206, source_calls: 356, source_objects: 2206, evictions: 1799, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=37 wall_ns=137166208 paths=5696 sampled=482 authenticated_bytes=1526161 pooled=PoolReadCounters { leaf_requests: 2132, chain_edges: 4888, physical_record_calls: 14040, physical_group_decodes: 1980, physical_group_decoded_bytes: 73378489, physical_group_cache_hits: 12060, value_group_decodes: 14993, pack_fetches: 99, pack_bytes: 2482581 }
+VERIFY_STATE_BEGIN state=38
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1876, 123420, 23403000, 0, 0, 0, 0, 370, 2274949, 1876, 6266306, 5597515, 0, 0, 0, 193, 6, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[2200, 98073, 58693000, 0, 0, 0, 0, 892, 6677565, 2200, 5772225, 85284431, 0, 0, 0, 868, 32, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[16, 605, 389000, 0, 0, 0, 0, 13, 57461, 16, 35916, 295120, 0, 0, 0, 4, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=79847167 lengths=120760666 digest=2379459
+HISTORY_ENGINE_WORK {"state":38,"stage":"verification","available":true,"values":[4092, 222098, 82485000, 0, 0, 0, 0, 1275, 9009975, 4092, 12074447, 91177066, 0, 0, 0, 1065, 40, 0, 0]}
+VERIFY_METADATA_MEMO state=38 cumulative=Counters { hits: 13829, misses: 2349, source_calls: 374, source_objects: 2349, evictions: 1925, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=38 wall_ns=245483458 paths=8016 sampled=687 authenticated_bytes=3929738 pooled=PoolReadCounters { leaf_requests: 2271, chain_edges: 5093, physical_record_calls: 14728, physical_group_decodes: 2090, physical_group_decoded_bytes: 78070442, physical_group_cache_hits: 12638, value_group_decodes: 16048, pack_fetches: 104, pack_bytes: 2721569 }
+VERIFY_STATE_BEGIN state=39
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[1923, 124879, 22572000, 0, 0, 0, 0, 376, 2249671, 1923, 6217212, 5866765, 0, 0, 0, 201, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[2244, 99298, 53436000, 0, 0, 0, 0, 935, 6824709, 2244, 5550229, 89231043, 0, 0, 0, 907, 8, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=84370583 lengths=110856792 digest=1568167
+HISTORY_ENGINE_WORK {"state":39,"stage":"verification","available":true,"values":[4167, 224177, 76008000, 0, 0, 0, 0, 1311, 9074380, 4167, 11767441, 95097808, 0, 0, 0, 1108, 11, 0, 0]}
+VERIFY_METADATA_MEMO state=39 cumulative=Counters { hits: 14524, misses: 2470, source_calls: 390, source_objects: 2470, evictions: 2041, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=39 wall_ns=239518667 paths=8196 sampled=704 authenticated_bytes=3679947 pooled=PoolReadCounters { leaf_requests: 2388, chain_edges: 5365, physical_record_calls: 15506, physical_group_decodes: 2230, physical_group_decoded_bytes: 84324152, physical_group_cache_hits: 13276, value_group_decodes: 17111, pack_fetches: 107, pack_bytes: 2828478 }
+VERIFY_STATE_BEGIN state=40
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[2065, 130701, 23764000, 0, 0, 0, 0, 388, 2338807, 2065, 6626848, 6219116, 0, 0, 0, 210, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[2379, 103894, 60387000, 0, 0, 0, 0, 1027, 7642626, 2379, 6401885, 102733989, 0, 0, 0, 999, 12, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=89867083 lengths=122625834 digest=1588666
+HISTORY_ENGINE_WORK {"state":40,"stage":"verification","available":true,"values":[4444, 234595, 84151000, 0, 0, 0, 0, 1415, 9981433, 4444, 13028733, 108953105, 0, 0, 0, 1209, 16, 0, 0]}
+VERIFY_METADATA_MEMO state=40 cumulative=Counters { hits: 15231, misses: 2598, source_calls: 408, source_objects: 2598, evictions: 2163, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=40 wall_ns=257819250 paths=8262 sampled=712 authenticated_bytes=3631479 pooled=PoolReadCounters { leaf_requests: 2512, chain_edges: 5697, physical_record_calls: 16418, physical_group_decodes: 2383, physical_group_decoded_bytes: 91084822, physical_group_cache_hits: 14035, value_group_decodes: 18263, pack_fetches: 111, pack_bytes: 2958324 }
+VERIFY_STATE_BEGIN state=41
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[2119, 133212, 22128000, 0, 0, 0, 0, 395, 2292326, 2119, 6679696, 6203426, 0, 0, 0, 217, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[1572, 67376, 42153000, 0, 0, 0, 0, 708, 5271455, 1572, 4317678, 69751417, 0, 0, 0, 688, 7, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=86377667 lengths=83979542 digest=1757625
+HISTORY_ENGINE_WORK {"state":41,"stage":"verification","available":true,"values":[3691, 200588, 64281000, 0, 0, 0, 0, 1103, 7563781, 3691, 10997374, 75954843, 0, 0, 0, 905, 10, 0, 0]}
+VERIFY_METADATA_MEMO state=41 cumulative=Counters { hits: 15942, misses: 2714, source_calls: 425, source_objects: 2714, evictions: 2285, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=41 wall_ns=216521500 paths=8297 sampled=715 authenticated_bytes=2378618 pooled=PoolReadCounters { leaf_requests: 2624, chain_edges: 5993, physical_record_calls: 17234, physical_group_decodes: 2504, physical_group_decoded_bytes: 96199488, physical_group_cache_hits: 14730, value_group_decodes: 19473, pack_fetches: 114, pack_bytes: 3042567 }
+VERIFY_STATE_BEGIN state=42
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[2040, 131973, 22229000, 0, 0, 0, 0, 423, 2661376, 2040, 6980522, 7586750, 0, 0, 0, 215, 5, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[2546, 111995, 66136000, 0, 0, 0, 0, 1019, 7424452, 2546, 6201417, 106468456, 0, 0, 0, 995, 32, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[32, 1560, 784000, 0, 0, 0, 0, 27, 144665, 32, 85584, 536992, 0, 0, 0, 8, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=87797666 lengths=129455000 digest=4783542
+HISTORY_ENGINE_WORK {"state":42,"stage":"verification","available":true,"values":[4618, 245528, 89149000, 0, 0, 0, 0, 1469, 10230493, 4618, 13267523, 114592198, 0, 0, 0, 1218, 41, 0, 0]}
+VERIFY_METADATA_MEMO state=42 cumulative=Counters { hits: 16669, misses: 2862, source_calls: 444, source_objects: 2862, evictions: 2431, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=42 wall_ns=271033000 paths=8668 sampled=747 authenticated_bytes=4236073 pooled=PoolReadCounters { leaf_requests: 2768, chain_edges: 6146, physical_record_calls: 17828, physical_group_decodes: 2609, physical_group_decoded_bytes: 100500467, physical_group_cache_hits: 15219, value_group_decodes: 20704, pack_fetches: 119, pack_bytes: 3320734 }
+VERIFY_STATE_BEGIN state=43
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[2121, 135459, 24562000, 0, 0, 0, 0, 427, 2465532, 2121, 6932631, 7596448, 0, 0, 0, 223, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[2129, 92574, 57492000, 0, 0, 0, 0, 900, 6931854, 2129, 5895156, 93750851, 0, 0, 0, 880, 8, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=89788042 lengths=115844583 digest=1600750
+HISTORY_ENGINE_WORK {"state":43,"stage":"verification","available":true,"values":[4250, 228033, 82054000, 0, 0, 0, 0, 1327, 9397386, 4250, 12827787, 101347299, 0, 0, 0, 1103, 11, 0, 0]}
+VERIFY_METADATA_MEMO state=43 cumulative=Counters { hits: 17445, misses: 2997, source_calls: 462, source_objects: 2997, evictions: 2563, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=43 wall_ns=256618792 paths=8814 sampled=760 authenticated_bytes=3337742 pooled=PoolReadCounters { leaf_requests: 2899, chain_edges: 6371, physical_record_calls: 18540, physical_group_decodes: 2689, physical_group_decoded_bytes: 103734023, physical_group_cache_hits: 15851, value_group_decodes: 21977, pack_fetches: 122, pack_bytes: 3426584 }
+VERIFY_STATE_BEGIN state=44
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[2105, 134944, 25273000, 0, 0, 0, 0, 441, 2630806, 2105, 7072236, 7930029, 0, 0, 0, 237, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[2323, 100962, 57846000, 0, 0, 0, 0, 974, 7072164, 2323, 5961256, 101537309, 0, 0, 0, 947, 12, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=91909208 lengths=116790000 digest=1784500
+HISTORY_ENGINE_WORK {"state":44,"stage":"verification","available":true,"values":[4428, 235906, 83119000, 0, 0, 0, 0, 1415, 9702970, 4428, 13033492, 109467338, 0, 0, 0, 1184, 15, 0, 0]}
+VERIFY_METADATA_MEMO state=44 cumulative=Counters { hits: 18259, misses: 3120, source_calls: 479, source_objects: 3120, evictions: 2688, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=44 wall_ns=262260833 paths=9060 sampled=782 authenticated_bytes=3473363 pooled=PoolReadCounters { leaf_requests: 3018, chain_edges: 6614, physical_record_calls: 19264, physical_group_decodes: 2754, physical_group_decoded_bytes: 106154057, physical_group_cache_hits: 16510, value_group_decodes: 23223, pack_fetches: 125, pack_bytes: 3530164 }
+VERIFY_STATE_BEGIN state=45
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[2332, 147034, 27015000, 0, 0, 0, 0, 474, 2919666, 2332, 7450071, 9858462, 0, 0, 0, 247, 5, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[2950, 128357, 75255000, 0, 0, 0, 0, 1211, 8898950, 2950, 7189095, 127095549, 0, 0, 0, 1180, 25, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=99218625 lengths=149820000 digest=1779500
+HISTORY_ENGINE_WORK {"state":45,"stage":"verification","available":true,"values":[5282, 275391, 102270000, 0, 0, 0, 0, 1685, 11818616, 5282, 14639166, 136954011, 0, 0, 0, 1427, 30, 0, 0]}
+VERIFY_METADATA_MEMO state=45 cumulative=Counters { hits: 19089, misses: 3267, source_calls: 499, source_objects: 3267, evictions: 2842, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=45 wall_ns=306406500 paths=9499 sampled=820 authenticated_bytes=4257405 pooled=PoolReadCounters { leaf_requests: 3161, chain_edges: 6951, physical_record_calls: 20224, physical_group_decodes: 2855, physical_group_decoded_bytes: 109983905, physical_group_cache_hits: 17369, value_group_decodes: 24534, pack_fetches: 130, pack_bytes: 3768121 }
+VERIFY_STATE_BEGIN state=46
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[2685, 161334, 29574000, 0, 0, 0, 0, 454, 2533410, 2685, 8424816, 9032969, 0, 0, 0, 241, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[2636, 110861, 64046000, 0, 0, 0, 0, 1131, 8092993, 2636, 6732427, 112981679, 0, 0, 0, 1104, 7, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[45, 1847, 1081000, 0, 0, 0, 0, 30, 171164, 45, 106871, 641648, 0, 0, 0, 11, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=106215959 lengths=123790541 digest=4883750
+HISTORY_ENGINE_WORK {"state":46,"stage":"verification","available":true,"values":[5366, 274042, 94701000, 0, 0, 0, 0, 1615, 10797567, 5366, 15264114, 122656296, 0, 0, 0, 1356, 13, 0, 0]}
+VERIFY_METADATA_MEMO state=46 cumulative=Counters { hits: 19898, misses: 3403, source_calls: 518, source_objects: 3403, evictions: 2989, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=46 wall_ns=285741333 paths=9141 sampled=790 authenticated_bytes=3505191 pooled=PoolReadCounters { leaf_requests: 3293, chain_edges: 7403, physical_record_calls: 21392, physical_group_decodes: 2985, physical_group_decoded_bytes: 115142266, physical_group_cache_hits: 18407, value_group_decodes: 26109, pack_fetches: 133, pack_bytes: 3850189 }
+VERIFY_STATE_BEGIN state=47
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[2381, 152917, 30010000, 0, 0, 0, 0, 462, 2676744, 2381, 7600361, 9521400, 0, 0, 0, 226, 6, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[2848, 125881, 78063000, 0, 0, 0, 0, 1145, 8546954, 2848, 7010340, 115515407, 0, 0, 0, 1106, 52, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[29, 1102, 726000, 0, 0, 0, 0, 16, 75249, 29, 60917, 506272, 0, 0, 0, 7, 2, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=105346208 lengths=152224292 digest=3592375
+HISTORY_ENGINE_WORK {"state":47,"stage":"verification","available":true,"values":[5258, 279900, 108799000, 0, 0, 0, 0, 1623, 11298947, 5258, 14671618, 125543079, 0, 0, 0, 1339, 60, 0, 0]}
+VERIFY_METADATA_MEMO state=47 cumulative=Counters { hits: 20722, misses: 3575, source_calls: 540, source_objects: 3575, evictions: 3150, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=47 wall_ns=320625084 paths=9987 sampled=861 authenticated_bytes=4696870 pooled=PoolReadCounters { leaf_requests: 3461, chain_edges: 7758, physical_record_calls: 22438, physical_group_decodes: 3149, physical_group_decoded_bytes: 121902851, physical_group_cache_hits: 19289, value_group_decodes: 27463, pack_fetches: 137, pack_bytes: 4091688 }
+VERIFY_STATE_BEGIN state=48
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[2525, 158696, 33597000, 0, 0, 0, 0, 565, 3941752, 2525, 8405711, 13281990, 0, 0, 0, 319, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[3326, 144595, 86252000, 0, 0, 0, 0, 1360, 10697515, 3326, 8735972, 138206929, 0, 0, 0, 1326, 22, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[15, 576, 369000, 0, 0, 0, 0, 13, 101877, 15, 35707, 141504, 0, 0, 0, 3, 1, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=113647459 lengths=178928583 digest=3190250
+HISTORY_ENGINE_WORK {"state":48,"stage":"verification","available":true,"values":[5866, 303867, 120218000, 0, 0, 0, 0, 1938, 14741144, 5866, 17177390, 151630423, 0, 0, 0, 1648, 27, 0, 0]}
+VERIFY_METADATA_MEMO state=48 cumulative=Counters { hits: 21610, misses: 3733, source_calls: 561, source_objects: 3733, evictions: 3300, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=48 wall_ns=360074167 paths=10422 sampled=899 authenticated_bytes=5834653 pooled=PoolReadCounters { leaf_requests: 3615, chain_edges: 8150, physical_record_calls: 23530, physical_group_decodes: 3293, physical_group_decoded_bytes: 127646730, physical_group_cache_hits: 20237, value_group_decodes: 28834, pack_fetches: 217, pack_bytes: 7322995 }
+VERIFY_STATE_BEGIN state=49
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[2677, 167344, 33141000, 0, 0, 0, 0, 508, 2984220, 2677, 8311977, 11742105, 0, 0, 0, 259, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[3398, 146163, 90899000, 0, 0, 0, 0, 1439, 10626278, 3398, 8706092, 149375952, 0, 0, 0, 1400, 19, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"remaining-digest","available":true,"sql_values":[32, 1213, 765000, 0, 0, 0, 0, 18, 125582, 32, 72713, 670160, 0, 0, 0, 8, 1, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+verify parts: walk=117494500 lengths=174636916 digest=3852667
+HISTORY_ENGINE_WORK {"state":49,"stage":"verification","available":true,"values":[6107, 314720, 124805000, 0, 0, 0, 0, 1965, 13736080, 6107, 17090782, 161788217, 0, 0, 0, 1667, 24, 0, 0]}
+VERIFY_METADATA_MEMO state=49 cumulative=Counters { hits: 22500, misses: 3895, source_calls: 584, source_objects: 3895, evictions: 3464, peak_bytes: 2097152, peak_rows: 437 }
+VERIFY_STATE_WORK state=49 wall_ns=362854792 paths=10614 sampled=917 authenticated_bytes=4978862 pooled=PoolReadCounters { leaf_requests: 3773, chain_edges: 8604, physical_record_calls: 24754, physical_group_decodes: 3472, physical_group_decoded_bytes: 134883283, physical_group_cache_hits: 21282, value_group_decodes: 30338, pack_fetches: 229, pack_bytes: 7711834 }
+VERIFY_STATE_BEGIN state=50
+VERIFY_PHASE_WORK {"stage":"walk","available":true,"sql_values":[2154, 141433, 31393000, 0, 0, 0, 0, 497, 3411330, 2154, 7452167, 10967735, 0, 0, 0, 259, 3, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
+VERIFY_PHASE_WORK {"stage":"file-roots","available":true,"sql_values":[2801, 120058, 83797000, 0, 0, 0, 0, 1263, 10654973, 2801, 8530412, 127999194, 0, 0, 0, 1227, 4, 0, 0],"blob_values":[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}

@@ -1,0 +1,42 @@
+{
+  "admission": "NOT_APPLICABLE",
+  "arms": [
+    "baseline",
+    "candidate"
+  ],
+  "baseline_run": "issue302-history53-value-retention-baseline1",
+  "blob_counter_fields": [
+    "matched_pack_open_calls",
+    "matched_pack_open_ns",
+    "matched_pack_open_failures",
+    "all_blob_read_calls",
+    "all_blob_requested_bytes",
+    "all_blob_returned_bytes",
+    "all_blob_read_ns",
+    "all_blob_read_failures",
+    "all_blob_close_calls",
+    "all_blob_close_ns",
+    "all_blob_close_failures"
+  ],
+  "cache": "whole source corpus and retained database content invalidated and mincore checked before each native child",
+  "candidate_run": "issue302-history53-value-retention-candidate1",
+  "children_per_arm": 1,
+  "complete_per_arm_budget_ns": 60000000000,
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "8e8df10184e144e521d57898c2f2a8d331b81eb928c5206488f3654e9bd62aeb",
+    "product_seal": "5a38e912ba345dd3dcd284efc0d059a300d57c0286f3003ff9940bbe023a9099",
+    "source_commit": "551f5f4e3a2bd610dc8f1753180b3d581663d471",
+    "source_dirty": false,
+    "source_tree": "31cec8facf5891fd717370a05ec9fc66dadf05c1"
+  },
+  "kind": "history53-native-proof-count-v3",
+  "native_budget_ns": 9500000000,
+  "phase_scope": "disjoint child phases nested inside outer per-state verification; never add child counters to parent",
+  "reuse": "original closed retained stores/producer roots/census/reference metadata; no speed rerun",
+  "scope": "native oracle/custody verification only; census/export/preservation of ordinary combined proof not included in native wall; no admission or proof promotion",
+  "workload_row": "history-stride3"
+}

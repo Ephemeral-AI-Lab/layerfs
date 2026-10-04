@@ -549,3 +549,47 @@ checks/file-root-phase-functional1. Prior497Coretests cover unchanged product
 8302782a9; no product LOC change. Freeze changed diagnostic harness then one
 labelled53native-only child per arm using original closed stores. Ordinary
 performance/combined proof admission remainsNOT_RUN at this new harness.
+
+
+###551f5f4e3 native53phase-count result
+
+ReferenceTIMEOUT9,504,788,000ns after49states, complete25,791,683,625ns;
+candidateTIMEOUT9,507,372,833ns after45, complete23,861,268,458ns. Bothnative
+children cold/closed ownerSHA256 preservationPASS; original manifests audited.
+Diagnosticonly, one child/arm, no performance/proof admission or oldrow promotion.
+The unequal49/45coverage is not an overall wall comparison.
+
+Completeprefix43child phases (SQL/VFS observer values, BLOBexactcall counters):
+
+|Phase|Reference pack acquisitions/VFSrequestedB|Candidate acquisitions/VFSrequestedB|Candidate BLOBrequested=returnedB/readcalls/readns|
+|---|---:|---:|---:|
+|walk|5619 /124914338|1604 /108034252|49707462 /3208 /29066536|
+|file-roots|17381 /1605225756|27310 /3114098218|2980405669 /74706 /759693478|
+|remaining-digest|109 /5781814|75 /7590604|6246126 /177 /6934408|
+
+Reference usescolumn bodySELECT, not incrementalBLOB; BLOBzero is actual route
+coverage, notzeroI/O. Candidate matched opens/filephase27310; allBLOBclose
+APIcalls54620 and open/read/close failurecounts0. Closecalls include every
+delegated invocation, including null handles; do not equate them to distinct
+resources or provider checked-close counters. SQL/VFS/BLOBtimes/bytes are
+nested/different observations and must not be summed into fabricated device
+I/O or totalCPU/wall. FilephaseSQLVM/step643090000ns, matchedBLOBopen25255473ns,
+BLOBread759693478ns, allclose36921860ns; no direct SHA/canonical timer inferred.
+
+The current remaining gap is file-root acquisition:27310vs17381packs and
+3.114GBvs1.605GBVFS requests throughprefix43, with2.980GBBLOBbytes scanned.
+Next specific hypothesis to test: initial selected payload acquisition followed
+by whole reuse promotion duplicates full authentication scans. A prospective
+whole-payload choice may avoid those duplicate acquisitions under the same2MiB
+cache; sparse metadata selection can remain. Need a deterministic publicread
+fixture and changed count diagnosis before adoption, not another cache increase
+or weaker partial verification. This is a hypothesis, not proven globalcause.
+
+Rawissue302-history53-file-root-phase-cause1; [comparison](checks/file-root-phase-native1/comparison.json)
+retains fullphase arrays/field schemas/proof scopes/identities. Reproduce:
+`python3 core/benchmark/fs-bench-pro/diagnostics/run_history_proof_mechanism.py
+--out <fresh-owned-output> --states 53 --arm both
+--baseline-run issue302-history53-value-retention-baseline1
+--candidate-run issue302-history53-value-retention-candidate1`.
+Product830 unchanged; current551harness ordinary matched performance/combined
+proofNOT_RUN. Limits/resources/cold/wholeSHA unchanged,goalACTIVE.
