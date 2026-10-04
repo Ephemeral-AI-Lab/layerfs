@@ -32,7 +32,7 @@ class SqliteStep10(unittest.TestCase):
     def test_unresolved_contract_refuses_before_build_setup_or_sample(self):
         with patch.object(f,'INIT_ALLOCATION_RULE',None):
             with self.assertRaisesRegex(ValueError,'allocation'):f.run(f.REQUIRED[0],None,'candidate',None,None)
-        with self.assertRaisesRegex(ValueError,'history selection'):f.run(f.REQUIRED[4],None,'candidate',None,None)
+        with self.assertRaisesRegex(ValueError,'qualified reference pins'):f.run(f.REQUIRED[4],None,'candidate',None,None)
     def test_wait4_is_per_child_and_watchdog_keeps_failed_output(self):
         with tempfile.TemporaryDirectory() as d:
             out=Path(d)

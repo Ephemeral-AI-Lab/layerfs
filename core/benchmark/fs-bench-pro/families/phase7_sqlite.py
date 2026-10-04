@@ -83,10 +83,11 @@ def build(root,arm,out,common):
     finally:
         if temporary is not None:temporary.unlink()
 
-def run(selection,output,arm,baseline_root,common):
+def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pins=None):
     case=CASES[selection]
     if case.fixture is None:
-        raise ValueError('registered history selection awaits actual profile-aware driver/proof/cold binding; owner60/170/170 performance budgets restored; no substitute sample')
+        from families import phase7_history
+        return phase7_history.run(case,output,arm,baseline_root,common,corpus_root,reference_pins)
     if INIT_ALLOCATION_RULE is None:
         raise ValueError('prospective Init allocation contract is pending; no admission arm is authorized under a guessed gate')
     if os.uname().sysname!='Darwin':raise ValueError('required SQLite full-sync profile and wait4 accounting are macOS-only')

@@ -1717,3 +1717,8 @@ and final custody, charged inside lifecycle in both arms; process-group watchdog
 Six native capability, five registry/watchdog, three facade checks and example
 Clippy PASS; both release/locked drivers build under30s. No performance sample.
 See SQLITE-HISTORY-COLD-BINDING.md; actual runner/proof/observer freeze pending.
+
+-2026-10-04: sole-runner history scaffold and combined bounded proof child added;
+observer pre-sample gate remains explicit. Owner prioritizes all four supported
+Disposable Init sizes independently of history integration; freeze and run
+matched one-arm-per-case campaign next. No speed result claimed at this point.

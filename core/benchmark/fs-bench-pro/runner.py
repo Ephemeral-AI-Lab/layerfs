@@ -388,6 +388,8 @@ def main():
     run_parser.add_argument("--out", required=True)
     run_parser.add_argument("--arm", choices=["baseline", "candidate"])
     run_parser.add_argument("--baseline-root")
+    run_parser.add_argument("--reference-pins")
+    run_parser.add_argument("--corpus")
     proof_parser = commands.add_parser("prove")
     proof_parser.add_argument("--run", required=True)
     proof_parser.add_argument("--out", required=True)
@@ -439,7 +441,7 @@ def main():
         if selection in sqlite_phase7.CASES:
             if args.arm is None or args.arm=="baseline" and args.baseline_root is None:
                 parser.error("SQLite Phase7 requires an arm and owned baseline root")
-            print(sqlite_phase7.run(selection,args.out,args.arm,args.baseline_root,sys.modules[__name__]))
+            print(sqlite_phase7.run(selection,args.out,args.arm,args.baseline_root,sys.modules[__name__],corpus_root=args.corpus,reference_pins=args.reference_pins))
             return
         if selection in causes.CASES:
             if args.arm is None:

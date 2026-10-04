@@ -82,3 +82,20 @@ pass. This is a harness check, not a full-history sample or production proof.
 Remaining: cold handling across retained states and predecessor reads, bounded
 combined proof invocation, profile readbacks, matched runner/observer seals and
 all-seven qualification. No numerical result promoted.
+
+The sole runner now routes history selections to a dedicated binding and accepts
+--corpus/--reference-pins. Candidate preflight refuses missing/unqualified pins
+before setup; build binding creates only temporary reference examples, seals
+shared inputs and reuses identity-matched release binaries. A bounded proof
+child combines actual census/export, namespace/custody verification and original
+file preservation. Actual performance invocation remains explicitly stopped at
+an observer-freeze gate; this scaffold is not a history admission runner yet.
+Focused registry and census/provenance checks pass. No history sample was taken.
+
+Owner milestone update: independently runnable supported Disposable Init100,
+1000,10000,100000 is now first, without waiting for unrelated history observer/
+proof integration. Preserve existing cold/release/identity/settings/worker/
+buffer/storage/cleanup/budget/proof gates and one sample per case/arm. Then
+return to the three histories; Durable measurement follows all-seven Disposable
+qualification at the same implementation identity. This changes scheduling,
+not the durable terminal goal or any comparison requirement.

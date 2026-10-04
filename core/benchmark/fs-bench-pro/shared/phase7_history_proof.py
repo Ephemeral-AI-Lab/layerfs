@@ -177,3 +177,40 @@ def validate_pins(pins, matched_identity):
     if pins != derived or pins['identity'] != matched_identity:
         raise ValueError('root pins do not match qualified reference/paired harness identity')
     return records
+
+
+def main():
+    """One bounded proof child owns census/export, native proof and preservation."""
+    import argparse
+    import subprocess
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--request', required=True)
+    args = parser.parse_args()
+    request = json.loads(Path(args.request).read_text())
+    out = Path(request['out'])
+    child = request['producer']
+    if request['arm'] == 'candidate':
+        validate_pins(json.loads(Path(request['pins']).read_text()), request['identity'])
+    metadata = out/'reference-metadata.tsv' if request['arm'] == 'baseline' else None
+    census = collect(request['db'], request['arm'], child, request['row'], metadata)
+    (out/'census.json').write_text(json.dumps(census, sort_keys=True, indent=2)+'\n')
+    receipt = out/'producer-proof-input.json'
+    receipt.write_text(json.dumps({'run': {'child': child}})+'\n')
+    command = [request['verifier'], request['corpus'], request['db'], str(receipt), request['row'], 'complete']
+    command += ['reference', 'independent-reference', str(metadata)] if request['arm'] == 'baseline' else [request['profile'], request['pins']]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    (out/'namespace-proof.stdout').write_text(result.stdout); (out/'namespace-proof.stderr').write_text(result.stderr)
+    if result.returncode: raise ValueError('independent namespace/custody proof failed; see retained output')
+    native = json.loads(result.stdout)
+    if native.get('status') != 'CHECKED' or native.get('states') != child['states'] or native.get('custody_states') != child['states']:
+        raise ValueError('independent namespace/custody proof incomplete')
+    if request['arm'] == 'candidate' and native.get('independent_root_pins') != 'CHECKED':
+        raise ValueError('candidate independent roots not checked')
+    for owner_record in census['owners']:
+        if digest(owner_record['path']) != owner_record['sha256_before'] or any(Path(owner_record['path']+s).exists() for s in ('-wal','-shm','-journal')):
+            raise ValueError('namespace proof changed original owner')
+    print(json.dumps(native, sort_keys=True))
+
+
+if __name__ == '__main__':
+    main()
