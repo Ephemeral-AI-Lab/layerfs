@@ -57,3 +57,51 @@ existing oversized singleton is isolated, with no companion bodies. Large packs
 therefore keep separate INSERTs; batching targets small packs without increasing
 payload binding ownership. A three192KiB-pack count/readback check confirms three
 INSERTs within one transaction. This deliberately limits potential speed savings.
+
+
+## Matched ordinary Init1000 at c55bfa2f3
+
+One arm each, frozen source/tree/harness/fixture identities matched and clean.
+Reference126,033,958ns /candidate229,371,791ns, ratio1.819920557, time FAIL:
+10*candidate=2,293,717,910 >11*reference=1,386,373,538. Candidate Init-only
+204,686,125ns; bootstrap22,935,625ns, checkpoint1,442,083ns, close274,458ns
+are recorded separately. Reference Init119,510,209ns/bootstrap6,436,500ns/
+close86,666ns. The compared product clock includes these lifecycle terms.
+
+Roots match; separate proof, source-content cold0, cleanup and budgets PASS.
+Complete commands248,184,916 /1,355,733,500ns (<15s), independent proofs
+56,384,417 /594,714,917ns (<9.5s). Prepared source was reused outside timers,
+fresh SQLite creation remained inside the product clock; release/locked
+worktree-local sealed executables and exact dependency/profile flags recorded.
+Final allocation23,101,440 /20,557,824B: candidate<=reference, storage PASS.
+No phase-only memory claim from lifetime RSS or partial counters.
+
+Candidate normal diagnostics:300statements,203,513VMsteps,32transactions,
+17write commits,10publications,4reservations (3ordinal),95bodies/20,125,908B,
+zero C2 pack/payload reads. COMMIT116,982,126ns is inclusive; its next phase
+116,921,335ns still dominates. FULL5,976,273ns/group1,888,577ns; overlapping
+stage totals are not added. The prior ordinary source had303statements, but
+separate windows and worker-arrival pack variation prevent a causal time delta.
+Small-pack page batching has a deterministic count benefit and retains existing
+ownership, but this workload's mostly-large packs do not yield a competitive
+speed result. It does not remedy the previously observed write/sync term.
+
+[Comparison receipt](checks/sqlite-packpages1000-comparison-treatment1/comparison.json),
+[reference receipt](checks/sqlite-packpages1000-baseline-treatment1/receipt.json),
+[candidate receipt](checks/sqlite-packpages1000-candidate-treatment1/receipt.json)
+retain raw identities, arithmetic, timings and every failure. Reproduction:
+`python3 core/benchmark/fs-bench-pro/runner.py run --case phase7-sqlite-init-1000-v2 --arm baseline --baseline-root target/phase7-baseline/layerfs --out benchmark-results/fs-bench-pro/issue302-sqlite-packpages1000-baseline-treatment1`,
+then the same case `--arm candidate --out benchmark-results/fs-bench-pro/issue302-sqlite-packpages1000-candidate-treatment1`.
+These existing output paths are receipts, not instructions to overwrite/rerun.
+
+Other Init100/10000/100000 and history stride10/3/1 are NOT_RUN at this identity.
+The latest Init1000 is FAIL. All seven remain required; no terminal success,
+unchanged-arm retry, durability relaxation or budget extension. Next cause work
+must attribute actual publication batch byte/row occupancy before selecting a
+safe publication-boundary change; existing aggregate VFS cost alone does not
+prove which boundaries can be removed within the unchanged limits.
+
+Implementation Production LOC137829->137867(+38), rootreference65417,
+core72412->72450,active28368->28406/inactive44044; migrationold191/
+new7958->7996/rest64263. Exact committed tree/parent confirmed. This evidence-only
+follow-up retains137867/delta0, subject to exact staged/committed confirmation.

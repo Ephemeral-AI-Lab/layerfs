@@ -1628,3 +1628,13 @@ bounded by actual SQL limits/512rows, within the same publication transaction.
 publication/ordinal/transaction checks PASS, fixture errors retained in report.
 No profile/buffer/cache/schema/dependency change. One matched ordinary Init1000
 pair next; allseven remain active. [Treatment](SQLITE-PACK-INSERT-PAGES.md).
+
+### Small-pack INSERT matched Init1000 result
+
+At c55bfa2f3 reference126,033,958ns/candidate229,371,791ns,1.819920557x,timeFAIL.
+Root/proof/cold0/cleanup/budgets/storagePASS (23,101,440/20,557,824B). Candidate
+300statements/203,513VM/32transactions/17write commits/10pub/4reserve/95bodies.
+Small-pack count benefit does not remove the measured write/acknowledgement term.
+[Full treatment and receipts](SQLITE-PACK-INSERT-PAGES.md) retain exact arithmetic
+and NOT_RUN selections; allsevenACTIVE. Next causal count: actual per-publication
+byte/row occupancy before any boundary change. No unchanged-arm speed retry.

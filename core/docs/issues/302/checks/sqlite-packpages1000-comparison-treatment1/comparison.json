@@ -1,0 +1,21 @@
+{
+  "gate": "FAIL",
+  "baseline_ns": 126033958,
+  "candidate_ns": 229371791,
+  "candidate_x10": 2293717910,
+  "baseline_x11": 1386373538,
+  "ratio": 1.8199205566487089,
+  "roots_match": true,
+  "allocation_baseline_bytes": 23101440,
+  "allocation_candidate_bytes": 20557824,
+  "receipts": {
+    "baseline": {
+      "path": "benchmark-results/fs-bench-pro/issue302-sqlite-packpages1000-baseline-treatment1/receipt.json",
+      "sha256": "60edc0f9278a4a31b0a060d55b6774c3d614ddfef4955ebd903db5ab257f09b1"
+    },
+    "candidate": {
+      "path": "benchmark-results/fs-bench-pro/issue302-sqlite-packpages1000-candidate-treatment1/receipt.json",
+      "sha256": "270e7782de065fb98c1e33d73c2f65a2cacf45fb9e9e9b6ac86c826a54fb13bd"
+    }
+  }
+}
