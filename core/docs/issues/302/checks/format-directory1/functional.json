@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "tests": 502,
+  "targets": 95,
+  "clippy": "workspace/alltargets-Dwarnings PASS",
+  "fmt": "PASS",
+  "boundary": 449,
+  "boundary_selftests": 12,
+  "fixture": "380 selected bytes; corrupt control fails after24B",
+  "measurement": "NOT_RUN pending frozen diagnostic"
+}

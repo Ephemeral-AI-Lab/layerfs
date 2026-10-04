@@ -2086,3 +2086,10 @@ PASS. No newcache/extraresources/weakerchecks; freeze/countdiag next,goalACTIVE.
   mutable value-input cache/invalidation stays local. Covering checksPASS, no
   larger cache/buffer/prefetch/worker or promotion-policy change. Freeze and one
   history17count cause next; no new performance/admission claim yet.
+
+
+-2026-10-04: shared-cache0446 count diagnostic complete46.833s/60s, coldPASS;
+  Save requests1,836,602,313B (1.9654%fewer), acquisitions25,989 (6.2514%fewer).
+  VerificationSKIPPED/admissionNOT_APPLICABLE; fullCore502/95targetsPASS.
+  Separate format-sized control acquisition begins with failing real SQLite
+  fixture4120B versus280B directory, same transaction/handle and unchanged bounds.

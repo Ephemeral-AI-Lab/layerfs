@@ -1,0 +1,24 @@
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-persistence)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.41s
+     Running tests/sqlite_pack_selection.rs (core/target/debug/deps/sqlite_pack_selection-0e872828aed24042)
+
+running 1 test
+test sqlite_selected_ranges_scan_once_close_and_match_the_full_body ... FAILED
+
+failures:
+
+---- sqlite_selected_ranges_scan_once_close_and_match_the_full_body stdout ----
+
+thread 'sqlite_selected_ranges_scan_once_close_and_match_the_full_body' panicked at crates/layerfs-persistence/tests/sqlite_pack_selection.rs:94:5:
+assertion `left == right` failed
+  left: 4120
+ right: 280
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    sqlite_selected_ranges_scan_once_close_and_match_the_full_body
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+error: test failed, to rerun pass `-p layerfs-persistence --test sqlite_pack_selection`

@@ -4,7 +4,7 @@ use super::{
     PACK_READ_PREFIX_BYTES,
 };
 use crate::location::PackInfo;
-use crate::{location::PackDomain, policy};
+use crate::{location::PackDomain, pack::layout, policy};
 
 /// Bounded physical units. These bytes are structurally checked by storage,
 /// then authenticated by canonical reconstruction or a value-catalogue digest.
@@ -60,8 +60,17 @@ impl AcquiredPackRead {
         {
             return Err(PersistenceError::Malformed);
         }
-        let mut prefix = vec![0; info.length.min(PACK_READ_PREFIX_BYTES)];
+        let mut prefix = vec![0; layout::HEADER_LEN];
         read_at(0, &mut prefix)?;
+        let header = layout::parse_control_header(&prefix, info.length)
+            .map_err(|_| PersistenceError::Malformed)?;
+        if header.body_offset > PACK_READ_PREFIX_BYTES
+            || PackDomain::for_lane(header.lane) != info.domain
+        {
+            return Err(PersistenceError::Malformed);
+        }
+        prefix.resize(header.body_offset, 0);
+        read_at(layout::HEADER_LEN, &mut prefix[layout::HEADER_LEN..])?;
         match plan.select(info, &prefix)? {
             PackReadChoice::Whole => {
                 let start = prefix.len();

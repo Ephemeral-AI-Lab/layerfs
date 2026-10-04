@@ -1257,3 +1257,14 @@ explicit private-write invalidation. Cache capacities, cohorts, framing/identity
 dependency/visibility/private/publication/transaction checks are unchanged.
 This removes a reproduced duplicate acquisition; no workload speed/VFS result
 is claimed until the count diagnostic and qualification provide evidence.
+
+
+### Format-sized scoped control acquisition (against0446bf884)
+
+Scoped acquisition reads and validates the fixed24B control header, derives the
+version-specific reserved directory width, then acquires that directory before
+planning group reads. The existing directory parser still requires the complete
+reserved region. Tight ordinary/native widths are280B; maximum prefix allowance
+is4120B. One transaction/BLOB handle covers all reads. Whole-selection policy,
+framing/canonical/dependency authentication and full-pack audit stay unchanged.
+Additional control read overhead is subject to count diagnostics.

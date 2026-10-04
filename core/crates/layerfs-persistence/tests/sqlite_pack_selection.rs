@@ -89,7 +89,12 @@ fn sqlite_selected_ranges_scan_once_close_and_match_the_full_body() {
         scoped.ranges()[0].1,
         body[range.offset..range.offset + range.length]
     );
-    let acquired = PACK_READ_PREFIX_BYTES + range.length;
+    let directory = layerfs_storage::pack::layout::parse_header(body)
+        .unwrap()
+        .body_offset;
+    assert_eq!(directory, 280);
+    assert_eq!(scoped.prefix().len(), directory);
+    let acquired = directory + range.length;
     assert_eq!(scoped.acquired_bytes(), acquired);
     let work = h.diagnostics().unwrap();
     assert_eq!(work.blob_open_calls - before.blob_open_calls, 1);
@@ -98,7 +103,24 @@ fn sqlite_selected_ranges_scan_once_close_and_match_the_full_body() {
         work.blob_read_bytes - before.blob_read_bytes,
         acquired as u64
     );
+    assert_eq!(work.blob_read_calls - before.blob_read_calls, 3);
     assert!(acquired < body.len() / 2);
+    for field in [0, 8, 12, 16, 20] {
+        let mut corrupt = body.to_vec();
+        corrupt[field] ^= 0xff;
+        let mut reads = Vec::new();
+        let result = AcquiredPackRead::acquire(
+            packs[0].info(),
+            &mut Plan(PackReadChoice::Whole),
+            |offset, out| {
+                reads.push((offset, out.len()));
+                out.copy_from_slice(&corrupt[offset..offset + out.len()]);
+                Ok(())
+            },
+        );
+        assert_eq!(result, Err(PersistenceError::Malformed));
+        assert_eq!(reads, vec![(0, 24)]);
+    }
     assert!(matches!(
         h.storage
             .read_pack_selection(i64::MAX, &mut Plan(PackReadChoice::Whole)),

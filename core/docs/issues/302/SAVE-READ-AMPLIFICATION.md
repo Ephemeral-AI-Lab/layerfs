@@ -78,3 +78,35 @@ python3 core/benchmark/fs-bench-pro/diagnostics/run_save_acquisition_cause.py --
 Accept a reduction in Save VFS requests and repeated acquisitions before making
 any new broad performance claim. Preserve all failures and omissions; previous
 qualified/failed rows are not relabeled. No deadline, cache or worker inflation.
+
+## Shared-cache count result (source0446bf884)
+
+The one count diagnostic completed in46.832501708s of the declared60s command
+budget. Source and database cold boundaries passed. Save/custody requested VFS
+bytes fell from1,873,421,324 to1,836,602,313 (36,819,011 fewer,1.9654%); pack
+acquisitions fell from27,722 to25,989 (1,733 fewer,6.2514%). Filesystem requests
+were28,377,170B/679acquisitions. Store allocation stayed49,594,368B.
+The comparison is a labeled mechanism diagnostic against the retained prior
+phase counts, not a new matched speed qualification. Verification SKIPPED;
+admission NOT_APPLICABLE. [Receipt](checks/save-acquisition-sharing1/count-receipt.json).
+Full Core502tests/95targets, Clippy, fmt and boundary449/23selftests PASS.
+
+## Separate format-sized directory treatment
+
+Against0446bf884, scoped acquisition validates the fixed24B header first, then
+reads exactly the lane/version's complete reserved directory width through the
+same read transaction and BLOB handle. Tight ordinary/native directories are
+280B; legacy directories retain their full width. The maximum4120B allowance,
+reserved-slot validation, group selection/promotion rules, canonical/dependency
+authentication and separate whole-pack audit are unchanged. Malformed control
+fields fail before directory/body reads. This adds one BLOB read per acquisition;
+its navigation cost must be observed, not assumed beneficial.
+
+The real SQLite fixture first failed because the scoped prefix was4120 rather
+than280B. After the change, its selected100B range must pay380B across three
+reads with one open/close; corrupt magic/version/count/length/reserved fields
+must fail after only the24B control read. New count result remains pending.
+
+Format-directory covering checks: full Core502tests/95targets, workspace all-target
+Clippy with warnings denied, fmt and boundary449/12 boundary selftests PASS. Count diagnostic
+will run once after freezing this separate treatment.

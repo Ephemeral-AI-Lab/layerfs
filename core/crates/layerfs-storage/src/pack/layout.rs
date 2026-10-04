@@ -389,6 +389,16 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
 /// Validates a bounded control/directory prefix against the separately declared
 /// complete physical length. This checks framing only, never pack authentication.
 pub fn parse_directory_header(bytes: &[u8], total_length: usize) -> StorageResult<PackHeader> {
+    let header = parse_control_header(bytes, total_length)?;
+    if bytes.len() < header.body_offset {
+        return Err(StorageError::Integrity("pack directory width"));
+    }
+    Ok(header)
+}
+
+/// Validates fixed control fields and derives the complete reserved directory
+/// width before directory I/O. This does not validate directory entries or bodies.
+pub fn parse_control_header(bytes: &[u8], total_length: usize) -> StorageResult<PackHeader> {
     let header = bytes
         .get(..HEADER_LEN)
         .ok_or(StorageError::Integrity("pack header"))?;
@@ -447,7 +457,7 @@ pub fn parse_directory_header(bytes: &[u8], total_length: usize) -> StorageResul
         return Err(StorageError::Integrity("pack length"));
     }
     let body_offset = HEADER_LEN + directory_entry_len(lane) * slots;
-    if used < body_offset + 1 || bytes.len() < body_offset {
+    if used < body_offset + 1 {
         return Err(StorageError::Integrity("pack directory width"));
     }
     let pack_limit = match version {
