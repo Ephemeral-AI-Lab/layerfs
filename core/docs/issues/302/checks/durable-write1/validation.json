@@ -1,0 +1,16 @@
+{
+  "tests": 524,
+  "reports": 100,
+  "failed": 0,
+  "ignored": 0,
+  "clippy": "PASS",
+  "fmt": "PASS",
+  "boundary": "PASS: scanned 457 production Rust/SQL files; semantic review still required",
+  "guard_self_tests": 23,
+  "harness_tests": 9,
+  "failed_logs_retained": [
+    "treatment-core-tests-final.log",
+    "treatment-core-tests-repaired.log"
+  ],
+  "custody_scope": "negative test rejects alias before SQL and preserves main/WAL bytes; does not promise recovery after external live-WAL link/unlink; normal canonical/empty-WAL/allocation tests retained"
+}

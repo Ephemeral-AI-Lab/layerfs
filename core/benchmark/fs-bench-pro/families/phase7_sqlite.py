@@ -127,6 +127,13 @@ for profile,names in OWNER_CLOSURE_CASES_BY_PROFILE.items():
             CASES[new]=Case(new,c.fixture,None,None,c.command_budget_ns,c.verification_budget_ns,profile)
             SHARED_ALLOCATION_CASES_BY_PROFILE[profile].append(new)
 
+WAL_RESERVATION_CASES_BY_PROFILE={'durable':[], 'disposable':[]}
+for profile,names in SHARED_ALLOCATION_CASES_BY_PROFILE.items():
+    for old in names:
+        c=CASES[old];new=old.replace('-shared-allocation-v1','-wal-reservation-v1')
+        CASES[new]=Case(new,c.fixture,None,None,c.command_budget_ns,c.verification_budget_ns,profile)
+        WAL_RESERVATION_CASES_BY_PROFILE[profile].append(new)
+
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"
@@ -196,7 +203,7 @@ def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pin
     if arm=='baseline' and (not root.is_relative_to(common.ROOT/'target/phase7-baseline') or subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()!=BASE or subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True)):
         raise ValueError('reference requires clean pinned owned checkout')
     out=common.owned(output);out.mkdir(parents=True)
-    record={'schema':'phase7-sqlite-step10-v2','case':case.id,'arm':arm,'status':'NOT_RUN','sample_count':0,'verification_status':'NOT_RUN','cache_status':'INCOMPLETE','cleanup':{'status':'NOT_RUN'},'comparison_scope':'inner complete product clock including fresh database create/open, real Init, required checkpoint and final close; external child wall reported separately','margin_arithmetic':'10*candidate_ns<=11*baseline_ns','cache_contract':contract.CACHE,'requested_profile':case.profile,'profile':PROFILE_IDS[case.profile] if arm=='candidate' else 'Phase4.5 MEMORY/OFF disclosed','command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'construction_workers':4,'environment_workers':1,'required_case_ids':SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] if case.id in SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] else OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] if case.id in OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] else REQUIRED_BY_PROFILE[case.profile],'allocation_rule':INIT_ALLOCATION_RULE}
+    record={'schema':'phase7-sqlite-step10-v2','case':case.id,'arm':arm,'status':'NOT_RUN','sample_count':0,'verification_status':'NOT_RUN','cache_status':'INCOMPLETE','cleanup':{'status':'NOT_RUN'},'comparison_scope':'inner complete product clock including fresh database create/open, real Init, required checkpoint and final close; external child wall reported separately','margin_arithmetic':'10*candidate_ns<=11*baseline_ns','cache_contract':contract.CACHE,'requested_profile':case.profile,'profile':PROFILE_IDS[case.profile] if arm=='candidate' else 'Phase4.5 MEMORY/OFF disclosed','command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'construction_workers':4,'environment_workers':1,'required_case_ids':WAL_RESERVATION_CASES_BY_PROFILE[case.profile] if case.id in WAL_RESERVATION_CASES_BY_PROFILE[case.profile] else SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] if case.id in SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] else OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] if case.id in OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] else REQUIRED_BY_PROFILE[case.profile],'allocation_rule':INIT_ALLOCATION_RULE}
     locks=[]
     try:
         for p in [common.RESULTS/'phase7-sqlite.lock']+([root/'target/phase7-sqlite.lock'] if arm=='baseline' else []):

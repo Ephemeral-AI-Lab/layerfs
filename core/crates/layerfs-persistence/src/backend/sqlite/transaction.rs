@@ -41,7 +41,27 @@ impl Transaction<'_> {
             if result.as_ref().err() == Some(&BackendError::Unknown) {
                 self.uncertain.set(true);
             }
-            result.map(|_| ())
+            result?;
+            if let Some(wal) = &self.owner.wal_allocation {
+                let start = Instant::now();
+                let result = wal.before_pack(capacity);
+                let wall = start.elapsed().as_nanos() as u64;
+                let mut work = self.work.borrow_mut();
+                work.preallocation_ns += wall;
+                work.wal_preallocation_ns += wall;
+                if let Ok((bytes, close)) = result {
+                    work.preallocation_calls += u64::from(bytes != 0);
+                    work.preallocation_bytes += bytes;
+                    work.preallocation_close_ns += close;
+                    work.wal_preallocation_calls += u64::from(bytes != 0);
+                    work.wal_preallocation_bytes += bytes;
+                }
+                if result.as_ref().err() == Some(&BackendError::Unknown) {
+                    self.uncertain.set(true);
+                }
+                result?;
+            }
+            Ok(())
         }
         #[cfg(not(target_os = "macos"))]
         {

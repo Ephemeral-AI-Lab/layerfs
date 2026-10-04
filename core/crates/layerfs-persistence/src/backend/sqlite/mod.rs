@@ -22,3 +22,6 @@ pub(crate) mod unit_io;
 pub(crate) mod unit_layout;
 mod units_publish;
 mod units_read;
+
+#[cfg(target_os = "macos")]
+mod wal_allocation;
