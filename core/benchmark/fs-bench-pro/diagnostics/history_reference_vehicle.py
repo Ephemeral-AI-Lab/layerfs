@@ -13,7 +13,7 @@ def generate(root: Path) -> tuple[str, dict[str, str]]:
     source = root / 'core/crates/layerfs-project/examples/benchmark_history.rs'
     text = source.read_text()
     seals = {str(source.relative_to(root)): hashlib.sha256(source.read_bytes()).hexdigest()}
-    for name in ('producer', 'retained', 'support', 'workload'):
+    for name in ('cold', 'producer', 'retained', 'support', 'workload'):
         path = source.parent / f'history_support/{name}.rs'
         seals[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
         old = f'#[path = "history_support/{name}.rs"]'
@@ -46,6 +46,8 @@ def generate(root: Path) -> tuple[str, dict[str, str]]:
         Store::create(&args[2], StoragePolicy::frozen_default(), timer.child("store"))).0?;
     let history_path = PathBuf::from(format!("{}.history.sqlite", args[2]));
     let history = sqlite::create(&history_path, &retained::config())?;''')
+    replace('cold::Boundary::new(vec![PathBuf::from(&args[2])], probe_states.is_none())?',
+            'cold::Boundary::new(vec![PathBuf::from(&args[2]), history_path.clone()], probe_states.is_none())?')
     replace('let reader = storage.reader()?;', 'let reader = StoreProvider::new(&storage);')
     replace('let save = storage.begin_save()?;', '''let mut save = Timing::disabled("history.begin", |timer|
             storage.begin_save(timer.child("save"))).0?;''')

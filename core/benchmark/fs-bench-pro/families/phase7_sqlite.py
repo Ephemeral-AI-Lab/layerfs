@@ -1,7 +1,7 @@
 """SQLite-only Step10 registry and direct Init runner; unresolved gates fail closed."""
 from dataclasses import dataclass
 from pathlib import Path
-import fcntl,hashlib,json,os,resource,shutil,subprocess,time,threading
+import fcntl,hashlib,json,os,resource,shutil,subprocess,time,threading,signal
 from families import init_namespace as init
 from shared import sqlite_contract as contract
 from shared import cold_native
@@ -36,11 +36,11 @@ HISTORY_BUDGET_RULE='owner-2026-10-04-restored-original-60-170-170-performance-o
 def invoke(command,folder,label,budget_ns,env,cwd):
     start=time.monotonic_ns();timeout=False
     with (folder/f'{label}.stdout').open('xb') as out,(folder/f'{label}.stderr').open('xb') as err:
-        child=subprocess.Popen(command,cwd=cwd,env=env,stdout=out,stderr=err)
+        child=subprocess.Popen(command,cwd=cwd,env=env,stdout=out,stderr=err,start_new_session=True)
         expired=threading.Event()
         def expire():
             expired.set()
-            try: child.kill()
+            try: os.killpg(child.pid,signal.SIGKILL)
             except ProcessLookupError: pass
         timer=threading.Timer(max(0,(budget_ns-(time.monotonic_ns()-start))/1e9),expire)
         timer.daemon=True;timer.start()

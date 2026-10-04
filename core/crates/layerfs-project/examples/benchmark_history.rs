@@ -1,6 +1,8 @@
 //! Actual retained-history producer on shared C2/C5 SQLite authority.
 //! Benchmark vehicle; qualification and matched baseline are separate.
 #![allow(dead_code)]
+#[path = "history_support/cold.rs"]
+mod cold;
 #[path = "history_support/producer.rs"]
 mod producer;
 #[path = "history_support/retained.rs"]
@@ -72,6 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let storage = Storage::new(handles.storage.clone())?;
     let profile_identity = handles.profile().identity;
     let bootstrap_ns = begin.elapsed().as_nanos();
+    let mut cold = cold::Boundary::new(vec![PathBuf::from(&args[2])], probe_states.is_none())?;
     let mut held = None;
     let mut previous_root = None;
     let mut previous_content = BTreeMap::<Vec<u8>, ObjectId>::new();
@@ -86,6 +89,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let count = probe_states.unwrap_or_else(|| row.states());
     let mut inventory = BTreeMap::<ObjectId, (u8, usize)>::new();
     for position in 0..count {
+        if position != 0 {
+            cold.check(position + 1)?;
+        }
         let state_stages_before = stages;
         let acquire = Instant::now();
         let transition = corpus.transition(position)?;
@@ -242,6 +248,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             transition.state.ordinal, transition.state.full157_index, built.root.0
         );
     }
+    cold.check(count + 1)?;
     let finalization = Instant::now();
     let custody_start = Instant::now();
     let custody = retained::verify(&handles.history, scope, &roots)?;
@@ -258,6 +265,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     drop(storage);
     drop(handles);
     let close_ns = close.elapsed().as_nanos();
+    eprintln!(
+        "HISTORY_COLD_TOTAL {{\"checks\":{},\"wall_ns\":{}}}",
+        cold.checks, cold.wall_ns
+    );
     if std::fs::read_dir(&scratch)?.next().is_some() {
         return Err("ordering scratch not empty".into());
     }

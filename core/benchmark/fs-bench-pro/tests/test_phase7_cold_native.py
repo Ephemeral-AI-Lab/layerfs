@@ -1,6 +1,8 @@
 """Real resident/cold primitive equivalence and fail-closed input custody."""
 import json
 import os
+import sqlite3
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -91,3 +93,43 @@ class ColdNative(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'seal mismatch'):
             cold_native.attest(self.out, bad, self.out, 2_000_000_000, invoke, runner.ROOT)
         self.assertFalse((self.out / 'cold.stdout').exists())
+
+    def test_live_memory_and_wal_owners_attest_all_body_pages_and_refuse_aliases(self):
+        for mode in ('MEMORY', 'WAL'):
+            path = self.out / f'live-{mode}.sqlite'
+            with sqlite3.connect(path) as db:
+                db.execute(f'PRAGMA journal_mode={mode}')
+                db.execute('PRAGMA mmap_size=0')
+                db.execute('CREATE TABLE values_fixture (body BLOB)')
+                db.execute('INSERT INTO values_fixture VALUES (?)', (b'x' * 1048576,))
+                db.commit()
+                paths = [str(path)]
+                if mode == 'WAL': paths.append(str(path) + '-wal')
+                result = subprocess.run([self.helper['binary'], '--files', *paths],
+                                        capture_output=True, text=True, timeout=2, check=True)
+                row = json.loads(result.stdout)
+                self.assertEqual(row['files'], len(paths))
+                self.assertEqual(row['resident_after'], 0)
+                self.assertGreater(row['resident_first'], 0)
+                # This capability check must preserve live SQLite contents.
+                self.assertEqual(db.execute('SELECT length(body) FROM values_fixture').fetchone(), (1048576,))
+                bad = subprocess.run([self.helper['binary'], '--files', str(path), str(path)],
+                                     capture_output=True, text=True, timeout=2)
+                self.assertNotEqual(bad.returncode, 0)
+                self.assertIn('duplicate file identity', bad.stderr)
+
+    def test_mixed_corpus_roots_cover_manifest_oracles_inputs_without_other_data(self):
+        corpus = self.out / 'corpus-shape'; corpus.mkdir()
+        roots = [corpus / 'manifest.json', corpus / 'inputs', corpus / 'oracles']
+        roots[0].write_bytes(b'manifest')
+        roots[1].mkdir(); roots[2].mkdir()
+        (roots[1] / 'blob').write_bytes(b'x' * 32768)
+        (roots[2] / 'oracle').write_bytes(b'oracle')
+        # Unrelated history data is intentionally outside the declared inventory.
+        (corpus / 'unrelated').write_bytes(b'not measured')
+        out = self.out / 'mixed-cold'; out.mkdir()
+        row = cold_native.attest_paths(roots, self.helper, out, 2_000_000_000, invoke, runner.ROOT)
+        self.assertEqual(row['files'], 3)
+        self.assertEqual(row['length_bytes'], 32768 + 8 + 6)
+        self.assertEqual(row['resident_after'], 0)
+        self.assertEqual(row['status'], 'PASS')

@@ -13,7 +13,7 @@ from history_reference_vehicle import generate, generate_verifier, BASE
 class HistoryVehicle(unittest.TestCase):
     def test_reference_facade_uses_unmodified_memory_engine_and_same_state_stages(self):
         source, seals = generate(ROOT)
-        self.assertEqual(len(seals), 5)
+        self.assertEqual(len(seals), 6)
         self.assertNotIn('handles.', source)
         self.assertNotIn('SqlitePersistenceProfile', source)
         self.assertIn('phase4.5-memory-off', source)

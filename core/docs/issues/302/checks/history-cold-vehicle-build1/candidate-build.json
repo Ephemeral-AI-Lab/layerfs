@@ -1,0 +1,33 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--release",
+    "--locked",
+    "-p",
+    "layerfs-project",
+    "--example",
+    "benchmark_history"
+  ],
+  "wall_ns": 2082791083,
+  "budget_ns": 30000000000,
+  "exit_code": 0,
+  "timed_out": false,
+  "child": null,
+  "cpu_ns": 6793220000,
+  "peak_rss_bytes": 301694976,
+  "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+  "source_seals": {
+    "core/crates/layerfs-project/examples/benchmark_history.rs": "9dc6e4919fb439e8567f39b90b9ec40f2df9ffbc266cb4a5144b12060b07a431",
+    "core/crates/layerfs-project/examples/history_support/cold.rs": "c87489ea8d4dbd8960a7f8fbd2b9cd26d0e1f6c9f3ca761a178e033b9c6de3d8",
+    "core/crates/layerfs-project/examples/history_support/producer.rs": "d247193b6e33b7b58899d07595c721d9733f5cad95255ed56836ff5b347c5361",
+    "core/crates/layerfs-project/examples/history_support/retained.rs": "53b79a02d56dbf0af754469756429b8e586c855676d701b1e6b7b702f0c79790",
+    "core/crates/layerfs-project/examples/history_support/support.rs": "38d8737f6dd643dee9a7452d6a82aea26b37ebb5c67d2868095b644a634adcbf",
+    "core/crates/layerfs-project/examples/history_support/workload.rs": "cb01e98bea3a3b7bb936686d9aa50658785d9345246d452bd5f598830b7529d6"
+  },
+  "profile": "release/locked",
+  "product_sample_count": 0
+}

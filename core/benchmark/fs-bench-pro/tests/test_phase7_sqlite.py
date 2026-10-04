@@ -40,3 +40,13 @@ class SqliteStep10(unittest.TestCase):
             self.assertEqual(r['exit_code'],0);self.assertFalse(r['timed_out']);self.assertEqual(r['child']['status'],'COMPLETE');self.assertGreater(r['wall_ns'],0);self.assertGreater(r['peak_rss_bytes'],0)
             r=f.invoke([sys.executable,'-c','import time; time.sleep(1)'],out,'timeout',50000000,{},d)
             self.assertTrue(r['timed_out']);self.assertNotEqual(r['exit_code'],0);self.assertTrue((out/'timeout.stderr').exists())
+
+    def test_watchdog_terminates_descendant_observers(self):
+        import time
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp); marker=out/'orphan-wrote'
+            child_code='import time; from pathlib import Path; time.sleep(0.2); Path('+repr(str(marker))+').touch()'
+            parent_code='import subprocess,time; subprocess.Popen(['+repr(sys.executable)+',"-c",'+repr(child_code)+']); time.sleep(2)'
+            result=f.invoke([sys.executable,'-c',parent_code],out,'tree-timeout',100000000,{},tmp)
+            self.assertTrue(result['timed_out']); time.sleep(0.3)
+            self.assertFalse(marker.exists(),'descendant survived measured-command timeout')

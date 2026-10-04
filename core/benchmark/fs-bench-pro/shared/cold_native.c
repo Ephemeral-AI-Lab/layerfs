@@ -114,8 +114,8 @@ static uint64_t precondition(const FTSENT *entry, size_t *length) {
     unmap_file(address, *length, entry->fts_path);
     return n;
 }
-static void walk(char *root, int final) {
-    char *paths[] = {root, NULL};
+static void walk(char **paths, int final) {
+    const char *root = paths[0];
     FTS *tree = fts_open(paths, FTS_PHYSICAL | FTS_NOCHDIR | FTS_NOSTAT, order);
     if (!tree) fail("fts_open", root);
     FTSENT *entry;
@@ -142,14 +142,52 @@ static void walk(char *root, int final) {
         }
     } else { c.files = files; c.bytes = bytes; c.pages = pages; c.first_fingerprint = fingerprint; }
 }
+static void files(char **paths, int count, int final) {
+    uint64_t bytes = 0, pages = 0;
+    fingerprint = UINT64_C(14695981039346656037);
+    for (int i = 0; i < count; i++) {
+        struct stat s;
+        if (lstat(paths[i], &s) || !S_ISREG(s.st_mode)) {
+            errno = EINVAL; fail("ordinary file required", paths[i]);
+        }
+        for (int j = 0; j < i; j++) {
+            struct stat previous;
+            if (lstat(paths[j], &previous)) fail("inventory", paths[j]);
+            if (s.st_dev == previous.st_dev && s.st_ino == previous.st_ino) {
+                errno = EINVAL; fail("duplicate file identity", paths[i]);
+            }
+        }
+        FTSENT entry = {0}; entry.fts_path = paths[i];
+        size_t length;
+        uint64_t n = final ? inspect(&entry, &length) : precondition(&entry, &length);
+        bytes += length; pages += length / page + (length % page != 0);
+        if (final) c.resident_after += n; else c.resident_first += n;
+        c.entries++;
+    }
+    if (final) {
+        if (c.files != (uint64_t)count || c.bytes != bytes || c.pages != pages || fingerprint != c.first_fingerprint) {
+            errno = EINVAL; fail("file inventory changed", paths[0]);
+        }
+    } else { c.files = (uint64_t)count; c.bytes = bytes; c.pages = pages; c.first_fingerprint = fingerprint; }
+}
 int main(int argc, char **argv) {
-    struct stat s;
-    if (argc != 2) { fprintf(stderr, "usage: phase7-cold SOURCE\n"); return 2; }
-    if (lstat(argv[1], &s) || !S_ISDIR(s.st_mode)) { errno = EINVAL; fail("ordinary directory required", argv[1]); }
+    int file_mode = argc >= 3 && !strcmp(argv[1], "--files");
+    int paths_mode = argc >= 3 && !strcmp(argv[1], "--paths");
+    if (!file_mode && !paths_mode && argc != 2) {
+        fprintf(stderr, "usage: phase7-cold SOURCE | --files FILE... | --paths PATH...\n"); return 2;
+    }
+    if (!file_mode && !paths_mode) {
+        struct stat s;
+        if (lstat(argv[1], &s) || !S_ISDIR(s.st_mode)) { errno = EINVAL; fail("ordinary directory required", argv[1]); }
+    }
     long value = sysconf(_SC_PAGESIZE);
     if (value <= 0) fail("page size", argv[1]);
     page = (size_t)value;
-    uint64_t begin = now(); walk(argv[1], 0); uint64_t middle = now(); walk(argv[1], 1); uint64_t end = now();
+    uint64_t begin = now();
+    if (file_mode) files(argv + 2, argc - 2, 0); else walk(argv + (paths_mode ? 2 : 1), 0);
+    uint64_t middle = now();
+    if (file_mode) files(argv + 2, argc - 2, 1); else walk(argv + (paths_mode ? 2 : 1), 1);
+    uint64_t end = now();
     printf("{\"files\":%"PRIu64",\"length_bytes\":%"PRIu64",\"total_pages\":%"PRIu64
            ",\"resident_first\":%"PRIu64",\"resident_after\":%"PRIu64",\"invalidated_files\":%"PRIu64
            ",\"page_size_bytes\":%zu,\"first_pass_ns\":%"PRIu64",\"attestation_ns\":%"PRIu64

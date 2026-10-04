@@ -1710,3 +1710,10 @@ hash-bound reference-root evidence helpers; focused tests pass after fixing a
 synthetic fixture's missing pack body column. Runner/cold/combined proof binding
 still pending; all seven supported Disposable measurements NOT_RUN, no durable
 parity/admission claim. See SQLITE-HISTORY-PROFILE-BINDING.md.
+
+-2026-10-04: history cold-boundary observer prerequisite added: mixed original
+corpus roots; whole database/WAL invalidation+zero-residency before later states
+and final custody, charged inside lifecycle in both arms; process-group watchdog.
+Six native capability, five registry/watchdog, three facade checks and example
+Clippy PASS; both release/locked drivers build under30s. No performance sample.
+See SQLITE-HISTORY-COLD-BINDING.md; actual runner/proof/observer freeze pending.

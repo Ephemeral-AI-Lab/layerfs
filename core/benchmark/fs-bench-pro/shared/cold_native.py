@@ -46,10 +46,17 @@ def build(root, out, invoke):
 
 
 def attest(root, helper, out, budget_ns, invoke, cwd):
+    return attest_paths([root], helper, out, budget_ns, invoke, cwd, single_tree=True)
+
+
+def attest_paths(paths, helper, out, budget_ns, invoke, cwd, single_tree=False):
+    if not paths:
+        raise ValueError("cold attestation requires explicit inputs")
     binary = Path(helper['binary'])
     if helper['inputs']['source_sha256'] != digest(SOURCE) or helper['binary_sha256'] != digest(binary):
         raise ValueError('cold helper source/binary seal mismatch')
-    result = invoke([str(binary), str(root)], out, 'cold', budget_ns, os.environ.copy(), cwd)
+    command = [str(binary)] + ([] if single_tree else ["--paths"]) + [str(path) for path in paths]
+    result = invoke(command, out, 'cold', budget_ns, os.environ.copy(), cwd)
     row = result['child']
     if result['exit_code'] != 0 or result['timed_out'] or not isinstance(row, dict):
         raise ValueError('native cold attestation failed; retained cold stdout/stderr')
