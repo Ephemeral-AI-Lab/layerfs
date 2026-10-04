@@ -1,0 +1,61 @@
+{
+  "files": {
+    "build.stderr": {
+      "bytes": 219,
+      "sha256": "cd844c20257d2e1bc052a26e38e0997b703bb56247bc1fce25f8a7cef31c578a"
+    },
+    "build.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "close.json": {
+      "bytes": 612,
+      "sha256": "41d50eb00c48d990e6ac7b77fd2273abbea8b4bb77f081f8441b7ccd2813f0c3"
+    },
+    "cold.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cold.stdout": {
+      "bytes": 366,
+      "sha256": "ff10753f858740524a8227e2fdaa3305268a11d0251b992e27474d2dbca2d234"
+    },
+    "driver.stderr": {
+      "bytes": 41229,
+      "sha256": "b71a33565dce07224096cfe703503c582478e43824ff424a474b9d77155d1b1e"
+    },
+    "driver.stdout": {
+      "bytes": 1610,
+      "sha256": "8456545b216493d8f5e2af0e22dc0e6b2baac6df93976b6aad75c76e1c40742d"
+    },
+    "observer-build.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "observer-build.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "receipt.json": {
+      "bytes": 366960,
+      "sha256": "26325d3054d3157eac111216a7147c49890db4106a26f44e4b6d26adc7693867"
+    },
+    "sql-work.json": {
+      "bytes": 205009,
+      "sha256": "a28e311d438cbc874f925b778d28c6f62acf27b1c1db931f5d70b440201c8115"
+    },
+    "store.sqlite": {
+      "bytes": 49573888,
+      "sha256": "3140f232ca68537f443fb3fa960f088d2ce39f464f2eda51427321719b3c15ea"
+    },
+    "store.sqlite.history.sqlite": {
+      "bytes": 41984,
+      "sha256": "44ea0ba408d803eb6be4bacf710a38911a06de9306f3ebd6d7393c18f79d6918"
+    },
+    "vfs.json": {
+      "bytes": 1036,
+      "sha256": "1da3f627fa952d5dd98977b0e85562ecf2d6399aec8b52602bf1a3bdd08ed833"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

@@ -1799,3 +1799,11 @@ pack counts plus qualified provider scopes added; synthetic2reads/1distinctPASS.
 User authorizes fresh labelled17mechanism pair, supplemental processing parity
 objective without subtracting acquisition or changing whole gate. Prior failures
 retained, Init artifacts pinned. Freeze and execute diagnostic next.
+
+-2026-10-04: authorized fresh17mechanism pair at6d148a2c1 completes both
+DIAGNOSTIC/cold0/originalroots/cleanup within60s. Processing17.457401624s ref/
+22.458082502s candidate; supplemental19.3213359625s objective unmet. Filesystem
+candidate SQLstep0.422s vsref1.938s but whole6.752s vs4.506s; save candidate
+2.815GBVFSreads vsref0.812GB and31155body acquisitions vs16484. Actual per-state
+prepare/reset/VM/reprepare/sort/first-seen-pack scopes retained. No admission or
+redundancy inference. Next pooled/canonical reconstruction/save read-lifetime work.

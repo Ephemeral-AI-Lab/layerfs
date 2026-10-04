@@ -1,0 +1,29 @@
+{
+  "admission": "NOT_APPLICABLE",
+  "fields": [
+    "statements",
+    "vm_steps",
+    "step_ns",
+    "exec_ns",
+    "fullscan_steps",
+    "sorts",
+    "reprepare",
+    "prepare_calls",
+    "prepare_ns",
+    "reset_calls",
+    "reset_ns",
+    "vfs_read_requested_bytes",
+    "vfs_write_submitted_bytes",
+    "vfs_sync_calls",
+    "vfs_close_calls",
+    "pack_body_acquisitions",
+    "new_distinct_pack_ids_lifetime",
+    "unattributed_pack_ids",
+    "read_begin_calls"
+  ],
+  "kind": "history17-stage-mechanism-v1",
+  "processing_ns": {
+    "baseline": 17457401624,
+    "candidate": 22458082502
+  }
+}

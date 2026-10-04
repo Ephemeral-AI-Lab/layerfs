@@ -1,0 +1,42 @@
+{
+  "admission": "NOT_APPLICABLE",
+  "distinct_scope": "new pack IDs first observed during this lifetime, not per-stage unique set; do not call all repeated acquisitions redundant",
+  "fields": [
+    "statements",
+    "vm_steps",
+    "step_ns",
+    "exec_ns",
+    "fullscan_steps",
+    "sorts",
+    "reprepare",
+    "prepare_calls",
+    "prepare_ns",
+    "reset_calls",
+    "reset_ns",
+    "vfs_read_requested_bytes",
+    "vfs_write_submitted_bytes",
+    "vfs_sync_calls",
+    "vfs_close_calls",
+    "pack_body_acquisitions",
+    "new_distinct_pack_ids_lifetime",
+    "unattributed_pack_ids",
+    "read_begin_calls"
+  ],
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "3e56db7cf027a7d1731990a2988cb598ef681cfe61a7480ae1cb3a37f2472a72",
+    "product_seal": "6b1451f99237ed2b9695807069046ed8482c652102ba946264b18eee17c0fac1",
+    "source_commit": "6d148a2c113865dc3d11686eef20e376d4fb5507",
+    "source_dirty": false,
+    "source_tree": "9e1f550c06e9dc9e0b7aa99e398b5f0fa15be72d"
+  },
+  "kind": "history17-stage-mechanism-v1",
+  "orchestrator_sha256": "b4e233891a9f4252c14afd3410b9b544af282f7fa72a47119fda5385651980fa",
+  "performance_budget_ns": 60000000000,
+  "processing_objective": "parity; <=19.3213359625s supplementary contextual target, whole-operation gate unchanged",
+  "samples_per_arm": 1,
+  "verification": "SKIPPED; existing canonical expected-root cross-check; diagnostic only"
+}
