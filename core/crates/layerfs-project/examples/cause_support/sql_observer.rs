@@ -5,7 +5,7 @@ use std::{
     collections::BTreeMap,
     ffi::{c_char, c_int, c_uint, c_void, CStr},
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicU64, AtomicUsize, Ordering},
         Mutex,
     },
     time::Instant,
@@ -36,6 +36,11 @@ static CALLS: [AtomicU64; N * DBS] = [const { AtomicU64::new(0) }; N * DBS];
 static WALL: [AtomicU64; N * DBS] = [const { AtomicU64::new(0) }; N * DBS];
 static VM: [AtomicU64; N * DBS] = [const { AtomicU64::new(0) }; N * DBS];
 static RAW: [AtomicU64; N * DBS] = [const { AtomicU64::new(0) }; N * DBS];
+static PROFILE_ACTIVE: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_os = "macos")]
+extern "C" {
+    fn dlsym(handle: *mut c_void, name: *const c_char) -> *mut c_void;
+}
 static ERRORS: AtomicU64 = AtomicU64::new(0);
 static CONNECTIONS: AtomicU64 = AtomicU64::new(0);
 static ACTIVE: Mutex<BTreeMap<usize, (Instant, usize)>> = Mutex::new(BTreeMap::new());
@@ -73,6 +78,15 @@ unsafe extern "C" fn trace(
     stmt: *mut c_void,
     duration: *mut c_void,
 ) -> c_int {
+    let pointer = PROFILE_ACTIVE.load(Ordering::Relaxed);
+    if pointer != 0 {
+        // SAFETY: the explicitly selected diagnostic library exports this fixed
+        // signature and remains loaded. Its thread-local guard covers both events.
+        let active: unsafe extern "C" fn() -> c_int = unsafe { std::mem::transmute(pointer) };
+        if unsafe { active() } != 0 {
+            return 0;
+        }
+    }
     if event == TRACE_STMT {
         // SAFETY: SQLite owns the SQL/connection strings for this callback's lifetime.
         let sql = unsafe { sqlite3_sql(stmt) };
@@ -144,6 +158,24 @@ unsafe extern "C" fn opened(
     }
 }
 pub fn initialize() -> Result<(), String> {
+    if std::env::var_os("LAYERFS_CAUSE_MEMORY_ARM").is_some() {
+        #[cfg(target_os = "macos")]
+        {
+            // SAFETY: explicit injected profile library, resolved before SQLite opens.
+            let pointer = unsafe {
+                dlsym(
+                    (-2isize) as *mut c_void,
+                    c"cause_memory_profile_active".as_ptr(),
+                )
+            };
+            if pointer.is_null() {
+                return Err("memory diagnostic guard symbol unavailable".into());
+            }
+            PROFILE_ACTIVE.store(pointer as usize, Ordering::Relaxed);
+        }
+        #[cfg(not(target_os = "macos"))]
+        return Err("memory profile observer unavailable on this platform".into());
+    }
     // SAFETY: called once before the diagnostic opens any SQLite connection;
     // SQLLOG's documented callback signature and process-lifetime state are used.
     let code = unsafe {

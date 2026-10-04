@@ -1638,3 +1638,15 @@ Small-pack count benefit does not remove the measured write/acknowledgement term
 [Full treatment and receipts](SQLITE-PACK-INSERT-PAGES.md) retain exact arithmetic
 and NOT_RUN selections; allsevenACTIVE. Next causal count: actual per-publication
 byte/row occupancy before any boundary change. No unchanged-arm speed retry.
+
+### MEMORY/OFF diagnostic (prospective)
+
+Priority is matched effective MEMORY/OFF mutation/Init comparison before another
+publication optimizer. ProductionWAL/FULL checks remain; tooling switches after
+validation and before first mutation, with actual before/effective/final readback.
+Candidate initialWAL validation/transition remains measuredbootstrap and is
+explicitly a lifecycle difference. Proof uses independent byte-copy WAL header,
+measured original unchanged, within9.5s. Capability/read42/refusal/copy checks,
+C-Werror/Python/reference seams/exampleClippy/fmtPASS; product unchanged.
+[Prospective contract](SQLITE-MEMORY-OFF-DIAGNOSTIC-CONTRACT.md). One new labeled
+paired diagnostic perarm next, no production speed rerun or admission claim.

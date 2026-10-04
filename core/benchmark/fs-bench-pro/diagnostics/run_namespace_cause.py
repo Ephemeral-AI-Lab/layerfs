@@ -9,7 +9,7 @@ from shared import cold_native
 from cause_reference_vehicle import generate,BASE
 
 def write(path,value):path.write_text(json.dumps(value,indent=2,sort_keys=True)+'\n')
-def run(arm,output,api_observer=False,vfs_observer=False):
+def run(arm,output,api_observer=False,vfs_observer=False,memory_off=False):
     if arm not in ('baseline','candidate'):raise ValueError('baseline or candidate required')
     out=common.owned(output);out.mkdir()
     base=ROOT/'target/phase7-baseline/layerfs';owner=base if arm=='baseline' else ROOT
@@ -25,6 +25,10 @@ def run(arm,output,api_observer=False,vfs_observer=False):
     prospective={'kind':'paired-cold-namespace-small-step-cause-diagnostic','arm':arm,'admission':'NOT_RUN','product_speed_sample_count':0,'declared_diagnostic_children':1,'identity':identity,'shared_source_sha256':seals,'command_budget_ns':15000000000,'verification_budget_ns':9500000000,'scope':'shared namespace caller through public C1/C2/C5; Service envelope omitted; fixed observers and canonical census added; not an admission clock','native_vm_counter_qualified':False,'trace_vm_scope':'prepared statements exposing STMT/PROFILE events; status reset at PROFILE; opaque blob/VFS/internal operations not inferred','required_root_equivalence':'both frozen production Init1000 roots and eachother','required_canonical_equivalence':'2003ID role/length inventory and identical digest; independently sampled byte/tree proof'}
     prospective['api_observer_enabled']=api_observer
     prospective['vfs_observer_enabled']=vfs_observer
+    prospective['memory_off_diagnostic']=memory_off
+    if memory_off:
+        prospective['profile_scope']='MEMORY/OFF before first mutation and at close; candidate retains original WAL/FULL validation and profile transition inside measured bootstrap; not a pure MEMORY/OFF connection-open lifecycle'
+        prospective['proof_scope']='candidate independent byte-copy with WAL header for unchanged production verifier; original measured database hash checked unchanged; all copy/hash/header/verification wall below9.5s'
     write(out/'prospective.json',prospective)
     temporary=None
     if arm=='baseline':
@@ -59,6 +63,18 @@ def run(arm,output,api_observer=False,vfs_observer=False):
         vfs=sqlite.archive(binary,ROOT,common)
         identity['vfs_observer']=vfs
         identity['vfs_source_sha256']=common.digest(ROOT/'core/benchmark/fs-bench-pro/diagnostics/sqlite_vfs_observer.c')
+    memory=proof_adapter=None
+    if memory_off:
+        for source_name,binary_name,dynamic in [('sqlite_memory_profile.c','sqlite-memory-profile.dylib',True),('sqlite_proof_journal.c','sqlite-proof-journal',False)]:
+            binary=out/binary_name
+            command=['clang','-O2','-Wall','-Wextra','-Werror']+(['-dynamiclib'] if dynamic else [])+[str(ROOT/'core/benchmark/fs-bench-pro/diagnostics'/source_name),'-lsqlite3','-o',str(binary)]
+            b=sqlite.invoke(command,out,binary_name+'-build',30000000000,os.environ.copy(),ROOT)
+            write(out/(binary_name+'-build.json'),b)
+            if b['exit_code']!=0 or b['timed_out']:raise ValueError('required memory diagnostic tool build failed')
+            artifact=sqlite.archive(binary,ROOT,common)
+            identity[source_name]={'artifact':artifact,'source_sha256':common.digest(ROOT/'core/benchmark/fs-bench-pro/diagnostics'/source_name)}
+            if dynamic:memory=artifact
+            else:proof_adapter=artifact
     helper=cold_native.build(ROOT,out,sqlite.invoke)
     case=init.CASES[sqlite.CASES['phase7-sqlite-init-1000-v2'].fixture]
     fixture=init.prepare(case,common.RESULTS/'sdk-prepared')
@@ -77,13 +93,31 @@ def run(arm,output,api_observer=False,vfs_observer=False):
     if vfs is not None:
         libraries=[x['path'] for x in [api,vfs] if x is not None]
         env.update({'DYLD_INSERT_LIBRARIES':':'.join(libraries),'LAYERFS_CAUSE_VFS_ENABLED':'1','LAYERFS_CAUSE_VFS_LOG':str(out/'sqlite-vfs.json')})
+    if memory is not None:
+        libraries=[x['path'] for x in [api,vfs,memory] if x is not None]
+        env.update({'DYLD_INSERT_LIBRARIES':':'.join(libraries),'LAYERFS_CAUSE_MEMORY_ARM':arm,'LAYERFS_CAUSE_MEMORY_DB':str(out/'store.sqlite'),'LAYERFS_CAUSE_MEMORY_LOG':str(out/'sqlite-memory.json')})
     child=sqlite.invoke([driver['path'],fixture['source'],str(out/'store.sqlite'),str(scratch),'phase7-sqlite-init-1000-v2'],out,'driver',remaining,env,owner)
     wall=time.monotonic_ns()-start
     result={**prospective,'frozen':identity,'fixture':fixture,'cold':cold,'run':child,'diagnostic_child_count':1,'command_wall_ns':wall,'cleanup':'PASS' if not list(scratch.iterdir()) else 'FAIL','status':'DIAGNOSTIC','verification':'NOT_RUN'}
     write(out/'receipt.json',result)
     if child['exit_code']==0 and not child['timed_out'] and child['child'] and child['child'].get('status')=='DIAGNOSTIC':
-        data=child['child'];proof=sqlite.invoke([verifier['path'],str(out/'store.sqlite'),str(out/'store.sqlite.history.sqlite' if arm=='baseline' else out/'store.sqlite'),data['root'],data['stack'],fixture['manifest'],fixture['manifest_sha256']],out,'verifier',9500000000,env,owner)
+        data=child['child'];proof_db=out/'store.sqlite';proof_start=time.monotonic_ns()
+        proof_env={k:v for k,v in env.items() if k!='DYLD_INSERT_LIBRARIES' and not k.startswith('LAYERFS_CAUSE_')}
+        if memory_off and arm=='candidate':
+            import shutil
+            original_hash=common.digest(proof_db);proof_db=out/'proof.sqlite'
+            if proof_db.exists():raise ValueError('fresh proof copy required')
+            shutil.copy2(out/'store.sqlite',proof_db)
+            if common.digest(proof_db)!=original_hash:raise ValueError('proof byte copy mismatch')
+            adapted=sqlite.invoke([proof_adapter['path'],str(proof_db)],out,'proof-journal',9500000000-(time.monotonic_ns()-proof_start),proof_env,owner)
+            result['proof_copy']={'original_sha256':original_hash,'method':'independent shutil.copy2 byte copy; exact SHA match before journal header conversion','adapter':adapted}
+            if adapted['exit_code']!=0 or adapted['timed_out']:raise ValueError('proof-copy header adaptation failed')
+        proof=sqlite.invoke([verifier['path'],str(proof_db),str(out/'store.sqlite.history.sqlite' if arm=='baseline' else proof_db),data['root'],data['stack'],fixture['manifest'],fixture['manifest_sha256']],out,'verifier',9500000000-(time.monotonic_ns()-proof_start),proof_env,owner)
+        if memory_off and arm=='candidate':
+            result['proof_copy']['original_after_sha256']=common.digest(out/'store.sqlite')
+            if result['proof_copy']['original_after_sha256']!=original_hash:raise ValueError('measured original changed during proof')
         result['verification']=proof
+        result['verification_complete_wall_ns']=time.monotonic_ns()-proof_start
     else:result['status']='FAIL'
     if api is not None:
         log=out/'sqlite-api.json'
@@ -91,8 +125,11 @@ def run(arm,output,api_observer=False,vfs_observer=False):
     if vfs is not None:
         log=out/'sqlite-vfs.json'
         result['vfs_observer']=json.loads(log.read_text()) if log.exists() else {'status':'UNAVAILABLE','reason':'delegated VFS report missing'}
+    if memory is not None:
+        log=out/'sqlite-memory.json'
+        result['memory_profile']=json.loads(log.read_text()) if log.exists() else {'status':'UNAVAILABLE','reason':'profile intervention/readback report missing'}
     write(out/'receipt.json',result);common.manifest_run(out)
     return out
 if __name__=='__main__':
-    if len(sys.argv) not in (3,4) or len(sys.argv)==4 and sys.argv[3] not in ('--api','--vfs'):raise SystemExit('ARM FRESH_OUTPUT [--api|--vfs] required')
-    print(run(sys.argv[1],sys.argv[2],len(sys.argv)==4,len(sys.argv)==4 and sys.argv[3]=='--vfs'))
+    if len(sys.argv) not in (3,4) or len(sys.argv)==4 and sys.argv[3] not in ('--api','--vfs','--memory-off'):raise SystemExit('ARM FRESH_OUTPUT [--api|--vfs|--memory-off] required')
+    print(run(sys.argv[1],sys.argv[2],len(sys.argv)==4,len(sys.argv)==4 and sys.argv[3] in ('--vfs','--memory-off'),len(sys.argv)==4 and sys.argv[3]=='--memory-off'))
