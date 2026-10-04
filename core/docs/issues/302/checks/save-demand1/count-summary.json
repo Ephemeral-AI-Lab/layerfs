@@ -1,0 +1,764 @@
+{
+  "allocation": {
+    "files": [
+      {
+        "allocated_bytes": 49594368,
+        "length_bytes": 49594368,
+        "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-save-demand-cause1/store.sqlite"
+      }
+    ],
+    "scope": "database/WAL/SHM at this observation; not an unobserved peak",
+    "total_bytes": 49594368
+  },
+  "build": {
+    "binaries": {
+      "benchmark_history": {
+        "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/binary-archive/ae516397df76470e66ade9897c12ebb7c7850a58c118392b15c9863673afa8db/benchmark_history",
+        "sha256": "ae516397df76470e66ade9897c12ebb7c7850a58c118392b15c9863673afa8db"
+      },
+      "verify_history": {
+        "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/binary-archive/2ce7c5e57220c0b9184f360de8ca1689034968a4aba373276b7922fb29aa543f/verify_history",
+        "sha256": "2ce7c5e57220c0b9184f360de8ca1689034968a4aba373276b7922fb29aa543f"
+      }
+    },
+    "budget_ns": 30000000000,
+    "child": null,
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "build",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--release",
+      "--locked",
+      "-p",
+      "layerfs-project",
+      "--example",
+      "benchmark_history",
+      "--example",
+      "verify_history"
+    ],
+    "compilation_seal": "e7b1a046441f2026e70641922bd67b398a1118dcc3b646d257c13a3eaa75a797",
+    "cpu_ns": 35071106000,
+    "dependency_reuse": "worktree-local target",
+    "exit_code": 0,
+    "mode": "incremental-build",
+    "peak_rss_bytes": 374603776,
+    "profile": "release/locked",
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "status": "PASS",
+    "timed_out": false,
+    "wall_ns": 5746571625
+  },
+  "caller_counts": {
+    "construction/read": {
+      "blob_bytes": 2114830,
+      "opens": 62,
+      "vfs_bytes": 3431138
+    },
+    "filesystem/read": {
+      "blob_bytes": 19551201,
+      "opens": 679,
+      "vfs_bytes": 19177273
+    },
+    "save/delta-probe": {
+      "blob_bytes": 416092179,
+      "opens": 8667,
+      "vfs_bytes": 585489120
+    },
+    "save/delta-reconstruct": {
+      "blob_bytes": 23974856,
+      "opens": 670,
+      "vfs_bytes": 42143369
+    },
+    "save/exact-reuse": {
+      "blob_bytes": 19044242,
+      "opens": 490,
+      "vfs_bytes": 28963820
+    },
+    "save/pool-index": {
+      "blob_bytes": 95832979,
+      "opens": 5763,
+      "vfs_bytes": 83476093
+    },
+    "save/pooled-base": {
+      "blob_bytes": 11048009,
+      "opens": 872,
+      "vfs_bytes": 10574416
+    }
+  },
+  "cold": {
+    "attestation_ns": 5458485000,
+    "files": 180444,
+    "first_pass_ns": 5511768000,
+    "fstats": 360889,
+    "helper_binary_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+    "helper_seal": "6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87",
+    "invalidated_files": 1,
+    "inventory_entries": 362152,
+    "invocation": {
+      "budget_ns": 60000000000,
+      "child": {
+        "attestation_ns": 5458485000,
+        "files": 180444,
+        "first_pass_ns": 5511768000,
+        "fstats": 360889,
+        "invalidated_files": 1,
+        "inventory_entries": 362152,
+        "length_bytes": 2254684026,
+        "mincore_calls": 360875,
+        "mmap_calls": 360874,
+        "msync_calls": 1,
+        "munmap_calls": 360874,
+        "opens": 360889,
+        "page_size_bytes": 16384,
+        "resident_after": 0,
+        "resident_first": 4,
+        "total_pages": 264706,
+        "vector_peak_bytes": 140
+      },
+      "command": [
+        "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+        "--paths",
+        "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data/checkpoint-manifest.json",
+        "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data/inputs",
+        "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data/oracles"
+      ],
+      "cpu_ns": 10896561000,
+      "exit_code": 0,
+      "peak_rss_bytes": 2818048,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "timed_out": false,
+      "wall_ns": 10975745250
+    },
+    "length_bytes": 2254684026,
+    "method": "native two-pass msync-invalidate and whole-input mincore; no payload reads",
+    "mincore_calls": 360875,
+    "mmap_calls": 360874,
+    "msync_calls": 1,
+    "munmap_calls": 360874,
+    "opens": 360889,
+    "page_size_bytes": 16384,
+    "resident_after": 0,
+    "resident_first": 4,
+    "scope": "regular-file content pages; filesystem metadata residency not directly observed",
+    "status": "PASS",
+    "total_pages": 264706,
+    "vector_peak_bytes": 140
+  },
+  "competing_work": [
+    "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+  ],
+  "complete_budget_ns": 60000000000,
+  "complete_wall_ns": 44362384458,
+  "database_cold": {
+    "boundaries": [
+      {
+        "attestation": {
+          "attestation_ns": 53000,
+          "files": 1,
+          "first_pass_ns": 495000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 716800,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 44,
+          "total_pages": 44,
+          "vector_peak_bytes": 44
+        },
+        "before_state": 2,
+        "wall_ns": 4303916
+      },
+      {
+        "attestation": {
+          "attestation_ns": 97000,
+          "files": 1,
+          "first_pass_ns": 971000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 2596864,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 157,
+          "total_pages": 159,
+          "vector_peak_bytes": 159
+        },
+        "before_state": 3,
+        "wall_ns": 4872708
+      },
+      {
+        "attestation": {
+          "attestation_ns": 120000,
+          "files": 1,
+          "first_pass_ns": 1023000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 4132864,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 250,
+          "total_pages": 253,
+          "vector_peak_bytes": 253
+        },
+        "before_state": 4,
+        "wall_ns": 4631209
+      },
+      {
+        "attestation": {
+          "attestation_ns": 141000,
+          "files": 1,
+          "first_pass_ns": 1381000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 5337088,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 324,
+          "total_pages": 326,
+          "vector_peak_bytes": 326
+        },
+        "before_state": 5,
+        "wall_ns": 4896958
+      },
+      {
+        "attestation": {
+          "attestation_ns": 268000,
+          "files": 1,
+          "first_pass_ns": 1851000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 8515584,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 516,
+          "total_pages": 520,
+          "vector_peak_bytes": 520
+        },
+        "before_state": 6,
+        "wall_ns": 5595541
+      },
+      {
+        "attestation": {
+          "attestation_ns": 368000,
+          "files": 1,
+          "first_pass_ns": 3208000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 11296768,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 685,
+          "total_pages": 690,
+          "vector_peak_bytes": 690
+        },
+        "before_state": 7,
+        "wall_ns": 8372000
+      },
+      {
+        "attestation": {
+          "attestation_ns": 328000,
+          "files": 1,
+          "first_pass_ns": 3584000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 14376960,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 873,
+          "total_pages": 878,
+          "vector_peak_bytes": 878
+        },
+        "before_state": 8,
+        "wall_ns": 7446708
+      },
+      {
+        "attestation": {
+          "attestation_ns": 364000,
+          "files": 1,
+          "first_pass_ns": 3653000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 15699968,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 941,
+          "total_pages": 959,
+          "vector_peak_bytes": 959
+        },
+        "before_state": 9,
+        "wall_ns": 8014500
+      },
+      {
+        "attestation": {
+          "attestation_ns": 447000,
+          "files": 1,
+          "first_pass_ns": 4911000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 18792448,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1139,
+          "total_pages": 1147,
+          "vector_peak_bytes": 1147
+        },
+        "before_state": 10,
+        "wall_ns": 9340000
+      },
+      {
+        "attestation": {
+          "attestation_ns": 490000,
+          "files": 1,
+          "first_pass_ns": 5238000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 20750336,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1220,
+          "total_pages": 1267,
+          "vector_peak_bytes": 1267
+        },
+        "before_state": 11,
+        "wall_ns": 9127958
+      },
+      {
+        "attestation": {
+          "attestation_ns": 633000,
+          "files": 1,
+          "first_pass_ns": 5978000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 24797184,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1465,
+          "total_pages": 1514,
+          "vector_peak_bytes": 1514
+        },
+        "before_state": 12,
+        "wall_ns": 10912375
+      },
+      {
+        "attestation": {
+          "attestation_ns": 625000,
+          "files": 1,
+          "first_pass_ns": 6119000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 28082176,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1642,
+          "total_pages": 1714,
+          "vector_peak_bytes": 1714
+        },
+        "before_state": 13,
+        "wall_ns": 10255917
+      },
+      {
+        "attestation": {
+          "attestation_ns": 689000,
+          "files": 1,
+          "first_pass_ns": 7683000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 30896128,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1806,
+          "total_pages": 1886,
+          "vector_peak_bytes": 1886
+        },
+        "before_state": 14,
+        "wall_ns": 12361959
+      },
+      {
+        "attestation": {
+          "attestation_ns": 830000,
+          "files": 1,
+          "first_pass_ns": 8229000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 35778560,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 2102,
+          "total_pages": 2184,
+          "vector_peak_bytes": 2184
+        },
+        "before_state": 15,
+        "wall_ns": 13044709
+      },
+      {
+        "attestation": {
+          "attestation_ns": 938000,
+          "files": 1,
+          "first_pass_ns": 9773000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 42053632,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 2464,
+          "total_pages": 2567,
+          "vector_peak_bytes": 2567
+        },
+        "before_state": 16,
+        "wall_ns": 14777792
+      },
+      {
+        "attestation": {
+          "attestation_ns": 1022000,
+          "files": 1,
+          "first_pass_ns": 10720000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 45785088,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 2680,
+          "total_pages": 2795,
+          "vector_peak_bytes": 2795
+        },
+        "before_state": 17,
+        "wall_ns": 15138958
+      },
+      {
+        "attestation": {
+          "attestation_ns": 1174000,
+          "files": 1,
+          "first_pass_ns": 11066000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 49594368,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 2885,
+          "total_pages": 3027,
+          "vector_peak_bytes": 3027
+        },
+        "before_state": 18,
+        "wall_ns": 17752250
+      }
+    ],
+    "scope": "database/extant-WAL content pages; metadata/SHM/internal bounded product buffers excluded",
+    "status": "PASS",
+    "total": {
+      "checks": 17,
+      "wall_ns": 160845458
+    }
+  },
+  "fixture": {
+    "checkpoints": 157,
+    "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+    "reachable_commits": 15632,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+    "total_logical_bytes": 4936693030,
+    "unique_blob_bytes": 891893320
+  },
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "6dd4312bf35bdf0d88523a76eb3f4c50f5dd2a59390d634cb924855c704e2e2f",
+    "product_seal": "c20d51128d61f1bf04967e8fc62eb21a79458ac5f5c2cd4b630fac1b969ba69a",
+    "source_commit": "b1151f732a3dc8250e6d088040df06390ae2429f",
+    "source_dirty": false,
+    "source_tree": "ee5195bb5a1a96c06f4fa9c9ef67242469db10d4"
+  },
+  "observer": {
+    "build": {
+      "budget_ns": 30000000000,
+      "child": null,
+      "command": [
+        "/usr/bin/clang",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-dynamiclib",
+        "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/diagnostics/sqlite_history_observer.c",
+        "-lsqlite3",
+        "-o",
+        "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/history-observer-archive/2e01bf1ca7fec4cfa620912f6569699de5b6ec447b188c2fd5070aef859b5251/history-observer.dylib"
+      ],
+      "cpu_ns": 245752000,
+      "exit_code": 0,
+      "peak_rss_bytes": 55476224,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "timed_out": false,
+      "wall_ns": 194126000
+    },
+    "coverage": "trace statements/VM plus delegated BLOB open/read/close and VFS read/write/sync/close; native VM reset counters unqualified; no device-byte/syscall claim",
+    "inputs": {
+      "architecture": "arm64",
+      "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+      "flags": [
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-dynamiclib"
+      ],
+      "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+      "sources": {
+        "sqlite_close_observer.c": "f1075ec9294b86fedf9b662bf5a040a03db530cdf332d5873055561a946a1aa7",
+        "sqlite_history_observer.c": "6fd11420727427e5d9a99b513760b8e87d2295731fc0c548f18172e9d4696f70",
+        "sqlite_vfs_observer.c": "40559848d8988307e7f034beabde54f3f49d8f6c7210c93627932303e1a9f944",
+        "sqlite_work.c": "925daf0a74f4506a1958ca6a3b674c3e4d21525a8d4fb6e1d770b177d34fbc9f"
+      },
+      "sqlite_link": "unmodified system -lsqlite3"
+    },
+    "mode": "sealed-binary-reuse",
+    "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/history-observer-archive/2e01bf1ca7fec4cfa620912f6569699de5b6ec447b188c2fd5070aef859b5251/history-observer.dylib",
+    "seal": "2e01bf1ca7fec4cfa620912f6569699de5b6ec447b188c2fd5070aef859b5251",
+    "sha256": "eabb7a659dc276d32a50951d8cd21420669796a3f4aa71065fd0aa14cd9be92b"
+  },
+  "phases": {
+    "acquisition": {
+      "pack_acquisitions": 0,
+      "states": 17,
+      "vfs_requested_bytes": 0
+    },
+    "construction": {
+      "pack_acquisitions": 62,
+      "states": 17,
+      "vfs_requested_bytes": 3721506
+    },
+    "filesystem": {
+      "pack_acquisitions": 679,
+      "states": 17,
+      "vfs_requested_bytes": 27593177
+    },
+    "save_custody": {
+      "pack_acquisitions": 16462,
+      "states": 17,
+      "vfs_requested_bytes": 1039486710
+    }
+  },
+  "physical_counts": {
+    "construction/v18/range": {
+      "blob_bytes": 1138770,
+      "identical_reacquisitions": 0,
+      "opens": 32,
+      "vfs_bytes": 2512935
+    },
+    "construction/v18/whole": {
+      "blob_bytes": 663948,
+      "identical_reacquisitions": 0,
+      "opens": 13,
+      "vfs_bytes": 638292
+    },
+    "construction/v19/range": {
+      "blob_bytes": 199073,
+      "identical_reacquisitions": 0,
+      "opens": 12,
+      "vfs_bytes": 177511
+    },
+    "construction/v19/whole": {
+      "blob_bytes": 113039,
+      "identical_reacquisitions": 0,
+      "opens": 5,
+      "vfs_bytes": 102400
+    },
+    "filesystem/v19/range": {
+      "blob_bytes": 904514,
+      "identical_reacquisitions": 0,
+      "opens": 44,
+      "vfs_bytes": 1597723
+    },
+    "filesystem/v19/whole": {
+      "blob_bytes": 5220875,
+      "identical_reacquisitions": 0,
+      "opens": 153,
+      "vfs_bytes": 4928044
+    },
+    "filesystem/v21/range": {
+      "blob_bytes": 1274179,
+      "identical_reacquisitions": 0,
+      "opens": 241,
+      "vfs_bytes": 1706893
+    },
+    "filesystem/v21/whole": {
+      "blob_bytes": 12151633,
+      "identical_reacquisitions": 0,
+      "opens": 241,
+      "vfs_bytes": 10944613
+    },
+    "save/v18/range": {
+      "blob_bytes": 193426533,
+      "identical_reacquisitions": 1535,
+      "opens": 5065,
+      "vfs_bytes": 395380277
+    },
+    "save/v18/whole": {
+      "blob_bytes": 248540555,
+      "identical_reacquisitions": 1289,
+      "opens": 4419,
+      "vfs_bytes": 239709369
+    },
+    "save/v19/range": {
+      "blob_bytes": 1108172,
+      "identical_reacquisitions": 21,
+      "opens": 65,
+      "vfs_bytes": 2297831
+    },
+    "save/v19/whole": {
+      "blob_bytes": 2871745,
+      "identical_reacquisitions": 74,
+      "opens": 74,
+      "vfs_bytes": 2734013
+    },
+    "save/v20/range": {
+      "blob_bytes": 8813302,
+      "identical_reacquisitions": 43,
+      "opens": 207,
+      "vfs_bytes": 13344465
+    },
+    "save/v20/whole": {
+      "blob_bytes": 7831217,
+      "identical_reacquisitions": 7,
+      "opens": 110,
+      "vfs_bytes": 7634265
+    },
+    "save/v21/range": {
+      "blob_bytes": 28428967,
+      "identical_reacquisitions": 450,
+      "opens": 5203,
+      "vfs_bytes": 21780508
+    },
+    "save/v21/whole": {
+      "blob_bytes": 74971774,
+      "identical_reacquisitions": 1319,
+      "opens": 1319,
+      "vfs_bytes": 67766090
+    }
+  },
+  "raw_hashes": {
+    "acquisitions.jsonl": "7b4fa31c0f75bf48eef5bed78819664b95c48f04844d0674bd5f1bbd494fd4f0",
+    "driver.stderr": "d380b09db20ff367acc7a7dbc42d7bd75fdb29ebb82eabda47c78b2d2bceae9f",
+    "manifest.json": "3beb900a0c37b7afed653cb8fd76a394de7f9392adcd9fe82f9384b9fbc6f385",
+    "receipt.json": "b5e81896c6638a82cec7b5b2c1a655e5d169ff7eab4cac23f8d8a0e09dff73e4"
+  },
+  "raw_run": "benchmark-results/fs-bench-pro/issue302-save-demand-cause1",
+  "status": "DIAGNOSTIC_COMPLETE",
+  "verification": "SKIPPED: mechanism counts only; final independent proof separate"
+}

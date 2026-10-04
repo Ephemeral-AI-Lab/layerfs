@@ -244,3 +244,31 @@ and per-state DBcold, same fixture/build seals and no proof/speed admission.
 ProductionLOC139635->139620(delta-15); reference65417 unchanged, core
 74218->74203, exact parent/final staged snapshots and unchanged product scope
 elsewhere, same archive-counted parent counter/exclusions. No migration/retirement.
+
+## Demand-owned count result and residual cause experiment
+
+One b1151f732 count child complete44.362384458s/60s, coldPASS. Save
+1,039,486,710VFS requested B/16,462acquisitions:42.202748% fewer requests and
+36.657817% fewer acquisitions than8759. Filesystem27,593,177B/679 retains
+localized savings. Same613packs/45,558,472sealed pack bytes and49,594,368B Store
+allocation. Current count remains27.989607% above original812,164,935B reference;
+16,462acquisitions are near reference16,484. This is a cause count, not speed.
+[Receipt/attribution](checks/save-demand1/count-summary.json).
+
+Residual version18 sparse Save reads:5065acquisitions,193,426,533returnedB versus
+395,380,277requested VFS B inside BLOB reads. The201,953,744B difference is
+close to the227,321,775B whole-Save reference gap, but these observations do not
+prove every gap byte has that cause. No physical device attribution is claimed.
+SQLite's documented cursor-local overflow navigation lazily populates a page
+list and traverses preceding links on a fresh high-offset read.
+
+Prospective count-only structural vehicle`sqlite_overflow_navigation.c` observes
+one32768B BLOB read at each distinct offset0/32768/131072/196608 in a closed,
+prepared262144B SQLite row, plus offset0 in a32768B row. Each case uses a separate
+fresh read-only child, original system SQLite,4KiB pages/cache_size-2048/mmap0,
+source-file invalidation and residency attestation, unchanged delegated VFS
+observer,5s child budget. Setup contains no LayerFS product, expected-result
+prefill or timed producer work. Returned zeros are checked inside the count
+child. These counts test offset navigation versus independent physical rows;
+they support neither a product speed nor storage/admission claim. No production
+schema change is authorized or implemented by this mechanism experiment.
