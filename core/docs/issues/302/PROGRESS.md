@@ -1512,3 +1512,13 @@ after15published roots; full roots/inventory INCOMPLETE, no cleanup admission.
 No controlled-cache speed sample or full-history PASS; all historiesNOT_RUN.
 No unchanged-arm retry or deadline extension. See
 [reference/transition report](SQLITE-HISTORY-REFERENCE-TRANSITION.md).
+
+### Exact initial pooled ordinal lookahead
+
+Coalesce up to4exact fresh-leaf demands when synchronized pooled index is empty;
+nonempty-index reuse/window behavior and later16leaf-block policy unchanged.
+Fixed lookahead<=660values/one decoded leaf, released before admission; no
+wave/cache/transaction/worker/durability expansion. Deterministic dense assignment,
+deduplication, existing acknowledged-gap tests PASS;21covering tests,all-target
+Clippy/fmt,boundary439/guard23PASS. Matched Init1000-v2 pair prospectively next;
+no speed result yet. See [treatment](SQLITE-ORDINAL-LOOKAHEAD-TREATMENT.md).

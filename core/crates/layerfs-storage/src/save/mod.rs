@@ -3,6 +3,7 @@ mod operation;
 mod pooled;
 mod provider;
 mod publication;
+mod reservation;
 mod seal;
 mod select;
 mod source;

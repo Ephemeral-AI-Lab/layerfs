@@ -8,7 +8,6 @@ use crate::{
     error::{StorageError, StorageResult},
     pack::layout::PackLane,
     policy::{METADATA_INDEX_VALUES, ORDINAL_BLOCK_LEAVES, ORDINAL_RESERVE_AFTER},
-    port::Reserve,
     source::Source,
 };
 use layerfs_content::{
@@ -17,7 +16,7 @@ use layerfs_content::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 impl State<'_> {
-    fn sync_pool(&mut self) -> StorageResult<()> {
+    pub(super) fn sync_pool(&mut self) -> StorageResult<()> {
         if self.pool_synced {
             return Ok(());
         }
@@ -72,25 +71,7 @@ impl State<'_> {
             } else {
                 fresh_count.saturating_mul(ORDINAL_BLOCK_LEAVES)
             };
-            self.storage.source.note(|c| {
-                c.reserve += 1;
-                c.ordinal_reservations += 1;
-            });
-            let _work = self.storage.work.span(super::Stage::OrdinalReserve);
-            let allocation = self.storage.source.metadata.reserve(Reserve {
-                packs: 0,
-                ordinals: block,
-            })?;
-            if allocation.first_ordinal == 0 {
-                return Err(StorageError::Integrity("metadata ordinal reservation"));
-            }
-            self.next_ordinal = u64::from(allocation.first_ordinal);
-            self.ordinal_end = self
-                .next_ordinal
-                .checked_add(block as u64)
-                .filter(|end| *end <= u64::from(u32::MAX) + 1)
-                .ok_or(StorageError::Integrity("metadata ordinal maximum"))?;
-            self.ordinal_reservations += 1;
+            self.reserve_ordinals(block, 1)?;
         }
         let mut memo = BTreeMap::<[u8; INODE_VALUE_BYTES], u32>::new();
         let mut fresh = Vec::new();

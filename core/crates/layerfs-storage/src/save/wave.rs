@@ -65,6 +65,7 @@ impl State<'_> {
             &mut self.decode,
         )?;
         drop(membership);
+        self.plan_initial_ordinals(&objects)?;
         let admission = self.storage.work.span(super::Stage::Admission);
         // One possible payload pack per object, plus one possible pooled-value
         // pack per inode leaf, and the actual preceding open/queued groups. Keep

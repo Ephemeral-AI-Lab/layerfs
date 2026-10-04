@@ -858,3 +858,21 @@ new producer, buffer/row/byte/cache expansion or changed failure policy is used.
 Mixed-lane physical grouping can differ; canonical identities and wire grammar
 remain unchanged. Private pending signatures remain unregistered until their
 object is ready, under the existing bounded ring.
+
+### Exact initial pooled reservation lookahead
+
+This change is based on a0201bfef. Before admission, a wave with no prior
+ordinal demand synchronizes the existing pooled index. If that authenticated
+index is empty, up to four new, unlocated inode leaves are decoded to count
+their distinct values. One acknowledged exact reservation covers that demand;
+ordinary per-leaf assignment and group construction retain their order and
+small-save ordinal density. Actual reservation diagnostics count one call; the
+later16-leaf block switch counts the exact fresh leaf demands coalesced by it.
+Nonempty indexes retain the original per-leaf reuse/window logic. Existing
+reservation ownership, final unused-tail release, conflict and uncertain-outcome
+refusal remain unchanged. Temporary lookahead retains at most660fixed73-byte
+values (48,180value payload bytes plus collection overhead) and one decoded leaf
+(up to165rows), and releases these before admission. This fixed owner is separate
+from the unchanged4MiB/512object input wave,256KiB framing queues and131,072value
+index; it is not a whole-importer or total RSS bound. No durability/worker/cache/
+transaction limit changes or automatic retries are introduced.
