@@ -1,0 +1,66 @@
+[
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b",
+    "destination": "benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b",
+    "method": "independent ordinary byte copy via shutil.copy2, no APFS clone; preparation reuse, no cold claim",
+    "wall_ns": 37477500,
+    "fixture": {
+      "case": "namespace-100-compact-v3",
+      "directories": 2,
+      "files": 100,
+      "logical_bytes": 5000000,
+      "manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+      "profile": "core-sdk-init-fixture-v2",
+      "route": "host-direct-sdk-v2",
+      "seed": 1
+    }
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9",
+    "destination": "benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9",
+    "method": "independent ordinary byte copy via shutil.copy2, no APFS clone; preparation reuse, no cold claim",
+    "wall_ns": 319497167,
+    "fixture": {
+      "case": "namespace-1000-compact-v3",
+      "directories": 11,
+      "files": 1000,
+      "logical_bytes": 20000000,
+      "manifest_sha256": "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c",
+      "profile": "core-sdk-init-fixture-v2",
+      "route": "host-direct-sdk-v2",
+      "seed": 1
+    }
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-10000-edd2a0ddbfc8fab0",
+    "destination": "benchmark-results/fs-bench-pro/sdk-prepared/namespace-10000-edd2a0ddbfc8fab0",
+    "method": "independent ordinary byte copy via shutil.copy2, no APFS clone; preparation reuse, no cold claim",
+    "wall_ns": 3363169750,
+    "fixture": {
+      "case": "namespace-10000",
+      "directories": 101,
+      "files": 10000,
+      "logical_bytes": 300000000,
+      "manifest_sha256": "878f44e10303cc43f5f202a4cf59e817316b16cee153fb70f8bf389ade6253ab",
+      "profile": "core-sdk-init-fixture-v2",
+      "route": "host-direct-sdk-v2",
+      "seed": 1
+    }
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5",
+    "destination": "benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5",
+    "method": "independent ordinary byte copy via shutil.copy2, no APFS clone; preparation reuse, no cold claim",
+    "wall_ns": 26878733708,
+    "fixture": {
+      "case": "namespace-100000",
+      "directories": 1001,
+      "files": 100000,
+      "logical_bytes": 500000000,
+      "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+      "profile": "core-sdk-init-fixture-v2",
+      "route": "host-direct-sdk-v2",
+      "seed": 1
+    }
+  }
+]
