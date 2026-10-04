@@ -67,19 +67,9 @@ impl State<'_> {
         drop(membership);
         self.plan_initial_ordinals(&objects)?;
         let admission = self.storage.work.span(super::Stage::Admission);
-        // One possible payload pack per object, plus one possible pooled-value
-        // pack per inode leaf, and the actual preceding open/queued groups. Keep
-        // the original allocation block; only the reuse test needs this bound.
-        let pooled = objects
-            .iter()
-            .filter(|object| object.role() == layerfs_content::ObjectRole::InodeLeaf)
-            .count();
-        let required = objects.len()
-            + pooled
-                * layerfs_content::inode_leaf::MAXIMUM_LEAF_ROWS
-                    .div_ceil(crate::policy::VALUES_PER_GROUP)
-            + self.packer.finish_pack_bound();
-        let mut reserved = false;
+        // Keep the allocation block, but check the operation that can consume
+        // IDs rather than replacing a tail for an entire hypothetical wave.
+        let block = objects.len() * 2 + 5;
         let mut prepared = BTreeMap::<ObjectId, usize>::new();
         for (index, object) in objects.iter().enumerate() {
             if let Some(prior) = prepared.get(&object.id()).copied() {
@@ -93,10 +83,8 @@ impl State<'_> {
             }
             prepared.insert(object.id(), index);
             if self.packer.pending(object.id()) {
-                if !reserved {
-                    self.reserve_packs(required, objects.len() * 2 + 5)?;
-                    reserved = true;
-                }
+                let required = self.packer.finish_pack_bound();
+                self.reserve_packs(required, block.max(required))?;
                 self.packer.seal_pending(
                     &[object.id()],
                     &mut self.compression,
@@ -118,10 +106,13 @@ impl State<'_> {
                 }
                 self.outcome.reused += 1;
             } else {
-                if !reserved {
-                    self.reserve_packs(required, objects.len() * 2 + 5)?;
-                    reserved = true;
-                }
+                // One new object group and at most one value-group pack per
+                // inode leaf, plus every currently unfinished group/queue.
+                let pooled = usize::from(object.role() == layerfs_content::ObjectRole::InodeLeaf)
+                    * layerfs_content::inode_leaf::MAXIMUM_LEAF_ROWS
+                        .div_ceil(crate::policy::VALUES_PER_GROUP);
+                let required = self.packer.finish_pack_bound() + 1 + pooled;
+                self.reserve_packs(required, block.max(required))?;
                 self.offer(object)?;
             }
         }

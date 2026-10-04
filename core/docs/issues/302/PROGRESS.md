@@ -1530,3 +1530,14 @@ reserve5/ordinal3/publication10/write commits18,307SQL/203,498VM,93bodies/
 addsone publication and target stillmissed. No cross-window causal time claim.
 Raw ordlook1000 pair/compact checks and treatment report retain exactdata; other
 3Init/3history NOT_RUN atidentity,all-seven goalACTIVE. CodeLOC+66,evidence+0.
+
+### Pack allocation per concrete operation
+
+Replace whole-wave speculative tail test with existing open/queued group bound
+plus current object/value-group demand, before allocation. Original block/limits/
+base acknowledgement unchanged, no newowner/retry. Deterministic91large+1024small
+records21packs:old2reserve callsFAIL,new1PASS/readback. Corrected valid native
+pressure test proves replenishment beyond initialrange,distinctIDs/readback.
+23covering tests/full100/1000oracle,Clippy/fmt/boundary439/guard23PASS; fixture
+limit/grammar failures retained. Matched Init1000 prospectively next; no speed
+result yet. See [pack demand](SQLITE-PACK-DEMAND-TREATMENT.md).

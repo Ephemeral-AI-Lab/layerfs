@@ -236,3 +236,91 @@ fn same_save_read_and_dependency_force_closure_of_carried_queue() {
         ]
     );
 }
+
+#[test]
+fn a_small_acknowledged_pack_tail_serves_a_larger_following_wave() {
+    let t = support::Temp::new("pack-tail-wave-demand");
+    let h = create(&t.join("db"));
+    let storage = Storage::new(h.storage.clone()).unwrap();
+    let objects = (1..=91)
+        .map(|seed| object(seed, 46000))
+        .chain((1000..2024).map(|seed| object(seed, 500)))
+        .collect::<Vec<_>>();
+    let save = storage.begin_save().unwrap();
+    for o in &objects {
+        save.accept(o.clone()).unwrap();
+    }
+    save.finish().unwrap();
+    let calls = storage.diagnostics().reserve;
+    eprintln!(
+        "DIAGNOSTIC pack reservations={calls} body inserts={}",
+        h.diagnostics().unwrap().sealed_inserts
+    );
+    assert_eq!(
+        calls, 1,
+        "existing tail covers actual pack demand of the small-record wave"
+    );
+    for chunk in objects.chunks(32) {
+        assert_eq!(
+            storage
+                .reader()
+                .unwrap()
+                .read_objects(&chunk.iter().map(FinalizedObject::id).collect::<Vec<_>>())
+                .unwrap(),
+            chunk
+                .iter()
+                .map(|o| o.canonical().to_vec())
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn allocation_replenishes_before_pressure_seals_when_the_tail_is_consumed() {
+    let t = support::Temp::new("pack-tail-replenish");
+    let h = create(&t.join("db"));
+    let storage = Storage::new(h.storage.clone()).unwrap();
+    let objects = (1..=1024)
+        .map(|seed| object(seed, 46000))
+        .collect::<Vec<_>>();
+    let save = storage.begin_save().unwrap();
+    for o in &objects[..92] {
+        save.accept(o.clone()).unwrap();
+    }
+    let sql = rusqlite::Connection::open(t.join("db")).unwrap();
+    let initial_end: i64 = sql
+        .query_row("SELECT next_pack_id FROM store_policy", [], |r| r.get(0))
+        .unwrap();
+    drop(sql);
+    for o in &objects[92..] {
+        save.accept(o.clone()).unwrap();
+    }
+    save.finish().unwrap();
+    assert!(storage.diagnostics().reserve > 1);
+    for chunk in objects.chunks(8) {
+        assert_eq!(
+            storage
+                .reader()
+                .unwrap()
+                .read_objects(&chunk.iter().map(FinalizedObject::id).collect::<Vec<_>>())
+                .unwrap(),
+            chunk
+                .iter()
+                .map(|o| o.canonical().to_vec())
+                .collect::<Vec<_>>()
+        );
+    }
+    let sql = rusqlite::Connection::open(t.join("db")).unwrap();
+    let (rows, distinct): (i64, i64) = sql
+        .query_row(
+            "SELECT count(*),count(DISTINCT pack_id) FROM pack",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert!(
+        rows >= initial_end,
+        "workload consumes more than the initial acknowledged range"
+    );
+    assert_eq!(rows, distinct);
+}

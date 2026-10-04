@@ -876,3 +876,17 @@ values (48,180value payload bytes plus collection overhead) and one decoded leaf
 from the unchanged4MiB/512object input wave,256KiB framing queues and131,072value
 index; it is not a whole-importer or total RSS bound. No durability/worker/cache/
 transaction limit changes or automatic retries are introduced.
+
+### Pack tail sufficiency checked at each allocating operation
+
+Based on37eabc68f. Pending-object sealing checks the current unfinished group/
+queue pack bound. Each new object checks that bound plus one possible object
+pack and the maximum value-group packs for an inode leaf. The existing wave
+allocation block remains, raised only if the concrete conservative bound needs
+more. Checks reuse acknowledged remaining IDs until that operation's bound no
+longer fits, before the operation and never after an allocation failure.
+Finish/read/closure bounds and first-writer base acknowledgement are unchanged.
+This replaces a whole-wave speculative check that could discard a small tail
+before a larger small-record wave which used only a few packs. No consumed-ID
+recycling, buffer/cache/worker/profile/port-bound change or retry is added.
+Physical pack IDs can change; canonical identities do not.
