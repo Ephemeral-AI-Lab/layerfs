@@ -307,25 +307,9 @@ fn shared_pack_headroom_is_bounded_and_final_release_preserves_canonical_bytes()
                 <= work.preallocation_calls
                     * (layerfs_storage::policy::SINGLETON_PACK_LIMIT as u64 + 3 * 1024 * 1024)
         );
-        if profile == layerfs_persistence::SqlitePersistenceProfile::Durable {
-            assert!(work.wal_preallocation_calls > 0);
-            assert!(
-                work.wal_preallocation_bytes
-                    <= work.wal_preallocation_calls
-                        * (layerfs_storage::policy::SINGLETON_PACK_LIMIT as u64 + 3 * 1024 * 1024)
-            );
-        } else {
-            assert_eq!(work.wal_preallocation_calls, 0);
-        }
         let before = path.metadata().unwrap();
         assert!(before.blocks() * 512 > before.len());
         let completion = h.checkpoint().unwrap();
-        if profile == layerfs_persistence::SqlitePersistenceProfile::Durable {
-            assert_eq!(completion.wal_allocation_after_bytes, Some(0));
-            let wal = std::fs::metadata(format!("{}-wal", path.display())).unwrap();
-            assert_eq!(wal.len(), 0);
-            assert_eq!(wal.blocks(), 0);
-        }
         let source = completion.allocation_source.unwrap();
         assert_eq!((source.device, source.inode), (before.dev(), before.ino()));
         assert_eq!(source.logical_bytes, path.metadata().unwrap().len());
@@ -342,38 +326,4 @@ fn shared_pack_headroom_is_bounded_and_final_release_preserves_canonical_bytes()
             vec![object.canonical().to_vec()]
         );
     }
-}
-
-#[test]
-fn durable_wal_custody_refuses_alias_before_checkpoint_io() {
-    let t = support::Temp::new("wal-exclusive-custody");
-    let path = t.join("db");
-    let h = create(&path);
-    let storage = Storage::new(h.storage.clone()).unwrap();
-    let object = FinalizedObject::new(
-        ObjectRole::FileState,
-        layerfs_content::object::codec::encode_bytes_object(&vec![41; 32_000]).unwrap(),
-    )
-    .unwrap();
-    let save = storage.begin_save().unwrap();
-    save.accept(object.clone()).unwrap();
-    save.finish().unwrap();
-    assert!(h.diagnostics().unwrap().wal_preallocation_calls > 0);
-    let wal = t.join("db-wal");
-    let alias = t.join("wal-alias");
-    let main_before = std::fs::read(&path).unwrap();
-    let wal_before = std::fs::read(&wal).unwrap();
-    std::fs::hard_link(&wal, &alias).unwrap();
-    let statements = h.diagnostics().unwrap().statements;
-    assert!(matches!(
-        h.checkpoint(),
-        Err(layerfs_storage::port::PersistenceError::Malformed)
-    ));
-    assert_eq!(h.diagnostics().unwrap().statements, statements);
-    assert_eq!(std::fs::read(&path).unwrap(), main_before);
-    assert_eq!(std::fs::read(&wal).unwrap(), wal_before);
-    // Restoring a mutated live WAL is outside exclusive custody. Do not assume
-    // recovery or clear an uncertain outcome; normal canonical reads are covered
-    // by the both-profile positive headroom/checkpoint test above.
-    std::fs::remove_file(alias).unwrap();
 }

@@ -37,6 +37,12 @@ class SqliteStep10(unittest.TestCase):
                     self.assertEqual(c.storage_ceiling,old.storage_ceiling)
                     self.assertEqual(c.proof_policy,old.proof_policy)
                     self.assertEqual(c.proof_envelope,'owner-double-caps-20261005-v2')
+    def test_rejected_wal_reservation_cannot_be_replayed_after_withdrawal(self):
+        self.assertEqual(len(f.RETIRED_WAL_RESERVATION_CASES),8)
+        for name in f.RETIRED_WAL_RESERVATION_CASES:
+            self.assertIn(name,f.CASES)
+            with self.assertRaisesRegex(ValueError,'rejected WAL reservation selection retired'):
+                f.run(name,None,'candidate',None,None)
     def test_stride1_increase_is_prospective_and_does_not_change_proof_or_old_cases(self):
         self.assertEqual(len(f.RETIRED_STRIDE1),2)
         for old in f.RETIRED_STRIDE1:

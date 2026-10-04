@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "rows": [
+    {
+      "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-wal-durable-init10000-baseline1",
+      "manifest_sha256": "84ba848a893e7d2c98de0023ddc01c0e76669f95a3ffcea35c99b5bcd7bc5a05",
+      "receipt_sha256": "d8c34c81f7493428d0195fc45bb8d372cf5ff76d9859aadd280b64c5a4385fc3",
+      "status": "PASS"
+    },
+    {
+      "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-owner-wal-durable-init10000-candidate1",
+      "manifest_sha256": "f3d6218d368cb95f248f7072ddd9af181491ca9cd99ba03af2f71f31d20333e0",
+      "receipt_sha256": "31ad391ff152eaaca7cb43ca22b55b29fcafad049ae5b9712991fa911c5542ac",
+      "status": "PASS"
+    },
+    {
+      "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-durable-write1/cause10k1",
+      "manifest_sha256": "67c7ff8a38d629ca4d82850d74f502a62df5f0d58f10859082e5a970a8c0579c",
+      "receipt_sha256": "2e8a3d21f23bd2d85a72c763189667dba19591708211c3b11fb24a0d15a78aef",
+      "status": "PASS"
+    },
+    {
+      "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-durable-write1/cause10k-treated1",
+      "manifest_sha256": "6d7e602a59163bb685d5d1710ec12e7bbbe092fd7a00b80ef7d071c91a0b368f",
+      "receipt_sha256": "f99861ea8168b22ec1d8bf134c9bf16e8f11c5ee44fc0d010eb6e82f5cc2e422",
+      "status": "PASS"
+    }
+  ]
+}

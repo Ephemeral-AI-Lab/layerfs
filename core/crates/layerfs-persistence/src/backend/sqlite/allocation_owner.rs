@@ -41,9 +41,6 @@ impl AllocationOwner {
             inode: m.ino(),
         })
     }
-    pub(crate) fn check_custody(&self) -> Result<(), BackendError> {
-        metadata(&self.path, self.device, self.inode).map(|_| ())
-    }
     pub(crate) fn before_pack(&self, capacity: usize) -> Result<(u64, u64), BackendError> {
         if capacity > layerfs_storage::policy::SINGLETON_PACK_LIMIT {
             return Err(BackendError::Capacity);

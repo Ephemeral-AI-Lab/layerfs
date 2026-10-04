@@ -1,0 +1,7 @@
+{
+  "status": "BYTE_IDENTICAL",
+  "source": "197d2fb7d",
+  "core_crates_tree": "c558ee85e1e751d03378b91cbd950df5fb673872",
+  "active_product_tests": "523 PASS /100 reports retained at exact restored implementation; experimental524 and failures archived",
+  "no_new_performance_claim": true
+}

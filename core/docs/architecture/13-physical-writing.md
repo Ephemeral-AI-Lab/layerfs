@@ -510,3 +510,7 @@ Source implementation `197d2fb7d`, adjusted from parent `64b5f9e3f`: both profil
 ## Bounded WAL reservation experiment, 2026-10-05
 
 Against parent b6b9b8e53: Durable additionally binds its WAL once after BEGIN IMMEDIATE and before first pack insertion, using the shared reservation/custody/extent-release implementation and existing per-request bound. Retained WAL allocation descriptor and constant-sized identity state; logical WAL bytes, synchronization, automatic checkpoint1000, journaling and publication/transaction bounds stay SQLite-owned and unchanged. After unobstructed TRUNCATE checkpoint, shared release removes any unused WAL extents; Busy skips all release, Unknown quarantines. Separate WAL request counters and final physical allocation are recorded. Disposable path is unchanged. This is a prospective performance experiment, not proof of benefit.
+
+## WAL experiment withdrawn, 2026-10-05
+
+The bounded-WAL reservation experiment in a8e93276f was tested and rejected: extra reservation work did not yield a useful write-path benefit and the10k relative speed gate failed. Active product implementation is restored byte-for-byte to197d2fb7d shared main-file allocation; WAL growth is again wholly SQLite-owned, with no added descriptor, identity cache, WAL reservation counter or release path. The experiment and its custody validation remain recoverable in its commit/evidence. No broader Init/history qualification is inferred; new experimental case IDs are retired.

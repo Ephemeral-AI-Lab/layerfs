@@ -134,6 +134,9 @@ for profile,names in SHARED_ALLOCATION_CASES_BY_PROFILE.items():
         CASES[new]=Case(new,c.fixture,None,None,c.command_budget_ns,c.verification_budget_ns,profile)
         WAL_RESERVATION_CASES_BY_PROFILE[profile].append(new)
 
+# Rejected WAL-headroom experiment: immutable registry retained, no replay.
+RETIRED_WAL_RESERVATION_CASES=tuple(name for names in WAL_RESERVATION_CASES_BY_PROFILE.values() for name in names)
+
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"
@@ -191,6 +194,8 @@ def build(root,arm,out,common):
 
 def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pins=None):
     case=CASES[selection]
+    if selection in RETIRED_WAL_RESERVATION_CASES:
+        raise ValueError('rejected WAL reservation selection retired; original receipts retained')
     if selection in LEGACY_HISTORY:
         raise ValueError('historical history selection retired; original receipts preserved; use current required case version')
     if case.fixture is None:

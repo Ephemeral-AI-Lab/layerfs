@@ -103,7 +103,7 @@ pub struct SqlWork {
     pub blob_read_ns: u64,
     /// Attempted checked closes of incremental BLOB handles.
     pub blob_close_calls: u64,
-    /// Successful shared bounded main/WAL physical reservations (not SQL statements).
+    /// Successful shared bounded main-file physical reservations (not SQL statements).
     pub preallocation_calls: u64,
     /// Bytes reserved without changing logical length.
     pub preallocation_bytes: u64,
@@ -111,12 +111,6 @@ pub struct SqlWork {
     pub preallocation_ns: u64,
     /// Checked temporary descriptor close wall nested in reservation.
     pub preallocation_close_ns: u64,
-    /// Successful WAL reservations, a subset of preallocation_calls.
-    pub wal_preallocation_calls: u64,
-    /// Cumulative WAL physical reservation bytes, not retained allocation.
-    pub wal_preallocation_bytes: u64,
-    /// Inclusive WAL reservation/custody wall, nested in preallocation_ns.
-    pub wal_preallocation_ns: u64,
     /// Explicit checkpoint wall, outside SQL statement spans.
     pub checkpoint_ns: u64,
 }
@@ -160,10 +154,6 @@ pub struct Checkpoint {
     pub allocation_before_bytes: Option<u64>,
     /// Physical main-file allocation after unused-extents release; absent when busy.
     pub allocation_after_bytes: Option<u64>,
-    /// WAL physical allocation before release after a complete checkpoint.
-    pub wal_allocation_before_bytes: Option<u64>,
-    /// WAL physical allocation after release; absent when no WAL reservation exists.
-    pub wal_allocation_after_bytes: Option<u64>,
     /// Exact descriptor/file identity used for unused-extents release.
     pub allocation_source: Option<AllocationIdentity>,
     /// F_TRANSFEREXTENTS call wall, nested in completion.
@@ -185,8 +175,6 @@ pub(crate) struct Session {
     pub(crate) layout: crate::SqlitePackLayout,
     #[cfg(target_os = "macos")]
     pub(crate) allocation: Option<super::allocation_owner::AllocationOwner>,
-    #[cfg(target_os = "macos")]
-    pub(crate) wal_allocation: Option<super::wal_allocation::WalAllocation>,
 }
 impl Session {
     pub(crate) fn connect(
@@ -286,12 +274,6 @@ impl Session {
         };
         Ok(Self {
             #[cfg(target_os = "macos")]
-            wal_allocation: if writable && selected == SqlitePersistenceProfile::Durable {
-                Some(super::wal_allocation::WalAllocation::new(path)?)
-            } else {
-                None
-            },
-            #[cfg(target_os = "macos")]
             allocation,
             state: Mutex::new(State {
                 connection,
@@ -318,10 +300,6 @@ impl Session {
         }
         let start = Instant::now();
         let result = (|| {
-            #[cfg(target_os = "macos")]
-            if let Some(wal) = &self.wal_allocation {
-                wal.check_custody()?;
-            }
             let wal_checkpoint_performed =
                 self.profile.persistence == SqlitePersistenceProfile::Durable;
             let (busy, log_frames, checkpointed_frames) = if wal_checkpoint_performed {
@@ -353,18 +331,6 @@ impl Session {
                     return Err(BackendError::Integrity);
                 }
             };
-            #[cfg(target_os = "macos")]
-            let wal_release = if busy {
-                None
-            } else {
-                self.wal_allocation
-                    .as_ref()
-                    .map(super::wal_allocation::WalAllocation::release)
-                    .transpose()?
-                    .flatten()
-            };
-            #[cfg(not(target_os = "macos"))]
-            let wal_release: Option<AllocationRelease> = None;
             Ok(Checkpoint {
                 persistence: self.profile.persistence,
                 wal_checkpoint_performed,
@@ -374,8 +340,6 @@ impl Session {
                 wall_ns: 0,
                 allocation_before_bytes: allocation.map(|p| p.before),
                 allocation_after_bytes: allocation.map(|p| p.after),
-                wal_allocation_before_bytes: wal_release.map(|p| p.before),
-                wal_allocation_after_bytes: wal_release.map(|p| p.after),
                 allocation_source: allocation.and_then(|p| p.source),
                 allocation_transfer_ns: allocation.map_or(0, |p| p.transfer_ns),
                 allocation_scratch_close_ns: allocation.map_or(0, |p| p.scratch_close_ns),
