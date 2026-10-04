@@ -428,7 +428,7 @@ pub fn stored_base(
                             let decompressed =
                                 workspace.decompress_group(selected, view.decoded_length)?;
                             *group_decodes = group_decodes.saturating_add(1);
-                            groups.insert(location.pack_id, location.group_number, decompressed);
+                            groups.insert(location.pack_id, location.group_number, decompressed)?;
                             groups
                                 .get(location.pack_id, location.group_number)
                                 .ok_or(StorageError::Integrity("decoded group cache"))?

@@ -441,3 +441,30 @@ it is progress, not successful admission. Next safe source investigation:
 decoded-group reuse across dependency discovery/reconstruction and explicit
 private-writer invalidation. Need concrete evidence before another retention
 change, no newcache/largerbound/format/weakerauthentication. GoalACTIVE.
+
+
+## Shared decoded-group retention review after8b325c561
+
+Previous goal turn was progress: required source-matched qualification recorded
+10PASS/3proofTIMEOUT/1reference190sTIMEOUT. Current tree/records revalidated;
+no unchanged performance arm rerun. Source ownership review found ordinary
+pending members seal/flush before ready locators expose immutable groups. Only
+the separate PooledMetadata private tail appends; it calls pool.release_packs,
+and those values do not enter ordinary GroupCache. All private invalidation
+remains. Shared groups serve dependency discovery, ordinary reconstruction and
+pooled physical-leaf reads under the same caller/source frame/ceiling checks.
+
+GroupCache still used clear-all overflow despite this valid immutable lifetime.
+External public-cache fixture filled512KiB, touched a dependency group, then
+admitted one group; the touched group vanished (beforeFAIL retained). One
+directed change: owner-local recency and only least-recent victims needed for
+admission. No extra cache/history or widerbody bound/workers. Checked insertion
+returns explicit error for empty/invalid/oversized input or changed immutable
+key; same-key identical insertion is idempotent and correctly charged once.
+All three decode/discovery callers propagate insertion failure; current frame/
+record/canonical validation still surrounds hits, no partial proof shortcut.
+AfterfixturePASS selective victim/recent sibling/512KiB/duplicate accounting/
+invalid admission preservation. Fullworkspace/alltarget tests,Clippy-Dwarnings,
+fmt-all/check,boundary448/23PASS; logschecks/decoded-group-retention-functional1.
+Freeze then one native-only53count diagnostic on original retained store; no
+proof/performance pass inferred. Existing qualifiedrows stay historical.

@@ -20,18 +20,24 @@ use crate::pack::assemble::FULL_TAG as ORDINARY_FULL_TAG;
 use crate::pack::layout::{group_view, parse_header, record_range, GroupCodec, PackLane};
 use crate::policy::{StorageCapacities, CANONICAL_LIMIT};
 
+#[derive(Debug)]
+struct DecodedEntry {
+    body: Vec<u8>,
+    touched: std::cell::Cell<u64>,
+}
+
 /// Bounded cache of decoded ordinary-lane group bodies, keyed by locator group.
 ///
-/// Owner: the read wave that decodes through it. Bound:
-/// [`DECODED_GROUP_CACHE_BYTES`]. Live multiplicity: one cache per wave, one copy
-/// per distinct `(pack, group)`. Lifetime: the wave; dropped with it. Release: the
-/// whole cache is released when the next body would cross the bound, and a body
-/// the bound released is simply decompressed again. A cache hit charges no
-/// `group_decodes`: the counter reports decompressions, not records served.
+/// One cache belongs to its supplied reader/save owner; dependency discovery and
+/// reconstruction share it. Retention never exceeds DECODED_GROUP_CACHE_BYTES.
+/// Only the least-recent entries needed for admission are released. Every
+/// ordinary group is immutable before its locator is readable. A hit avoids
+/// decompression but still undergoes the caller's frame/record/identity checks.
 #[derive(Debug, Default)]
 pub struct GroupCache {
-    bodies: std::collections::BTreeMap<(i64, usize), Vec<u8>>,
+    bodies: std::collections::BTreeMap<(i64, usize), DecodedEntry>,
     retained: usize,
+    clock: std::cell::Cell<u64>,
 }
 
 impl GroupCache {
@@ -40,19 +46,64 @@ impl GroupCache {
         Self::default()
     }
 
-    /// The decoded body of one `(pack, group)`, when this wave already decoded it.
+    /// Borrows retained input and records its recency in this owner.
     pub fn get(&self, pack_id: i64, group_number: usize) -> Option<&[u8]> {
-        self.bodies.get(&(pack_id, group_number)).map(Vec::as_slice)
+        let entry = self.bodies.get(&(pack_id, group_number))?;
+        let next = self.clock.get().saturating_add(1);
+        self.clock.set(next);
+        entry.touched.set(next);
+        Some(&entry.body)
     }
 
-    /// Retains one decoded body, releasing the whole cache first if it would not fit.
-    pub fn insert(&mut self, pack_id: i64, group_number: usize, body: Vec<u8>) {
-        if self.retained.saturating_add(body.len()) > crate::policy::DECODED_GROUP_CACHE_BYTES {
-            self.bodies.clear();
-            self.retained = 0;
+    /// Retains authenticated decoded input within the same byte allowance.
+    /// Duplicate immutable input is idempotent; changed or oversized input fails.
+    pub fn insert(
+        &mut self,
+        pack_id: i64,
+        group_number: usize,
+        body: Vec<u8>,
+    ) -> StorageResult<()> {
+        let limit = crate::policy::DECODED_GROUP_CACHE_BYTES;
+        if pack_id <= 0 || body.is_empty() {
+            return Err(StorageError::Integrity("decoded group cache input"));
         }
-        self.retained = self.retained.saturating_add(body.len());
-        self.bodies.insert((pack_id, group_number), body);
+        if body.len() > limit {
+            return Err(StorageError::CapacityExceeded {
+                what: "decoded group cache",
+                limit: limit as u64,
+                actual: body.len() as u64,
+            });
+        }
+        if let Some(prior) = self.get(pack_id, group_number) {
+            if prior != body {
+                return Err(StorageError::Integrity("immutable decoded group changed"));
+            }
+            return Ok(());
+        }
+        while self.retained + body.len() > limit {
+            let victim = self
+                .bodies
+                .iter()
+                .min_by_key(|(key, entry)| (entry.touched.get(), **key))
+                .map(|(key, _)| *key)
+                .ok_or(StorageError::Integrity("decoded group cache victim"))?;
+            let entry = self
+                .bodies
+                .remove(&victim)
+                .ok_or(StorageError::Integrity("decoded group cache victim"))?;
+            self.retained -= entry.body.len();
+        }
+        let next = self.clock.get().saturating_add(1);
+        self.clock.set(next);
+        self.retained += body.len();
+        self.bodies.insert(
+            (pack_id, group_number),
+            DecodedEntry {
+                body,
+                touched: std::cell::Cell::new(next),
+            },
+        );
+        Ok(())
     }
 
     /// Bytes of decoded bodies this cache currently retains.
@@ -139,7 +190,7 @@ pub(crate) fn decode_selected_group(
                             let decompressed =
                                 workspace.decompress_group(selected, view.decoded_length)?;
                             *group_decodes = group_decodes.saturating_add(1);
-                            groups.insert(location.pack_id, location.group_number, decompressed);
+                            groups.insert(location.pack_id, location.group_number, decompressed)?;
                             groups
                                 .get(location.pack_id, location.group_number)
                                 .ok_or(StorageError::Integrity("decoded group cache"))?

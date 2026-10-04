@@ -1988,3 +1988,12 @@ Raw/compact receipts and all6manifest/hash audits preserved. No cap/worker/
 cache/workload relaxation. Previousgoalturnprogress; currentrequiredsequence
 completedbutgoalnotachieved. Nextdependency/decoded-group ownership review,
 private-writer invalidation before any retentionchange. GoalACTIVE.
+
+
+-2026-10-04: ownership review after8b325c561 confirms ordinary groups sealbefore
+private locator exposure; mutable pooledtail separate, appendinvalidations
+unchanged. External sharedGroupCache fixture recentdependency lost on512KiB
+overflowFAIL. Selective same-cache eviction fixesrecentgroup/coldvictim/bound;
+checked/idempotent immutable admission with errors propagated by3callers.
+FullCorechecksPASS; freeze/countdiag next. No newcache/workers/bounds or
+weakerhash/frame/ceiling checks; earlierqualification unchanged,goalACTIVE.

@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "source_parent": "8b325c561",
+  "workspace_tests": 497,
+  "targets": 94,
+  "clippy": "workspace/all-targets/-Dwarnings PASS",
+  "format": "all/check PASS",
+  "boundary_files": 448,
+  "guard_selftests": 23,
+  "regression_before": "recent dependency group missing after overflow; failed test retained",
+  "regression_after": "only cold victim evicted;512KiB retained, identical admission idempotent, changed/empty/oversized input refused",
+  "ownership": "ordinary pending members seal/flush before locator exposure; mutable PooledMetadata tail separate and pool.release_packs after append unchanged"
+}

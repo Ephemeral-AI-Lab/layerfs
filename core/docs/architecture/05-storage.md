@@ -1168,3 +1168,17 @@ Ordinal identity remains immutable, and begin_chain/release_packs ownership and
 private pack invalidation are unchanged. PoolReadCounters records real decoded
 value hits, capacity evictions and evicted decoded bytes. These counts do not
 claim a memory peak or physical I/O bytes.
+
+
+### Shared decoded ordinary-group retention (against8b325c561)
+
+Dependency discovery, ordinary reconstruction and pooled physical-leaf decoding
+share the supplied reader/save's512KiB GroupCache. It now evicts only least-recent
+entries needed for admission; entries retain the same immutable(pack,group)
+identity. Duplicate input is byte-compared/idempotent; changed/empty/oversized
+input is explicitly refused. Source frame/domain/descriptor/visibility and
+record/canonical checks still precede or surround hits. No new cache or bound.
+Private ownership reviewed: ordinary pending members seal and flush into ready
+immutable packs before locators are exposed. Mutable pooled tails use their
+separate PooledMetadata body view; appending still releases pooled pack bodies
+and does not enter ordinary GroupCache. No private invalidation removed.

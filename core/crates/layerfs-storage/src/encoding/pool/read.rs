@@ -424,7 +424,7 @@ impl PoolReader {
                                 workspace.decompress_group(selected, view.decoded_length)?;
                             work.physical_group_decodes = 1;
                             work.physical_group_decoded_bytes = decoded.len() as u64;
-                            groups.insert(location.pack_id, location.group_number, decoded);
+                            groups.insert(location.pack_id, location.group_number, decoded)?;
                         }
                         Cow::Borrowed(
                             groups

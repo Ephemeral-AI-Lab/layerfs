@@ -1,0 +1,22 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.80s
+     Running tests/decoded_group_retention.rs (core/target/debug/deps/decoded_group_retention-2970537800b47d4d)
+
+running 1 test
+test overflow_keeps_recent_dependency_groups_and_evicts_only_a_cold_group ... FAILED
+
+failures:
+
+---- overflow_keeps_recent_dependency_groups_and_evicts_only_a_cold_group stdout ----
+
+thread 'overflow_keeps_recent_dependency_groups_and_evicts_only_a_cold_group' panicked at crates/layerfs-storage/tests/decoded_group_retention.rs:13:32:
+called `Option::unwrap()` on a `None` value
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    overflow_keeps_recent_dependency_groups_and_evicts_only_a_cold_group
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p layerfs-storage --test decoded_group_retention`
