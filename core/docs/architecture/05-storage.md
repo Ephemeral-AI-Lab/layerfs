@@ -1011,3 +1011,14 @@ are separate from SQL/VM counts. Required final unused-extents release is retain
 no assumption that headroom is automatically discarded. Durable does not reuse
 this main-file growth strategy because WAL grows differently. No schema, canonical
 identity, publication acknowledgement or existing named byte/worker bound change.
+
+
+### Locator demand custody (based on7d44b04df)
+
+When a bounded locator miss reply would overflow the existing512-entry cache,
+retain already-cached IDs requested by the current demand before admitting its
+misses. This prevents wholesale clearing from discarding hits that reconstruction
+will immediately need. The original full-cache guard still bounds larger internal
+frontiers; capacity and physical/decoded byte caches do not grow. Reply membership
+uses binary search over the already sorted miss page. Identity/role/length/pack,
+cardinality, duplicate, reference-cycle and authentication checks remain.

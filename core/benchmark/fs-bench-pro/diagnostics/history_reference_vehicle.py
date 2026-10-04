@@ -13,7 +13,7 @@ def generate(root: Path) -> tuple[str, dict[str, str]]:
     source = root / 'core/crates/layerfs-project/examples/benchmark_history.rs'
     text = source.read_text()
     seals = {str(source.relative_to(root)): hashlib.sha256(source.read_bytes()).hexdigest()}
-    for name in ('cold', 'producer', 'retained', 'support', 'workload'):
+    for name in ('observer', 'cold', 'producer', 'retained', 'support', 'workload'):
         path = source.parent / f'history_support/{name}.rs'
         seals[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
         old = f'#[path = "history_support/{name}.rs"]'
@@ -48,6 +48,13 @@ def generate(root: Path) -> tuple[str, dict[str, str]]:
     let history = sqlite::create(&history_path, &retained::config())?;''')
     replace('cold::Boundary::new(vec![PathBuf::from(&args[2])], probe_states.is_none())?',
             'cold::Boundary::new(vec![PathBuf::from(&args[2]), history_path.clone()], probe_states.is_none())?')
+    for stage in ('construction', 'filesystem', 'save_custody'):
+        old = f'''eprintln!(
+            "HISTORY_PROVIDER_WORK state={{}} stage={stage} cumulative={{:?}}",
+            position + 1,
+            storage.diagnostics()
+        );'''
+        replace(old, f'eprintln!("HISTORY_PROVIDER_WORK state={{}} stage={stage} scope=operation-reader-only opens={{}} group_decodes={{}} pooled={{:?}}", position + 1, reader.connection_opens(), reader.group_decodes(), reader.pooled_read_counters());')
     replace('let reader = storage.reader()?;', 'let reader = StoreProvider::new(&storage);')
     replace('let save = storage.begin_save()?;', '''let mut save = Timing::disabled("history.begin", |timer|
             storage.begin_save(timer.child("save"))).0?;''')

@@ -3,6 +3,8 @@
 #![allow(dead_code)]
 #[path = "history_support/cold.rs"]
 mod cold;
+#[path = "history_support/observer.rs"]
+mod observer;
 #[path = "history_support/producer.rs"]
 mod producer;
 #[path = "history_support/retained.rs"]
@@ -95,9 +97,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             cold.check(position + 1)?;
         }
         let state_stages_before = stages;
+        let mut engine = observer::snapshot();
         let acquire = Instant::now();
         let transition = corpus.transition(position)?;
         stages[0] += acquire.elapsed().as_nanos() as u64;
+        observer::report(position + 1, "acquisition", engine);
+        engine = observer::snapshot();
         let start = Instant::now();
         let mut consumer = TreeStore::new();
         let reader = storage.reader()?;
@@ -171,6 +176,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         stages[1] += start.elapsed().as_nanos() as u64;
+        observer::report(position + 1, "construction", engine);
+        eprintln!(
+            "HISTORY_PROVIDER_WORK state={} stage=construction cumulative={:?}",
+            position + 1,
+            storage.diagnostics()
+        );
+        engine = observer::snapshot();
         let start = Instant::now();
         let mut directories = Vec::new();
         let mut inodes = Vec::new();
@@ -201,6 +213,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             update_filesystem(&mut objects, &input, Some(&mut backing))?
         };
         stages[2] += start.elapsed().as_nanos() as u64;
+        observer::report(position + 1, "filesystem", engine);
+        eprintln!(
+            "HISTORY_PROVIDER_WORK state={} stage=filesystem cumulative={:?}",
+            position + 1,
+            storage.diagnostics()
+        );
+        engine = observer::snapshot();
         let start = Instant::now();
         let save = storage.begin_save()?;
         for id in consumer.insertion_order() {
@@ -241,6 +260,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             )?);
         }
         stages[3] += start.elapsed().as_nanos() as u64;
+        observer::report(position + 1, "save_custody", engine);
+        eprintln!(
+            "HISTORY_PROVIDER_WORK state={} stage=save_custody cumulative={:?}",
+            position + 1,
+            storage.diagnostics()
+        );
         previous_root = Some(built.root);
         roots.push(built.root.0);
         let state_stages = std::array::from_fn::<_, 4, _>(|i| stages[i] - state_stages_before[i]);

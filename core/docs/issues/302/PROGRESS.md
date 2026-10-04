@@ -1791,3 +1791,11 @@ canonical/storage/cleanup, but timingFAIL1.176952009x and candidate proofTIMEOUT
 reference still slower. Pin bookkeeping tuple/list defect repaired offline from
 immutable records without rerun; source normalization next. Hist53/157/Durable
 NOT_RUN. See SQLITE-HISTORY17-V2-COMPARISON.md.
+
+-2026-10-04: bounded locator demand-custody treatment and state/stage mechanism
+instrument ready:512capacity unchanged, public200hit/312miss test one312-IDcall,
+canonical bytes correct. Common SQL/VM/prepare/reset/VFS and lifetime first-seen
+pack counts plus qualified provider scopes added; synthetic2reads/1distinctPASS.
+User authorizes fresh labelled17mechanism pair, supplemental processing parity
+objective without subtracting acquisition or changing whole gate. Prior failures
+retained, Init artifacts pinned. Freeze and execute diagnostic next.

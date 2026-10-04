@@ -28,9 +28,15 @@ static struct row *get_sql(const char *sql,int ow) {
  struct row *r=&rows[used++]; r->id=h;r->phase=ph;r->owner=ow;snprintf(r->sql,SQL_TEXT,"%s",sql);return r;
 }
 static struct row *get(sqlite3_stmt *s) { return get_sql(sqlite3_sql(s),owner(s)); }
+#ifdef LAYERFS_COMBINED_OBSERVER
+void cause_history_note_pack(sqlite3_stmt *statement);
+#endif
 static int profile(unsigned event,void *ctx,void *statement,void *time) {
  (void)ctx; if(event!=SQLITE_TRACE_PROFILE) return 0;
  sqlite3_stmt *s=statement;
+#ifdef LAYERFS_COMBINED_OBSERVER
+ cause_history_note_pack(s);
+#endif
  pthread_mutex_lock(&guard);struct row *r=get(s);
  if(r) {r->calls++;r->steps+=sqlite3_stmt_status(s,SQLITE_STMTSTATUS_VM_STEP,1);r->scans+=sqlite3_stmt_status(s,SQLITE_STMTSTATUS_FULLSCAN_STEP,1);r->sorts+=sqlite3_stmt_status(s,SQLITE_STMTSTATUS_SORT,1);r->reprepare+=sqlite3_stmt_status(s,SQLITE_STMTSTATUS_REPREPARE,1);r->profile_ns+=*(sqlite3_uint64*)time;}
  pthread_mutex_unlock(&guard);return 0;

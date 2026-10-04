@@ -85,10 +85,18 @@ impl Fetch {
             if rows.len() > page.len() {
                 return Err(StorageError::Integrity("locator cardinality"));
             }
+            {
+                let mut cache = self.locators.borrow_mut();
+                if cache.len().saturating_add(rows.len()) > READ_OBJECT_LIMIT {
+                    // Keep hits needed by this demand before admitting its misses.
+                    // The existing full-cache guard still bounds oversized frontiers.
+                    cache.retain(|id, _| ids.contains(id));
+                }
+            }
             let mut seen = BTreeSet::new();
             for row in rows {
                 let location = row.location;
-                if !page.contains(&location.object_id)
+                if page.binary_search(&location.object_id).is_err()
                     || !seen.insert(location.object_id)
                     || location.pack_id != row.pack.pack_id
                     || location.pack_id <= 0
