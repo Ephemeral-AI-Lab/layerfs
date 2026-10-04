@@ -1,0 +1,55 @@
+{
+  "canonical_bytes": 380559460,
+  "canonical_objects": 51689,
+  "inventory_sha256": "fb5c8b1768e52ed56013c255c227f155ffe98f4cd2af7aaf5abec60471402249",
+  "owners": [
+    {
+      "allocated_bytes": 50724864,
+      "application_id": 1279677264,
+      "closed_sidecars": [
+        {
+          "allocated_bytes": 0,
+          "device": 16777230,
+          "inode": 866644291,
+          "length_bytes": 0,
+          "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-opportunity-durable-history17-candidate1/store.sqlite-wal",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "allocated_bytes": 32768,
+          "device": 16777230,
+          "inode": 866644292,
+          "length_bytes": 32768,
+          "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-opportunity-durable-history17-candidate1/store.sqlite-shm",
+          "sha256": "67866980d562a4afbc2d6e063b858d6613b23424eb2f405d13a566e9e0394ac9"
+        }
+      ],
+      "immutable_read": true,
+      "length_bytes": 50692096,
+      "main_allocated_bytes": 50692096,
+      "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-opportunity-durable-history17-candidate1/store.sqlite",
+      "rows": {
+        "branch": 17,
+        "commit": 16,
+        "content_signature": 6614,
+        "history_meta": 1,
+        "layer": 17,
+        "layer_stack": 1,
+        "metadata_value_group": 1626,
+        "object_location": 51689,
+        "pack": 613,
+        "pack_unit": 2965,
+        "scope_allocator": 0,
+        "store_policy": 1,
+        "workspace_stage": 0
+      },
+      "sha256_after": "27e40011ae1fbe026da6c391a12f929d856c695b98ecf9ed6f213890d5357a54",
+      "sha256_before": "27e40011ae1fbe026da6c391a12f929d856c695b98ecf9ed6f213890d5357a54",
+      "user_version": 3
+    }
+  ],
+  "pack_bodies_bytes": 45558472,
+  "scope": "closed-owner schema/integrity, canonical IDs/roles/lengths and C5 roots/counts; namespace oracle separate",
+  "status": "CHECKED",
+  "storage_bytes": 50724864
+}

@@ -1,0 +1,63 @@
+{
+  "scope": "tiny public SQLite lifecycle diagnostic only, not product/performance/admission sample",
+  "observer_sha256": "05c3273404d3462075154f1322d9e9d337cb5f0f5931b5f61e93529fae4bac4a",
+  "probe_sha256": "74381e70463c5929b043ecdc116394ca06f7208a0cea7ad10f9897eb41f6dcbc",
+  "rows": [
+    {
+      "name": "stock",
+      "observer": false,
+      "extra_fd_held_until_after_sqlite_close": 0,
+      "result": {
+        "persist_wal_result": 0,
+        "persist_wal": 1,
+        "close_result": 0,
+        "wal_exists": 1,
+        "wal_size": 0,
+        "shm_exists": 1,
+        "shm_size": 32768
+      }
+    },
+    {
+      "name": "stock-extra-fd",
+      "observer": false,
+      "extra_fd_held_until_after_sqlite_close": 1,
+      "result": {
+        "persist_wal_result": 0,
+        "persist_wal": 1,
+        "close_result": 0,
+        "wal_exists": 1,
+        "wal_size": 0,
+        "shm_exists": 1,
+        "shm_size": 32768
+      }
+    },
+    {
+      "name": "observer",
+      "observer": true,
+      "extra_fd_held_until_after_sqlite_close": 0,
+      "result": {
+        "persist_wal_result": 0,
+        "persist_wal": 1,
+        "close_result": 0,
+        "wal_exists": 1,
+        "wal_size": 0,
+        "shm_exists": 1,
+        "shm_size": 32768
+      }
+    },
+    {
+      "name": "observer-extra-fd",
+      "observer": true,
+      "extra_fd_held_until_after_sqlite_close": 1,
+      "result": {
+        "persist_wal_result": 0,
+        "persist_wal": 1,
+        "close_result": 0,
+        "wal_exists": 1,
+        "wal_size": 0,
+        "shm_exists": 1,
+        "shm_size": 32768
+      }
+    }
+  ]
+}

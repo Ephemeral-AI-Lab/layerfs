@@ -1,0 +1,9 @@
+{
+  "parent": "9800ec65908154ed90da5bb4fbcc7ed19a2bd6f7",
+  "before": 140304,
+  "after": 140304,
+  "delta": 0,
+  "reference": 65417,
+  "core": 74887,
+  "method": "same production counter/version; exact parent/staged product src/runtime SQL and active harness blob equality; inactive docs/proposal only; validated full totals inherited"
+}

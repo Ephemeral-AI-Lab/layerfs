@@ -366,3 +366,45 @@ its candidate profile is WAL/FULL/fullfsync against the registered original
 phase4.5-memory-off reference, not a claim of equal durability between arms.
 Init, all-seven admission and PostgreSQL/MinIO M4 pause remain unchanged.
 Production LOC 140,304 → 140,304 (delta 0), reference 65,417/core 74,887.
+
+## Checkpoint10 — Durable stride 10 refusal and reviewable correction
+
+[Audited failed admission](checks/durable-sidecar-failure10/comparison.json),
+source 9800ec659: Durable candidate 32.053082042 s vs original memory-off
+reference 32.282464625 s (−0.710548546%). Complete performance command and
+cold/residency/cleanup-scratch/time margin PASS. Effective WAL/FULL/fullfsync
+settings and checkpoint completion read back exactly. Shared original allocation
+is 50,724,864 bytes = main 50,692,096 + SHM 32,768 + empty WAL 0: original
+49,344,512 target FAIL +2.797376940%; approved 54,278,964 ceiling PASS.
+
+**Independent proof FAIL / overall admission INCOMPLETE:** the active census
+refuses any sidecar before namespace proof. Stock public SQLite diagnostics
+confirm default PERSIST_WAL=1 retains exactly this empty pair after close,
+with/without our observer and an extra descriptor. No old receipt is promoted.
+A first CLI spelling with a nonexistent explicit-durable prefix was refused
+before setup/build/sample and stays in the launch log.
+
+[Concrete inactive v2 proposal](checks/durable-proof-proposal1/README.md)
+accepts only a closed, exclusive, WAL-header main plus a zero-length WAL and
+stable 32 KiB SHM, hash-custodies every original, rejects nonempty WAL/journals/
+aliases/incomplete pairs, and runs the native proof on an independent bounded
+byte copy. Prototype full 17-state proof passes in 3.318778667 s under unchanged
+12 s, with 101,477 paths / 67 bounded content paths and all original hashes
+stable. Five new rejection tests and five existing proof tests pass. Prototype
+attempts are diagnostic only and retained; active verifier/product unchanged.
+Prototype copy-size enforcement uses the existing Store ceiling; F_NOCACHE
+checksum/copy descriptors plus native whole-copy attestation show zero initial
+and final resident pages before native verification. Prospective v2 integration
+awaits review; all original hashes/identities remain stable.
+
+| Family 2 | Stride 10 / 17 | Stride 3 / 53 | Stride 1 / 157 |
+| --- | --- | --- | --- |
+| Disposable | PASS, original storage target FAIL retained | PASS, original target FAIL retained | PASS, original target FAIL retained |
+| Durable | Performance numeric gates PASS; proof FAIL; admission INCOMPLETE | NOT_RUN pending proof treatment | NOT_RUN pending proof treatment |
+
+SDK/server/daemon/FUSE N/A. Init, all-seven admission, exhaustive payload and
+PostgreSQL/MinIO M4 remain unqualified/paused as recorded. Production source
+140,304 → 140,304 (delta 0), reference 65,417/core 74,887. Only docs/inactive
+proposal/diagnostic evidence are staged; product and active harness blobs match
+the parent exactly. Required owner review is the proof-admission extension,
+not a request to relax any time, bytes, cold or publication limit.

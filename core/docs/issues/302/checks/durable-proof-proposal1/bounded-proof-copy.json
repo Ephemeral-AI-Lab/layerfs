@@ -1,0 +1,29 @@
+{
+  "method": "independent read/write byte stream, not APFS clone",
+  "bytes": 50692096,
+  "buffer_bytes": 65536,
+  "limit_bytes": 54278964,
+  "cache_io_hint": "macOS F_NOCACHE on source/destination; hint, not a memory bound",
+  "sha256": "27e40011ae1fbe026da6c391a12f929d856c695b98ecf9ed6f213890d5357a54",
+  "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype5/independent-proof.sqlite",
+  "sidecars": [
+    {
+      "method": "independent read/write byte stream, not APFS clone",
+      "bytes": 0,
+      "buffer_bytes": 65536,
+      "limit_bytes": 54278964,
+      "cache_io_hint": "macOS F_NOCACHE on source/destination; hint, not a memory bound",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype5/independent-proof.sqlite-wal"
+    },
+    {
+      "method": "independent read/write byte stream, not APFS clone",
+      "bytes": 32768,
+      "buffer_bytes": 65536,
+      "limit_bytes": 54278964,
+      "cache_io_hint": "macOS F_NOCACHE on source/destination; hint, not a memory bound",
+      "sha256": "67866980d562a4afbc2d6e063b858d6613b23424eb2f405d13a566e9e0394ac9",
+      "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-opportunity-loop1/durable-proof-prototype5/independent-proof.sqlite-shm"
+    }
+  ]
+}
