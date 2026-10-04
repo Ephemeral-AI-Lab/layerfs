@@ -1619,3 +1619,12 @@ nest in step clocks; no physical syscall/device-byte or exact partition claim.
 Publication/write work is next priority while preserving durability/limits.
 [Full report](SQLITE-VFS-CAUSE-RESULTS.md) and append-only receipts retained.
 Latest ordinary Init1000 speed FAIL; all seven selections remain active.
+
+### Bounded pack INSERT pages (prospective)
+
+Replace95per-body INSERTs observed by revision4 with borrowed multi-row pages
+bounded by actual SQL limits/512rows, within the same publication transaction.
+513pack count/readback and second-page conflict rollback proof PASS; existing
+publication/ordinal/transaction checks PASS, fixture errors retained in report.
+No profile/buffer/cache/schema/dependency change. One matched ordinary Init1000
+pair next; allseven remain active. [Treatment](SQLITE-PACK-INSERT-PAGES.md).

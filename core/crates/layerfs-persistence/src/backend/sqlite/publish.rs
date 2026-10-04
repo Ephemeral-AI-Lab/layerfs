@@ -5,26 +5,7 @@ use layerfs_content::ObjectId;
 use layerfs_storage::{location::PackDomain, port::*};
 use std::collections::BTreeSet;
 pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published, BackendError> {
-    for p in &batch.packs {
-        tx.borrowed(
-            "INSERT INTO pack(pack_id,domain,digest,length,body) VALUES(?1,?2,?3,?4,?5)",
-            &[
-                &p.info.pack_id,
-                &(if p.info.domain == PackDomain::Metadata {
-                    0i64
-                } else {
-                    1
-                }),
-                &p.info.key.as_bytes().as_slice(),
-                &(p.info.length as i64),
-                &p.body.as_slice(),
-            ],
-            p.body.len() as u64 + 56,
-        )?;
-        let mut w = tx.work.borrow_mut();
-        w.sealed_inserts += 1;
-        w.sealed_body_bytes += p.body.len() as u64;
-    }
+    write_packs(tx, &batch.packs)?;
     let mut inserted = BTreeSet::new();
     // Both actual limits constrain one statement. SQL size is bounded conservatively.
     let limit = tx.input_limit(6, 192, 32)?;
@@ -71,4 +52,66 @@ pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published
             .map(|o| o.object_id)
             .collect(),
     })
+}
+
+/// Borrow complete immutable bodies into bounded INSERT pages in caller order.
+fn write_packs(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(), BackendError> {
+    if packs.is_empty() {
+        return Ok(());
+    }
+    const PREFIX: &str = "INSERT INTO pack(pack_id,domain,digest,length,body) VALUES ";
+    const ROW: &str = "(?,?,?,?,?)";
+    let limit = tx
+        .input_limit(5, PREFIX.len(), ROW.len() + 1)?
+        .min(layerfs_storage::policy::BATCH_OBJECT_LIMIT);
+    let mut remaining = packs;
+    while !remaining.is_empty() {
+        // rusqlite's safe BLOB binding copies into SQLite. Keep the aggregate
+        // binding charge within the preceding one-ordinary-pack statement bound.
+        // An existing large singleton remains alone, with no companion bodies.
+        let mut count = 1;
+        let mut bytes = remaining[0].body.len() as u64 + 56;
+        while count < remaining.len().min(limit) {
+            let next = remaining[count].body.len() as u64 + 56;
+            if bytes.saturating_add(next) > layerfs_storage::policy::PACK_LIMIT as u64 + 56 {
+                break;
+            }
+            bytes += next;
+            count += 1;
+        }
+        let (page, tail) = remaining.split_at(count);
+        remaining = tail;
+        let sql = format!(
+            "{}{}",
+            PREFIX,
+            std::iter::repeat_n(ROW, page.len())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let encoded = page
+            .iter()
+            .map(|p| {
+                (
+                    p.info.pack_id,
+                    if p.info.domain == PackDomain::Metadata {
+                        0i64
+                    } else {
+                        1
+                    },
+                    p.info.key.as_bytes().as_slice(),
+                    p.info.length as i64,
+                    p.body.as_slice(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let values = encoded
+            .iter()
+            .flat_map(|r| [&r.0 as &dyn rusqlite::ToSql, &r.1, &r.2, &r.3, &r.4])
+            .collect::<Vec<_>>();
+        tx.borrowed(&sql, &values, bytes)?;
+        let mut w = tx.work.borrow_mut();
+        w.sealed_inserts += page.len() as u64;
+        w.sealed_body_bytes += page.iter().map(|p| p.body.len() as u64).sum::<u64>();
+    }
+    Ok(())
 }

@@ -443,3 +443,69 @@ fn signature_pages_share_one_acknowledgement_at_the_existing_row_bound() {
     h.storage.signatures(&mut rows).unwrap();
     assert_eq!(rows, batch.signatures);
 }
+
+#[test]
+fn pack_insert_pages_preserve_bodies_and_atomic_conflict_refusal() {
+    let t = Temp::new("pack-insert-pages");
+    let h = create(&t.join("db"));
+    let mut batch = Publication::default();
+    // Cross the 512-row statement bound while staying below transaction bytes.
+    for id in 1..=513 {
+        batch.packs.extend(unit(id, 0).packs);
+    }
+    let before = h.diagnostics().unwrap();
+    assert!(h.storage.publish(&batch).unwrap().lost.is_empty());
+    let after = h.diagnostics().unwrap();
+    // BEGIN, two pack INSERT pages and COMMIT; no per-pack statements.
+    assert_eq!(after.statements - before.statements, 4);
+    assert_eq!(after.write_commits - before.write_commits, 1);
+    assert_eq!(after.sealed_inserts - before.sealed_inserts, 513);
+    let mut read = Vec::new();
+    h.storage.read_packs(&[1, 512, 513], &mut read).unwrap();
+    assert_eq!(read.len(), 3);
+    for pack in read {
+        assert_eq!(pack.body, *batch.packs[pack.info.pack_id as usize - 1].body);
+    }
+    let mut conflict = Publication::default();
+    // A new first page must also roll back when the second page conflicts.
+    for id in 1000..1512 {
+        conflict.packs.extend(unit(id, 0).packs);
+    }
+    conflict.packs.extend(unit(1, 0).packs);
+    assert!(h.storage.publish(&conflict).is_err());
+    let mut absent = Vec::new();
+    assert_eq!(
+        h.storage.read_packs(&[1000, 1511], &mut absent),
+        Err(PersistenceError::Missing)
+    );
+    assert!(absent.is_empty());
+    let mut existing = Vec::new();
+    h.storage.read_packs(&[1], &mut existing).unwrap();
+    assert_eq!(existing[0].body, *batch.packs[0].body);
+}
+
+#[test]
+fn pack_insert_pages_keep_large_blob_binding_ownership_separate() {
+    let t = Temp::new("pack-page-byte-bound");
+    let h = create(&t.join("db"));
+    let group = build_group(PackLane::WholeFile, &[vec![0x10; 64000]], None).unwrap();
+    let body = assemble(PackLane::WholeFile, &[group.clone(), group.clone(), group]).unwrap();
+    assert!(body.len() > layerfs_storage::policy::PACK_LIMIT / 2);
+    let mut batch = Publication::default();
+    for id in 1..=3 {
+        let mut p = unit(id, 0).packs.remove(0);
+        p.info.key = ObjectKey::for_bytes(&body);
+        p.info.length = body.len();
+        p.body = Arc::new(body.clone());
+        batch.packs.push(p);
+    }
+    let before = h.diagnostics().unwrap();
+    h.storage.publish(&batch).unwrap();
+    let after = h.diagnostics().unwrap();
+    assert_eq!(after.statements - before.statements, 5);
+    assert_eq!(after.write_commits - before.write_commits, 1);
+    let mut read = Vec::new();
+    h.storage.read_packs(&[1, 2, 3], &mut read).unwrap();
+    assert_eq!(read.len(), 3);
+    assert!(read.iter().all(|p| p.body == body));
+}

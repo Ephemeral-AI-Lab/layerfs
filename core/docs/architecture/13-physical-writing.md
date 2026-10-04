@@ -479,3 +479,26 @@ socket/entity bytes. They are not a timing or admission claim. Service tests use
 external response interception to drop an acknowledged PUT reply and damage a
 real GET header; product source contains no fault hook or alternate path.
 The complete sealed bytes supplied by C2 are unchanged by this transport.
+
+
+### Phase 7 immutable SQLite pack INSERT pages
+
+Source: this commit, based on `284bf5dda`. Active `layerfs-persistence` borrows
+complete pack bodies into multi-row INSERT pages, in publication input order.
+Each page is bounded by the connection's actual variable and SQL-length limits
+and at most 512 rows. Only scalar/binding descriptors are staged; the Arc-backed
+payloads are not cloned. All pages, locators, signatures and policy changes retain
+the same one-attempt publication transaction. A conflict or definite failure in a
+later page rolls back prior pages; uncertain outcomes retain existing quarantine.
+Canonical and physical transaction byte limits, immutable pack grammar, body
+validation, WAL/FULL and checkpoint policy are unchanged. Actual sealed-insert
+and byte diagnostics count packs, independent of statement page count. This
+reduces statement work; it does not claim less physical I/O or a speed PASS.
+
+The safe rusqlite BLOB binding uses SQLITE_TRANSIENT, so Rust borrowing alone
+does not bound SQLite-owned copies. The aggregate per-page binding charge is
+also limited to the preceding single ordinary-pack statement's256KiB+56B. An
+existing oversized singleton is isolated, with no companion bodies. Large packs
+therefore keep separate INSERTs; batching targets small packs without increasing
+payload binding ownership. A three192KiB-pack count/readback check confirms three
+INSERTs within one transaction. This deliberately limits potential speed savings.
