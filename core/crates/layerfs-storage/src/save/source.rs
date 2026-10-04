@@ -58,6 +58,7 @@ impl Source for WaveSource<'_> {
         &self,
         id: i64,
         groups: &[usize],
+        whole_for_reuse: bool,
     ) -> StorageResult<crate::encoding::PackAcquisition> {
         if let Some(body) = self.packer.pooled_body(id)? {
             return Ok(crate::encoding::PackAcquisition::Whole { info: None, body });
@@ -73,7 +74,7 @@ impl Source for WaveSource<'_> {
                 body: pack.body.as_ref().clone(),
             });
         }
-        self.fetch.acquire_groups(id, groups)
+        self.fetch.acquire_groups(id, groups, whole_for_reuse)
     }
     fn value_group(&self, ordinal: u32) -> StorageResult<Option<ValueGroupRow>> {
         match self.packer.pooled_row(ordinal) {

@@ -223,3 +223,34 @@ Implementation productionLOC138465->139279(+814); reference65417 unchanged,
 core73048->73862, same production_loc.py exact parent/staged archive method.
 Next: labelled native proof count diagnostic on retained53stores with BLOB
 acquisition attribution, no speed rerun or proof promotion. GoalACTIVE.
+
+
+## Directed reuse promotion after count diagnostic
+
+Corrected SQL+BLOB count observer2e43336cd native-only53diagnostic: reference
+TIMEOUT9,512,798,750ns after52states, candidateTIMEOUT9,503,366,625ns after46.
+Whole commands25,467,049,250/24,110,084,667ns; source/database cold and owner
+SHA256/closed-state preservation PASS. Diagnostic only; ordinary proof remains
+FAIL and no speed sample replaced. Rawissue302-history53-ranges-native-cause1,
+compactchecks/read-ranges-native-cause1. The observer counts successful read-only
+main.pack.body opens and legacy SELECT acquisitions, fixed bitmap distinct IDs.
+Unknown-ID counts0. Cumulative acquisitions36,436/36,575,distinct912/590 and
+delegated VFS requested read2,994,085,023/4,123,410,782B across completed stages.
+Different completed-state coverage prevents a direct speed/throughput ratio.
+Candidate state46pooled pack acquisitions3,158/149,243,528scan bytes; reference
+state52=241/8,193,630B. These differing states diagnose repetition, not matched
+per-state speed. A selected group still needs a complete digest scan each miss.
+
+Directed product change: on a new group miss while this owner retains another
+selected unit of that same <=2MiB pack, explicitly choose whole before I/O.
+Descriptor/strategy/full digest/whole frame and retained-unit equality checked;
+units replaced, ordinary selective eviction enforces same2MiB/4096entry allowance.
+No extra history, buffers, workers, retries or private mutable-pack reuse. The
+first sparse acquisition stays selected, existing density/small/singleton
+policies retain precedence, reason counterwhole_due_reuse records the real
+choice. Source/WaveSource forward demand preference explicitly. External tests
+assert acquisition counts, exact sibling bytes and promotion peak bound.
+Functional full workspace/alltargets tests/Clippy/fmt/boundary PASS; exact
+commands/logs/countschecks/read-ranges-reuse-functional1. Next one prospective
+candidate native-only count diagnostic against original closed53store; no proof
+promotion. Ordinary source-matched qualification will require new receipts.

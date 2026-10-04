@@ -1,0 +1,14 @@
+{
+  "boundary_files": 448,
+  "boundary_selftests": 23,
+  "clippy": "workspace/all-targets/-Dwarnings PASS",
+  "formatting": "all/check PASS",
+  "new_external_tests": [
+    "sparse new-group miss promotes then siblings hit",
+    "whole admission replaces units within same byte allowance"
+  ],
+  "source_parent": "2e43336cd",
+  "status": "PASS",
+  "targets": 92,
+  "workspace_all_targets_tests": 494
+}

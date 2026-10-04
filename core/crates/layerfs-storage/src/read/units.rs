@@ -9,16 +9,18 @@ use crate::{
 pub(crate) struct GroupPlan<'a> {
     id: i64,
     groups: &'a [usize],
+    whole_for_reuse: bool,
     pub(crate) error: Option<StorageError>,
     pub(crate) selected_info: Option<PackInfo>,
     pub(crate) selected_choice: Option<PackReadChoice>,
     pub(crate) whole_reason: Option<&'static str>,
 }
 impl<'a> GroupPlan<'a> {
-    pub(crate) fn new(id: i64, groups: &'a [usize]) -> Self {
+    pub(crate) fn new(id: i64, groups: &'a [usize], whole_for_reuse: bool) -> Self {
         Self {
             id,
             groups,
+            whole_for_reuse,
             error: None,
             selected_info: None,
             selected_choice: None,
@@ -69,6 +71,8 @@ impl<'a> GroupPlan<'a> {
             Some("small")
         } else if useful >= info.length.div_ceil(2) || ranges.len() > 4 {
             Some("density")
+        } else if self.whole_for_reuse {
+            Some("reuse")
         } else {
             None
         };

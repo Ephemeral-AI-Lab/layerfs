@@ -102,6 +102,22 @@ fn adjacent_sparse_groups_coalesce_and_dense_promotion_preserves_bytes_and_order
     assert_eq!(storage.diagnostics().read_pack_selections, 2);
 }
 #[test]
+fn new_sparse_group_miss_promotes_retained_pack_then_all_siblings_reuse() {
+    let (metadata, objects, _) = fixture();
+    let storage = Storage::new(metadata).unwrap();
+    let reader = storage.reader().unwrap();
+    for (step, number) in [0, 0, 7, 3, 5, 1, 6, 2, 4].into_iter().enumerate() {
+        assert_eq!(
+            reader.read_objects(&[objects[number].id()]).unwrap()[0],
+            objects[number].canonical()
+        );
+        let work = storage.diagnostics();
+        assert_eq!(work.range_selected, 1);
+        assert_eq!(work.whole_due_reuse, u64::from(step >= 2));
+        assert_eq!(work.read_pack_selections, if step < 2 { 1 } else { 2 });
+    }
+}
+#[test]
 fn random_sparse_groups_preserve_duplicate_slots() {
     let (metadata, objects, _) = fixture();
     let storage = Storage::new(metadata).unwrap();

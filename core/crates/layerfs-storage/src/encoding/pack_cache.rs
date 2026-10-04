@@ -229,7 +229,21 @@ impl PackCache {
         if missing.is_empty() {
             return Ok((false, 0));
         }
-        let acquired = source.acquire_groups(id, &missing)?;
+        // A selected read already pays a complete digest scan. On a new group
+        // miss for the same retained pack, pay that scan once more for its whole
+        // body, then reuse it. No extra history/cache or error-driven retry.
+        let whole_for_reuse = self
+            .entries
+            .range((id, Some(0))..=(id, Some(usize::MAX)))
+            .any(|(_, entry)| {
+                entry
+                    .info
+                    .is_some_and(|info| info.length <= policy::DEPENDENCY_PACK_CACHE_BYTES)
+            });
+        let acquired = source.acquire_groups(id, &missing, whole_for_reuse)?;
+        if whole_for_reuse && !matches!(&acquired, super::PackAcquisition::Whole { .. }) {
+            return Err(StorageError::Integrity("whole reuse selection reply"));
+        }
         let before = self.work;
         let bytes = match acquired {
             super::PackAcquisition::Whole { info, body } => {

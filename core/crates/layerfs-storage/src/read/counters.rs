@@ -19,6 +19,8 @@ pub struct Diagnostics {
     pub whole_due_singleton: u64,
     /// Whole selections whose body already fits the acquired prefix.
     pub whole_due_small: u64,
+    /// Whole selections after another selected group was retained by this owner.
+    pub whole_due_reuse: u64,
     /// Actual selected complete-group materializations.
     pub range_selected: u64,
     /// Complete bytes scanned/hashed for selected acquisitions, not device bytes.

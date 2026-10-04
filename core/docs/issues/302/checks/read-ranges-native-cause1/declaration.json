@@ -1,0 +1,28 @@
+{
+  "admission": "NOT_APPLICABLE",
+  "arms": [
+    "baseline",
+    "candidate"
+  ],
+  "baseline_run": "issue302-history53-ranges-baseline1",
+  "cache": "whole source corpus and retained database content invalidated and mincore checked before each native child",
+  "candidate_run": "issue302-history53-ranges-candidate1",
+  "children_per_arm": 1,
+  "complete_per_arm_budget_ns": 60000000000,
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "b073f1b699ca071f7de7abbcc49c5828bb396fe23059861364b741a628e029a9",
+    "product_seal": "dbf4a91975b3f053a6afd2e72d6694802b05f6c02afd5af5d9d335f3dfd2d8cd",
+    "source_commit": "2e43336cdada9e1dba93ccc882f12cff782c1a85",
+    "source_dirty": false,
+    "source_tree": "e6df6e2a1310df86917537d0101c5cce13dd4149"
+  },
+  "kind": "history53-native-proof-count-v2",
+  "native_budget_ns": 9500000000,
+  "reuse": "original closed retained stores/producer roots/census/reference metadata; no speed rerun",
+  "scope": "native oracle/custody verification only; census/export/preservation of ordinary combined proof not included in native wall; no admission or proof promotion",
+  "workload_row": "history-stride3"
+}

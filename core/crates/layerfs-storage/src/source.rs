@@ -16,11 +16,13 @@ pub trait Source {
     /// Complete declared pack bytes, without capacity padding.
     fn pack_bytes(&self, pack_id: i64) -> StorageResult<Vec<u8>>;
     /// Acquires the complete encoded groups needed by this bounded physical
-    /// demand. Ordinary custom sources explicitly use their whole-body route.
+    /// demand. `whole_for_reuse` requests whole materialization before I/O when
+    /// this owner already retained another group. Custom sources use whole bodies.
     fn acquire_groups(
         &self,
         pack_id: i64,
         _groups: &[usize],
+        _whole_for_reuse: bool,
     ) -> StorageResult<crate::encoding::PackAcquisition> {
         Ok(crate::encoding::PackAcquisition::Whole {
             info: None,

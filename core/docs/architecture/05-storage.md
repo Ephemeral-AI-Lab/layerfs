@@ -1141,3 +1141,17 @@ open/read/close calls, requested/returned bytes and read-call wall. SQL, BLOB,
 transaction and product spans overlap; they must not be summed as independent
 work. Lifetime owner peaks are not phase-local process-memory evidence.
 Qualification remains in the [read plan](../issues/302/READ-OPTIMIZATION-QUALIFICATION.md).
+
+
+### Retained selected-pack reuse promotion (against2e43336cd)
+
+A new group miss while the owner retains selected units of that pack chooses
+whole materialization prospectively, provided the complete body fits2MiB. Each
+selected acquisition already scans the complete digest; promoting on further
+demand avoids repeated complete scans for sibling groups. The ordinary/singleton/
+density policies still apply. This is a cache-state decision before I/O, never
+a retry. Fetch binds the actual descriptor/strategy and private Save bodies stay
+explicit. Whole admission compares retained group bytes, removes those units,
+and evicts unrelated entries under the same2MiB/4096entry allowance. No extra
+history map, cache, workers or relaxed integrity/visibility ceiling. Diagnostics
+separate reuse-driven whole selections from small/singleton/density choices.

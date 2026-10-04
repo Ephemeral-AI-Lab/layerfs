@@ -1933,3 +1933,13 @@ Original170s evidence unchanged. SQL-onlypack observer missesnewBLOBopens;
 explicit BLOB counters authoritative, countdiagnostic extended to bothroutes
 without altering product operations. Raw/compact receipts in qualificationdoc,
 all6raw manifests/hash audited. GoalACTIVE; no all-seven/Durable claim.
+
+
+-2026-10-04: corrected BLOBobserver53native countdiag at2e43336cd preserves
+closed stores/cold eligibility; refTIMEOUT52states9.512798750s,candidate46states
+9.503366625s. Candidate4.123GB delegated reads/36,575acqs vsref2.994GB/36,436
+with unequal statecoverage. State46pooled3,158acqs149MB signals sibling rereads.
+Directed <=2MiB wholepromotion on second selected-group demand, samebody bound
+and no extra cache/history, privateinvalidations/integrity unchanged. Full
+workspace functionaltests/Clippy/fmt/boundaryPASS; freshcandidatecountdiag next.
+No oldspeed/proof promotion,190s/9.5s unchanged,goalACTIVE.

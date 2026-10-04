@@ -293,12 +293,13 @@ impl Source for Fetch {
         &self,
         id: i64,
         groups: &[usize],
+        whole_for_reuse: bool,
     ) -> StorageResult<crate::encoding::PackAcquisition> {
         self.note(|c| {
             c.read_pack_selections += 1;
             c.pack_misses += 1;
         });
-        let mut plan = super::units::GroupPlan::new(id, groups);
+        let mut plan = super::units::GroupPlan::new(id, groups, whole_for_reuse);
         let reply = self.metadata.read_pack_selection(id, &mut plan);
         if let Some(error) = plan.error {
             return Err(error);
@@ -339,6 +340,7 @@ impl Source for Fetch {
                         Some("singleton") => c.whole_due_singleton += 1,
                         Some("density") => c.whole_due_density += 1,
                         Some("small") => c.whole_due_small += 1,
+                        Some("reuse") => c.whole_due_reuse += 1,
                         _ => {}
                     }
                     if info.domain == PackDomain::Payload {

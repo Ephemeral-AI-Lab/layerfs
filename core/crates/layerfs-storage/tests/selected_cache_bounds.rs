@@ -70,8 +70,21 @@ impl Source for Input {
     fn pack_bytes(&self, _: i64) -> StorageResult<Vec<u8>> {
         Err(StorageError::Integrity("unexpected whole route"))
     }
-    fn acquire_groups(&self, id: i64, groups: &[usize]) -> StorageResult<PackAcquisition> {
+    fn acquire_groups(
+        &self,
+        id: i64,
+        groups: &[usize],
+        whole_for_reuse: bool,
+    ) -> StorageResult<PackAcquisition> {
         self.calls.set(self.calls.get() + 1);
+        if whole_for_reuse {
+            let row = PersistedPack::authenticate(self.info(id), self.body.clone())?;
+            let (info, body) = row.into_parts();
+            return Ok(PackAcquisition::Whole {
+                info: Some(info),
+                body,
+            });
+        }
         let acquired =
             PersistedPackRead::acquire(self.info(id), &mut Plan(groups), |offset, out| {
                 out.copy_from_slice(&self.body[offset..offset + out.len()]);
@@ -138,4 +151,23 @@ fn tiny_selected_units_still_obey_the_existing_entry_count_limit() {
         .group(&source, policy::READ_OBJECT_LIMIT as i64 + 1, 0)
         .unwrap()
         .is_some());
+}
+
+#[test]
+fn whole_promotion_replaces_units_within_same_byte_allowance() {
+    let source = Input::new(32_000);
+    let mut cache = PackCache::new();
+    cache.acquire_groups(&source, 1, &[0]).unwrap();
+    assert!(!cache.contains_key(&1));
+    cache.acquire_groups(&source, 1, &[7]).unwrap();
+    assert!(cache.contains_key(&1));
+    assert_eq!(cache.retained_bytes(), source.body.len());
+    assert!(cache.work().peak_bytes <= policy::DEPENDENCY_PACK_CACHE_BYTES);
+    for number in 0..8 {
+        assert_eq!(
+            cache.acquire_groups(&source, 1, &[number]).unwrap(),
+            (false, 0)
+        );
+    }
+    assert_eq!(source.calls.get(), 2);
 }
