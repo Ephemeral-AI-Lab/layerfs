@@ -11,3 +11,9 @@ One release/locked sample per new frozen case and arm, fresh append-only outputs
 The proof becomes one active path using the reviewed correction; no production/dependency/durability change. Validate covering helper tests and changed release example once at frozen source. Record every result, identity, reproduction command and gap. SDK/server/daemon/FUSE are N/A for this direct component lane. PostgreSQL/MinIO remains paused; SQLite qualification and owner-requested closure do not claim those original service milestones or release admission.
 
 Close #302 after this requested round and a concrete report; failures cannot be renamed PASS. Checkpoint commits record exact first-parent/staged production LOC and update the issue.
+
+## Checkpoint: Durable stride10 and stride3
+
+Source702f7a38f, exact matched release/locked arms. Stride10 PASS: product32630223375 /32356111208ns (−0.8400560543%); complete46596506375 /44885041583ns; proof3018135167 /3332632167ns; candidate50724864B <=54278964B. Stride3 PASS: product69063050500 /69114259292ns (+0.0741478861%, within unchanged10% margin); complete82421191000 /81654476917ns; proof6765155625 /6761100583ns; candidate64278528B <=70427034B. Both cold, custody, independent roots, cleanup and original preservation PASS. Original storage targets remain missed. [Compact evidence](checks/owner-closure1/) pins raw receipts. Stride1 and both-profile Init remain NOT_RUN at this checkpoint.
+
+Validation:37 covering harness tests PASS; changed Init example locked Clippy/fmt PASS; boundary456 PASS. Historical failed helper checks retained with corrections; product523unique tests and23 unchanged guard self-tests retained at identical product source. No aggregate preflight/CI. Production LOC remains reference65417/core74887/combined140304.
