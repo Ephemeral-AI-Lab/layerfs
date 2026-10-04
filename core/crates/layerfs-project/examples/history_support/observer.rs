@@ -46,3 +46,21 @@ pub fn phase_report(stage: &str, before: ([u64; 20], [u64; 12])) {
     let blob_values = std::array::from_fn::<_, 11, _>(|n| blob[n].saturating_sub(before.1[n]));
     eprintln!("VERIFY_PHASE_WORK {{\"stage\":\"{stage}\",\"available\":{},\"sql_values\":{:?},\"blob_values\":{:?}}}", sql[19] == 1 && blob[11] == 1, sql_values, blob_values);
 }
+
+/// Successful physical body extraction/BLOB bytes, including dependencies.
+/// Conservative across all BLOB handles; unsupported observer fails closed.
+pub fn acquired_snapshot() -> Option<u64> {
+    let pointer = unsafe {
+        dlsym(
+            (-2isize) as *mut c_void,
+            c"cause_history_acquired_snapshot".as_ptr(),
+        )
+    };
+    if pointer.is_null() {
+        return None;
+    }
+    let mut out = [0; 2];
+    let call: unsafe extern "C" fn(*mut u64) = unsafe { std::mem::transmute(pointer) };
+    unsafe { call(out.as_mut_ptr()) };
+    (out[1] == 1).then_some(out[0])
+}

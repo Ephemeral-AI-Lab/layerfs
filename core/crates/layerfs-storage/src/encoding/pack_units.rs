@@ -1,13 +1,14 @@
-//! Complete encoded groups derived from immutable authenticated physical input.
+//! Complete encoded groups from immutable physical input; consumers authenticate records.
 use crate::{
     error::{StorageError, StorageResult},
     location::{PackDomain, PackInfo},
     pack::layout::{self, GroupView, PackHeader},
-    port::PersistedPackRanges,
+    port::{AcquiredPackUnits, PackRangeBodies, PersistedPackRanges},
 };
 
 /// One immutable complete encoded group; construction validates the full directory
-/// and exact selected extent from a complete authenticated pack scan.
+/// and exact selected extent. Canonical consumers authenticate requested records;
+/// unrelated records in an acquired group are not thereby authenticated.
 #[derive(Debug)]
 pub struct PackUnit {
     pub(crate) info: PackInfo,
@@ -20,11 +21,25 @@ impl PackUnit {
     /// Converts verified ranges into complete encoded groups. Ranges that split
     /// groups, duplicate them or bind a mismatched domain are refused.
     pub fn from_ranges(read: PersistedPackRanges) -> StorageResult<Vec<Self>> {
-        let header = layout::parse_directory_header(read.prefix(), read.info().length)?;
-        if PackDomain::for_lane(header.lane) != read.info().domain {
+        let (info, prefix, pieces) = read.into_parts();
+        Self::from_parts(info, &prefix, pieces)
+    }
+    /// Converts untrusted physical units into structurally checked encoded groups.
+    /// Canonical consumers still authenticate each requested object/dependency.
+    pub fn from_acquired(read: AcquiredPackUnits) -> StorageResult<Vec<Self>> {
+        let (info, prefix, pieces) = read.into_parts();
+        Self::from_parts(info, &prefix, pieces)
+    }
+    fn from_parts(
+        info: PackInfo,
+        prefix: &[u8],
+        pieces: PackRangeBodies,
+    ) -> StorageResult<Vec<Self>> {
+        let header = layout::parse_directory_header(prefix, info.length)?;
+        if PackDomain::for_lane(header.lane) != info.domain {
             return Err(StorageError::Integrity("sealed pack length/domain"));
         }
-        let views: Vec<_> = layout::directory_group_views(read.prefix(), header)?
+        let views: Vec<_> = layout::directory_group_views(prefix, header)?
             .into_iter()
             .enumerate()
             .collect();
@@ -33,7 +48,6 @@ impl PackUnit {
                 "singleton requires whole pack acquisition",
             ));
         }
-        let (info, _, pieces) = read.into_parts();
         let mut units = Vec::new();
         let mut prior = None;
         for (range, body) in pieces {
@@ -100,7 +114,7 @@ pub enum PackAcquisition {
         /// Complete real bytes.
         body: Vec<u8>,
     },
-    /// Complete selected encoded groups from a complete authenticated scan.
+    /// Complete structurally checked groups; consumers authenticate used records.
     Units(Vec<PackUnit>),
 }
 /// A borrow of a complete validated group from either cache representation.

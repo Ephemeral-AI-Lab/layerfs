@@ -94,6 +94,26 @@ impl PackPersistence for MemoryMetadata {
             Ok(())
         })
     }
+    fn read_scoped_pack(
+        &self,
+        id: i64,
+        plan: &mut dyn PackReadPlan,
+    ) -> Result<AcquiredPackRead, PersistenceError> {
+        self.calls.lock().unwrap().push(("read_scoped_pack", 1));
+        let state = self.state.lock().unwrap();
+        let pack = state.packs.get(&id).ok_or(PersistenceError::Missing)?;
+        if pack.info.length != pack.body.len() {
+            return Err(PersistenceError::Malformed);
+        }
+        AcquiredPackRead::acquire(pack.info, plan, |offset, out| {
+            let bytes = pack
+                .body
+                .get(offset..offset + out.len())
+                .ok_or(PersistenceError::Malformed)?;
+            out.copy_from_slice(bytes);
+            Ok(())
+        })
+    }
     fn read_packs(
         &self,
         ids: &[i64],

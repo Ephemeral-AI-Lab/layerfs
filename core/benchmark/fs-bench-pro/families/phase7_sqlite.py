@@ -15,6 +15,7 @@ class Case:
     command_budget_ns:int|None
     verification_budget_ns:int=9_500_000_000
     profile:str="durable"
+    proof_policy:str="every-tenth-content-path-and-final"
 CASES={c.id:c for c in (
     *(Case(f'phase7-sqlite-init-{n}-v2',f.id,None,None,15_000_000_000) for n,f in zip((100,1000,10000,100000),init.CASES.values())),
     Case('phase7-sqlite-history-stride10-v1',None,17,54_278_964,60_000_000_000),
@@ -55,6 +56,17 @@ LEGACY_HISTORY+=RETIRED_STRIDE1_V3
 REQUIRED=tuple(name.rsplit('-v',1)[0]+'-v4' if name in RETIRED_STRIDE1_V3 else name for name in REQUIRED)
 REQUIRED_BY_PROFILE={profile:tuple(name.rsplit('-v',1)[0]+'-v4' if name in RETIRED_STRIDE1_V3 else name for name in names)
                      for profile,names in REQUIRED_BY_PROFILE.items()}
+# Owner approves prospective all-state structure with bounded representative
+# content and 12s combined proof. Case identities distinguish this lite scope.
+LITE_PROOF_POLICY='all-state-structure-five-anchor-bounded-content-v1'
+RETIRED_FULL_CONTENT=tuple(name for names in REQUIRED_BY_PROFILE.values() for name in names if CASES[name].states is not None)
+for name in RETIRED_FULL_CONTENT:
+    c=CASES[name];version=int(name.rsplit('-v',1)[1])+1;new=name.rsplit('-v',1)[0]+f'-v{version}'
+    CASES[new]=Case(new,c.fixture,c.states,c.storage_ceiling,c.command_budget_ns,12_000_000_000,c.profile,LITE_PROOF_POLICY)
+LEGACY_HISTORY+=RETIRED_FULL_CONTENT
+REQUIRED_BY_PROFILE={profile:tuple(name.rsplit('-v',1)[0]+f'-v{int(name.rsplit("-v",1)[1])+1}' if name in RETIRED_FULL_CONTENT else name for name in names)
+                     for profile,names in REQUIRED_BY_PROFILE.items()}
+REQUIRED=REQUIRED_BY_PROFILE['durable']
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"

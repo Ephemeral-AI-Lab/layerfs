@@ -42,6 +42,15 @@ impl PackPersistence for StorageProvider {
             crate::backend::sqlite::objects_selection::read(tx, id, plan)
         })
     }
+    fn read_scoped_pack(
+        &self,
+        id: i64,
+        plan: &mut dyn PackReadPlan,
+    ) -> Result<AcquiredPackRead, PersistenceError> {
+        self.session.run(false, |tx| {
+            crate::backend::sqlite::objects_selection::read_scoped(tx, id, plan)
+        })
+    }
     fn value_groups(&self, query: ValueGroupQuery<'_>) -> Result<ValueGroups, PersistenceError> {
         self.session
             .run(false, |tx| metadata::pooling::read(tx, query))

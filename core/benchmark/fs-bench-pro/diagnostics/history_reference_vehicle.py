@@ -96,7 +96,7 @@ def generate_verifier(root: Path, helper_path: Path) -> tuple[str, str, dict[str
     verification = helper.read_text()
     seals = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
              for p in [source, helper] + [source.parent / f'history_support/{n}.rs'
-                                        for n in ('canonical_memo', 'observer', 'producer', 'retained', 'support', 'workload')]}
+                                        for n in ('canonical_memo', 'observer', 'producer', 'retained', 'support', 'workload', 'lite_scope')]}
 
     def replace(old, new):
         nonlocal text
@@ -104,7 +104,7 @@ def generate_verifier(root: Path, helper_path: Path) -> tuple[str, str, dict[str
             raise ValueError(f'expected one reference proof seam: {old}')
         text = text.replace(old, new)
 
-    for name in ('canonical_memo', 'observer', 'producer', 'retained', 'support', 'workload'):
+    for name in ('canonical_memo', 'observer', 'producer', 'retained', 'support', 'workload', 'lite_scope'):
         replace(f'#[path = "history_support/{name}.rs"]',
                 f'#[path = "{source.parent / f"history_support/{name}.rs"}"]')
     replace('#[path = "history_support/verify.rs"]', f'#[path = "{helper_path}"]')
@@ -118,7 +118,9 @@ def generate_verifier(root: Path, helper_path: Path) -> tuple[str, str, dict[str
     text = text[:begin] + '    if child.get("profile_identity").and_then(json::Value::as_str) != Some("phase4.5-memory-off") {\n        return Err("reference effective profile identity mismatch".into());\n    }\n    let independent_pins = false;\n' + text[end:]
     replace('        if !independent_pins {\n            return Err("complete proof requires independent root pins".into());\n        }\n', '')
     replace('    let handles = Handles::open_read_only(\n        PersistenceConfig::sqlite(&args[2]).with_sqlite_profile(selected_profile),\n        &config.binding_key,\n        config.cursor_key,\n    )?;\n    let custody = retained::verify(&handles.history, producer::scope_of(row), &roots)?;\n    let storage = Storage::new(handles.storage.clone())?;\n    let reader = storage.reader()?;', '    let history_path = std::path::PathBuf::from(format!("{}.history.sqlite", args[2]));\n    let history = sqlite::open_read_only(&history_path, &config.binding_key, config.cursor_key)?;\n    let custody = retained::verify(&history, producer::scope_of(row), &roots)?;\n    let storage = Timing::disabled("reference.verify.open", |scope| Store::open(&args[2], scope.child("store"))).0?;\n    let reader = StoreProvider::new(&storage);\n    let mut metadata = std::collections::BTreeMap::new();\n    for line in std::fs::read_to_string(&args[8])?.lines() {\n        let fields: Vec<_> = line.split(\'\\t\').collect();\n        if fields.len() != 4 { return Err("reference metadata row shape".into()); }\n        let bytes = workload::digest::unhex(fields[0]).ok_or("reference metadata id hex")?;\n        let id = ObjectId::from_bytes(&bytes)?;\n        let role = fields[1].parse::<u8>()?;\n        let length = fields[2].parse::<u64>()?;\n        let pack = fields[3].parse::<i64>()?;\n        if pack <= 0 { return Err("invalid physical pack hint".into()); }\n        if metadata.insert(id, (role, length, pack)).is_some() { return Err("duplicate reference metadata id".into()); }\n    }\n    let actual_bytes: u64 = metadata.values().map(|(_, length, _)| *length).sum();\n    if child.get("canonical_objects").and_then(json::Value::as_i64) != Some(metadata.len() as i64)\n        || child.get("canonical_bytes").and_then(json::Value::as_i64) != Some(actual_bytes as i64) {\n        return Err("closed reference census disagrees with producer".into());\n    }')
-    replace('handles.storage.as_ref()', '&metadata')
+    if text.count('handles.storage.as_ref()') != 2:
+        raise ValueError('expected two reference complete/probe persistence seams')
+    text = text.replace('handles.storage.as_ref()', '&metadata')
     verification = verification.replace('dyn layerfs_storage::port::PackPersistence',
                                         'BTreeMap<ObjectId, (u8, u64, i64)>')
     start = verification.index('        for chunk in ids.chunks(512) {')

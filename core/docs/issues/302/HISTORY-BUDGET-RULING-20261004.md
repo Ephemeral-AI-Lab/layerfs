@@ -54,3 +54,27 @@ Preserve historical v3/190s failures with their original identities and limits;
 v3 selections are retired. The new version receives one prospectively declared
 sample per arm, with an unchanged reference product and newly matched harness.
 Registry rule: `owner-2026-10-04-60-170-300-performance-only-v3`.
+
+
+## Approved fast content proof, owner follow-up2026-10-04
+
+After stride1-v4 completes performance in211.235051708s, its existing proof times
+out at9.505829958s. The owner explicitly selects **“Use bounded content proof
+with a12s limit”**. New case IDs are stride10-v3, stride3-v3, stride1-v5 for both
+profiles. Their complete separate proof budget is12,000,000,000ns. Prior case
+IDs retain9.5s and original content scope and are retired, never relabeled.
+Performance budgets stay60/170/300s; all other gates stay unchanged.
+
+Proof policy `all-state-structure-five-anchor-bounded-content-v1` keeps closed
+C2/C5 schema/integrity/census/custody and every selected state's namespace path,
+kind and declared size checks. At initial/quarter/midpoint/three-quarter/final
+states it compares up to8 whole files<=64KiB and2 symlinks<=4KiB; up to4 larger
+chunked files compare16KiB logical ranges at start/middle/end against actual
+prepared-source bytes read inside proof. Unselected whole-file sizes are metadata
+commitments, not claims that their payload bytes were decoded. Large whole-file
+payloads are outside this sample selection. Logical content bytes<=8MiB; actual
+physical acquisition during file-root/content phases, including dependencies and
+conservatively included mapping metadata,<=32MiB. The calibrated sealed observer
+counts returned whole-pack SQL bodies and successful BLOB read bytes in both
+arms; missing counters or overflow fails closed. Read-unit size and object/depth
+bounds remain product limits. Optional whole-pack audit stays a separate scope.

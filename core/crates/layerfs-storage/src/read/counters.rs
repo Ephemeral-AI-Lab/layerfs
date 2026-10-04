@@ -25,6 +25,8 @@ pub struct Diagnostics {
     pub range_selected: u64,
     /// Complete bytes scanned/hashed for selected acquisitions, not device bytes.
     pub range_scan_bytes: u64,
+    /// Actual localized acquisition bytes including controls, excluding unread bytes.
+    pub range_acquired_bytes: u64,
     /// Prefix plus selected bytes returned, separately from scanned bytes.
     pub range_materialized_bytes: u64,
     /// Catalogue set/page calls.

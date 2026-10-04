@@ -3,6 +3,8 @@
 #![allow(dead_code)]
 #[path = "history_support/canonical_memo.rs"]
 mod canonical_memo;
+#[path = "history_support/lite_scope.rs"]
+mod lite_scope;
 #[path = "history_support/observer.rs"]
 mod observer;
 #[path = "history_support/producer.rs"]
@@ -140,6 +142,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     let mut reuse = verify::Reuse::default();
+    let sources = lite_scope::Sources::open(&corpus)?;
+    let mut acquired_bytes = 0;
     let mut paths = 0;
     let mut sampled = 0;
     let mut bytes = 0;
@@ -157,7 +161,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if oracle.is_empty() {
             return Err("empty oracle".into());
         }
-        let (p, s, b) = reuse.check(&reader, handles.storage.as_ref(), &oracle, *root)?;
+        let (p, s, b, acquired) = if probe_states.is_none() {
+            reuse.check_lite(
+                &reader,
+                handles.storage.as_ref(),
+                &oracle,
+                *root,
+                lite_scope::StateScope {
+                    corpus: &corpus,
+                    state: &corpus.states()[position],
+                    anchor: lite_scope::anchor(position, roots.len()),
+                    sources: &sources,
+                },
+            )?
+        } else {
+            let (p, s, b) = reuse.check(&reader, handles.storage.as_ref(), &oracle, *root)?;
+            (p, s, b, 0)
+        };
+        acquired_bytes += acquired;
+        if acquired_bytes > lite_scope::ACQUIRED_LIMIT || bytes + b > lite_scope::LOGICAL_LIMIT {
+            return Err("bounded content proof exceeds declared bytes".into());
+        }
         paths += p;
         sampled += s;
         bytes += b;
@@ -171,6 +195,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("VERIFY_STATE_WORK state={} wall_ns={} paths={} sampled={} authenticated_bytes={} pooled={:?}", position + 1, state_start.elapsed().as_nanos(), p, s, b, reader.pooled_read_counters());
         }
     }
-    println!("{{\"status\":\"{}\",\"states\":{},\"custody_states\":{},\"paths\":{},\"sampled_content_paths\":{},\"authenticated_bytes\":{},\"sample_policy\":\"every-tenth-content-path-and-final\",\"independent_root_pins\":\"{}\",\"admission\":\"NOT_RUN\"}}",if probe_states.is_some(){"DIAGNOSTIC"}else{"CHECKED"},count,custody,paths,sampled,bytes,if independent_pins {"CHECKED"} else {"NOT_CHECKED"});
+    if probe_states.is_none() && paths != row.path_states() {
+        return Err("all-state structural path census mismatch".into());
+    }
+    println!("{{\"status\":\"{}\",\"states\":{},\"custody_states\":{},\"paths\":{},\"sampled_content_paths\":{},\"authenticated_bytes\":{},\"sample_policy\":\"{}\",\"acquired_content_bytes\":{},\"independent_root_pins\":\"{}\",\"admission\":\"NOT_RUN\"}}",if probe_states.is_some(){"DIAGNOSTIC"}else{"CHECKED"},count,custody,paths,sampled,bytes,if probe_states.is_some(){"every-tenth-content-path-and-final"}else{lite_scope::POLICY},acquired_bytes,if independent_pins {"CHECKED"} else {"NOT_CHECKED"});
     Ok(())
 }

@@ -1,0 +1,9 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.13s
+     Running tests/pooled_dependency_integrity.rs (core/target/debug/deps/pooled_dependency_integrity-0d8ae1806db79685)
+
+running 1 test
+test literal_delta_cannot_hide_a_wrong_canonical_base ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

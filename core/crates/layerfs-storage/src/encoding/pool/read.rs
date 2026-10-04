@@ -359,6 +359,19 @@ impl PoolReader {
                     delta::apply(base_body, instructions, count, output_length)?
                 }
             });
+            if location.object_id != root.object_id {
+                // A dependent may overwrite corrupt base bytes. Authenticate the
+                // complete canonical base before it is used by the next delta.
+                self.canonical_from_body(
+                    connection,
+                    capacities,
+                    ceiling,
+                    workspace,
+                    *location,
+                    body.as_deref()
+                        .ok_or(StorageError::Integrity("pooled base body"))?,
+                )?;
+            }
             decoded_id = Some(location.object_id);
         }
         body.ok_or(StorageError::Integrity("pooled chain empty"))
@@ -486,7 +499,18 @@ impl PoolReader {
         self.begin_chain();
         let body =
             self.leaf_body_with_groups(connection, capacities, ceiling, workspace, root, groups)?;
-        let (prefix, rows) = decode_pooled_body(&body)?;
+        self.canonical_from_body(connection, capacities, ceiling, workspace, root, &body)
+    }
+    fn canonical_from_body(
+        &mut self,
+        connection: &dyn Source,
+        capacities: &StorageCapacities,
+        ceiling: i64,
+        workspace: &mut DecompressionWorkspace,
+        root: ObjectLocation,
+        body: &[u8],
+    ) -> StorageResult<Vec<u8>> {
+        let (prefix, rows) = decode_pooled_body(body)?;
         if rows.len() > MAXIMUM_LEAF_ROWS {
             return Err(StorageError::Integrity("pooled row count"));
         }
@@ -544,6 +568,9 @@ impl PoolReader {
         let canonical = rebuild_leaf(&prefix, &rows, &values)?;
         if canonical.len() != root.canonical_length {
             return Err(StorageError::Integrity("pooled canonical length"));
+        }
+        if ObjectId::for_bytes(&canonical) != root.object_id {
+            return Err(StorageError::Integrity("pooled canonical identity"));
         }
         Ok(canonical)
     }

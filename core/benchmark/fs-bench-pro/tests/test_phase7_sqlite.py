@@ -15,13 +15,13 @@ class SqliteStep10(unittest.TestCase):
         self.assertEqual([x.storage_ceiling for x in cases[4:]],[54278964,70427034,92342273])
         self.assertEqual([x.command_budget_ns for x in cases[4:]],[60000000000,170000000000,300000000000])
         self.assertIn("owner-2026-10-04",f.HISTORY_BUDGET_RULE)
-        self.assertTrue(all(x.verification_budget_ns==9500000000 for x in cases));self.assertEqual(f.REQUIRED_BY_PROFILE["durable"],f.REQUIRED)
+        self.assertTrue(all(x.verification_budget_ns==9500000000 for x in cases[:4]));self.assertTrue(all(x.verification_budget_ns==12000000000 for x in cases[4:]));self.assertEqual(f.REQUIRED_BY_PROFILE["durable"],f.REQUIRED)
         disposable=[f.CASES[x] for x in f.REQUIRED_BY_PROFILE["disposable"]]
         self.assertEqual(len(disposable),7)
         self.assertTrue(all(x.profile=="disposable" for x in disposable))
         self.assertEqual([(x.fixture,x.states,x.storage_ceiling,x.command_budget_ns) for x in disposable],[(x.fixture,x.states,x.storage_ceiling,x.command_budget_ns) for x in cases])
-        self.assertEqual(len(f.CASES),24)
-        self.assertEqual(len(f.LEGACY_HISTORY),10)
+        self.assertEqual(len(f.CASES),30)
+        self.assertEqual(len(f.LEGACY_HISTORY),16)
         self.assertTrue(all(f.CASES[name].states for name in f.LEGACY_HISTORY))
     def test_stride1_increase_is_prospective_and_does_not_change_proof_or_old_cases(self):
         self.assertEqual(len(f.RETIRED_STRIDE1),2)
@@ -42,6 +42,17 @@ class SqliteStep10(unittest.TestCase):
             self.assertEqual(f.CASES[new].command_budget_ns,300000000000)
             self.assertEqual(f.CASES[new].verification_budget_ns,9500000000)
             self.assertEqual(f.CASES[old].storage_ceiling,f.CASES[new].storage_ceiling)
+            self.assertIn(new,f.LEGACY_HISTORY)
+            with self.assertRaisesRegex(ValueError,'historical history selection'):
+                f.run(old,None,'baseline',None,None)
+    def test_lite_scope_is_new_and_symmetric_with_old_proofs_preserved(self):
+        self.assertEqual(len(f.RETIRED_FULL_CONTENT),6)
+        for old in f.RETIRED_FULL_CONTENT:
+            new=old.rsplit('-v',1)[0]+f'-v{int(old.rsplit("-v",1)[1])+1}'
+            self.assertEqual(f.CASES[old].verification_budget_ns,9500000000)
+            self.assertEqual(f.CASES[new].verification_budget_ns,12000000000)
+            self.assertEqual(f.CASES[new].proof_policy,f.LITE_PROOF_POLICY)
+            self.assertEqual(f.CASES[old].command_budget_ns,f.CASES[new].command_budget_ns)
             self.assertIn(new,f.REQUIRED_BY_PROFILE[f.CASES[new].profile])
             with self.assertRaisesRegex(ValueError,'historical history selection'):
                 f.run(old,None,'baseline',None,None)

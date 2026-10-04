@@ -31,8 +31,9 @@ pub enum PackReadChoice {
     Ranges(Vec<PackRange>),
 }
 /// Storage-owned framing/unit planner over a bounded, initially untrusted prefix.
-/// The provider supplies physical I/O only. The prefix becomes authenticated only
-/// after acquisition finishes; callers must validate the returned framing again.
+/// The provider supplies physical I/O only. Strict acquisition authenticates the
+/// prefix with the full scan; scoped acquisition leaves physical bytes untrusted.
+/// Callers validate returned framing and authenticate every used canonical object.
 pub trait PackReadPlan {
     /// Choose complete encoded units under C2 grammar and demand bounds.
     fn select(&mut self, info: PackInfo, prefix: &[u8])
@@ -129,7 +130,7 @@ impl PersistedPackRead {
         }
     }
 }
-fn check_ranges(
+pub(super) fn check_ranges(
     info: PackInfo,
     prefix: usize,
     ranges: &[PackRange],

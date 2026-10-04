@@ -132,6 +132,17 @@ pub trait PackPersistence: Send + Sync {
     ) -> Result<PersistedPackRead, PersistenceError> {
         Err(PersistenceError::BackendUnavailable)
     }
+    /// Localized physical acquisition for canonical consumers. Returned units do
+    /// not assert whole-pack integrity; every used canonical object/dependency
+    /// or catalogue value must be authenticated by storage before use/return.
+    /// Complete pack audits continue through read_packs/read_pack_selection.
+    fn read_scoped_pack(
+        &self,
+        _id: i64,
+        _plan: &mut dyn PackReadPlan,
+    ) -> Result<super::AcquiredPackRead, PersistenceError> {
+        Err(PersistenceError::BackendUnavailable)
+    }
     /// Reads one bounded catalogue set or page.
     fn value_groups(&self, query: ValueGroupQuery<'_>) -> Result<ValueGroups, PersistenceError>;
     /// Reads at most 8,192 signature rows, in insertion order, once per handle.

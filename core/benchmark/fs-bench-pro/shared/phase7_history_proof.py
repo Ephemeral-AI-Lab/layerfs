@@ -10,6 +10,7 @@ from pathlib import Path
 import sqlite3
 from urllib.parse import quote
 
+LITE_POLICY = 'all-state-structure-five-anchor-bounded-content-v1'
 BASE = '7edddbdb8e8512627aed0ed42533ef099d802384'
 CANONICAL = {'history-stride10': (51689, 380559460),
              'history-stride3': (73447, 589480854),
@@ -150,7 +151,14 @@ def root_pins(receipt, census, proof, receipt_path, census_path, proof_path):
         raise ValueError('reference lifecycle/cold/cleanup incomplete')
     if receipt.get('sample_count') != 1 or receipt.get('verification_status') != 'PASS':
         raise ValueError('reference requires one arm and independent proof')
-    if receipt['command_wall_ns'] > receipt['command_budget_ns'] or receipt['verification_wall_ns'] > 9_500_000_000:
+    lite = receipt.get('proof_policy') == LITE_POLICY
+    allowed = 12_000_000_000 if lite else 9_500_000_000
+    if lite and (proof.get('sample_policy') != LITE_POLICY or proof.get('authenticated_bytes', 8*1024*1024+1) > 8*1024*1024
+                 or proof.get('acquired_content_bytes', 32*1024*1024+1) > 32*1024*1024):
+        raise ValueError('bounded content proof scope/bytes mismatch')
+    if receipt.get('verification_budget_ns', allowed) != allowed:
+        raise ValueError('reference declared proof budget mismatch')
+    if receipt['command_wall_ns'] > receipt['command_budget_ns'] or receipt['verification_wall_ns'] > allowed:
         raise ValueError('reference command/proof budget exceeded')
     child = receipt['performance']['child']
     if child.get('status') != 'COMPLETE' or child.get('profile_identity') != 'phase4.5-memory-off':
@@ -217,6 +225,9 @@ def main():
     native = json.loads((out/'namespace-proof.stdout').read_text())
     if native.get('status') != 'CHECKED' or native.get('states') != child['states'] or native.get('custody_states') != child['states']:
         raise ValueError('independent namespace/custody proof incomplete')
+    if request.get('proof_policy') == LITE_POLICY:
+        if native.get('sample_policy') != LITE_POLICY or native.get('authenticated_bytes', 8*1024*1024+1) > 8*1024*1024 or native.get('acquired_content_bytes', 32*1024*1024+1) > 32*1024*1024:
+            raise ValueError('native bounded content proof scope/byte limit mismatch')
     if request['arm'] == 'candidate' and native.get('independent_root_pins') != 'CHECKED':
         raise ValueError('candidate independent roots not checked')
     for owner_record in census['owners']:

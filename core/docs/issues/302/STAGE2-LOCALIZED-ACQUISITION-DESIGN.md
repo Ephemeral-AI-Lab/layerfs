@@ -1,3 +1,8 @@
+> Owner decisions,2026-10-04: canonical-object/dependency integrity with separate
+> whole-pack audit APPROVED. Versioned all-state structural/bounded content proof
+> with12s combined limit APPROVED. Historical guarantees/scopes/receipts unchanged.
+> Implementation in progress; no performance or admission claim yet.
+
 # Stage 2: genuinely localized pack acquisition
 
 > Status: reviewable design, 2026-10-04. Product inspected at `68ed100de`.

@@ -63,6 +63,23 @@ class HistoryProof(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'do not match'): p.validate_pins(bad, receipt['identity'])
             bad_receipt = {**receipt, 'verification_wall_ns': 9_500_000_001}
             with self.assertRaisesRegex(ValueError, 'budget'): p.root_pins(bad_receipt, census, proof, *paths)
+            lite_receipt = {**receipt, 'proof_policy': p.LITE_POLICY, 'verification_budget_ns': 12_000_000_000,
+                            'verification_wall_ns': 11_000_000_000}
+            lite_proof = {**proof, 'sample_policy': p.LITE_POLICY, 'authenticated_bytes': 123,
+                          'acquired_content_bytes': 456}
+            for path, value in zip(paths, (lite_receipt, census, lite_proof)): path.write_text(json.dumps(value))
+            lite_pins = p.root_pins(lite_receipt, census, lite_proof, *paths)
+            self.assertEqual(p.validate_pins(lite_pins, receipt['identity'])['proof'], lite_proof)
+            for invalid in ({**lite_proof, 'sample_policy': 'every-tenth-content-path-and-final'},
+                            {**lite_proof, 'authenticated_bytes': 8*1024*1024+1},
+                            {**lite_proof, 'acquired_content_bytes': 32*1024*1024+1}):
+                with self.assertRaisesRegex(ValueError,'scope/bytes'):
+                    p.root_pins(lite_receipt, census, invalid, *paths)
+            with self.assertRaisesRegex(ValueError,'budget'):
+                p.root_pins({**lite_receipt, 'verification_wall_ns': 12_000_000_001}, census, lite_proof, *paths)
+            with self.assertRaisesRegex(ValueError,'declared proof budget'):
+                p.root_pins({**lite_receipt, 'verification_budget_ns': 300_000_000_000}, census, lite_proof, *paths)
+            for path, value in zip(paths, (receipt, census, proof)): path.write_text(json.dumps(value))
             bad_receipt = {**receipt, 'cache_status': 'INELIGIBLE'}
             with self.assertRaisesRegex(ValueError, 'cold'): p.root_pins(bad_receipt, census, proof, *paths)
             paths[2].write_text('{}')

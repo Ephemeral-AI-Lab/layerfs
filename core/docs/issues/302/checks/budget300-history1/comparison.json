@@ -1,0 +1,54 @@
+{
+  "schema": "issue302-budget300-v4-disposition-v1",
+  "rows": [
+    {
+      "run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-budget300-baseline1",
+      "receipt_sha256": "c43b27a0ebf2811cc03bce49be01a044e73fcd0f6d12ab4d926c80d3463998b4",
+      "manifest_sha256": "19c4621d72a03f09b04d939a3d55c66a6ec77f06ae787e2349786fda643d44ff",
+      "case": "phase7-sqlite-disposable-history-stride1-v4",
+      "status": "COMPLETE",
+      "command_budget_ns": 300000000000,
+      "command_wall_ns": 211235051708,
+      "verification_status": "FAIL",
+      "storage_bytes": 86179840,
+      "identity": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "d3c05f3718a7e0bb345d1438d29a5c6afc27e994887f825749cfce390fd20302",
+        "product_seal": "08edbe8f29fbcc7472522bd8cbbf8a14201b62f21993406244317aa34b9146e1",
+        "source_commit": "cddb16f20e05ec201684ba6f4c32f32f89640f08",
+        "source_dirty": false,
+        "source_tree": "8b546153a866c85bcac639e6bdb7d4990bd8315d"
+      },
+      "performance_ns": 193116135375,
+      "proof_wall_ns": 9505829958
+    },
+    {
+      "run": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-budget300-candidate-notrun1",
+      "receipt_sha256": "047159a7ae6a0abafc74614d72fc2c8e0a980b5e90c28fb42cccebc6689fea7d",
+      "manifest_sha256": "df06f645812570b45baf78b445f02de226cf07d3b53e5eb32e6025965f62c4dd",
+      "case": "phase7-sqlite-disposable-history-stride1-v4",
+      "status": "NOT_RUN",
+      "command_budget_ns": 300000000000,
+      "command_wall_ns": null,
+      "verification_status": "NOT_RUN",
+      "storage_bytes": null,
+      "identity": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "d3c05f3718a7e0bb345d1438d29a5c6afc27e994887f825749cfce390fd20302",
+        "product_seal": "08edbe8f29fbcc7472522bd8cbbf8a14201b62f21993406244317aa34b9146e1",
+        "source_commit": "cddb16f20e05ec201684ba6f4c32f32f89640f08",
+        "source_dirty": false,
+        "source_tree": "8b546153a866c85bcac639e6bdb7d4990bd8315d"
+      },
+      "performance_ns": null,
+      "proof_wall_ns": null
+    }
+  ],
+  "status": "Reference performance COMPLETE; proof FAIL/TIMEOUT under historical9.5s; candidate NOT_RUN. No qualified pins."
+}

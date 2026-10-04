@@ -2052,3 +2052,11 @@ PASS. No newcache/extraresources/weakerchecks; freeze/countdiag next,goalACTIVE.
   scope remains an explicit decision. Owner grants prospective300s to stride1
   both arms/profiles in v4, seven focused registry tests PASS, proof stays9.5s.
   Next one matched stride1-v4 pair; no stride10/3 resampling, goal ACTIVE.
+
+
+-2026-10-04:cddb16f20 stride1-v4 reference performance COMPLETE211.235051708s
+  (product193.116135375s),86,179,840B; proof TIMEOUT9.505829958s/candidate NOT_RUN.
+  Owner approves scoped canonical/dependency integrity plus whole-pack audit,
+  and bounded representative content proof/12s. Localized physical port and
+  pooled intermediate CID validation implemented; focused storage/persistence
+  and corruption/base fixtures PASS. Frozen final checks/campaign still pending.

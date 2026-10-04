@@ -85,8 +85,9 @@ fn adjacent_sparse_groups_coalesce_and_dense_promotion_preserves_bytes_and_order
     );
     let work = storage.diagnostics();
     assert_eq!(work.range_selected, 1);
-    assert_eq!(work.range_scan_bytes, length as u64);
-    assert!(work.range_materialized_bytes < work.range_scan_bytes);
+    assert_eq!(work.range_scan_bytes, 0);
+    assert!(work.range_acquired_bytes < length as u64 / 2);
+    assert!(work.range_materialized_bytes < length as u64);
     reader.read_objects(&[objects[1].id()]).unwrap();
     assert_eq!(storage.diagnostics().range_selected, 1);
     assert_eq!(
@@ -133,7 +134,7 @@ fn random_sparse_groups_preserve_duplicate_slots() {
     assert_eq!(storage.diagnostics().range_selected, 1);
 }
 #[test]
-fn unrelated_body_corruption_still_refuses_a_sparse_read() {
+fn unread_corruption_is_outside_scoped_read_but_whole_pack_audit_refuses_it() {
     let (metadata, objects, _) = fixture();
     {
         let mut state = metadata.state.lock().unwrap();
@@ -141,8 +142,29 @@ fn unrelated_body_corruption_still_refuses_a_sparse_read() {
         let last = pack.body.len() - 1;
         Arc::make_mut(&mut pack.body)[last] ^= 1;
     }
-    let storage = Storage::new(metadata).unwrap();
-    assert!(storage
+    let storage = Storage::new(metadata.clone()).unwrap();
+    assert_eq!(
+        storage
+            .reader()
+            .unwrap()
+            .read_objects(&[objects[0].id()])
+            .unwrap()[0],
+        objects[0].canonical()
+    );
+    assert!(metadata.read_packs(&[1], &mut Vec::new()).is_err());
+}
+#[test]
+fn accessed_record_corruption_fails_canonical_authentication() {
+    let (metadata, objects, _) = fixture();
+    {
+        let mut state = metadata.state.lock().unwrap();
+        let pack = state.packs.get_mut(&1).unwrap();
+        let header = layout::parse_directory_header(&pack.body, pack.info.length).unwrap();
+        let view = layout::directory_group_views(&pack.body, header).unwrap()[0];
+        Arc::make_mut(&mut pack.body)[view.end - 1] ^= 1;
+    }
+    let store = Storage::new(metadata).unwrap();
+    assert!(store
         .reader()
         .unwrap()
         .read_objects(&[objects[0].id()])

@@ -2,6 +2,7 @@
 mod pack;
 mod persistence;
 mod read_pack;
+mod read_scoped;
 mod read_selection;
 pub use pack::ObjectKey;
 pub use persistence::{
@@ -14,3 +15,5 @@ pub use read_selection::{
     PackRange, PackRangeBodies, PackReadChoice, PackReadPlan, PersistedPackRanges,
     PersistedPackRead, PACK_READ_PREFIX_BYTES, PACK_SCAN_BYTES,
 };
+
+pub use read_scoped::{AcquiredPackRead, AcquiredPackUnits};

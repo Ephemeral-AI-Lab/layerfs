@@ -77,6 +77,28 @@ fn sqlite_selected_ranges_scan_once_close_and_match_the_full_body() {
         work.blob_read_bytes - before.blob_read_bytes,
         body.len() as u64
     );
+    let before = h.diagnostics().unwrap();
+    let scoped = h
+        .storage
+        .read_scoped_pack(id, &mut Plan(PackReadChoice::Ranges(vec![range])))
+        .unwrap();
+    let AcquiredPackRead::Units(scoped) = scoped else {
+        panic!("scoped strategy changed")
+    };
+    assert_eq!(
+        scoped.ranges()[0].1,
+        body[range.offset..range.offset + range.length]
+    );
+    let acquired = PACK_READ_PREFIX_BYTES + range.length;
+    assert_eq!(scoped.acquired_bytes(), acquired);
+    let work = h.diagnostics().unwrap();
+    assert_eq!(work.blob_open_calls - before.blob_open_calls, 1);
+    assert_eq!(work.blob_close_calls - before.blob_close_calls, 1);
+    assert_eq!(
+        work.blob_read_bytes - before.blob_read_bytes,
+        acquired as u64
+    );
+    assert!(acquired < body.len() / 2);
     assert!(matches!(
         h.storage
             .read_pack_selection(i64::MAX, &mut Plan(PackReadChoice::Whole)),

@@ -29,6 +29,8 @@ struct Sampler<'a> {
     metadata_memo: &'a RefCell<Memo>,
     digests: BTreeMap<ObjectId, ([u8; 32], u64)>,
     lengths: BTreeMap<ObjectId, (u64, i64)>,
+    lite: Option<super::lite_scope::StateScope<'a>>,
+    acquired: u64,
 }
 impl Sampler<'_> {
     fn run_complete(&mut self, root: FilesystemRootId) -> Result<VerifyTally, OpError> {
@@ -55,12 +57,31 @@ impl Sampler<'_> {
             .iter()
             .filter(|(_, e)| !e.is_directory())
             .collect();
-        let selected: BTreeSet<Vec<u8>> = files
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| index % 10 == 0 || index + 1 == files.len())
-            .map(|(_, (path, _))| (*path).clone())
-            .collect();
+        let selected: BTreeSet<Vec<u8>> = if let Some(scope) = self.lite {
+            if scope.anchor {
+                files
+                    .iter()
+                    .filter(|(_, entry)| entry.mode != 0o120000 && entry.size <= 64 * 1024)
+                    .take(8)
+                    .chain(
+                        files
+                            .iter()
+                            .filter(|(_, entry)| entry.mode == 0o120000 && entry.size <= 4 * 1024)
+                            .take(2),
+                    )
+                    .map(|(path, _)| (*path).clone())
+                    .collect()
+            } else {
+                BTreeSet::new()
+            }
+        } else {
+            files
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| index % 10 == 0 || index + 1 == files.len())
+                .map(|(_, (path, _))| (*path).clone())
+                .collect()
+        };
         let mut file_entries = Vec::new();
         while !pending.is_empty() {
             let mut children = Vec::new();
@@ -167,6 +188,14 @@ impl Sampler<'_> {
             super::observer::phase_report("walk", before);
         }
         let file_counts = diagnostic.then(super::observer::phase_start);
+        let acquired_before =
+            if self.lite.is_some() {
+                Some(super::observer::acquired_snapshot().ok_or_else(|| {
+                    OpError::Io("bounded proof needs acquisition observer".into())
+                })?)
+            } else {
+                None
+            };
         // Classify distinct file roots in bounded Store waves. Each wave's
         // declared logical bytes plus framing stay below 16 MiB, leaving ample
         // room under the Store's 32 MiB canonical-byte bound. The previous
@@ -179,7 +208,9 @@ impl Sampler<'_> {
         let ids: Vec<_> = file_entries
             .iter()
             .map(|(_, id, _, _, _, _)| *id)
-            .filter(|id| !self.lengths.contains_key(id))
+            .filter(|id| {
+                !self.lengths.contains_key(id) || self.lite.is_some_and(|scope| scope.anchor)
+            })
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect();
@@ -329,6 +360,41 @@ impl Sampler<'_> {
             super::observer::phase_report("file-roots", before);
         }
         let digest_counts = diagnostic.then(super::observer::phase_start);
+        if let Some(scope) = self.lite.filter(|scope| scope.anchor) {
+            let large = file_entries
+                .iter()
+                .filter(|(_, id, kind, size, _, _)| {
+                    *kind == InodeKind::RegularFile
+                        && *size > 64 * 1024
+                        && metadata.get(id).is_some_and(|(role, _, _)| *role == 5)
+                })
+                .take(4);
+            for (path, id, _, size, _, _) in large {
+                for (range, expected) in
+                    scope
+                        .sources
+                        .ranges(scope.corpus, scope.state, path, *size)?
+                {
+                    let mut actual = Vec::new();
+                    let (result, _) = Timing::disabled("verify.range", |scope| {
+                        layerfs_content::read_range(
+                            self.reader,
+                            *id,
+                            range,
+                            &mut actual,
+                            scope.child("content.acquire"),
+                        )
+                    });
+                    result
+                        .map_err(|error| OpError::Product(format!("bounded range: {error:?}")))?;
+                    if actual != expected {
+                        return Err(OpError::Io("bounded logical range mismatch".into()));
+                    }
+                    self.tally.file_bytes += actual.len() as u64;
+                }
+                self.tally.sampled += 1;
+            }
+        }
         for (path, id, kind, expected_size, expected_digest, sampled) in file_entries {
             if self.lengths.get(&id).map(|(length, _)| *length) != Some(expected_size) {
                 return Err(OpError::Io(format!(
@@ -354,6 +420,12 @@ impl Sampler<'_> {
                 "verify parts: walk={walk_ns} lengths={lengths_ns} digest={}",
                 diagnostic_start.elapsed().as_nanos() - walk_ns - lengths_ns
             );
+        }
+        if let Some(before) = acquired_before {
+            self.acquired = super::observer::acquired_snapshot()
+                .ok_or_else(|| OpError::Io("acquisition observer disappeared".into()))?
+                .checked_sub(before)
+                .ok_or_else(|| OpError::Io("acquisition counter regression".into()))?;
         }
         Ok(self.tally)
     }
@@ -433,10 +505,37 @@ impl Reuse {
             metadata_memo: &self.metadata_memo,
             digests: std::mem::take(&mut self.digests),
             lengths: std::mem::take(&mut self.lengths),
+            lite: None,
+            acquired: 0,
         };
         let tally = sampler.run_complete(FilesystemRootId(root))?;
         self.digests = sampler.digests;
         self.lengths = sampler.lengths;
         Ok((tally.compared, tally.sampled, tally.file_bytes))
+    }
+    pub fn check_lite(
+        &mut self,
+        reader: &dyn layerfs_content::object::AuthenticatedObjects,
+        persistence: &dyn layerfs_storage::port::PackPersistence,
+        oracle: &crate::workload::history::Oracle,
+        root: ObjectId,
+        scope: super::lite_scope::StateScope<'_>,
+    ) -> Result<(u64, u64, u64, u64), OpError> {
+        let mut sampler = Sampler {
+            reader,
+            persistence,
+            oracle,
+            tally: VerifyTally::default(),
+            metadata_memo: &self.metadata_memo,
+            digests: std::mem::take(&mut self.digests),
+            lengths: std::mem::take(&mut self.lengths),
+            lite: Some(scope),
+            acquired: 0,
+        };
+        let tally = sampler.run_complete(FilesystemRootId(root))?;
+        let acquired = sampler.acquired;
+        self.digests = sampler.digests;
+        self.lengths = sampler.lengths;
+        Ok((tally.compared, tally.sampled, tally.file_bytes, acquired))
     }
 }

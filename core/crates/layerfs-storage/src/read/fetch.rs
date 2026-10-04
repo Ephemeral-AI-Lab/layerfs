@@ -300,26 +300,24 @@ impl Source for Fetch {
             c.pack_misses += 1;
         });
         let mut plan = super::units::GroupPlan::new(id, groups, whole_for_reuse);
-        let reply = self.metadata.read_pack_selection(id, &mut plan);
+        let reply = self.metadata.read_scoped_pack(id, &mut plan);
         if let Some(error) = plan.error {
             return Err(error);
         }
         let reply = reply?;
         let info = match &reply {
-            crate::port::PersistedPackRead::Whole(row) => row.info(),
-            crate::port::PersistedPackRead::Ranges(row) => row.info(),
+            crate::port::AcquiredPackRead::Whole(row) => row.info(),
+            crate::port::AcquiredPackRead::Units(row) => row.info(),
         };
         if plan.selected_info != Some(info) {
             return Err(StorageError::Integrity("selected descriptor binding"));
         }
         match (&plan.selected_choice, &reply) {
-            (
-                Some(crate::port::PackReadChoice::Whole),
-                crate::port::PersistedPackRead::Whole(_),
-            ) => {}
+            (Some(crate::port::PackReadChoice::Whole), crate::port::AcquiredPackRead::Whole(_)) => {
+            }
             (
                 Some(crate::port::PackReadChoice::Ranges(wanted)),
-                crate::port::PersistedPackRead::Ranges(row),
+                crate::port::AcquiredPackRead::Units(row),
             ) if wanted
                 .iter()
                 .copied()
@@ -327,7 +325,7 @@ impl Source for Fetch {
             _ => return Err(StorageError::Integrity("selected strategy/extent reply")),
         }
         match reply {
-            crate::port::PersistedPackRead::Whole(row) => {
+            crate::port::AcquiredPackRead::Whole(row) => {
                 let (info, body) = row.into_parts();
                 if info.pack_id != id {
                     return Err(StorageError::Integrity("selected whole binding"));
@@ -355,14 +353,14 @@ impl Source for Fetch {
                     body,
                 })
             }
-            crate::port::PersistedPackRead::Ranges(row) => {
+            crate::port::AcquiredPackRead::Units(row) => {
                 if row.info().pack_id != id {
                     return Err(StorageError::Integrity("selected pack binding"));
                 }
                 self.remember_pack(row.info())?;
                 self.note(|c| {
                     c.range_selected += 1;
-                    c.range_scan_bytes += row.info().length as u64;
+                    c.range_acquired_bytes += row.acquired_bytes() as u64;
                     c.range_materialized_bytes += row.prefix().len() as u64
                         + row
                             .ranges()
@@ -371,7 +369,7 @@ impl Source for Fetch {
                             .sum::<u64>();
                 });
                 Ok(crate::encoding::PackAcquisition::Units(
-                    crate::encoding::PackUnit::from_ranges(row)?,
+                    crate::encoding::PackUnit::from_acquired(row)?,
                 ))
             }
         }

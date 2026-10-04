@@ -1210,3 +1210,29 @@ descriptors, adding no history/cache map or buffer. All descriptor/strategy/
 wholeSHA/frame/canonical/private/visibility/count/byte/chain bounds remain.
 Explicit failures and owning invalidations unchanged. Sparse native/PREFIX
 consumption remains active, not replaced by a whole-only payload path.
+
+
+### Canonical-scoped localized acquisition (against cddb16f20 plus this change)
+
+Owner-approved integrity scope: every accessed canonical object and dependency,
+plus existing pooled value-catalogue digests, with a separate whole-pack audit.
+`port::AcquiredPackRead` is distinct from `PersistedPackRead`: selected units make
+no full-pack digest/unread-record guarantee. `read_scoped_pack` plans complete
+groups before body I/O, acquires the bounded directory prefix and exact selected
+ranges, and copies overlapping prefix bytes without reading them twice. Whole
+choices retain `PersistedPack::authenticate`; strong full-pack/strict selected
+scan APIs remain available. Unsupported providers fail explicitly.
+
+SQLite shares one descriptor/read-only BLOB transaction implementation between
+strict and scoped callers. Size/binding, exact reads, close/uncertainty handling
+and no-fallback semantics stay unchanged. Storage validates the full directory,
+requested complete extents, lane/record grammar and every reconstructed canonical
+identity. Pooled physical intermediate bases are rebuilt through authenticated
+catalogue values and checked against their CID before a dependent consumes them;
+a valid final delta cannot mask a wrong base. No new base cache or metadata schema.
+
+The original2MiB/4096-entry body cache,512KiB decoded/value caches,32MiB/4096
+canonical output bounds, singleton exception, chain/work/visibility/private
+ownership/publication rules and workers remain. Telemetry separates acquired
+range bytes from returned/retained units; `range_scan_bytes` stays zero on the
+scoped path. This describes the implementation, not measured speed or admission.

@@ -684,3 +684,51 @@ is not implemented or silently substituted for existing guarantees.
 The owner separately grants300s to stride1: new v4 matched arms use that limit;
 historical190s failures stay unchanged. Stride10/3 are not resampled for this
 budget-only follow-up; new stride1 reference precedes any candidate.
+
+
+### Owner-requested300s stride1 follow-up atcddb16f20
+
+One new stride1-v4 reference finishes157states: product193.116135375s, complete
+performance command211.235051708s, closed storage86,179,840B. Separate old-scope
+proof TIMEOUT9.505829958s under9.5s; candidate NOT_RUN without qualified pins.
+Both raw manifests checked; [sealed disposition](checks/budget300-history1/comparison.json).
+This resolves the reference performance timeout, not proof admission. Historical
+190s failures unchanged. The owner then approves canonical/dependency-scoped
+localized reads with separate whole-pack audit and a new bounded content/12s
+proof. Implement both before one final matched10,3,1 campaign; no further cache
+policy experiments or repeated unchanged performance arms.
+
+
+### Localized Stage2 implementation and approved lite-proof freeze
+
+`read_scoped_pack` now acquires only bounded controls and selected complete
+encoded groups, with a distinct untrusted physical-unit carrier. It never labels
+a partial pack SHA-authenticated. Ordinary/native/PREFIX consumers authenticate
+requested canonical objects and dependencies; pooled intermediate canonical
+bases now authenticate through existing value-group digests before delta use.
+Strict complete-pack and full-scan selection/audit APIs remain. Same schema,
+resource/transaction/visibility/private/publication/worker bounds, no new base
+cache, dependency or error-driven fallback. Dense/singleton/retention whole
+choices still use the strong whole carrier. Raw record-only selection is not
+implemented; complete raw groups are the current bounded units.
+
+A deterministic sparse fixture first refused a valid requested object due to
+unread corruption (old scan contract); with scoped reads the requested CID passes
+and separate whole audit refuses. Accessed-record corruption still fails. A
+literal pooled delta cannot conceal a wrong canonical base. Actual SQLite offset
+calibration reads4,220B for a100B selection plus4,120B prefix versus the complete
+32KiB body; checks exact bytes/open/close with no full scan. Sparse ordinary
+public reads also assert acquired bytes below half their original pack, exact
+output/ordering/reuse and unchanged bounds.
+
+Core default-workspace tests444/89targets, all-target Clippy, fmt, boundary449
+files/23selftests PASS. Generated original-reference release verifier builds in
+2.827585750s. Eight registry,three closed-proof,three generated-vehicle,two runner,
+six diagnostic calibration checks PASS. [Functional evidence](checks/localized-functional1/receipt.json).
+No performance/admission yet. Owner-approved lite cases10-v3,3-v3,1-v5 use
+60/170/300s performance and12s combined proof, all-state structural checks and
+five bounded content anchors. New successful physical SQL-extraction+BLOB
+counters include dependency reads and conservatively include mapping metadata;
+missing coverage/8MiB logical/32MiB acquired excess fails. Old proof scopes and
+9.5s failures remain historical. Freeze, final checks, then one matched10,3,1
+campaign with qualified reference pins; no repeated unchanged arm.

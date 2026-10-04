@@ -1,7 +1,10 @@
 //! Exact incremental BLOB I/O; C2 plans and authenticates selected acquisition.
 use super::{rows, transaction::Transaction};
 use crate::backend::{metadata_locations::info, records::Param};
-use layerfs_storage::port::{PackReadPlan, PersistedPackRead, PersistenceError};
+use layerfs_storage::{
+    location::PackInfo,
+    port::{AcquiredPackRead, PackReadPlan, PersistedPackRead, PersistenceError},
+};
 use std::time::Instant;
 
 pub(crate) fn read(
@@ -9,6 +12,25 @@ pub(crate) fn read(
     id: i64,
     plan: &mut dyn PackReadPlan,
 ) -> Result<PersistedPackRead, PersistenceError> {
+    read_with(tx, id, |descriptor, read_at| {
+        PersistedPackRead::acquire(descriptor, plan, read_at)
+    })
+}
+pub(crate) fn read_scoped(
+    tx: &Transaction<'_>,
+    id: i64,
+    plan: &mut dyn PackReadPlan,
+) -> Result<AcquiredPackRead, PersistenceError> {
+    read_with(tx, id, |descriptor, read_at| {
+        AcquiredPackRead::acquire(descriptor, plan, read_at)
+    })
+}
+type OffsetRead<'a> = dyn FnMut(usize, &mut [u8]) -> Result<(), PersistenceError> + 'a;
+fn read_with<T>(
+    tx: &Transaction<'_>,
+    id: i64,
+    acquire: impl FnOnce(PackInfo, &mut OffsetRead<'_>) -> Result<T, PersistenceError>,
+) -> Result<T, PersistenceError> {
     if id <= 0 {
         return Err(PersistenceError::Malformed);
     }
@@ -28,7 +50,7 @@ pub(crate) fn read(
     let result = if blob.len() != descriptor.length {
         Err(PersistenceError::Malformed)
     } else {
-        PersistedPackRead::acquire(descriptor, plan, |offset, bytes| {
+        acquire(descriptor, &mut |offset, bytes| {
             {
                 let mut work = tx.work.borrow_mut();
                 work.blob_read_calls += 1;
