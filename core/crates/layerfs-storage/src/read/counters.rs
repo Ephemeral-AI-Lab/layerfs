@@ -57,6 +57,8 @@ pub struct Diagnostics {
     pub locator_hits: u64,
     /// Uncached locator consults.
     pub locator_misses: u64,
+    /// Positive locators released for capacity, excluding explicit invalidation.
+    pub locator_evictions: u64,
     /// Cached pack consults.
     pub pack_hits: u64,
     /// Uncached pack consults.

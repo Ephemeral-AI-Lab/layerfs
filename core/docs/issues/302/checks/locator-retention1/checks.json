@@ -1,0 +1,82 @@
+{
+  "status": "PASS",
+  "before_cause": "public-reader 4096-cache fill; one miss; prior unrequested positive hit: two singleton locate requests",
+  "after_cause": "same demand: one singleton locate request, exactly one capacity eviction, exact canonical outputs",
+  "unique_core_tests": 522,
+  "all_target_reports": 100,
+  "ignored": 0,
+  "current_covering_tests": 5,
+  "remaining_all_target_tests": 518,
+  "current_source_reused_tests": 4,
+  "note": "four already passing public-reader tests are explicitly skipped in the all-target command and carried from current-source covering run; fifth covering test also ran in the workspace command because its skip selector did not match",
+  "commands": [
+    "cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test locator_pressure --test read_demand_custody --test read_pack_locality --test save_demand_locality -- --nocapture",
+    "cargo +1.85.1 test --manifest-path core/Cargo.toml --locked --workspace --all-targets -- --skip pressure_admission_preserves_an_unrequested_positive_locator --skip mixed_hit_miss_wave_keeps_all_requested_locators_within_existing_bound --skip bounded_hash_order_demand_does_not_reacquire_one_pack_for_each_object --skip physical_scheduling_preserves_repeated_ids_and_demand_order --skip save_reuse_consumes_each_bounded_physical_cohort",
+    "cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --workspace --all-targets -- -D warnings",
+    "cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check",
+    "python3 core/tools/check_product_boundary.py"
+  ],
+  "tool_selftests": "23 PASS reused from cohort-directory1; guard/selftest source unchanged; no re-run",
+  "logs": [
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-pressure-before.stderr",
+      "sha256": "fe1ec057e38b8382b28bd2c9bf9cefc8201827817ed6f74804d8aaeb45880a73",
+      "bytes": 366
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-pressure-before.stdout",
+      "sha256": "c405278e55041b13659e33c07ad42d1bd564da6d34f9209a73ba6f9db101ac36",
+      "bytes": 185
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-retention-boundary.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-retention-boundary.stdout",
+      "sha256": "cffe3914b9828f495b052f79833dfeb47ed9e9a8b1899fb8471149ce5b27027b",
+      "bytes": 76
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-retention-clippy.stderr",
+      "sha256": "d701b68bc1b5accec8f2b3a4e8b9452009206a49a168196c04dcc7a452262f9b",
+      "bytes": 467
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-retention-clippy.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-retention-covering.stderr",
+      "sha256": "994137d243554b0da512793803771facb508b0934f6a045b9f630a809d54c5c1",
+      "bytes": 760
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-retention-covering.stdout",
+      "sha256": "881a5766147dd846e1be7606a34fd2ef41f5762c82ab4f8edabbe9dde07e7d6c",
+      "bytes": 835
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-retention-final.stderr",
+      "sha256": "77e3f5e2e011127fcd25dd879188b76470727e2296fc84ee625c218dac286f26",
+      "bytes": 10611
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-retention-final.stdout",
+      "sha256": "549a2dd8358aa6c1f6609a477d1b72b828efd0b4707db07e8485577692b3ae01",
+      "bytes": 46600
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-retention-fmt.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "benchmark-results/fs-bench-pro/issue302-opportunity-loop1/locator-retention-fmt.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  ]
+}

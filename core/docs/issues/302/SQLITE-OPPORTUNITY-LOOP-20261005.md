@@ -157,3 +157,42 @@ tool selftests pass; exact commands/counts/log custody are in
 Exact first-parent/staged full scans use the unchanged production counter.
 A fresh matched stride 10 pair follows this freeze. Stride 3 / 1 and Durable
 remain NOT_RUN at this treatment; no timing benefit is assumed from the count.
+
+## Checkpoint4 — stride 10 directory outcome and bounded locator treatment
+
+[Directory pair](checks/cohort-directory-final10/comparison.json): candidate
+31.071818500 s vs reference 32.544756500 s (−4.525884223%), complete
+44.331850958 / 46.534721709 s, separate proof 4.322044375 / 2.916071583 s.
+Cold, cleanup, roots, inventory and approved storage PASS; candidate allocation
+50,692,096 bytes still FAILS original 49,344,512-byte target and PASSES
+54,278,964-byte ceiling. These are candidate-vs-original clocks, not an isolated
+directory effect. Actual 814,703 directory validations vs 815,874 equivalent
+unshared walks removes 1,171 walks (0.143527064%): a contained but small result.
+All SQLite/provider/acquisition counts and Store bytes match the prior candidate.
+The first candidate invocation used an incorrect generated-pins filename and
+was INCOMPLETE with sample_count 0 before build/sample; it is retained unchanged.
+The successful fresh output uses the reference's root-pins.json.
+
+[Locator treatment](checks/locator-retention1/README.md) preserves useful positive
+locators by evicting only the needed unrequested slots in existing key order.
+A public-reader pressure diagnostic changes two singleton locate requests to
+one and records one eviction, with unchanged capacity/lifetime/snapshot and no
+new cache index. Final covering Core work has 522 unique passing tests across
+100 target reports, including explicit current-source reuse of four covering
+tests; Clippy, fmt and boundary pass. Exact commands and every test filter are
+recorded. The unchanged guard's 23 selftests are reused explicitly.
+
+| Family 2, Disposable at the new locator freeze | Status |
+| --- | --- |
+| Stride 10 / 17 states | NOT_RUN; first consolidated pair next |
+| Stride 3 / 53 states | NOT_RUN; follows stride 10 |
+| Stride 1 / 157 states | NOT_RUN; follows stride 3 |
+
+Durable remains separate, NOT_RUN at this treatment. SDK/server/daemon/FUSE
+are N/A. SQLite mappings remain fully checked once per acquisition: no within-
+request duplicate query was found. Reuse across acquisitions requires a new
+trust-lifetime design and review; no memo or extended transaction is introduced.
+
+Checkpoint4 exact production LOC: 140,199 → 140,213 (delta +14), reference
+65,417 unchanged, core 74,782 → 74,796. Counter/version and first-parent/staged
+full-snapshot comparison are in checks/locator-retention1/production-loc.json.

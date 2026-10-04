@@ -88,9 +88,21 @@ impl Fetch {
             {
                 let mut cache = self.locators.borrow_mut();
                 if cache.len().saturating_add(rows.len()) > READ_OBJECT_LIMIT {
-                    // Keep hits needed by this demand before admitting its misses.
-                    // The existing full-cache guard still bounds oversized frontiers.
-                    cache.retain(|id, _| ids.contains(id));
+                    // Keep requested hits and release only the slots this page needs.
+                    // Key order is deterministic; no additional recency index is kept.
+                    let before = cache.len();
+                    let mut excess = before
+                        .saturating_add(rows.len())
+                        .saturating_sub(READ_OBJECT_LIMIT);
+                    cache.retain(|id, _| {
+                        if excess > 0 && !ids.contains(id) {
+                            excess -= 1;
+                            false
+                        } else {
+                            true
+                        }
+                    });
+                    self.note(|c| c.locator_evictions += (before - cache.len()) as u64);
                 }
             }
             let mut seen = BTreeSet::new();
@@ -110,6 +122,7 @@ impl Fetch {
                 self.remember_pack(row.pack)?;
                 let mut cache = self.locators.borrow_mut();
                 if cache.len() >= READ_OBJECT_LIMIT {
+                    self.note(|c| c.locator_evictions += cache.len() as u64);
                     cache.clear();
                 }
                 cache.insert(location.object_id, row);

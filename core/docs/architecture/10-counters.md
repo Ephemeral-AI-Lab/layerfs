@@ -1,5 +1,17 @@
 # Counters and receipts
 
+### #302 bounded positive-locator pressure admission (2026-10-05)
+
+Described against parent `22a6675d8` and the accompanying change. Locator
+admission evicts only the required number of unrequested entries, in existing
+CID key order, instead of discarding all unrequested entries. Requested hits
+remain protected; the existing 4,096-entry ceiling and oversized-frontier guard
+remain. Positive locator lifetimes, explicit invalidation, per-demand negative
+cache clearing, row/descriptor validation and snapshot/transaction scope are
+unchanged. No new cache/index/allocation is added. One cumulative u64 counter
+counts actual capacity removals and adds 8 bytes per Diagnostics value.
+
+
 ### #302 within-cohort directory validation (2026-10-05)
 
 Described against parent `2c766b1e6` and the accompanying implementation.
