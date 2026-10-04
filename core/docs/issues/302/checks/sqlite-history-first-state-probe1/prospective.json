@@ -1,0 +1,26 @@
+{
+  "binary_sha256": "50214c3e642dda6f7d1b83a65817afbd2bc7e2c34e6b22a43748c92441c33495",
+  "budget_ns": 25000000000,
+  "cache_contract": "original corpus read-probe diagnostic; no declared cold claim",
+  "exception": "prospective diagnostic-only25s full-corpus identity/open plus first-state functional port probe; no speed/admission claim",
+  "executed_states": 1,
+  "gate": "NOT_RUN",
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [
+      "?? core/crates/layerfs-project/examples/benchmark_history.rs",
+      "?? core/crates/layerfs-project/examples/history_support/"
+    ],
+    "harness_seal": "a93ab59cb680da673c64e4038526cbddbb1abdef6065f39d1cd393761f25e34a",
+    "product_seal": "8f46fc4f612f6a7bf1e82fbf5a85cafbb0d868ec65f6df4b4c891f8cc1607cbf",
+    "source_commit": "dabd0aa8e7c7e7a99c2600c90dc522bb883975a2",
+    "source_dirty": true,
+    "source_tree": "b8263de43f5f3e328f9bce3d8e3d2f36ca8fa02c"
+  },
+  "kind": "functional-first-state-diagnostic",
+  "product_sample_count": 0,
+  "profile": "release/locked",
+  "required_selected_states": 17
+}

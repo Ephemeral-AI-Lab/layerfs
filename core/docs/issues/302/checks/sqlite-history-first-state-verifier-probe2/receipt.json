@@ -1,0 +1,28 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/binary-archive/ad8b3360ced7c2e7a7f29689c3b175e67e4e4e563c8ed7bcb35ab4cdd0601d86/verify_history",
+    "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history-first-state-probe1/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history-first-state-probe1/receipt.json",
+    "history-stride10",
+    "probe"
+  ],
+  "wall_ns": 544587084,
+  "budget_ns": 9500000000,
+  "exit_code": 0,
+  "timed_out": false,
+  "child": {
+    "status": "DIAGNOSTIC",
+    "states": 1,
+    "custody_states": 1,
+    "paths": 359,
+    "sampled_content_paths": 29,
+    "authenticated_bytes": 306296,
+    "sample_policy": "every-tenth-content-path-and-final",
+    "independent_root_pins": "NOT_CHECKED",
+    "admission": "NOT_RUN"
+  },
+  "cpu_ns": 50200000,
+  "peak_rss_bytes": 15941632,
+  "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution"
+}

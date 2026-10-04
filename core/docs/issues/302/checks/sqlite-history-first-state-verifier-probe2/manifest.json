@@ -1,0 +1,7 @@
+{
+  "prospective.json": "21d1126ba126a010071d6193082de766745133f5b26eb763bcc1e2b6e6894d54",
+  "verifier.stdout": "7ef6a37cb159f6fa91ca5e33f13b51f230c5c220979d0f18457df402e56d2b4e",
+  "verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "benchmark-report-contract-read.txt": "bf9009234bf0c0692a3913bb0626543d2dbd60a897c8a52f31eef2976456e263",
+  "receipt.json": "8ee8650c04b43765e5e02a5d40d3356878e3d5e0fe60dcd01d1d15b0cb4b7b34"
+}

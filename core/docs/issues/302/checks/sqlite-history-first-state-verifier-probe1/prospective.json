@@ -1,0 +1,11 @@
+{
+  "kind": "independent-first-state-verifier-diagnostic",
+  "product_sample_count": 0,
+  "budget_ns": 9500000000,
+  "binary_sha256": "b7b37afaaaabdb041f4cfa2eb860c39c1fa255961355ae335e08809c8210fe58",
+  "source_commit": "dabd0aa8e7c7e7a99c2600c90dc522bb883975a2",
+  "source_dirty": true,
+  "root_pins": "NOT_CHECKED",
+  "admission": "NOT_RUN",
+  "scope": "complete listed tree/kinds/sizes and every-tenth-plus-final content digest, independently reopened readonly; one state only"
+}

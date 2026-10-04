@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/binary-archive/b7b37afaaaabdb041f4cfa2eb860c39c1fa255961355ae335e08809c8210fe58/verify_history",
+    "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history-first-state-probe1/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history-first-state-probe1/receipt.json",
+    "history-stride10",
+    "probe"
+  ],
+  "wall_ns": 870505875,
+  "budget_ns": 9500000000,
+  "exit_code": 1,
+  "timed_out": false,
+  "child": null,
+  "cpu_ns": 6932000,
+  "peak_rss_bytes": 1818624,
+  "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution"
+}

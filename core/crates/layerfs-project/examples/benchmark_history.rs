@@ -1,0 +1,245 @@
+//! Actual retained-history producer on shared C2/C5 SQLite authority.
+//! Benchmark vehicle; qualification and matched baseline are separate.
+#![allow(dead_code)]
+#[path = "history_support/producer.rs"]
+mod producer;
+#[path = "history_support/retained.rs"]
+mod retained;
+#[path = "history_support/support.rs"]
+mod support;
+#[path = "history_support/workload.rs"]
+mod workload;
+use layerfs_content::filesystem::{
+    build_filesystem, references::backing::FileBacking, update_filesystem, FilesystemInput,
+    FilesystemObjects, FilesystemResources,
+};
+use layerfs_content::inode_leaf::InodeKind;
+use layerfs_content::{
+    construct_bytes, construct_bytes_with_predecessor, AdvisoryPredecessors, ConstructionPolicy,
+    ObjectId, PredecessorBase, PredecessorProvenance,
+};
+use layerfs_persistence::{Handles, PersistenceConfig};
+use layerfs_storage::{Storage, StoragePolicy};
+use layerfs_telemetry::timer::Timing;
+use std::{collections::BTreeMap, path::PathBuf, time::Instant};
+use workload::{
+    history::{Change, Corpus, Row},
+    providers::TreeStore,
+};
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = std::env::args().collect::<Vec<_>>();
+    if args.len() != 6 {
+        return Err(
+            "usage: benchmark_history CORPUS DB SCRATCH history-stride{10,3,1} complete|probe"
+                .into(),
+        );
+    }
+    let row = Row::from_id(&args[4]).ok_or("invalid history selection")?;
+    let probe = match args[5].as_str() {
+        "complete" => false,
+        "probe" => true,
+        _ => return Err("invalid operation mode".into()),
+    };
+    for (key, value) in [
+        ("LAYERFS_CONSTRUCTION_WORKERS", "1"),
+        ("LAYERFS_HISTORY_ADVISORY", "1"),
+        ("LAYERFS_HISTORY_CHUNK_PREDECESSORS", "1"),
+        ("LAYERFS_HISTORY_FULL_PRODUCER", "0"),
+        ("LAYERFS_HISTORY_ORDERED_PREDECESSORS", "0"),
+        ("LAYERFS_HISTORY_SIMILARITY_CANDIDATES", "0"),
+        ("LAYERFS_HISTORY_DEPTH_LIMIT", "255"),
+    ] {
+        if std::env::var(key).ok().as_deref() != Some(value) {
+            return Err(format!("required {key}={value}").into());
+        }
+    }
+    let begin = Instant::now();
+    let mut corpus = Corpus::open(&PathBuf::from(&args[1]), row)?;
+    let scope = producer::scope_of(row);
+    let policy = ConstructionPolicy::frozen_default();
+    let caps = policy.capacities();
+    let handles = Handles::create(
+        PersistenceConfig::sqlite(&args[2]),
+        StoragePolicy::frozen_default(),
+        &retained::config(),
+    )?;
+    let storage = Storage::new(handles.storage.clone())?;
+    let mut held = None;
+    let mut previous_root = None;
+    let mut previous_content = BTreeMap::<Vec<u8>, ObjectId>::new();
+    let mut same_path_root = BTreeMap::<Vec<u8>, ObjectId>::new();
+    let mut depth = BTreeMap::<Vec<u8>, u8>::new();
+    let mut index = producer::SimilarityIndex::new();
+    let mut chain = producer::Chain::new();
+    let mut roots = Vec::new();
+    let scratch = PathBuf::from(&args[3]);
+    std::fs::create_dir(&scratch)?;
+    let mut stages = [0u64; 4];
+    let count = if probe { 1 } else { row.states() };
+    for position in 0..count {
+        let acquire = Instant::now();
+        let transition = corpus.transition(position)?;
+        stages[0] += acquire.elapsed().as_nanos() as u64;
+        let start = Instant::now();
+        let mut consumer = TreeStore::new();
+        let reader = storage.reader()?;
+        let mut constructed = BTreeMap::new();
+        let mut signatures = BTreeMap::new();
+        for change in &transition.changed {
+            if matches!(change.kind, Change::Removed | Change::MetadataOnly) {
+                continue;
+            }
+            let bytes = transition
+                .blobs
+                .get(&change.oid)
+                .ok_or("missing changed blob")?;
+            let base = previous_content
+                .get(&change.path)
+                .copied()
+                .map(|id| PredecessorBase::new(&reader, id));
+            let root = if producer::kind_of(change.mode) == InodeKind::Symlink {
+                producer::emit_symlink_target(bytes, &mut consumer)?
+            } else {
+                Timing::disabled("history.content", |scope| match base {
+                    Some(base) => construct_bytes_with_predecessor(
+                        policy,
+                        &caps,
+                        bytes,
+                        Some(base),
+                        &mut consumer,
+                        scope.child("file"),
+                    ),
+                    None => {
+                        construct_bytes(policy, &caps, bytes, &mut consumer, scope.child("file"))
+                    }
+                })
+                .0?
+                .root
+            };
+            signatures.insert(
+                root,
+                layerfs_storage::encoding::delta::candidates::signature(bytes),
+            );
+            constructed.insert(change.path.clone(), root);
+        }
+        let mut bases = BTreeMap::new();
+        for change in &transition.changed {
+            if matches!(change.kind, Change::Removed | Change::MetadataOnly) {
+                continue;
+            }
+            let Some(new_root) = constructed.get(&change.path).copied() else {
+                continue;
+            };
+            if !signatures.contains_key(&new_root) {
+                continue;
+            }
+            let previous = same_path_root.get(&change.path).copied();
+            if previous == Some(new_root) {
+                continue;
+            }
+            if let Some(candidate) = previous {
+                let old_depth = index
+                    .path_of
+                    .get(&candidate)
+                    .and_then(|path| depth.get(path))
+                    .copied()
+                    .unwrap_or(0);
+                if old_depth < 255 {
+                    bases.insert(new_root, vec![candidate]);
+                    depth.insert(change.path.clone(), old_depth.saturating_add(1));
+                }
+            } else {
+                depth.insert(change.path.clone(), 0);
+            }
+        }
+        stages[1] += start.elapsed().as_nanos() as u64;
+        let start = Instant::now();
+        let mut directories = Vec::new();
+        let mut inodes = Vec::new();
+        let mut new_inodes = Vec::new();
+        producer::filesystem_input(
+            &mut chain,
+            &transition,
+            &constructed,
+            previous_root.is_none(),
+            &mut directories,
+            &mut inodes,
+            &mut new_inodes,
+        )?;
+        let input = FilesystemInput {
+            base: previous_root,
+            scope,
+            root_serial: 1,
+            directories: &directories,
+            inodes: &inodes,
+            new_inodes: &new_inodes,
+            resources: FilesystemResources::default(),
+        };
+        let mut backing = FileBacking::new(&scratch);
+        let mut objects = FilesystemObjects::new(&reader, &mut consumer);
+        let built = if previous_root.is_none() {
+            build_filesystem(&mut objects, &input, Some(&mut backing))?
+        } else {
+            update_filesystem(&mut objects, &input, Some(&mut backing))?
+        };
+        stages[2] += start.elapsed().as_nanos() as u64;
+        let start = Instant::now();
+        let save = storage.begin_save()?;
+        for id in consumer.insertion_order() {
+            let mut object = consumer
+                .cloned_object(*id)
+                .ok_or("consumer object vanished")?;
+            if let Some(ordered) = bases.get(id) {
+                let mut list = AdvisoryPredecessors::new();
+                for id in ordered {
+                    list.push(*id, PredecessorProvenance::OriginalBase)?;
+                }
+                object = object.with_predecessors(list);
+            }
+            save.accept(object)?;
+        }
+        for (path, root) in &constructed {
+            if let Some(sig) = signatures.get(root).copied() {
+                index.insert(*root, path, sig);
+            }
+            previous_content.insert(path.clone(), *root);
+            same_path_root.insert(path.clone(), *root);
+        }
+        save.finish()?;
+        if let Some(catalog) = held.as_mut() {
+            retained::RetainedHistory::publish(catalog, transition.state.ordinal, built.root.0)?;
+        } else {
+            held = Some(retained::RetainedHistory::create(
+                &handles.history,
+                scope,
+                built.root.0,
+            )?);
+        }
+        stages[3] += start.elapsed().as_nanos() as u64;
+        previous_root = Some(built.root);
+        roots.push(built.root.0);
+        eprintln!(
+            "DIAGNOSTIC state={} full157={} root={:?}",
+            transition.state.ordinal, transition.state.full157_index, built.root.0
+        );
+    }
+    let custody = retained::verify(&handles.history, scope, &roots)?;
+    let checkpoint = handles.checkpoint()?;
+    eprintln!(
+        "DIAGNOSTIC sqlite={:?} storage={:?} checkpoint={checkpoint:?}",
+        handles.diagnostics()?,
+        storage.diagnostics()
+    );
+    drop(storage);
+    drop(handles);
+    if std::fs::read_dir(&scratch)?.next().is_some() {
+        return Err("ordering scratch not empty".into());
+    }
+    let list = roots
+        .iter()
+        .map(|id| format!("\"{}\"", workload::digest::hex(id.as_bytes())))
+        .collect::<Vec<_>>()
+        .join(",");
+    println!("{{\"status\":\"{}\",\"selected_states\":{},\"states\":{},\"custody_states\":{},\"operation_ns\":{},\"stages_ns\":{:?},\"roots\":[{}]}}",if probe{"DIAGNOSTIC"}else{"COMPLETE"},row.states(),count,custody,begin.elapsed().as_nanos(),stages,list);
+    Ok(())
+}

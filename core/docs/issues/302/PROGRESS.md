@@ -1489,3 +1489,13 @@ statements/203876VM,writecommits20,95bodies/20125893B; pack optimization does no
 reduce acknowledgements in thisrow. Other6requiredcasesNOT_RUN at thisidentity.
 All priorFAIL retained, goalactive. SQLITE-PACK-CARRY-TREATMENT.md has arithmetic,
 raw IDs/repro; CodeLOC137678->137677(-1), evidencefollowup+0.
+
+### Retained-history vehicle port (first-state diagnostics)
+
+Add real single-producer C1/C2/C5 shared-SQLite history example and independent
+readonly corpus read-back. One first stride10 state only: producer1,008,797,500ns
+complete diagnostic; corrected verifier544,587,084ns,359paths/29content samples/
+306,296authenticatedB. Initial receipt-schema failure retained. No cold claim,
+independent root pins unchecked, no speed sample/admission. All historiesNOT_RUN,
+matched baseline/cold/timing/budget still required. See
+[vehicle report](SQLITE-HISTORY-VEHICLE-PORT.md); all-seven goal ACTIVE.
