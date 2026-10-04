@@ -1,0 +1,70 @@
+# SQLite structural-opportunity iteration goal, 2026-10-05
+
+> **Status:** Current planning checklist; no release candidate exists.
+
+Owner explicitly requests an active goal against three remaining opportunities,
+with **stride10 →stride3 →stride1**, fast smaller-case iteration, commits and
+issue#302updates at checkpoints. Existing isolated checkout/branch only. Start
+HEAD893fac296; product freeze edcfae4ac. Earlier evidence remains immutable.
+
+## Goal and checkpoint method
+
+1. Observer bookkeeping: replace repeated linear statement-class navigation only
+   if count/cause and differential calibration support it. Preserve full SQL
+   fingerprint, owner/phase distinction, output row order, omission/failure behavior,
+   VM/status reset, acquisition/byte accounting and thread safety. Instrumentation
+   overhead reduction is reported separately from product optimization.
+2. Bounded lookup/acquisition request sharing: trace actual caller/demand boundaries,
+   locate duplicated or separately repeated necessary work, and implement only a
+   supported sharing treatment under current snapshot/transaction/output bounds.
+   If a larger snapshot or new API/storage contract is necessary, prepare a concrete
+   design and reviewable change before obtaining the required owner decision.
+3. Repeated mapping validation: quantify validation multiplicity against actual
+   needed units, preserve every required integrity check and current lifetime/cache
+   bounds, and remove supported redundant work. Do not silently skip checks or
+   retain a cross-request validation memo to improve counts.
+
+For each treatment: investigate from retained receipts/source and labelled
+count/cause diagnostics first; implement one mechanism; freeze identities; perform
+covering checks once; commit exact first-parent/staged production LOC; take one
+fresh matched stride10pair. Preserve every failure/ineligible/unrun row. Use
+stride10evidence to evaluate the mechanism; advance supported frozen work through
+stride3then1. A count proportion may carry across schedules; a clock percentage
+is never assumed. No unchanged performance repeat, best-of, increased timeout,
+fixture regeneration, warmed input, new worker or relaxed integrity/cache budget.
+
+The initial fast mechanism ladder leads with existing Disposable settings;
+Durable remains a distinct prospective qualification. A profile preference was
+requested without blocking independent observer diagnosis. Durable results must
+never inherit Disposable clocks/admission. PostgreSQL/MinIO M4pause stays unchanged.
+
+## Frozen-case registration preparation
+
+Existing schema3indexed case covers157states only. Register prospective indexed
+stride10/3v1 from their existing group-row case declarations, preserving their
+60/170s complete performance and12s separate bounded-proof envelopes, allocated
+ceilings, workload/oracle selection,10%time margin and cold/worker contracts.
+Existing indexed stride1v1retains300s/30s and92342273B. Original target deviations
+remain explicit; no gate changes follow observed results.
+
+Prepared corpus/worktree-local targets and immutable archived binaries/observer
+are reused through seals. Fresh output Stores are created within the measured
+operation; this history setup is not a prepared Store clone. Source and per-state
+DB cold invalidation/whole-input residency remain mandatory. No same-worktree
+build overlaps performance. Read benchmark_agent_report.md before each invocation
+and publish the Family2table with all three registered strides/statuses. Server/
+daemon/FUSE/SDK attribution is N/A for this direct C1/C2/C5component lane.
+
+## Checkpoint0
+
+Current completed product edcfae4ac retains519Coretests/99targets/0ignored,
+Clippy/fmt/455-file boundary/23selftestsPASS and its Disposable157matched pair
+173624895625ns vs182385692375ns. Exact current evidence is linked in
+[SQLITE-TYPED-DESCRIPTOR-FINAL-REPORT.md](SQLITE-TYPED-DESCRIPTOR-FINAL-REPORT.md).
+This new goal has no new performance sample yet. All three opportunities are
+in progress; no new mechanism/admission PASS is claimed.17/53at a new artifact,
+Durable,Init,all-seven and exhaustive payload remain NOT_RUN until covered.
+Every subsequent checkpoint records commit/LOC, mechanism counts, case verdicts,
+limits/identities/reproduction and unresolved contract questions here or linked
+append-only evidence. Issue#302receives a checkpoint comment, not a rewrite of
+historical receipt status or the PostgreSQL/MinIO milestone checklist.
