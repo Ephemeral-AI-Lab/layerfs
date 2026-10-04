@@ -1541,3 +1541,12 @@ pressure test proves replenishment beyond initialrange,distinctIDs/readback.
 23covering tests/full100/1000oracle,Clippy/fmt/boundary439/guard23PASS; fixture
 limit/grammar failures retained. Matched Init1000 prospectively next; no speed
 result yet. See [pack demand](SQLITE-PACK-DEMAND-TREATMENT.md).
+
+Matchedcf360c1d1 Init1000:142,588,792/223,193,959ns,1.565298057x,timeFAIL;
+allocation23,101,440/20,553,728B androots/cold/proof/cleanup/budgetsPASS. Actual
+reserve4/ordinal3/write commits17/pub10,303SQL/203,509VM,93bodies/20,125,509B;
+packreservationmechanismremovesonecall. No cross-window causaltimeclaim. NEXT
+PREREQUISITE paired small-step cause diagnostic with baseline publicSaveOutcome
+profiles and equivalentcandidatework observations, SQLplans/counts and missing
+observations explicit, beforeanotherproductoptimization. Scope/route equivalence
+andobserverfreeze required; current speed receipts unchanged,all-sevenACTIVE.

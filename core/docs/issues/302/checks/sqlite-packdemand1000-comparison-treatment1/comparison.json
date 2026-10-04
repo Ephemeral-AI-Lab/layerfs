@@ -1,0 +1,19 @@
+{
+  "gate": "FAIL",
+  "baseline_ns": 142588792,
+  "candidate_ns": 223193959,
+  "candidate_x10": 2231939590,
+  "baseline_x11": 1568476712,
+  "ratio": 1.5652980565260697,
+  "roots_match": true,
+  "receipts": {
+    "baseline": {
+      "path": "benchmark-results/fs-bench-pro/issue302-packdemand1000-baseline-treatment1/receipt.json",
+      "sha256": "8a04c13908015137fc170aa77e142f412ce03e834025c497b56d71a1513e5d93"
+    },
+    "candidate": {
+      "path": "benchmark-results/fs-bench-pro/issue302-packdemand1000-candidate-treatment1/receipt.json",
+      "sha256": "7ea3d88e1736cc2a898ae0a13806acedd36b725f81ec57e99d8cc880d7e2f7f2"
+    }
+  }
+}
