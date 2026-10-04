@@ -1,0 +1,35 @@
+{
+  "canonical_bytes": 380559460,
+  "canonical_objects": 51689,
+  "inventory_sha256": "fb5c8b1768e52ed56013c255c227f155ffe98f4cd2af7aaf5abec60471402249",
+  "owners": [
+    {
+      "allocated_bytes": 49594368,
+      "application_id": 1279677264,
+      "immutable_read": true,
+      "length_bytes": 49594368,
+      "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-selective-candidate1/store.sqlite",
+      "rows": {
+        "branch": 17,
+        "commit": 16,
+        "content_signature": 6614,
+        "history_meta": 1,
+        "layer": 17,
+        "layer_stack": 1,
+        "metadata_value_group": 1626,
+        "object_location": 51689,
+        "pack": 613,
+        "scope_allocator": 0,
+        "store_policy": 1,
+        "workspace_stage": 0
+      },
+      "sha256_after": "4ecd44b53abbce9bfcb9ee8a3d4c5337d7bc929cc105474ed71a510955805f1e",
+      "sha256_before": "4ecd44b53abbce9bfcb9ee8a3d4c5337d7bc929cc105474ed71a510955805f1e",
+      "user_version": 1
+    }
+  ],
+  "pack_bodies_bytes": 45558472,
+  "scope": "closed-owner schema/integrity, canonical IDs/roles/lengths and C5 roots/counts; namespace oracle separate",
+  "status": "CHECKED",
+  "storage_bytes": 49594368
+}

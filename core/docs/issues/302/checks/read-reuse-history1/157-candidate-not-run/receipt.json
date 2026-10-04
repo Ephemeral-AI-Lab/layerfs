@@ -1,0 +1,22 @@
+{
+  "schema": "phase7-sqlite-history-explicit-not-run-v1",
+  "case": "phase7-sqlite-disposable-history-stride1-v2",
+  "workload_row": "history-stride1",
+  "arm": "candidate",
+  "status": "NOT_RUN",
+  "sample_count": 0,
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "faae08ae7973559e8c28ad981f420a446913dac104e6acc4fe4a75dc1ea617bb",
+    "product_seal": "0c655dc0c742c8a1e5c8498d7917a8de79acf900933e7b05a3e78b7dfbf486f5",
+    "source_commit": "82dd31b24af85d5f3f7a92c3aa5c8bde31999769",
+    "source_dirty": false,
+    "source_tree": "f9171c332d0c3a82d3cfd829a5445141e508b813"
+  },
+  "reason": "Same-identity reference complete performance timed out at 170014270917ns after 143/157 completed states; no complete producer/census/proof or qualified reference pins. Candidate precondition refuses sampling. No retry, budget/workload reduction or fabricated comparison.",
+  "reference_receipt": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-selective-baseline1/receipt.json",
+  "verification_status": "NOT_RUN"
+}

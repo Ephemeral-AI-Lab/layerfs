@@ -1,0 +1,169 @@
+{
+  "source_commit": "82dd31b24",
+  "stage": "whole-pack reuse only; partial reads not implemented",
+  "rows": [
+    {
+      "states": 17,
+      "ratio": 0.9505579979440988,
+      "time_gate": "PASS",
+      "joint": "PASS",
+      "arithmetic": {
+        "10_candidate": 333066998750,
+        "11_reference": 385430136212
+      },
+      "arms": {
+        "baseline": {
+          "status": "COMPLETE",
+          "comparison_ns": 35039103292,
+          "command_wall_ns": 53129534542,
+          "verification_status": "PASS",
+          "verification_wall_ns": 2968669542,
+          "storage_bytes": 52473856,
+          "allocation_ceiling": 54278964,
+          "cache_status": "PASS",
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "reason": null
+        },
+        "candidate": {
+          "status": "COMPLETE",
+          "comparison_ns": 33306699875,
+          "command_wall_ns": 50671928209,
+          "verification_status": "PASS",
+          "verification_wall_ns": 5073271209,
+          "storage_bytes": 49594368,
+          "allocation_ceiling": 54278964,
+          "cache_status": "PASS",
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "reason": null
+        }
+      }
+    },
+    {
+      "states": 53,
+      "ratio": 0.9801523239730849,
+      "time_gate": "PASS",
+      "joint": "INCOMPLETE",
+      "arithmetic": {
+        "10_candidate": 698738888330,
+        "11_reference": 784176865538
+      },
+      "arms": {
+        "baseline": {
+          "status": "COMPLETE",
+          "comparison_ns": 71288805958,
+          "command_wall_ns": 86535392041,
+          "verification_status": "PASS",
+          "verification_wall_ns": 8616643417,
+          "storage_bytes": 65142784,
+          "allocation_ceiling": 70427034,
+          "cache_status": "PASS",
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "reason": null
+        },
+        "candidate": {
+          "status": "COMPLETE",
+          "comparison_ns": 69873888833,
+          "command_wall_ns": 86882979333,
+          "verification_status": "FAIL",
+          "verification_wall_ns": 9507661125,
+          "storage_bytes": 62611456,
+          "allocation_ceiling": 70427034,
+          "cache_status": "PASS",
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "reason": null
+        }
+      }
+    },
+    {
+      "states": 157,
+      "ratio": null,
+      "time_gate": "NOT_RUN",
+      "joint": "INCOMPLETE",
+      "arithmetic": null,
+      "arms": {
+        "baseline": {
+          "status": "FAIL",
+          "comparison_ns": null,
+          "command_wall_ns": 170014270917,
+          "verification_status": "NOT_RUN",
+          "verification_wall_ns": null,
+          "storage_bytes": 73596928,
+          "allocation_ceiling": 92342273,
+          "cache_status": "INCOMPLETE",
+          "cleanup": {
+            "scope": "child exited; ordering/allocation scratch empty; original databases retained",
+            "status": "PASS"
+          },
+          "reason": null
+        },
+        "candidate": {
+          "status": "NOT_RUN",
+          "comparison_ns": null,
+          "command_wall_ns": null,
+          "verification_status": "NOT_RUN",
+          "verification_wall_ns": null,
+          "storage_bytes": null,
+          "allocation_ceiling": null,
+          "cache_status": null,
+          "cleanup": null,
+          "reason": "Same-identity reference complete performance timed out at 170014270917ns after 143/157 completed states; no complete producer/census/proof or qualified reference pins. Candidate precondition refuses sampling. No retry, budget/workload reduction or fabricated comparison."
+        }
+      }
+    }
+  ],
+  "manifest_inventory": [
+    {
+      "run": "issue302-history17-selective-baseline1",
+      "manifest_sha256": "e5b14a42e126a718e83893e9c6fba535623112e22c14c04e92a00c5c7724227a",
+      "manifest_keys": [
+        "files",
+        "schema"
+      ]
+    },
+    {
+      "run": "issue302-history17-selective-candidate1",
+      "manifest_sha256": "32db0c5e4054affd5d1160095feda2c299c459691c761e96961f373eb70e4c21",
+      "manifest_keys": [
+        "files",
+        "schema"
+      ]
+    },
+    {
+      "run": "issue302-history53-selective-baseline1",
+      "manifest_sha256": "faa531883d55afbbf0f47716756b843a85b1ba875b5357154071c2ab6b5ef8d4",
+      "manifest_keys": [
+        "files",
+        "schema"
+      ]
+    },
+    {
+      "run": "issue302-history53-selective-candidate1",
+      "manifest_sha256": "f1c36e1cb7781c8d1efa43ab191502f179a3a78ad9cbfa7f9068a9f3baf1f1a9",
+      "manifest_keys": [
+        "files",
+        "schema"
+      ]
+    },
+    {
+      "run": "issue302-history157-selective-baseline1",
+      "manifest_sha256": "1d8989121f7ba789bf4b23bcbbd28689b19112a96ee91d799ade972951ee74e0",
+      "manifest_keys": [
+        "files",
+        "schema"
+      ]
+    }
+  ],
+  "compact_omissions": "Owned databases, build binaries and full logs remain in immutable raw run folders; compact copies are not independent custody evidence."
+}

@@ -47,3 +47,56 @@ Commands: `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked --workspa
 `git diff --check`. Raw initial/repaired test and Clippy logs are retained under
 `checks/read-reuse-functional1/`. Performance/proofs remain NOT_RUN for this
 new treatment; earlier evidence is not promoted.
+
+## Stage 1 retained-history qualification at `82dd31b24`
+
+One source-matched release/locked pair each for stride10 then stride3; followed
+by one stride1 reference attempt. Raw manifests/owner databases remain untouched.
+No sampling retries, profile/cache/worker/buffer/budget/workload relaxation.
+
+| Stride/states; arm | Product lifecycle ns | Complete performance ns / cap | Separate proof ns / 9.5s | C2 + C5 allocated B | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 10/17; baseline | 35039103292 | 53129534542 / 60s | 2968669542 PASS | 52473856 | joint PASS |
+| 10/17; candidate | 33306699875 | 50671928209 / 60s | 5073271209 PASS | 49594368 | joint PASS |
+| 3/53; baseline | 71288805958 | 86535392041 / 170s | 8616643417 PASS | 65142784 | joint INCOMPLETE |
+| 3/53; candidate | 69873888833 | 86882979333 / 170s | 9507661125 FAIL | 62611456 | joint INCOMPLETE |
+| 1/157; baseline | UNAVAILABLE: incomplete producer after143/157 states | 170014270917 / 170s | NOT_RUN | 73596928 | FAIL_COMMAND_BUDGET; cleanup PASS; proof NOT_RUN |
+| 1/157; candidate | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN: unqualified reference |
+
+Stride10 ratio0.9505579979440988, integer333066998750<=385430136212;
+strict candidate storage49,594,368B<54,278,964B. JointPASS, source/database cold,
+canonical roots/census, proof and cleanup PASS. Candidate final single DB is C2/C5
+combined49,594,368B; reference C2=52,428,800B+C5=45,056B=52,473,856B.
+
+Stride3 ratio0.9801523239730849, integer698738888330<=784176865538;
+strict candidate storage62,611,456B<70,427,034B; cold/roots/census/cleanup PASS.
+Candidate proof9,507,661,125ns is timeout (not9.5s PASS), so jointINCOMPLETE.
+Reference proof8,616,643,417ns PASS.
+
+Stride1 reference complete command170,014,270,917ns exceeds170s. Actual producer
+child153,425,238,583ns exceeds its remaining153,412,272,750ns; exit-9, no COMPLETE
+result. Logs contain143completed state work rows, final before_state144cold boundary;
+no final root vector/census/proof. Observed partial allocated73,596,928B is not
+completed157storage qualification. Candidate is explicitNOT_RUN: reference pins
+cannot be derived. No original/partial receipt promotion or unchanged-arm retry.
+
+Original storage targets remain context, ceilings are the existing registered
+54,278,964/70,427,034/92,342,273B strict candidate bounds; no tolerance changed.
+SDK/Server transport/daemon/FUSE are N/A: these are direct host C1/C2/C5 cases.
+RSS is per-child lifetime only, not phase/cgroup/device-memory attribution.
+VFS work is requested/submitted bytes, not physical device bytes.
+
+Raw folders `benchmark-results/fs-bench-pro/issue302-history{17,53,157}-selective-*1`;
+compact comparison `checks/read-reuse-history1/comparison.json` retains identity,
+raw nanoseconds, arithmetic, all verdicts and omissions. Reproduce with sole
+`python3 core/benchmark/fs-bench-pro/runner.py run --case
+phase7-sqlite-disposable-history-stride{10,3,1}-v2 --arm baseline --baseline-root
+/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-baseline/layerfs
+--out <fresh-owned-output>`; candidate uses same selection and qualified
+`--reference-pins <baseline-output>/root-pins.json`. Complete commands and separate
+verifier argv are in each raw receipt, not reconstructed speed numbers.
+
+Production implementation LOC138233->138465(+232), reference65417 unchanged,
+core72816->73048. Earlier Init/history17passes stay pinned older identities;
+this is Stage1 only, not all-seven/current-Durable admission. Stage2 remains
+implementation work; goalACTIVE.
