@@ -254,3 +254,67 @@ Functional full workspace/alltargets tests/Clippy/fmt/boundary PASS; exact
 commands/logs/countschecks/read-ranges-reuse-functional1. Next one prospective
 candidate native-only count diagnostic against original closed53store; no proof
 promotion. Ordinary source-matched qualification will require new receipts.
+
+
+## Final reuse promotion22c26f6da — source-matched10/3/1-v3
+
+Full Core workspace/alltargets494tests/92targets PASS; Clippy-Dwarnings,
+fmt-all/check, boundary448files/23selftests PASS. `cargo fmt` first invocation
+without--all found no virtual-workspace targets; corrected command passed.
+Raw Cargo test log ends with its original blank line (retained verbatim);
+production/test/docs source diff is whitespace-clean. ProductionLOC139279->
+139299(+20), reference65417unchanged, core73862->73882; exact parent/staged
+archives using sameproduction_loc.py, committed tree7e1ffb9ab6e362b25ecec7b5df7f480431b18992.
+
+Changed-policy native countdiag: candidateTIMEOUT9,512,228,750ns after43states,
+complete26,416,371,792ns; cold/owners preserved PASS. Not proof or speed admission.
+At same state43, pooled acquisitions2792->589 and scan bytes130119754->20784043;
+state40=2400->339/108368054->11656875. Reconstruction calls/decoded-work counts
+remain unchanged at those states. Different window/completion means no overall
+wall improvement claim: promotion diagnostic completed43, previous46.
+Rawissue302-history53-ranges-reuse-native-cause1; compactchecks counterpart.
+
+Frozen product22c26f6da then new matched performance/proof pairs in10,3,1 order
+with corrected BLOB-aware observer. Each registered case got one sample per
+eligible arm; no unchanged retry or best-of selection. Clean source, release/
+locked archives, one worker and source/database cold contract unchanged.
+[Final raw operands/identities/commands/comparison](checks/read-ranges-reuse-history1/comparison.json).
+
+|Stride/states;arm|Product lifecycle ns|Complete performance ns /cap|Separate proof ns /9.5s|Allocated B|
+|---|---:|---:|---:|---:|
+|10/17;baseline|33655000209|49284228000 /60s|2852601958 PASS|52473856|
+|10/17;candidate|32375273334|51899902166 /60s|3787051708 PASS|49594368|
+|3/53;baseline|67220889666|81325426291 /170s|8104830125 PASS|65142784|
+|3/53;candidate|66147117583|82130659250 /170s|9508026625 FAIL|62611456|
+|1/157;baseline|UNAVAILABLE|190019704292 /190s|NOT_RUN NOT_RUN|84082688|
+|1/157;candidate|NOT_RUN|NOT_RUN /190s|NOT_RUN NOT_RUN|NOT_RUN|
+
+Stride10jointPASS: ratio0.9619751339458386 (integer323752733340<=370205002299),
+reference52428800+45056=52473856B; candidate49594368B combined<54278964B.
+Complete cold/producer roots/census/full declared proof/cleanup PASS; proof scope
+17custody states,101477paths,8631sampled content paths,51862943authenticatedB.
+
+Stride3timePASS: ratio0.9840262143459385 (integer661471175830<=739429786326),
+reference65011712+131072=65142784B; candidate62611456B<70427034B.
+Producer roots/census/cold/storage/cleanup PASS; referenceproofPASS8104830125ns,
+candidateproofTIMEOUT9508026625ns with no complete verifier result =>joint
+INCOMPLETE. No admission inferred from a passing performance/storage gate.
+
+Stride1-v3reference complete command190019704292nsTIMEOUT;154complete state
+rows and filesystem state155, no final root vector/census/proof. Observed
+83886080+196608=84082688B is partial, not157storage qualification.
+CleanupPASS; candidate explicitNOT_RUN because qualified reference pins missing.
+Performance envelope190s and proof9.5s remain. Earlier170s and190s attempts
+keep their source/harness/outcomes; neither is relabelled or replaced.
+
+Reproduce solely with `python3 core/benchmark/fs-bench-pro/runner.py run --case
+phase7-sqlite-disposable-history-stride10-v2 --arm baseline --baseline-root
+/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/target/phase7-baseline/layerfs
+--out <fresh-owned-output>`, stride3-v2 then stride1-v3; candidate same selection
+and--reference-pins from its qualified reference. Raw folders
+issue302-history{17,53,157}-ranges-reuse-*1, all6manifest inventories/lengths/
+SHA256 audited. Receipts retain driver/verifier argv and complete seals/fixtures/
+interference/cache/cleanup observations. No current-source Init/Durable/all-seven
+admission claimed. GoalACTIVE: stride3proof and stride1reference gates remain
+unfulfilled. Future work must change the measured mechanism; no unchanged retry
+or implicit further budget enlargement is authorized by this report.

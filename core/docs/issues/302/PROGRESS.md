@@ -1943,3 +1943,16 @@ Directed <=2MiB wholepromotion on second selected-group demand, samebody bound
 and no extra cache/history, privateinvalidations/integrity unchanged. Full
 workspace functionaltests/Clippy/fmt/boundaryPASS; freshcandidatecountdiag next.
 No oldspeed/proof promotion,190s/9.5s unchanged,goalACTIVE.
+
+
+-2026-10-04: final22c26f6da full494tests/92targets,Clippy/fmt/boundary448/23PASS;
+productionLOC139279->139299(+20),reference65417/core73882. Reuse native countdiag
+43statesTIMEOUT; same-state43pooled2792->589acqs,130MB->20.8MBscan but no wall
+PASS. New matched10/3/1qualification:10jointPASS32.375273334s vs33.655000209s,
+proof3.787051708/2.852601958s.3timePASS66.147117583s vs67.220889666s; proof
+9.508026625sTIMEOUT vs8.104830125sPASS =>jointINCOMPLETE. Strict candidate
+49,594,368/62,611,456B,cold/producerroots/census/cleanupPASS.1-v3reference
+190.019704292sTIMEOUT after154states, candidateNOT_RUN withoutpins. No further
+limit enlargement or oldproof promotion; original170s/190s receipts retained.
+FinalREAD-OPTIMIZATION-QUALIFICATION.md/compactchecks retain exact identities
+and commands. GoalACTIVE with53proof/157reference gating; no all-seven claim.

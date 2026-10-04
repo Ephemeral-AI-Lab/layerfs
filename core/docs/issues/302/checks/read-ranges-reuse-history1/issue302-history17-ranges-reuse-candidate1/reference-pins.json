@@ -1,0 +1,50 @@
+{
+  "evidence": {
+    "census": {
+      "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-ranges-reuse-baseline1/census.json",
+      "sha256": "2288dadd938bec09e0a2f9774761a633f1576a191a89e0b23950328a37d54963"
+    },
+    "proof": {
+      "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-ranges-reuse-baseline1/proof.json",
+      "sha256": "147a23be688721a156d4bc0f74b0c5aebc8080f0393cbe75f48dfe1cce35ff1b"
+    },
+    "receipt": {
+      "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-ranges-reuse-baseline1/receipt.json",
+      "sha256": "fd897d0ff7d45caa6d97756a748f85d1cd76a2fb865a1a3c2bf2f05217f82c54"
+    }
+  },
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "b073f1b699ca071f7de7abbcc49c5828bb396fe23059861364b741a628e029a9",
+    "product_seal": "7c4d40a7e1e03be86cad1cfc390ae567e2adedeec4dc0864f1cbc10cbba8e804",
+    "source_commit": "22c26f6daef8043c30fb80a98e0911033f4828f0",
+    "source_dirty": false,
+    "source_tree": "7e1ffb9ab6e362b25ecec7b5df7f480431b18992"
+  },
+  "kind": "matched-phase4.5-root-pins-v1",
+  "profile": "phase4.5-memory-off",
+  "roots": [
+    "ff484f8d92f57413ee83e7201fb04c8512ffd7bed3083471713db4e8e17c70d3",
+    "2906f3669420afb3ec336bc5d87856328371db4e9ad644ced4224cc8d3cd75ab",
+    "1282ed4c917126c0ee219ba221243405bf0223092021c860b48163b741068bde",
+    "92f98e576ec1811361095b29bea2cc5137d2eca8c9b3fce96d75cfb4c30a7fa9",
+    "208d34b9ee9c867cf7e8988dd53d342d5acb4ca9ddc2420d2eb020c39d0b580f",
+    "0bba4b43e94f8d20551a062b35379db0897e89f8de62b425b7d47abd4f79e698",
+    "83c507e708c9a53e0d205d666c84d2c08ff2c8f60d63604df4b719417577cbdc",
+    "ca4ac6eb28a22995b580b57435f904b48594f3eb14d0405bf1fcbc1fd5ef9d0e",
+    "5532bc3c204f92a48122bad3aa684b150614d1266972ed1724412e1affa55517",
+    "1f8ab5053f1bb25ced3ec59504a196c0c5f3078dc70e8ece55fd12c8bf7412e4",
+    "ac623f883e77b3e5150a4188d62bfdb4fc9bee9ecc74168e15fe516e590ed7e0",
+    "23a46c5765b9b64f428be8455b539f009c3e5f35a77e445bcea4076770240984",
+    "f47315de1d996263ecfc900244742c43862765e90e781a1c84619785e18b2928",
+    "9619cad6e350b6c872b95ed5ec8468a07e24453df60032ff8f826e581ab57878",
+    "3728f7dbc9b8276322b1c92d3db550bf95d46b27e74e14a9bc13ca740110689f",
+    "fe6aa65d2f28b1f3a6fd946a400e85549bf2b6c82a0fd8b440dd6db0ece83241",
+    "b9a4eeac902c5b6d10acc1d26fd69f9c1f809e1b0d68316eb98a873e9eea5d03"
+  ],
+  "row": "history-stride10",
+  "source_commit": "7edddbdb8e8512627aed0ed42533ef099d802384"
+}

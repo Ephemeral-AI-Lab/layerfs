@@ -1,0 +1,24 @@
+{
+  "arm": "candidate",
+  "case": "phase7-sqlite-disposable-history-stride1-v3",
+  "command_budget_ns": 190000000000,
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "b073f1b699ca071f7de7abbcc49c5828bb396fe23059861364b741a628e029a9",
+    "product_seal": "7c4d40a7e1e03be86cad1cfc390ae567e2adedeec4dc0864f1cbc10cbba8e804",
+    "source_commit": "22c26f6daef8043c30fb80a98e0911033f4828f0",
+    "source_dirty": false,
+    "source_tree": "7e1ffb9ab6e362b25ecec7b5df7f480431b18992"
+  },
+  "reason": "Same-identity reference lacks qualified complete producer/census/proof and root-pins.json; candidate precondition refuses sampling. No retry or fabricated comparison.",
+  "reference_receipt": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history157-ranges-reuse-baseline1/receipt.json",
+  "sample_count": 0,
+  "schema": "phase7-sqlite-history-explicit-not-run-v1",
+  "status": "NOT_RUN",
+  "verification_budget_ns": 9500000000,
+  "verification_status": "NOT_RUN",
+  "workload_row": "history-stride1"
+}

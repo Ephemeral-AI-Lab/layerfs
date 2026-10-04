@@ -1,0 +1,35 @@
+{
+  "canonical_bytes": 589480854,
+  "canonical_objects": 73447,
+  "inventory_sha256": "de9a85025bbd10c907e9b5aab67a3d69bd72ee7da8c0a3d2bb12cac6c415972b",
+  "owners": [
+    {
+      "allocated_bytes": 62611456,
+      "application_id": 1279677264,
+      "immutable_read": true,
+      "length_bytes": 62611456,
+      "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history53-ranges-reuse-candidate1/store.sqlite",
+      "rows": {
+        "branch": 53,
+        "commit": 52,
+        "content_signature": 6788,
+        "history_meta": 1,
+        "layer": 53,
+        "layer_stack": 1,
+        "metadata_value_group": 4107,
+        "object_location": 73447,
+        "pack": 790,
+        "scope_allocator": 0,
+        "store_policy": 1,
+        "workspace_stage": 0
+      },
+      "sha256_after": "cc3c207215d55f2db963a592279cae241dbf1212f517b1f4387956de8216e45f",
+      "sha256_before": "cc3c207215d55f2db963a592279cae241dbf1212f517b1f4387956de8216e45f",
+      "user_version": 1
+    }
+  ],
+  "pack_bodies_bytes": 57097856,
+  "scope": "closed-owner schema/integrity, canonical IDs/roles/lengths and C5 roots/counts; namespace oracle separate",
+  "status": "CHECKED",
+  "storage_bytes": 62611456
+}
