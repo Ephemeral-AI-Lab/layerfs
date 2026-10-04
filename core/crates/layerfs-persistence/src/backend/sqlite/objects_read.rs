@@ -56,10 +56,7 @@ pub(crate) fn read(
             .first_mut()
             .ok_or(PersistenceError::Missing)?
             .take_bytes(0)?;
-        if body.len() != info.length || ObjectKey::for_bytes(&body) != info.key {
-            return Err(PersistenceError::Malformed);
-        }
-        out.push(PersistedPack { info, body });
+        out.push(PersistedPack::authenticate(info, body)?);
     }
     Ok(())
 }

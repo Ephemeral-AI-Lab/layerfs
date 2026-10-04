@@ -6,7 +6,7 @@ use crate::{
     location::{LocatedObject, ObjectLocation, PackDomain, PackInfo, SignatureRow, ValueGroupRow},
     pack::layout,
     policy::{DEPENDENCY_PACK_CACHE_BYTES, READ_OBJECT_LIMIT, SINGLETON_PACK_LIMIT},
-    port::{PackPersistence, PersistedPack, ValueGroupQuery, ValueGroups},
+    port::{PackPersistence, ValueGroupQuery, ValueGroups},
     source::Source,
 };
 use layerfs_content::ObjectId;
@@ -174,7 +174,7 @@ impl Fetch {
             c.pack_misses += ids.len() as u64;
         });
         self.metadata.read_packs(ids, &mut rows)?;
-        let bytes: usize = rows.iter().map(|row| row.body.len()).sum();
+        let bytes: usize = rows.iter().map(|row| row.body().len()).sum();
         if rows.len() != ids.len()
             || bytes > DEPENDENCY_PACK_CACHE_BYTES
                 && !(rows.len() == 1 && bytes <= SINGLETON_PACK_LIMIT)
@@ -182,11 +182,12 @@ impl Fetch {
             return Err(StorageError::Integrity("metadata pack cardinality/bytes"));
         }
         let mut seen = BTreeSet::new();
-        for PersistedPack { info, body } in rows {
+        for row in rows {
+            let (info, body) = row.into_parts();
             if !ids.contains(&info.pack_id) || !seen.insert(info.pack_id) {
                 return Err(StorageError::Integrity("metadata pack descriptor"));
             }
-            authenticate(info, &body)?;
+            validate_frame(info, &body)?;
             self.remember_pack(info)?;
             self.note(|c| c.pack_read_bytes += body.len() as u64);
             retain(packs, info.pack_id, body);
@@ -202,11 +203,11 @@ impl Fetch {
         self.metadata.read_packs(&[info.pack_id], &mut rows)?;
         let row = rows
             .pop()
-            .filter(|row| rows.is_empty() && row.info == info)
+            .filter(|row| rows.is_empty() && row.info() == info)
             .ok_or(StorageError::Integrity("payload descriptor"))?;
-        let body = row.body;
+        let (_, body) = row.into_parts();
         self.note(|c| c.payload_read_bytes += body.len() as u64);
-        authenticate(info, &body)?;
+        validate_frame(info, &body)?;
         Ok(body)
     }
     pub(crate) fn prefetch_values(&self, ordinals: &[u32]) -> StorageResult<()> {
@@ -396,11 +397,8 @@ fn check_info(info: PackInfo) -> StorageResult<()> {
     }
     Ok(())
 }
-pub(crate) fn authenticate(info: PackInfo, body: &[u8]) -> StorageResult<()> {
+fn validate_frame(info: PackInfo, body: &[u8]) -> StorageResult<()> {
     check_info(info)?;
-    if body.len() != info.length || crate::port::ObjectKey::for_bytes(body) != info.key {
-        return Err(StorageError::Integrity("sealed pack length/digest"));
-    }
     let header = layout::parse_header(body)?;
     if layout::declared_length(body)? != body.len()
         || PackDomain::for_lane(header.lane) != info.domain

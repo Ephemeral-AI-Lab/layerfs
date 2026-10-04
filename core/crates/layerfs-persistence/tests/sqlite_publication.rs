@@ -148,7 +148,7 @@ fn final_body_multirow_locators_and_first_wins_have_one_atomic_ack() {
     h.storage
         .read_packs(&[block.first_pack_id], &mut packs)
         .unwrap();
-    assert_eq!(packs[0].body, *batch.packs[0].body);
+    assert_eq!(packs[0].body(), batch.packs[0].body.as_slice());
 }
 #[test]
 fn failure_after_body_insert_rolls_back_the_entire_unit_and_published_body_is_immutable() {
@@ -464,7 +464,12 @@ fn pack_insert_pages_preserve_bodies_and_atomic_conflict_refusal() {
     h.storage.read_packs(&[1, 512, 513], &mut read).unwrap();
     assert_eq!(read.len(), 3);
     for pack in read {
-        assert_eq!(pack.body, *batch.packs[pack.info.pack_id as usize - 1].body);
+        assert_eq!(
+            pack.body(),
+            batch.packs[pack.info().pack_id as usize - 1]
+                .body
+                .as_slice()
+        );
     }
     let mut conflict = Publication::default();
     // A new first page must also roll back when the second page conflicts.
@@ -481,7 +486,7 @@ fn pack_insert_pages_preserve_bodies_and_atomic_conflict_refusal() {
     assert!(absent.is_empty());
     let mut existing = Vec::new();
     h.storage.read_packs(&[1], &mut existing).unwrap();
-    assert_eq!(existing[0].body, *batch.packs[0].body);
+    assert_eq!(existing[0].body(), batch.packs[0].body.as_slice());
 }
 
 #[test]
@@ -507,7 +512,7 @@ fn pack_insert_pages_keep_large_blob_binding_ownership_separate() {
     let mut read = Vec::new();
     h.storage.read_packs(&[1, 2, 3], &mut read).unwrap();
     assert_eq!(read.len(), 3);
-    assert!(read.iter().all(|p| p.body == body));
+    assert!(read.iter().all(|p| p.body() == body.as_slice()));
 }
 
 #[test]

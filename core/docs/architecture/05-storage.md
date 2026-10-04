@@ -1058,3 +1058,23 @@ budgets, queue/worker limits and definite read errors remain. No cache capacity
 increases; the index list has one demand lifetime and is released before return.
 A public256-object37-pack count fixture proves413→111body acquisitions and exact
 canonical bytes. Global history/proof speed remains separately qualified.
+
+
+### Immutable authenticated pack-read boundary
+
+`port::PersistedPack` has private descriptor/body fields. Every engine returns it
+through `PersistedPack::authenticate`, which verifies the real acquired byte
+length and SHA256 against the returned descriptor once. Immutable accessors and
+consuming `into_parts` preserve the pair; changing consumed bytes requires a new
+successful authentication before returning another read result. No unchecked
+constructor, mutable body reference or deserialization route exists. Public read
+port implementors use the constructor/accessors rather than struct literals.
+
+SQLite read budgets are still checked before BLOB acquisition. C2 Fetch consumes
+the verified pair without hashing it again, retaining requested-pack membership,
+cardinality/byte limits, descriptor consistency/visibility, header/directory/declared
+length/domain checks, group authentication and canonical/dependency identity
+checks. Raw publication bodies and their validation are unchanged. Direct SQLite
+read callers retain their length/digest failure contract, including opaque hash
+valid bytes whose C2 grammar the consuming decoder must independently refuse.
+No cache/buffer/queue/worker/schema/durability change or release parity claim.

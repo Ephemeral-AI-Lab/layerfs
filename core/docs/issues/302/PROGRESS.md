@@ -1879,3 +1879,11 @@ Matchedcandidate full53cold/root/storage/cleanup pass but timeFAIL1.170621697129
 Save43.393351043s vs27.876083411s dominates; candidate13.2755GBreturned packbytes,
 174876readTX,19.09MVM vsref55.99M. Next productbody acquisition/hash attribution
 and verified-boundary reuse; no checks removed.157/DurableNOT_RUN, goal ACTIVE.
+
+
+-2026-10-04: duplicate whole-pack SHA256 found at SQLite/read and C2 Fetch.
+Immutable private PersistedPack authenticatedconstructor preserves directport
+corruption refusal while Fetch consumes verifiedpair and retains allframe/domain/
+canon checks. Active callers/getters updated, rawpublicationAPI untouched.
+2new/5existingread tests,22persistence/initprofileoracle/owningClippy/boundary443/
+23selftests PASS. Freeze changed53matchedpair; no latency/pass claim yet.

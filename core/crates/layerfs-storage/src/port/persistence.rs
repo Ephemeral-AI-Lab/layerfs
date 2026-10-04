@@ -1,18 +1,10 @@
 //! Bounded atomic physical persistence; one transaction attempt per operation.
 
+use super::PersistedPack;
 use crate::location::{LocatedObject, ObjectLocation, PackInfo, SignatureRow, ValueGroupRow};
 use crate::policy::StoragePolicy;
 use layerfs_content::ObjectId;
 use std::{fmt, sync::Arc};
-
-/// One persisted pack returned with its authenticated descriptor.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PersistedPack {
-    /// Persisted descriptor.
-    pub info: PackInfo,
-    /// Complete immutable pack bytes.
-    pub body: Vec<u8>,
-}
 
 /// Bounded catalogue query: distinct ordinals or one chronological page.
 #[derive(Clone, Copy, Debug)]
@@ -126,6 +118,8 @@ pub trait PackPersistence: Send + Sync {
     ) -> Result<(), PersistenceError>;
     /// Reads complete packs totalling at most DEPENDENCY_PACK_CACHE_BYTES,
     /// or one separately bounded singleton up to SINGLETON_PACK_LIMIT.
+    /// Results use `PersistedPack::authenticate`: length/digest verified once,
+    /// immutable across this boundary. C2 retains framing/binding checks.
     fn read_packs(&self, ids: &[i64], out: &mut Vec<PersistedPack>)
         -> Result<(), PersistenceError>;
     /// Reads one bounded catalogue set or page.

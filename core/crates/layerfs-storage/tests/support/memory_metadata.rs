@@ -84,12 +84,14 @@ impl PackPersistence for MemoryMetadata {
         out.clear();
         for id in ids {
             let pack = state.packs.get(id).ok_or(PersistenceError::Missing)?;
-            out.push(PersistedPack {
-                info: pack.info,
-                body: pack.body.as_ref().clone(),
-            });
+            out.push(PersistedPack::authenticate(
+                pack.info,
+                pack.body.as_ref().clone(),
+            )?);
         }
-        assert!(out.iter().map(|row| row.body.len()).sum::<usize>() <= DEPENDENCY_PACK_CACHE_BYTES);
+        assert!(
+            out.iter().map(|row| row.body().len()).sum::<usize>() <= DEPENDENCY_PACK_CACHE_BYTES
+        );
         Ok(())
     }
     fn value_groups(&self, query: ValueGroupQuery<'_>) -> Result<ValueGroups, PersistenceError> {

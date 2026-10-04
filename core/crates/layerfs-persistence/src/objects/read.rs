@@ -10,7 +10,7 @@ pub(crate) fn read(
         return Err(PersistenceError::Malformed);
     }
     objects_read::read(tx, ids, out)?;
-    if out.iter().any(|row| row.info.length != row.body.len()) {
+    if out.iter().any(|row| row.info().length != row.body().len()) {
         return Err(PersistenceError::Malformed);
     }
     Ok(())
