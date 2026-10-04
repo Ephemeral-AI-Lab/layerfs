@@ -21,3 +21,14 @@ Validation:37 covering harness tests PASS; changed Init example locked Clippy/fm
 ## Checkpoint: complete Durable history ladder
 
 Stride1 v2 PASS at4833a03b8 (same product/harness as702f7a38f): reference182112717542 / candidate180930537000ns product (−0.649147714%); complete196315354542 /194080112084ns under600s; proof16976626000 /17494827625ns under60s. Candidate85204992B <=92342273B; original83947520B target remains missed (+1.497926%). Matched roots/inventory, cold, closed-owner preservation, bounded independent copy/whole-copy residency, proof and cleanup PASS. All three Durable history selections now PASS under the owner-doubled absolute caps and unchanged10% relative margin/storage ceilings. Eight requested Init profile/tier pairs remain NOT_RUN at this checkpoint.
+
+## Checkpoint: four Durable Init cases
+
+All four arms complete with PASS independent namespace proof, matching roots, cold source, cleanup, allocation <= matched reference and30s/19s absolute deadlines. All four joint gates FAIL the unchanged1.10x reference speed ceiling. Increasing the absolute deadline cannot change that verdict. Relative-cap interpretation has been explicitly asked while remaining Disposable/report work continues.
+
+|Files|Reference product ns|Durable product ns|Difference %|Candidate command ns|Proof ns|Candidate allocated B|Joint gate|
+|---:|---:|---:|---:|---:|---:|---:|---|
+|100|46350375|84598417|82.519379832|625966042|514674667|5255168|FAIL|
+|1000|132358959|256686959|93.932440191|360132334|31156291|20561920|FAIL|
+|10000|1659485708|2630212625|58.495647918|3528378000|347918500|305053696|FAIL|
+|100000|6337916541|7829636333|23.536437919|14702016041|1102071417|514895872|FAIL|
