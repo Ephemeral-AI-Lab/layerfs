@@ -110,3 +110,48 @@ must fail after only the24B control read. New count result remains pending.
 Format-directory covering checks: full Core502tests/95targets, workspace all-target
 Clippy with warnings denied, fmt and boundary449/12 boundary selftests PASS. Count diagnostic
 will run once after freezing this separate treatment.
+
+## Format-directory count result (source8759d992b)
+
+One diagnostic completed45.198178958s/60s, with source/per-state DB cold checks
+PASS; verification SKIPPED and admission NOT_APPLICABLE. Same17states/roots,
+canonical inventory and49,594,368B Store allocation as the shared-cache treatment.
+
+| Treatment | Save VFS requested B | Save acquisitions | Lifetime successful BLOB B | Lifetime BLOB read calls |
+| --- | ---: | ---: | ---: | ---: |
+| Shared caches0446 | 1,836,602,313 | 25,989 | 1,187,219,829 | 53,445 |
+| Exact directory8759 | 1,798,505,411 | 25,989 | 1,162,204,149 | 80,370 |
+
+Save reduction38,096,902B =100*(1,836,602,313−1,798,505,411)/1,836,602,313
+=2.074314%. Lifetime BLOB bytes fell25,015,680B while reads grew26,925.
+The lifetime columns cannot be attributed to Save alone. No byte figure is a
+device traffic measurement. Filesystem28,142,041B/679acquisitions; construction
+3,774,754B/62. Driver32.227982417s, internal operation31.015470959s andCPU
+24.288983s are diagnostic observations, not a matched speed/admission result.
+No repeated sample or comparison against a warm source.
+
+[Identity, cold checks, counters and immutable raw receipt hash](checks/format-directory1/count-summary.json).
+Raw receipt/SQL/VFS/close/log/manifest retained under
+`benchmark-results/fs-bench-pro/issue302-format-directory-cause1/`.
+Reproduction command is the count command above with this fresh output name.
+Release/locked, local incremental build; sealed prepared corpus reused outside
+child, fresh17state database construction inside child; one worker. No image.
+Ordering scratch checked empty; database retained as diagnostic artifact.
+No independent content proof for either new treatment; updated matched
+10/3/1 qualification and Durable/Init/all-seven remain NOT_RUN. Historical
+7230d62f1 qualification is unchanged and is not promoted onto this source.
+
+Both treatments reduce the counted mechanism modestly. Relative to the original
+localized723 Save total,1,798,505,411 is74,915,913B (3.9989%) lower; it remains
+about2.21 times the earlier reference812,164,935B, whose layout differs.
+Further work should first identify repeated pack/group demands and navigation
+by phase/domain from a labeled count diagnostic, then consider bounded existing
+cohort acquisition sharing. Larger buffers, whole-first promotion and cross-write
+BLOB handle retention are not justified by these results.
+
+Production LOC8759:139619→139635(delta+16), reference65417 unchanged, core
+74202→74218; exact parent/staged product snapshots, same versioned counter and
+inline-test/nonproduct exclusions. This result-only commit has unchanged139635
+(delta0). [Count confirmation](checks/format-directory1/production-loc.json).
+
+Issue updated with implementation/count result: https://github.com/Ephemeral-AI-Lab/layerfs/issues/302#issuecomment-5980190482

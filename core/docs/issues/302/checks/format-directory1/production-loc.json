@@ -1,0 +1,28 @@
+{
+  "parent": "0446bf884e2a673def0beb86426069be7bb9c4eb",
+  "staged_tree": "a84238798ba9364ee587be85350ba12b2c5ee94f",
+  "files": [
+    {
+      "path": "core/crates/layerfs-storage/src/pack/layout.rs",
+      "before": 497,
+      "after": 504,
+      "delta": 7
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/port/read_scoped.rs",
+      "before": 85,
+      "after": 94,
+      "delta": 9
+    }
+  ],
+  "before": 139619,
+  "after": 139635,
+  "reference": 65417,
+  "core_before": 74202,
+  "core_after": 74218,
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "Exact parent/staged changed product snapshots; same counter/scope/inline-test exclusions, all other product src/SQL unchanged.",
+  "committed_tree": "74bb7f7f47ba2fedf2005bd7ddeda17b50d7e916",
+  "commit": "8759d992bbffea72b60d9d8e7595d8ebfb7903f3",
+  "confirmation": "Final staged docs/evidence additions did not change product snapshots; committed product bytes match counted staged snapshot."
+}

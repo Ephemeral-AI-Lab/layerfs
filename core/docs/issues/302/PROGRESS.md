@@ -2093,3 +2093,11 @@ PASS. No newcache/extraresources/weakerchecks; freeze/countdiag next,goalACTIVE.
   VerificationSKIPPED/admissionNOT_APPLICABLE; fullCore502/95targetsPASS.
   Separate format-sized control acquisition begins with failing real SQLite
   fixture4120B versus280B directory, same transaction/handle and unchanged bounds.
+
+
+-2026-10-04: exact-directory8759 count complete45.198s/60s coldPASS; Save
+  1,798,505,411B/25,989acquisitions,2.0743%fewer VFS requests than0446. Lifetime
+  BLOBbytes1,162,204,149/readcalls80,370 show extra call cost. Store49,594,368B
+  unchanged. FullCore502/95targets,Clippy/fmt,boundary449/12selftestsPASS.
+  No new speed/proof/admission claim; new matched10/3/1 qualificationNOT_RUN.
+  Details and exact identities inSAVE-READ-AMPLIFICATION.md/checks/format-directory1.

@@ -1,0 +1,503 @@
+{
+  "schema": "history17-save-acquisition-cause-v1",
+  "status": "DIAGNOSTIC_COMPLETE",
+  "admission": "NOT_APPLICABLE",
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "a73967aeef838d98192e02d57b3ad37dd6cf0781075d31af31d27218b4c75a79",
+    "product_seal": "8bb6a516fdb8c51bcc836209c8938c4415efde59979e652bd0221e4947e9b2ed",
+    "source_commit": "8759d992bbffea72b60d9d8e7595d8ebfb7903f3",
+    "source_dirty": false,
+    "source_tree": "74bb7f7f47ba2fedf2005bd7ddeda17b50d7e916"
+  },
+  "complete_budget_ns": 60000000000,
+  "complete_wall_ns": 45198178958,
+  "phases": {
+    "acquisition": {
+      "pack_acquisitions": 0,
+      "states": 17,
+      "vfs_requested_bytes": 0
+    },
+    "construction": {
+      "pack_acquisitions": 62,
+      "states": 17,
+      "vfs_requested_bytes": 3774754
+    },
+    "filesystem": {
+      "pack_acquisitions": 679,
+      "states": 17,
+      "vfs_requested_bytes": 28142041
+    },
+    "save_custody": {
+      "pack_acquisitions": 25989,
+      "states": 17,
+      "vfs_requested_bytes": 1798505411
+    }
+  },
+  "verification": "SKIPPED: mechanism counts only; final independent proof separate",
+  "allocation": {
+    "files": [
+      {
+        "allocated_bytes": 49594368,
+        "length_bytes": 49594368,
+        "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-format-directory-cause1/store.sqlite"
+      }
+    ],
+    "scope": "database/WAL/SHM at this observation; not an unobserved peak",
+    "total_bytes": 49594368
+  },
+  "competing_work": [
+    "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+  ],
+  "raw_receipt": "benchmark-results/fs-bench-pro/issue302-format-directory-cause1/receipt.json",
+  "raw_receipt_sha256": "0396a05d7f8550f7247bae2b08485489e7bd4624b799610ec894ac17531aaf85",
+  "source_cold_status": "PASS",
+  "database_cold": {
+    "boundaries": [
+      {
+        "attestation": {
+          "attestation_ns": 49000,
+          "files": 1,
+          "first_pass_ns": 329000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 716800,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 44,
+          "total_pages": 44,
+          "vector_peak_bytes": 44
+        },
+        "before_state": 2,
+        "wall_ns": 3713125
+      },
+      {
+        "attestation": {
+          "attestation_ns": 77000,
+          "files": 1,
+          "first_pass_ns": 793000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 2596864,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 157,
+          "total_pages": 159,
+          "vector_peak_bytes": 159
+        },
+        "before_state": 3,
+        "wall_ns": 4575125
+      },
+      {
+        "attestation": {
+          "attestation_ns": 109000,
+          "files": 1,
+          "first_pass_ns": 1099000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 4132864,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 251,
+          "total_pages": 253,
+          "vector_peak_bytes": 253
+        },
+        "before_state": 4,
+        "wall_ns": 4520375
+      },
+      {
+        "attestation": {
+          "attestation_ns": 154000,
+          "files": 1,
+          "first_pass_ns": 1209000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 5337088,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 324,
+          "total_pages": 326,
+          "vector_peak_bytes": 326
+        },
+        "before_state": 5,
+        "wall_ns": 4393125
+      },
+      {
+        "attestation": {
+          "attestation_ns": 219000,
+          "files": 1,
+          "first_pass_ns": 1702000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 8515584,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 516,
+          "total_pages": 520,
+          "vector_peak_bytes": 520
+        },
+        "before_state": 6,
+        "wall_ns": 4967375
+      },
+      {
+        "attestation": {
+          "attestation_ns": 416000,
+          "files": 1,
+          "first_pass_ns": 3453000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 11296768,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 686,
+          "total_pages": 690,
+          "vector_peak_bytes": 690
+        },
+        "before_state": 7,
+        "wall_ns": 7775250
+      },
+      {
+        "attestation": {
+          "attestation_ns": 421000,
+          "files": 1,
+          "first_pass_ns": 3912000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 14376960,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 873,
+          "total_pages": 878,
+          "vector_peak_bytes": 878
+        },
+        "before_state": 8,
+        "wall_ns": 8239000
+      },
+      {
+        "attestation": {
+          "attestation_ns": 427000,
+          "files": 1,
+          "first_pass_ns": 3715000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 15699968,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 947,
+          "total_pages": 959,
+          "vector_peak_bytes": 959
+        },
+        "before_state": 9,
+        "wall_ns": 7751250
+      },
+      {
+        "attestation": {
+          "attestation_ns": 491000,
+          "files": 1,
+          "first_pass_ns": 4702000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 18792448,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1140,
+          "total_pages": 1147,
+          "vector_peak_bytes": 1147
+        },
+        "before_state": 10,
+        "wall_ns": 8658500
+      },
+      {
+        "attestation": {
+          "attestation_ns": 468000,
+          "files": 1,
+          "first_pass_ns": 4190000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 20750336,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1219,
+          "total_pages": 1267,
+          "vector_peak_bytes": 1267
+        },
+        "before_state": 11,
+        "wall_ns": 7869375
+      },
+      {
+        "attestation": {
+          "attestation_ns": 586000,
+          "files": 1,
+          "first_pass_ns": 6203000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 24797184,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1468,
+          "total_pages": 1514,
+          "vector_peak_bytes": 1514
+        },
+        "before_state": 12,
+        "wall_ns": 12113292
+      },
+      {
+        "attestation": {
+          "attestation_ns": 651000,
+          "files": 1,
+          "first_pass_ns": 6518000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 28082176,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1643,
+          "total_pages": 1714,
+          "vector_peak_bytes": 1714
+        },
+        "before_state": 13,
+        "wall_ns": 10313250
+      },
+      {
+        "attestation": {
+          "attestation_ns": 785000,
+          "files": 1,
+          "first_pass_ns": 7527000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 30896128,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1806,
+          "total_pages": 1886,
+          "vector_peak_bytes": 1886
+        },
+        "before_state": 14,
+        "wall_ns": 12555125
+      },
+      {
+        "attestation": {
+          "attestation_ns": 878000,
+          "files": 1,
+          "first_pass_ns": 8190000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 35778560,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 2101,
+          "total_pages": 2184,
+          "vector_peak_bytes": 2184
+        },
+        "before_state": 15,
+        "wall_ns": 12672375
+      },
+      {
+        "attestation": {
+          "attestation_ns": 988000,
+          "files": 1,
+          "first_pass_ns": 9776000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 42053632,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 2463,
+          "total_pages": 2567,
+          "vector_peak_bytes": 2567
+        },
+        "before_state": 16,
+        "wall_ns": 15478250
+      },
+      {
+        "attestation": {
+          "attestation_ns": 1076000,
+          "files": 1,
+          "first_pass_ns": 11532000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 45785088,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 2688,
+          "total_pages": 2795,
+          "vector_peak_bytes": 2795
+        },
+        "before_state": 17,
+        "wall_ns": 16317083
+      },
+      {
+        "attestation": {
+          "attestation_ns": 1123000,
+          "files": 1,
+          "first_pass_ns": 10363000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 49594368,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 2887,
+          "total_pages": 3027,
+          "vector_peak_bytes": 3027
+        },
+        "before_state": 18,
+        "wall_ns": 15320833
+      }
+    ],
+    "scope": "database/extant-WAL content pages; metadata/SHM/internal bounded product buffers excluded",
+    "status": "PASS",
+    "total": {
+      "checks": 17,
+      "wall_ns": 157232708
+    }
+  },
+  "driver": {
+    "wall_ns": 32227982417,
+    "cpu_ns": 24288983000,
+    "exit_code": 0,
+    "timed_out": false
+  },
+  "operation_ns": 31015470959,
+  "binary_seals": {
+    "benchmark_history": {
+      "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/binary-archive/3e3304a623e9caa6b4cb51fa65ef388c482c97f121e329b92509cd7a3d12a425/benchmark_history",
+      "sha256": "3e3304a623e9caa6b4cb51fa65ef388c482c97f121e329b92509cd7a3d12a425"
+    },
+    "verify_history": {
+      "path": "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/binary-archive/99cd03fce0db971dfcff4c5a18a91217cde10f46cf4d655ffb1cc3480fe13aee/verify_history",
+      "sha256": "99cd03fce0db971dfcff4c5a18a91217cde10f46cf4d655ffb1cc3480fe13aee"
+    }
+  },
+  "compilation_seal": "58bd963c90d22df1c2d430a35f02c693579ef84e2c9c9b8757c383fec1e5930a",
+  "fixture": {
+    "checkpoints": 157,
+    "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+    "reachable_commits": 15632,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+    "total_logical_bytes": 4936693030,
+    "unique_blob_bytes": 891893320
+  },
+  "counter_scopes": "phase VFS requested bytes and acquisitions are disjoint differences; BLOB read bytes/read calls below are lifetime totals, not phase counters or device bytes",
+  "blob_lifetime": {
+    "blob_open_calls": 26730,
+    "blob_read_calls": 80370,
+    "blob_read_bytes": 1162204149,
+    "blob_close_calls": 26730
+  }
+}
