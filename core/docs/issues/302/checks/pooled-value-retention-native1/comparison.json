@@ -1,0 +1,26 @@
+{
+  "complete_wall_ns": 28717124250,
+  "coverage_limit": "prior diagnostic43states, current44; overall walls/VFS/pack totals not a matched workload comparison; no unchanged arm retry",
+  "kind": "count diagnostic, not performance/proof admission",
+  "native_wall_ns": 9507618208,
+  "owners_preserved": true,
+  "product_source": "9dac05a3483900aaba05c0be7f77f946080c72ac",
+  "same_state_counts": [
+    {
+      "difference": -1754,
+      "prior_value_decodes": 18265,
+      "ratio": 0.9039693402682727,
+      "selected_value_decodes": 16511,
+      "state": 40
+    },
+    {
+      "difference": -2048,
+      "prior_value_decodes": 21976,
+      "ratio": 0.9068074262832181,
+      "selected_value_decodes": 19928,
+      "state": 43
+    }
+  ],
+  "states_completed": 44,
+  "status": "DIAGNOSTIC_TIMEOUT"
+}

@@ -1965,3 +1965,13 @@ lost reuse. Same-cache selective recency eviction fixes44decodes/1eviction;
 exactbytes/ceiling/countercompositionPASS,fullworkspace/Clippy/fmt/boundaryPASS.
 No newcache/history/bounds/authenticationstrategy. Freeze then one directed53
 native countdiag on original stores; prior qualification unchanged,goalACTIVE.
+
+
+-2026-10-04:9dac05a34 decoded-value retention change495tests/93targets plus
+Clippy/fmt/boundaryPASS;productionLOC139299->139358(+59),ref65417/core73941.
+Newnative53countdiagTIMEOUT9.507618208s after44states,whole28.717124250s,cold/
+ownerspreservedPASS. Same43value decodes21976->19928,163943hits/19668evictions;
+physicalrecord/decode work unchanged. Retention defect fixed but proofgate not
+resolved. All historyrows unchanged; currentcombinedqualificationNOT_RUN.
+Remainingmetadata materialization/dependencywork requires architectural source
+review before another tuningchange. Stride1ref stillunqualified190s,goalACTIVE.

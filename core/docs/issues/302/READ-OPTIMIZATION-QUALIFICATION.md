@@ -345,3 +345,45 @@ After fixture44decodes/1eviction/exactbytes/bound and ceiling refusalPASS.
 Full workspace/alltarget tests,Clippy-Dwarnings,fmt-all/check,boundary448/23
 PASS; exact counts/logschecks/pooled-value-retention-functional1. Native count
 diagnostic at frozen source next; no proof/performance pass inferred.
+
+
+###9dac05a34 value-retention frozen diagnostic result
+
+ProductionLOC139299->139358(+59), reference65417unchanged, core73882->73941.
+Sameproduction_loc.py/SHA256, exact parent25820af5d and committed
+tree13abdc17187a9d6ba01271f941e13e0df33c8a30. Changed production files counted
+from git-show parent/staged with the same counter; remaining production scope
+verified identical to the full archive-counted22c26f6da tree. No paths moved or
+new production classes; external tests/docs excluded.495tests/93targets PASS.
+
+One prospective native-only count child on original closed53store:TIMEOUT
+9,507,618,208ns,44completed states; complete28,717,124,250ns within60s diagnostic
+bound; source/DBcold/owner hashes preservedPASS. Original row manifests audited.
+Same state40value decodes18265->16511; state43=21976->19928(-2048,9.31926%);
+state43physical18540records/3144group decodes/119619946decodedB unchanged,
+pooled acquisitions589->586, pack scan20784043->20502867B. Current43value-cache
+hits163943/evictions19668/evicteddecoded33723153B. These are actual count
+differences for the same retained state; not proof admission or overall wall
+improvement. Full diagnostic totals have unequal43/44state coverage.
+Rawissue302-history53-value-retention-native-cause1, compact
+[comparison](checks/pooled-value-retention-native1/comparison.json). Reproduction:
+`python3 core/benchmark/fs-bench-pro/diagnostics/run_history_proof_mechanism.py
+--out <fresh-owned-output> --states 53 --arm candidate
+--baseline-run issue302-history53-ranges-reuse-baseline1
+--candidate-run issue302-history53-ranges-reuse-candidate1`. Actual argv has
+spaces between flags and values; declaration/receipt pins exact vehicle/command.
+
+Current goal turn is progress: deterministic retention defect reproduced,
+bounded implementation/focused regression fixed, fullCorechecks passed, changed
+count diagnostic recorded. It did not achieve qualification. Historical22c26f6da
+10PASS/3proofTIMEOUT/1reference190sTIMEOUT remain historical; current9dac05a34
+source-matched performance/combined proofs NOT_RUN. No assumption that a count
+reduction or raw native diagnostic passes the separate combined proof.
+
+Architecture review remains necessary before another tuning change: body
+authentication scans all bytes, selected retention and valueLRU cannot remove
+full traversal/dependency/canonical verification. Need distinguish remaining
+necessary work from redundant decode/acquisition (including value-group
+materialization/validation) rather than repeat an unchanged arm or grow caps.
+Stride1reference stays unqualified, and it cannot be made faster by candidate
+cache code. GoalACTIVE; no further budget/workload/format ruling made.
