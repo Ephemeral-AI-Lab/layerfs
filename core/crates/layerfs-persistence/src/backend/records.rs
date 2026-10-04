@@ -78,6 +78,7 @@ pub(crate) enum BackendError {
     ReadOnly,
     Capacity,
     Integrity,
+    Filesystem(std::io::ErrorKind),
     Unknown,
 }
 impl From<BackendError> for layerfs_storage::port::PersistenceError {
@@ -98,6 +99,7 @@ impl From<BackendError> for layerfs_history::HistoryError {
             BackendError::ReadOnly => Self::ContinuityUnavailable,
             BackendError::Capacity => Self::Capacity("persistence"),
             BackendError::Integrity => Self::Integrity("persistence"),
+            BackendError::Filesystem(_) => Self::ContinuityUnavailable,
             BackendError::Unknown => Self::UnknownOutcome,
         }
     }

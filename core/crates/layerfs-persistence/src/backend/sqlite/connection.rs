@@ -88,8 +88,12 @@ pub struct Checkpoint {
     pub log_frames: i64,
     /// Frames checkpointed, -1 when no WAL exists.
     pub checkpointed_frames: i64,
-    /// Time spent performing the checkpoint.
+    /// Time spent performing the checkpoint and allocation release.
     pub wall_ns: u64,
+    /// Physical main-file allocation before unused-extents release; absent when busy.
+    pub allocation_before_bytes: Option<u64>,
+    /// Physical main-file allocation after unused-extents release; absent when busy.
+    pub allocation_after_bytes: Option<u64>,
 }
 pub(crate) struct State {
     pub(crate) connection: Connection,
@@ -100,6 +104,8 @@ pub(crate) struct Session {
     pub(crate) state: Mutex<State>,
     pub(crate) writable: bool,
     pub(crate) profile: ConnectionProfile,
+    #[cfg(target_os = "macos")]
+    allocation: Option<super::allocation::AllocationFile>,
 }
 impl Session {
     pub(crate) fn connect(path: &Path, writable: bool, create: bool) -> Result<Self, BackendError> {
@@ -222,7 +228,15 @@ impl Session {
         {
             return Err(BackendError::Integrity);
         }
+        #[cfg(target_os = "macos")]
+        let allocation = if writable {
+            Some(super::allocation::AllocationFile::open(path)?)
+        } else {
+            None
+        };
         Ok(Self {
+            #[cfg(target_os = "macos")]
+            allocation,
             state: Mutex::new(State {
                 connection,
                 quarantined: false,
@@ -246,28 +260,49 @@ impl Session {
             return Err(BackendError::Unknown);
         }
         let start = Instant::now();
-        let rows = match query::run(
-            &s.connection,
-            "PRAGMA wal_checkpoint(TRUNCATE)",
-            vec![],
-            &s.work,
-        ) {
-            Ok(rows) => rows,
-            Err(e) => {
-                if e == BackendError::Unknown {
-                    s.quarantined = true;
+        let result = (|| {
+            let rows = query::run(
+                &s.connection,
+                "PRAGMA wal_checkpoint(TRUNCATE)",
+                vec![],
+                &s.work,
+            )?;
+            let r = rows.first().ok_or(BackendError::Integrity)?;
+            let busy = r.get::<i64>(0)? != 0;
+            let allocation = if busy {
+                None
+            } else {
+                #[cfg(target_os = "macos")]
+                {
+                    Some(
+                        self.allocation
+                            .as_ref()
+                            .ok_or(BackendError::Integrity)?
+                            .release()?,
+                    )
                 }
-                return Err(e);
-            }
-        };
-        let r = rows.first().ok_or(BackendError::Integrity)?;
+                #[cfg(not(target_os = "macos"))]
+                {
+                    return Err(BackendError::Integrity);
+                }
+            };
+            Ok(Checkpoint {
+                busy,
+                log_frames: r.get(1)?,
+                checkpointed_frames: r.get(2)?,
+                wall_ns: 0,
+                allocation_before_bytes: allocation.map(|p| p.0),
+                allocation_after_bytes: allocation.map(|p| p.1),
+            })
+        })();
         let wall_ns = start.elapsed().as_nanos() as u64;
         s.work.borrow_mut().checkpoint_ns += wall_ns;
-        Ok(Checkpoint {
-            busy: r.get::<i64>(0)? != 0,
-            log_frames: r.get(1)?,
-            checkpointed_frames: r.get(2)?,
-            wall_ns,
+        if result.as_ref().err() == Some(&BackendError::Unknown) {
+            s.quarantined = true;
+        }
+        result.map(|mut report| {
+            report.wall_ns = wall_ns;
+            report
         })
     }
 }

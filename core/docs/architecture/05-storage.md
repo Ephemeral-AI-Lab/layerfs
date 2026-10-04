@@ -827,3 +827,20 @@ borrowed. Stale stamps are ignored and equal-stamp later publications retain the
 existing replacement rule. Foreign-key failure rolls back the entire publication,
 including bodies and preceding signature rows. No acknowledgement, transaction,
 profile, canonical/physical format or working-byte bound is enlarged.
+
+
+### Explicit checkpoint allocation release
+
+This implementation is based on269e520f7. A successful unobstructed explicit
+checkpoint also transfers unused extents beyond the main file's logical EOF to
+an exclusively created empty same-volume scratch, then closes/removes it. A
+retained main-file descriptor targets the opened file. No logical bytes are
+copied or truncated. Busy checkpoints do no allocation work; readonly authority
+is refused before SQL. Missing capabilities and filesystem cleanup errors fail
+explicitly. Uncertain transfer/close/metadata outcomes quarantine the session,
+without retry or guessed source deletion. No third-party package identity or
+unsafe product code is introduced: existing nix0.31.3 supplies the safe wrapper.
+Checkpoint wall includes this work; before/after main allocation is reported.
+WAL/FULL/fullfsync/page/cache/worker/canonical/physical policies remain unchanged.
+Process-crash tests cover acknowledged content after completed cleanup; physical
+power-loss behavior and atomic in-syscall crash interruption are not claimed.

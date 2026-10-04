@@ -18,7 +18,7 @@ impl Handles {
     pub fn diagnostics(&self) -> Result<SqlWork, PersistenceError> {
         self.storage.session.diagnostics().map_err(Into::into)
     }
-    /// Explicit final checkpoint; caller includes this work in lifecycle accounting.
+    /// Explicit checkpoint and unused allocation release; caller times both.
     pub fn checkpoint(&self) -> Result<Checkpoint, PersistenceError> {
         self.storage.session.checkpoint().map_err(Into::into)
     }

@@ -307,6 +307,7 @@ dependencies = [
  "layerfs-content",
  "layerfs-history",
  "layerfs-storage",
+ "nix",
  "rusqlite",
 ]
 

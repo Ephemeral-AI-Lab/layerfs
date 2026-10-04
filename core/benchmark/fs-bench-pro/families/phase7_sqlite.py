@@ -124,7 +124,7 @@ def run(selection,output,arm,baseline_root,common):
         remaining=case.command_budget_ns-(time.monotonic_ns()-perf_start)
         if remaining<=0:record['status']='NOT_RUN';record['reason']='cold attestation exhausted complete performance command budget';return out
         sample=invoke(command,out,'driver',remaining,env,root);record['sample_count']=1;record['performance']=sample;record['comparison_ns']=sample['child'].get('operation_ns') if isinstance(sample['child'],dict) else None
-        record['storage']=contract.allocations([db] if arm=='candidate' else [db,history]);record['storage_bytes']=record['storage']['total_bytes'];record['cleanup']={'status':'PASS' if not list(scratch.iterdir()) else 'FAIL','scope':'measured child exited, ordering scratch empty, database evidence retained'};record['command_wall_ns']=time.monotonic_ns()-perf_start
+        record['storage']=contract.allocations([db] if arm=='candidate' else [db,history]);record['storage_bytes']=record['storage']['total_bytes'];record['cleanup']={'status':'PASS' if not list(scratch.iterdir()) and not list(out.glob('.layerfs-allocation-*')) else 'FAIL','scope':'measured child exited, ordering/allocation scratch empty, database evidence retained'};record['command_wall_ns']=time.monotonic_ns()-perf_start
         child=sample['child']
         if sample['exit_code']!=0 or sample['timed_out'] or not isinstance(child,dict) or child.get('status')!='COMPLETE':record['status']='FAIL';return out
         record['status']='COMPLETE'

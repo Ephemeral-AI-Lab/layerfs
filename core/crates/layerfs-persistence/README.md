@@ -52,3 +52,14 @@ The current plan and evidence live in
 [issue 302](../../docs/issues/302/SQLITE-DESIGN-AND-PLAN.md). Performance qualification
 requires all seven revised Step 10 selections and the prospectively frozen 10%
 time margin; unit tests and compilation alone do not complete it.
+
+
+A complete unobstructed explicit checkpoint releases unused main-file extents
+past logical EOF using the safe macOS extent-transfer capability. The adapter
+retains a main-file descriptor, transfers only extra allocation to an exclusively
+created same-volume empty scratch, and closes/removes that scratch. No logical
+Store bytes are copied or truncated. Readonly/busy cases perform no release;
+unsupported volume/capability and cleanup failures are explicit, with uncertain
+outcomes quarantined. Before/after allocation and total checkpoint wall are
+reported. This operation is part of lifecycle accounting, not setup. Process-kill
+proof after completed release is not a physical power-loss/in-syscall crash claim.
