@@ -63,6 +63,7 @@ impl State<'_> {
             &roots,
             &mut self.packs,
             &mut self.decode,
+            &mut self.groups,
         )?;
         drop(membership);
         self.plan_initial_ordinals(&objects)?;

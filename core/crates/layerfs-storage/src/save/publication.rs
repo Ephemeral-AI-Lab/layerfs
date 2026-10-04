@@ -234,7 +234,9 @@ impl State<'_> {
             self.acknowledge(&mut batch, &members)?;
         }
         self.packer.ready.clear();
-        self.packs.clear();
+        // Ordinary dependency bodies name sealed immutable packs. Publication
+        // changes locator winners, not these bytes; keep bounded bodies across
+        // waves. The private pooled tail still releases its own cache on append.
         Ok(())
     }
     fn acknowledge(

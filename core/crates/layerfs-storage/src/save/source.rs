@@ -62,6 +62,9 @@ impl Source for WaveSource<'_> {
         }
         Ok(rows.len())
     }
+    fn note_pack_evictions(&self, entries: u64, bytes: u64) {
+        self.fetch.note_pack_evictions(entries, bytes);
+    }
     fn note_pack_cache_hit(&self) {
         self.fetch.note_pack_cache_hit();
     }

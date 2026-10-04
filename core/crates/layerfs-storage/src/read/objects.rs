@@ -13,13 +13,13 @@ use crate::{
     source::Source,
 };
 use layerfs_content::ObjectId;
-use std::collections::BTreeMap;
 
 pub(crate) struct ReadState {
     workspace: DecompressionWorkspace,
     groups: GroupCache,
     pool: PoolReader,
-    packs: BTreeMap<i64, Vec<u8>>,
+    prefetch_pool: crate::encoding::pool::PoolReadCounters,
+    packs: crate::encoding::PackCache,
 }
 impl ReadState {
     pub(crate) fn new() -> StorageResult<Self> {
@@ -27,11 +27,14 @@ impl ReadState {
             workspace: DecompressionWorkspace::new()?,
             groups: GroupCache::new(),
             pool: PoolReader::new(),
-            packs: BTreeMap::new(),
+            prefetch_pool: crate::encoding::pool::PoolReadCounters::default(),
+            packs: crate::encoding::PackCache::new(),
         })
     }
     pub(crate) fn pooled_read_counters(&self) -> crate::encoding::pool::PoolReadCounters {
-        self.pool.counters()
+        let mut work = self.pool.counters();
+        work.accumulate(self.prefetch_pool);
+        work
     }
     pub(crate) fn read(
         &mut self,
@@ -68,7 +71,14 @@ impl ReadState {
                 actual: bytes as u64,
             });
         }
-        prefetch::chains(source, &roots, &mut self.packs, &mut self.workspace)?;
+        let prefetch = prefetch::chains(
+            source,
+            &roots,
+            &mut self.packs,
+            &mut self.workspace,
+            &mut self.groups,
+        )?;
+        self.prefetch_pool.accumulate(prefetch);
         let mut counters = ChainCounters::default();
         // Output slots preserve demand order, including repeated identities.
         // Only the bounded root worklist is scheduled by physical location.

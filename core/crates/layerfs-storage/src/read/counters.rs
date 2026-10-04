@@ -41,6 +41,12 @@ pub struct Diagnostics {
     pub pack_hits: u64,
     /// Uncached pack consults.
     pub pack_misses: u64,
+    /// Selective capacity evictions across operation-owned body caches.
+    pub pack_evictions: u64,
+    /// Body bytes released by selective capacity eviction.
+    pub pack_evicted_bytes: u64,
+    /// Actual group decompressions during dependency prefetch.
+    pub prefetch_group_decodes: u64,
     /// Lanes sealed because registration requires reference closure.
     pub forced_seals: u64,
 }

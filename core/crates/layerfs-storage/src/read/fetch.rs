@@ -138,11 +138,29 @@ impl Fetch {
     pub(crate) fn fetch_packs(
         &self,
         ids: &[i64],
-        packs: &mut BTreeMap<i64, Vec<u8>>,
+        packs: &mut crate::encoding::PackCache,
     ) -> StorageResult<()> {
+        let ids: BTreeSet<_> = ids.iter().copied().collect();
+        let wanted = ids
+            .iter()
+            .map(|id| {
+                let info = self
+                    .descriptors
+                    .borrow()
+                    .get(id)
+                    .copied()
+                    .ok_or(StorageError::Integrity("pack descriptor missing"))?;
+                Ok((*id, info.length))
+            })
+            .collect::<StorageResult<Vec<_>>>()?;
+        let before = packs.work();
+        packs.reserve(&wanted)?;
+        self.note(|c| {
+            c.pack_evictions += packs.work().evictions - before.evictions;
+            c.pack_evicted_bytes += packs.work().evicted_bytes - before.evicted_bytes;
+        });
         let mut metadata = Vec::new();
         let mut bytes = 0;
-        let ids: BTreeSet<_> = ids.iter().copied().collect();
         for id in ids {
             if packs.contains_key(&id) {
                 self.note(|c| c.pack_hits += 1);
@@ -164,7 +182,35 @@ impl Fetch {
         }
         self.metadata_packs(&metadata, packs)
     }
-    fn metadata_packs(&self, ids: &[i64], packs: &mut BTreeMap<i64, Vec<u8>>) -> StorageResult<()> {
+    pub(crate) fn cohort_end(&self, rows: &[ObjectLocation], from: usize) -> StorageResult<usize> {
+        let mut end = from;
+        let mut bytes = 0usize;
+        let mut prior = None;
+        while let Some(row) = rows.get(end) {
+            if prior != Some(row.pack_id) {
+                let length = self
+                    .descriptors
+                    .borrow()
+                    .get(&row.pack_id)
+                    .ok_or(StorageError::Integrity("pack descriptor missing"))?
+                    .length;
+                if end > from && bytes.saturating_add(length) > DEPENDENCY_PACK_CACHE_BYTES {
+                    break;
+                }
+                bytes = bytes
+                    .checked_add(length)
+                    .ok_or(StorageError::Integrity("cohort bytes"))?;
+                prior = Some(row.pack_id);
+            }
+            end += 1;
+        }
+        Ok(end)
+    }
+    fn metadata_packs(
+        &self,
+        ids: &[i64],
+        packs: &mut crate::encoding::PackCache,
+    ) -> StorageResult<()> {
         if ids.is_empty() {
             return Ok(());
         }
@@ -190,7 +236,7 @@ impl Fetch {
             validate_frame(info, &body)?;
             self.remember_pack(info)?;
             self.note(|c| c.pack_read_bytes += body.len() as u64);
-            retain(packs, info.pack_id, body);
+            packs.insert(info.pack_id, body)?;
         }
         Ok(())
     }
@@ -302,7 +348,7 @@ impl Source for Fetch {
         } else if !self.groups.borrow().values().any(|row| row.pack_id == id) {
             return Err(StorageError::Integrity("pack descriptor missing"));
         }
-        let mut packs = BTreeMap::new();
+        let mut packs = crate::encoding::PackCache::new();
         self.metadata_packs(&[id], &mut packs)?;
         packs
             .remove(&id)
@@ -380,6 +426,12 @@ impl Source for Fetch {
             field: "signature changes require atomic registration",
         })
     }
+    fn note_pack_evictions(&self, entries: u64, bytes: u64) {
+        self.note(|c| {
+            c.pack_evictions += entries;
+            c.pack_evicted_bytes += bytes;
+        });
+    }
     fn note_pack_cache_hit(&self) {
         self.note(|c| c.pack_hits += 1);
     }
@@ -406,10 +458,4 @@ fn validate_frame(info: PackInfo, body: &[u8]) -> StorageResult<()> {
         return Err(StorageError::Integrity("sealed pack length/domain"));
     }
     Ok(())
-}
-pub(crate) fn retain(packs: &mut BTreeMap<i64, Vec<u8>>, id: i64, body: Vec<u8>) {
-    if packs.values().map(Vec::len).sum::<usize>() + body.len() > DEPENDENCY_PACK_CACHE_BYTES {
-        packs.clear();
-    }
-    packs.insert(id, body);
 }

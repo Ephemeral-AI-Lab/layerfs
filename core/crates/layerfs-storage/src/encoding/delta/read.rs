@@ -8,8 +8,6 @@
 //! first-wins path permits forward locators and explicitly refuses repeated
 //! identities in the chain, because concurrent winners can have higher pack ids.
 
-use std::collections::BTreeMap;
-
 use crate::source::Source;
 
 use layerfs_content::ObjectId;
@@ -55,7 +53,7 @@ pub struct ChainCounters {
 ///
 /// * `packs` - ordinary-lane pack bodies, bounded by
 ///   [`crate::policy::DEPENDENCY_PACK_CACHE_BYTES`]. The read wave owns it, so a
-///   pack is read once per wave per pack.
+///   pack can be reused while retained; capacity eviction can require rereads.
 /// * `pool` - the pooled metadata reader: its pack bodies (same bound) and its
 ///   decoded value groups ([`crate::policy::POOLED_VALUE_CACHE_BYTES`]). The
 ///   **caller's operation** owns it. A pooled reader built per resolved inode leaf
@@ -75,7 +73,7 @@ pub struct ChainCounters {
 /// released, because an ordinal's value is written once and never moves.
 pub struct BodyCaches<'a> {
     /// Ordinary-lane pack bodies this reading caller already read.
-    pub packs: &'a mut BTreeMap<i64, Vec<u8>>,
+    pub packs: &'a mut crate::encoding::PackCache,
     /// Pooled metadata reader this reading caller reconstructs pooled leaves through.
     pub pool: &'a mut PoolReader,
 }
@@ -124,7 +122,7 @@ impl<'a> Resolver<'a> {
     /// Pack bodies this resolver fetched from storage.
     ///
     /// Counted where the body is fetched, not inferred from the cache's length:
-    /// the cache releases itself wholesale when it reaches its byte bound, so a
+    /// the cache selectively evicts bodies when it reaches its byte bound, so a
     /// length difference would be wrong exactly when the bound binds.
     pub const fn packs_read(&self) -> u64 {
         self.packs_read
@@ -349,16 +347,17 @@ impl<'a> Resolver<'a> {
 /// [`crate::policy::DEPENDENCY_PACK_CACHE_BYTES`] and the decoded-group cache by
 /// [`crate::policy::DECODED_GROUP_CACHE_BYTES`]. Live multiplicity: one per
 /// walking caller. Lifetime: the caller's. Release: both caches release
-/// themselves wholesale when the next body would cross their bound.
+/// themselves at owner drop; body pressure evicts selectively and decoded-group
+/// pressure keeps its existing clear-all policy.
 pub struct ChainBases<'a> {
-    packs: &'a mut BTreeMap<i64, Vec<u8>>,
+    packs: &'a mut crate::encoding::PackCache,
     groups: GroupCache,
     group_decodes: u64,
 }
 
 impl<'a> ChainBases<'a> {
     /// A walk over `packs`, with its own bounded decoded-group cache.
-    pub fn new(packs: &'a mut BTreeMap<i64, Vec<u8>>) -> Self {
+    pub fn new(packs: &'a mut crate::encoding::PackCache) -> Self {
         Self {
             packs,
             groups: GroupCache::new(),
@@ -400,7 +399,7 @@ impl<'a> ChainBases<'a> {
 /// an integrity failure, never a chain that silently ends.
 pub fn stored_base(
     connection: &dyn Source,
-    packs: &mut BTreeMap<i64, Vec<u8>>,
+    packs: &mut crate::encoding::PackCache,
     groups: &mut GroupCache,
     workspace: &mut DecompressionWorkspace,
     group_decodes: &mut u64,
@@ -496,22 +495,23 @@ pub fn accumulate(total: &mut ChainCounters, chain: ChainCounters) {
 /// Reads one pack body through the operation's shared cache.
 ///
 /// The cache is bounded by [`DEPENDENCY_PACK_CACHE_BYTES`]: when the next body
-/// would push the retained bytes past the bound the whole cache is released, the
-/// same wholesale discipline the pooled value cache uses, so a save can never
+/// would push the retained bytes past the bound the least-recently-used bodies are evicted, the
+/// same selective body eviction policy the pooled value cache uses, so a save can never
 /// retain a body count that grows with the number of packs it touches.
 fn pack_of<'b>(
-    packs: &'b mut BTreeMap<i64, Vec<u8>>,
+    packs: &'b mut crate::encoding::PackCache,
     connection: &dyn Source,
     pack_id: i64,
 ) -> StorageResult<(&'b [u8], bool)> {
     let mut fetched = false;
     if !packs.contains_key(&pack_id) {
         let bytes = connection.pack_bytes(pack_id)?;
-        let retained: usize = packs.values().map(Vec::len).sum();
-        if retained.saturating_add(bytes.len()) > crate::policy::DEPENDENCY_PACK_CACHE_BYTES {
-            packs.clear();
-        }
-        packs.insert(pack_id, bytes);
+        let before = packs.work();
+        packs.insert(pack_id, bytes)?;
+        connection.note_pack_evictions(
+            packs.work().evictions - before.evictions,
+            packs.work().evicted_bytes - before.evicted_bytes,
+        );
         fetched = true;
     } else {
         connection.note_pack_cache_hit();

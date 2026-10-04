@@ -28,7 +28,7 @@ use crate::policy::{StorageCapacities, METADATA_DECODED_WORK_LIMIT, METADATA_REC
 /// One wave's pooled reader: pack and decoded-value caches plus work counters.
 #[derive(Debug, Default)]
 pub struct PoolReader {
-    packs: BTreeMap<i64, Vec<u8>>,
+    packs: crate::encoding::PackCache,
     groups: BTreeMap<u32, Vec<[u8; INODE_VALUE_BYTES]>>,
     retained_bytes: usize,
     decoded_work: u64,
@@ -199,7 +199,7 @@ impl PoolReader {
     }
 
     /// Reads one pack body through this wave's cache, bounded as the dependency
-    /// cache is: the cache is released wholesale when the next body would cross
+    /// cache is: the cache is selectively evicted when the next body would cross
     /// the declared bound, so a wave's retained pack bytes are a constant rather
     /// than a function of how many packs it reads.
     fn pack(&mut self, connection: &dyn Source, pack_id: i64) -> StorageResult<&[u8]> {
@@ -207,11 +207,12 @@ impl PoolReader {
             let bytes = connection.pack_bytes(pack_id)?;
             self.counters.pack_fetches = self.counters.pack_fetches.saturating_add(1);
             self.counters.pack_bytes = self.counters.pack_bytes.saturating_add(bytes.len() as u64);
-            let retained: usize = self.packs.values().map(Vec::len).sum();
-            if retained.saturating_add(bytes.len()) > crate::policy::DEPENDENCY_PACK_CACHE_BYTES {
-                self.packs.clear();
-            }
-            self.packs.insert(pack_id, bytes);
+            let before = self.packs.work();
+            self.packs.insert(pack_id, bytes)?;
+            connection.note_pack_evictions(
+                self.packs.work().evictions - before.evictions,
+                self.packs.work().evicted_bytes - before.evicted_bytes,
+            );
         } else {
             connection.note_pack_cache_hit();
         }

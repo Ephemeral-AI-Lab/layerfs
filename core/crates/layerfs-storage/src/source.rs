@@ -35,6 +35,8 @@ pub trait Source {
     fn signatures(&self) -> StorageResult<Vec<SignatureRow>>;
     /// Records a real cache consult for operation-count diagnostics.
     fn note_pack_cache_hit(&self) {}
+    /// Records capacity eviction of real acquired bodies, never private invalidation.
+    fn note_pack_evictions(&self, _entries: u64, _bytes: u64) {}
     /// Stores the bounded signature changes in the caller's transaction.
     fn write_signatures(&self, rows: &[SignatureRow]) -> StorageResult<usize>;
 }

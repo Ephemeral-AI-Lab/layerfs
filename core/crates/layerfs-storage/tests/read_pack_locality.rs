@@ -59,11 +59,11 @@ fn bounded_hash_order_demand_does_not_reacquire_one_pack_for_each_object() {
         .filter(|(name, _)| *name == "read_packs")
         .map(|(_, count)| count)
         .sum();
-    // The current algorithm has initial acquisition, dependency inspection and
-    // canonical reconstruction. Each physical pass should visit a pack once.
+    // Bounded acquisition consumes each cohort during dependency inspection;
+    // reconstruction is the second physical pass.
     eprintln!("locality: {bodies} body acquisitions for {pack_count} packs");
     assert!(
-        bodies <= 3 * pack_count,
+        bodies <= 2 * pack_count,
         "{bodies}body acquisitions for{pack_count}packs"
     );
 }

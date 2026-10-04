@@ -212,7 +212,7 @@ pub struct SelectInput<'a> {
     /// Pack bodies this operation already read, bounded by
     /// [`crate::policy::DEPENDENCY_PACK_CACHE_BYTES`] and released wholesale when
     /// the next body would cross it.
-    pub packs: &'a mut BTreeMap<i64, Vec<u8>>,
+    pub packs: &'a mut crate::encoding::PackCache,
     /// The operation's pooled metadata reader.
     ///
     /// A selection of a non-pooled role never reaches the pooled branch, but the

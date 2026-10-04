@@ -109,11 +109,10 @@ pub const CHAIN_ENCODED_LIMIT: u64 = 256 * 1024;
 ///
 /// Owner: the save operation that fills it. Bound: this many bytes of pack bodies.
 /// Live multiplicity: one cache per save, one copy per distinct pack. Lifetime:
-/// the operation. Release: dropped with the operation, and released wholesale when
-/// the next body would cross the bound - exactly the discipline the pooled value
-/// cache and the index window use. A released body is read again if a later
+/// the operation. Release: dropped with the operation; capacity pressure releases
+/// only the least-recently-used bodies needed to admit the next body. A released body is read again if a later
 /// dependency needs it, so the bound costs reads and never correctness.
-pub const DEPENDENCY_PACK_CACHE_BYTES: usize = 4 * 1024 * 1024;
+pub const DEPENDENCY_PACK_CACHE_BYTES: usize = 2 * 1024 * 1024;
 /// Decoded values one pooled reader may retain across one wave.
 ///
 /// Owner: one pooled reader. Bound: this many canonical decoded value bytes. Live
@@ -128,7 +127,7 @@ pub const POOLED_VALUE_CACHE_BYTES: usize = 512 * 1024;
 /// the caller that owns the wave's pack cache and carried by every resolver in that
 /// wave. Bound: this many decoded body bytes. Live multiplicity: one copy per
 /// distinct `(pack, group)`. Lifetime: the wave; dropped with it. Release: the
-/// whole cache is released when the next body would cross the bound, the
+/// least-recently-used bodies are evicted when the next body would cross the bound, the
 /// discipline the pooled value cache and the dependency pack cache already use. A
 /// released body is decompressed again if a later record needs it, so the bound
 /// costs work and never correctness.

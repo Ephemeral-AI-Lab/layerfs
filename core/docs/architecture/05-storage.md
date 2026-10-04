@@ -1078,3 +1078,25 @@ checks. Raw publication bodies and their validation are unchanged. Direct SQLite
 read callers retain their length/digest failure contract, including opaque hash
 valid bytes whose C2 grammar the consuming decoder must independently refuse.
 No cache/buffer/queue/worker/schema/durability change or release parity claim.
+
+### Selective operation-owned pack reuse
+
+Described against parent `1782b07eb149f6f8f81d4c675533e44ec49ebed6`.
+The port reader/save and pooled reader use one concrete PackCache implementation
+per existing body owner, with a 2 MiB ordinary body cap (tightened from the
+parent source's 4 MiB), 4,096 entry cap and isolated existing singleton exception.
+Least-recently-used victims are released selectively. Bounded physical cohorts
+reserve miss space before acquisition while protecting demanded hits; discovery
+consumes a cohort before acquiring the next, and borrows the operation's existing
+512 KiB decoded-group cache. Output order/duplicate slots and chain checks remain.
+
+Sealed ordinary bodies survive acknowledged save waves: publication changes
+locator winners but never the sealed bytes. Locator and race-depth invalidation
+remain; private pooled appends still release the pooled reader's body cache.
+PackCacheWork and Fetch diagnostics count actual selective evictions/bytes;
+prefetch group decodes are separate from reconstruction counts. Retained cache
+bytes exclude result/decode/private buffers and are not a process-memory claim.
+Whole acquired packs keep the immutable PersistedPack SHA256 boundary and C2
+framing/domain/canonical validation. No range attestation or measured speed claim
+is supplied by this change. Qualification is tracked in
+[the implementation plan](../issues/302/READ-OPTIMIZATION-QUALIFICATION.md).

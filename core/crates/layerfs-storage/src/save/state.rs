@@ -48,7 +48,7 @@ pub(super) struct State<'a> {
     pub(super) compression: CompressionWorkspace,
     pub(super) decode: DecompressionWorkspace,
     pub(super) groups: GroupCache,
-    pub(super) packs: BTreeMap<i64, Vec<u8>>,
+    pub(super) packs: crate::encoding::PackCache,
     pub(super) pool: PoolReader,
     pub(super) pool_index: RefMut<'a, PoolIndex>,
     pub(super) pool_synced: bool,
@@ -85,7 +85,7 @@ impl<'a> State<'a> {
             compression: CompressionWorkspace::new()?,
             decode: DecompressionWorkspace::new()?,
             groups: GroupCache::new(),
-            packs: BTreeMap::new(),
+            packs: crate::encoding::PackCache::new(),
             pool: PoolReader::new(),
             pool_index: storage
                 .pool_index
