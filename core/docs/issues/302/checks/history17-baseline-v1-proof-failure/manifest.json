@@ -1,0 +1,65 @@
+{
+  "files": {
+    "close.json": {
+      "bytes": 612,
+      "sha256": "8c0a94e96488b3fb04b57c7b8ce8c3d13080a8f38808f716e57d724f87c93d57"
+    },
+    "cold.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cold.stdout": {
+      "bytes": 366,
+      "sha256": "62a52ce34d5ce85308558eb04c5d4a687a02adad5ce8998c7e525d29f08846ab"
+    },
+    "driver.stderr": {
+      "bytes": 11925,
+      "sha256": "02fee3c9499c9421852341d5a0627343cef0149495c47145745bee36f9dac7ad"
+    },
+    "driver.stdout": {
+      "bytes": 1610,
+      "sha256": "22fd65d0d8526407e320a934da49d11ea66d1da57521b8e552bee0b0e01ebe3f"
+    },
+    "observer-build.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "observer-build.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "proof-request.json": {
+      "bytes": 3282,
+      "sha256": "cb102e1e033ae5aa382a092aceb894e11b98ae62fb054a717226a1ce84ff6b01"
+    },
+    "receipt.json": {
+      "bytes": 309356,
+      "sha256": "6af22f703670f9a029bdad0d2e847d9db371bc70b7fcb4df3e2f9b1c31940794"
+    },
+    "sql-work.json": {
+      "bytes": 204992,
+      "sha256": "3fa48d01bdb739bdc79e603ee4037400fc58b94df13c6a0b2adddfb251f426b8"
+    },
+    "store.sqlite": {
+      "bytes": 49573888,
+      "sha256": "3140f232ca68537f443fb3fa960f088d2ce39f464f2eda51427321719b3c15ea"
+    },
+    "store.sqlite.history.sqlite": {
+      "bytes": 41984,
+      "sha256": "44ea0ba408d803eb6be4bacf710a38911a06de9306f3ebd6d7393c18f79d6918"
+    },
+    "verifier.stderr": {
+      "bytes": 753,
+      "sha256": "519c4ee080cce74ef9cf176d8c35663c0d1df444f402a31bece0d79eeaa0ba62"
+    },
+    "verifier.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "vfs.json": {
+      "bytes": 1036,
+      "sha256": "44082b7882d3bc1b3486c5b4e22429559ef04bbc5d8115bd40211d4be8142824"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

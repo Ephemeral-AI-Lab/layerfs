@@ -1777,3 +1777,9 @@ cold checks, supported profile readbacks, same fixed SQL/VM/VFS observer, sealed
 reference pins, combined9.5s proof and append-only claims.12focused checks/example
 Clippy and combined-observer capability PASS; reference/candidate release build
 2.417667583/2.202156125s. Product unchanged, Init receipts remain pinned. Next17pair.
+
+-2026-10-04: history17reference v1performance complete33.078299s/50.806978209s,
+cold0/boundaries/51689canonical objects380559460B, but proofFAIL due completed-saves
+misclassification. Retained-data proof repair PASS7.113652792s without speed rerun.
+Original receipt not promoted. Prospective historyv2proof-corrected IDs registered;
+6legacyv1 remain visible/refused; original workloads/budgets/ceilings unchanged.

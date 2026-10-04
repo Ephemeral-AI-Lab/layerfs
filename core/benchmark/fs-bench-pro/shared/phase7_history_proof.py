@@ -59,6 +59,10 @@ def owner(path, tables, application, version):
         raise
 
 
+def unfinished_saves(db):
+    return db.execute('SELECT COUNT(*) FROM saves WHERE active_slot IS NOT NULL OR publication IS NULL').fetchone()[0]
+
+
 def collect(db_path, arm, child, row, metadata_output=None):
     """Authenticate counts/roots against actual C2/C5 rows; preserve original files.
 
@@ -87,7 +91,8 @@ def collect(db_path, arm, child, row, metadata_output=None):
             pack_bytes = c2.execute('SELECT COALESCE(SUM(length(body)),0) FROM pack').fetchone()[0]
         else:
             inconsistent = c2.execute('SELECT 1 FROM objects GROUP BY object_id HAVING MIN(object_role)!=MAX(object_role) OR MIN(canonical_length)!=MAX(canonical_length) LIMIT 1').fetchone()
-            if inconsistent or records[0]['rows']['saves']:
+            unfinished = unfinished_saves(c2)
+            if inconsistent or unfinished or records[0]['rows']['saves'] != n:
                 raise ValueError('reference has inconsistent identities or unfinished saves')
             query = 'SELECT object_id, MIN(object_role), MIN(canonical_length) FROM objects GROUP BY object_id ORDER BY object_id'
             counts = {'history_meta': 1, 'layer_stacks': 1, 'branches': n, 'layers': n,

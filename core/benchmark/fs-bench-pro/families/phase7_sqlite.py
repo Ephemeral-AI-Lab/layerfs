@@ -27,7 +27,14 @@ REQUIRED=tuple(CASES)
 DISPOSABLE={c.id.replace('phase7-sqlite-','phase7-sqlite-disposable-').rsplit('-v',1)[0]+'-v1':c for c in CASES.values()}
 for name,c in DISPOSABLE.items():
     CASES[name]=Case(name,c.fixture,c.states,c.storage_ceiling,c.command_budget_ns,c.verification_budget_ns,'disposable')
-REQUIRED_BY_PROFILE={'durable':REQUIRED,'disposable':tuple(DISPOSABLE)}
+LEGACY_HISTORY=tuple(name for name,c in CASES.items() if c.states is not None)
+# Corrected completed-save proof requires new prospective scenario versions;
+# historical v1 cases/receipts remain visible and cannot be sampled again.
+for name in LEGACY_HISTORY:
+    c=CASES[name];new=name.rsplit('-v',1)[0]+'-v2'
+    CASES[new]=Case(new,c.fixture,c.states,c.storage_ceiling,c.command_budget_ns,c.verification_budget_ns,c.profile)
+REQUIRED=tuple(name if CASES[name].states is None else name.rsplit('-v',1)[0]+'-v2' for name in REQUIRED)
+REQUIRED_BY_PROFILE={'durable':REQUIRED,'disposable':tuple(name if CASES[name].states is None else name.rsplit('-v',1)[0]+'-v2' for name in DISPOSABLE)}
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"
@@ -85,6 +92,8 @@ def build(root,arm,out,common):
 
 def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pins=None):
     case=CASES[selection]
+    if selection in LEGACY_HISTORY:
+        raise ValueError('historical history v1 retired after completed-save proof correction; original receipts preserved; use registered v2')
     if case.fixture is None:
         from families import phase7_history
         return phase7_history.run(case,output,arm,baseline_root,common,corpus_root,reference_pins)

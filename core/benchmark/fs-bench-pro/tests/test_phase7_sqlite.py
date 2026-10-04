@@ -20,7 +20,9 @@ class SqliteStep10(unittest.TestCase):
         self.assertEqual(len(disposable),7)
         self.assertTrue(all(x.profile=="disposable" for x in disposable))
         self.assertEqual([(x.fixture,x.states,x.storage_ceiling,x.command_budget_ns) for x in disposable],[(x.fixture,x.states,x.storage_ceiling,x.command_budget_ns) for x in cases])
-        self.assertEqual(len(f.CASES),14)
+        self.assertEqual(len(f.CASES),20)
+        self.assertEqual(len(f.LEGACY_HISTORY),6)
+        self.assertTrue(all(f.CASES[name].states for name in f.LEGACY_HISTORY))
     def test_margin_is_integer_total_bound_and_joint_gate_cannot_waive_missing_proof(self):
         self.assertEqual(c.gate(self.row(110),self.row(100),100),'PASS')
         self.assertEqual(c.gate(self.row(111),self.row(100),100),'FAIL')

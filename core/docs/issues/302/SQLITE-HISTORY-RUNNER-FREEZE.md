@@ -62,3 +62,31 @@ all failures. Continue53/157 as their independent proof/root binding qualifies.
 All3history and Durable currentlyNOT_RUN. After all7Disposable cases qualify,
 measure the same product implementation/artifacts under Durable; terminal goal
 requires its own seven-case evidence and full requirement audit.
+
+## Completed-save proof correction and prospective v2 cases
+
+At192f9ebf6 the original17-state reference performance arm completes:
+33.078299000s lifecycle/50.806978209s performance envelope within60s,
+source cold15.668087375s,17database boundaries with total0.093861084s and all
+zero residency. Canonical51689objects/380559460B and final allocation52473856B.
+Initial proof FAIL0.209258250s: the census wrongly treated every retained native
+saves row as unfinished. Actual rows17 all active_slotNULL/publication1..17;
+no inconsistent ID/role/length row. Original ownership.rs explicitly retains
+completed publication rows. The fix requires no active slot/missing publication
+and exactlyNcompleted rows, preserving stricter actual-save custody.
+
+A separate fresh proof-only repair on those exact original databases now PASS
+7.113652792s/9.5s,101477paths/17custody states/8631sampled content paths/
+51,862,943authenticated B, canonical census and original-file preservation.
+No product child or speed arm was repeated. Original performance/proof receipt
+remains unchanged with verificationFAIL; repaired proof is separate evidence,
+not a retrospective promotion of that historical speed receipt.
+
+The corrected proof contract prospectively registers history-v2 selections for
+both profiles (17/53/157 unchanged workloads/budgets/ceilings). All6old v1 cases
+remain listed/historical and explicitly refuse another sample. Active required
+seven-case lists retain the four Init IDs and use the three v2history IDs.
+Fresh matched v2arms are required at the corrected frozen harness; no v1clock is
+pooled/relabelled as a v2PASS. Existing Init milestone remains pinned to its
+measured artifacts. Focused census regression uses actual unfinished_saves helper
+against completed and active native-style rows; scope is not a fake census.

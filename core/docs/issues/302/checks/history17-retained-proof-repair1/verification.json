@@ -1,0 +1,26 @@
+{
+  "command": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/benchmark/fs-bench-pro/shared/phase7_history_proof.py",
+    "--request",
+    "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/benchmark-results/fs-bench-pro/issue302-history17-baseline-proof-repair1/proof-request.json"
+  ],
+  "wall_ns": 7113652792,
+  "budget_ns": 9500000000,
+  "exit_code": 0,
+  "timed_out": false,
+  "child": {
+    "admission": "NOT_RUN",
+    "authenticated_bytes": 51862943,
+    "custody_states": 17,
+    "independent_root_pins": "NOT_CHECKED",
+    "paths": 101477,
+    "sample_policy": "every-tenth-content-path-and-final",
+    "sampled_content_paths": 8631,
+    "states": 17,
+    "status": "CHECKED"
+  },
+  "cpu_ns": 4521462000,
+  "peak_rss_bytes": 71188480,
+  "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution"
+}

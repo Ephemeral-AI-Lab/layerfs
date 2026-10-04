@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/benchmark/fs-bench-pro/shared/phase7_history_proof.py", line 216, in <module>
+    main()
+    ~~~~^^
+  File "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/benchmark/fs-bench-pro/shared/phase7_history_proof.py", line 195, in main
+    census = collect(request['db'], request['arm'], child, request['row'], metadata)
+  File "/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/benchmark/fs-bench-pro/shared/phase7_history_proof.py", line 91, in collect
+    raise ValueError('reference has inconsistent identities or unfinished saves')
+ValueError: reference has inconsistent identities or unfinished saves

@@ -67,3 +67,12 @@ class HistoryProof(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'cold'): p.root_pins(bad_receipt, census, proof, *paths)
             paths[2].write_text('{}')
             with self.assertRaisesRegex(ValueError, 'hash'): p.validate_pins(pins, receipt['identity'])
+
+    def test_reference_completed_save_rows_are_not_unfinished(self):
+        # Original native schema retains publication rows after active_slot clears.
+        with sqlite3.connect(':memory:') as db:
+            db.execute('CREATE TABLE saves(active_slot INTEGER, publication INTEGER)')
+            db.executemany('INSERT INTO saves VALUES(NULL,?)', [(n,) for n in range(1,18)])
+            self.assertEqual(p.unfinished_saves(db),0)
+            db.execute('INSERT INTO saves VALUES(1,NULL)')
+            self.assertEqual(p.unfinished_saves(db),1)
