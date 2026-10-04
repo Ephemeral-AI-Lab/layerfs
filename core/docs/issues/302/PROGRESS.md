@@ -1857,3 +1857,9 @@ file reads/oraclechecks/C5/preservation unchanged. Skip metadataqueries for
 already-checked immutable filelengths. Additional bounded verifierbuffer declared,
 productlimits unchanged. Externalhelpercontracts and new53reference countdiag
 prepared; no speed/proof admission or oldreceipt promotion. Freeze/check next.
+
+
+-2026-10-04: broad-metadata memo dc7f1726f countdiag53 TIMEOUT9.513163750s after46,
+cold/owners preserved;20854hits/39837misses/39325evictions peak1.09MiB/512rows.
+Narrow same-bounded memo to root/inode navigation; direct directoryreads bypass
+alongside files, checks unchanged. No limitincrease/unchanged retry/proofpromotion.

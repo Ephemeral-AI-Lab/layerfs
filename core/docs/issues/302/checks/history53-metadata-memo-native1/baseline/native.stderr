@@ -1,0 +1,233 @@
+VERIFY_CORPUS_OPEN_WORK wall_ns=116992167
+VERIFY_STORE_CUSTODY_WORK wall_ns=59020041
+VERIFY_STATE_BEGIN state=1
+verify parts: walk=17059791 lengths=6427875 digest=1981375
+HISTORY_ENGINE_WORK {"state":1,"stage":"verification","available":true,"values":[110, 7005, 20804000, 0, 0, 0, 0, 85, 1024045, 105, 311131, 1018383, 0, 0, 0, 29, 19, 0, 0]}
+VERIFY_METADATA_MEMO state=1 cumulative=Counters { hits: 24, misses: 93, source_calls: 10, source_objects: 93, evictions: 0, peak_bytes: 41469, peak_rows: 93 }
+VERIFY_STATE_WORK state=1 wall_ns=26580958 paths=359 sampled=29 authenticated_bytes=306296 pooled=PoolReadCounters { leaf_requests: 7, chain_edges: 0, physical_record_calls: 14, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 14, value_group_decodes: 7, pack_fetches: 2, pack_bytes: 24072 }
+VERIFY_STATE_BEGIN state=2
+verify parts: walk=15238000 lengths=8556208 digest=39083
+HISTORY_ENGINE_WORK {"state":2,"stage":"verification","available":true,"values":[148, 10628, 18827000, 0, 0, 0, 0, 89, 783795, 148, 407167, 1436879, 0, 0, 0, 38, 15, 0, 0]}
+VERIFY_METADATA_MEMO state=2 cumulative=Counters { hits: 90, misses: 233, source_calls: 24, source_objects: 233, evictions: 0, peak_bytes: 109958, peak_rows: 233 }
+VERIFY_STATE_WORK state=2 wall_ns=25454709 paths=607 sampled=47 authenticated_bytes=234262 pooled=PoolReadCounters { leaf_requests: 19, chain_edges: 0, physical_record_calls: 38, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 38, value_group_decodes: 19, pack_fetches: 4, pack_bytes: 57145 }
+VERIFY_STATE_BEGIN state=3
+verify parts: walk=10240000 lengths=11809125 digest=58417
+HISTORY_ENGINE_WORK {"state":3,"stage":"verification","available":true,"values":[213, 12702, 15118000, 0, 0, 0, 0, 98, 751201, 213, 539165, 1908631, 0, 0, 0, 49, 13, 0, 0]}
+VERIFY_METADATA_MEMO state=3 cumulative=Counters { hits: 279, misses: 343, source_calls: 38, source_objects: 343, evictions: 0, peak_bytes: 198117, peak_rows: 343 }
+VERIFY_STATE_WORK state=3 wall_ns=24425167 paths=889 sampled=68 authenticated_bytes=475074 pooled=PoolReadCounters { leaf_requests: 35, chain_edges: 9, physical_record_calls: 88, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 88, value_group_decodes: 35, pack_fetches: 6, pack_bytes: 91497 }
+VERIFY_STATE_BEGIN state=4
+verify parts: walk=8894208 lengths=14334375 digest=77542
+HISTORY_ENGINE_WORK {"state":4,"stage":"verification","available":true,"values":[298, 16378, 14560000, 0, 0, 0, 0, 107, 771253, 298, 634784, 2469142, 0, 0, 0, 57, 10, 0, 0]}
+VERIFY_METADATA_MEMO state=4 cumulative=Counters { hits: 541, misses: 439, source_calls: 52, source_objects: 439, evictions: 0, peak_bytes: 301654, peak_rows: 439 }
+VERIFY_STATE_WORK state=4 wall_ns=26271291 paths=1098 sampled=85 authenticated_bytes=571389 pooled=PoolReadCounters { leaf_requests: 54, chain_edges: 26, physical_record_calls: 160, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 160, value_group_decodes: 54, pack_fetches: 8, pack_bytes: 129959 }
+VERIFY_STATE_BEGIN state=5
+verify parts: walk=8913708 lengths=16422083 digest=98459
+HISTORY_ENGINE_WORK {"state":5,"stage":"verification","available":true,"values":[352, 19948, 14387000, 0, 0, 0, 0, 120, 789252, 352, 755037, 3221103, 0, 0, 0, 66, 15, 0, 0]}
+VERIFY_METADATA_MEMO state=5 cumulative=Counters { hits: 855, misses: 559, source_calls: 67, source_objects: 559, evictions: 47, peak_bytes: 425135, peak_rows: 512 }
+VERIFY_STATE_WORK state=5 wall_ns=29026625 paths=1380 sampled=107 authenticated_bytes=835074 pooled=PoolReadCounters { leaf_requests: 75, chain_edges: 45, physical_record_calls: 240, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 240, value_group_decodes: 75, pack_fetches: 10, pack_bytes: 174062 }
+VERIFY_STATE_BEGIN state=6
+verify parts: walk=9868458 lengths=19454750 digest=940875
+HISTORY_ENGINE_WORK {"state":6,"stage":"verification","available":true,"values":[485, 25581, 16854000, 0, 0, 0, 0, 149, 938123, 485, 992931, 4036250, 0, 0, 0, 79, 10, 0, 0]}
+VERIFY_METADATA_MEMO state=6 cumulative=Counters { hits: 1266, misses: 679, source_calls: 85, source_objects: 679, evictions: 167, peak_bytes: 495541, peak_rows: 512 }
+VERIFY_STATE_WORK state=6 wall_ns=34555708 paths=1630 sampled=126 authenticated_bytes=925697 pooled=PoolReadCounters { leaf_requests: 100, chain_edges: 82, physical_record_calls: 364, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 364, value_group_decodes: 100, pack_fetches: 12, pack_bytes: 218644 }
+VERIFY_STATE_BEGIN state=7
+verify parts: walk=9413458 lengths=22805917 digest=134583
+HISTORY_ENGINE_WORK {"state":7,"stage":"verification","available":true,"values":[577, 29884, 14983000, 0, 0, 0, 0, 138, 933998, 577, 1173088, 4491834, 0, 0, 0, 86, 12, 0, 0]}
+VERIFY_METADATA_MEMO state=7 cumulative=Counters { hits: 1730, misses: 791, source_calls: 100, source_objects: 791, evictions: 279, peak_bytes: 495541, peak_rows: 512 }
+VERIFY_STATE_WORK state=7 wall_ns=37039750 paths=1771 sampled=137 authenticated_bytes=1038255 pooled=PoolReadCounters { leaf_requests: 127, chain_edges: 111, physical_record_calls: 476, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 476, value_group_decodes: 127, pack_fetches: 14, pack_bytes: 278741 }
+VERIFY_STATE_BEGIN state=8
+verify parts: walk=10856708 lengths=30206334 digest=169625
+HISTORY_ENGINE_WORK {"state":8,"stage":"verification","available":true,"values":[779, 40481, 20070000, 0, 0, 0, 0, 276, 1950416, 779, 1859404, 12529334, 0, 0, 0, 213, 17, 0, 0]}
+VERIFY_METADATA_MEMO state=8 cumulative=Counters { hits: 2213, misses: 999, source_calls: 118, source_objects: 999, evictions: 487, peak_bytes: 495541, peak_rows: 512 }
+VERIFY_STATE_WORK state=8 wall_ns=47242583 paths=2153 sampled=167 authenticated_bytes=1015217 pooled=PoolReadCounters { leaf_requests: 158, chain_edges: 151, physical_record_calls: 618, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 618, value_group_decodes: 158, pack_fetches: 16, pack_bytes: 340258 }
+VERIFY_STATE_BEGIN state=9
+verify parts: walk=9545375 lengths=19222042 digest=138666
+HISTORY_ENGINE_WORK {"state":9,"stage":"verification","available":true,"values":[676, 34515, 12639000, 0, 0, 0, 0, 205, 1525090, 676, 1606045, 8296905, 0, 0, 0, 155, 5, 0, 0]}
+VERIFY_METADATA_MEMO state=9 cumulative=Counters { hits: 2620, misses: 1152, source_calls: 132, source_objects: 1152, evictions: 640, peak_bytes: 495541, peak_rows: 512 }
+VERIFY_STATE_WORK state=9 wall_ns=33492667 paths=1746 sampled=135 authenticated_bytes=714846 pooled=PoolReadCounters { leaf_requests: 182, chain_edges: 211, physical_record_calls: 786, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 786, value_group_decodes: 181, pack_fetches: 18, pack_bytes: 364185 }
+VERIFY_STATE_BEGIN state=10
+verify parts: walk=8883333 lengths=22949792 digest=135333
+HISTORY_ENGINE_WORK {"state":10,"stage":"verification","available":true,"values":[751, 34425, 14733000, 0, 0, 0, 0, 214, 1578541, 751, 1772178, 11121033, 0, 0, 0, 168, 6, 0, 0]}
+VERIFY_METADATA_MEMO state=10 cumulative=Counters { hits: 3093, misses: 1214, source_calls: 145, source_objects: 1214, evictions: 702, peak_bytes: 495541, peak_rows: 512 }
+VERIFY_STATE_WORK state=10 wall_ns=36350500 paths=1659 sampled=128 authenticated_bytes=845384 pooled=PoolReadCounters { leaf_requests: 206, chain_edges: 287, physical_record_calls: 986, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 986, value_group_decodes: 203, pack_fetches: 20, pack_bytes: 393832 }
+VERIFY_STATE_BEGIN state=11
+verify parts: walk=11712125 lengths=22214917 digest=1945500
+HISTORY_ENGINE_WORK {"state":11,"stage":"verification","available":true,"values":[799, 42551, 16520000, 0, 0, 0, 0, 282, 2097953, 799, 2014613, 12249406, 0, 0, 0, 206, 7, 0, 0]}
+VERIFY_METADATA_MEMO state=11 cumulative=Counters { hits: 3543, misses: 1457, source_calls: 163, source_objects: 1457, evictions: 945, peak_bytes: 508435, peak_rows: 512 }
+VERIFY_STATE_WORK state=11 wall_ns=41758708 paths=2148 sampled=167 authenticated_bytes=1003583 pooled=PoolReadCounters { leaf_requests: 238, chain_edges: 352, physical_record_calls: 1180, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 1180, value_group_decodes: 227, pack_fetches: 23, pack_bytes: 428362 }
+VERIFY_STATE_BEGIN state=12
+verify parts: walk=16388667 lengths=27327333 digest=1137917
+HISTORY_ENGINE_WORK {"state":12,"stage":"verification","available":true,"values":[870, 54391, 20217000, 0, 0, 0, 0, 345, 2805076, 870, 2450965, 14452460, 0, 0, 0, 259, 19, 0, 0]}
+VERIFY_METADATA_MEMO state=12 cumulative=Counters { hits: 3827, misses: 1950, source_calls: 183, source_objects: 1950, evictions: 1438, peak_bytes: 508435, peak_rows: 512 }
+VERIFY_STATE_WORK state=12 wall_ns=51951917 paths=2465 sampled=193 authenticated_bytes=1161021 pooled=PoolReadCounters { leaf_requests: 277, chain_edges: 385, physical_record_calls: 1324, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 1324, value_group_decodes: 266, pack_fetches: 26, pack_bytes: 507183 }
+VERIFY_STATE_BEGIN state=13
+verify parts: walk=17408334 lengths=38971125 digest=221083
+HISTORY_ENGINE_WORK {"state":13,"stage":"verification","available":true,"values":[1117, 65876, 26656000, 0, 0, 0, 0, 453, 3585380, 1117, 3381592, 23805495, 0, 0, 0, 376, 15, 0, 0]}
+VERIFY_METADATA_MEMO state=13 cumulative=Counters { hits: 4043, misses: 2507, source_calls: 204, source_objects: 2507, evictions: 1995, peak_bytes: 508435, peak_rows: 512 }
+VERIFY_STATE_WORK state=13 wall_ns=63749916 paths=2465 sampled=194 authenticated_bytes=1197296 pooled=PoolReadCounters { leaf_requests: 317, chain_edges: 420, physical_record_calls: 1474, physical_group_decodes: 1, physical_group_decoded_bytes: 49147, physical_group_cache_hits: 1473, value_group_decodes: 370, pack_fetches: 29, pack_bytes: 565230 }
+VERIFY_STATE_BEGIN state=14
+verify parts: walk=23287750 lengths=39509875 digest=268959
+HISTORY_ENGINE_WORK {"state":14,"stage":"verification","available":true,"values":[1216, 73206, 29021000, 0, 0, 0, 0, 476, 3747254, 1216, 3570573, 25177866, 0, 0, 0, 398, 14, 0, 0]}
+VERIFY_METADATA_MEMO state=14 cumulative=Counters { hits: 4277, misses: 3133, source_calls: 225, source_objects: 3133, evictions: 2621, peak_bytes: 508435, peak_rows: 512 }
+VERIFY_STATE_WORK state=14 wall_ns=71766459 paths=2825 sampled=226 authenticated_bytes=1260887 pooled=PoolReadCounters { leaf_requests: 364, chain_edges: 489, physical_record_calls: 1706, physical_group_decodes: 20, physical_group_decoded_bytes: 616120, physical_group_cache_hits: 1686, value_group_decodes: 518, pack_fetches: 32, pack_bytes: 636087 }
+VERIFY_STATE_BEGIN state=15
+verify parts: walk=24007750 lengths=37708541 digest=3153584
+HISTORY_ENGINE_WORK {"state":15,"stage":"verification","available":true,"values":[1301, 74957, 28451000, 0, 0, 0, 0, 488, 3830036, 1301, 3937724, 26638569, 0, 0, 0, 404, 11, 0, 0]}
+VERIFY_METADATA_MEMO state=15 cumulative=Counters { hits: 4478, misses: 3745, source_calls: 246, source_objects: 3745, evictions: 3233, peak_bytes: 508435, peak_rows: 512 }
+VERIFY_STATE_WORK state=15 wall_ns=72598667 paths=2590 sampled=204 authenticated_bytes=1320183 pooled=PoolReadCounters { leaf_requests: 405, chain_edges: 579, physical_record_calls: 1968, physical_group_decodes: 44, physical_group_decoded_bytes: 1337178, physical_group_cache_hits: 1924, value_group_decodes: 651, pack_fetches: 34, pack_bytes: 671811 }
+VERIFY_STATE_BEGIN state=16
+verify parts: walk=32290625 lengths=60946666 digest=361042
+HISTORY_ENGINE_WORK {"state":16,"stage":"verification","available":true,"values":[1651, 95926, 42724000, 0, 0, 0, 0, 710, 5675295, 1651, 5294595, 45086103, 0, 0, 0, 629, 29, 0, 0]}
+VERIFY_METADATA_MEMO state=16 cumulative=Counters { hits: 4757, misses: 4517, source_calls: 269, source_objects: 4517, evictions: 4005, peak_bytes: 563703, peak_rows: 512 }
+VERIFY_STATE_WORK state=16 wall_ns=106172125 paths=3654 sampled=296 authenticated_bytes=1867927 pooled=PoolReadCounters { leaf_requests: 466, chain_edges: 683, physical_record_calls: 2298, physical_group_decodes: 70, physical_group_decoded_bytes: 2155320, physical_group_cache_hits: 2228, value_group_decodes: 934, pack_fetches: 38, pack_bytes: 777696 }
+VERIFY_STATE_BEGIN state=17
+verify parts: walk=33002333 lengths=52999792 digest=356416
+HISTORY_ENGINE_WORK {"state":17,"stage":"verification","available":true,"values":[1670, 96836, 36520000, 0, 0, 0, 0, 690, 5160213, 1670, 4952825, 41588934, 0, 0, 0, 609, 10, 0, 0]}
+VERIFY_METADATA_MEMO state=17 cumulative=Counters { hits: 5043, misses: 5295, source_calls: 292, source_objects: 5295, evictions: 4783, peak_bytes: 583558, peak_rows: 512 }
+VERIFY_STATE_WORK state=17 wall_ns=98979083 paths=3734 sampled=303 authenticated_bytes=1641637 pooled=PoolReadCounters { leaf_requests: 520, chain_edges: 820, physical_record_calls: 2680, physical_group_decodes: 108, physical_group_decoded_bytes: 3339078, physical_group_cache_hits: 2572, value_group_decodes: 1257, pack_fetches: 41, pack_bytes: 832110 }
+VERIFY_STATE_BEGIN state=18
+verify parts: walk=40916625 lengths=74072417 digest=500250
+HISTORY_ENGINE_WORK {"state":18,"stage":"verification","available":true,"values":[2018, 114370, 53044000, 0, 0, 0, 0, 874, 6660053, 2018, 6199667, 67070114, 0, 0, 0, 780, 29, 0, 0]}
+VERIFY_METADATA_MEMO state=18 cumulative=Counters { hits: 5403, misses: 6140, source_calls: 319, source_objects: 6140, evictions: 5628, peak_bytes: 670232, peak_rows: 512 }
+VERIFY_STATE_WORK state=18 wall_ns=134201750 paths=4763 sampled=402 authenticated_bytes=1826678 pooled=PoolReadCounters { leaf_requests: 597, chain_edges: 934, physical_record_calls: 3062, physical_group_decodes: 165, physical_group_decoded_bytes: 5243993, physical_group_cache_hits: 2897, value_group_decodes: 1649, pack_fetches: 45, pack_bytes: 986447 }
+VERIFY_STATE_BEGIN state=19
+verify parts: walk=47831834 lengths=74571250 digest=525416
+HISTORY_ENGINE_WORK {"state":19,"stage":"verification","available":true,"values":[2175, 121412, 54416000, 0, 0, 0, 0, 904, 7006691, 2175, 6903494, 67680804, 0, 0, 0, 807, 20, 0, 0]}
+VERIFY_METADATA_MEMO state=19 cumulative=Counters { hits: 5812, misses: 7025, source_calls: 347, source_objects: 7025, evictions: 6513, peak_bytes: 736664, peak_rows: 512 }
+VERIFY_STATE_WORK state=19 wall_ns=143032167 paths=5065 sampled=428 authenticated_bytes=1869467 pooled=PoolReadCounters { leaf_requests: 675, chain_edges: 1087, physical_record_calls: 3524, physical_group_decodes: 229, physical_group_decoded_bytes: 7443209, physical_group_cache_hits: 3295, value_group_decodes: 2091, pack_fetches: 48, pack_bytes: 1078519 }
+VERIFY_STATE_BEGIN state=20
+verify parts: walk=54551833 lengths=72067625 digest=526167
+HISTORY_ENGINE_WORK {"state":20,"stage":"verification","available":true,"values":[2268, 125345, 55997000, 0, 0, 0, 0, 901, 7351262, 2268, 7316841, 66438780, 0, 0, 0, 796, 9, 0, 0]}
+VERIFY_METADATA_MEMO state=20 cumulative=Counters { hits: 6228, misses: 7922, source_calls: 376, source_objects: 7922, evictions: 7410, peak_bytes: 778504, peak_rows: 512 }
+VERIFY_STATE_WORK state=20 wall_ns=147862125 paths=5140 sampled=434 authenticated_bytes=1629146 pooled=PoolReadCounters { leaf_requests: 752, chain_edges: 1273, physical_record_calls: 4050, physical_group_decodes: 321, physical_group_decoded_bytes: 10840971, physical_group_cache_hits: 3729, value_group_decodes: 2607, pack_fetches: 51, pack_bytes: 1147099 }
+VERIFY_STATE_BEGIN state=21
+verify parts: walk=53538833 lengths=93111833 digest=630459
+HISTORY_ENGINE_WORK {"state":21,"stage":"verification","available":true,"values":[2638, 141969, 68071000, 0, 0, 0, 0, 1104, 8680042, 2638, 8998131, 88338932, 0, 0, 0, 1001, 12, 0, 0]}
+VERIFY_METADATA_MEMO state=21 cumulative=Counters { hits: 6669, misses: 8858, source_calls: 406, source_objects: 8858, evictions: 8346, peak_bytes: 807473, peak_rows: 512 }
+VERIFY_STATE_WORK state=21 wall_ns=169426500 paths=5383 sampled=455 authenticated_bytes=1966901 pooled=PoolReadCounters { leaf_requests: 836, chain_edges: 1441, physical_record_calls: 4554, physical_group_decodes: 377, physical_group_decoded_bytes: 12770078, physical_group_cache_hits: 4177, value_group_decodes: 3176, pack_fetches: 54, pack_bytes: 1236884 }
+VERIFY_STATE_BEGIN state=22
+verify parts: walk=49908500 lengths=69311208 digest=597000
+HISTORY_ENGINE_WORK {"state":22,"stage":"verification","available":true,"values":[2183, 122001, 51675000, 0, 0, 0, 0, 925, 7024080, 2183, 7252707, 68928226, 0, 0, 0, 823, 5, 0, 0]}
+VERIFY_METADATA_MEMO state=22 cumulative=Counters { hits: 7135, misses: 9781, source_calls: 435, source_objects: 9781, evictions: 9269, peak_bytes: 807473, peak_rows: 512 }
+VERIFY_STATE_WORK state=22 wall_ns=142172375 paths=5399 sampled=456 authenticated_bytes=1544118 pooled=PoolReadCounters { leaf_requests: 901, chain_edges: 1604, physical_record_calls: 5010, physical_group_decodes: 433, physical_group_decoded_bytes: 14834905, physical_group_cache_hits: 4577, value_group_decodes: 3626, pack_fetches: 56, pack_bytes: 1270149 }
+VERIFY_STATE_BEGIN state=23
+verify parts: walk=61289750 lengths=70725625 digest=594375
+HISTORY_ENGINE_WORK {"state":23,"stage":"verification","available":true,"values":[2468, 137065, 56180000, 0, 0, 0, 0, 940, 7361679, 2468, 7923224, 70755834, 0, 0, 0, 831, 12, 0, 0]}
+VERIFY_METADATA_MEMO state=23 cumulative=Counters { hits: 7609, misses: 10761, source_calls: 466, source_objects: 10761, evictions: 10249, peak_bytes: 857237, peak_rows: 512 }
+VERIFY_STATE_WORK state=23 wall_ns=156367833 paths=5641 sampled=477 authenticated_bytes=1618347 pooled=PoolReadCounters { leaf_requests: 989, chain_edges: 1845, physical_record_calls: 5668, physical_group_decodes: 501, physical_group_decoded_bytes: 17441381, physical_group_cache_hits: 5167, value_group_decodes: 4260, pack_fetches: 58, pack_bytes: 1344891 }
+VERIFY_STATE_BEGIN state=24
+verify parts: walk=66894167 lengths=87604166 digest=685209
+HISTORY_ENGINE_WORK {"state":24,"stage":"verification","available":true,"values":[2839, 152953, 66304000, 0, 0, 0, 0, 1082, 8853887, 2839, 9067687, 85239972, 0, 0, 0, 968, 14, 0, 0]}
+VERIFY_METADATA_MEMO state=24 cumulative=Counters { hits: 8126, misses: 11784, source_calls: 498, source_objects: 11784, evictions: 11272, peak_bytes: 886827, peak_rows: 512 }
+VERIFY_STATE_WORK state=24 wall_ns=180763125 paths=5880 sampled=497 authenticated_bytes=2067384 pooled=PoolReadCounters { leaf_requests: 1079, chain_edges: 2135, physical_record_calls: 6428, physical_group_decodes: 573, physical_group_decoded_bytes: 20123587, physical_group_cache_hits: 5855, value_group_decodes: 4937, pack_fetches: 60, pack_bytes: 1419727 }
+VERIFY_STATE_BEGIN state=25
+verify parts: walk=67730333 lengths=92939750 digest=795209
+HISTORY_ENGINE_WORK {"state":25,"stage":"verification","available":true,"values":[3024, 160571, 70382000, 0, 0, 0, 0, 1177, 9004236, 3024, 9902172, 91849609, 0, 0, 0, 1065, 7, 0, 0]}
+VERIFY_METADATA_MEMO state=25 cumulative=Counters { hits: 8673, misses: 12812, source_calls: 529, source_objects: 12812, evictions: 12300, peak_bytes: 892555, peak_rows: 512 }
+VERIFY_STATE_WORK state=25 wall_ns=187420459 paths=5951 sampled=503 authenticated_bytes=2203704 pooled=PoolReadCounters { leaf_requests: 1162, chain_edges: 2397, physical_record_calls: 7118, physical_group_decodes: 655, physical_group_decoded_bytes: 23188401, physical_group_cache_hits: 6463, value_group_decodes: 5669, pack_fetches: 63, pack_bytes: 1478642 }
+VERIFY_STATE_BEGIN state=26
+verify parts: walk=62179667 lengths=43526541 digest=647000
+HISTORY_ENGINE_WORK {"state":26,"stage":"verification","available":true,"values":[2011, 116470, 39210000, 0, 0, 0, 0, 628, 5061705, 2011, 6231341, 39347578, 0, 0, 0, 522, 4, 0, 0]}
+VERIFY_METADATA_MEMO state=26 cumulative=Counters { hits: 9111, misses: 13742, source_calls: 559, source_objects: 13742, evictions: 13230, peak_bytes: 895986, peak_rows: 512 }
+VERIFY_STATE_WORK state=26 wall_ns=128300959 paths=5358 sampled=453 authenticated_bytes=1284693 pooled=PoolReadCounters { leaf_requests: 1243, chain_edges: 2645, physical_record_calls: 7776, physical_group_decodes: 796, physical_group_decoded_bytes: 28752569, physical_group_cache_hits: 6980, value_group_decodes: 6332, pack_fetches: 65, pack_bytes: 1507534 }
+VERIFY_STATE_BEGIN state=27
+verify parts: walk=71628875 lengths=72649791 digest=655125
+HISTORY_ENGINE_WORK {"state":27,"stage":"verification","available":true,"values":[2760, 151508, 60557000, 0, 0, 0, 0, 937, 7568295, 2760, 9399289, 69579290, 0, 0, 0, 824, 8, 0, 0]}
+VERIFY_METADATA_MEMO state=27 cumulative=Counters { hits: 9624, misses: 14785, source_calls: 591, source_objects: 14785, evictions: 14273, peak_bytes: 895986, peak_rows: 512 }
+VERIFY_STATE_WORK state=27 wall_ns=171435375 paths=5987 sampled=506 authenticated_bytes=1717677 pooled=PoolReadCounters { leaf_requests: 1336, chain_edges: 2928, physical_record_calls: 8528, physical_group_decodes: 939, physical_group_decoded_bytes: 34284432, physical_group_cache_hits: 7589, value_group_decodes: 7152, pack_fetches: 68, pack_bytes: 1554470 }
+VERIFY_STATE_BEGIN state=28
+verify parts: walk=64671417 lengths=74841417 digest=4721666
+HISTORY_ENGINE_WORK {"state":28,"stage":"verification","available":true,"values":[2498, 137811, 61865000, 0, 0, 0, 0, 998, 7898396, 2498, 8978802, 72547634, 0, 0, 0, 880, 14, 0, 0]}
+VERIFY_METADATA_MEMO state=28 cumulative=Counters { hits: 10175, misses: 15803, source_calls: 624, source_objects: 15803, evictions: 15291, peak_bytes: 895986, peak_rows: 512 }
+VERIFY_STATE_WORK state=28 wall_ns=170544291 paths=6027 sampled=509 authenticated_bytes=2086673 pooled=PoolReadCounters { leaf_requests: 1397, chain_edges: 3103, physical_record_calls: 9000, physical_group_decodes: 1053, physical_group_decoded_bytes: 38630973, physical_group_cache_hits: 7947, value_group_decodes: 7765, pack_fetches: 70, pack_bytes: 1589624 }
+VERIFY_STATE_BEGIN state=29
+verify parts: walk=94891667 lengths=115541041 digest=10715959
+HISTORY_ENGINE_WORK {"state":29,"stage":"verification","available":true,"values":[3835, 200006, 102874000, 0, 0, 0, 0, 1335, 10882627, 3835, 13534938, 107816659, 0, 0, 0, 1172, 42, 0, 0]}
+VERIFY_METADATA_MEMO state=29 cumulative=Counters { hits: 10723, misses: 16959, source_calls: 666, source_objects: 16959, evictions: 16447, peak_bytes: 960204, peak_rows: 512 }
+VERIFY_STATE_WORK state=29 wall_ns=251748916 paths=6647 sampled=566 authenticated_bytes=3244398 pooled=PoolReadCounters { leaf_requests: 1535, chain_edges: 3507, physical_record_calls: 10084, physical_group_decodes: 1234, physical_group_decoded_bytes: 45432274, physical_group_cache_hits: 8850, value_group_decodes: 8882, pack_fetches: 74, pack_bytes: 1735940 }
+VERIFY_STATE_BEGIN state=30
+verify parts: walk=93009875 lengths=92490083 digest=7741000
+HISTORY_ENGINE_WORK {"state":30,"stage":"verification","available":true,"values":[3589, 189700, 82153000, 0, 0, 0, 0, 1224, 10682580, 3589, 13008604, 98009533, 0, 0, 0, 1056, 12, 0, 0]}
+VERIFY_METADATA_MEMO state=30 cumulative=Counters { hits: 11289, misses: 18107, source_calls: 709, source_objects: 18107, evictions: 17595, peak_bytes: 960204, peak_rows: 512 }
+VERIFY_STATE_WORK state=30 wall_ns=224962166 paths=6752 sampled=576 authenticated_bytes=2842031 pooled=PoolReadCounters { leaf_requests: 1658, chain_edges: 3905, physical_record_calls: 11126, physical_group_decodes: 1376, physical_group_decoded_bytes: 50428832, physical_group_cache_hits: 9750, value_group_decodes: 9908, pack_fetches: 76, pack_bytes: 1780394 }
+VERIFY_STATE_BEGIN state=31
+verify parts: walk=96270458 lengths=82769917 digest=780417
+HISTORY_ENGINE_WORK {"state":31,"stage":"verification","available":true,"values":[3552, 188209, 73716000, 0, 0, 0, 0, 1077, 8469282, 3552, 11430997, 88510681, 0, 0, 0, 931, 13, 0, 0]}
+VERIFY_METADATA_MEMO state=31 cumulative=Counters { hits: 11847, misses: 19263, source_calls: 752, source_objects: 19263, evictions: 18751, peak_bytes: 960204, peak_rows: 512 }
+VERIFY_STATE_WORK state=31 wall_ns=211803125 paths=6750 sampled=575 authenticated_bytes=1773917 pooled=PoolReadCounters { leaf_requests: 1788, chain_edges: 4378, physical_record_calls: 12332, physical_group_decodes: 1607, physical_group_decoded_bytes: 58801290, physical_group_cache_hits: 10725, value_group_decodes: 11084, pack_fetches: 79, pack_bytes: 1857132 }
+VERIFY_STATE_BEGIN state=32
+verify parts: walk=91263583 lengths=87257167 digest=6190167
+HISTORY_ENGINE_WORK {"state":32,"stage":"verification","available":true,"values":[3570, 189528, 74146000, 0, 0, 0, 0, 1217, 9333670, 3570, 12230787, 96841314, 0, 0, 0, 1054, 13, 0, 0]}
+VERIFY_METADATA_MEMO state=32 cumulative=Counters { hits: 12394, misses: 20383, source_calls: 796, source_objects: 20383, evictions: 19871, peak_bytes: 960204, peak_rows: 512 }
+VERIFY_STATE_WORK state=32 wall_ns=215850125 paths=6622 sampled=566 authenticated_bytes=3316962 pooled=PoolReadCounters { leaf_requests: 1913, chain_edges: 4671, physical_record_calls: 13168, physical_group_decodes: 1802, physical_group_decoded_bytes: 65970758, physical_group_cache_hits: 11366, value_group_decodes: 12275, pack_fetches: 82, pack_bytes: 1932333 }
+VERIFY_STATE_BEGIN state=33
+verify parts: walk=99651167 lengths=138912167 digest=876500
+HISTORY_ENGINE_WORK {"state":33,"stage":"verification","available":true,"values":[4740, 238502, 105186000, 0, 0, 0, 0, 1682, 13094575, 4740, 15517589, 152633124, 0, 0, 0, 1530, 28, 0, 0]}
+VERIFY_METADATA_MEMO state=33 cumulative=Counters { hits: 12951, misses: 21592, source_calls: 841, source_objects: 21592, evictions: 21080, peak_bytes: 960204, peak_rows: 512 }
+VERIFY_STATE_WORK state=33 wall_ns=273360709 paths=7057 sampled=604 authenticated_bytes=2780860 pooled=PoolReadCounters { leaf_requests: 2079, chain_edges: 5044, physical_record_calls: 14246, physical_group_decodes: 2009, physical_group_decoded_bytes: 73604140, physical_group_cache_hits: 12237, value_group_decodes: 13679, pack_fetches: 86, pack_bytes: 2098420 }
+VERIFY_STATE_BEGIN state=34
+verify parts: walk=112864042 lengths=136909625 digest=850750
+HISTORY_ENGINE_WORK {"state":34,"stage":"verification","available":true,"values":[5035, 254085, 111544000, 0, 0, 0, 0, 1707, 13314507, 5035, 17172733, 149731029, 0, 0, 0, 1543, 18, 0, 0]}
+VERIFY_METADATA_MEMO state=34 cumulative=Counters { hits: 13551, misses: 22854, source_calls: 889, source_objects: 22854, evictions: 22342, peak_bytes: 960204, peak_rows: 512 }
+VERIFY_STATE_WORK state=34 wall_ns=287017250 paths=7314 sampled=626 authenticated_bytes=2867435 pooled=PoolReadCounters { leaf_requests: 2260, chain_edges: 5504, physical_record_calls: 15528, physical_group_decodes: 2215, physical_group_decoded_bytes: 81170631, physical_group_cache_hits: 13313, value_group_decodes: 15256, pack_fetches: 89, pack_bytes: 2182982 }
+VERIFY_STATE_BEGIN state=35
+verify parts: walk=118053375 lengths=142744250 digest=1059875
+HISTORY_ENGINE_WORK {"state":35,"stage":"verification","available":true,"values":[5474, 276003, 119935000, 0, 0, 0, 0, 1784, 13765132, 5474, 18376010, 156979471, 0, 0, 0, 1613, 28, 0, 0]}
+VERIFY_METADATA_MEMO state=35 cumulative=Counters { hits: 14153, misses: 24177, source_calls: 939, source_objects: 24177, evictions: 23665, peak_bytes: 1012959, peak_rows: 512 }
+VERIFY_STATE_WORK state=35 wall_ns=300201500 paths=7588 sampled=651 authenticated_bytes=2702250 pooled=PoolReadCounters { leaf_requests: 2468, chain_edges: 5759, physical_record_calls: 16454, physical_group_decodes: 2349, physical_group_decoded_bytes: 86151064, physical_group_cache_hits: 14105, value_group_decodes: 17267, pack_fetches: 93, pack_bytes: 2354951 }
+VERIFY_STATE_BEGIN state=36
+verify parts: walk=120446625 lengths=107720292 digest=925083
+HISTORY_ENGINE_WORK {"state":36,"stage":"verification","available":true,"values":[4851, 249141, 99535000, 0, 0, 0, 0, 1429, 11415710, 4851, 16780798, 117659286, 0, 0, 0, 1272, 11, 0, 0]}
+VERIFY_METADATA_MEMO state=36 cumulative=Counters { hits: 14708, misses: 25438, source_calls: 984, source_objects: 25438, evictions: 24926, peak_bytes: 1012959, peak_rows: 512 }
+VERIFY_STATE_WORK state=36 wall_ns=263924292 paths=7181 sampled=613 authenticated_bytes=2374755 pooled=PoolReadCounters { leaf_requests: 2653, chain_edges: 6117, physical_record_calls: 17540, physical_group_decodes: 2531, physical_group_decoded_bytes: 93238019, physical_group_cache_hits: 15009, value_group_decodes: 19062, pack_fetches: 96, pack_bytes: 2413858 }
+VERIFY_STATE_BEGIN state=37
+verify parts: walk=75481208 lengths=44946667 digest=4779000
+HISTORY_ENGINE_WORK {"state":37,"stage":"verification","available":true,"values":[2404, 136271, 45612000, 0, 0, 0, 0, 692, 5647335, 2404, 7751998, 41059093, 0, 0, 0, 571, 14, 0, 0]}
+VERIFY_METADATA_MEMO state=37 cumulative=Counters { hits: 15181, misses: 26431, source_calls: 1016, source_objects: 26431, evictions: 25919, peak_bytes: 1012959, peak_rows: 512 }
+VERIFY_STATE_WORK state=37 wall_ns=149656291 paths=5696 sampled=482 authenticated_bytes=1526161 pooled=PoolReadCounters { leaf_requests: 2746, chain_edges: 6327, physical_record_calls: 18146, physical_group_decodes: 2674, physical_group_decoded_bytes: 99277798, physical_group_cache_hits: 15472, value_group_decodes: 19960, pack_fetches: 99, pack_bytes: 2482581 }
+VERIFY_STATE_BEGIN state=38
+verify parts: walk=120548958 lengths=175678875 digest=3094792
+HISTORY_ENGINE_WORK {"state":38,"stage":"verification","available":true,"values":[6077, 304857, 140721000, 0, 0, 0, 0, 2076, 16144359, 6077, 20237149, 185886401, 0, 0, 0, 1874, 40, 0, 0]}
+VERIFY_METADATA_MEMO state=38 cumulative=Counters { hits: 15739, misses: 27856, source_calls: 1071, source_objects: 27856, evictions: 27344, peak_bytes: 1012959, peak_rows: 512 }
+VERIFY_STATE_WORK state=38 wall_ns=341279750 paths=8016 sampled=687 authenticated_bytes=3929738 pooled=PoolReadCounters { leaf_requests: 2990, chain_edges: 6702, physical_record_calls: 19384, physical_group_decodes: 2859, physical_group_decoded_bytes: 107325332, physical_group_cache_hits: 16525, value_group_decodes: 21827, pack_fetches: 104, pack_bytes: 2721569 }
+VERIFY_STATE_BEGIN state=39
+verify parts: walk=132771208 lengths=173778667 digest=1228917
+HISTORY_ENGINE_WORK {"state":39,"stage":"verification","available":true,"values":[6329, 315734, 140421000, 0, 0, 0, 0, 2074, 15676005, 6329, 21347830, 188490278, 0, 0, 0, 1880, 11, 0, 0]}
+VERIFY_METADATA_MEMO state=39 cumulative=Counters { hits: 16323, misses: 29280, source_calls: 1127, source_objects: 29280, evictions: 28768, peak_bytes: 1012959, peak_rows: 512 }
+VERIFY_STATE_WORK state=39 wall_ns=350861625 paths=8196 sampled=704 authenticated_bytes=3679947 pooled=PoolReadCounters { leaf_requests: 3220, chain_edges: 7220, physical_record_calls: 20880, physical_group_decodes: 3112, physical_group_decoded_bytes: 118640722, physical_group_cache_hits: 17768, value_group_decodes: 23851, pack_fetches: 107, pack_bytes: 2828478 }
+VERIFY_STATE_BEGIN state=40
+verify parts: walk=141475209 lengths=191946625 digest=1458416
+HISTORY_ENGINE_WORK {"state":40,"stage":"verification","available":true,"values":[6683, 329597, 157883000, 0, 0, 0, 0, 2179, 17066480, 6683, 23896436, 202655600, 0, 0, 0, 1983, 16, 0, 0]}
+VERIFY_METADATA_MEMO state=40 cumulative=Counters { hits: 16922, misses: 30698, source_calls: 1183, source_objects: 30698, evictions: 30186, peak_bytes: 1012959, peak_rows: 512 }
+VERIFY_STATE_WORK state=40 wall_ns=379073000 paths=8262 sampled=712 authenticated_bytes=3631479 pooled=PoolReadCounters { leaf_requests: 3454, chain_edges: 7850, physical_record_calls: 22608, physical_group_decodes: 3378, physical_group_decoded_bytes: 130362489, physical_group_cache_hits: 19230, value_group_decodes: 25981, pack_fetches: 111, pack_bytes: 2958324 }
+VERIFY_STATE_BEGIN state=41
+verify parts: walk=146915458 lengths=109982959 digest=1109708
+HISTORY_ENGINE_WORK {"state":41,"stage":"verification","available":true,"values":[5622, 288830, 111913000, 0, 0, 0, 0, 1451, 11083298, 5622, 19680813, 114470807, 0, 0, 0, 1262, 10, 0, 0]}
+VERIFY_METADATA_MEMO state=41 cumulative=Counters { hits: 17520, misses: 32115, source_calls: 1240, source_objects: 32115, evictions: 31603, peak_bytes: 1012959, peak_rows: 512 }
+VERIFY_STATE_WORK state=41 wall_ns=302075250 paths=8297 sampled=715 authenticated_bytes=2378618 pooled=PoolReadCounters { leaf_requests: 3681, chain_edges: 8418, physical_record_calls: 24198, physical_group_decodes: 3620, physical_group_decoded_bytes: 140610493, physical_group_cache_hits: 20578, value_group_decodes: 28244, pack_fetches: 114, pack_bytes: 3042567 }
+VERIFY_STATE_BEGIN state=42
+verify parts: walk=139613750 lengths=207806208 digest=5200459
+HISTORY_ENGINE_WORK {"state":42,"stage":"verification","available":true,"values":[6819, 337882, 168982000, 0, 0, 0, 0, 2368, 18737695, 6819, 25231387, 234933922, 0, 0, 0, 2138, 41, 0, 0]}
+VERIFY_METADATA_MEMO state=42 cumulative=Counters { hits: 18133, misses: 33614, source_calls: 1302, source_objects: 33614, evictions: 33102, peak_bytes: 1012959, peak_rows: 512 }
+VERIFY_STATE_WORK state=42 wall_ns=400976292 paths=8668 sampled=747 authenticated_bytes=4236073 pooled=PoolReadCounters { leaf_requests: 3944, chain_edges: 8669, physical_record_calls: 25226, physical_group_decodes: 3802, physical_group_decoded_bytes: 148130334, physical_group_cache_hits: 21424, value_group_decodes: 30464, pack_fetches: 119, pack_bytes: 3320734 }
+VERIFY_STATE_BEGIN state=43
+verify parts: walk=142550917 lengths=169832333 digest=1220333
+HISTORY_ENGINE_WORK {"state":43,"stage":"verification","available":true,"values":[6452, 324307, 142421000, 0, 0, 0, 0, 2011, 15476345, 6452, 23082459, 190090675, 0, 0, 0, 1799, 11, 0, 0]}
+VERIFY_METADATA_MEMO state=43 cumulative=Counters { hits: 18784, misses: 35127, source_calls: 1364, source_objects: 35127, evictions: 34615, peak_bytes: 1012959, peak_rows: 512 }
+VERIFY_STATE_WORK state=43 wall_ns=363994834 paths=8814 sampled=760 authenticated_bytes=3337742 pooled=PoolReadCounters { leaf_requests: 4205, chain_edges: 9082, physical_record_calls: 26574, physical_group_decodes: 3997, physical_group_decoded_bytes: 156173232, physical_group_cache_hits: 22577, value_group_decodes: 32855, pack_fetches: 122, pack_bytes: 3426584 }
+VERIFY_STATE_BEGIN state=44
+verify parts: walk=146887208 lengths=173537333 digest=1523209
+HISTORY_ENGINE_WORK {"state":44,"stage":"verification","available":true,"values":[6914, 344676, 142390000, 0, 0, 0, 0, 2143, 16758682, 6914, 25042552, 202046938, 0, 0, 0, 1929, 15, 0, 0]}
+VERIFY_METADATA_MEMO state=44 cumulative=Counters { hits: 19462, misses: 36670, source_calls: 1427, source_objects: 36670, evictions: 36158, peak_bytes: 1012959, peak_rows: 512 }
+VERIFY_STATE_WORK state=44 wall_ns=373918666 paths=9060 sampled=782 authenticated_bytes=3473363 pooled=PoolReadCounters { leaf_requests: 4465, chain_edges: 9614, physical_record_calls: 28158, physical_group_decodes: 4146, physical_group_decoded_bytes: 161961901, physical_group_cache_hits: 24012, value_group_decodes: 35383, pack_fetches: 125, pack_bytes: 3530164 }
+VERIFY_STATE_BEGIN state=45
+verify parts: walk=147284625 lengths=212889292 digest=1560333
+HISTORY_ENGINE_WORK {"state":45,"stage":"verification","available":true,"values":[7825, 382386, 166615000, 0, 0, 0, 0, 2640, 19136688, 7825, 25829084, 260403368, 0, 0, 0, 2412, 30, 0, 0]}
+VERIFY_METADATA_MEMO state=45 cumulative=Counters { hits: 20167, misses: 38289, source_calls: 1494, source_objects: 38289, evictions: 37777, peak_bytes: 1076927, peak_rows: 512 }
+VERIFY_STATE_WORK state=45 wall_ns=417649917 paths=9499 sampled=820 authenticated_bytes=4257405 pooled=PoolReadCounters { leaf_requests: 4738, chain_edges: 10239, physical_record_calls: 29954, physical_group_decodes: 4333, physical_group_decoded_bytes: 169260330, physical_group_cache_hits: 25621, value_group_decodes: 37844, pack_fetches: 130, pack_bytes: 3768121 }
+VERIFY_STATE_BEGIN state=46
+verify parts: walk=158593291 lengths=179785292 digest=4792208
+HISTORY_ENGINE_WORK {"state":46,"stage":"verification","available":true,"values":[8113, 392895, 152585000, 0, 0, 0, 0, 2413, 18040879, 8113, 26288664, 221769504, 0, 0, 0, 2176, 13, 0, 0]}
+VERIFY_METADATA_MEMO state=46 cumulative=Counters { hits: 20854, misses: 39837, source_calls: 1559, source_objects: 39837, evictions: 39325, peak_bytes: 1092229, peak_rows: 512 }
+VERIFY_STATE_WORK state=46 wall_ns=395365375 paths=9141 sampled=790 authenticated_bytes=3505191 pooled=PoolReadCounters { leaf_requests: 4997, chain_edges: 11094, physical_record_calls: 32182, physical_group_decodes: 4586, physical_group_decoded_bytes: 179398643, physical_group_cache_hits: 27596, value_group_decodes: 40766, pack_fetches: 133, pack_bytes: 3850189 }
+VERIFY_STATE_BEGIN state=47

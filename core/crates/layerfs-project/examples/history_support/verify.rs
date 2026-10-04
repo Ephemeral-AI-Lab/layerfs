@@ -6,7 +6,7 @@ use super::producer::{kind_of, OpError};
 use layerfs_content::{
     filesystem::{FilesystemRead, FilesystemRootId},
     inode_leaf::InodeKind,
-    AuthenticatedObjects, ObjectId,
+    ObjectId,
 };
 use layerfs_telemetry::timer::{Active, Timing, TimingScope};
 use std::{
@@ -65,11 +65,9 @@ impl Sampler<'_> {
             let breadth = std::mem::take(&mut pending);
             for batch in breadth.chunks(128) {
                 let ids: Vec<_> = batch.iter().map(|(_, root)| *root).collect();
-                let pages = metadata_reader
-                    .read_canonical_batch(&ids)
-                    .map_err(|error| {
-                        OpError::Product(format!("directory root batch: {error:?}"))
-                    })?;
+                let pages = self.reader.read_canonical_batch(&ids).map_err(|error| {
+                    OpError::Product(format!("directory root batch: {error:?}"))
+                })?;
                 if pages.len() != batch.len() {
                     return Err(OpError::Io("directory root batch cardinality".into()));
                 }
@@ -90,7 +88,7 @@ impl Sampler<'_> {
                             let mut after = None;
                             loop {
                                 let page = layerfs_content::filesystem::directory::list_after(
-                                    &metadata_reader,
+                                    self.reader,
                                     layerfs_content::filesystem::DirectoryRoot(*directory_root),
                                     after.as_ref(),
                                     512,

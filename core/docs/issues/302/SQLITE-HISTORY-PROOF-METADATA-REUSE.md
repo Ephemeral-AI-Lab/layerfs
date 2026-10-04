@@ -43,3 +43,18 @@ refusal); verifier example/helper test Clippy-Dwarnings PASS after removing
 unnecessary non-Drop lifetime calls;8history facade/runner/provenance tests PASS.
 Package formatting applied. Runtime product source is unchanged; no full-workspace
 or new product-boundary verification claim. Freeze and execute diagnostic next.
+
+
+First frozen count diagnostic atdc7f1726f retains DIAGNOSTIC_TIMEOUT:46/53states
+complete,9.513163750s native,26.541444541s complete; source/database cold and owners
+preserved PASS. Memo20854hits/39837misses/39325evictions, peak1092229B/512rows.
+Row capacity binds below byte capacity. This scope covers all namespace metadata,
+including numerous small direct-directory pages. Original failure unchanged;
+native-only count timing does not qualify any ordinary proof.
+
+Next changed scope keeps2MiB/512rows/8KiBentry bounds and empty invocation start:
+only FilesystemRead root/inode-table navigation uses the memo. Direct directory
+reads/listing use the original provider alongside file reads, reducing one-use
+entries without expanding any cache or dropping checks. New labelled53native
+reference count diagnostic will measure this admission-policy change, not retry
+the unchanged failed scope. Product performance still unrun at the new harness.
