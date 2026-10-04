@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/runner.py", line 535, in <module>
+    main()
+    ~~~~^^
+  File "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/runner.py", line 405, in main
+    print(reprove(args.run,args.case,args.out));return
+          ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/diagnostics/reprove_reference.py", line 15, in reprove
+    prior=runner.owned(run);original=json.loads((prior/'receipt.json').read_text())
+  File "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/runner.py", line 60, in owned
+    raise ValueError("output must be a fresh path under this worktree's benchmark-results/fs-bench-pro")
+ValueError: output must be a fresh path under this worktree's benchmark-results/fs-bench-pro

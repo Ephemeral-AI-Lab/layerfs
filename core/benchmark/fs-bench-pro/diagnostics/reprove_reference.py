@@ -7,12 +7,23 @@ from families.phase7_history import build
 from families import history_retention as history
 from shared import phase7_history_proof as proof
 
+def reference_run_dir(run):
+    supplied=Path(run)
+    prior=supplied.resolve()
+    if supplied.is_symlink() or not prior.is_relative_to(runner.RESULTS.resolve()) or not prior.is_dir():raise ValueError('retained reference must be an owned existing run directory')
+    return prior
+
 def reprove(run,case_id,output):
     case=CASES[case_id]
     if case.states!=157 or case.proof_envelope!='owner-stride1-proof15-v2':raise ValueError('explicit owner stride1 proof15 case required')
     identity=runner.identities()
     if identity['source_dirty']:raise ValueError('freeze the owner proof15 harness')
-    prior=runner.owned(run);original=json.loads((prior/'receipt.json').read_text())
+    prior=reference_run_dir(run)
+    manifest=json.loads((prior/'manifest.json').read_text())
+    for name in ('receipt.json','proof-request.json'):
+        seal=manifest['files'][name]
+        if (prior/name).stat().st_size!=seal['bytes'] or runner.digest(prior/name)!=seal['sha256']:raise ValueError('retained reference evidence manifest mismatch')
+    original=json.loads((prior/'receipt.json').read_text())
     if original['arm']!='baseline' or original['status']!='COMPLETE' or original['workload_row']!='history-stride1' or original['cache_status']!='PASS' or original['cleanup']['status']!='PASS':raise ValueError('eligible original reference performance required')
     for key in ('product_seal','cargo_lock_sha256'):
         if original['identity'][key]!=identity[key]:raise ValueError('changed product/dependency cannot share performance')

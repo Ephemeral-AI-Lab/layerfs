@@ -349,3 +349,9 @@ original proof and prospective registry guards remain. Reproduction:
 phase7-sqlite-disposable-history-stride1-group-rows-v2 --out <fresh-output>`.
 Source/code verification ated6807c6f remains current: product unchanged;
 benchmark-only checks cover this owner ruling. ProductionLOC140027unchanged.
+
+Proof15 launcher first refused the retained input because it accidentally used
+the fresh-output guard. No output/build/proof child existed. Corrected to an
+owned existing-directory guard plus immutable receipt/request manifest checks;
+a focused path/symlink guard test covers it. Retainreprove-launch.log; next
+launch usesfreshproof15-2output. No performance or proof sample is discarded.

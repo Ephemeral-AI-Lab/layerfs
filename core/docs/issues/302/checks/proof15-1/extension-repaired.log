@@ -1,0 +1,14 @@
+.F.
+======================================================================
+FAIL: test_retained_input_uses_existing_directory_guard_not_fresh_output_guard (test_proof_extension.Proof15.test_retained_input_uses_existing_directory_guard_not_fresh_output_guard)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/tests/test_proof_extension.py", line 13, in test_retained_input_uses_existing_directory_guard_not_fresh_output_guard
+    self.assertEqual(r.reference_run_dir(owned),owned)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: PosixPath('/private/var/folders/s4/xpkmz7wn6yq97w1ls_[32 chars]ing') != PosixPath('/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc00[24 chars]ing')
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.048s
+
+FAILED (failures=1)
