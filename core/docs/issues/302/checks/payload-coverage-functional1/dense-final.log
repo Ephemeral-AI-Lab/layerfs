@@ -1,0 +1,17 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.33s
+     Running tests/selected_group_reads.rs (core/target/debug/deps/selected_group_reads-2c80f0d9c1fcccf7)
+
+running 9 tests
+test random_sparse_groups_preserve_duplicate_slots ... ok
+test adjacent_sparse_groups_coalesce_and_dense_promotion_preserves_bytes_and_order ... ok
+test hash_valid_malformed_directory_is_refused_by_the_shared_prefix_validator ... ok
+test unrelated_body_corruption_still_refuses_a_sparse_read ... ok
+test new_sparse_group_miss_promotes_retained_pack_then_all_siblings_reuse ... ok
+test a_sparse_prefix_target_reconstructs_its_required_base_exactly ... ok
+test sparse_native_records_reconstruct_canonical_chunk_bytes ... ok
+test dense_payload_coverage_promotes_once_and_then_reuses_sibling_groups ... ok
+test sparse_payload_siblings_survive_multiple_pack_pressure_without_whole_promotion ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

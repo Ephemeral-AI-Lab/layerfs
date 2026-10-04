@@ -2034,3 +2034,12 @@ validation fixes1/exactnative+PREFIXbytes; sparsemetadata remainsselected. Same
 body/decode/count/chain/output/privatebounds+fullSHA,nonewcache/baseMemo.
 FullCorechecksPASS;freeze thennative53phasecounts. Previousphaseattribution
 progress,notadmission;oldrows/190s/9.5s unchanged,goalACTIVE.
+
+
+-2026-10-04:5a10e4ff0 wholepayloadexperiment negative: native42statesTIMEOUT
+9.506894500s,whole26.883438084s,cold/ownersPASS. Equalprefix40acqs23265->
+25950,BLOB2.482->2.709GB despitefewerreadcalls. Rejected/retained.9packpublic
+pressurefixture27vs18FAIL confirmsretentionpressure. Restoreselectedfirst;
+payloadpromotiononlyat>=half retainedencodedcoverage, metadataunchanged.
+Fixture18/zeroeviction/exactbytesPASS; fullCorechecks +finaldense9testtarget
+PASS. No newcache/extraresources/weakerchecks; freeze/countdiag next,goalACTIVE.

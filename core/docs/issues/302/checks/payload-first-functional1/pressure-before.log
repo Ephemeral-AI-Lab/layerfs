@@ -1,0 +1,24 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/phase7-cluster1-storage/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.57s
+     Running tests/selected_group_reads.rs (core/target/debug/deps/selected_group_reads-2c80f0d9c1fcccf7)
+
+running 1 test
+test sparse_payload_siblings_survive_multiple_pack_pressure_without_whole_promotion ... FAILED
+
+failures:
+
+---- sparse_payload_siblings_survive_multiple_pack_pressure_without_whole_promotion stdout ----
+
+thread 'sparse_payload_siblings_survive_multiple_pack_pressure_without_whole_promotion' panicked at crates/layerfs-storage/tests/selected_group_reads.rs:368:5:
+assertion `left == right` failed
+  left: 27
+ right: 18
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    sparse_payload_siblings_survive_multiple_pack_pressure_without_whole_promotion
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p layerfs-storage --test selected_group_reads`

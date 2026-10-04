@@ -71,11 +71,6 @@ impl<'a> GroupPlan<'a> {
             Some("small")
         } else if useful >= info.length.div_ceil(2) || ranges.len() > 4 {
             Some("density")
-        } else if info.domain == PackDomain::Payload {
-            // Payload dependencies commonly need sibling groups. Since every
-            // acquisition scans the full digest, retain that paid input once
-            // rather than scan selected input and promote it on the next miss.
-            Some("payload")
         } else if self.whole_for_reuse {
             Some("reuse")
         } else {

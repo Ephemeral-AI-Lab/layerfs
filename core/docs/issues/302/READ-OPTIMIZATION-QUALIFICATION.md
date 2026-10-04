@@ -619,3 +619,30 @@ sparse-I/O claim. This is a cost policy, not proof admission.
 Freeze then one prospective native53phase-count child on original closed
 store; compare completed-prefix acquisition/byte counts, no unchanged speed
 retry or historicalrow promotion. Existing limits190s/9.5s remain.
+
+
+### Whole-first5a10e4ff0 rejected; sparse payload coverage refinement
+
+Whole-first native53countdiagTIMEOUT9,506,894,500ns after42states, complete
+26,883,438,084ns; source/databasecold/ownerpreservationPASS. Same completed
+prefix40filephase acquisitions23265->25950; BLOBbytes2482379134->2708934196;
+VFSrequested2595724224->2800715969. Readcalls62704->51559 fell, but more pack
+acquisitions/bytes contradict the useful-retention hypothesis under2MiB. No
+performance sample/proof admission; rawnegative evidence unchanged,
+[comparison](checks/payload-first-native1/comparison.json). This treatment is
+rejected, not silently dropped or promoted.
+
+A public9pack pressure fixture keeps2sparse sibling groups per256KiB pack.
+Whole-first makes27acquisitions versus18expectedFAIL; missing retention, not
+data correctness, is the failure. Firstselected strategy restored for both
+domains. Payload second-miss promotion now uses existing retained encoded
+coverage: keep units below half fullpack length, promote when dense. Metadata
+keeps second-demand promotion; GroupPlan singleton/small/density choices remain.
+Existing entries/descriptors supply the scalarcoverage, no new cache/history/
+buffer/workers or weakerSHA/frame/record/visibility checks. Sparse native and
+PREFIX unit consumption remains active.
+Fixture now18acquisitions/zeroevictions/exactbytesPASS; densepayloadfixture
+confirms eventualwholepromotion once and later siblinghits. Fullworkspace
+checks then final newdense externaltarget9tests/ClippyPASS; exactcounts
+checks/payload-coverage-functional1. Currentalgorithmfreeze/changednative
+phase-count next; no belief that unitfixture guarantees a9.5s proof.

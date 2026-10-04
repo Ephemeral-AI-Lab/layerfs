@@ -229,17 +229,21 @@ impl PackCache {
         if missing.is_empty() {
             return Ok((false, 0));
         }
-        // A selected read already pays a complete digest scan. On a new group
-        // miss for the same retained pack, pay that scan once more for its whole
-        // body, then reuse it. No extra history/cache or error-driven retry.
-        let whole_for_reuse = self
-            .entries
-            .range((id, Some(0))..=(id, Some(usize::MAX)))
-            .any(|(_, entry)| {
-                entry
-                    .info
-                    .is_some_and(|info| info.length <= policy::DEPENDENCY_PACK_CACHE_BYTES)
-            });
+        // Sparse payload units preserve capacity for unrelated dependency packs.
+        // Promote only after retained payload coverage is dense; metadata keeps
+        // its second-demand policy. No extra cache/history or error-driven retry.
+        let retained_units = self.entries.range((id, Some(0))..=(id, Some(usize::MAX)));
+        let mut retained_info = None;
+        let mut retained_bytes = 0usize;
+        for (_, entry) in retained_units {
+            retained_info = retained_info.or(entry.info);
+            retained_bytes += entry.body.len();
+        }
+        let whole_for_reuse = retained_info.is_some_and(|info| {
+            info.length <= policy::DEPENDENCY_PACK_CACHE_BYTES
+                && (info.domain == crate::location::PackDomain::Metadata
+                    || retained_bytes >= info.length.div_ceil(2))
+        });
         let acquired = source.acquire_groups(id, &missing, whole_for_reuse)?;
         if whole_for_reuse && !matches!(&acquired, super::PackAcquisition::Whole { .. }) {
             return Err(StorageError::Integrity("whole reuse selection reply"));

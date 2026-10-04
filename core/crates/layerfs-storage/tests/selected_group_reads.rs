@@ -256,13 +256,11 @@ fn a_sparse_prefix_target_reconstructs_its_required_base_exactly() {
             .unwrap()[0],
         objects[1].canonical()
     );
-    assert_eq!(storage.diagnostics().range_selected, 0);
-    assert_eq!(storage.diagnostics().whole_due_payload, 1);
-    assert_eq!(storage.diagnostics().read_pack_selections, 1);
+    assert_eq!(storage.diagnostics().range_selected, 1);
+    assert_eq!(storage.diagnostics().whole_due_density, 1);
 }
 
-#[test]
-fn payload_siblings_reuse_one_complete_acquisition_with_exact_native_bytes() {
+fn native_fixture(packs: usize) -> (Arc<metadata::MemoryMetadata>, Vec<FinalizedObject>) {
     use layerfs_storage::{
         encoding::{encode_full, CompressionWorkspace},
         policy::{StorageCapacities, StoragePolicy},
@@ -271,7 +269,7 @@ fn payload_siblings_reuse_one_complete_acquisition_with_exact_native_bytes() {
     let metadata = Arc::new(metadata::MemoryMetadata::default());
     let capacities = StorageCapacities::from_policy(StoragePolicy::frozen_default()).unwrap();
     let mut random = 793_811u64;
-    let objects: Vec<_> = (0..8)
+    let objects: Vec<_> = (0..packs * 8)
         .map(|_| {
             let bytes: Vec<_> = (0..32_000)
                 .map(|_| {
@@ -290,32 +288,36 @@ fn payload_siblings_reuse_one_complete_acquisition_with_exact_native_bytes() {
         .collect();
     let mut workspace = CompressionWorkspace::new().unwrap();
     let mut profile = SaveProfile::default();
-    let groups = objects
-        .iter()
-        .map(|object| {
-            let record = encode_full(
-                object.canonical(),
-                ObjectRole::Chunk,
-                &capacities,
-                &mut workspace,
-                &mut profile,
-            )
-            .unwrap();
-            build_group(PackLane::Native, &[record.record], None).unwrap()
-        })
-        .collect::<Vec<_>>();
-    let body = assemble(PackLane::Native, &groups).unwrap();
+    let mut published = Vec::new();
+    for (number, pack_objects) in objects.chunks(8).enumerate() {
+        let groups = pack_objects
+            .iter()
+            .map(|object| {
+                let record = encode_full(
+                    object.canonical(),
+                    ObjectRole::Chunk,
+                    &capacities,
+                    &mut workspace,
+                    &mut profile,
+                )
+                .unwrap();
+                build_group(PackLane::Native, &[record.record], None).unwrap()
+            })
+            .collect::<Vec<_>>();
+        let body = assemble(PackLane::Native, &groups).unwrap();
+        published.push(PublishedPack {
+            info: PackInfo {
+                pack_id: number as i64 + 1,
+                domain: PackDomain::Payload,
+                length: body.len(),
+                key: ObjectKey::for_bytes(&body),
+            },
+            body: Arc::new(body),
+        });
+    }
     metadata
         .publish(&Publication {
-            packs: vec![PublishedPack {
-                info: PackInfo {
-                    pack_id: 1,
-                    domain: PackDomain::Payload,
-                    length: body.len(),
-                    key: ObjectKey::for_bytes(&body),
-                },
-                body: Arc::new(body),
-            }],
+            packs: published,
             objects: objects
                 .iter()
                 .enumerate()
@@ -323,25 +325,73 @@ fn payload_siblings_reuse_one_complete_acquisition_with_exact_native_bytes() {
                     object_id: object.id(),
                     role: object.role(),
                     canonical_length: object.canonical_len(),
-                    pack_id: 1,
-                    group_number: number,
+                    pack_id: (number / 8) as i64 + 1,
+                    group_number: number % 8,
                     record_number: 0,
                 })
                 .collect(),
             ..Publication::default()
         })
         .unwrap();
+    (metadata, objects)
+}
+#[test]
+fn sparse_native_records_reconstruct_canonical_chunk_bytes() {
+    let (metadata, objects) = native_fixture(1);
     let storage = Storage::new(metadata).unwrap();
-    let reader = storage.reader().unwrap();
     assert_eq!(
-        reader.read_objects(&[objects[7].id()]).unwrap()[0],
+        storage
+            .reader()
+            .unwrap()
+            .read_objects(&[objects[7].id()])
+            .unwrap()[0],
         objects[7].canonical()
     );
+    assert_eq!(storage.diagnostics().range_selected, 1);
+}
+
+#[test]
+fn sparse_payload_siblings_survive_multiple_pack_pressure_without_whole_promotion() {
+    let packs = 9;
+    let (metadata, objects) = native_fixture(packs);
+    let storage = Storage::new(metadata).unwrap();
+    let reader = storage.reader().unwrap();
+    for group in [0, 7, 0] {
+        for pack in 0..packs {
+            let object = &objects[pack * 8 + group];
+            assert_eq!(
+                reader.read_objects(&[object.id()]).unwrap()[0],
+                object.canonical()
+            );
+        }
+    }
+    assert_eq!(
+        storage.diagnostics().read_pack_selections,
+        (packs * 2) as u64
+    );
+    assert_eq!(storage.diagnostics().pack_evictions, 0);
+}
+
+#[test]
+fn dense_payload_coverage_promotes_once_and_then_reuses_sibling_groups() {
+    let (metadata, objects) = native_fixture(1);
+    let storage = Storage::new(metadata).unwrap();
+    let reader = storage.reader().unwrap();
+    for object in &objects {
+        assert_eq!(
+            reader.read_objects(&[object.id()]).unwrap()[0],
+            object.canonical()
+        );
+    }
+    let before = storage.diagnostics();
+    assert!(before.range_selected > 1);
+    assert_eq!(before.whole_due_reuse, 1);
     assert_eq!(
         reader.read_objects(&[objects[0].id()]).unwrap()[0],
         objects[0].canonical()
     );
-    assert_eq!(storage.diagnostics().range_selected, 0);
-    assert_eq!(storage.diagnostics().whole_due_payload, 1);
-    assert_eq!(storage.diagnostics().read_pack_selections, 1);
+    assert_eq!(
+        storage.diagnostics().read_pack_selections,
+        before.read_pack_selections
+    );
 }

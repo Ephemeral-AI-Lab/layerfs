@@ -1184,10 +1184,10 @@ separate PooledMetadata body view; appending still releases pooled pack bodies
 and does not enter ordinary GroupCache. No private invalidation removed.
 
 
-### Payload first-demand whole selection (against356b04dff)
+### Payload first-demand whole experiment (against356b04dff; rejected after5a10e4ff0)
 
 Strict selected acquisition already scans all pack bytes for the complete
-digest. C2 chooses whole materialization on first payload demand to avoid a
+digest. The rejected5a10e4ff0 experiment chose whole materialization on first payload demand to avoid a
 selected scan followed by whole promotion when sibling groups/dependencies are
 needed. Singleton/small/density decisions retain precedence; sparse metadata
 units and reuse promotion remain supported. This is a prospective domain policy
@@ -1196,3 +1196,17 @@ cache/count, singleton exception, decoded/output/chain/private/publication bound
 and descriptor/fullSHA/frame/canonical checks remain. whole_due_payload reports
 actual choices. The backend-neutral selected-read port and checked BLOB path
 still serve both whole and sparse metadata strategies.
+
+
+### Payload promotion by retained coverage (against5a10e4ff0)
+
+The whole-first experiment increased acquisitions/scan bytes under the existing
+2MiB allowance. Current first demand again uses the whole/range planner's
+singleton/small/density policy for both domains. On a subsequent miss, sparse
+payload units remain selected until their retained encoded bytes reach half the
+pack length; only then is whole promotion requested. Metadata retains its
+second-demand promotion. This density check uses existing retained entries and
+descriptors, adding no history/cache map or buffer. All descriptor/strategy/
+wholeSHA/frame/canonical/private/visibility/count/byte/chain bounds remain.
+Explicit failures and owning invalidations unchanged. Sparse native/PREFIX
+consumption remains active, not replaced by a whole-only payload path.

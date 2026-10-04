@@ -1,0 +1,30 @@
+{
+  "comparison": [
+    {
+      "blob_read_calls": 62704,
+      "blob_read_ns": 629536069,
+      "blob_requested_bytes": 2482379134,
+      "complete_prefix": 40,
+      "pack_acquisitions": 23265,
+      "policy": "selected-first",
+      "vfs_requested_bytes": 2595724224
+    },
+    {
+      "blob_read_calls": 51559,
+      "blob_read_ns": 725684254,
+      "blob_requested_bytes": 2708934196,
+      "complete_prefix": 40,
+      "pack_acquisitions": 25950,
+      "policy": "whole-first",
+      "vfs_requested_bytes": 2800715969
+    }
+  ],
+  "disposition": "reject whole-first payload; it increases acquisitions/scans despitefewer read calls. Restoreselected first, test coverage-aware promotion underfixedcache.",
+  "kind": "negative policy experiment; retained, not admission",
+  "native_wall_ns": 9506894500,
+  "owners_preserved": true,
+  "source": "5a10e4ff0",
+  "states_completed": 42,
+  "status": "DIAGNOSTIC_TIMEOUT",
+  "whole_wall_ns": 26883438084
+}

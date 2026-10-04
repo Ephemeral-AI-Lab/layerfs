@@ -1,0 +1,19 @@
+{
+  "status": "PASS",
+  "source_parent": "5a10e4ff0",
+  "workspace_before_final_dense_case": {
+    "tests": 498,
+    "targets": 94
+  },
+  "final_external_target_tests": 9,
+  "full_clippy": "workspace/all-targets/-Dwarnings PASS",
+  "final_test_target_clippy": "PASS",
+  "fmt": "all/check PASS",
+  "boundary_files": 448,
+  "selftests": 23,
+  "pressure_before": "whole-first27vs18expected acquisitionsFAIL, retained",
+  "pressure_after": "sparse9pack workload18 acquisitions/zeroevictions/exactbytesPASS",
+  "dense": "payloadcoverage eventualpromotion once and subsequent siblinghitPASS",
+  "strategy": "selectedfirstpayload, promotewhenretainedencodedcoverage>=half; metadataunchanged",
+  "limits": "unchanged2MiBbody/512KiBdecode/count/output/chain/authentication"
+}
