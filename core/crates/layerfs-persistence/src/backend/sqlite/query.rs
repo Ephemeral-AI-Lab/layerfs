@@ -127,6 +127,18 @@ pub(crate) fn borrowed(
     bytes: u64,
     work: &RefCell<SqlWork>,
 ) -> Result<Vec<Record>, BackendError> {
+    mapped(connection, sql, values, bytes, work, |row| {
+        rows::record(row, row.as_ref().column_count())
+    })
+}
+pub(crate) fn mapped<T>(
+    connection: &Connection,
+    sql: &str,
+    values: &[&dyn rusqlite::ToSql],
+    bytes: u64,
+    work: &RefCell<SqlWork>,
+    mut decode: impl FnMut(&rusqlite::Row<'_>) -> Result<T, BackendError>,
+) -> Result<Vec<T>, BackendError> {
     let start = Instant::now();
     let commit = sql == "COMMIT";
     let result = (|| {
@@ -134,7 +146,6 @@ pub(crate) fn borrowed(
             let _phase = super::statement_work::phase(work, 0, commit);
             connection.prepare_cached(sql).map_err(rows::error)?
         };
-        let count = statement.column_count();
         let result = (|| {
             let mut cursor = {
                 let _phase = super::statement_work::phase(work, 1, commit);
@@ -149,7 +160,7 @@ pub(crate) fn borrowed(
                     };
                     let Some(row) = next? else { break };
                     let _phase = super::statement_work::phase(work, 3, commit);
-                    result.push(rows::record(row, count)?);
+                    result.push(decode(row)?);
                 }
                 Ok(result)
             })();

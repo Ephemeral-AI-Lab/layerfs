@@ -1,0 +1,26 @@
+{
+  "parent": "ab92d13222d86581a91f76ece15c13b6bee8c401",
+  "before": 140027,
+  "after": 140045,
+  "delta": 18,
+  "reference_before": 65417,
+  "reference_after": 65417,
+  "core_before": 74610,
+  "core_after": 74628,
+  "changed_files": {
+    "core/crates/layerfs-persistence/src/backend/sqlite/query.rs": {
+      "before": 206,
+      "after": 217
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/transaction.rs": {
+      "before": 204,
+      "after": 217
+    },
+    "core/crates/layerfs-persistence/src/backend/sqlite/units_read.rs": {
+      "before": 192,
+      "after": 186
+    }
+  },
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "exact first-parent/staged changed production blobs; unchanged production paths inherit previously counted totals; nonblank/noncomment Rust src/runtime SQL excluding tests"
+}

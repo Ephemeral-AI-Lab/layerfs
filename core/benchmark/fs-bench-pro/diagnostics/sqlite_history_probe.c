@@ -26,5 +26,16 @@ int main(void){
  assert(sqlite3_step(stmt)==SQLITE_ROW);assert(sqlite3_column_blob(stmt,0));assert(sqlite3_step(stmt)==SQLITE_DONE);assert(sqlite3_finalize(stmt)==SQLITE_OK);
  assert(sqlite3_blob_open(db,"main","pack_unit","body",7,0,&blob)==SQLITE_OK);char unit_bytes[4];assert(sqlite3_blob_read(blob,unit_bytes,4,0)==SQLITE_OK);assert(sqlite3_blob_close(blob)==SQLITE_OK);
  snapshot(after);assert(after[15]-before[15]==1);blob_snapshot(work);assert(work[0]-previous_opens==1);acquired_snapshot(acquired);assert(acquired[0]-previous_bytes==8);
+ snapshot(before);acquired_snapshot(acquired);previous_bytes=acquired[0];
+ assert(sqlite3_exec(db,"UPDATE pack SET control=zeroblob(24)",0,0,0)==SQLITE_OK);
+ assert(sqlite3_prepare_v2(db,"SELECT CASE WHEN length(control) BETWEEN 24 AND ?2 THEN control END AS control,pack_id FROM pack WHERE pack_id=?1",-1,&stmt,0)==SQLITE_OK);
+ assert(sqlite3_bind_int64(stmt,1,1)==SQLITE_OK);assert(sqlite3_bind_int64(stmt,2,4120)==SQLITE_OK);
+ assert(sqlite3_step(stmt)==SQLITE_ROW);assert(sqlite3_column_blob(stmt,0));assert(sqlite3_step(stmt)==SQLITE_DONE);assert(sqlite3_finalize(stmt)==SQLITE_OK);
+ snapshot(after);acquired_snapshot(acquired);assert(after[15]-before[15]==1);assert(acquired[0]-previous_bytes==24);
+ assert(sqlite3_exec(db,"UPDATE pack SET control=zeroblob(4121)",0,0,0)==SQLITE_OK);
+ assert(sqlite3_prepare_v2(db,"SELECT CASE WHEN length(control) BETWEEN 24 AND ?2 THEN control END AS control,pack_id FROM pack WHERE pack_id=?1",-1,&stmt,0)==SQLITE_OK);
+ assert(sqlite3_bind_int64(stmt,1,1)==SQLITE_OK);assert(sqlite3_bind_int64(stmt,2,4120)==SQLITE_OK);
+ assert(sqlite3_step(stmt)==SQLITE_ROW);assert(sqlite3_column_type(stmt,0)==SQLITE_NULL);assert(!sqlite3_column_blob(stmt,0));assert(sqlite3_step(stmt)==SQLITE_DONE);assert(sqlite3_finalize(stmt)==SQLITE_OK);
+ acquired_snapshot(acquired);assert(acquired[0]-previous_bytes==24);
  assert(sqlite3_close(db)==SQLITE_OK);puts("PASS pack attribution plus BLOB attempts/returned bytes/errors; operations delegated unchanged");
 }

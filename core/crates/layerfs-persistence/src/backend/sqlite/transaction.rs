@@ -106,6 +106,19 @@ impl Transaction<'_> {
         }
         r
     }
+    pub(crate) fn mapped<T>(
+        &self,
+        sql: &str,
+        values: &[&dyn rusqlite::ToSql],
+        bytes: u64,
+        decode: impl FnMut(&rusqlite::Row<'_>) -> Result<T, BackendError>,
+    ) -> Result<Vec<T>, BackendError> {
+        let result = query::mapped(self.connection, sql, values, bytes, self.work, decode);
+        if result.as_ref().err() == Some(&BackendError::Unknown) {
+            self.uncertain.set(true);
+        }
+        result
+    }
     pub(crate) fn query(&self, sql: &str, params: Vec<Param>) -> Result<Vec<Record>, BackendError> {
         {
             let r = query::run(self.connection, sql, params, self.work);

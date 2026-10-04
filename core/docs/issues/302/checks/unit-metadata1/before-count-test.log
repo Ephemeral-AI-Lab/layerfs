@@ -1,0 +1,24 @@
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/crates/layerfs-persistence)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.66s
+     Running tests/sqlite_group_rows.rs (core/target/debug/deps/sqlite_group_rows-283f7679d840de10)
+
+running 1 test
+test complete_reads_reassemble_exact_bytes_and_digest_for_every_lane ... FAILED
+
+failures:
+
+---- complete_reads_reassemble_exact_bytes_and_digest_for_every_lane stdout ----
+
+thread 'complete_reads_reassemble_exact_bytes_and_digest_for_every_lane' panicked at crates/layerfs-persistence/tests/sqlite_group_rows.rs:187:9:
+assertion `left == right` failed
+  left: 6
+ right: 5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    complete_reads_reassemble_exact_bytes_and_digest_for_every_lane
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-persistence --test sqlite_group_rows`

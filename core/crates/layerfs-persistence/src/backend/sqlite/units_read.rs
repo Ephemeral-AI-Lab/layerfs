@@ -1,6 +1,9 @@
 //! Logical pack offsets mapped to independent immutable unit BLOBs, one transaction.
 use super::{rows, transaction::Transaction};
-use crate::backend::{metadata_locations::info, records::Param};
+use crate::backend::{
+    metadata_locations::info,
+    records::{BackendError, Param},
+};
 use layerfs_storage::{location::PackInfo, pack::layout, port::*};
 use std::time::Instant;
 struct Unit {
@@ -18,33 +21,23 @@ impl Input {
         if id <= 0 {
             return Err(PersistenceError::Malformed);
         }
+        // CASE bounds extraction inside SQLite, even if stored constraints were bypassed.
         let mut descriptors = tx.query(
-            "SELECT pack_id,domain,digest,length,length(control) FROM pack WHERE pack_id=?1",
-            vec![Param::I64(id)],
+            "SELECT CASE WHEN length(control) BETWEEN 24 AND ?2 THEN control END AS control,pack_id,domain,digest,length,length(control) FROM pack WHERE pack_id=?1",
+            vec![Param::I64(id), Param::I64(PACK_READ_PREFIX_BYTES as i64)],
         )?;
-        let info = info(
-            descriptors
-                .first()
-                .filter(|_| descriptors.len() == 1)
-                .ok_or(PersistenceError::Missing)?,
-            0,
-        )?;
-        let control_length = descriptors[0].get::<i64>(4)?;
-        if !(24..=PACK_READ_PREFIX_BYTES as i64).contains(&control_length) {
+        let row = descriptors.first_mut().ok_or(PersistenceError::Missing)?;
+        let info = info(row, 1)?;
+        let control_length = row.get::<i64>(5)?;
+        if descriptors.len() != 1 || !(24..=PACK_READ_PREFIX_BYTES as i64).contains(&control_length)
+        {
             return Err(PersistenceError::Malformed);
         }
-        descriptors.clear();
-        let mut controls = tx.query(
-            "SELECT control FROM pack WHERE pack_id=?1",
-            vec![Param::I64(id)],
-        )?;
-        if controls.len() != 1 {
+        let control = descriptors[0].take_bytes(0)?;
+        if control.len() != control_length as usize {
             return Err(PersistenceError::Malformed);
         }
-        let control = controls[0].take_bytes(0)?;
-        if control.len() > PACK_READ_PREFIX_BYTES {
-            return Err(PersistenceError::Malformed);
-        }
+        drop(descriptors);
         let header = layout::parse_directory_header(&control, info.length)
             .map_err(|_| PersistenceError::Malformed)?;
         if control.len() != header.body_offset
@@ -54,25 +47,27 @@ impl Input {
         }
         let views = layout::directory_group_views(&control, header)
             .map_err(|_| PersistenceError::Malformed)?;
-        let records=tx.query("SELECT unit_id,group_number,offset,length FROM pack_unit WHERE pack_id=?1 ORDER BY group_number LIMIT 257",vec![Param::I64(id)])?;
-        if records.len() != views.len() {
+        let mut number = 0;
+        let units = tx.mapped(
+            "SELECT unit_id,group_number,offset,length FROM pack_unit WHERE pack_id=?1 ORDER BY group_number LIMIT 257",
+            &[&id],
+            8,
+            |row| {
+                let view = views.get(number).ok_or(BackendError::Integrity)?;
+                let id: i64 = row.get(0).map_err(rows::error)?;
+                if id <= 0
+                    || row.get::<_, i64>(1).map_err(rows::error)? != number as i64
+                    || row.get::<_, i64>(2).map_err(rows::error)? != view.start as i64
+                    || row.get::<_, i64>(3).map_err(rows::error)? != (view.end - view.start) as i64
+                {
+                    return Err(BackendError::Integrity);
+                }
+                number += 1;
+                Ok(Unit { id, start: view.start, end: view.end })
+            },
+        )?;
+        if units.len() != views.len() {
             return Err(PersistenceError::Malformed);
-        }
-        let mut units = Vec::with_capacity(records.len());
-        for (number, (row, view)) in records.iter().zip(views).enumerate() {
-            let id = row.get::<i64>(0)?;
-            if id <= 0
-                || row.get::<i64>(1)? != number as i64
-                || row.get::<i64>(2)? != view.start as i64
-                || row.get::<i64>(3)? != (view.end - view.start) as i64
-            {
-                return Err(PersistenceError::Malformed);
-            }
-            units.push(Unit {
-                id,
-                start: view.start,
-                end: view.end,
-            });
         }
         Ok(Self {
             info,

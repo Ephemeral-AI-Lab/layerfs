@@ -182,7 +182,9 @@ fn complete_reads_reassemble_exact_bytes_and_digest_for_every_lane() {
             })
             .unwrap();
         let mut out = Vec::new();
+        let before = h.diagnostics().unwrap();
         h.storage.read_packs(&[id], &mut out).unwrap();
+        assert_eq!(h.diagnostics().unwrap().statements - before.statements, 5);
         assert_eq!(out[0].info(), info);
         assert_eq!(out[0].body(), &body);
     }
@@ -322,4 +324,26 @@ fn exact_physical_fanout_refuses_over_budget_batch_before_begin() {
     let before = h.diagnostics().unwrap();
     assert_eq!(h.storage.publish(&batch), Err(PersistenceError::Malformed));
     assert_eq!(h.diagnostics().unwrap().transactions, before.transactions);
+}
+
+#[test]
+fn oversized_control_is_rejected_before_group_blob_acquisition() {
+    let t = support::Temp::new("unit-oversized-control");
+    let path = t.join("db");
+    let h = create(&path);
+    let objects = fixture(&h);
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch("DROP TRIGGER pack_immutable_update;PRAGMA ignore_check_constraints=ON;UPDATE pack SET control=zeroblob(4121)").unwrap();
+    drop(db);
+    let before = h.diagnostics().unwrap();
+    assert!(Storage::new(h.storage.clone())
+        .unwrap()
+        .reader()
+        .unwrap()
+        .read_objects(&[objects[0].id()])
+        .is_err());
+    assert_eq!(
+        h.diagnostics().unwrap().blob_open_calls,
+        before.blob_open_calls
+    );
 }

@@ -88,11 +88,14 @@ INTERPOSE(history_blob_close,sqlite3_blob_close)
 void cause_history_blob_snapshot(uint64_t*out){
  for(int i=0;i<11;i++)out[i]=atomic_load(&blob_work[i]);out[11]=1;
 }
+static int history_control(const char *sql){
+ return sql&&(!strncmp(sql,"SELECT control FROM pack ",strlen("SELECT control FROM pack "))||!strncmp(sql,"SELECT CASE WHEN length(control) BETWEEN 24 AND ?2 THEN control END AS control,",strlen("SELECT CASE WHEN length(control) BETWEEN 24 AND ?2 THEN control END AS control,")));
+}
 /* Observe the original body extraction, without pre-reading or copying bytes. */
 static const void* history_column_blob(sqlite3_stmt*statement,int column){
  const void*body=sqlite3_column_blob(statement,column);
  const char*sql=sqlite3_sql(statement);
- if(body&&column==0&&sql&&(!strncmp(sql,"SELECT control FROM pack ",strlen("SELECT control FROM pack "))||!strncmp(sql,"SELECT body FROM pack ",strlen("SELECT body FROM pack "))||!strncmp(sql,"SELECT p.data FROM object_packs ",strlen("SELECT p.data FROM object_packs ")))){
+ if(body&&column==0&&sql&&(history_control(sql)||!strncmp(sql,"SELECT body FROM pack ",strlen("SELECT body FROM pack "))||!strncmp(sql,"SELECT p.data FROM object_packs ",strlen("SELECT p.data FROM object_packs ")))){
   int bytes=sqlite3_column_bytes(statement,column);if(bytes>0)atomic_fetch_add(&pack_materialized_bytes,(uint64_t)bytes);
  }
  return body;
@@ -101,7 +104,7 @@ INTERPOSE(history_column_blob,sqlite3_column_blob)
 void cause_history_acquired_snapshot(uint64_t*out){out[0]=atomic_load(&pack_materialized_bytes);out[1]=1;}
 void cause_history_note_pack(sqlite3_stmt*statement){
  const char*sql=sqlite3_sql(statement);
- if(!sql||(strncmp(sql,"SELECT control FROM pack ",strlen("SELECT control FROM pack "))&&strncmp(sql,"SELECT body FROM pack ",strlen("SELECT body FROM pack "))&&strncmp(sql,"SELECT p.data FROM object_packs ",strlen("SELECT p.data FROM object_packs "))))return;
+ if(!sql||(!history_control(sql)&&strncmp(sql,"SELECT body FROM pack ",strlen("SELECT body FROM pack "))&&strncmp(sql,"SELECT p.data FROM object_packs ",strlen("SELECT p.data FROM object_packs "))))return;
  char*text=sqlite3_expanded_sql(statement);
  if(!text){history_note_pack_id(0);return;}
  const char*where=strstr(text,"WHERE");const char*key=where?strstr(where,"pack_id"):0;const char*equals=key?strchr(key,'='):0;
