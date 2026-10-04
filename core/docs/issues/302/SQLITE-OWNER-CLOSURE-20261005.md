@@ -1,0 +1,13 @@
+# Owner-directed SQLite closure qualification, 2026-10-05
+
+The owner explicitly requested simpler proof/validation, doubled time caps, a fresh Durable stride 10 → 3 → 1 round, all namespace Init tiers for Durable and Disposable, statistics, and issue closure. This prospectively supersedes the earlier deadline policy for this campaign only. Historical failures and qualified Disposable receipts remain unchanged.
+
+History uses creation-only GroupRowsIndexed schema3. New Durable `phase7-sqlite-history-stride{10,3,1}-group-rows-indexed-v2` caps respectively are 120/340/600 seconds complete performance command and 24/24/60 seconds separate proof (exactly twice previous 60/170/300 and 12/12/30). Storage ceilings remain 54,278,964 / 70,427,034 / 92,342,273 bytes; original targets and misses are reported. Relative time gate stays 10*candidate <= 11*reference.
+
+Init uses the public default Monolithic layout, four tiers 100/1000/10000/100000 in each profile: Durable `phase7-sqlite-init-{tier}-v3`, Disposable `phase7-sqlite-disposable-init-{tier}-v2`. Both arms have 30-second complete performance and 19-second separate verification caps, twice 15/9.5. Internal operation deadlines match the new cap. Allocation remains candidate final main/WAL/SHM <= matched reference total. Init retains its legitimate four-worker exception; history has one construction worker.
+
+One release/locked sample per new frozen case and arm, fresh append-only outputs, matched original pinned reference source, prepared fixture/corpus reuse, full input invalidation plus residency checks, real measured work and cleanup. Copy cost belongs inside proof. Closed WAL proof permits only exclusive regular main plus exact empty WAL/32768-byte SHM, immutable census, bounded independent byte copy, zero copied-input residency, unchanged original identities/hashes. Journals, pending frames, aliases, changes and excess copies fail closed. Existing all-state structure, independent roots, canonical counts, bounded selected content and authentication limits remain.
+
+The proof becomes one active path using the reviewed correction; no production/dependency/durability change. Validate covering helper tests and changed release example once at frozen source. Record every result, identity, reproduction command and gap. SDK/server/daemon/FUSE are N/A for this direct component lane. PostgreSQL/MinIO remains paused; SQLite qualification and owner-requested closure do not claim those original service milestones or release admission.
+
+Close #302 after this requested round and a concrete report; failures cannot be renamed PASS. Checkpoint commits record exact first-parent/staged production LOC and update the issue.
