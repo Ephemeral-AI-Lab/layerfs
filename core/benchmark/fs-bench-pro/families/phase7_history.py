@@ -85,7 +85,7 @@ def run(case, output, arm, baseline_root, common, corpus_root=None, reference_pi
     record = {'schema':'phase7-sqlite-history-v1','case':case.id,'workload_row':row,'arm':arm,'status':'NOT_RUN','sample_count':0,
               'cache_status':'INCOMPLETE','verification_status':'NOT_RUN','cleanup':{'status':'NOT_RUN'},
               'requested_profile':case.profile,'profile':PROFILE_IDS[case.profile] if arm == 'candidate' else 'phase4.5-memory-off',
-              'command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'proof_policy':case.proof_policy,
+              'command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'proof_policy':case.proof_policy,'proof_envelope':case.proof_envelope,
               'required_case_ids':tuple(name for name in GROUP_ROW_CASES if CASES[name].profile==case.profile) if case.pack_layout=='group-rows' else REQUIRED_BY_PROFILE[case.profile],'construction_workers':1,
               'comparison_scope':'Corpus open through all real retained-state construction/save/C5, measured cold boundaries, final custody/checkpoint/close and canonical census',
               'margin_arithmetic':'10*candidate_ns<=11*baseline_ns','allocation_ceiling':case.storage_ceiling,

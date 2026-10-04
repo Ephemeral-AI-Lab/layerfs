@@ -393,9 +393,16 @@ def main():
     proof_parser = commands.add_parser("prove")
     proof_parser.add_argument("--run", required=True)
     proof_parser.add_argument("--out", required=True)
+    reprove_parser=commands.add_parser("reprove-reference")
+    reprove_parser.add_argument("--run",required=True)
+    reprove_parser.add_argument("--case",required=True)
+    reprove_parser.add_argument("--out",required=True)
     for name in ("verify", "report"):
         commands.add_parser(name).add_argument("--run", required=True)
     args = parser.parse_args()
+    if args.command=="reprove-reference":
+        from diagnostics.reprove_reference import reprove
+        print(reprove(args.run,args.case,args.out));return
     if args.command == "list":
         for case in sqlite_phase7.CASES.values():
             print(f"{case.id}\tSQLite-only; candidate<=1.10*matched Phase4.5; prospective contract/proof pending")

@@ -154,6 +154,25 @@ def root_pins(receipt, census, proof, receipt_path, census_path, proof_path):
         raise ValueError('reference requires one arm and independent proof')
     lite = receipt.get('proof_policy') == LITE_POLICY
     allowed = 12_000_000_000 if lite else 9_500_000_000
+    extension=receipt.get('proof_envelope')=='owner-stride1-proof15-v2'
+    if extension:
+        if not lite or receipt.get('workload_row')!='history-stride1':raise ValueError('proof15 applies only to the unchanged stride1 lite scope')
+        allowed=15_000_000_000
+    reuse=receipt.get('performance_reuse')
+    if reuse:
+        original_path=Path(reuse['receipt'])
+        if digest(original_path)!=reuse['sha256']:raise ValueError('shared reference performance receipt hash mismatch')
+        original=json.loads(original_path.read_text())
+        if not extension or original.get('arm')!='baseline' or original.get('status')!='COMPLETE' or original.get('cache_status')!='PASS' or original.get('cleanup',{}).get('status')!='PASS' or original.get('sample_count')!=1:
+            raise ValueError('shared reference performance is unqualified')
+        if reuse.get('new_performance_samples')!=0 or original.get('workload_row')!=receipt.get('workload_row'):
+            raise ValueError('shared performance scope/sample mismatch')
+        for field in ('performance','comparison_ns','command_wall_ns','command_budget_ns','storage_bytes','observer','fixture'):
+            if original.get(field)!=receipt.get(field):raise ValueError('shared performance evidence was altered')
+        if original['build']['compilation_seal']!=reuse.get('matched_compilation_seal') or original['build']['binaries']!=receipt['build']['binaries']:
+            raise ValueError('shared performance compilation/binary mismatch')
+        if original['identity']['product_seal']!=receipt['identity']['product_seal'] or original['identity']['cargo_lock_sha256']!=receipt['identity']['cargo_lock_sha256']:
+            raise ValueError('shared performance product/dependency mismatch')
     if lite and (proof.get('sample_policy') != LITE_POLICY or proof.get('authenticated_bytes', 8*1024*1024+1) > 8*1024*1024
                  or proof.get('acquired_content_bytes', 32*1024*1024+1) > 32*1024*1024):
         raise ValueError('bounded content proof scope/bytes mismatch')

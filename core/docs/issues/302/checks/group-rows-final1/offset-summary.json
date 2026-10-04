@@ -1,0 +1,149 @@
+{
+  "binary_sha256": "e0cd3166c51117aae2c43424a813eceb90f41de8544a615ed36eeecf390fd40a",
+  "cases": [
+    {
+      "child_wall_ns": 1791106209,
+      "cold": "PASS",
+      "fixture_sha256": "6582421a037a9e2f199f400a9098926987ce725ff0d63958362d09dedcb6746d",
+      "label": "pack-front",
+      "offset": 0,
+      "result": {
+        "acquisitions": 1,
+        "kind": "count-only-overflow-navigation",
+        "offset": 0,
+        "returned_bytes": 32768,
+        "sqlite": "3.51.0",
+        "vfs_requested_bytes": 40624
+      },
+      "row_bytes": 262144
+    },
+    {
+      "child_wall_ns": 12733167,
+      "cold": "PASS",
+      "fixture_sha256": "6582421a037a9e2f199f400a9098926987ce725ff0d63958362d09dedcb6746d",
+      "label": "pack-near",
+      "offset": 32768,
+      "result": {
+        "acquisitions": 1,
+        "kind": "count-only-overflow-navigation",
+        "offset": 32768,
+        "returned_bytes": 32768,
+        "sqlite": "3.51.0",
+        "vfs_requested_bytes": 73424
+      },
+      "row_bytes": 262144
+    },
+    {
+      "child_wall_ns": 12794667,
+      "cold": "PASS",
+      "fixture_sha256": "6582421a037a9e2f199f400a9098926987ce725ff0d63958362d09dedcb6746d",
+      "label": "pack-middle",
+      "offset": 131072,
+      "result": {
+        "acquisitions": 1,
+        "kind": "count-only-overflow-navigation",
+        "offset": 131072,
+        "returned_bytes": 32768,
+        "sqlite": "3.51.0",
+        "vfs_requested_bytes": 171824
+      },
+      "row_bytes": 262144
+    },
+    {
+      "child_wall_ns": 13196416,
+      "cold": "PASS",
+      "fixture_sha256": "6582421a037a9e2f199f400a9098926987ce725ff0d63958362d09dedcb6746d",
+      "label": "pack-tail",
+      "offset": 196608,
+      "result": {
+        "acquisitions": 1,
+        "kind": "count-only-overflow-navigation",
+        "offset": 196608,
+        "returned_bytes": 32768,
+        "sqlite": "3.51.0",
+        "vfs_requested_bytes": 237424
+      },
+      "row_bytes": 262144
+    },
+    {
+      "child_wall_ns": 12175750,
+      "cold": "PASS",
+      "fixture_sha256": "7842e6ac419645d3ab4350fe5fb1154c2f7d6c8db737d036415d941314c62c68",
+      "label": "unit-front",
+      "offset": 0,
+      "result": {
+        "acquisitions": 1,
+        "kind": "count-only-overflow-navigation",
+        "offset": 0,
+        "returned_bytes": 32768,
+        "sqlite": "3.51.0",
+        "vfs_requested_bytes": 40624
+      },
+      "row_bytes": 32768
+    }
+  ],
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "2a0448c1ab04ce0fd8f4c01c9f408f2a37fad94495b7a64b7823a1b359a89aa2",
+    "product_seal": "c20d51128d61f1bf04967e8fc62eb21a79458ac5f5c2cd4b630fac1b969ba69a",
+    "source_commit": "509d9f164d45655d740389daf6962f8583070a96",
+    "source_dirty": false,
+    "source_tree": "d97a7bb72f443ad84715b9903ff60f83c93c6789"
+  },
+  "manifest_sha256": "2bbc86b76fd18274059babbb9e77bbb6853ffbd137722355d73fac7102695f6f",
+  "observer": {
+    "build": {
+      "budget_ns": 30000000000,
+      "child": null,
+      "command": [
+        "/usr/bin/clang",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-dynamiclib",
+        "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/diagnostics/sqlite_history_observer.c",
+        "-lsqlite3",
+        "-o",
+        "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/history-observer-archive/2e01bf1ca7fec4cfa620912f6569699de5b6ec447b188c2fd5070aef859b5251/history-observer.dylib"
+      ],
+      "cpu_ns": 245752000,
+      "exit_code": 0,
+      "peak_rss_bytes": 55476224,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "timed_out": false,
+      "wall_ns": 194126000
+    },
+    "coverage": "trace statements/VM plus delegated BLOB open/read/close and VFS read/write/sync/close; native VM reset counters unqualified; no device-byte/syscall claim",
+    "inputs": {
+      "architecture": "arm64",
+      "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+      "flags": [
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-dynamiclib"
+      ],
+      "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+      "sources": {
+        "sqlite_close_observer.c": "f1075ec9294b86fedf9b662bf5a040a03db530cdf332d5873055561a946a1aa7",
+        "sqlite_history_observer.c": "6fd11420727427e5d9a99b513760b8e87d2295731fc0c548f18172e9d4696f70",
+        "sqlite_vfs_observer.c": "40559848d8988307e7f034beabde54f3f49d8f6c7210c93627932303e1a9f944",
+        "sqlite_work.c": "925daf0a74f4506a1958ca6a3b674c3e4d21525a8d4fb6e1d770b177d34fbc9f"
+      },
+      "sqlite_link": "unmodified system -lsqlite3"
+    },
+    "mode": "sealed-binary-reuse",
+    "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/history-observer-archive/2e01bf1ca7fec4cfa620912f6569699de5b6ec447b188c2fd5070aef859b5251/history-observer.dylib",
+    "seal": "2e01bf1ca7fec4cfa620912f6569699de5b6ec447b188c2fd5070aef859b5251",
+    "sha256": "eabb7a659dc276d32a50951d8cd21420669796a3f4aa71065fd0aa14cd9be92b"
+  },
+  "raw_run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-overflow-offset-cause1",
+  "receipt_sha256": "82dc68d23144b03c32608539575fb5df0d0c1bcec11b3cb1460459bab43c3151"
+}

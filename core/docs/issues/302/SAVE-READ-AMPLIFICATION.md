@@ -326,3 +326,26 @@ checks/group-rows1/freeze-refusal.log; no product or performance sample ran.
 Documentation whitespace repaired, product snapshot unchanged; next launch uses
 a freshcause2output after confirming the commit. No budget/rule relaxation.
 Issue plan posted:https://github.com/Ephemeral-AI-Lab/layerfs/issues/302#issuecomment-5980662434
+
+## Explicit owner proof-time ruling after the12s timeout
+
+Owner: "its independent proof timed out at12.003190125s, give it more time".
+Prospective stride1group-rowv2proof envelope uses15s in both arms/profiles,
+unchanged all-state structure/five-anchor content,8MiBlogical/32MiBacquired caps,
+native verifier, corpus, observer, compiled performance vehicle and300s
+performance limit. Historical12s timeout and v1candidateNOT_RUN stay unchanged.
+No performance resample is authorized or needed: original successful cold
+reference performance is referenced as shared control, with its immutable
+receipt/hash, exact observations, original identity and zero new samples.
+The source changes only proof supervision/receipts/pins and prospective registry;
+no product or native vehicle code changes. Native compilation/binary/observer/
+fixture/product/dependency seals must match before sharing. A separate fresh
+proof row qualifies new pins only if its unchanged proof fits15s. Candidate then
+runs once under that prospective envelope. Shared performance is explicitly
+referenced, never replayed as a new sample or relabeled in the original receipt.
+Two proof-envelope guards cover15scope/limits and immutable shared observations;
+original proof and prospective registry guards remain. Reproduction:
+`runner.py reprove-reference --run <retained-v1-reference> --case
+phase7-sqlite-disposable-history-stride1-group-rows-v2 --out <fresh-output>`.
+Source/code verification ated6807c6f remains current: product unchanged;
+benchmark-only checks cover this owner ruling. ProductionLOC140027unchanged.
