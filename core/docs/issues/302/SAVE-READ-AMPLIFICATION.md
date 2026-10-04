@@ -197,3 +197,50 @@ no product hook, alternative operation or data pre-read. Same one fresh17state
 count child,60s cold envelope, no speed/admission claim. This differs from the
 first cause instrument by observing the callers needed to settle the remaining
 mechanism hypothesis; it is not a second performance sample.
+
+## Caller result and one demand-owned implementation
+
+Caller diagnostic26a453961 completed under the fixed60s budget, all source and
+DBcold checksPASS and same phase totals as8759. External symbolized stacks
+attribute Save's BLOB reads as follows (not the SQL/metadata remainder):
+
+| Caller | Acquisitions | Returned BLOB B | VFS requested B inside BLOB reads |
+| --- | ---: | ---: | ---: |
+| Eager wave discovery |10439|636139189|778636499|
+| Candidate depth/probe |7729|354577818|498578452|
+| Pool value index |5763|95832979|82976381|
+| Pooled base reconstruction |772|7885315|6428290|
+| Ordinary base reconstruction |835|28802936|49190721|
+| Exact reuse |451|17299881|25916072|
+
+[Two retained count identities and raw hashes](checks/save-vfs-caller1/caller-summary.json).
+The requested-byte observations support a demand-lifetime problem and sparse
+BLOB navigation overhead; they do not identify physical storage traffic.
+
+Remove only Save's eager physical prewalk. Batched locator membership, object and
+advisory order, required depth checks, actual base/exact-reuse reconstruction and
+all canonical/dependency authentication remain. Reader prefetch is unchanged.
+No representation/layout/schema/promotion/cache/worker/publication policy change.
+Each admission now consumes its required physical chains in the existing owner
+caches instead of first scanning a wave whose input can exceed2MiB retention.
+Architecture05 describes this algorithm in the same implementation commit.
+
+Public exact-reuse pressure fixture:37packs/256objects beyond2MiB. Before113
+acquisitionsFAIL. After74; the initial test expected38 and therefore still
+failed. Source analysis confirms the unchanged metadata sparse-first then
+whole-on-sibling promotion legitimately needs up to2acquisitions/pack. The
+assertion is corrected to74, preserving the before113failure; this is a test
+expectation correction, not a product policy or cache-bound change. Both failed
+logs are retained. Final frozen Core checks and changed-product count diagnostic
+follow; no new speed/qualification is claimed before those results.
+
+Implementation covering checksPASS:503tests/96targets with0ignored,
+locked workspace/all-target Clippy-Dwarnings, fmt-all/check,449file boundary,
+23tool selftests,2count-parser tests and external realSQLite observer probe.
+Exact commands/logs inchecks/save-demand1; original failed/raw logs retained in
+benchmark-results. No CI/aggregate preflight. Final prospective changed-source
+history17count diagnostic retains60s complete bound, new fresh output, source
+and per-state DBcold, same fixture/build seals and no proof/speed admission.
+ProductionLOC139635->139620(delta-15); reference65417 unchanged, core
+74218->74203, exact parent/final staged snapshots and unchanged product scope
+elsewhere, same archive-counted parent counter/exclusions. No migration/retirement.

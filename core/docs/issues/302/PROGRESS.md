@@ -2101,3 +2101,13 @@ PASS. No newcache/extraresources/weakerchecks; freeze/countdiag next,goalACTIVE.
   unchanged. FullCore502/95targets,Clippy/fmt,boundary449/12selftestsPASS.
   No new speed/proof/admission claim; new matched10/3/1 qualificationNOT_RUN.
   Details and exact identities inSAVE-READ-AMPLIFICATION.md/checks/format-directory1.
+
+-2026-10-04: independent `save-vfs-amplification` task at4032cfe75, isolated
+  checkout; other owner checkouts untouched. External SQLite caller-count trace
+  identifies10439Save wave-discovery acquisitions/778636499VFS requested B
+  inside BLOB reads, followed by7729candidate-probe acquisitions. Remove eager
+  Save physical prewalk; preserve batched membership and demand-local required
+  chain/canonical/dependency checks.37pack exact-reuse fixture113->74acquisitions
+  under original sparse/whole promotion; initial overly strict38assertion repaired
+  to74after source review. Full final checks/count result pending; no new speed
+  qualification. PostgreSQL/MinIO M4pause and later NOT_RUN milestones unchanged.

@@ -1268,3 +1268,22 @@ reserved region. Tight ordinary/native widths are280B; maximum prefix allowance
 is4120B. One transaction/BLOB handle covers all reads. Whole-selection policy,
 framing/canonical/dependency authentication and full-pack audit stay unchanged.
 Additional control read overhead is subject to count diagnostics.
+
+
+### Demand-owned Save chain acquisition (against26a453961)
+
+Save retains batched locator membership for exact objects, logical references and
+advisory predecessors, then consumes physical chains during each existing object
+admission. The former wave-wide physical dependency prewalk is removed: it read
+unneeded candidate chains and displaced acquired input before selection when a
+wave exceeded the2MiB body cache. Exact reuse still reconstructs and compares
+canonical bytes; ordinary/native selection retains depth/role/chain-work checks
+and authenticates selected bases; pooled selection authenticates every used node
+and physical-root base. Reader dependency discovery remains unchanged.
+
+Object/advisory order, single construction worker, candidate selection, pack
+layout, canonical identity, locator winner/visibility, private sealing and atomic
+publication rules are unchanged. No cross-write BLOB handle, new base memo,
+cohort prefill or larger cache is introduced. Required demand-local walks share
+the existing encoded/decoded caches and their bounds. This describes the
+algorithm; workload counts and new qualification remain separate evidence.

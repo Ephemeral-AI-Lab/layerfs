@@ -1,0 +1,22 @@
+{
+  "parent": "26a453961c62900b3ac95b19f42d379b7d584cde",
+  "staged_product_tree": "68ed8b8ec64a5df0dbe0c45fc1bbeda50b57c3fb",
+  "before": 139635,
+  "after": 139620,
+  "delta": -15,
+  "reference": 65417,
+  "core_before": 74218,
+  "core_after": 74203,
+  "changed_files": {
+    "core/crates/layerfs-storage/src/read/mod.rs": {
+      "before": 10,
+      "after": 9
+    },
+    "core/crates/layerfs-storage/src/save/wave.rs": {
+      "before": 150,
+      "after": 136
+    }
+  },
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "exact parent/staged changed product snapshots; complete archive-counted parent production scope unchanged elsewhere; identical source classification, inline-test exclusions"
+}

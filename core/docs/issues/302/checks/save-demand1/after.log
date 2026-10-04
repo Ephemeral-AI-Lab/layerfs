@@ -1,0 +1,20 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.61s
+     Running tests/save_demand_locality.rs (core/target/debug/deps/save_demand_locality-ca6697ee16269413)
+
+running 1 test
+Save exact reuse: 74 acquisitions, 37 distinct packs
+
+thread 'exact_reuse_does_not_scan_the_wave_before_consuming_its_objects' panicked at crates/layerfs-storage/tests/save_demand_locality.rs:48:5:
+wave discovery displaced input before consumption: 74 reads for 37 packs
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test exact_reuse_does_not_scan_the_wave_before_consuming_its_objects ... FAILED
+
+failures:
+
+failures:
+    exact_reuse_does_not_scan_the_wave_before_consuming_its_objects
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+error: test failed, to rerun pass `-p layerfs-storage --test save_demand_locality`

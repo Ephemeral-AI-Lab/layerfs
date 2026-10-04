@@ -1,0 +1,660 @@
+{
+  "admission": "NOT_APPLICABLE",
+  "allocation": {
+    "files": [
+      {
+        "allocated_bytes": 49594368,
+        "length_bytes": 49594368,
+        "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/issue302-save-vfs-caller-cause1/store.sqlite"
+      }
+    ],
+    "scope": "database/WAL/SHM at this observation; not an unobserved peak",
+    "total_bytes": 49594368
+  },
+  "analysis_sha256": "42180adb11304dfdeae96bf341e6671d439d820c97aebe23605b3cc705081515",
+  "build": {
+    "binaries": {
+      "benchmark_history": {
+        "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/binary-archive/ffaf46db34f2f0f14df5601880da220448b9ab04b510c5fe36a79acefc1f9a37/benchmark_history",
+        "sha256": "ffaf46db34f2f0f14df5601880da220448b9ab04b510c5fe36a79acefc1f9a37"
+      },
+      "verify_history": {
+        "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/binary-archive/60f9f3a3d8bc25aaf7b2743fda4e231cd45d1b72722edc4eb1e59a444812f0fd/verify_history",
+        "sha256": "60f9f3a3d8bc25aaf7b2743fda4e231cd45d1b72722edc4eb1e59a444812f0fd"
+      }
+    },
+    "budget_ns": 30000000000,
+    "child": null,
+    "command": null,
+    "compilation_seal": "58bd963c90d22df1c2d430a35f02c693579ef84e2c9c9b8757c383fec1e5930a",
+    "cpu_ns": 59313000,
+    "dependency_reuse": "worktree-local target",
+    "exit_code": 0,
+    "mode": "sealed-binary-reuse",
+    "peak_rss_bytes": 35291136,
+    "profile": "release/locked",
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "status": "PASS",
+    "timed_out": false,
+    "wall_ns": 0
+  },
+  "caller_counts": {
+    "construction/read": {
+      "blob_bytes": 2114830,
+      "opens": 62,
+      "vfs_bytes": 3468002
+    },
+    "filesystem/read": {
+      "blob_bytes": 19551201,
+      "opens": 679,
+      "vfs_bytes": 19418937
+    },
+    "save/delta-probe": {
+      "blob_bytes": 354577818,
+      "opens": 7729,
+      "vfs_bytes": 498578452
+    },
+    "save/delta-reconstruct": {
+      "blob_bytes": 28802936,
+      "opens": 835,
+      "vfs_bytes": 49190721
+    },
+    "save/exact-reuse": {
+      "blob_bytes": 17299881,
+      "opens": 451,
+      "vfs_bytes": 25916072
+    },
+    "save/pool-index": {
+      "blob_bytes": 95832979,
+      "opens": 5763,
+      "vfs_bytes": 82976381
+    },
+    "save/pooled-base": {
+      "blob_bytes": 7885315,
+      "opens": 772,
+      "vfs_bytes": 6428290
+    },
+    "save/wave-discovery": {
+      "blob_bytes": 636139189,
+      "opens": 10439,
+      "vfs_bytes": 778636499
+    }
+  },
+  "cold": {
+    "attestation_ns": 5459047000,
+    "files": 180444,
+    "first_pass_ns": 6220390000,
+    "fstats": 386727,
+    "helper_binary_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+    "helper_seal": "6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87",
+    "invalidated_files": 25839,
+    "inventory_entries": 362152,
+    "invocation": {
+      "budget_ns": 60000000000,
+      "child": {
+        "attestation_ns": 5459047000,
+        "files": 180444,
+        "first_pass_ns": 6220390000,
+        "fstats": 386727,
+        "invalidated_files": 25839,
+        "inventory_entries": 362152,
+        "length_bytes": 2254684026,
+        "mincore_calls": 386713,
+        "mmap_calls": 360874,
+        "msync_calls": 25839,
+        "munmap_calls": 360874,
+        "opens": 386727,
+        "page_size_bytes": 16384,
+        "resident_after": 0,
+        "resident_first": 38233,
+        "total_pages": 264706,
+        "vector_peak_bytes": 140
+      },
+      "command": [
+        "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+        "--paths",
+        "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data/checkpoint-manifest.json",
+        "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data/inputs",
+        "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data/oracles"
+      ],
+      "cpu_ns": 11640978000,
+      "exit_code": 0,
+      "peak_rss_bytes": 2818048,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "timed_out": false,
+      "wall_ns": 11684932833
+    },
+    "length_bytes": 2254684026,
+    "method": "native two-pass msync-invalidate and whole-input mincore; no payload reads",
+    "mincore_calls": 386713,
+    "mmap_calls": 360874,
+    "msync_calls": 25839,
+    "munmap_calls": 360874,
+    "opens": 386727,
+    "page_size_bytes": 16384,
+    "resident_after": 0,
+    "resident_first": 38233,
+    "scope": "regular-file content pages; filesystem metadata residency not directly observed",
+    "status": "PASS",
+    "total_pages": 264706,
+    "vector_peak_bytes": 140
+  },
+  "competing_work": [
+    "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+  ],
+  "complete_budget_ns": 60000000000,
+  "complete_wall_ns": 45703042833,
+  "database_cold": {
+    "boundaries": [
+      {
+        "attestation": {
+          "attestation_ns": 55000,
+          "files": 1,
+          "first_pass_ns": 410000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 716800,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 44,
+          "total_pages": 44,
+          "vector_peak_bytes": 44
+        },
+        "before_state": 2,
+        "wall_ns": 3959417
+      },
+      {
+        "attestation": {
+          "attestation_ns": 192000,
+          "files": 1,
+          "first_pass_ns": 1001000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 2596864,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 157,
+          "total_pages": 159,
+          "vector_peak_bytes": 159
+        },
+        "before_state": 3,
+        "wall_ns": 4789417
+      },
+      {
+        "attestation": {
+          "attestation_ns": 138000,
+          "files": 1,
+          "first_pass_ns": 1057000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 4132864,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 251,
+          "total_pages": 253,
+          "vector_peak_bytes": 253
+        },
+        "before_state": 4,
+        "wall_ns": 4617625
+      },
+      {
+        "attestation": {
+          "attestation_ns": 164000,
+          "files": 1,
+          "first_pass_ns": 1195000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 5337088,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 324,
+          "total_pages": 326,
+          "vector_peak_bytes": 326
+        },
+        "before_state": 5,
+        "wall_ns": 4530000
+      },
+      {
+        "attestation": {
+          "attestation_ns": 208000,
+          "files": 1,
+          "first_pass_ns": 2030000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 8515584,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 516,
+          "total_pages": 520,
+          "vector_peak_bytes": 520
+        },
+        "before_state": 6,
+        "wall_ns": 5605416
+      },
+      {
+        "attestation": {
+          "attestation_ns": 284000,
+          "files": 1,
+          "first_pass_ns": 3132000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 11296768,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 686,
+          "total_pages": 690,
+          "vector_peak_bytes": 690
+        },
+        "before_state": 7,
+        "wall_ns": 6775542
+      },
+      {
+        "attestation": {
+          "attestation_ns": 323000,
+          "files": 1,
+          "first_pass_ns": 3978000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 14376960,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 873,
+          "total_pages": 878,
+          "vector_peak_bytes": 878
+        },
+        "before_state": 8,
+        "wall_ns": 8610333
+      },
+      {
+        "attestation": {
+          "attestation_ns": 373000,
+          "files": 1,
+          "first_pass_ns": 3904000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 15699968,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 947,
+          "total_pages": 959,
+          "vector_peak_bytes": 959
+        },
+        "before_state": 9,
+        "wall_ns": 8164959
+      },
+      {
+        "attestation": {
+          "attestation_ns": 443000,
+          "files": 1,
+          "first_pass_ns": 4605000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 18792448,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1140,
+          "total_pages": 1147,
+          "vector_peak_bytes": 1147
+        },
+        "before_state": 10,
+        "wall_ns": 9018917
+      },
+      {
+        "attestation": {
+          "attestation_ns": 464000,
+          "files": 1,
+          "first_pass_ns": 4806000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 20750336,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1219,
+          "total_pages": 1267,
+          "vector_peak_bytes": 1267
+        },
+        "before_state": 11,
+        "wall_ns": 9134167
+      },
+      {
+        "attestation": {
+          "attestation_ns": 553000,
+          "files": 1,
+          "first_pass_ns": 5854000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 24797184,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1468,
+          "total_pages": 1514,
+          "vector_peak_bytes": 1514
+        },
+        "before_state": 12,
+        "wall_ns": 10536708
+      },
+      {
+        "attestation": {
+          "attestation_ns": 641000,
+          "files": 1,
+          "first_pass_ns": 6793000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 28082176,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1643,
+          "total_pages": 1714,
+          "vector_peak_bytes": 1714
+        },
+        "before_state": 13,
+        "wall_ns": 11547750
+      },
+      {
+        "attestation": {
+          "attestation_ns": 786000,
+          "files": 1,
+          "first_pass_ns": 7551000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 30896128,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 1806,
+          "total_pages": 1886,
+          "vector_peak_bytes": 1886
+        },
+        "before_state": 14,
+        "wall_ns": 11949375
+      },
+      {
+        "attestation": {
+          "attestation_ns": 858000,
+          "files": 1,
+          "first_pass_ns": 8328000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 35778560,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 2101,
+          "total_pages": 2184,
+          "vector_peak_bytes": 2184
+        },
+        "before_state": 15,
+        "wall_ns": 13548166
+      },
+      {
+        "attestation": {
+          "attestation_ns": 950000,
+          "files": 1,
+          "first_pass_ns": 10729000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 42053632,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 2463,
+          "total_pages": 2567,
+          "vector_peak_bytes": 2567
+        },
+        "before_state": 16,
+        "wall_ns": 15626500
+      },
+      {
+        "attestation": {
+          "attestation_ns": 1045000,
+          "files": 1,
+          "first_pass_ns": 11064000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 45785088,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 2688,
+          "total_pages": 2795,
+          "vector_peak_bytes": 2795
+        },
+        "before_state": 17,
+        "wall_ns": 16269667
+      },
+      {
+        "attestation": {
+          "attestation_ns": 1068000,
+          "files": 1,
+          "first_pass_ns": 11001000,
+          "fstats": 3,
+          "invalidated_files": 1,
+          "inventory_entries": 2,
+          "length_bytes": 49594368,
+          "mincore_calls": 3,
+          "mmap_calls": 2,
+          "msync_calls": 1,
+          "munmap_calls": 2,
+          "opens": 3,
+          "page_size_bytes": 16384,
+          "resident_after": 0,
+          "resident_first": 2887,
+          "total_pages": 3027,
+          "vector_peak_bytes": 3027
+        },
+        "before_state": 18,
+        "wall_ns": 16164792
+      }
+    ],
+    "scope": "database/extant-WAL content pages; metadata/SHM/internal bounded product buffers excluded",
+    "status": "PASS",
+    "total": {
+      "checks": 17,
+      "wall_ns": 160848751
+    }
+  },
+  "fixture": {
+    "checkpoints": 157,
+    "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+    "reachable_commits": 15632,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+    "total_logical_bytes": 4936693030,
+    "unique_blob_bytes": 891893320
+  },
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "69e650526b3b59dcbc6b0a44276c27a2184edf566857376f1a18a7995c48f529",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "6dd4312bf35bdf0d88523a76eb3f4c50f5dd2a59390d634cb924855c704e2e2f",
+    "product_seal": "8bb6a516fdb8c51bcc836209c8938c4415efde59979e652bd0221e4947e9b2ed",
+    "source_commit": "26a453961c62900b3ac95b19f42d379b7d584cde",
+    "source_dirty": false,
+    "source_tree": "d0ed9146a1110586a89c0e97c03e0a964bb3597d"
+  },
+  "observer": {
+    "build": {
+      "budget_ns": 30000000000,
+      "child": null,
+      "command": [
+        "/usr/bin/clang",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-dynamiclib",
+        "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/core/benchmark/fs-bench-pro/diagnostics/sqlite_history_observer.c",
+        "-lsqlite3",
+        "-o",
+        "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/history-observer-archive/2e01bf1ca7fec4cfa620912f6569699de5b6ec447b188c2fd5070aef859b5251/history-observer.dylib"
+      ],
+      "cpu_ns": 245752000,
+      "exit_code": 0,
+      "peak_rss_bytes": 55476224,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "timed_out": false,
+      "wall_ns": 194126000
+    },
+    "coverage": "trace statements/VM plus delegated BLOB open/read/close and VFS read/write/sync/close; native VM reset counters unqualified; no device-byte/syscall claim",
+    "inputs": {
+      "architecture": "arm64",
+      "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+      "flags": [
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-dynamiclib"
+      ],
+      "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+      "sources": {
+        "sqlite_close_observer.c": "f1075ec9294b86fedf9b662bf5a040a03db530cdf332d5873055561a946a1aa7",
+        "sqlite_history_observer.c": "6fd11420727427e5d9a99b513760b8e87d2295731fc0c548f18172e9d4696f70",
+        "sqlite_vfs_observer.c": "40559848d8988307e7f034beabde54f3f49d8f6c7210c93627932303e1a9f944",
+        "sqlite_work.c": "925daf0a74f4506a1958ca6a3b674c3e4d21525a8d4fb6e1d770b177d34fbc9f"
+      },
+      "sqlite_link": "unmodified system -lsqlite3"
+    },
+    "mode": "compiled",
+    "path": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/history-observer-archive/2e01bf1ca7fec4cfa620912f6569699de5b6ec447b188c2fd5070aef859b5251/history-observer.dylib",
+    "seal": "2e01bf1ca7fec4cfa620912f6569699de5b6ec447b188c2fd5070aef859b5251",
+    "sha256": "eabb7a659dc276d32a50951d8cd21420669796a3f4aa71065fd0aa14cd9be92b"
+  },
+  "phases": {
+    "acquisition": {
+      "pack_acquisitions": 0,
+      "states": 17,
+      "vfs_requested_bytes": 0
+    },
+    "construction": {
+      "pack_acquisitions": 62,
+      "states": 17,
+      "vfs_requested_bytes": 3774754
+    },
+    "filesystem": {
+      "pack_acquisitions": 679,
+      "states": 17,
+      "vfs_requested_bytes": 28142041
+    },
+    "save_custody": {
+      "pack_acquisitions": 25989,
+      "states": 17,
+      "vfs_requested_bytes": 1798505411
+    }
+  },
+  "raw_hashes": {
+    "acquisitions.jsonl": "54e30d504053b2bb9f7c11dc04765834f1fb22cc4fbff048d95812fa629d2729",
+    "driver.stderr": "079fb5f1beeb22befdd99473a9c2d74fdfccfd50953ff6ac50bd56867739419c",
+    "manifest.json": "5c1e79f2ddddb0e919f778a5d256fb7fa97744933dcdb0f8f0b42b90dc3a292e",
+    "receipt.json": "2f8d4f3c0504267e0f63333c1f83c28dd07a862eba274b6b601c5e82b27b5bb3"
+  },
+  "raw_run": "benchmark-results/fs-bench-pro/issue302-save-vfs-caller-cause1",
+  "schema": "history17-save-acquisition-cause-v1",
+  "status": "DIAGNOSTIC_COMPLETE",
+  "verification": "SKIPPED: mechanism counts only; final independent proof separate"
+}

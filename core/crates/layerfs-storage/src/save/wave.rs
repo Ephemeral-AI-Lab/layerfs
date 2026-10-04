@@ -49,22 +49,10 @@ impl State<'_> {
             .into_iter()
             .collect();
         self.storage.source.locate(&ids)?;
-        // Logical children require locator membership, not payload reconstruction.
-        // Only exact-reuse objects and declared physical candidates need chains.
-        let roots = objects
-            .iter()
-            .flat_map(|o| std::iter::once(o.id()).chain(o.predecessors().ids()))
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .filter_map(|id| self.storage.source.location(id, i64::MAX).transpose())
-            .collect::<StorageResult<Vec<_>>>()?;
-        crate::read::chains(
-            &self.storage.source,
-            &roots,
-            &mut self.packs,
-            &mut self.decode,
-            &mut self.groups,
-        )?;
+        // Exact reuse and representation selection walk and authenticate their
+        // own required chains. Consume those inputs with the object demand:
+        // a wave-wide physical prewalk can exceed retention and evict them
+        // before admission, or acquire candidates selection never needs.
         drop(membership);
         self.plan_initial_ordinals(&objects)?;
         let admission = self.storage.work.span(super::Stage::Admission);
