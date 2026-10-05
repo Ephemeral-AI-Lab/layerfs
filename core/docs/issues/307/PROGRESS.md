@@ -26,8 +26,16 @@ full reader/orphan/failure composition remain open.
 S0/S8 now has a source/build-proven external dependency gate:
 [FUSE timestamp blocker](FUSE-TIME-BLOCKER-20261005.md). The published fuser pin
 corrupts negative fractional time and panics before the callback at signed minimum.
-A decision on the unmodified upstream fix is pending; no dependency is changed.
+The owner reaffirmed the third-party restriction; no source exception was
+authorized. Keep the published pin while awaiting an allowed corrected release.
 Independent ready engine/runtime/prerequisite work continues.
+
+P1 now has public content semantic admission for all thirteen canonical roles:
+hash/domain verification, owning grammar decoders, Store-policy whole-file bounds,
+expected root scope and references derived from bytes. Real macOS Save rejects
+omitted inode dependencies and reconstructs an admitted complete root. This is
+local grammar/closure prerequisite evidence; authenticated adapters, contextual
+closure and authority remain open.
 
 S0 in progress. Public-API proof in
 [interleaved_saves.rs](../../../crates/layerfs-persistence/tests/interleaved_saves.rs)
@@ -51,19 +59,17 @@ See [implemented architecture](../../architecture/19-daemon-overlay.md).
 The remaining list below includes initial interfaces already established; complete
 S0/S1/S2 acceptance requires the unimplemented service/lifetime/resource work.
 
-1. Implement S1 as an active `layerfs-overlay` crate: one owner connection,
-   startup/schema/readback, typed namespaced metadata, binary cell payload,
-   operation scratch and ownership; observe real VM/sort/full-scan/reprepare
-   counters and retain paired EXPLAIN. Preserve existing dependency pins.
-2. Establish minimal S2 frontier interfaces: checked incarnations, publication
-   tickets and reply-send-attempt custody, generation-selective keyset pages and
-   fixed EOF. Defer no long computation/IO under the owner transaction.
-3. Establish S3 against genuine content-built roots and current public APIs.
-   No mount-wide materialization or special empty-root substitute.
-4. Close S0 algorithm gates for truncate/regrow, repeated failed capture and
+1. Embed runtime authority/Save adapters in the SDK composition. Use established
+   semantic admission, initialized provider handles and scoped borrowed Saves;
+   retain exact error/completion/disconnect custody and bounded windows.
+2. Close S0 algorithm gates for truncate/regrow, repeated failed capture and
    orphan composition, physical pressure and fair service; specify all R1–R8
    adversarial bounds and P1–P14 implementation ownership. These remain open,
    so prerequisite smoke proofs do not complete S0.
+3. Extend S1/S2 with physical pressure, automatic bounded reclamation and exact
+   reader/orphan custody; retain paired SQL plans/profiles and fair short jobs.
+4. Extend S3/S4/S5 from the established immutable base and mutable engine APIs
+   to effective namespace/payload semantics with bounded streaming windows.
 5. Progress the embedded runtime and canonical backed-construction/import
    prerequisites as their public boundaries become ready.
 

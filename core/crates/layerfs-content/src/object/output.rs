@@ -94,7 +94,10 @@ pub struct FinalizedObject {
 }
 
 impl FinalizedObject {
-    /// Wraps already-canonical bytes and computes their identity once.
+    /// Wraps trusted constructor output and computes its identity once.
+    ///
+    /// This checks the envelope only. Untrusted runtime input must use
+    /// [`Self::admit`] to authenticate identity, decode the role and derive refs.
     pub fn new(role: ObjectRole, canonical: Vec<u8>) -> ContentResult<Self> {
         // A leaf or whole-file object must still be a decodable canonical object.
         codec::decode_bytes_object(&canonical)?;
@@ -104,6 +107,32 @@ impl FinalizedObject {
             role,
             canonical,
             references: Vec::new(),
+            predecessors: AdvisoryPredecessors::new(),
+        })
+    }
+
+    /// Authenticates untrusted canonical bytes and derives their direct refs.
+    ///
+    /// Uses the selected Store policy and expected inode allocation scope. No
+    /// supplied reference list or predecessor claim is trusted. This validates
+    /// local grammar; the runtime must separately establish authority, saved
+    /// dependency closure and contextual tree/topology invariants before use.
+    /// Frame admission must bound allocation before passing ownership here.
+    pub fn admit(
+        id: ObjectId,
+        role: ObjectRole,
+        canonical: Vec<u8>,
+        policy: crate::policy::ConstructionPolicy,
+        inode_scope: crate::filesystem::InodeScope,
+        timing: layerfs_telemetry::timer::TimingScope<'_>,
+    ) -> ContentResult<Self> {
+        let references =
+            super::admission::references(id, role, &canonical, policy, inode_scope, timing)?;
+        Ok(Self {
+            id,
+            role,
+            canonical,
+            references,
             predecessors: AdvisoryPredecessors::new(),
         })
     }

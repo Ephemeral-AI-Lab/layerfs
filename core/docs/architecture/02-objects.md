@@ -116,3 +116,39 @@ predecessors were attached.
 `FinalizedObject::new` re-decodes the supplied bytes as a canonical object before
 accepting them, so a leaf or whole-file object must still be decodable canonical
 framing.
+
+### 2.5 Runtime semantic admission — #307 implementation checkpoint
+
+This section describes the implementation after `6a0dbe003`; it does not advance
+the earlier sections' source pin or historical measurements.
+[FinalizedObject::admit](../../crates/layerfs-content/src/object/output.rs) is the
+untrusted-input boundary. The selected Store construction policy and expected
+inode scope are required inputs. The existing `new` checks only the envelope and
+does not establish semantic admission.
+
+[Admission](../../crates/layerfs-content/src/object/admission.rs) first validates
+policy and envelope/object/field bounds, hashes once under the canonical domain,
+then calls the owning decoder for each of the thirteen roles. Leaf/branch role
+confusion, invalid grammar and impossible local summaries fail explicitly. A
+filesystem root must have the expected allocation scope. Whole-file bounds derive
+from the selected policy; this imposes no total file/Save/Workspace cap. Directory
+decode now rejects an impossible declared row count before reserving decoded rows.
+
+References come from decoded bytes in canonical order, retaining repeats: extent
+payloads/children, file mapping root, inode content then metadata for each row,
+branch children, attribute values and filesystem inode table. Directory serials,
+profile and scope identities are not stored-object references. Payload/symlink
+roles have no children. No sandbox reference list or predecessor provenance claim
+is accepted. The canonical allocation transfers intact; bounded decoded page
+state and reference vectors are temporary per-object work. Hashing costs O(B),
+decoding/reference extraction O(B+R); R is bounded by that role's page grammar.
+There is no Save-sized resident set or graph traversal here.
+
+Runtime authority, reference savedness, child role/level/summary/fill context,
+inode-root placement and complete namespace topology remain separate obligations.
+Admission permits a locally valid short root page; closure must check whether it
+actually appears in a non-root position. The real Store still rejects a derived
+missing inode dependency at Save completion. Public tests cover all roles,
+cross-role confusion, rehashed malformed input, allocation ownership, policy/
+scope and real macOS Store reconstruction/closure. These small proofs do not
+complete P1 or qualify the authenticated runtime.

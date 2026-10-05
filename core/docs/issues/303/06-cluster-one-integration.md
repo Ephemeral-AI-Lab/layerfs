@@ -144,6 +144,13 @@ only validates a generic envelope and supplied role, not the complete proposed
 admission contract. Bind peer, Workspace incarnation, Branch/scope, Store/profile
 and Save capability. Enforce count/byte/session bounds before buffering.
 
+Implementation checkpoint #307 after `6a0dbe003`: public
+[`FinalizedObject::admit`](../../../crates/layerfs-content/src/object/output.rs)
+now supplies domain identity, local role grammar, expected root scope and
+role-derived direct references without a payload copy. Runtime adapters must use
+this boundary for untrusted output. It does not establish peer/capability authority,
+saved closure or contextual child/topology validation; P1 remains incomplete.
+
 ## 5. Immutable distribution and caller obligations
 
 ```text

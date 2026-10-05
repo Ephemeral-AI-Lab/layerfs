@@ -75,12 +75,11 @@ the failed minimum case remains unverified, rather than rewritten as success.
 
 ## Smallest required decision and independent work
 
-Pending owner decision: allow a locked pin to the exact **unmodified upstream**
-fix revision as an explicit exception to the registry/dependency-source rule,
-then rebuild/requalify both native cases; or keep the registry requirement and
-retain this blocker until a corrected published release exists. The dependency
-and pins remain unchanged while that approval is pending. The async approval
-request names this exact revision and the governing repository/user restriction.
+Owner response on 2026-10-05 reaffirmed that third-party libraries and imports
+must not be modified or patched. No dependency-source exception was authorized.
+Keep the published 0.18.0 pin and retain this blocker until a corrected published
+release can satisfy the governing dependency policy. The upstream fix above is
+source evidence only; it is not an adopted dependency or implementation.
 
 This blocks S0's required native capability closure and complete S8/S12 admission.
 It does not make partial S1/S2/S3 complete and does not stop independent engine,

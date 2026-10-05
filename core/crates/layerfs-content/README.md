@@ -40,6 +40,7 @@ object::ObjectId          fixed 32-byte identity over frozen domain framing
 object::codec             canonical envelope encode/decode with checked lengths
 object::AuthenticatedObjects  narrow provider: read_canonical_batch, read_canonical
 object::FinalizedObject   identity + role + owned canonical bytes + direct references
+FinalizedObject::admit    untrusted ID/role/bytes -> authenticated role-derived refs
 object::FinalizedConsumer bounded sink; DiscardingConsumer is the non-persisting one
 object::inode_leaf        checked compact inode value/leaf grammar and pooled layout
 file::construct_bytes     known-length complete-file construction
@@ -60,7 +61,9 @@ enabled or disabled changes no product work and no result.
 - The compact inode-leaf grammar (`object/inode_leaf.rs`) is the pooling input
   format only: it implements no directory traversal, inode allocation, hardlink
   update or tree construction, and it does not decide whether a leaf is pooled.
-- Filesystem trees, attributes and metadata ropes are not implemented here.
+- Filesystem trees and attributes are implemented by the public filesystem
+  modules below; the backed streaming corrections in cluster-two P3/P4/P6/P7/
+  P13/P14 remain required.
 - Known-edit construction is implemented for ordered edit streams. It re-derives
   the mapping from the retained extent sequence: unchanged chunk payloads are
   retained and referenced, but unchanged mapping *pages* are re-encoded rather
@@ -73,6 +76,13 @@ enabled or disabled changes no product work and no result.
 - The `AuthenticatedObjects` contract requires the provider to authenticate the
   bytes it returns; C1 revalidates framing and structure but does not re-hash an
   unchanged owned allocation.
+- Runtime output uses `FinalizedObject::admit` with the selected Store policy and
+  expected scope. It checks the envelope before hashing, verifies the canonical
+  ID, decodes the supplied role and derives all direct references (including
+  inode content/metadata). The canonical allocation moves without a payload
+  copy. Generic `new` remains a trusted-constructor envelope check. Admission
+  alone supplies neither peer authority nor saved dependency closure/contextual
+  tree validation; adapters must establish those before root use.
 - A range read navigates the tree with one-ID batches and batches only payload
   acquisition; grouped node acquisition is a later change, not a silent default.
 

@@ -147,6 +147,11 @@ impl Format for CompactDirectory {
         let count = node_count(value);
         let subtree_count = node_subtree_count(value);
         let subtree_bytes = node_subtree_bytes(value);
+        // Even the shortest leaf row needs a name prefix, one name byte and
+        // one serial. Refuse impossible counts before reserving decoded rows.
+        if count > (value.len() - NODE_HEADER_BYTES) / (NAME_LENGTH_BYTES + 1 + 8) {
+            return Err(ContentError::UnexpectedEof);
+        }
         let mut cursor = NODE_HEADER_BYTES;
         let mut entries = Vec::with_capacity(count);
         match role {
