@@ -1,7 +1,8 @@
 //! Typed bounded SQL jobs. No closure can hold the owner across network/Exec work.
 use layerfs_overlay::{
-    BaseSource, Capture, Cell, Dentry, Inode, Lease, Overlay, OverlayResult, Publication, Route,
-    ScratchRecord, WorkspaceState, CELL_BYTES, MASK_BYTES, PAGE_ROWS, SCRATCH_BYTES,
+    BaseSource, Capture, Cell, Dentry, Inode, Lease, NameWindow, Overlay, OverlayResult,
+    Publication, Route, ScratchRecord, WorkspaceState, CELL_BYTES, MASK_BYTES, PAGE_ROWS,
+    SCRATCH_BYTES,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -36,6 +37,20 @@ pub enum Command {
     SourceInode {
         source: BaseSource,
         serial: u64,
+    },
+    SourceDentry {
+        source: BaseSource,
+        parent: u64,
+        name: Vec<u8>,
+    },
+    SourceNames {
+        source: BaseSource,
+        parent: u64,
+        after: Option<Vec<u8>>,
+    },
+    InstallPrepared {
+        workspace: std::sync::Arc<layerfs_workspace::Workspace>,
+        input: layerfs_workspace::PreparedBase,
     },
     CleanupState,
     Close,
@@ -91,6 +106,8 @@ pub enum Response {
     Dentries(Vec<Dentry>),
     Cell(Option<Cell>),
     BaseSource(BaseSource),
+    Dentry(Option<Dentry>),
+    Names(NameWindow),
     RetainedBaseSource(Option<BaseSource>),
     Scratch(Vec<ScratchRecord>),
     Done,
@@ -112,11 +129,14 @@ impl Command {
             Self::Inode(_) | Self::PendingPublications { .. } | Self::CapturedCell { .. } => {
                 ServiceClass::Read
             }
-            Self::SourceInode { .. } => ServiceClass::Read,
+            Self::SourceInode { .. } | Self::SourceDentry { .. } | Self::SourceNames { .. } => {
+                ServiceClass::Read
+            }
             Self::AcquireBaseSource { .. } => ServiceClass::Source,
             Self::Publish { .. } => ServiceClass::Mutation,
             Self::Capture
             | Self::Install { .. }
+            | Self::InstallPrepared { .. }
             | Self::CapturedInodes { .. }
             | Self::CapturedDentries { .. } => ServiceClass::Capture,
             Self::PutScratch { .. } | Self::ScratchPage { .. } => ServiceClass::Scratch,
@@ -143,11 +163,49 @@ impl Command {
             ),
             Self::PendingPublications { .. } => (0, PAGE_ROWS * std::mem::size_of::<Publication>()),
             Self::CapturedCell { .. } => (0, CELL_BYTES + MASK_BYTES + std::mem::size_of::<Cell>()),
+            Self::SourceDentry { name, .. } => {
+                (name.capacity(), std::mem::size_of::<Dentry>() + 255)
+            }
+            Self::SourceNames { after, .. } => (
+                after.as_ref().map_or(0, Vec::capacity),
+                2 * PAGE_ROWS * (std::mem::size_of::<Dentry>() + 255)
+                    + std::mem::size_of::<NameWindow>(),
+            ),
             _ => (0, 256),
         };
         base.checked_add(input)?.checked_add(reply)
     }
-    pub(crate) fn perform(self, db: &Overlay, route: Option<Route>) -> OverlayResult<Response> {
+    pub(crate) fn install_capture(&self) -> Option<Capture> {
+        match self {
+            Self::Install { capture, .. } => Some(*capture),
+            Self::InstallPrepared { input, .. } => Some(input.capture()),
+            _ => None,
+        }
+    }
+    pub(crate) fn perform(
+        self,
+        db: &Overlay,
+        route: Option<Route>,
+    ) -> Result<Response, crate::OwnerError> {
+        if let Self::InstallPrepared { workspace, input } = self {
+            if route != Some(workspace.route()) {
+                return Err(crate::OwnerError::Install {
+                    cause: Box::new(layerfs_overlay::OverlayError::Stale.into()),
+                    input: Box::new(input),
+                });
+            }
+            return workspace
+                .install_prepared_base(db, input)
+                .map(|_| Response::Done)
+                .map_err(|(cause, input)| crate::OwnerError::Install {
+                    cause: Box::new(cause),
+                    input: Box::new(input),
+                });
+        }
+        self.perform_overlay(db, route)
+            .map_err(crate::OwnerError::Overlay)
+    }
+    fn perform_overlay(self, db: &Overlay, route: Option<Route>) -> OverlayResult<Response> {
         if let Self::Open {
             incarnation,
             base_root,
@@ -159,7 +217,7 @@ impl Command {
         }
         let route = route.ok_or(layerfs_overlay::OverlayError::Invalid("missing route"))?;
         match self {
-            Self::Open { .. } => unreachable!(),
+            Self::Open { .. } | Self::InstallPrepared { .. } => unreachable!(),
             Self::State => db.state(route).map(Response::State),
             Self::RetainedCapture => db.retained_capture(route).map(Response::RetainedCapture),
             Self::PendingPublications { after } => db
@@ -182,6 +240,28 @@ impl Command {
                     return Err(layerfs_overlay::OverlayError::Stale);
                 }
                 db.source_inode(source, serial).map(Response::Inode)
+            }
+            Self::SourceDentry {
+                source,
+                parent,
+                name,
+            } => {
+                if source.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.source_dentry(source, parent, &name)
+                    .map(Response::Dentry)
+            }
+            Self::SourceNames {
+                source,
+                parent,
+                after,
+            } => {
+                if source.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.source_name_window(source, parent, after.as_deref())
+                    .map(Response::Names)
             }
             Self::CleanupState => db.cleanup_state(route).map(Response::CleanupState),
             Self::Close => db.close(route).map(|_| Response::Done),

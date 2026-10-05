@@ -503,6 +503,7 @@ name = "layerfs-daemon"
 version = "0.1.6"
 dependencies = [
  "layerfs-overlay",
+ "layerfs-workspace",
 ]
 
 [[package]]
@@ -555,6 +556,7 @@ dependencies = [
  "layerfs-persistence",
  "layerfs-storage",
  "layerfs-telemetry",
+ "layerfs-workspace",
 ]
 
 [[package]]
@@ -581,6 +583,7 @@ name = "layerfs-workspace"
 version = "0.1.6"
 dependencies = [
  "layerfs-content",
+ "layerfs-daemon",
  "layerfs-overlay",
  "layerfs-telemetry",
 ]

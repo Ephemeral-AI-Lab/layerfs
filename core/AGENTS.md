@@ -16,8 +16,9 @@ product mental model or campaign-specific benchmark procedures.
   Init and telemetry. The initial cluster-two SQLite engine is `layerfs-overlay`;
   its active membership does not complete Workspace/FUSE/daemon integration.
   [core/Cargo.toml](Cargo.toml) is the membership authority.
-  Workspace now exposes initial immutable base binding/read and prepared known
-  install interfaces; effective namespace merge remains unfinished. Its
+  Workspace now exposes immutable base binding/read, effective source-qualified
+  lookup/stat/paged name merge and prepared actor install interfaces. Full mutable
+  namespace/payload/native semantics remain unfinished. Its
   temporarily relocated `layerfs-workspace-legacy` source remains excluded.
   Daemon now exposes an initial fair SQL owner library; its relocated predecessor
   remains excluded, and native executable/control/Exec integration is unfinished.

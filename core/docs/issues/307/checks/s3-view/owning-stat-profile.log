@@ -1,0 +1,10 @@
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.48s
+     Running tests/runtime.rs (core/target/debug/deps/runtime-e75646e62b883e6e)
+
+running 1 test
+S3_OWNING_STAT logical=131071 namespace_refs=2 owning_payload_bytes=0 owning_pack_bytes=0 locate=1
+test workspace_stat_uses_authenticated_scoped_owning_lengths_without_payload_or_fallback ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.02s
+

@@ -69,11 +69,11 @@ impl Lane {
             if index == ServiceClass::Source as usize
                 && self.queues[ServiceClass::Capture as usize]
                     .iter()
-                    .any(|job| matches!(job.command, Command::Install { .. }) && job.id < front.id)
+                    .any(|job| job.command.install_capture().is_some() && job.id < front.id)
             {
                 continue;
             }
-            if matches!(front.command, Command::Install { .. })
+            if front.command.install_capture().is_some()
                 && self.queues[ServiceClass::Source as usize]
                     .iter()
                     .any(|job| job.id < front.id)
@@ -180,7 +180,10 @@ impl Shared {
             Ok(state) => state,
             Err(_) => {
                 let _ = job.reply.send(Envelope {
-                    result: Err(OwnerError::Stopped),
+                    result: Err(OwnerError::Unattempted {
+                        cause: Box::new(OwnerError::Stopped),
+                        command: Box::new(job.command),
+                    }),
                     _credit: job.credit,
                 });
                 return;
@@ -189,7 +192,10 @@ impl Shared {
         if state.stopping {
             drop(state);
             let _ = job.reply.send(Envelope {
-                result: Err(OwnerError::Stopped),
+                result: Err(OwnerError::Unattempted {
+                    cause: Box::new(OwnerError::Stopped),
+                    command: Box::new(job.command),
+                }),
                 _credit: job.credit,
             });
             return;
@@ -197,7 +203,10 @@ impl Shared {
         let Some(lane) = state.lanes.get_mut(&job.route.map_or(0, Route::namespace)) else {
             drop(state);
             let _ = job.reply.send(Envelope {
-                result: Err(OwnerError::Stopped),
+                result: Err(OwnerError::Unattempted {
+                    cause: Box::new(OwnerError::Stopped),
+                    command: Box::new(job.command),
+                }),
                 _credit: job.credit,
             });
             return;
@@ -239,7 +248,10 @@ impl Shared {
         // Drop/send retained credits outside the queue lock.
         for job in jobs {
             let _ = job.reply.send(Envelope {
-                result: Err(OwnerError::Stopped),
+                result: Err(OwnerError::Unattempted {
+                    cause: Box::new(OwnerError::Stopped),
+                    command: Box::new(job.command),
+                }),
                 _credit: job.credit,
             });
         }

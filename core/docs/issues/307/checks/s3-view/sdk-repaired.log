@@ -1,0 +1,13 @@
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.07s
+     Running tests/runtime.rs (core/target/debug/deps/runtime-e75646e62b883e6e)
+
+running 5 tests
+test refused_admission_retains_the_exact_phase_without_replay ... ok
+test missing_dependency_finish_is_retained_as_the_original_storage_error ... ok
+test capability_scope_authority_and_read_window_are_checked_before_service ... ok
+test workspace_stat_uses_authenticated_scoped_owning_lengths_without_payload_or_fallback ... ok
+test independent_saves_pending_reads_retained_finish_and_slot_reuse ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

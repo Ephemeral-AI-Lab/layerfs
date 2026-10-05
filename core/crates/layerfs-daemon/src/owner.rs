@@ -45,13 +45,31 @@ pub enum OwnerError {
     IdentityExhausted,
     Disconnected,
     WorkerPanicked,
+    Unattempted {
+        cause: Box<OwnerError>,
+        command: Box<Command>,
+    },
+    Install {
+        cause: Box<layerfs_workspace::WorkspaceError>,
+        input: Box<layerfs_workspace::PreparedBase>,
+    },
 }
 impl fmt::Display for OwnerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{self:?}")
     }
 }
-impl std::error::Error for OwnerError {}
+impl std::error::Error for OwnerError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(error) => Some(error),
+            Self::Overlay(error) => Some(error),
+            Self::Unattempted { cause, .. } => Some(cause.as_ref()),
+            Self::Install { cause, .. } => Some(cause.as_ref()),
+            _ => None,
+        }
+    }
+}
 
 /// One initialized daemon service. It owns the connection thread's entire lifetime.
 pub struct Owner {
@@ -317,7 +335,10 @@ fn run(shared: &Shared, db: &Overlay) {
         served = served.saturating_add(1);
         if shared.stopped() {
             let _ = job.reply.send(Envelope {
-                result: Err(OwnerError::Stopped),
+                result: Err(OwnerError::Unattempted {
+                    cause: Box::new(OwnerError::Stopped),
+                    command: Box::new(job.command),
+                }),
                 _credit: job.credit,
             });
             continue;
@@ -333,7 +354,10 @@ fn run(shared: &Shared, db: &Overlay) {
                         let class = job.command.class();
                         shared.progress(ns(job.route), class, elapsed(job.admitted), 0);
                         let _ = job.reply.send(Envelope {
-                            result: Err(OwnerError::Overlay(error)),
+                            result: Err(OwnerError::Unattempted {
+                                cause: Box::new(OwnerError::Overlay(error)),
+                                command: Box::new(job.command),
+                            }),
                             _credit: job.credit,
                         });
                         continue;
@@ -342,9 +366,9 @@ fn run(shared: &Shared, db: &Overlay) {
                 }
             }
         }
-        if let Command::Install { capture, .. } = &job.command {
+        if let Some(capture) = job.command.install_capture() {
             let ready = if job.route == Some(capture.route()) {
-                db.install_ready(*capture)
+                db.install_ready(capture)
             } else {
                 Err(OverlayError::Stale)
             };
@@ -357,7 +381,10 @@ fn run(shared: &Shared, db: &Overlay) {
                     let class = job.command.class();
                     shared.progress(ns(job.route), class, elapsed(job.admitted), 0);
                     let _ = job.reply.send(Envelope {
-                        result: Err(OwnerError::Overlay(error)),
+                        result: Err(OwnerError::Unattempted {
+                            cause: Box::new(OwnerError::Overlay(error)),
+                            command: Box::new(job.command),
+                        }),
                         _credit: job.credit,
                     });
                     continue;
@@ -369,14 +396,31 @@ fn run(shared: &Shared, db: &Overlay) {
         let namespace = ns(job.route);
         let wait = elapsed(job.admitted);
         let start = Instant::now();
-        let result = job
-            .command
-            .perform(db, job.route)
-            .map_err(OwnerError::Overlay);
+        let result = job.command.perform(db, job.route);
         shared.progress(namespace, class, wait, elapsed(start));
         let _ = job.reply.send(Envelope {
             result,
             _credit: job.credit,
         });
+    }
+}
+
+impl fmt::Debug for Completion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.envelope.result.fmt(f)
+    }
+}
+impl fmt::Display for Completion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "owner completion: {:?}", self.envelope.result)
+    }
+}
+impl std::error::Error for Completion {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.envelope
+            .result
+            .as_ref()
+            .err()
+            .map(|error| error as &dyn std::error::Error)
     }
 }

@@ -27,5 +27,8 @@ pub(crate) const BASE_SOURCE_DECREMENT: &str =
 pub(crate) const DENTRY_CAPTURE: &str = "SELECT parent,name,serial
     FROM dentry INDEXED BY dentry_capture WHERE ns=?1 AND gen=?2
     AND (parent,name)>(?3,?4) ORDER BY parent,name LIMIT 64";
+pub(crate) const SOURCE_NAMES: &str =
+    "SELECT parent,name,serial FROM dentry INDEXED BY dentry_capture
+    WHERE ns=?1 AND gen=?2 AND parent=?3 AND name>?4 ORDER BY name LIMIT 64";
 pub(crate) const SCRATCH_PAGE: &str = "SELECT kind,key,value FROM scratch
     WHERE ns=?1 AND operation=?2 AND kind=?3 AND key>?4 ORDER BY key LIMIT 64";

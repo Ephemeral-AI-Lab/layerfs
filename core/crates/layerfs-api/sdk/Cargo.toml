@@ -13,3 +13,4 @@ layerfs-history = { path = "../../layerfs-history" }
 layerfs-persistence = { path = "../../layerfs-persistence" }
 layerfs-storage = { path = "../../layerfs-storage" }
 layerfs-telemetry = { path = "../../layerfs-telemetry" }
+layerfs-workspace = { path = "../../layerfs-workspace" }

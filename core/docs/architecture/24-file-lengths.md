@@ -51,3 +51,12 @@ proof returns ordered lengths with zero payload reads and 926 acquired metadata
 pack bytes. These are scoped count diagnostics, not a cold latency qualification;
 OS/database cache residency is not asserted. Non-file, missing and oversize windows
 fail explicitly. Final logs retain the exact checked source identity.
+
+## S3 completion reconciliation
+
+The completion after `bdc6ed4af` adds effective source-qualified read/ordered-name
+composition, actual paired actor install, original unattempted-command custody and
+owning SDK stat lengths. See [effective base view](29-effective-base-view.md) and
+[S3 exit audit](../issues/307/S3-EXIT-AUDIT.md). Earlier limitations/evidence above
+retain their source scope; native/logical runtime transport, mutable byte semantics
+and aggregate resource acceptance remain unfinished.

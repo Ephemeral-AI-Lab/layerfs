@@ -192,6 +192,28 @@ pub fn list_after(
     max_bytes: usize,
     work: &mut DirectoryReadWork,
 ) -> ContentResult<ListingPage> {
+    list_after_bytes(
+        reader,
+        root,
+        after.map(PathName::as_bytes),
+        max_entries,
+        max_bytes,
+        work,
+    )
+}
+/// Lists after a binary resume boundary. The cursor is not a stored name and
+/// need not satisfy the canonical UTF-8 name grammar; encoded names are unchanged.
+pub fn list_after_bytes(
+    reader: &dyn AuthenticatedObjects,
+    root: DirectoryRoot,
+    after: Option<&[u8]>,
+    max_entries: usize,
+    max_bytes: usize,
+    work: &mut DirectoryReadWork,
+) -> ContentResult<ListingPage> {
+    if after.is_some_and(|key| key.len() > 255) {
+        return Err(ContentError::PathLimitExceeded);
+    }
     if max_entries == 0 || max_bytes == 0 {
         return Err(ContentError::InvalidRecord("listing limit"));
     }
@@ -201,7 +223,7 @@ pub fn list_after(
     while let Some((id, root_page, maximum)) = stack.pop() {
         if after
             .zip(maximum.as_ref())
-            .is_some_and(|(cursor, maximum)| maximum <= cursor)
+            .is_some_and(|(cursor, maximum)| maximum.as_bytes() <= cursor)
         {
             continue;
         }
@@ -211,7 +233,7 @@ pub fn list_after(
         let wire = decode_checked(&canonical, root_page, None, maximum.as_ref())?;
         if wire.level == 0 {
             for entry in wire.entries {
-                if after.is_some_and(|cursor| entry.key <= *cursor) {
+                if after.is_some_and(|cursor| entry.key.as_bytes() <= cursor) {
                     continue;
                 }
                 let width =

@@ -10,3 +10,6 @@ license.workspace = true
 layerfs-content = { path = "../layerfs-content" }
 layerfs-overlay = { path = "../layerfs-overlay" }
 layerfs-telemetry = { path = "../layerfs-telemetry" }
+
+[dev-dependencies]
+layerfs-daemon = { path = "../layerfs-daemon" }

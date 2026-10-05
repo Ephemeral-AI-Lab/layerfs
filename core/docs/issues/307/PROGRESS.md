@@ -5,7 +5,7 @@
 Owner: [tracker #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307).
 Design baseline: `c9861bc878583822a468e78dbc0f3740eacbecbe` on local main.
 The [implementation plan](../303/07-implementation-validation.md) owns milestone
-dependencies and exits. S1 and S2 are complete with their exit audits and covering evidence. S0 and S3–S13 remain
+dependencies and exits. S1, S2 and S3 are complete with their exit audits and covering evidence. S0 and S4–S13 remain
 unchecked until their complete implementation and required evidence exist.
 
 ## Current checkpoint
@@ -14,7 +14,7 @@ Initial overlay/prerequisite checkpoint `f2a381119` is committed locally, with
 all required host checks passing. S3 now has initial public content-built root
 binding/read APIs and immutable caching; its dormant predecessor is temporarily
 relocated intact. See [base architecture](../../architecture/20-workspace-base.md).
-The immutable base remains partial implementation; S1 engine closure is recorded below.
+S3 immutable/effective read closure is recorded below; full mutable filesystem/native implementation remains outstanding.
 
 S2 now has a built daemon SQL owner with fair namespaces/classes, finite capture
 ordering, lifecycle credits, retained-result accounting and event-driven parked
@@ -67,8 +67,7 @@ and `CAP_SYS_ADMIN`. This is prerequisite evidence, not product FUSE qualificati
 
 P5 has an owning saved-file metadata length API and authorized SDK delivery.
 Whole-file facts avoid payload reads; chunked/empty facts authenticate only small
-state roots. Paired actual locator EXPLAIN/runtime counters are retained. Base/stat
-and logical transport integration remain open; see [file lengths](../../architecture/24-file-lengths.md).
+state roots. Paired actual locator EXPLAIN/runtime counters are retained. Owning Base/stat integration is complete; logical transport integration remains open; see [file lengths](../../architecture/24-file-lengths.md).
 
 Terminal close now revokes new entry, retains exact owner/capture/reply custody
 and maintains a ready-only cleanup index. Daemon maintenance rotates short deletion
@@ -76,7 +75,7 @@ windows automatically while idle and after finite foreground service. Native
 unmount, live-generation/orphan/failure/pressure and aggregate qualification remain
 open; see [terminal reclaim](../../architecture/25-terminal-reclaim.md).
 
-## Completed milestones: S1 and S2; next completion target: S3
+## Completed milestones: S1–S3; current stopping boundary: handoff before S4
 
 [S1 exit audit](S1-EXIT-AUDIT.md) maps the engine exits to actual source/evidence.
 The current closure slice removes the arbitrary default total-page quota and
@@ -93,10 +92,10 @@ Final host565/Linux21 tests and all prescribed core checks pass. Live-generation
 orphan/normal failed-Commit resolution, pressure and native ownership remain later gates.
 
 [S3 exit audit](S3-EXIT-AUDIT.md) now records prepared known install and old-root
-retention against actual engine install. Effective point/name/metadata merge and
-P5 stat/runtime integration remain required. Exact short base-source leases and
+retention against actual engine install. Effective point/name/metadata merge, actual source-bound actor install and
+owning SDK stat lengths now pass their required evidence. Exact short base-source leases and
 finite install readiness now provide the source lifetime prerequisite; see
-[source windows](../../architecture/28-base-source-windows.md). S3 is still unchecked.
+[source windows](../../architecture/28-base-source-windows.md). S3 is complete; mutable/kernel/resource obligations remain separate.
 
 ## Concrete next work
 
@@ -107,9 +106,9 @@ See [implemented architecture](../../architecture/19-daemon-overlay.md).
 The remaining list below includes initial interfaces already established; complete
 S0 and later acceptance require the remaining service/lifetime/resource work.
 
-1. Audit and implement S3 effective base-overlay merge and retained-root integration.
-   Existing real-root reads and S2 engine interfaces satisfy its usable dependencies;
-   prove each remaining exit before starting the S4 namespace completion target.
+1. Write, verify and commit HANDOFF-S4-S6.md, publish the handoff receipt, then
+   stop before S4 as explicitly requested by the owner. The next agent owns the
+   complete mutable filesystem group; this thread starts no later milestone.
 2. Close S0 algorithm gates for truncate/regrow, repeated failed capture and
    orphan composition, physical pressure and fair service; specify all R1–R8
    adversarial bounds and P1–P14 implementation ownership. These remain open,
@@ -130,5 +129,5 @@ untracked `docs/general/sandbox-cache-design.md` and
 S12 qualification permits S13. Checkpoint hashes are local-only; no remote push,
 release or deployment is authorized. Append-only tracker texts are retained in
 [checkpoints](checkpoints/initial.md). Rust checks/LOC/evidence are recorded in
-each checkpoint commit and its tracker comment. S1 and S2 are complete; later
+each checkpoint commit and its tracker comment. S1–S3 are complete; later
 engine, native/runtime and integrated qualification exits remain explicit.

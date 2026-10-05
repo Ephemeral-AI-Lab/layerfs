@@ -164,3 +164,90 @@ fn source_changes_have_finite_plans_and_correlated_runtime_work() {
     }
     assert_eq!(db.state(route).unwrap().base_readers, 0);
 }
+
+#[test]
+fn ordered_source_name_windows_visit_only_parent_and_generation_with_runtime_evidence() {
+    let temp = Temp::new();
+    let db = Overlay::create(&temp.0.join("db"), ProfileConfig::default()).unwrap();
+    let route = db.open_workspace([31; 32], [32; 32]).unwrap();
+    let other = db.open_workspace([33; 32], [32; 32]).unwrap();
+    for n in 0..193 {
+        let p = db
+            .publish(
+                route,
+                &inode(),
+                Some(&Dentry {
+                    parent: 1,
+                    name: format!("n{n:04}").into_bytes(),
+                    serial: Some(2),
+                }),
+                None,
+            )
+            .unwrap();
+        db.reply_attempted(p).unwrap();
+    }
+    let capture = db.capture(route).unwrap();
+    let source = db.acquire_base_source(route, 7).unwrap();
+    let mut previous = 0;
+    let mut vm = None;
+    for count in [128, 1024, 4096] {
+        for n in previous..count {
+            let p = db
+                .publish(
+                    other,
+                    &inode(),
+                    Some(&Dentry {
+                        parent: 1,
+                        name: format!("n{n:04}").into_bytes(),
+                        serial: Some(2),
+                    }),
+                    None,
+                )
+                .unwrap();
+            db.reply_attempted(p).unwrap();
+        }
+        previous = count;
+        let plan = db
+            .explain_source_names(source, 1, capture.generation, Some(b"n0063"))
+            .unwrap();
+        assert!(
+            plan.iter().all(|p| p.contains("SEARCH")
+                && p.contains("dentry_capture")
+                && !p.contains("TEMP B-TREE")),
+            "{plan:?}"
+        );
+        let before = db.diagnostics();
+        let window = db.source_name_window(source, 1, Some(b"n0063")).unwrap();
+        let after = db.diagnostics();
+        assert!(window.active.is_empty());
+        assert_eq!(window.captured.len(), 64);
+        assert_eq!(window.captured[0].name, b"n0064");
+        assert_eq!(window.captured[63].name, b"n0127");
+        let a = before.statements[StatementKind::Dentry as usize];
+        let b = after.statements[StatementKind::Dentry as usize];
+        let steps = b.vm_steps - a.vm_steps;
+        let total_vm: u64 = after
+            .statements
+            .iter()
+            .zip(before.statements)
+            .map(|(end, start)| end.vm_steps - start.vm_steps)
+            .sum();
+        let total_runs: u64 = after
+            .statements
+            .iter()
+            .zip(before.statements)
+            .map(|(end, start)| end.executions - start.executions)
+            .sum();
+        if let Some(old) = vm {
+            assert_eq!(old, steps);
+        }
+        vm = Some(steps);
+        assert_eq!(b.rows_returned - a.rows_returned, 64);
+        assert_eq!(b.fullscan_steps - a.fullscan_steps, 0);
+        assert_eq!(b.sorts - a.sorts, 0);
+        assert_eq!(b.autoindex_rows - a.autoindex_rows, 0);
+        assert_eq!(b.reprepares - a.reprepares, 0);
+        println!("S3_NAME_WINDOW unrelated_names={count} name_vm={steps} returned=64 total_vm={total_vm} total_runs={total_runs} source_checks_and_parent_are_separate_families fullscan=0 sorts=0 plan={plan:?}");
+    }
+    db.release_base_source(source).unwrap();
+}

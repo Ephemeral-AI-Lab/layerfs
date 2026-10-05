@@ -86,3 +86,12 @@ Init/control/transport has coverage; root reference remains until S13.
 The following P5 slice adds authorized saved-file lengths through a borrowed
 metadata sink. See [file-length facts](24-file-lengths.md) for the exact descriptor
 trust and owning DB/canonical work, and remaining base/stat integration.
+
+## S3 completion reconciliation
+
+The completion after `bdc6ed4af` adds effective source-qualified read/ordered-name
+composition, actual paired actor install, original unattempted-command custody and
+owning SDK stat lengths. See [effective base view](29-effective-base-view.md) and
+[S3 exit audit](../issues/307/S3-EXIT-AUDIT.md). Earlier limitations/evidence above
+retain their source scope; native/logical runtime transport, mutable byte semantics
+and aggregate resource acceptance remain unfinished.

@@ -18,6 +18,7 @@ mod profile;
 mod reclaim;
 mod scratch;
 mod source;
+mod source_names;
 mod source_plan;
 mod sql;
 mod types;
@@ -30,6 +31,7 @@ pub use metrics::{DatabaseWork, StatementKind, StatementWork};
 pub use profile::{DatabaseProfile, ProfileConfig};
 pub use reclaim::ReclaimStep;
 pub use types::{
-    BaseSource, Capture, Cell, Dentry, Generation, Inode, InodeKind, Lease, LeaseKind, Publication,
-    Route, ScratchRecord, WorkspaceState, CELL_BYTES, MASK_BYTES, PAGE_ROWS, SCRATCH_BYTES,
+    BaseSource, Capture, Cell, Dentry, Generation, Inode, InodeKind, Lease, LeaseKind, NameWindow,
+    Publication, Route, ScratchRecord, WorkspaceState, CELL_BYTES, MASK_BYTES, PAGE_ROWS,
+    SCRATCH_BYTES,
 };

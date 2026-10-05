@@ -1,5 +1,5 @@
 //! Demand reads through current public content APIs, without a base-tree mirror.
-use crate::CanonicalClient;
+use crate::{CanonicalClient, WorkspaceResult};
 use layerfs_content::filesystem::attributes::PortableMetadata;
 use layerfs_content::filesystem::{
     DirectoryListing, FilesystemRead, FilesystemRoot, FilesystemRootId, InodeScope, PathName,
@@ -78,15 +78,43 @@ impl BaseView {
     ) -> ContentResult<DirectoryListing> {
         self.reader()?.list_inode(serial, after, entries, bytes)
     }
+    pub fn list_after_bytes(
+        &self,
+        serial: u64,
+        after: Option<&[u8]>,
+        entries: usize,
+        bytes: usize,
+    ) -> ContentResult<DirectoryListing> {
+        let value = self.inode(serial)?.value;
+        if value.kind != InodeKind::Directory {
+            return Err(ContentError::WrongLogicalRole);
+        }
+        layerfs_content::filesystem::directory::read::list_after_bytes(
+            self.client.as_ref(),
+            layerfs_content::filesystem::DirectoryRoot(value.content_root),
+            after,
+            entries,
+            bytes,
+            &mut layerfs_content::filesystem::directory::DirectoryReadWork::default(),
+        )
+    }
     pub fn readlink(&self, serial: u64) -> ContentResult<SymlinkTarget> {
         self.reader()?.readlink_inode(serial)
     }
-    pub fn stat(&self, serial: u64) -> ContentResult<BaseStat> {
+    pub fn stat(&self, serial: u64) -> WorkspaceResult<BaseStat> {
+        self.stat_with_lengths(serial, self.client.as_ref())
+    }
+    /// Explicit scoped owning metadata port; no payload classification fallback.
+    pub fn stat_with_lengths(
+        &self,
+        serial: u64,
+        lengths: &dyn crate::FileLengths,
+    ) -> WorkspaceResult<BaseStat> {
         let mut read = self.reader()?;
         let value = read.resolve_inode(serial)?.value;
         let metadata = read.read_portable_inode(serial)?;
         let logical_len = match value.kind {
-            InodeKind::RegularFile => self.file(value)?.logical_len(),
+            InodeKind::RegularFile => lengths.file_length(value.content_root)?,
             InodeKind::Symlink => read.readlink_inode(serial)?.as_bytes().len() as u64,
             InodeKind::Directory => 0,
         };

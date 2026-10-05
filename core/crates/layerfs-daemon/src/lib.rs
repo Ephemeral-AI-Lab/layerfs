@@ -9,6 +9,7 @@ mod commands;
 mod credits;
 mod owner;
 mod queue;
+mod read_port;
 
 pub use commands::{Command, Response, ServiceClass};
 pub use owner::{Completion, Owner, OwnerClient, OwnerConfig, OwnerError, Pending};

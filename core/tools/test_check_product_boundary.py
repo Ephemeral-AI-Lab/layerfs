@@ -20,6 +20,16 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(dependency_violations(prefix + 'layerfs-persistence={path="../../layerfs-persistence"}'))
         self.assertTrue(dependency_violations(prefix + 'layerfs-server={path="../../layerfs-server"}'))
 
+    def test_workspace_composition_edges_preserve_domain_and_reverse_boundaries(self):
+        for package in ("layerfs-sdk", "layerfs-daemon"):
+            source=f'[package]\nname="{package}"\n[dependencies]\nlayerfs-workspace={{path="../layerfs-workspace"}}\n'
+            self.assertFalse(dependency_violations(source))
+            path=Path("core/crates/layerfs-api/sdk/src/runtime/length_port.rs") if package=="layerfs-sdk" else Path("core/crates/layerfs-daemon/src/commands.rs")
+            self.assertFalse(violations(path,"use layerfs_workspace::Workspace;"))
+            self.assertTrue(violations(path,"use layerfs_server::Server;"))
+        self.assertTrue(dependency_violations('[package]\nname="layerfs-workspace"\n[dependencies]\nlayerfs-daemon={path="../layerfs-daemon"}\n'))
+        self.assertTrue(dependency_violations('[package]\nname="layerfs-content"\n[dependencies]\nlayerfs-workspace={path="../layerfs-workspace"}\n'))
+
     def test_cluster1_dependency_edges(self):
         for package in ("layerfs-storage", "layerfs-history", "layerfs-project", "layerfs-content"):
             for dependency in ("layerfs-s3", "layerfs-metadata", "layerfs-workspace", "layerfs-sdk"):

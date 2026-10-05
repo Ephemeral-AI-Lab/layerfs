@@ -81,3 +81,13 @@ impl Workspace {
         Ok(())
     }
 }
+
+impl std::fmt::Debug for PreparedBase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PreparedBase")
+            .field("capture", &self.capture)
+            .field("expected", &self.expected)
+            .field("next", &self.next.identity())
+            .finish()
+    }
+}

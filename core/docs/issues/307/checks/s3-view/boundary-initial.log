@@ -1,0 +1,9 @@
+crates/layerfs-api/sdk/src/runtime/length_port.rs:4: forbidden first-party source import layerfs-sdk -> layerfs-workspace
+crates/layerfs-daemon/src/commands.rs:52: forbidden first-party source import layerfs-daemon -> layerfs-workspace
+crates/layerfs-daemon/src/commands.rs:53: forbidden first-party source import layerfs-daemon -> layerfs-workspace
+crates/layerfs-daemon/src/owner.rs:53: forbidden first-party source import layerfs-daemon -> layerfs-workspace
+crates/layerfs-daemon/src/owner.rs:54: forbidden first-party source import layerfs-daemon -> layerfs-workspace
+crates/layerfs-daemon/src/read_port.rs:4: forbidden first-party source import layerfs-daemon -> layerfs-workspace
+crates/layerfs-api/sdk/Cargo.toml:1: forbidden production dependency layerfs-sdk -> layerfs-workspace
+crates/layerfs-daemon/Cargo.toml:1: forbidden production dependency layerfs-daemon -> layerfs-workspace
+FAIL: 8 product-source boundary violations

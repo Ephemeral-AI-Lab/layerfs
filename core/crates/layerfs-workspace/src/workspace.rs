@@ -19,6 +19,8 @@ pub enum WorkspaceError {
     Content(ContentError),
     Overlay(OverlayError),
     BindingPoisoned,
+    MissingLengthProvider,
+    Service(Box<dyn std::error::Error + Send + Sync>),
     BaseChanged {
         expected: [u8; 32],
         actual: [u8; 32],
@@ -30,7 +32,16 @@ impl fmt::Display for WorkspaceError {
         write!(f, "{self:?}")
     }
 }
-impl std::error::Error for WorkspaceError {}
+impl std::error::Error for WorkspaceError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Content(error) => Some(error),
+            Self::Overlay(error) => Some(error),
+            Self::Service(error) => Some(error.as_ref()),
+            _ => None,
+        }
+    }
+}
 impl From<ContentError> for WorkspaceError {
     fn from(e: ContentError) -> Self {
         Self::Content(e)
@@ -57,6 +68,14 @@ impl Workspace {
             base: RwLock::new(base),
         })
     }
+    /// Binds a checked root to an already-open owner route. The source-read
+    /// entry verifies the selected root before any effective read.
+    pub fn bind(route: Route, base: BaseView) -> Self {
+        Self {
+            route,
+            base: RwLock::new(base),
+        }
+    }
     pub const fn route(&self) -> Route {
         self.route
     }
@@ -66,5 +85,13 @@ impl Workspace {
             .read()
             .map(|base| base.clone())
             .map_err(|_| WorkspaceError::BindingPoisoned)
+    }
+}
+
+impl fmt::Debug for Workspace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Workspace")
+            .field("route", &self.route)
+            .finish_non_exhaustive()
     }
 }

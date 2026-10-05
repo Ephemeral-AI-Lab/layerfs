@@ -28,17 +28,36 @@ struct State {
 pub struct CanonicalClient {
     source: Arc<dyn AuthenticatedObjects + Send + Sync>,
     state: Mutex<State>,
+    lengths: Option<Arc<dyn crate::FileLengths + Send + Sync>>,
 }
 impl CanonicalClient {
     /// Selects a cache allowance. A large object can bypass cache without refusal.
     pub fn new(source: Arc<dyn AuthenticatedObjects + Send + Sync>, cache_bytes: usize) -> Self {
         Self {
             source,
+            lengths: None,
             state: Mutex::new(State {
                 cache: Cache::new(cache_bytes),
                 work: ClientWork::default(),
             }),
         }
+    }
+    /// Adds the owning trusted Store-length port without payload classification.
+    /// Missing capability fails explicitly; no FileView/stat fallback is used.
+    pub fn with_lengths(
+        source: Arc<dyn AuthenticatedObjects + Send + Sync>,
+        lengths: Arc<dyn crate::FileLengths + Send + Sync>,
+        cache_bytes: usize,
+    ) -> Self {
+        let mut client = Self::new(source, cache_bytes);
+        client.lengths = Some(lengths);
+        client
+    }
+    pub(crate) fn file_length(&self, id: ObjectId) -> crate::WorkspaceResult<u64> {
+        self.lengths
+            .as_ref()
+            .ok_or(crate::WorkspaceError::MissingLengthProvider)?
+            .file_length(id)
     }
     /// Bounded cumulative acquisition counters and logical cache charge.
     pub fn diagnostics(&self) -> ContentResult<ClientWork> {
@@ -144,5 +163,11 @@ impl AuthenticatedObjects for CanonicalClient {
                 .saturating_add(result[index].len() as u64);
         }
         Ok(result)
+    }
+}
+
+impl crate::FileLengths for CanonicalClient {
+    fn file_length(&self, id: ObjectId) -> crate::WorkspaceResult<u64> {
+        CanonicalClient::file_length(self, id)
     }
 }

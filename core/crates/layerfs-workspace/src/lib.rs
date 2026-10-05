@@ -9,9 +9,15 @@ mod base;
 mod cache;
 mod client;
 mod install;
+mod list;
+mod port;
+mod view;
 mod workspace;
 
 pub use base::{BaseRead, BaseStat, BaseView};
 pub use client::{CanonicalClient, ClientWork};
 pub use install::PreparedBase;
+pub use list::ViewListing;
+pub use port::{FileLengths, OverlayRead};
+pub use view::{SourceView, ViewStat};
 pub use workspace::{Workspace, WorkspaceError, WorkspaceResult};

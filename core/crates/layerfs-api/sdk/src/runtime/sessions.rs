@@ -23,7 +23,7 @@ struct Slot<'a> {
 /// and disconnect fences must be provided by the host transport adapter.
 pub struct Sessions<'a> {
     owners: &'a [Storage],
-    demand: &'a Storage,
+    pub(super) demand: &'a Storage,
     history: &'a HistoryProvider,
     authority: &'a dyn Authorization,
     owner: [u8; 32],

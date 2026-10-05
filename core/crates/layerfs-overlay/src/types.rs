@@ -122,6 +122,16 @@ pub struct BaseSource {
     pub(crate) owner: u64,
     pub(crate) root: [u8; 32],
 }
+/// Two bounded ordered local name inputs from one owner job. A capture can
+/// change membership between jobs, never within this returned window.
+#[derive(Clone, Debug)]
+pub struct NameWindow {
+    pub source: BaseSource,
+    pub parent: u64,
+    pub parent_inode: Option<Inode>,
+    pub active: Vec<Dentry>,
+    pub captured: Vec<Dentry>,
+}
 impl BaseSource {
     pub const fn route(self) -> Route {
         self.route

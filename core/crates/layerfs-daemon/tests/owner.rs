@@ -340,7 +340,9 @@ fn stopping_cancels_unattempted_capture_and_fences_future_admission() {
     assert!(capture.try_complete().unwrap().is_none());
     owner.stop().unwrap();
     let result = capture.wait().unwrap();
-    assert!(matches!(result.result(), Err(OwnerError::Stopped)));
+    assert!(
+        matches!(result.result(), Err(OwnerError::Unattempted {cause,command}) if matches!(cause.as_ref(),OwnerError::Stopped)&&matches!(command.as_ref(),Command::Capture))
+    );
     assert!(matches!(
         client.try_submit(Some(a), Command::State),
         Err((OwnerError::Stopped, _))

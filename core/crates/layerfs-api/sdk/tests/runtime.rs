@@ -440,3 +440,187 @@ fn missing_dependency_finish_is_retained_as_the_original_storage_error() {
     ));
     s.release(&a, id).unwrap();
 }
+
+type EmittedObject = (ObjectId, ObjectRole, Vec<u8>);
+#[derive(Clone, Default)]
+struct Archive {
+    objects: std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<ObjectId, Vec<u8>>>>,
+    emitted: std::sync::Arc<std::sync::Mutex<Vec<EmittedObject>>>,
+}
+impl layerfs_content::AuthenticatedObjects for Archive {
+    fn read_canonical_batch(
+        &self,
+        ids: &[ObjectId],
+    ) -> layerfs_content::ContentResult<Vec<Vec<u8>>> {
+        let objects = self.objects.lock().unwrap();
+        ids.iter()
+            .map(|id| {
+                objects
+                    .get(id)
+                    .cloned()
+                    .ok_or(layerfs_content::ContentError::MissingObject)
+            })
+            .collect()
+    }
+}
+impl layerfs_content::FinalizedConsumer for Archive {
+    fn accept(
+        &mut self,
+        object: layerfs_content::FinalizedObject,
+    ) -> layerfs_content::ContentResult<()> {
+        self.objects
+            .lock()
+            .unwrap()
+            .insert(object.id(), object.canonical().to_vec());
+        self.emitted.lock().unwrap().push((
+            object.id(),
+            object.role(),
+            object.canonical().to_vec(),
+        ));
+        Ok(())
+    }
+}
+fn portable(archive: &Archive, kind: InodeKind) -> ObjectId {
+    use layerfs_content::filesystem::attributes::{
+        build_attribute_tree, emit_value, AttributeEntry, AttributeKey, PortableMetadata,
+    };
+    let mut sink = archive.clone();
+    let mut objects = layerfs_content::filesystem::FilesystemObjects::new(archive, &mut sink);
+    let meta = PortableMetadata {
+        mode: if kind == InodeKind::Directory {
+            0o1777
+        } else {
+            0o644
+        },
+        mtime_seconds: 9,
+        mtime_nanoseconds: 7,
+    };
+    let mode = emit_value(&mut objects, &meta.mode_bytes(kind).unwrap()).unwrap();
+    let time = emit_value(&mut objects, &meta.mtime_bytes().unwrap()).unwrap();
+    build_attribute_tree(
+        &mut objects,
+        [
+            Ok(AttributeEntry {
+                key: AttributeKey::new("portable".into(), b"mode".to_vec()).unwrap(),
+                value_root: mode,
+            }),
+            Ok(AttributeEntry {
+                key: AttributeKey::new("portable".into(), b"mtime".to_vec()).unwrap(),
+                value_root: time,
+            }),
+        ]
+        .into_iter(),
+    )
+    .unwrap()
+    .0
+}
+#[test]
+fn workspace_stat_uses_authenticated_scoped_owning_lengths_without_payload_or_fallback() {
+    use layerfs_content::filesystem::{
+        build_filesystem, DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemResources,
+        InodeUpdate, PathName,
+    };
+    use layerfs_content::{FinalizedConsumer, FinalizedObject};
+    use layerfs_workspace::{BaseView, CanonicalClient, WorkspaceError};
+    let mut f = Fixture::new();
+    let s = f.runtime.sessions();
+    let b = binding(&s, f.branch, 90, 1);
+    let archive = Archive::default();
+    let canonical = encode_whole_file_payload(&vec![0xa7; 131071]).unwrap();
+    let file = ObjectId::for_bytes(&canonical);
+    archive
+        .clone()
+        .accept(FinalizedObject::new(ObjectRole::WholeFile, canonical).unwrap())
+        .unwrap();
+    let file_meta = portable(&archive, InodeKind::RegularFile);
+    let dir_meta = portable(&archive, InodeKind::Directory);
+    let inodes = [
+        InodeUpdate {
+            serial: 1,
+            value: InodeValue {
+                kind: InodeKind::Directory,
+                content_root: ObjectId::for_bytes(b"new-dir"),
+                metadata_root: dir_meta,
+                namespace_ref_count: 0,
+            },
+        },
+        InodeUpdate {
+            serial: 2,
+            value: InodeValue {
+                kind: InodeKind::RegularFile,
+                content_root: file,
+                metadata_root: file_meta,
+                namespace_ref_count: 0,
+            },
+        },
+    ];
+    let dirs = [DirectoryUpdate {
+        parent: 1,
+        changes: vec![
+            (PathName::new("alias").unwrap(), Some(2)),
+            (PathName::new("file").unwrap(), Some(2)),
+        ],
+    }];
+    let scope = scope_for_seed([8; 32]);
+    let mut sink = archive.clone();
+    let mut objects = FilesystemObjects::new(&archive, &mut sink);
+    let root = build_filesystem(
+        &mut objects,
+        &FilesystemInput {
+            base: None,
+            scope,
+            root_serial: 1,
+            directories: &dirs,
+            inodes: &inodes,
+            new_inodes: &[1, 2],
+            resources: FilesystemResources::default(),
+        },
+        None,
+    )
+    .unwrap()
+    .root;
+    let mut s = s;
+    let id = s.begin(&b).unwrap();
+    for (claimed, role, bytes) in archive.emitted.lock().unwrap().iter() {
+        Timing::disabled("stat-save", |timing| {
+            s.accept(
+                &b,
+                id,
+                *claimed,
+                *role,
+                bytes.clone(),
+                timing.child("object"),
+            )
+        })
+        .0
+        .unwrap();
+    }
+    assert!(s.finish(&b, id).unwrap().outcome().is_ok());
+    let client = std::sync::Arc::new(CanonicalClient::new(std::sync::Arc::new(archive), 0));
+    let base = BaseView::open(client, root, scope).unwrap();
+    assert!(matches!(
+        base.stat(2),
+        Err(WorkspaceError::MissingLengthProvider)
+    ));
+    let before = s.demand_diagnostics();
+    let port = s.length_port(&b);
+    let stat = base.stat_with_lengths(2, &port).unwrap();
+    let after = s.demand_diagnostics();
+    assert_eq!(
+        (
+            stat.logical_len,
+            stat.value.namespace_ref_count,
+            stat.metadata.mode
+        ),
+        (131071, 2, 0o644)
+    );
+    assert_eq!(after.payload_read_bytes - before.payload_read_bytes, 0);
+    assert_eq!(after.pack_read_bytes - before.pack_read_bytes, 0);
+    assert_eq!(after.read_packs - before.read_packs, 0);
+    println!("S3_OWNING_STAT logical=131071 namespace_refs=2 owning_payload_bytes=0 owning_pack_bytes=0 locate={}",after.locate-before.locate);
+    f.deny.set(Some(file));
+    let error = base.stat_with_lengths(2, &port).unwrap_err();
+    assert!(
+        matches!(error,WorkspaceError::Service(error) if matches!(error.downcast_ref::<RuntimeError>(),Some(RuntimeError::Denied)))
+    );
+}
