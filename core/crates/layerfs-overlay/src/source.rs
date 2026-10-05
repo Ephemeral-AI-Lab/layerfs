@@ -31,6 +31,7 @@ impl Overlay {
                 route,
                 owner,
                 root: state.base_root,
+                installed: state.installed,
             })
         })
     }
@@ -41,10 +42,15 @@ impl Overlay {
         route: Route,
         owner: u64,
     ) -> OverlayResult<Option<BaseSource>> {
-        self.state(route)?;
-        self.base_source_by_owner(route, owner)
+        let installed = self.state(route)?.installed;
+        self.base_source_by_owner(route, owner, installed)
     }
-    fn base_source_by_owner(&self, route: Route, owner: u64) -> OverlayResult<Option<BaseSource>> {
+    fn base_source_by_owner(
+        &self,
+        route: Route,
+        owner: u64,
+        installed: i64,
+    ) -> OverlayResult<Option<BaseSource>> {
         self.query(
             StatementKind::Lease,
             sql::BASE_SOURCE_LOOKUP,
@@ -56,6 +62,7 @@ impl Overlay {
                     route,
                     owner,
                     root: root.try_into().map_err(|_| rusqlite::Error::InvalidQuery)?,
+                    installed,
                 })
             },
         )
@@ -64,7 +71,8 @@ impl Overlay {
     pub(crate) fn source_state(&self, source: BaseSource) -> OverlayResult<WorkspaceState> {
         let state = self.state(source.route)?;
         if state.base_root != source.root
-            || self.base_source_by_owner(source.route, source.owner)? != Some(source)
+            || self.base_source_by_owner(source.route, source.owner, state.installed)?
+                != Some(source)
         {
             return Err(OverlayError::Stale);
         }

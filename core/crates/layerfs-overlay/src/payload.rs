@@ -53,6 +53,23 @@ impl Overlay {
         self.checked_capture(capture)?;
         self.cell_at(capture.route(), serial, capture.generation, offset)
     }
+    /// One cell written at an exact live generation of an owned source, such as
+    /// the creation generation of a local symlink target. Byte composition over
+    /// several generations belongs to the payload read contract.
+    pub fn source_cell(
+        &self,
+        source: crate::BaseSource,
+        serial: u64,
+        generation: u64,
+        offset: u64,
+    ) -> OverlayResult<Option<Cell>> {
+        let state = self.source_state(source)?;
+        let generation = integer(generation)?;
+        if generation <= state.installed || generation > state.active.0 {
+            return Err(OverlayError::Stale);
+        }
+        self.cell_at(source.route(), serial, Generation(generation), offset)
+    }
     fn cell_at(
         &self,
         route: Route,

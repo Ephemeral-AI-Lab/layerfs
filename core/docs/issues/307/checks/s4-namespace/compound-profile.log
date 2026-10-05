@@ -1,0 +1,13 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/compound.rs (core/target/debug/deps/compound-cca6e9b42fb4506c)
+
+running 3 tests
+test compound_job_publishes_every_final_value_with_one_ticket_or_nothing ... ok
+test removed_names_keep_a_whiteout_only_where_a_lower_binding_exists ... ok
+S4_COMPOUND siblings=128 complete_job_vm=997 statements=26 rows_changed=7 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=["lower-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)", "active-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "drop-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "active-inode: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "put-name: vm-program opcodes=79 btree-cursors=3 btree-scan-opcodes=0", "put-inode: vm-program opcodes=208 btree-cursors=3 btree-scan-opcodes=0"]
+S4_COMPOUND siblings=1024 complete_job_vm=997 statements=26 rows_changed=7 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=["lower-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)", "active-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "drop-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "active-inode: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "put-name: vm-program opcodes=79 btree-cursors=3 btree-scan-opcodes=0", "put-inode: vm-program opcodes=208 btree-cursors=3 btree-scan-opcodes=0"]
+S4_COMPOUND siblings=4096 complete_job_vm=997 statements=26 rows_changed=7 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=["lower-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)", "active-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "drop-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "active-inode: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "put-name: vm-program opcodes=79 btree-cursors=3 btree-scan-opcodes=0", "put-inode: vm-program opcodes=208 btree-cursors=3 btree-scan-opcodes=0"]
+test compound_statements_keep_point_work_as_the_namespace_grows ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+

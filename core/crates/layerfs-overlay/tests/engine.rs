@@ -36,6 +36,8 @@ fn inode(serial: u64) -> Inode {
         nlink: 1,
         size: 4096,
         inherited_cutoff: 0,
+        born: 0,
+        entries: 0,
     }
 }
 fn cell(value: u8) -> Cell {
@@ -193,7 +195,7 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
     let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
     assert!(Overlay::create(&temp.db(), ProfileConfig::default()).is_err());
     let p = db.profile();
-    assert_eq!(p.schema_version, 6);
+    assert_eq!(p.schema_version, 7);
     assert_eq!(p.max_pages, i64::from(u32::MAX - 1));
     assert_eq!(p.explicit_page_quota, None);
     #[cfg(unix)]

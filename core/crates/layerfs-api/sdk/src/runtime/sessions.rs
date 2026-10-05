@@ -24,7 +24,7 @@ struct Slot<'a> {
 pub struct Sessions<'a> {
     owners: &'a [Storage],
     pub(super) demand: &'a Storage,
-    history: &'a HistoryProvider,
+    pub(super) history: &'a HistoryProvider,
     authority: &'a dyn Authorization,
     owner: [u8; 32],
     next_serial: &'a mut u64,
@@ -310,7 +310,7 @@ impl<'a> Sessions<'a> {
         Ok(())
     }
 
-    fn check_binding(&self, binding: &Binding) -> RuntimeResult<()> {
+    pub(super) fn check_binding(&self, binding: &Binding) -> RuntimeResult<()> {
         if binding.owner != self.owner
             || binding.catalog != self.history.catalog_id()
             || binding.incarnation != self.history.incarnation()

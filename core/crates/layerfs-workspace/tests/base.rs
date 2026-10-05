@@ -1,214 +1,15 @@
 //! Public S3 proof over content-built trees; fixture memory is external to product.
+mod common;
+use common::{file, fixture, name, Store};
 use layerfs_content::filesystem::{
-    attributes::{
-        build_attribute_tree, emit_value, AttributeEntry, AttributeKey, PortableMetadata,
-    },
-    build_filesystem, scope_for_seed, update_filesystem, DirectoryUpdate, FilesystemInput,
-    FilesystemObjects, FilesystemResources, FilesystemRootId, InodeScope, InodeUpdate, PathName,
-    SymlinkTarget,
+    scope_for_seed, update_filesystem, DirectoryUpdate, FilesystemInput, FilesystemObjects,
+    FilesystemResources, InodeUpdate,
 };
-use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
-use layerfs_content::{
-    construct_bytes, AuthenticatedObjects, ConstructionPolicy, ContentError, ContentResult,
-    FinalizedConsumer, FinalizedObject, ObjectId,
-};
+use layerfs_content::object::inode_leaf::InodeKind;
+use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
 use layerfs_overlay::{Overlay, ProfileConfig};
-use layerfs_telemetry::timer::Timing;
 use layerfs_workspace::{BaseView, CanonicalClient, Workspace};
-use std::{
-    collections::BTreeMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc, Mutex,
-    },
-};
-
-#[derive(Clone, Default)]
-struct Store {
-    objects: Arc<Mutex<BTreeMap<ObjectId, Vec<u8>>>>,
-    demand: Arc<AtomicU64>,
-    lengths: Arc<Mutex<BTreeMap<ObjectId, u64>>>,
-}
-impl AuthenticatedObjects for Store {
-    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
-        self.demand.fetch_add(ids.len() as u64, Ordering::Relaxed);
-        let objects = self.objects.lock().unwrap();
-        ids.iter()
-            .map(|id| objects.get(id).cloned().ok_or(ContentError::MissingObject))
-            .collect()
-    }
-}
-impl layerfs_workspace::FileLengths for Store {
-    fn file_length(&self, id: ObjectId) -> layerfs_workspace::WorkspaceResult<u64> {
-        self.lengths
-            .lock()
-            .unwrap()
-            .get(&id)
-            .copied()
-            .ok_or(ContentError::MissingObject.into())
-    }
-}
-impl FinalizedConsumer for Store {
-    fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
-        self.objects
-            .lock()
-            .unwrap()
-            .insert(object.id(), object.canonical().to_vec());
-        Ok(())
-    }
-}
-fn name(s: &str) -> PathName {
-    PathName::new(s).unwrap()
-}
-fn metadata(store: &Store, kind: InodeKind) -> ObjectId {
-    let mut sink = store.clone();
-    let mut objects = FilesystemObjects::new(store, &mut sink);
-    let portable = PortableMetadata {
-        mode: match kind {
-            InodeKind::Directory => 0o1777,
-            InodeKind::Symlink => 0o777,
-            _ => 0o644,
-        },
-        mtime_seconds: i64::MAX,
-        mtime_nanoseconds: 999_999_999,
-    };
-    let mode = emit_value(&mut objects, &portable.mode_bytes(kind).unwrap()).unwrap();
-    let time = emit_value(&mut objects, &portable.mtime_bytes().unwrap()).unwrap();
-    build_attribute_tree(
-        &mut objects,
-        [
-            Ok(AttributeEntry {
-                key: AttributeKey::new("portable".into(), b"mode".to_vec()).unwrap(),
-                value_root: mode,
-            }),
-            Ok(AttributeEntry {
-                key: AttributeKey::new("portable".into(), b"mtime".to_vec()).unwrap(),
-                value_root: time,
-            }),
-        ]
-        .into_iter(),
-    )
-    .unwrap()
-    .0
-}
-fn file(store: &Store, bytes: &[u8]) -> ObjectId {
-    let mut sink = store.clone();
-    let policy = ConstructionPolicy::frozen_default();
-    let root = Timing::disabled("file", |scope| {
-        construct_bytes(
-            policy,
-            &policy.capacities(),
-            bytes,
-            &mut sink,
-            scope.child("construct"),
-        )
-    })
-    .0
-    .unwrap()
-    .root;
-    store
-        .lengths
-        .lock()
-        .unwrap()
-        .insert(root, bytes.len() as u64);
-    root
-}
-struct Fixture {
-    store: Store,
-    root: FilesystemRootId,
-    scope: InodeScope,
-    bytes: Vec<u8>,
-}
-fn fixture() -> Fixture {
-    let store = Store::default();
-    let scope = scope_for_seed([11; 32]);
-    let bytes: Vec<u8> = (0..400_000)
-        .map(|i| ((i * 17 + i / 128) % 251) as u8)
-        .collect();
-    let small = file(&store, b"original\0\xff");
-    let large = file(&store, &bytes);
-    let symlink = SymlinkTarget::new(b"../.git/index".to_vec())
-        .unwrap()
-        .finalize()
-        .unwrap();
-    let target = symlink.id();
-    store.clone().accept(symlink).unwrap();
-    let dir_meta = metadata(&store, InodeKind::Directory);
-    let file_meta = metadata(&store, InodeKind::RegularFile);
-    let link_meta = metadata(&store, InodeKind::Symlink);
-    let inodes: Vec<_> = (1..=8)
-        .map(|serial| {
-            let (kind, content_root, metadata_root) = match serial {
-                2 => (InodeKind::RegularFile, small, file_meta),
-                3 => (InodeKind::Symlink, target, link_meta),
-                8 => (InodeKind::RegularFile, large, file_meta),
-                _ => (
-                    InodeKind::Directory,
-                    ObjectId::for_bytes(b"new-directory"),
-                    dir_meta,
-                ),
-            };
-            InodeUpdate {
-                serial,
-                value: InodeValue {
-                    kind,
-                    content_root,
-                    metadata_root,
-                    namespace_ref_count: 0,
-                },
-            }
-        })
-        .collect();
-    let directories = vec![
-        DirectoryUpdate {
-            parent: 1,
-            changes: vec![
-                (name(".git"), Some(4)),
-                (name("alias"), Some(2)),
-                (name("cache"), Some(6)),
-                (name("file"), Some(2)),
-                (name("node_modules"), Some(5)),
-                (name("output"), Some(7)),
-                (name("symlink"), Some(3)),
-            ],
-        },
-        DirectoryUpdate {
-            parent: 4,
-            changes: vec![(name("index"), Some(8))],
-        },
-        DirectoryUpdate {
-            parent: 5,
-            changes: vec![(name("pkg"), Some(8))],
-        },
-        DirectoryUpdate {
-            parent: 6,
-            changes: vec![(name("state"), Some(8))],
-        },
-        DirectoryUpdate {
-            parent: 7,
-            changes: vec![(name("result"), Some(8))],
-        },
-    ];
-    let new: Vec<_> = (1..=8).collect();
-    let mut sink = store.clone();
-    let mut objects = FilesystemObjects::new(&store, &mut sink);
-    let input = FilesystemInput {
-        base: None,
-        scope,
-        root_serial: 1,
-        directories: &directories,
-        inodes: &inodes,
-        new_inodes: &new,
-        resources: FilesystemResources::default(),
-    };
-    let root = build_filesystem(&mut objects, &input, None).unwrap().root;
-    Fixture {
-        store,
-        root,
-        scope,
-        bytes,
-    }
-}
+use std::sync::{atomic::Ordering, Arc, Mutex};
 
 #[test]
 fn full_root_binding_aliases_metadata_symlinks_and_eof_use_content_apis() {
@@ -367,6 +168,8 @@ fn known_install_advances_selected_base_and_preserves_retained_plans_and_later_r
         nlink: 2,
         size: changed.len() as u64,
         inherited_cutoff: 0,
+        born: 0,
+        entries: 0,
     };
     let publication = overlay
         .publish(
@@ -496,6 +299,8 @@ fn local(serial: u64, size: u64, links: u64) -> layerfs_overlay::Inode {
         nlink: links,
         size,
         inherited_cutoff: size,
+        born: 0,
+        entries: 0,
     }
 }
 fn publish_name(

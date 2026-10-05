@@ -1,4 +1,4 @@
--- Disposable overlay schema v6. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v7. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -25,6 +25,8 @@ CREATE TABLE inode (
     nlink INTEGER NOT NULL CHECK(nlink>=0),
     size INTEGER NOT NULL CHECK(size>=0),
     inherited_cutoff INTEGER NOT NULL CHECK(inherited_cutoff>=0),
+    born INTEGER NOT NULL CHECK(born>=0 AND born<=gen),
+    entries INTEGER NOT NULL CHECK(entries>=0 AND (kind=2 OR entries=0)),
     PRIMARY KEY(ns,serial,gen)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX inode_capture ON inode(ns,gen,serial);
@@ -84,4 +86,4 @@ CREATE TABLE reclaim (
 ) STRICT, WITHOUT ROWID;
 PRAGMA application_id=1279676210;
 CREATE INDEX reclaim_ready ON reclaim(queue_key,ns);
-PRAGMA user_version=6;
+PRAGMA user_version=7;

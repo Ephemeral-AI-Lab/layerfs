@@ -36,6 +36,8 @@ fn inode(serial: u64) -> Inode {
         nlink: 1,
         size: 4096,
         inherited_cutoff: 0,
+        born: 0,
+        entries: 0,
     }
 }
 fn cell(byte: u8) -> Cell {

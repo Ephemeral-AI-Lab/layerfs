@@ -109,3 +109,16 @@ owning SDK stat lengths. See [effective base view](29-effective-base-view.md) an
 [S3 exit audit](../issues/307/S3-EXIT-AUDIT.md). Earlier limitations/evidence above
 retain their source scope; native/logical runtime transport, mutable byte semantics
 and aggregate resource acceptance remain unfinished.
+
+## S4 namespace jobs
+
+The checkpoint after `8d691ab8a` adds `Command::Namespace`, a Mutation-class job
+carrying one complete Workspace operation round as data, and a Read-class
+`SourceCell`. The owner evaluates and publishes inside that one job and performs
+no provider work; a round that needs base facts returns them to the caller's
+thread. `OwnerClient` implements the Workspace job port, so unadmitted jobs keep
+returning their original command and an attempted job's failure is returned as
+`OwnerError::Workspace` without replay. Multi-round operations hold no ticket
+before their publication, so they never delay a capture. See
+[namespace operations](30-namespace-operations.md). Native deferred replies,
+per-request credit residency and source/reply job consolidation remain S7/S8.

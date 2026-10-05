@@ -624,3 +624,39 @@ fn workspace_stat_uses_authenticated_scoped_owning_lengths_without_payload_or_fa
         matches!(error,WorkspaceError::Service(error) if matches!(error.downcast_ref::<RuntimeError>(),Some(RuntimeError::Denied)))
     );
 }
+
+#[test]
+fn workspace_serials_come_from_the_owning_scope_allocator_under_authority() {
+    use layerfs_workspace::{InodeSerials, WorkspaceError};
+    let mut f = Fixture::new();
+    let branch = f.branch;
+    let revoked = f.revoked.clone();
+    let s = f.runtime.sessions();
+    let b = binding(&s, branch, 10, 1);
+    let port = s.serial_port(&b);
+    // Consecutive consumed ranges of the Branch scope, never reissued.
+    let (first, count) = port.reserve(layerfs_workspace::SERIAL_REFILL).unwrap();
+    assert_eq!(count, layerfs_workspace::SERIAL_REFILL);
+    assert!(first > 0);
+    let (second, _) = port.reserve(1).unwrap();
+    assert_eq!(second, first + count);
+    assert_eq!(s.reserve_serials(&b, 3).unwrap(), (second + 1, 3));
+    for invalid in [0, layerfs_sdk::SERIAL_WINDOW + 1] {
+        assert!(matches!(
+            s.reserve_serials(&b, invalid),
+            Err(RuntimeError::Invalid("inode serial window"))
+        ));
+    }
+    // Revocation refuses before the allocator: nothing is consumed.
+    revoked.set(true);
+    let denied = port.reserve(8).unwrap_err();
+    assert!(
+        matches!(denied, WorkspaceError::Service(error) if matches!(error.downcast_ref::<RuntimeError>(), Some(RuntimeError::Denied)))
+    );
+    revoked.set(false);
+    assert_eq!(port.reserve(2).unwrap(), (second + 4, 2));
+    println!(
+        "S4_OWNING_SERIALS first={first} refill={count} next={} scope_allocator=history_catalog",
+        second + 6
+    );
+}

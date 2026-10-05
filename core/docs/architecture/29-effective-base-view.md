@@ -81,3 +81,12 @@ and old immutable bytes. The macOS SDK/real Store stat test serves131071 bytes o
 logical length with zero owning payload/pack reads, authorized by an actual native
 handshake binding, then preserves RuntimeError::Denied without fallback. Required
 checks/source/build pins are recorded in [S3 exit audit](../issues/307/S3-EXIT-AUDIT.md).
+
+## S4 update
+
+Lookup and listing now read the directory's local row first: a directory
+created above the installed floor makes no base demand, and a removed directory
+is absent. `readlink` serves a locally created symlink from its creation cell
+and an inherited one from the base object. Enumeration semantics under mutation
+are declared in [namespace operations](30-namespace-operations.md), which also
+supersedes this document's statement that atomic namespace effects are pending.

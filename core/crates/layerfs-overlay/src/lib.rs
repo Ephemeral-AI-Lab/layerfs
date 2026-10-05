@@ -7,6 +7,7 @@
 
 mod access_plan;
 mod close;
+mod compound;
 mod db;
 mod error;
 mod frontier;
@@ -25,13 +26,15 @@ mod types;
 mod workspace;
 
 pub use close::CleanupState;
+pub use compound::SourceRows;
 pub use db::Overlay;
 pub use error::{OverlayError, OverlayResult};
 pub use metrics::{DatabaseWork, StatementKind, StatementWork};
 pub use profile::{DatabaseProfile, ProfileConfig};
 pub use reclaim::ReclaimStep;
 pub use types::{
-    BaseSource, Capture, Cell, Dentry, Generation, Inode, InodeKind, Lease, LeaseKind, NameWindow,
-    Publication, Route, ScratchRecord, WorkspaceState, CELL_BYTES, MASK_BYTES, PAGE_ROWS,
+    BaseSource, Binding, Capture, Cell, Changes, Dentry, Generation, Inode, InodeKind, Lease,
+    LeaseKind, NameChange, NameLayers, NameWindow, Publication, Route, ScratchRecord,
+    WorkspaceState, CELL_BYTES, COMPOUND_INODES, COMPOUND_NAMES, MASK_BYTES, PAGE_ROWS,
     SCRATCH_BYTES,
 };

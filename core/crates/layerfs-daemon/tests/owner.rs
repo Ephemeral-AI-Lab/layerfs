@@ -192,6 +192,8 @@ fn value(serial: u64) -> Inode {
         nlink: 1,
         size: 0,
         inherited_cutoff: 0,
+        born: 0,
+        entries: 0,
     }
 }
 fn write(client: &OwnerClient, route: Route, serial: u64) -> Completion {
@@ -229,7 +231,7 @@ fn parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation
         OwnerConfig::default(),
     )
     .unwrap();
-    assert_eq!(owner.profile().schema_version, 6);
+    assert_eq!(owner.profile().schema_version, 7);
     let client = owner.client();
     let a = open(&client, 1);
     let b = open(&client, 2);

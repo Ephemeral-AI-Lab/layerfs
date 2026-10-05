@@ -1,7 +1,10 @@
-//! Workspace read composition through real short owner jobs, outside provider IO.
+//! Workspace read and namespace-job composition through real short owner jobs,
+//! outside provider IO.
 use crate::{Command, OwnerClient, OwnerError, Response};
-use layerfs_overlay::{BaseSource, Dentry, Inode, NameWindow};
-use layerfs_workspace::{OverlayRead, WorkspaceError, WorkspaceResult};
+use layerfs_overlay::{BaseSource, Cell, Dentry, Inode, NameWindow};
+use layerfs_workspace::{
+    JobOutcome, NamespaceJob, OverlayJobs, OverlayRead, WorkspaceError, WorkspaceResult,
+};
 fn error(error: OwnerError) -> WorkspaceError {
     WorkspaceError::Service(Box::new(error))
 }
@@ -72,6 +75,38 @@ impl OverlayRead for OwnerClient {
         )?;
         match done.result() {
             Ok(Response::Names(value)) => Ok(value.clone()),
+            _ => Err(WorkspaceError::Service(Box::new(done))),
+        }
+    }
+    fn cell(
+        &self,
+        source: BaseSource,
+        serial: u64,
+        generation: u64,
+        offset: u64,
+    ) -> WorkspaceResult<Option<Cell>> {
+        let done = self.read_job(
+            source,
+            Command::SourceCell {
+                source,
+                serial,
+                generation,
+                offset,
+            },
+        )?;
+        match done.result() {
+            Ok(Response::Cell(value)) => Ok(value.clone()),
+            _ => Err(WorkspaceError::Service(Box::new(done))),
+        }
+    }
+}
+impl OverlayJobs for OwnerClient {
+    /// One owner round. An unadmitted job returns its exact refusal and the
+    /// original command; an attempted job's error is its exact outcome.
+    fn namespace(&self, job: &NamespaceJob) -> WorkspaceResult<JobOutcome> {
+        let done = self.read_job(job.source(), Command::Namespace(Box::new(job.clone())))?;
+        match done.result() {
+            Ok(Response::Namespace(outcome)) => Ok(outcome.clone()),
             _ => Err(WorkspaceError::Service(Box::new(done))),
         }
     }

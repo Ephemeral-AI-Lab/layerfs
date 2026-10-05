@@ -48,6 +48,15 @@ pub enum Command {
         parent: u64,
         after: Option<Vec<u8>>,
     },
+    SourceCell {
+        source: BaseSource,
+        serial: u64,
+        generation: u64,
+        offset: u64,
+    },
+    /// One complete ordinary namespace operation round: Workspace evaluates it
+    /// over the rows current in this job and publishes at most once.
+    Namespace(Box<layerfs_workspace::NamespaceJob>),
     InstallPrepared {
         workspace: std::sync::Arc<layerfs_workspace::Workspace>,
         input: layerfs_workspace::PreparedBase,
@@ -110,6 +119,7 @@ pub enum Response {
     Names(NameWindow),
     RetainedBaseSource(Option<BaseSource>),
     Scratch(Vec<ScratchRecord>),
+    Namespace(layerfs_workspace::JobOutcome),
     Done,
 }
 impl Command {
@@ -129,11 +139,12 @@ impl Command {
             Self::Inode(_) | Self::PendingPublications { .. } | Self::CapturedCell { .. } => {
                 ServiceClass::Read
             }
-            Self::SourceInode { .. } | Self::SourceDentry { .. } | Self::SourceNames { .. } => {
-                ServiceClass::Read
-            }
+            Self::SourceInode { .. }
+            | Self::SourceDentry { .. }
+            | Self::SourceNames { .. }
+            | Self::SourceCell { .. } => ServiceClass::Read,
             Self::AcquireBaseSource { .. } => ServiceClass::Source,
-            Self::Publish { .. } => ServiceClass::Mutation,
+            Self::Publish { .. } | Self::Namespace(_) => ServiceClass::Mutation,
             Self::Capture
             | Self::Install { .. }
             | Self::InstallPrepared { .. }
@@ -162,7 +173,15 @@ impl Command {
                 PAGE_ROWS * (std::mem::size_of::<Dentry>() + 255),
             ),
             Self::PendingPublications { .. } => (0, PAGE_ROWS * std::mem::size_of::<Publication>()),
-            Self::CapturedCell { .. } => (0, CELL_BYTES + MASK_BYTES + std::mem::size_of::<Cell>()),
+            Self::CapturedCell { .. } | Self::SourceCell { .. } => {
+                (0, CELL_BYTES + MASK_BYTES + std::mem::size_of::<Cell>())
+            }
+            // The boxed job, its bounded facts/names, and at most one reply of
+            // needed names or one changed inode.
+            Self::Namespace(job) => (
+                std::mem::size_of::<layerfs_workspace::NamespaceJob>() + job.charge(),
+                PAGE_ROWS * (std::mem::size_of::<layerfs_workspace::Need>() + 255),
+            ),
             Self::SourceDentry { name, .. } => {
                 (name.capacity(), std::mem::size_of::<Dentry>() + 255)
             }
@@ -187,6 +206,17 @@ impl Command {
         db: &Overlay,
         route: Option<Route>,
     ) -> Result<Response, crate::OwnerError> {
+        if let Self::Namespace(job) = self {
+            if route != Some(job.source().route()) {
+                return Err(crate::OwnerError::Overlay(
+                    layerfs_overlay::OverlayError::Stale,
+                ));
+            }
+            return job
+                .perform(db)
+                .map(Response::Namespace)
+                .map_err(|cause| crate::OwnerError::Workspace(Box::new(cause)));
+        }
         if let Self::InstallPrepared { workspace, input } = self {
             if route != Some(workspace.route()) {
                 return Err(crate::OwnerError::Install {
@@ -217,7 +247,19 @@ impl Command {
         }
         let route = route.ok_or(layerfs_overlay::OverlayError::Invalid("missing route"))?;
         match self {
-            Self::Open { .. } | Self::InstallPrepared { .. } => unreachable!(),
+            Self::Open { .. } | Self::InstallPrepared { .. } | Self::Namespace(_) => unreachable!(),
+            Self::SourceCell {
+                source,
+                serial,
+                generation,
+                offset,
+            } => {
+                if source.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.source_cell(source, serial, generation, offset)
+                    .map(Response::Cell)
+            }
             Self::State => db.state(route).map(Response::State),
             Self::RetainedCapture => db.retained_capture(route).map(Response::RetainedCapture),
             Self::PendingPublications { after } => db

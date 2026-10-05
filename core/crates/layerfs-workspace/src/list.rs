@@ -1,6 +1,6 @@
 //! Bounded three-way ordered name merge; deletion work advances its resume key.
 use crate::{OverlayRead, SourceView, WorkspaceResult};
-use layerfs_content::{object::inode_leaf::InodeKind, ContentError};
+use layerfs_content::ContentError;
 use layerfs_overlay::{Dentry, PAGE_ROWS};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ViewListing {
@@ -10,8 +10,10 @@ pub struct ViewListing {
 }
 impl SourceView {
     /// One processing window visits at most64 distinct keys, including whiteouts.
-    /// Empty output may have continuation. Concurrent mutation has ordinary weak
-    /// directory-read semantics; stable kernel cursor/reference ownership is S4.
+    /// Empty output may have continuation. The resume key is the last visited
+    /// name, so a name bound for the whole enumeration is returned exactly once
+    /// and names created, removed or renamed meanwhile may or may not appear.
+    /// A directory created above the installed floor makes no base demand.
     pub fn list(
         &self,
         overlay: &impl OverlayRead,
@@ -21,29 +23,19 @@ impl SourceView {
         if after.is_some_and(|key| key.len() > 255) {
             return Err(ContentError::PathLimitExceeded.into());
         }
-        if self.stat(overlay, parent)?.kind != InodeKind::Directory {
-            return Err(ContentError::WrongLogicalRole.into());
-        }
-        let base = match self
-            .base
-            .list_after_bytes(parent, after, PAGE_ROWS, PAGE_ROWS * 264)
-        {
-            Ok(page) => page,
-            Err(ContentError::PathNotFound) => layerfs_content::filesystem::DirectoryListing {
-                entries: Vec::new(),
-                continuation: None,
-            },
-            Err(error) => return Err(error.into()),
-        };
         let local = overlay.names(self.source, parent, after)?;
         if local.source != self.source || local.parent != parent {
             return Err(ContentError::InvalidRecord("source name response").into());
         }
-        if let Some(inode) = &local.parent_inode {
-            if inode.kind != layerfs_overlay::InodeKind::Directory {
-                return Err(ContentError::WrongLogicalRole.into());
+        let base = if self.inherits(parent, local.parent_inode.as_ref())? {
+            self.base
+                .list_after_bytes(parent, after, PAGE_ROWS, PAGE_ROWS * 264)?
+        } else {
+            layerfs_content::filesystem::DirectoryListing {
+                entries: Vec::new(),
+                continuation: None,
             }
-        }
+        };
         for rows in [&local.active, &local.captured] {
             if rows.len() > PAGE_ROWS
                 || rows.windows(2).any(|p| p[0].name >= p[1].name)

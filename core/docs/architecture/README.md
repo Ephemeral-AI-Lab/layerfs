@@ -67,6 +67,11 @@ The initial native authenticated channel is described in
 [23 — Native bridge](23-native-bridge.md), with completed KK peer binding, bounded
 borrowed records, one-attempt I/O/quarantine and unfinished logical service scope.
 
+Ordinary namespace operations are described in
+[30 — Namespace operations](30-namespace-operations.md): atomic compound owner
+jobs, exact refusals, maintained directory counts, verified rename ancestry and
+owning serial ranges, with unfinished byte-stream/lifetime/native scope.
+
 ## Why these papers exist
 
 Initial terminal ownership/maintenance is described in

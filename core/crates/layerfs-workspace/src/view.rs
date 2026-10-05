@@ -90,17 +90,41 @@ impl SourceView {
             .map(Into::into)
             .ok_or(ContentError::PathNotFound.into())
     }
+    /// Canonical root directory serial of the owned base; never rebound.
+    pub fn root_serial(&self) -> u64 {
+        self.base.root().root_inode().serial()
+    }
+    /// Whether the owned base can bind names under this directory, after the
+    /// kind/removal checks every name read shares. A directory created above
+    /// the installed floor has no base children, so no base demand is made.
+    pub(crate) fn inherits(&self, serial: u64, local: Option<&Inode>) -> WorkspaceResult<bool> {
+        match local {
+            Some(row) if row.kind != layerfs_overlay::InodeKind::Directory => {
+                Err(ContentError::WrongLogicalRole.into())
+            }
+            Some(row) if row.nlink == 0 && serial != self.root_serial() => {
+                Err(ContentError::PathNotFound.into())
+            }
+            Some(row) => Ok(!self.source.created_above(row.born)),
+            None if self.base.inode(serial)?.value.kind != InodeKind::Directory => {
+                Err(ContentError::WrongLogicalRole.into())
+            }
+            None => Ok(true),
+        }
+    }
     pub fn lookup(
         &self,
         overlay: &impl OverlayRead,
         parent: u64,
         name: &PathName,
     ) -> WorkspaceResult<ViewStat> {
-        if self.stat(overlay, parent)?.kind != InodeKind::Directory {
-            return Err(ContentError::WrongLogicalRole.into());
-        }
+        let local = overlay.inode(self.source, parent)?;
+        let inherits = self.inherits(parent, local.as_ref())?;
         if let Some(local) = overlay.dentry(self.source, parent, name.as_bytes())? {
             return self.stat(overlay, local.serial.ok_or(ContentError::PathNotFound)?);
+        }
+        if !inherits {
+            return Err(ContentError::PathNotFound.into());
         }
         let inherited = match self.base.child(parent, name) {
             Ok(value) => Some(value.serial),
@@ -113,5 +137,31 @@ impl SourceView {
         }
         .ok_or(ContentError::PathNotFound)?;
         self.stat(overlay, serial)
+    }
+    /// Target of a symlink: the local creation cell, or the inherited object.
+    pub fn readlink(
+        &self,
+        overlay: &impl OverlayRead,
+        serial: u64,
+    ) -> WorkspaceResult<layerfs_content::filesystem::SymlinkTarget> {
+        let Some(local) = overlay.inode(self.source, serial)? else {
+            return Ok(self.base.readlink(serial)?);
+        };
+        if local.kind != layerfs_overlay::InodeKind::Symlink {
+            return Err(ContentError::WrongLogicalRole.into());
+        }
+        if !self.source.created_above(local.born) {
+            return Ok(self.base.readlink(serial)?);
+        }
+        let cell = overlay
+            .cell(self.source, serial, local.born, 0)?
+            .ok_or(ContentError::InvalidRecord("local symlink target"))?;
+        let length = usize::try_from(local.size)
+            .ok()
+            .filter(|length| *length <= cell.data.len())
+            .ok_or(ContentError::InvalidRecord("local symlink target"))?;
+        Ok(layerfs_content::filesystem::SymlinkTarget::new(
+            cell.data[..length].to_vec(),
+        )?)
     }
 }

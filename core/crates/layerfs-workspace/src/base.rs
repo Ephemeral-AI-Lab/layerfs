@@ -6,7 +6,7 @@ use layerfs_content::filesystem::{
     Resolved, SymlinkTarget,
 };
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
-use layerfs_content::{ContentError, ContentResult, FileView};
+use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, FileView};
 use layerfs_telemetry::timer::Timing;
 use std::{io::Write, sync::Arc};
 
@@ -97,6 +97,15 @@ impl BaseView {
             bytes,
             &mut layerfs_content::filesystem::directory::DirectoryReadWork::default(),
         )
+    }
+    /// Bindings recorded by a directory's root page: one authenticated object,
+    /// no listing. This is the exact base entry count of that directory.
+    pub fn entries(&self, value: InodeValue) -> ContentResult<u64> {
+        if value.kind != InodeKind::Directory {
+            return Err(ContentError::WrongLogicalRole);
+        }
+        let page = self.client.read_canonical(value.content_root)?;
+        Ok(layerfs_content::filesystem::directory::codec::page_shape(&page)?.1)
     }
     pub fn readlink(&self, serial: u64) -> ContentResult<SymlinkTarget> {
         self.reader()?.readlink_inode(serial)

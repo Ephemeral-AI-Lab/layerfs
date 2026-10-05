@@ -1,0 +1,48 @@
+S4 first-party failures before the final identity. Transcribed from the session's
+command output at the time each occurred; none is relabelled as a later PASS.
+All six were test-side expectations or diagnostics; no product semantic defect
+was found by them. The final logs in this directory are separate runs.
+
+1. overlay tests/engine.rs profile_namespace_binary_values_and_atomic_refusals
+   assertion `left == right` failed, left: 7, right: 6
+   Cause: schema advanced to version 7; the test (and daemon tests/owner.rs)
+   asserted version 6. Repair: both assertions now expect 7.
+
+2. overlay tests/compound.rs compound_statements_keep_point_work_as_the_namespace_grows
+   "put-inode: vm-program opcodes=208 point-probes=1 scan-opcodes=4"
+   Cause: the first diagnostic counted Rewind/Next on every cursor. The four
+   were over ephemeral cursors of the constant CHECK IN-lists, not b-trees.
+   Repair: explain_compound reports scan opcodes only for OpenRead/OpenWrite
+   cursors (btree-scan-opcodes=0); runtime fullscan_steps stays the paired proof.
+
+3. same test: "work must not grow with unrelated rows: [(849, 26, 7), (997, 26, 7), (997, 26, 7)]"
+   Cause: the first scale inserted two parent inode rows that later scales
+   updated (insert versus update path), not growth. Repair: both parents get
+   their rows before the first scale. Final: identical totals at all scales.
+
+4. workspace tests/namespace_view.rs opposing_directory_moves_cannot_form_a_cycle_between_owner_rounds
+   "assertion `left == right` failed: a refusal publishes nothing" (revision 1 vs 0)
+   Cause: the harness compared state around a refusal whose test deliberately
+   interleaves another published operation. Repair: assert the refusal and
+   that only the interleaved publication exists (revision 1).
+
+5. workspace tests/namespace_view.rs known_install_folds_a_capture_and_keeps_later_namespace_changes
+   panicked: "an installed directory is inherited"
+   Cause: the immutable-object cache already held the pages, so upstream
+   demand did not rise. Repair: that test uses a zero-byte cache.
+
+6. workspace tests/namespace_profile.rs complete_operations_keep_point_work_as_names_and_inodes_grow
+   (a) link case: 2 rounds/base_demand 10 at the first scale, 1 round/0 later:
+       first touch of the linked inherited inode. Repair: linked once before
+       the first scale.
+   (b) `assert_eq!(work("rename-directory-across-parents").base_demand, 0)`
+       left: 3, right: 0. The expectation was wrong: leaving an inherited
+       directory asks once whether the base binds the name. Repair: assert
+       two owner rounds instead.
+   workspace tests/namespace_daemon.rs closed_and_stopped_services_return_exact_outcomes_without_effect
+   asserted the debug text contained the name "never"; names print as bytes.
+   Product returned Unattempted { cause: Stopped, command: Namespace(..) } as
+   required. Repair: assert that exact prefix.
+
+Clippy: one test-only type_complexity finding in tests/harness/mod.rs, repaired
+with a named alias. No product-source Clippy finding occurred.

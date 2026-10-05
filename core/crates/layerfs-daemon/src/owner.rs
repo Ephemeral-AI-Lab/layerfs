@@ -53,6 +53,8 @@ pub enum OwnerError {
         cause: Box<layerfs_workspace::WorkspaceError>,
         input: Box<layerfs_workspace::PreparedBase>,
     },
+    /// Exact failure of an attempted namespace job; never replayed.
+    Workspace(Box<layerfs_workspace::WorkspaceError>),
 }
 impl fmt::Display for OwnerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -66,6 +68,7 @@ impl std::error::Error for OwnerError {
             Self::Overlay(error) => Some(error),
             Self::Unattempted { cause, .. } => Some(cause.as_ref()),
             Self::Install { cause, .. } => Some(cause.as_ref()),
+            Self::Workspace(cause) => Some(cause.as_ref()),
             _ => None,
         }
     }

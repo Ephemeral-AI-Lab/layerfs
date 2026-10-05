@@ -32,6 +32,8 @@ fn inode() -> Inode {
         nlink: 1,
         size: 7,
         inherited_cutoff: 0,
+        born: 0,
+        entries: 0,
     }
 }
 #[test]

@@ -95,3 +95,12 @@ owning SDK stat lengths. See [effective base view](29-effective-base-view.md) an
 [S3 exit audit](../issues/307/S3-EXIT-AUDIT.md). Earlier limitations/evidence above
 retain their source scope; native/logical runtime transport, mutable byte semantics
 and aggregate resource acceptance remain unfinished.
+
+## S4 owning serial allocation
+
+The checkpoint after `8d691ab8a` adds `Sessions::reserve_serials` and the
+borrowed `serial_port`: one authorized, binding-checked reservation from the
+Branch's allocation scope through the owning history catalog, at most 65,536
+serials per call. Workspace consumes the range locally. A failed or unknown
+call is never repeated for the same range; a consumed range is simply unused.
+Logical transport, fair network service and disconnect fences remain S9.

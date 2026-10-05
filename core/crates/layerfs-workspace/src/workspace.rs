@@ -1,5 +1,5 @@
 //! Logical Workspace binding. SQL/physical state remains in the overlay crate.
-use crate::{BaseView, CanonicalClient};
+use crate::{serials::Serials, BaseView, CanonicalClient, Refusal};
 use layerfs_content::{
     filesystem::{FilesystemRootId, InodeScope},
     ContentError,
@@ -7,12 +7,13 @@ use layerfs_content::{
 use layerfs_overlay::{Overlay, OverlayError, Route};
 use std::{
     fmt,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 
 pub struct Workspace {
     route: Route,
     pub(crate) base: RwLock<BaseView>,
+    pub(crate) serials: Mutex<Serials>,
 }
 #[derive(Debug)]
 pub enum WorkspaceError {
@@ -21,6 +22,8 @@ pub enum WorkspaceError {
     BindingPoisoned,
     MissingLengthProvider,
     Service(Box<dyn std::error::Error + Send + Sync>),
+    /// A definite pre-effect refusal of an ordinary namespace operation.
+    Refused(Refusal),
     BaseChanged {
         expected: [u8; 32],
         actual: [u8; 32],
@@ -63,10 +66,7 @@ impl Workspace {
     ) -> WorkspaceResult<Self> {
         let base = BaseView::open(client, root, scope)?;
         let route = overlay.open_workspace(incarnation, root.0.to_bytes())?;
-        Ok(Self {
-            route,
-            base: RwLock::new(base),
-        })
+        Ok(Self::bind(route, base))
     }
     /// Binds a checked root to an already-open owner route. The source-read
     /// entry verifies the selected root before any effective read.
@@ -74,6 +74,7 @@ impl Workspace {
         Self {
             route,
             base: RwLock::new(base),
+            serials: Mutex::new(Serials::default()),
         }
     }
     pub const fn route(&self) -> Route {

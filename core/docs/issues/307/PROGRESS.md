@@ -5,19 +5,24 @@
 Owner: [tracker #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307).
 Design baseline: `c9861bc878583822a468e78dbc0f3740eacbecbe` on local main.
 The [implementation plan](../303/07-implementation-validation.md) owns milestone
-dependencies and exits. S1, S2 and S3 are complete with their exit audits and covering evidence. S0 and S4–S13 remain
+dependencies and exits. S1, S2, S3 and S4 are complete with their exit audits and covering evidence. S0 and S5–S13 remain
 unchecked until their complete implementation and required evidence exist.
 
 ## Current checkpoint
 
+S4 is complete at the local milestone-completion commit after `8d691ab8a`: atomic
+ordinary namespace operations as compound owner jobs, maintained directory
+counts, verified rename ancestry and owning serial ranges. See the
+[S4 exit audit](S4-EXIT-AUDIT.md) and
+[namespace operations](../../architecture/30-namespace-operations.md). The next
+ready work is S5 payload and stream semantics, then S6 lifetimes and reclamation.
+
 S3 is complete at local-only `c4b49a121aec15a6eae58c04d8074fd9eb2772db`, tree
 `67a6b34e5b135ea5d30c48fa5d0bd977c4aa1356`, with its
 [tracker completion receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-5994947845).
-The standalone [S4–S6 handoff](HANDOFF-S4-S6.md) records ready APIs, reusable
-checks, preserved checkout/runtime state, remaining corrections and the first
-S4 slice. Its documentation-only commit follows that tested product identity.
-The owner requested this handoff and a stop before S4; no S4 implementation was
-started. The dormant predecessor remains temporarily relocated and counted.
+The standalone [S4–S6 handoff](HANDOFF-S4-S6.md) records the interfaces, reusable
+checks and preserved state the S4–S6 group started from. The dormant predecessor
+remains temporarily relocated and counted.
 See [base architecture](../../architecture/20-workspace-base.md).
 
 S2 now has a built daemon SQL owner with fair namespaces/classes, finite capture
@@ -79,7 +84,7 @@ windows automatically while idle and after finite foreground service. Native
 unmount, live-generation/orphan/failure/pressure and aggregate qualification remain
 open; see [terminal reclaim](../../architecture/25-terminal-reclaim.md).
 
-## Completed milestones: S1–S3; current stopping boundary: handoff before S4
+## Completed milestones: S1–S4
 
 [S1 exit audit](S1-EXIT-AUDIT.md) maps the engine exits to actual source/evidence.
 The current closure slice removes the arbitrary default total-page quota and
@@ -110,11 +115,9 @@ See [implemented architecture](../../architecture/19-daemon-overlay.md).
 The remaining list below includes initial interfaces already established; complete
 S0 and later acceptance require the remaining service/lifetime/resource work.
 
-1. The producing thread commits the checked [S4–S6 handoff](HANDOFF-S4-S6.md),
-   publishes its receipt, then stops before S4 as explicitly requested. The next
-   agent starts atomic bounded namespace/metadata transactions and Workspace
-   create/link/unlink semantics, using the completed S2/S3 dependencies; it owns
-   the complete S4–S6 group and its actual exit evidence.
+1. S4 is complete. The S4–S6 group continues with S5: derive and record the
+   fragmentation/cutoff/hole algorithm and its costs, then implement cells,
+   tails, validity, inherited reads, truncate/regrow and holes.
 2. Close S0 algorithm gates for truncate/regrow, repeated failed capture and
    orphan composition, physical pressure and fair service; specify all R1–R8
    adversarial bounds and P1–P14 implementation ownership. These remain open,

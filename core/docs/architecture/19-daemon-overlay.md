@@ -127,3 +127,17 @@ owning SDK stat lengths. See [effective base view](29-effective-base-view.md) an
 [S3 exit audit](../issues/307/S3-EXIT-AUDIT.md). Earlier limitations/evidence above
 retain their source scope; native/logical runtime transport, mutable byte semantics
 and aggregate resource acceptance remain unfinished.
+
+## S4 compound namespace job
+
+The checkpoint after `8d691ab8a` advances the disposable schema to version 7:
+every inode row carries its creation generation and a directory's exact visible
+entry count. `apply` publishes at most four inode finals, two name finals and
+one cell atomically with a single ticket; `source_rows` gives one owner job
+consistent point reads, including a name's active and latest lower rows. A
+removed name keeps a whiteout only where a lower row or the base binds it.
+`publish` remains the single-inode primitive and now shares the same checked
+write helpers. See [namespace operations](30-namespace-operations.md) for the
+semantics, work derivation and paired plan/runtime evidence. Earlier receipts
+keep their schema pins. Byte-stream transitions, removed-inode reclamation,
+failure composition and pressure remain S5/S6.

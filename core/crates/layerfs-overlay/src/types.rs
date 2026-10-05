@@ -8,6 +8,10 @@ pub const MASK_BYTES: usize = CELL_BYTES / 8;
 pub const PAGE_ROWS: usize = 64;
 /// Maximum bytes in one scratch record, not a total operation limit.
 pub const SCRATCH_BYTES: usize = 65_536;
+/// Maximum changed inodes in one compound namespace job, not a namespace limit.
+pub const COMPOUND_INODES: usize = 4;
+/// Maximum changed name bindings in one compound namespace job.
+pub const COMPOUND_NAMES: usize = 2;
 
 /// Incarnation-qualified routing capability issued by this daemon engine.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -50,6 +54,11 @@ pub struct Inode {
     pub nlink: u64,
     pub size: u64,
     pub inherited_cutoff: u64,
+    /// Generation that created this serial locally; zero inherits a base inode.
+    /// A value above the installed floor means the bound base has no such inode.
+    pub born: u64,
+    /// Exact visible child bindings of a directory; zero for other kinds.
+    pub entries: u64,
 }
 /// One final name binding; None is a whiteout, names remain binary in SQL.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -57,6 +66,39 @@ pub struct Dentry {
     pub parent: u64,
     pub name: Vec<u8>,
     pub serial: Option<u64>,
+}
+/// Final state of one name in a compound job.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Binding {
+    Bound(u64),
+    /// `inherited` states whether the owned immutable base binds this name; a
+    /// lower local row, when present, decides instead of this fact.
+    Removed {
+        inherited: bool,
+    },
+}
+/// One changed name key of a compound job.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NameChange {
+    pub parent: u64,
+    pub name: Vec<u8>,
+    pub binding: Binding,
+}
+/// Semantically checked final values of one atomic namespace operation. The
+/// windows bound one job; they are not Workspace totals.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Changes {
+    pub inodes: Vec<Inode>,
+    pub names: Vec<NameChange>,
+    /// One payload cell of a changed inode, published in the same transaction.
+    pub cell: Option<(u64, Cell)>,
+}
+/// Local rows of one name: the active generation and the latest lower one.
+/// The outer None is "no row"; the inner None is a whiteout.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NameLayers {
+    pub active: Option<Option<u64>>,
+    pub lower: Option<Option<u64>>,
 }
 /// A fixed bounded physical cell. Mask bits are little-bit-order per byte.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -121,6 +163,7 @@ pub struct BaseSource {
     pub(crate) route: Route,
     pub(crate) owner: u64,
     pub(crate) root: [u8; 32],
+    pub(crate) installed: i64,
 }
 /// Two bounded ordered local name inputs from one owner job. A capture can
 /// change membership between jobs, never within this returned window.
@@ -141,6 +184,11 @@ impl BaseSource {
     }
     pub const fn root(self) -> [u8; 32] {
         self.root
+    }
+    /// True when this source's base cannot hold an inode created at `born`:
+    /// install is fenced while the source is owned, so the floor is stable.
+    pub const fn created_above(self, born: u64) -> bool {
+        born > self.installed as u64
     }
 }
 /// Independently keyed custody, not a resident owner map.

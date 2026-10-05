@@ -1,9 +1,9 @@
 //! Fixed statement templates shared by ordinary jobs and plan diagnostics.
 pub(crate) const INODE_LOOKUP: &str =
-    "SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff
+    "SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries
     FROM inode WHERE ns=?1 AND serial=?2 AND gen<=?3 AND gen>?4 ORDER BY gen DESC LIMIT 1";
 pub(crate) const INODE_CAPTURE: &str =
-    "SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff
+    "SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries
     FROM inode INDEXED BY inode_capture WHERE ns=?1 AND gen=?2 AND serial>?3 ORDER BY serial LIMIT 64";
 pub(crate) const CELL_LOOKUP: &str = "SELECT data,validity FROM payload
     WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset=?4";
@@ -32,3 +32,19 @@ pub(crate) const SOURCE_NAMES: &str =
     WHERE ns=?1 AND gen=?2 AND parent=?3 AND name>?4 ORDER BY name LIMIT 64";
 pub(crate) const SCRATCH_PAGE: &str = "SELECT kind,key,value FROM scratch
     WHERE ns=?1 AND operation=?2 AND kind=?3 AND key>?4 ORDER BY key LIMIT 64";
+pub(crate) const INODE_ACTIVE: &str = "SELECT 1 FROM inode WHERE ns=?1 AND serial=?2 AND gen=?3";
+pub(crate) const INODE_PUT: &str =
+    "INSERT INTO inode VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)
+    ON CONFLICT(ns,serial,gen) DO UPDATE SET kind=excluded.kind,mode=excluded.mode,
+    mtime_seconds=excluded.mtime_seconds,mtime_nanoseconds=excluded.mtime_nanoseconds,
+    nlink=excluded.nlink,size=excluded.size,inherited_cutoff=excluded.inherited_cutoff,
+    born=excluded.born,entries=excluded.entries";
+pub(crate) const DENTRY_ACTIVE: &str =
+    "SELECT serial FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
+pub(crate) const DENTRY_PUT: &str = "INSERT INTO dentry VALUES(?1,?2,?3,?4,?5)
+    ON CONFLICT(ns,parent,name,gen) DO UPDATE SET serial=excluded.serial";
+pub(crate) const DENTRY_DROP: &str =
+    "DELETE FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
+pub(crate) const TICKET_PUT: &str = "INSERT INTO request(ns,revision,gen) VALUES(?1,?2,?3)";
+pub(crate) const FRONTIER_ADVANCE: &str = "UPDATE workspace SET revision=?2,
+    dirty_inodes=dirty_inodes+?3,dirty_names=dirty_names+?4 WHERE ns=?1";
