@@ -1,0 +1,39 @@
+{
+  "parent": "a0dc7da9bba51fefd7c8ab3df90f003e0d93faf9",
+  "source_sha256": {
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "core/Cargo.lock": "1aa5f363d2edbc8bb5907c627d7ee430430541335df46f3030150d3e727ca6ca",
+    "core/crates/layerfs-daemon/src/commands.rs": "5c89a1bb20e214a32c206ac507193779159a9ae2c2cfcb0771b7e93701b80b3f",
+    "core/crates/layerfs-daemon/src/owner.rs": "a3ef80cb4e370b1e0607ad24208b0b2b4545e12b420009edf0f775609d4a1c37",
+    "core/crates/layerfs-daemon/src/queue.rs": "9812c4008f9084c5b9c9f55e9b3defbc0e740c00a57265be331f9da4d55a2f9c",
+    "core/crates/layerfs-overlay/sql/schema.sql": "0b00fab6e8ea2d7948db5e4b0c32c983a0274b199675f060f4f01c8dc9423fa4",
+    "core/crates/layerfs-overlay/src/close.rs": "1d768b4ac15269ca1f1e61f844b15a653fcbbccd44d7de33692b8f5df3a0d7d5",
+    "core/crates/layerfs-overlay/src/composition.rs": "cfc5b9803cd8a5db54e4641e482cc9dd2bcfa3ce84012f38a973964413bc8614",
+    "core/crates/layerfs-overlay/src/db.rs": "2b5717e653371e248caabfa2c37bc716b57fdb92e8a11a6dec1c703a2a38140c",
+    "core/crates/layerfs-overlay/src/error.rs": "827dba0456f39d3a2c212f7e292ef40da50bc786c8f32ddfc7de8fecd617e820",
+    "core/crates/layerfs-overlay/src/garbage.rs": "c0a6af6d19c996cffe69b5a748cac0193aba0825d616b1c3deded7f1ea6107e3",
+    "core/crates/layerfs-overlay/src/generation.rs": "e5d6a56cf94a7d20f857267b8899519284e5927731f7b475ba4cf70985dc3630",
+    "core/crates/layerfs-overlay/src/layers.rs": "739ebe4cd216877bd38976820d28597669fa747cc967539da504bd49f9dc552c",
+    "core/crates/layerfs-overlay/src/lib.rs": "3d264a1166253d160a8607fa6039e605143fabd36c5d2423498ea386cf6bd728",
+    "core/crates/layerfs-overlay/src/maintenance.rs": "8ed363dde9bdc4d508ca8a27443989f493bd2a51714a57006657ef7f21d1520f",
+    "core/crates/layerfs-overlay/src/metrics.rs": "dafc0a2700058addbb62756e527b79a3f6411e27f3a313ad48a1760acb2dfd2e",
+    "core/crates/layerfs-overlay/src/reclaim.rs": "2719785dd4b0c440d0418cebbcadd58d0af3b136434ec2b6e66d8611e1cdfc21",
+    "core/crates/layerfs-overlay/src/scratch.rs": "5b8ee7618a4f6fd46705f0cc51b6f98f770f9f6a9e5d8ec6481afc23be3636db",
+    "core/crates/layerfs-overlay/src/source_names.rs": "5ba81c2a62c0a00de0b14649d1931671d2f0682d495cea40d0791d3e3f4bb0e2",
+    "core/crates/layerfs-overlay/src/types.rs": "2e7329750c8f8d614fbb006af3579b3c6f006e1b108cdfa82e4b4c53d23ff063",
+    "core/crates/layerfs-overlay/src/workspace.rs": "ad7b10169c5e404b5cd0220e7e010218f518c677d79e5dbea2a795d11411130b"
+  },
+  "counts": {
+    "layerfs-daemon-ready-final.log": 9,
+    "layerfs-workspace-ready-final.log": 27,
+    "layerfs-overlay-ready-final.log": 30,
+    "linux-layerfs-daemon-ready.log": 9,
+    "linux-layerfs-overlay-ready.log": 30,
+    "linux-layerfs-workspace-ready.log": 27
+  },
+  "scope": "S6 initial composition checkpoint only; not S6 completion",
+  "test_timeout_seconds": 120,
+  "rust": "1.85.1",
+  "linux_image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "unaffected_S5_scope_reused": true
+}

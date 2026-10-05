@@ -13,6 +13,9 @@ use std::{
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OwnerWork {
+    /// Exclusive command jobs; automatic maintenance is accounted separately.
+    pub sql_foreground: layerfs_overlay::DatabaseWork,
+    pub sql_maintenance: layerfs_overlay::DatabaseWork,
     pub admitted: u64,
     pub completed: [u64; 6],
     pub queue_wait_ns: [u64; 6],
@@ -37,6 +40,7 @@ pub(crate) struct Job {
     pub reply: SyncSender<Envelope>,
     pub admitted: Instant,
     pub blocked: bool,
+    pub wait_consolidation: bool,
 }
 pub(crate) struct Lane {
     pub queues: [VecDeque<Job>; 6],
@@ -85,7 +89,11 @@ impl Lane {
             if index == ServiceClass::Mutation as usize
                 && self.queues[ServiceClass::Capture as usize]
                     .iter()
-                    .any(|job| matches!(job.command, Command::Capture) && job.id < front.id)
+                    .any(|job| {
+                        matches!(job.command, Command::Capture)
+                            && !job.wait_consolidation
+                            && job.id < front.id
+                    })
             {
                 continue;
             }
@@ -116,6 +124,15 @@ pub(crate) struct Shared {
     pub config: crate::owner::OwnerConfig,
 }
 impl Shared {
+    pub fn sql_progress(&self, work: layerfs_overlay::DatabaseWork, maintenance: bool) {
+        if let Ok(mut state) = self.state.lock() {
+            if maintenance {
+                state.work.sql_maintenance.accumulate(work)
+            } else {
+                state.work.sql_foreground.accumulate(work)
+            }
+        }
+    }
     pub fn new(config: crate::owner::OwnerConfig) -> Self {
         Self {
             state: Mutex::new(State {
@@ -158,6 +175,12 @@ impl Shared {
     }
     pub fn maintenance(&self, step: layerfs_overlay::ReclaimStep, ns: u64) {
         if let Ok(mut state) = self.state.lock() {
+            state.event = state.event.wrapping_add(1);
+            if let Some(lane) = state.lanes.get_mut(&(step.namespace as i64)) {
+                for job in &mut lane.queues[ServiceClass::Capture as usize] {
+                    job.blocked = false;
+                }
+            }
             state.work.maintenance_jobs = state.work.maintenance_jobs.saturating_add(1);
             state.work.maintenance_rows = state.work.maintenance_rows.saturating_add(step.rows);
             state.work.maintenance_data_bytes = state
@@ -166,6 +189,7 @@ impl Shared {
                 .saturating_add(step.data_bytes);
             state.work.maintenance_ns = state.work.maintenance_ns.saturating_add(ns);
         }
+        self.wake.notify_all();
     }
     pub fn maintenance_failed(&self, error: layerfs_overlay::OverlayError) {
         if let Ok(mut state) = self.state.lock() {

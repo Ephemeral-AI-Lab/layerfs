@@ -36,7 +36,7 @@ impl Overlay {
         self.query(
             StatementKind::Workspace,
             "SELECT active,captured,revision,base_root,dirty_inodes,dirty_names,lifecycle,installed,captured_revision,base_readers
-             FROM workspace WHERE ns=?1 AND incarnation=?2",
+             ,consolidating FROM workspace WHERE ns=?1 AND incarnation=?2",
             &[&route.ns, &route.incarnation.as_slice()],
             40,
             |r| {
@@ -53,6 +53,7 @@ impl Overlay {
                     dirty_names: unsigned(r, 5)?,
                     closed: r.get::<_, i64>(6)? != 0,
                     base_readers: unsigned(r, 9)?,
+                    consolidating: r.get::<_, Option<i64>>(10)?.map(Generation),
                 })
             },
         )?

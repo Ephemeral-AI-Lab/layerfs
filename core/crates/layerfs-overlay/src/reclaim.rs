@@ -20,6 +20,10 @@ impl Overlay {
     /// One ready namespace turn, rotating after the caller's last namespace.
     /// No held namespace is probed; last-owner transitions maintain readiness.
     pub fn reclaim_closed(&self, after_namespace: u64) -> OverlayResult<Option<ReclaimStep>> {
+        self.available()?;
+        if !self.closed_ready.get() {
+            return Ok(None);
+        }
         self.atomic(|| {
             let after = integer(after_namespace)?;
             let mut rows = self.query(
@@ -39,6 +43,7 @@ impl Overlay {
                 )?;
             }
             let Some((ns, phase)) = rows.pop() else {
+                self.closed_ready.set(false);
                 return Ok(None);
             };
             let (count, bytes) = match phase {
@@ -48,6 +53,7 @@ impl Overlay {
                 3 => self.delete_scratch(ns)?,
                 4 => self.delete_old_reclaim(ns)?,
                 5 => self.delete_steps(ns)?,
+                6 => self.delete_maintenance(ns)?,
                 _ => {
                     self.execute(
                         StatementKind::Reclaim,
@@ -214,6 +220,31 @@ impl Overlay {
                 "DELETE FROM reclaim WHERE ns=?1 AND queue_key=?2",
                 &[&ns, key],
                 16,
+            )?;
+        }
+        Ok((rows.len() as u64, 0))
+    }
+    fn delete_maintenance(&self, ns: i64) -> OverlayResult<(u64, u64)> {
+        let rows = self.query(
+            StatementKind::Reclaim,
+            "SELECT kind,resource,target FROM maintenance
+            WHERE ns=?1 ORDER BY kind,resource,target LIMIT 64",
+            &[&ns],
+            8,
+            |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            },
+        )?;
+        for (kind, resource, target) in &rows {
+            self.execute(
+                StatementKind::Reclaim,
+                "DELETE FROM maintenance WHERE ns=?1 AND kind=?2 AND resource=?3 AND target=?4",
+                &[&ns, kind, resource, target],
+                32,
             )?;
         }
         Ok((rows.len() as u64, 0))

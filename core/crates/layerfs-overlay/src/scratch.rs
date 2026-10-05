@@ -43,6 +43,17 @@ impl Overlay {
             if changed != 1 {
                 return Err(OverlayError::Missing);
             }
+            if lease.kind == LeaseKind::Reader {
+                self.wake_generation(route.ns, lease.resource)?;
+            }
+            if lease.kind == LeaseKind::Operation && lease.resource == 0 {
+                self.enqueue(
+                    route.ns,
+                    crate::maintenance::SCRATCH,
+                    integer(lease.owner)?,
+                    1,
+                )?;
+            }
             self.queue_closed(route)
         })
     }

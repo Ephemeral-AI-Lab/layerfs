@@ -23,7 +23,7 @@ impl Overlay {
         let state = self.source_state(source)?;
         let parent_inode = self.inode_at(source.route, parent, state.active, state.installed)?;
         let active = self.source_names(source, parent, state.active, after)?;
-        let captured = if let Some(generation) = state.captured {
+        let captured = if let Some(generation) = state.captured.or(state.consolidating) {
             self.source_names(source, parent, generation, after)?
         } else {
             Vec::new()
@@ -41,7 +41,7 @@ impl Overlay {
         source: BaseSource,
     ) -> OverlayResult<(Generation, Option<Generation>)> {
         let state = self.source_state(source)?;
-        Ok((state.active, state.captured))
+        Ok((state.active, state.captured.or(state.consolidating)))
     }
     pub fn source_dentry(
         &self,
@@ -88,7 +88,8 @@ impl Overlay {
         after: Option<&[u8]>,
     ) -> OverlayResult<Vec<Dentry>> {
         let state = self.source_state(source)?;
-        if generation != state.active && Some(generation) != state.captured {
+        if generation != state.active && Some(generation) != state.captured.or(state.consolidating)
+        {
             return Err(OverlayError::Stale);
         }
         let after = after.unwrap_or(&[]);

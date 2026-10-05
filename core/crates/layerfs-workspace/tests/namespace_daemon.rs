@@ -519,13 +519,24 @@ fn payload_complete_operations_have_indexed_work_through_the_real_owner() {
         .iter()
         .all(|plan| plan.contains("SEARCH") && !plan.contains("SCAN") && !plan.contains("TEMP")));
     println!("S5_OWNER_PLANS {plans:?}");
-    let snapshot = || {
-        service.job(Command::DatabaseWork, |response| match response {
-            Response::DatabaseWork(work) => **work,
-            other => panic!("{other:?}"),
-        })
+    let snapshot = || service.client.diagnostics().unwrap().sql_foreground;
+    let quiesce = || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            assert!(std::time::Instant::now() < deadline, "maintenance deadline");
+            if service.job(Command::MaintenanceIdle, |response| {
+                matches!(response, Response::MaintenanceIdle(true))
+            }) {
+                break;
+            }
+            thread::yield_now();
+        }
     };
     let profile = |label: &str, scale, work: &dyn Fn()| {
+        // Counts are attributed to foreground jobs. Background work is
+        // reported independently and the same completed prior cleanup state
+        // precedes each operation. No latency/cache claim is made here.
+        quiesce();
         let before: DatabaseWork = snapshot();
         work();
         let after = snapshot();
@@ -544,7 +555,7 @@ fn payload_complete_operations_have_indexed_work_through_the_real_owner() {
                 *total += delta;
             }
         }
-        println!("S5_OWNER_OPERATION unrelated={scale} operation={label} statements={} vm={} changed={} bound_bytes={} fullscan=0 sorts=0 autoindex=0 reprepare=0 includes_post_observation_route_seek=true", totals[0], totals[1], totals[2], totals[3]);
+        println!("S6_OWNER_OPERATION unrelated={scale} operation={label} foreground_statements={} vm={} changed={} bound_bytes={} fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true", totals[0], totals[1], totals[2], totals[3]);
         totals
     };
     let (mut filled, mut reference) = (0, None);
@@ -610,4 +621,23 @@ fn payload_complete_operations_have_indexed_work_through_the_real_owner() {
             reference = Some(row);
         }
     }
+    let maintenance = service.client.diagnostics().unwrap().sql_maintenance;
+    println!(
+        "S6_OWNER_MAINTENANCE statements={} changed={} vm={}",
+        maintenance
+            .statements
+            .iter()
+            .map(|s| s.executions)
+            .sum::<u64>(),
+        maintenance
+            .statements
+            .iter()
+            .map(|s| s.rows_changed)
+            .sum::<u64>(),
+        maintenance
+            .statements
+            .iter()
+            .map(|s| s.vm_steps)
+            .sum::<u64>()
+    );
 }

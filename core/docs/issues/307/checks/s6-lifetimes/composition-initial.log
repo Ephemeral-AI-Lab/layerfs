@@ -1,0 +1,40 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'lifetimes', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.05s
+     Running tests/lifetimes.rs (core/target/debug/deps/lifetimes-214cb2efae5f9cbf)
+
+running 3 tests
+test reader_custody_parks_composition_then_exact_release_enables_it ... ok
+S6_STALE jobs=76 bytes_removed=4186112 pages_before=(1189, 0) pages_after=(1189, 1163)
+S6_PLANS ["SEARCH maintenance USING INDEX maintenance_ready (ready=? AND (ns,kind,resource,target)>(?,?,?,?))"]
+test stale_cleanup_rechecks_epochs_and_never_deletes_regrown_new_bytes ... ok
+S6_FAILURE round=0 transition_statements=6 read_statements=8 read_vm=435 live_namespace_layers<=2
+S6_FAILURE round=1 transition_statements=6 read_statements=4 read_vm=245 live_namespace_layers<=2
+S6_FAILURE round=2 transition_statements=6 read_statements=4 read_vm=181 live_namespace_layers<=2
+S6_FAILURE round=3 transition_statements=6 read_statements=4 read_vm=141 live_namespace_layers<=2
+S6_FAILURE round=4 transition_statements=6 read_statements=4 read_vm=125 live_namespace_layers<=2
+S6_FAILURE round=5 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=6 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=7 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=8 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=9 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=10 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=11 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=12 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=13 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=14 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=15 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=16 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=17 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=18 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=19 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=20 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=21 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=22 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+S6_FAILURE round=23 transition_statements=6 read_statements=4 read_vm=117 live_namespace_layers<=2
+test definite_failures_compose_in_bounded_turns_without_growing_live_layers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+
+EXIT: 0; WALL: 1.804s

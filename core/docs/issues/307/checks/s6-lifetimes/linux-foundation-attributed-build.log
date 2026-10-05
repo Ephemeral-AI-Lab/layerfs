@@ -1,0 +1,13 @@
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 11.68s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-eed025404273d72b)
+  Executable tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-ea54a23a5a9ed9ab)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_workspace-3685a7f963af61a6)
+  Executable tests/base.rs (core/target/cluster2-linux/debug/deps/base-7d805fc13bfbeb1e)
+  Executable tests/namespace.rs (core/target/cluster2-linux/debug/deps/namespace-cb69144a4d51439a)
+  Executable tests/namespace_daemon.rs (core/target/cluster2-linux/debug/deps/namespace_daemon-94202b6952d9eda5)
+  Executable tests/namespace_profile.rs (core/target/cluster2-linux/debug/deps/namespace_profile-4ebc5356b83444e1)
+  Executable tests/namespace_view.rs (core/target/cluster2-linux/debug/deps/namespace_view-d0b6023c6cde2da2)
+  Executable tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-7b5185cc83e7d42f)

@@ -186,6 +186,9 @@ pub struct WorkspaceState {
     pub closed: bool,
     /// Maintained exact pending base-source windows, not a namespace scan.
     pub base_readers: u64,
+    /// One lower namespace domain being composed after a definite fenced
+    /// failure. A next capture waits; ordinary mutations remain live.
+    pub consolidating: Option<Generation>,
 }
 /// One exact transient immutable-base source window. Release requires actual
 /// request completion/fencing; open-file and command lifetime are independent.

@@ -1,0 +1,155 @@
+    Checking layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error[E0599]: no variant or associated item named `ResolveFailed` found for enum `commands::Command` in the current scope
+   --> crates/layerfs-daemon/src/commands.rs:155:21
+    |
+23  | pub enum Command {
+    | ---------------- variant or associated item `ResolveFailed` not found for this enum
+...
+155 |             | Self::ResolveFailed(_)
+    |                     ^^^^^^^^^^^^^ variant or associated item not found in `Command`
+
+error[E0599]: no variant or associated item named `ResolveFailed` found for enum `commands::Command` in the current scope
+   --> crates/layerfs-daemon/src/commands.rs:380:19
+    |
+23  | pub enum Command {
+    | ---------------- variant or associated item `ResolveFailed` not found for this enum
+...
+380 |             Self::ResolveFailed(capture) => {
+    |                   ^^^^^^^^^^^^^ variant or associated item not found in `Command`
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+   --> crates/layerfs-daemon/src/owner.rs:265:21
+    |
+265 |         lane.queues[class as usize].push_back(Job {
+    |                     ^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+    |
+    = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+  --> crates/layerfs-daemon/src/queue.rs:70:25
+   |
+70 |             if index == ServiceClass::Source as usize
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+   |
+   = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+  --> crates/layerfs-daemon/src/queue.rs:71:32
+   |
+71 |                 && self.queues[ServiceClass::Capture as usize]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+   |
+   = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+  --> crates/layerfs-daemon/src/queue.rs:78:32
+   |
+78 |                 && self.queues[ServiceClass::Source as usize]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+   |
+   = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+  --> crates/layerfs-daemon/src/queue.rs:86:25
+   |
+86 |             if index == ServiceClass::Mutation as usize
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+   |
+   = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+  --> crates/layerfs-daemon/src/queue.rs:87:32
+   |
+87 |                 && self.queues[ServiceClass::Capture as usize]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+   |
+   = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+  --> crates/layerfs-daemon/src/queue.rs:98:32
+   |
+98 |                 && self.queues[ServiceClass::Mutation as usize]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+   |
+   = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+   --> crates/layerfs-daemon/src/queue.rs:168:45
+    |
+168 |                 for job in &mut lane.queues[ServiceClass::Capture as usize] {
+    |                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+    |
+    = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+   --> crates/layerfs-daemon/src/queue.rs:227:21
+    |
+227 |         lane.queues[job.command.class() as usize].push_front(job);
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+    |
+    = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+   --> crates/layerfs-daemon/src/queue.rs:233:28
+    |
+233 |             work.completed[class as usize] = work.completed[class as usize].saturating_add(1);
+    |                            ^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+    |
+    = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+   --> crates/layerfs-daemon/src/queue.rs:233:61
+    |
+233 |             work.completed[class as usize] = work.completed[class as usize].saturating_add(1);
+    |                                                             ^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+    |
+    = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+   --> crates/layerfs-daemon/src/queue.rs:234:32
+    |
+234 |             work.queue_wait_ns[class as usize] =
+    |                                ^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+    |
+    = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+   --> crates/layerfs-daemon/src/queue.rs:235:36
+    |
+235 |                 work.queue_wait_ns[class as usize].saturating_add(wait);
+    |                                    ^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+    |
+    = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+   --> crates/layerfs-daemon/src/queue.rs:236:29
+    |
+236 |             work.service_ns[class as usize] =
+    |                             ^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+    |
+    = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+   --> crates/layerfs-daemon/src/queue.rs:237:33
+    |
+237 |                 work.service_ns[class as usize].saturating_add(service);
+    |                                 ^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+    |
+    = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+error[E0605]: non-primitive cast: `ServiceClass` as `usize`
+   --> crates/layerfs-daemon/src/queue.rs:240:49
+    |
+240 |                     for job in &mut lane.queues[ServiceClass::Capture as usize] {
+    |                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ an `as` expression can be used to convert enum types to numeric types only if the enum type is unit-only or field-less
+    |
+    = note: see https://doc.rust-lang.org/reference/items/enumerations.html#casting for more information
+
+Some errors have detailed explanations: E0599, E0605.
+For more information about an error, try `rustc --explain E0599`.
+error: could not compile `layerfs-daemon` (lib) due to 18 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-daemon` (lib test) due to 18 previous errors

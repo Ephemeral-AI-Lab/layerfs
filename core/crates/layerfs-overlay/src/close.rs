@@ -76,6 +76,7 @@ impl Overlay {
             self.execute(StatementKind::Reclaim,
                 "INSERT INTO reclaim(ns,queue_key,target,cursor) VALUES(?1,?2,?2,0) ON CONFLICT(ns,queue_key) DO NOTHING",
                 &[&route.ns,&CLOSE_KEY],16)?;
+            self.closed_ready.set(true);
         }
         Ok(())
     }

@@ -1,0 +1,4 @@
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.81s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_daemon-4f522c7d11558724)
+  Executable tests/owner.rs (core/target/debug/deps/owner-5ca345c2c5cc75fd)

@@ -151,3 +151,8 @@ and one inherited range; raw cell APIs remain stored observations. See
 [payload streams](31-payload-streams.md) for complexity, amplification, custody
 and the paired real-owner evidence. Stale garbage, failure depth, orphans and
 physical pressure remain S6; earlier receipts retain their schema/source pins.
+
+Initial S6 after `a0dc7da9b`: schema v9 adds bounded failed-capture composition
+and indexed live maintenance. [Live composition](32-live-composition.md) records
+the implemented slice and remaining orphan/physical-headroom exits; S6 is not
+complete. Earlier receipts keep their source/schema/work identities.

@@ -11,6 +11,7 @@ pub enum OverlayError {
     Stale,
     Closed,
     CaptureInFlight,
+    Consolidating,
     ReplyAttemptsPending,
     BaseSourcesPending,
     Quarantined,

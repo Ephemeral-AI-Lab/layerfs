@@ -1,0 +1,3 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.50s
+  Executable tests/lifetimes.rs (core/target/debug/deps/lifetimes-214cb2efae5f9cbf)

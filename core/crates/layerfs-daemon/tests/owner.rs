@@ -196,6 +196,99 @@ fn value(serial: u64) -> Inode {
         entries: 0,
     }
 }
+
+#[test]
+fn failed_capture_waits_for_readers_while_later_writes_and_idle_composition_progress() {
+    use layerfs_overlay::{Lease, LeaseKind};
+    use std::time::{Duration, Instant};
+    let temp = Temp::new();
+    let owner = Owner::start(
+        &temp.0.join("failure"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let client = owner.client();
+    let route = open(&client, 125);
+    let wait = |pending: Pending| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            assert!(Instant::now() < deadline, "owner progress deadline");
+            if let Some(done) = pending.try_complete().unwrap() {
+                return done;
+            }
+            std::thread::yield_now();
+        }
+    };
+    for serial in 1..=256 {
+        let done = write(&client, route, serial);
+        reply(&client, publication(&done));
+    }
+    let done = wait(submit(&client, Some(route), Command::Capture));
+    let capture = match done.result() {
+        Ok(Response::Captured(c)) => *c,
+        x => panic!("{x:?}"),
+    };
+    drop(done);
+    let reader = Lease {
+        kind: LeaseKind::Reader,
+        owner: 901,
+        resource: capture.generation.number() as u64,
+    };
+    assert!(wait(submit(&client, Some(route), Command::Acquire(reader)))
+        .result()
+        .is_ok());
+    assert!(wait(submit(
+        &client,
+        Some(route),
+        Command::ResolveFailed(capture)
+    ))
+    .result()
+    .is_ok());
+    let next = submit(&client, Some(route), Command::Capture);
+    // A next capture is parked for composition, not a payload-sized mutation
+    // fence. Later writes must finish while the lower reader remains owned.
+    let done = wait(submit(
+        &client,
+        Some(route),
+        Command::Publish {
+            inode: value(999),
+            name: None,
+            cell: None,
+        },
+    ));
+    reply(&client, publication(&done));
+    drop(done);
+    assert!(next.try_complete().unwrap().is_none());
+    assert!(wait(submit(&client, Some(route), Command::Release(reader)))
+        .result()
+        .is_ok());
+    // No additional write/status/cleanup job triggers the composition.
+    let done = wait(next);
+    let captured = match done.result() {
+        Ok(Response::Captured(c)) => *c,
+        x => panic!("{x:?}"),
+    };
+    drop(done);
+    let done = wait(submit(
+        &client,
+        Some(route),
+        Command::CapturedInodes {
+            capture: captured,
+            after: 998,
+        },
+    ));
+    assert!(
+        matches!(done.result(),Ok(Response::Inodes(rows)) if rows.len()==1 && rows[0].serial==999)
+    );
+    drop(done);
+    assert!(client.maintenance_failure().unwrap().is_none());
+    println!(
+        "S6_OWNER_FAILURE automatic_work={:?}",
+        client.diagnostics().unwrap()
+    );
+    owner.stop().unwrap();
+}
 fn write(client: &OwnerClient, route: Route, serial: u64) -> Completion {
     submit(
         client,
@@ -231,7 +324,7 @@ fn parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation
         OwnerConfig::default(),
     )
     .unwrap();
-    assert_eq!(owner.profile().schema_version, 8);
+    assert_eq!(owner.profile().schema_version, 9);
     let client = owner.client();
     let a = open(&client, 1);
     let b = open(&client, 2);

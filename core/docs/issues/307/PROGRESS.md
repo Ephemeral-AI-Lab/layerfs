@@ -20,6 +20,15 @@ earlier paused snapshot, not current verification status. P3 is explicitly
 carried to backed S10 editing; it is not resolved. S6 lifetimes/reclamation,
 failure composition and physical headroom are the next required milestone.
 
+S6 is now in progress: the initial bounded failure-composition/live-maintenance
+slice is verified on macOS and Linux. [Live composition](../../architecture/32-live-composition.md)
+records its scope; independent orphans, minted file/capture custody, whiteouts
+and physical reservations/headroom remain required. The owner subsequently
+requested responsibility folders across active core packages. Complete the
+coherent composition checkpoint, apply that relocation in a separate checkpoint,
+then continue the original S6 exits. No S6 completion or later milestone is
+claimed by either checkpoint.
+
 S4 is complete at the local milestone-completion commit after `8d691ab8a`: atomic
 ordinary namespace operations as compound owner jobs, maintained directory
 counts, verified rename ancestry and owning serial ranges. See the

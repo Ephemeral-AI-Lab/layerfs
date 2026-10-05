@@ -1,0 +1,222 @@
+//! Definite failure resolution and bounded cell/name transfer into active state.
+use crate::{
+    cells::Window,
+    db::integer,
+    inode,
+    layers::Layer,
+    maintenance::{Item, FOLD, RETIRE},
+    sql, Capture, Generation, Overlay, OverlayError, OverlayResult, Route, StatementKind,
+    CELL_BYTES,
+};
+
+impl Overlay {
+    /// Releases an exact capture only after definite nonpublication and caller
+    /// fencing. Unknown stage/transition/discard must retain original custody.
+    /// This performs fixed metadata work; payload composition is maintained.
+    pub fn resolve_failed_capture(&self, capture: Capture) -> OverlayResult<()> {
+        self.atomic(|| {
+            self.checked_capture(capture)?;
+            if self.state(capture.route)?.closed {
+                return Err(OverlayError::Closed);
+            };
+            self.execute(
+                StatementKind::Capture,
+                "UPDATE workspace SET consolidating=captured,
+                captured=NULL,captured_revision=NULL WHERE ns=?1",
+                &[&capture.route.ns],
+                8,
+            )?;
+            self.enqueue(capture.route.ns, FOLD, 0, capture.generation.0)
+        })
+    }
+    pub(crate) fn route_for_ns(&self, ns: i64) -> OverlayResult<Route> {
+        let incarnation = self
+            .query(
+                StatementKind::Workspace,
+                "SELECT incarnation FROM workspace WHERE ns=?1",
+                &[&ns],
+                8,
+                |row| row.get::<_, Vec<u8>>(0),
+            )?
+            .pop()
+            .ok_or(OverlayError::Stale)?;
+        Ok(Route {
+            engine: self.identity,
+            ns,
+            incarnation: incarnation.try_into().map_err(|_| OverlayError::Stale)?,
+        })
+    }
+    pub(crate) fn fold_namespace(&self, item: &Item) -> OverlayResult<(u64, u64, bool)> {
+        let route = self.route_for_ns(item.ns)?;
+        let state = self.state(route)?;
+        if state.closed {
+            self.hold_item(item)?;
+            return Ok((0, 0, false));
+        }
+        if state.consolidating != Some(Generation(item.target)) {
+            return Err(OverlayError::Stale);
+        }
+        if item.phase == 0 {
+            let row = self
+                .query(
+                    StatementKind::Reclaim,
+                    "SELECT parent,name,serial FROM dentry INDEXED BY dentry_capture
+                WHERE ns=?1 AND gen=?2 AND (parent,name)>(?3,?4) ORDER BY parent,name LIMIT 1",
+                    &[&item.ns, &item.target, &item.cursor, &item.name],
+                    24 + item.name.len() as u64,
+                    |r| {
+                        Ok((
+                            r.get::<_, i64>(0)?,
+                            r.get::<_, Vec<u8>>(1)?,
+                            r.get::<_, Option<i64>>(2)?,
+                        ))
+                    },
+                )?
+                .pop();
+            if let Some((parent, name, serial)) = row {
+                let added = self
+                    .query(
+                        StatementKind::Dentry,
+                        sql::DENTRY_ACTIVE,
+                        &[&item.ns, &parent, &name, &state.active.0],
+                        24 + name.len() as u64,
+                        |_| Ok(()),
+                    )?
+                    .is_empty();
+                if added {
+                    self.put_name(route, state.active, parent, &name, serial)?;
+                    self.execute(
+                        StatementKind::Workspace,
+                        "UPDATE workspace SET dirty_names=dirty_names+1 WHERE ns=?1",
+                        &[&item.ns],
+                        8,
+                    )?;
+                }
+                self.execute(
+                    StatementKind::Reclaim,
+                    sql::DENTRY_DROP,
+                    &[&item.ns, &parent, &name, &item.target],
+                    24 + name.len() as u64,
+                )?;
+                self.advance_item(item, 0, parent, -1, &name)?;
+                return Ok((1, name.len() as u64, false));
+            }
+            self.advance_item(item, 1, 0, -1, &[])?;
+            return Ok((0, 0, false));
+        }
+        let lower=self.query(StatementKind::Inode,
+            "SELECT serial,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries
+             FROM inode INDEXED BY inode_capture WHERE ns=?1 AND gen=?2 AND serial>=?3 ORDER BY serial LIMIT 1",
+            &[&item.ns,&item.target,&item.cursor],24,inode::decode)?.pop();
+        let Some(lower) = lower else {
+            self.execute(
+                StatementKind::Capture,
+                "UPDATE workspace SET consolidating=NULL WHERE ns=?1",
+                &[&item.ns],
+                8,
+            )?;
+            self.enqueue(item.ns, RETIRE, 0, item.target)?;
+            self.finish_item(item)?;
+            return Ok((0, 0, true));
+        };
+        let serial = integer(lower.serial)?;
+        let layers = self.layers(item.ns, serial, state.active.0, state.installed)?;
+        let bottom = layers
+            .iter()
+            .find(|layer| layer.gen == item.target)
+            .ok_or(OverlayError::Stale)?;
+        let top = match layers.first().filter(|layer| layer.gen == state.active.0) {
+            Some(layer) => *layer,
+            None => {
+                let (_, layer) = self.put_inode(route, &state, &lower)?;
+                self.execute(
+                    StatementKind::Workspace,
+                    "UPDATE workspace SET dirty_inodes=dirty_inodes+1 WHERE ns=?1",
+                    &[&item.ns],
+                    8,
+                )?;
+                layer
+            }
+        };
+        let cell = self
+            .query(
+                StatementKind::Reclaim,
+                "SELECT cell_offset FROM payload
+            WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>?4 ORDER BY cell_offset LIMIT 1",
+                &[
+                    &item.ns,
+                    &serial,
+                    &item.target,
+                    &if serial == item.cursor { item.aux } else { -1 },
+                ],
+                32,
+                |r| r.get::<_, i64>(0),
+            )?
+            .pop();
+        if let Some(cell) = cell {
+            let bytes = self.compose_cell(item.ns, serial, bottom, &top, cell)?;
+            self.execute(
+                StatementKind::Reclaim,
+                sql::CELL_DROP,
+                &[&item.ns, &serial, &item.target, &cell],
+                32,
+            )?;
+            self.advance_item(item, 1, serial, cell, &[])?;
+            return Ok((1, bytes, false));
+        }
+        self.execute(
+            StatementKind::Inode,
+            "UPDATE inode SET inherited_cutoff=min(inherited_cutoff,?4)
+            WHERE ns=?1 AND serial=?2 AND gen=?3",
+            &[&item.ns, &serial, &top.gen, &integer(bottom.cutoff)?],
+            32,
+        )?;
+        self.execute(
+            StatementKind::Reclaim,
+            "DELETE FROM inode WHERE ns=?1 AND serial=?2 AND gen=?3",
+            &[&item.ns, &serial, &item.target],
+            24,
+        )?;
+        self.advance_item(item, 1, serial, -1, &[])?;
+        Ok((1, 0, false))
+    }
+    /// Copies only effective lower bytes into unwritten upper positions. This
+    /// runs atomically with the caller's source/reference advance; upper shrink
+    /// and write stamps are re-read each turn, never saved in a work item.
+    pub(crate) fn compose_cell(
+        &self,
+        ns: i64,
+        serial: i64,
+        lower: &Layer,
+        upper: &Layer,
+        cell: i64,
+    ) -> OverlayResult<u64> {
+        let Some(old) = self.stored(ns, serial, lower.gen, cell)? else {
+            return Ok(0);
+        };
+        if self.stale(ns, serial, lower, cell, old.epoch)? {
+            return Ok(0);
+        };
+        let mut window = match self.stored(ns, serial, upper.gen, cell)? {
+            Some(current) if !self.stale(ns, serial, upper, cell, current.epoch)? => {
+                current.expand()?
+            }
+            _ => Window::empty(),
+        };
+        let end = old.data.len().min(
+            lower
+                .size
+                .min(upper.cutoff)
+                .saturating_sub(cell as u64)
+                .min(CELL_BYTES as u64) as usize,
+        );
+        for at in 0..end {
+            if old.valid(at) && window.mask[at / 8] & (1 << (at % 8)) == 0 {
+                window.data[at] = old.data[at];
+                window.set(at, at + 1);
+            }
+        }
+        self.store(ns, serial, upper.gen, cell, upper.epoch, window.trim())?;
+        Ok(end as u64)
+    }
+}

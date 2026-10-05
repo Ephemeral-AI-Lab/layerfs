@@ -270,6 +270,7 @@ impl OwnerClient {
             reply,
             admitted: Instant::now(),
             blocked: false,
+            wait_consolidation: false,
         });
         if new {
             state.rotation.push_back(namespace);
@@ -307,17 +308,38 @@ fn ns(route: Option<Route>) -> i64 {
 fn elapsed(start: Instant) -> u64 {
     start.elapsed().as_nanos().min(u64::MAX as u128) as u64
 }
+struct SqlObservation<'a> {
+    db: &'a Overlay,
+    shared: &'a Shared,
+    before: layerfs_overlay::DatabaseWork,
+    maintenance: bool,
+}
+impl Drop for SqlObservation<'_> {
+    fn drop(&mut self) {
+        self.shared
+            .sql_progress(self.db.diagnostics().since(&self.before), self.maintenance);
+    }
+}
 fn run(shared: &Shared, db: &Overlay) {
     let mut served = 0_u8;
     let mut cursor = 0_u64;
     let mut maintenance_failed = false;
+    let mut live_cursor = layerfs_overlay::MaintenanceCursor::default();
+    let mut live_turn = true;
     while let Some((job, event)) = shared.poll() {
         let mut maintained = false;
         if !maintenance_failed && (served >= 8 || job.is_none()) {
+            let _sql = SqlObservation {
+                db,
+                shared,
+                before: db.diagnostics(),
+                maintenance: true,
+            };
             let start = Instant::now();
-            match db.reclaim_closed(cursor) {
+            let maintenance = maintenance_turn(db, &mut live_cursor, &mut cursor, &mut live_turn);
+            served = 0;
+            match maintenance {
                 Ok(Some(step)) => {
-                    cursor = step.namespace;
                     shared.maintenance(step, elapsed(start));
                     served = 0;
                     maintained = true;
@@ -329,7 +351,7 @@ fn run(shared: &Shared, db: &Overlay) {
                 }
             }
         }
-        let Some(job) = job else {
+        let Some(mut job) = job else {
             if !maintained {
                 shared.wait(event);
             }
@@ -346,10 +368,29 @@ fn run(shared: &Shared, db: &Overlay) {
             });
             continue;
         }
+        let _sql = SqlObservation {
+            db,
+            shared,
+            before: db.diagnostics(),
+            maintenance: false,
+        };
         if matches!(job.command, Command::Capture) {
             if let Some(route) = job.route {
                 match db.capture_ready(route) {
                     Ok(false) => {
+                        match db.state(route) {
+                            Ok(state) => job.wait_consolidation = state.consolidating.is_some(),
+                            Err(error) => {
+                                let _ = job.reply.send(Envelope {
+                                    result: Err(OwnerError::Unattempted {
+                                        cause: Box::new(OwnerError::Overlay(error)),
+                                        command: Box::new(job.command),
+                                    }),
+                                    _credit: job.credit,
+                                });
+                                continue;
+                            }
+                        }
                         shared.park(job);
                         continue;
                     }
@@ -400,12 +441,35 @@ fn run(shared: &Shared, db: &Overlay) {
         let wait = elapsed(job.admitted);
         let start = Instant::now();
         let result = job.command.perform(db, job.route);
+        drop(_sql);
         shared.progress(namespace, class, wait, elapsed(start));
         let _ = job.reply.send(Envelope {
             result,
             _credit: job.credit,
         });
     }
+}
+
+fn maintenance_turn(
+    db: &Overlay,
+    live: &mut layerfs_overlay::MaintenanceCursor,
+    closed: &mut u64,
+    live_turn: &mut bool,
+) -> Result<Option<layerfs_overlay::ReclaimStep>, OverlayError> {
+    let first = *live_turn;
+    *live_turn = !*live_turn;
+    for use_live in [first, !first] {
+        if use_live {
+            if let Some(step) = db.maintain(*live)? {
+                *live = step.cursor;
+                return Ok(Some(step.work));
+            }
+        } else if let Some(step) = db.reclaim_closed(*closed)? {
+            *closed = step.namespace;
+            return Ok(Some(step));
+        }
+    }
+    Ok(None)
 }
 
 impl fmt::Debug for Completion {

@@ -110,3 +110,38 @@ impl StatementWork {
         self.elapsed_ns = self.elapsed_ns.saturating_add(other.elapsed_ns);
     }
 }
+
+impl DatabaseWork {
+    /// Work since an earlier connection snapshot. Counters saturate for
+    /// observation rather than refusing a product operation.
+    pub fn since(&self, before: &Self) -> Self {
+        let mut delta = Self::default();
+        for ((to, a), b) in delta
+            .statements
+            .iter_mut()
+            .zip(&self.statements)
+            .zip(&before.statements)
+        {
+            *to = StatementWork {
+                attempts: a.attempts.saturating_sub(b.attempts),
+                executions: a.executions.saturating_sub(b.executions),
+                rows_returned: a.rows_returned.saturating_sub(b.rows_returned),
+                rows_changed: a.rows_changed.saturating_sub(b.rows_changed),
+                vm_steps: a.vm_steps.saturating_sub(b.vm_steps),
+                fullscan_steps: a.fullscan_steps.saturating_sub(b.fullscan_steps),
+                sorts: a.sorts.saturating_sub(b.sorts),
+                autoindex_rows: a.autoindex_rows.saturating_sub(b.autoindex_rows),
+                reprepares: a.reprepares.saturating_sub(b.reprepares),
+                bound_bytes: a.bound_bytes.saturating_sub(b.bound_bytes),
+                elapsed_ns: a.elapsed_ns.saturating_sub(b.elapsed_ns),
+            };
+        }
+        delta
+    }
+    /// Adds an exclusive owner-job observation to a bounded aggregate.
+    pub fn accumulate(&mut self, delta: Self) {
+        for (to, from) in self.statements.iter_mut().zip(delta.statements) {
+            to.add(from);
+        }
+    }
+}

@@ -26,6 +26,8 @@ pub enum Command {
     /// Connection-scoped work snapshot for operator diagnostics; includes the
     /// route validation seek, without scanning namespace rows or payloads.
     DatabaseWork,
+    /// Read-only pending maintenance observation; never drives cleanup.
+    MaintenanceIdle,
     /// Exact plans of the payload statements under an owned source window.
     PayloadPlans(BaseSource),
     RetainedCapture,
@@ -84,6 +86,9 @@ pub enum Command {
     },
     ReplyAttempted(Publication),
     Capture,
+    /// Caller has established definite nonpublication and fenced the exact
+    /// capture's external work. Unknown history must retain that capture.
+    ResolveFailed(Capture),
     Install {
         capture: Capture,
         root: [u8; 32],
@@ -118,6 +123,7 @@ pub enum Response {
     Opened(Route),
     State(WorkspaceState),
     DatabaseWork(Box<layerfs_overlay::DatabaseWork>),
+    MaintenanceIdle(bool),
     PayloadPlans(Vec<String>),
     CleanupState(layerfs_overlay::CleanupState),
     Inode(Option<Inode>),
@@ -143,12 +149,14 @@ impl Command {
             Self::Open { .. }
             | Self::State
             | Self::DatabaseWork
+            | Self::MaintenanceIdle
             | Self::RetainedCapture
             | Self::RetainedBaseSource { .. }
             | Self::ReleaseBaseSource(_)
             | Self::CleanupState
             | Self::Close
             | Self::ReleaseClosedCapture(_)
+            | Self::ResolveFailed(_)
             | Self::ReplyAttempted(_)
             | Self::Acquire(_)
             | Self::Release(_) => ServiceClass::Lifecycle,
@@ -279,6 +287,7 @@ impl Command {
                 db.state(route)?;
                 Ok(Response::DatabaseWork(Box::new(db.diagnostics())))
             }
+            Self::MaintenanceIdle => db.maintenance_idle(route).map(Response::MaintenanceIdle),
             Self::PayloadPlans(source) => {
                 if source.route() != route {
                     return Err(layerfs_overlay::OverlayError::Stale);
@@ -373,6 +382,12 @@ impl Command {
                 db.reply_attempted(publication).map(|_| Response::Done)
             }
             Self::Capture => db.capture(route).map(Response::Captured),
+            Self::ResolveFailed(capture) => {
+                if capture.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.resolve_failed_capture(capture).map(|_| Response::Done)
+            }
             Self::Install { capture, root } => {
                 if capture.route() != route {
                     return Err(layerfs_overlay::OverlayError::Stale);

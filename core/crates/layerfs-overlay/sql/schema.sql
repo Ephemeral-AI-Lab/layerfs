@@ -1,4 +1,4 @@
--- Disposable overlay schema v8. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v9. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -12,6 +12,8 @@ CREATE TABLE workspace (
     dirty_inodes INTEGER NOT NULL DEFAULT 0 CHECK(dirty_inodes>=0),
     dirty_names INTEGER NOT NULL DEFAULT 0 CHECK(dirty_names>=0),
     base_readers INTEGER NOT NULL DEFAULT 0 CHECK(base_readers>=0),
+    consolidating INTEGER CHECK(consolidating>0),
+    CHECK(captured IS NULL OR consolidating IS NULL),
     CHECK((captured IS NULL)=(captured_revision IS NULL))
 ) STRICT;
 CREATE TABLE inode (
@@ -68,6 +70,8 @@ CREATE TABLE request (
     PRIMARY KEY(ns,revision)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX payload_namespace_row ON payload(ns,rowid);
+CREATE INDEX payload_generation ON payload(ns,gen,serial,cell_offset);
+CREATE INDEX shrink_generation ON shrink(ns,gen,serial,depth);
 CREATE TABLE lease (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
     kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 4),
@@ -98,4 +102,19 @@ CREATE TABLE reclaim (
 ) STRICT, WITHOUT ROWID;
 PRAGMA application_id=1279676210;
 CREATE INDEX reclaim_ready ON reclaim(queue_key,ns);
-PRAGMA user_version=8;
+CREATE INDEX lease_resource ON lease(ns,kind,resource,owner);
+CREATE TABLE maintenance (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    kind INTEGER NOT NULL CHECK(kind IN(1,3,4,5,6)),
+    resource INTEGER NOT NULL CHECK(resource>=0),
+    target INTEGER NOT NULL CHECK(target<>0),
+    phase INTEGER NOT NULL DEFAULT 0 CHECK(phase>=0),
+    cursor INTEGER NOT NULL DEFAULT 0 CHECK(cursor>=-1),
+    aux INTEGER NOT NULL DEFAULT -1 CHECK(aux>=-1),
+    name BLOB NOT NULL DEFAULT X'' CHECK(length(name)<=255),
+    ready INTEGER NOT NULL DEFAULT 1 CHECK(ready IN(0,1)),
+    PRIMARY KEY(ns,kind,resource,target)
+) STRICT, WITHOUT ROWID;
+CREATE INDEX maintenance_ready ON maintenance(ready,ns,kind,resource,target);
+CREATE INDEX maintenance_generation ON maintenance(ns,target,kind,resource);
+PRAGMA user_version=9;

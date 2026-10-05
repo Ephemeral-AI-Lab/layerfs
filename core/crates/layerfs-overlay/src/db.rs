@@ -19,6 +19,11 @@ pub struct Overlay {
     pub(crate) connection: Connection,
     pub(crate) work: RefCell<DatabaseWork>,
     pub(crate) quarantined: Cell<bool>,
+    /// Connection-local readiness hints, never namespace/owner data. False is
+    /// established only by an exact empty ready query; enqueue/release marks
+    /// possible work. A rolled-back enqueue can leave only a false positive.
+    pub(crate) maintenance_ready: Cell<bool>,
+    pub(crate) closed_ready: Cell<bool>,
     profile: DatabaseProfile,
 }
 impl Overlay {
@@ -53,7 +58,7 @@ impl Overlay {
             connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
         let application: i64 =
             connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
-        if profile.schema_version != 8 || application != 1279676210 {
+        if profile.schema_version != 9 || application != 1279676210 {
             return Err(OverlayError::Invalid("overlay schema readback"));
         }
         connection.set_prepared_statement_cache_capacity(48);
@@ -70,6 +75,8 @@ impl Overlay {
             connection,
             work,
             quarantined: Cell::new(false),
+            maintenance_ready: Cell::new(false),
+            closed_ready: Cell::new(false),
             profile,
         })
     }

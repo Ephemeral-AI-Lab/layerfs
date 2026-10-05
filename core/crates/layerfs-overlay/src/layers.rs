@@ -187,6 +187,7 @@ impl Overlay {
             48,
         )?;
         layer.cutoff = layer.cutoff.min(to);
+        self.schedule_shrink(ns, serial, layer.gen, boundary, layer.height)?;
         Ok(())
     }
 }

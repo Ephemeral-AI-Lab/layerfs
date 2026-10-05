@@ -50,6 +50,7 @@ impl Overlay {
                 &[&capture.route.ns, &capture.generation.0],
                 16,
             )?;
+            self.enqueue(capture.route.ns,crate::maintenance::RETIRE,0,capture.generation.0)?;
             self.queue_closed(capture.route())
         })
     }
@@ -119,6 +120,9 @@ impl Overlay {
         if state.captured.is_some() {
             return Err(OverlayError::CaptureInFlight);
         }
+        if state.consolidating.is_some() {
+            return Ok(false);
+        }
         Ok(self
             .query(
                 StatementKind::Frontier,
@@ -156,6 +160,7 @@ impl Overlay {
         self.atomic(|| {
             let state=self.live(route)?;
             if state.captured.is_some() {return Err(OverlayError::CaptureInFlight);}
+            if state.consolidating.is_some() {return Err(OverlayError::Consolidating);}
             if !self.query(StatementKind::Frontier,
                 "SELECT revision FROM request WHERE ns=?1 ORDER BY revision LIMIT 1",
                 &[&route.ns],8,|r|r.get::<_,i64>(0))?.is_empty() {
