@@ -7,8 +7,9 @@
 ## Completed stopping boundary
 
 S5 and S6 are complete in the primary checkout on local main. The S6 completion
-commit is the commit containing this handoff; its exact source/tree/LOC and tracker
-receipt identify it. [S5 audit](S5-EXIT-AUDIT.md) and [S6 audit](S6-EXIT-AUDIT.md)
+commit is `983c2ee6d36a4417d8fff2d14db6b141f5386c8c`, tree `be2744223a450eaa01b9f31c4e3c850bbd141d72`, local-only. Its
+[completion receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6000716717)
+is posted and S6 is checked; S0/S7–S13 remain unchecked. [S5 audit](S5-EXIT-AUDIT.md) and [S6 audit](S6-EXIT-AUDIT.md)
 map every scoped exit to implementation and retained evidence. No push, release,
 deployment or legacy-root deletion has occurred. S0 and S7–S13 remain open.
 
@@ -19,7 +20,7 @@ deployment or legacy-root deletion has occurred. S0 and S7–S13 remain open.
 |1775fdf98|Owner-selected source organization,80 moves,public paths preserved|148227->148327(+100)|
 |cae3d43ed|Independent regular-file/capture/operation custody|148327->150019(+1692)|
 |be651a048|Relative name inheritance, non-file lookup/request custody|150019->150533(+514)|
-|Completion commit containing this handoff|Physical reservations/accounting/wakes/resource closure|150533->151299(+766)|
+|983c2ee6d|Physical reservations/accounting/wakes/resource closure|150533->151299(+766)|
 
 Reference production remains65417; core subtotals are each combined total minus
 65417. These include excluded predecessor product source and shipped SQL, exclude
@@ -126,3 +127,7 @@ The S6 completion comparison is core85116->85882(+766), reference65417->65417(0)
 combined150533->151299(+766), exact staged-parent archives with the counter above.
 The six implementation/organization commits since S4 total+5090; organization is
 reported separately and no reference retirement or algorithmic shrink is claimed.
+
+The following handoff/receipt-only commit pins these identities and adopts the
+exact posted receipt. It has unchanged core85882/reference65417/combined151299
+production LOC, delta0, confirmed from its own parent/final staged-tree archives.

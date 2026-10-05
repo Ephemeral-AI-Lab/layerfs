@@ -181,7 +181,7 @@ next required S6 slice. Earlier pending lists above retain their checkpoint date
 
 ## S5/S6 completion (2026-10-06)
 
-S5 is complete at a0dc7da9b; S6 is complete in the commit containing
+S5 is complete at a0dc7da9b; S6 is complete at `983c2ee6d`, documented in
 [S6-EXIT-AUDIT.md](S6-EXIT-AUDIT.md). Physical reservation/headroom, source waits,
 transactional accounting and owning ext4 device-full/idle cleanup now close the
 remaining S6 component criteria. Earlier checkpoint pending lists retain their

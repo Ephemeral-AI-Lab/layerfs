@@ -1,7 +1,8 @@
 # S6 lifetimes and reclamation exit audit
 
 > **Status:** Completion audit for the local S6 completion commit containing this
-> document, after `be651a048`. Component acceptance, not release evidence or
+> document: `983c2ee6d36a4417d8fff2d14db6b141f5386c8c`, after `be651a048`.
+> Component acceptance, not release evidence or
 > integrated FUSE/Exec/Commit qualification. Exact source/build/receipt identities
 > are in [s6-pressure](checks/s6-pressure/identity.json).
 
@@ -106,3 +107,8 @@ unit target and its actual public behavior exercised through Persistence. Linux
 unique component bodies are84 after the new snapshot case, plus the two separately
 executed owned device proofs. These are coverage counts, not a relabelled aggregate
 PASS or universal native/runtime acceptance.
+
+Completion tree be2744223a450eaa01b9f31c4e3c850bbd141d72 matches the counted
+staged tree. [Tracker receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6000716717)
+is posted, S6 is checked, and S0/S7–S13 remain unchecked. The exact text is
+adopted in [checkpoints/983c2ee6d.md](checkpoints/983c2ee6d.md).
