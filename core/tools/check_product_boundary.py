@@ -21,27 +21,23 @@ UNSAFE = re.compile(r"\bunsafe\b")
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
 }
-UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-s3", "layerfs-metadata", "layerfs-persistence", "layerfs-project")
+UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-persistence", "layerfs-project")
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
     "layerfs-content": "#![forbid(unsafe_code)]",
     "layerfs-telemetry": "#![forbid(unsafe_code)]",
-    "layerfs-s3": "#![forbid(unsafe_code)]",
-    "layerfs-metadata": "#![forbid(unsafe_code)]",
     "layerfs-persistence": "#![forbid(unsafe_code)]",
     "layerfs-project": "#![forbid(unsafe_code)]",
 }
 
 
 # First-party production edges; third-party approvals and the locked graph are
-# checked separately. Existing native SQLite providers coexist until step 12.
+# checked separately. The combined SQLite adapter is the active provider.
 ALLOWED_DEPENDENCIES = {
     "layerfs-telemetry": set(),
     "layerfs-content": {"layerfs-telemetry"},
     "layerfs-storage": {"layerfs-content", "layerfs-telemetry"},
     "layerfs-history": {"layerfs-content"},
-    "layerfs-s3": {"layerfs-storage"},
-    "layerfs-metadata": {"layerfs-storage", "layerfs-history", "layerfs-content"},
     "layerfs-persistence": {"layerfs-storage", "layerfs-history", "layerfs-content"},
     "layerfs-project": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-telemetry"},
 }

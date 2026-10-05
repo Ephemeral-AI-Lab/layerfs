@@ -14,8 +14,8 @@ class ProductBoundaryTests(unittest.TestCase):
                     self.assertTrue(dependency_violations(source))
                 source = f'[package]\nname="{package}"\n[dev-dependencies]\n"{dependency}"={{path="../{dependency}"}}\n'
                 self.assertFalse(dependency_violations(source))
-        self.assertFalse(dependency_violations('[package]\nname="layerfs-metadata"\n[dependencies]\nlayerfs-history={path="../layerfs-history"}\n'))
-        self.assertTrue(dependency_violations('[package]\nname="layerfs-s3"\n[dependencies]\nlayerfs-history={path="../layerfs-history"}\n'))
+        self.assertFalse(dependency_violations('[package]\nname="layerfs-persistence"\n[dependencies]\nlayerfs-history={path="../layerfs-history"}\n'))
+        self.assertTrue(dependency_violations('[package]\nname="layerfs-persistence"\n[dependencies]\nlayerfs-workspace={path="../layerfs-workspace"}\n'))
 
     def test_domain_source_component_names(self):
         for folder in ("layerfs-storage", "layerfs-history", "layerfs-project", "layerfs-content"):
@@ -23,7 +23,7 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertTrue(violations(path, "use layerfs_s3::S3Objects;"))
             self.assertTrue(violations(path, "// layerfs-metadata owns this"))
             self.assertTrue(violations(path, "use layerfs_workspace::Workspace;"))
-        path = Path("core/crates/layerfs-metadata/src/implementation.rs")
+        path = Path("core/crates/layerfs-persistence/src/implementation.rs")
         self.assertFalse(violations(path, "use layerfs_storage::port::MetadataStore;"))
         self.assertTrue(violations(path, "use layerfs_s3::S3Objects;"))
 

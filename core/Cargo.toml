@@ -25,7 +25,6 @@ exclude = [
     "crates/layerfs-workspace",
     "crates/layerfs-bridge",
     "crates/layerfs-server",
-    "crates/layerfs-s3",
 ]
 
 [workspace.package]

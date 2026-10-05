@@ -50,6 +50,14 @@ existing Diagnostics value; they retain no source/result data and claim no timin
 
 > **Status:** Research; informative and not a product contract.
 
+**Retirement update, 2026-10-05 (parent source `8dd9e37f3`):**
+The retained `layerfs-s3` crate is deleted and `layerfs-metadata` is absent.
+The active six-crate workspace uses the combined `layerfs-persistence` SQLite
+provider. Earlier MinIO/PostgreSQL descriptions below retain their dated source
+pins as historical context; they describe no currently available provider.
+This selective update does not advance the older algorithm/format source pins.
+See the [current cluster one handbook](../../../cluster_one_handbook.md).
+
 The pending issue #192 schema 7 changes are described in
 [save ownership and publication](15-multi-writer-storage.md), based on
 `0819f3f39833d477d9ed6d878a50691c3c046a83`. That description supersedes the

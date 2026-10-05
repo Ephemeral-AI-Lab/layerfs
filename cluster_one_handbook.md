@@ -7,6 +7,10 @@ This is an integration guide to the implemented cluster one libraries, not a
 release qualification or a new API contract. Source-linked contracts govern.
 Benchmark receipts retain their own source identities, stated in section 9.
 
+Retirement update 2026-10-05 against parent `8dd9e37f3`: the retained S3 crate
+is now deleted. This advances the provider-presence description only; algorithms
+and benchmark receipts keep the source pins above and in section 9.
+
 **Terminology:** cluster one and cluster two are implementation workstreams.
 Older source comments use C1 for `layerfs-content`, C2 for `layerfs-storage`,
 and C5 for `layerfs-history`. Those component numbers do not mean clusters.
@@ -84,7 +88,9 @@ Although storage and history share a database session, their semantic operations
 have separate transaction boundaries.
 
 The active provider is SQLite. PostgreSQL is an explicitly unavailable selection;
-MinIO is not an active alternative backend. Historical plans describing those
+MinIO is not an active alternative backend. The retired `layerfs-s3` crate has
+been deleted; `layerfs-metadata` is also absent. The combined
+`layerfs-persistence` crate is the active provider. Historical plans describing those
 backends must not be used as instructions for the current implementation.
 
 Sources: [workspace](core/Cargo.toml),

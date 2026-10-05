@@ -4,6 +4,14 @@
 > not a product contract. This paper selects no architecture, freezes no scope and
 > decides no open ruling.
 
+**Retirement update, 2026-10-05 (parent source `8dd9e37f3`):**
+The retained `layerfs-s3` crate is deleted and `layerfs-metadata` is absent.
+The active six-crate workspace uses the combined `layerfs-persistence` SQLite
+provider. Earlier MinIO/PostgreSQL descriptions below retain their dated source
+pins as historical context; they describe no currently available provider.
+This selective update does not advance the older algorithm/format source pins.
+See the [current cluster one handbook](../../../cluster_one_handbook.md).
+
 Issue: [#210](https://github.com/Ephemeral-AI-Lab/layerfs/issues/210). Design
 parent: [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180).
 The [remediation handoff and qualification record](../../../docs/roadmap/0.1/0.1.7/evidence/issue210-remediation-20260921/validation.md)
