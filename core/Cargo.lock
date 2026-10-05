@@ -339,6 +339,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-sdk"
+version = "0.1.6"
+dependencies = [
+ "layerfs-content",
+ "layerfs-history",
+ "layerfs-persistence",
+ "layerfs-storage",
+ "layerfs-telemetry",
+]
+
+[[package]]
 name = "layerfs-storage"
 version = "0.1.6"
 dependencies = [

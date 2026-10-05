@@ -37,6 +37,14 @@ omitted inode dependencies and reconstructs an admitted complete root. This is
 local grammar/closure prerequisite evidence; authenticated adapters, contextual
 closure and authority remain open.
 
+The SDK is now an active host runtime slice over already-open Handles. Initialized
+independent Storage owners support scoped interleaved Saves and saved/pending
+demand, authority-bound local capabilities and retained one-attempt completions.
+Its old Server-based facade is preserved in excluded `layerfs-sdk-legacy` and
+counted. Transport authentication/fair dispatch/history/disconnect fences, complete
+root import and aggregate/runtime qualification remain unfinished. See
+[SDK runtime architecture](../../architecture/22-sdk-runtime.md).
+
 S0 in progress. Public-API proof in
 [interleaved_saves.rs](../../../crates/layerfs-persistence/tests/interleaved_saves.rs)
 demonstrates an initialized provider with independently initialized Storage
@@ -59,9 +67,9 @@ See [implemented architecture](../../architecture/19-daemon-overlay.md).
 The remaining list below includes initial interfaces already established; complete
 S0/S1/S2 acceptance requires the unimplemented service/lifetime/resource work.
 
-1. Embed runtime authority/Save adapters in the SDK composition. Use established
-   semantic admission, initialized provider handles and scoped borrowed Saves;
-   retain exact error/completion/disconnect custody and bounded windows.
+1. Extend established SDK object/Save service to authenticated transport and
+   typed history calls, with queued fair service, delivery credits, completion/
+   disconnect fences and complete contextual admission. Keep existing pins.
 2. Close S0 algorithm gates for truncate/regrow, repeated failed capture and
    orphan composition, physical pressure and fair service; specify all R1–R8
    adversarial bounds and P1–P14 implementation ownership. These remain open,

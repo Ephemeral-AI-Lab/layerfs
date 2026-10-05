@@ -6,6 +6,20 @@ from check_product_boundary import production_files, unsafe_violations, violatio
 
 
 class ProductBoundaryTests(unittest.TestCase):
+    def test_sdk_source_edges_and_unsafe_boundary(self):
+        path = Path("core/crates/layerfs-api/sdk/src/runtime/owner.rs")
+        self.assertFalse(violations(path, "use layerfs_persistence::Handles;"))
+        self.assertTrue(violations(path, "use layerfs_server::Server;"))
+        self.assertTrue(unsafe_violations(path, "unsafe fn extend_lifetime() {}"))
+        root = Path("core/crates/layerfs-api/sdk/src/lib.rs")
+        self.assertTrue(unsafe_violations(root, "pub mod runtime;"))
+        self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\npub mod runtime;"))
+
+    def test_sdk_dependency_edges(self):
+        prefix = '[package]\nname="layerfs-sdk"\n[dependencies]\n'
+        self.assertFalse(dependency_violations(prefix + 'layerfs-persistence={path="../../layerfs-persistence"}'))
+        self.assertTrue(dependency_violations(prefix + 'layerfs-server={path="../../layerfs-server"}'))
+
     def test_cluster1_dependency_edges(self):
         for package in ("layerfs-storage", "layerfs-history", "layerfs-project", "layerfs-content"):
             for dependency in ("layerfs-s3", "layerfs-metadata", "layerfs-workspace", "layerfs-sdk"):

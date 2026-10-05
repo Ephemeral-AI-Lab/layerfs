@@ -20,7 +20,10 @@ product mental model or campaign-specific benchmark procedures.
   temporarily relocated `layerfs-workspace-legacy` source remains excluded.
   Daemon now exposes an initial fair SQL owner library; its relocated predecessor
   remains excluded, and native executable/control/Exec integration is unfinished.
-  FUSE/bridge/API/sandbox directories are presently excluded reference/
+  SDK now embeds an initial host object/Save runtime with scoped sessions. Its
+  predecessor is preserved in excluded `layerfs-sdk-legacy`; authenticated
+  transport/history/control and full runtime acceptance remain unfinished.
+  FUSE/bridge/API-core/sandbox directories are presently excluded reference/
   integration source; existence is not an implemented replacement.
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and

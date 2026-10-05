@@ -21,7 +21,7 @@ UNSAFE = re.compile(r"\bunsafe\b")
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
 }
-UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-persistence", "layerfs-project", "layerfs-overlay", "layerfs-workspace", "layerfs-daemon")
+UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-persistence", "layerfs-project", "layerfs-overlay", "layerfs-workspace", "layerfs-daemon", "layerfs-sdk")
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
     "layerfs-content": "#![forbid(unsafe_code)]",
@@ -31,6 +31,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-overlay": "#![forbid(unsafe_code)]",
     "layerfs-workspace": "#![forbid(unsafe_code)]",
     "layerfs-daemon": "#![forbid(unsafe_code)]",
+    "layerfs-sdk": "#![forbid(unsafe_code)]",
 }
 
 
@@ -46,6 +47,7 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-overlay": set(),
     "layerfs-workspace": {"layerfs-content", "layerfs-overlay", "layerfs-telemetry"},
     "layerfs-daemon": {"layerfs-overlay"},
+    "layerfs-sdk": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence", "layerfs-telemetry"},
 }
 DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-project"}
 ENGINES_AND_CLUSTER2 = {
@@ -100,6 +102,8 @@ def crate_name(path):
     parts = path.parts
     for index, part in enumerate(parts):
         if part == "crates" and index + 1 < len(parts):
+            if parts[index + 1] == "layerfs-api" and index + 2 < len(parts):
+                return {"sdk": "layerfs-sdk", "core": "layerfs-api-core"}.get(parts[index + 2], "layerfs-api")
             return parts[index + 1]
     return None
 
@@ -110,7 +114,7 @@ def unsafe_violations(path, source):
     crate = crate_name(path)
     if crate is None or crate not in UNSAFE_ROOT_ATTR or path.suffix != ".rs":
         return found
-    relative = Path(*path.parts[path.parts.index(crate) + 1:])
+    relative = Path(*path.parts[path.parts.index("src"):])
     code = "\n".join(line.split("//", 1)[0] for line in source.splitlines())
     if UNSAFE.search(code):
         if crate in UNSAFE_FREE_CRATES or str(relative) != UNSAFE_AUDITED_MODULE[crate]:
@@ -177,7 +181,9 @@ def main():
         for line, reason in violations(path, path.read_text()):
             print(f"{path.relative_to(core)}:{line}: {reason}")
             failures += 1
-    for manifest in sorted((core / "crates").glob("*/Cargo.toml")):
+    manifests = set((core / "crates").glob("*/Cargo.toml"))
+    manifests.update((core / "crates" / "layerfs-api").glob("*/Cargo.toml"))
+    for manifest in sorted(manifests):
         for line, reason in dependency_violations(manifest.read_text()):
             print(f"{manifest.relative_to(core)}:{line}: {reason}")
             failures += 1

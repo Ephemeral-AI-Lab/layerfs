@@ -59,6 +59,10 @@ The initial fair daemon SQL service is described in
 [21 — Daemon owner](21-daemon-owner.md), including finite capture ordering,
 retained-result credits, installed floors and remaining native/reclaim scope.
 
+The initial application-embedded host runtime is described in
+[22 — SDK runtime](22-sdk-runtime.md), with scoped Save borrows, typed local
+authority/custody and explicit remaining transport/history/control qualification.
+
 ## Why these papers exist
 
 The only architecture study in this release,

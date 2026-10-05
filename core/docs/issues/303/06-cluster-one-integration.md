@@ -151,6 +151,15 @@ role-derived direct references without a payload copy. Runtime adapters must use
 this boundary for untrusted output. It does not establish peer/capability authority,
 saved closure or contextual child/topology validation; P1 remains incomplete.
 
+The following SDK checkpoint embeds initialized provider/Storage owners and a
+serving-scope Save registry at the planned path. Local authority-bound object,
+policy, begin/accept/finish/abort/demand and retained-completion APIs are built and
+tested through the real host provider; see
+[implemented scope](../../architecture/22-sdk-runtime.md). Authenticated native
+transport, fair queued service, history adapters, disconnect/restart fences and
+complete root/import qualification remain required. A typed local binding is not
+a network authentication proof, and S9 remains incomplete.
+
 ## 5. Immutable distribution and caller obligations
 
 ```text

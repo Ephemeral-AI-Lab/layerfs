@@ -1,0 +1,307 @@
+//! Serving-scope Save registry over independent initialized Storage handles.
+use super::{
+    Authorization, Binding, Completion, CompletionPhase, ObjectReply, Runtime, RuntimeError,
+    RuntimeResult, SaveId,
+};
+use layerfs_content::{FilesystemRoot, FinalizedObject, InodeScope, ObjectId, ObjectRole};
+use layerfs_history::{BranchId, HistoryCatalog, WorkspaceId};
+use layerfs_persistence::HistoryProvider;
+use layerfs_storage::{save::Save, Storage, StoragePolicy};
+use layerfs_telemetry::timer::TimingScope;
+
+struct Slot<'a> {
+    serial: u64,
+    binding: Option<Binding>,
+    save: Option<Save<'a>>,
+    completion: Option<Completion>,
+}
+
+/// One live host serving scope, independent of connection or command duration.
+///
+/// The application retains this registry across sequential/concurrent RPCs.
+/// Methods are bounded synchronous service units; dispatch/framing/queue fairness
+/// and disconnect fences must be provided by the host transport adapter.
+pub struct Sessions<'a> {
+    owners: &'a [Storage],
+    demand: &'a Storage,
+    history: &'a HistoryProvider,
+    authority: &'a dyn Authorization,
+    owner: [u8; 32],
+    next_serial: &'a mut u64,
+    slots: Vec<Slot<'a>>,
+}
+impl<'a> Sessions<'a> {
+    pub(super) fn new(runtime: &'a mut Runtime) -> Self {
+        let slots = runtime
+            .owners
+            .iter()
+            .map(|_| Slot {
+                serial: 0,
+                binding: None,
+                save: None,
+                completion: None,
+            })
+            .collect();
+        Self {
+            owners: &runtime.owners,
+            demand: &runtime.demand,
+            history: &runtime.history,
+            authority: runtime.authority.as_ref(),
+            owner: runtime.incarnation,
+            next_serial: &mut runtime.next_serial,
+            slots,
+        }
+    }
+
+    /// Authorizes one peer/Workspace/Branch and demand-loads only its root.
+    /// `peer` must already be authenticated by the host transport.
+    pub fn bind(
+        &self,
+        peer: [u8; 32],
+        workspace: WorkspaceId,
+        branch: BranchId,
+    ) -> RuntimeResult<Binding> {
+        if peer == [0; 32] {
+            return Err(RuntimeError::Invalid("authenticated peer"));
+        }
+        self.authority.workspace(peer, workspace, branch)?;
+        let snapshot = self
+            .history
+            .branch_snapshot(branch)?
+            .ok_or(RuntimeError::Invalid("missing Branch"))?;
+        self.authority
+            .objects(peer, workspace, branch, &[snapshot.effective_root])?;
+        let reader = self.demand.reader()?;
+        let mut values = reader.read_objects(&[snapshot.effective_root])?;
+        if values.len() != 1 {
+            return Err(RuntimeError::Invalid("root demand cardinality"));
+        }
+        let canonical = values
+            .pop()
+            .ok_or(RuntimeError::Invalid("missing root reply"))?;
+        let root = FilesystemRoot::decode(&canonical)?;
+        if root.scope().object() != snapshot.scope || root.profile() != snapshot.profile {
+            return Err(RuntimeError::Invalid("Branch root scope/profile"));
+        }
+        Ok(Binding {
+            owner: self.owner,
+            peer,
+            workspace,
+            catalog: self.history.catalog_id(),
+            incarnation: self.history.incarnation(),
+            snapshot,
+        })
+    }
+
+    /// Persisted selected policy; no provider reopen or query.
+    pub fn policy(&self, binding: &Binding) -> RuntimeResult<StoragePolicy> {
+        self.check_binding(binding)?;
+        Ok(self.demand.policy())
+    }
+
+    /// Admits one Save. An unavailable slot has no provider effect.
+    pub fn begin(&mut self, binding: &Binding) -> RuntimeResult<SaveId> {
+        self.check_binding(binding)?;
+        let index = self
+            .slots
+            .iter()
+            .position(|slot| slot.binding.is_none())
+            .ok_or(RuntimeError::AdmissionUnavailable)?;
+        let serial = *self.next_serial;
+        let next = serial
+            .checked_add(1)
+            .ok_or(RuntimeError::Invalid("Save capability exhaustion"))?;
+        // Burn exposed serials, including a failed begin, without any replay.
+        *self.next_serial = next;
+        let save = self.owners[index].begin_save()?;
+        self.slots[index] = Slot {
+            serial,
+            binding: Some(binding.clone()),
+            save: Some(save),
+            completion: None,
+        };
+        Ok(SaveId {
+            owner: self.owner,
+            slot: index,
+            serial,
+        })
+    }
+
+    /// One semantically admitted object; no total Save/file/edit counter limit.
+    pub fn accept(
+        &mut self,
+        binding: &Binding,
+        id: SaveId,
+        claimed: ObjectId,
+        role: ObjectRole,
+        canonical: Vec<u8>,
+        timing: TimingScope<'_>,
+    ) -> RuntimeResult<ObjectId> {
+        self.check_binding(binding)?;
+        self.slot(binding, id)?;
+        if self.slots[id.slot].completion.is_some() {
+            return Err(RuntimeError::AlreadyAttempted);
+        }
+        let object = match FinalizedObject::admit(
+            claimed,
+            role,
+            canonical,
+            self.owners[id.slot].policy().construction(),
+            InodeScope::from_object(binding.snapshot.scope),
+            timing,
+        ) {
+            Ok(object) => object,
+            Err(error) => {
+                self.slots[id.slot].completion = Some(Completion {
+                    phase: CompletionPhase::Accept,
+                    outcome: Err(RuntimeError::Content(error.clone())),
+                });
+                return Err(error.into());
+            }
+        };
+        let mut refs = Vec::with_capacity(1 + object.references().len());
+        refs.push(claimed);
+        refs.extend_from_slice(object.references());
+        self.authority.objects(
+            binding.peer,
+            binding.workspace,
+            binding.snapshot.branch.id,
+            &refs,
+        )?;
+        let save = self.slots[id.slot]
+            .save
+            .as_ref()
+            .ok_or(RuntimeError::AlreadyAttempted)?;
+        if let Err(error) = save.accept(object) {
+            let error = std::sync::Arc::new(error);
+            self.slots[id.slot].completion = Some(Completion {
+                phase: CompletionPhase::Accept,
+                outcome: Err(RuntimeError::Storage(error.clone())),
+            });
+            return Err(RuntimeError::Storage(error));
+        }
+        Ok(claimed)
+    }
+
+    /// One bounded saved or same-Save demand, streamed to a borrowed reply sink.
+    pub fn read_objects(
+        &self,
+        binding: &Binding,
+        save: Option<SaveId>,
+        ids: &[ObjectId],
+        reply: &mut dyn ObjectReply,
+    ) -> RuntimeResult<()> {
+        self.check_binding(binding)?;
+        if ids.len() > layerfs_content::filesystem::objects::MAXIMUM_READ_DEMANDS {
+            return Err(RuntimeError::Invalid("object demand window"));
+        }
+        self.authority.objects(
+            binding.peer,
+            binding.workspace,
+            binding.snapshot.branch.id,
+            ids,
+        )?;
+        let values = if let Some(id) = save {
+            self.slot(binding, id)?
+                .save
+                .as_ref()
+                .ok_or(RuntimeError::AlreadyAttempted)?
+                .read_objects(ids)?
+        } else {
+            self.demand.reader()?.read_objects(ids)?
+        };
+        if values.len() != ids.len() {
+            return Err(RuntimeError::Invalid("provider demand cardinality"));
+        }
+        for (id, canonical) in ids.iter().zip(&values) {
+            reply.object(*id, canonical)?;
+        }
+        Ok(())
+    }
+
+    /// Attempts finish once and retains the exact borrowed completion receipt.
+    pub fn finish(&mut self, binding: &Binding, id: SaveId) -> RuntimeResult<&Completion> {
+        self.check_binding(binding)?;
+        self.slot(binding, id)?;
+        let slot = &mut self.slots[id.slot];
+        if slot.completion.is_some() {
+            return Err(RuntimeError::AlreadyAttempted);
+        }
+        let save = slot.save.take().ok_or(RuntimeError::AlreadyAttempted)?;
+        slot.completion = Some(Completion {
+            phase: CompletionPhase::Finish,
+            outcome: save.finish().map_err(Into::into),
+        });
+        Ok(slot.completion.as_ref().expect("finish stored completion"))
+    }
+
+    /// Reads a receipt after a lost reply without repeating its operation.
+    pub fn completion(&self, binding: &Binding, id: SaveId) -> RuntimeResult<&Completion> {
+        self.check_binding(binding)?;
+        self.slot(binding, id)?
+            .completion
+            .as_ref()
+            .ok_or(RuntimeError::Invalid("Save not completed"))
+    }
+
+    /// Explicitly ends an active producer; acknowledged waves are not deleted.
+    pub fn abort(&mut self, binding: &Binding, id: SaveId) -> RuntimeResult<&Completion> {
+        self.check_binding(binding)?;
+        self.slot(binding, id)?;
+        let slot = &mut self.slots[id.slot];
+        if slot.completion.is_some() {
+            return Err(RuntimeError::AlreadyAttempted);
+        }
+        slot.save.take();
+        slot.completion = Some(Completion {
+            phase: CompletionPhase::Abort,
+            outcome: Err(layerfs_storage::StorageError::Aborted.into()),
+        });
+        Ok(slot.completion.as_ref().expect("abort stored completion"))
+    }
+
+    /// Acknowledges a known terminal receipt and releases its local slot only.
+    /// Unknown publication/failed cleanup cannot be released by this operation.
+    pub fn release(&mut self, binding: &Binding, id: SaveId) -> RuntimeResult<()> {
+        self.check_binding(binding)?;
+        let completion = self
+            .slot(binding, id)?
+            .completion
+            .as_ref()
+            .ok_or(RuntimeError::Invalid("active Save release"))?;
+        if completion.retains_custody() {
+            return Err(RuntimeError::RetainedCustody);
+        }
+        self.slots[id.slot] = Slot {
+            serial: 0,
+            binding: None,
+            save: None,
+            completion: None,
+        };
+        Ok(())
+    }
+
+    fn check_binding(&self, binding: &Binding) -> RuntimeResult<()> {
+        if binding.owner != self.owner
+            || binding.catalog != self.history.catalog_id()
+            || binding.incarnation != self.history.incarnation()
+        {
+            return Err(RuntimeError::StaleCapability);
+        }
+        self.authority
+            .workspace(binding.peer, binding.workspace, binding.snapshot.branch.id)
+    }
+    fn slot(&self, binding: &Binding, id: SaveId) -> RuntimeResult<&Slot<'a>> {
+        let slot = self
+            .slots
+            .get(id.slot)
+            .ok_or(RuntimeError::StaleCapability)?;
+        if id.owner != self.owner
+            || slot.serial != id.serial
+            || slot.binding.as_ref() != Some(binding)
+        {
+            return Err(RuntimeError::StaleCapability);
+        }
+        Ok(slot)
+    }
+}
