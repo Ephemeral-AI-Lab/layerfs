@@ -1,0 +1,17 @@
+[package]
+name = "layerfs-cluster2-platform-proof"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[workspace]
+
+[dependencies]
+fuser = { version = "=0.18.0", default-features = false }
+rusqlite = { version = "=0.40.2", features = ["bundled", "blob"] }
+layerfs-content = { path = "../../crates/layerfs-content" }
+
+[[bin]]
+name = "platform-proof"
+path = "platform.rs"

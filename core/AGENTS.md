@@ -13,7 +13,9 @@ product mental model or campaign-specific benchmark procedures.
   legacy tree after cluster two is complete, with explicit retirement/accounting;
   it is not part of routine early cleanup.
 - Active cluster-one members are content, storage, history, persistence, project
-  Init and telemetry. [core/Cargo.toml](Cargo.toml) is the membership authority.
+  Init and telemetry. The initial cluster-two SQLite engine is `layerfs-overlay`;
+  its active membership does not complete Workspace/FUSE/daemon integration.
+  [core/Cargo.toml](Cargo.toml) is the membership authority.
   Workspace/FUSE/daemon/bridge/API/sandbox directories are presently excluded
   reference/integration source; existence is not an implemented replacement.
   Add members only with real product boundaries and implementation.

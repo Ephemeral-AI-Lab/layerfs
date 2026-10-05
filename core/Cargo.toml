@@ -15,6 +15,7 @@ members = [
     "crates/layerfs-project",
     "crates/layerfs-history",
     "crates/layerfs-telemetry",
+    "crates/layerfs-overlay",
 ]
 exclude = [
     "crates/layerfs-api/core",

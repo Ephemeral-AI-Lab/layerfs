@@ -1,0 +1,25 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.58s
+     Running tests/engine.rs (core/target/debug/deps/engine-6bce881eeb426b21)
+
+running 1 test
+capture plan before verification: ["SEARCH inode USING PRIMARY KEY (ns=? AND serial>?)"]
+active_population=128; plan=["SEARCH inode USING PRIMARY KEY (ns=? AND serial>?)"]; captured_rows=1; vm_steps=540; fullscan_steps=0; sorts=0; reprepare=0
+capture plan before verification: ["SEARCH inode USING PRIMARY KEY (ns=? AND serial>?)"]
+active_population=1024; plan=["SEARCH inode USING PRIMARY KEY (ns=? AND serial>?)"]; captured_rows=1; vm_steps=4124; fullscan_steps=0; sorts=0; reprepare=0
+capture plan before verification: ["SEARCH inode USING PRIMARY KEY (ns=? AND serial>?)"]
+active_population=4096; plan=["SEARCH inode USING PRIMARY KEY (ns=? AND serial>?)"]; captured_rows=1; vm_steps=16412; fullscan_steps=0; sorts=0; reprepare=0
+
+thread 'fixed_capture_uses_generation_index_while_active_namespace_grows' panicked at crates/layerfs-overlay/tests/engine.rs:193:5:
+capture must use its generation-selective index
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test fixed_capture_uses_generation_index_while_active_namespace_grows ... FAILED
+
+failures:
+
+failures:
+    fixed_capture_uses_generation_index_while_active_namespace_grows
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.16s
+
+error: test failed, to rerun pass `-p layerfs-overlay --test engine`

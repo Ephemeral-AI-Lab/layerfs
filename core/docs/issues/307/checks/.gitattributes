@@ -1,0 +1,2 @@
+# Preserve append-only raw Cargo output, including its final separator blank.
+*.log whitespace=-blank-at-eof

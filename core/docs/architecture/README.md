@@ -46,6 +46,11 @@ The selective #284 Workspace integration is described in
 with its own source pins and implementation/evaluation boundary. It does not
 advance the older chapters' pins or promote historical measurements.
 
+The new #307 engine checkpoint is described in
+[19 — Daemon overlay](19-daemon-overlay.md). It adds an active disposable
+SQLite overlay crate, with its own implemented scope and unfinished milestone
+gates; it does not advance the historical papers' source/evidence pins.
+
 ## Why these papers exist
 
 The only architecture study in this release,

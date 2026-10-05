@@ -1,0 +1,11 @@
+Milestone: S0 - Contracts and build risks
+State: CHECKPOINT
+Source: c9861bc878583822a468e78dbc0f3740eacbecbe on local main; local-only, unpushed.
+Checkpoint commits: c9861bc87 - owner-revised design and agent-guide checkpoint, already present before this implementation session.
+Delivered behavior: Design baseline reconciled with actual membership. Six cluster-one packages are active; excluded Workspace/FUSE/daemon/bridge/API/sandbox/server source is not implemented cluster two. No S0-S13 implementation milestone is complete. Existing untracked core/docs/issues/301/, docs/research/extent-normalization-analysis-2026-10-02.md and output/ are preserved.
+Validation: Read required guides/contracts and tracker; git status and branch inspected. Independently counted exact first-parent and committed product trees using git archive and tools/production_loc.py. Counts match the existing checkpoint message. No new build or qualification evidence yet.
+SQLite evidence: N/A for this design-only checkpoint; the new overlay will collect actual statement profiles alongside EXPLAIN from its first hot paths.
+Complexity/resources: S0 must resolve bounded cell visibility, failure/orphan composition, exact fixed capture domains, short fair jobs and pressure headroom. Docker reports Linux aarch64, engine 29.5.2, kernel 6.12.76-linuxkit; installed rust:1.85.1-bookworm is arm64 at sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4. Mounted FUSE/build readiness remains unproved.
+Production LOC: c9861bc87: 139417 -> 139417 (delta 0); core 74000 -> 74000, reference 65417 -> 65417. Counter tools/production_loc.py SHA256 c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb, identical on exact parent/staged/committed source scope, including shipped SQL and excluding inline/external tests, docs, tools and generated files. Parent tree c453cfbf622aaeaace0788fee553811568e7f9df; committed tree 21dbfe09056c1ccf3cd9c56b2be10336940ebb39.
+Remaining work/blockers: All S0-S13 exit evidence remains outstanding; no external blocker established.
+Next ready work: S0 public-API Save lifetime/interleaving proof and locked ARM64 Linux content/bundled SQLite/FUSE readiness; S1 schema/profile and minimal S2/S3 interfaces follow those contracts.
