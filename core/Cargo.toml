@@ -16,6 +16,7 @@ members = [
     "crates/layerfs-history",
     "crates/layerfs-telemetry",
     "crates/layerfs-overlay",
+    "crates/layerfs-workspace",
 ]
 exclude = [
     "crates/layerfs-api/core",
@@ -23,7 +24,7 @@ exclude = [
     "crates/layerfs-sandbox",
     "crates/layerfs-daemon",
     "crates/layerfs-fuse",
-    "crates/layerfs-workspace",
+    "crates/layerfs-workspace-legacy",
     "crates/layerfs-bridge",
     "crates/layerfs-server",
 ]

@@ -30,13 +30,20 @@ impl Overlay {
             path,
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
         )?;
-        let profile = crate::profile::initialize(&connection, config)?;
+        let mut profile = crate::profile::initialize(&connection, config)?;
         let work = RefCell::new(DatabaseWork::default());
         // Startup DDL is finite schema work, independently recorded from jobs.
         use rusqlite::fallible_iterator::FallibleIterator;
         let mut batch = rusqlite::Batch::new(&connection, include_str!("../sql/schema.sql"));
         while let Some(mut statement) = batch.next()? {
             statement.execute([])?;
+        }
+        profile.schema_version =
+            connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+        let application: i64 =
+            connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
+        if profile.schema_version != 2 || application != 1279676210 {
+            return Err(OverlayError::Invalid("overlay schema readback"));
         }
         connection.set_prepared_statement_cache_capacity(48);
         Ok(Self {
@@ -139,10 +146,7 @@ impl Overlay {
                         self.quarantined.set(true);
                         return Err(OverlayError::Uncertain {
                             cause: Box::new(cause),
-                            completion: match error {
-                                OverlayError::Sql(e) => Some(e),
-                                _ => None,
-                            },
+                            completion: Some(Box::new(error)),
                         });
                     }
                 }

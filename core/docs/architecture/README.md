@@ -51,6 +51,10 @@ The new #307 engine checkpoint is described in
 SQLite overlay crate, with its own implemented scope and unfinished milestone
 gates; it does not advance the historical papers' source/evidence pins.
 
+The initial immutable base library is described in
+[20 — Workspace base](20-workspace-base.md), with explicit relocation and
+remaining runtime/install/qualification scope.
+
 ## Why these papers exist
 
 The only architecture study in this release,

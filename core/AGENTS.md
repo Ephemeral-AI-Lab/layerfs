@@ -16,8 +16,10 @@ product mental model or campaign-specific benchmark procedures.
   Init and telemetry. The initial cluster-two SQLite engine is `layerfs-overlay`;
   its active membership does not complete Workspace/FUSE/daemon integration.
   [core/Cargo.toml](Cargo.toml) is the membership authority.
-  Workspace/FUSE/daemon/bridge/API/sandbox directories are presently excluded
-  reference/integration source; existence is not an implemented replacement.
+  Workspace now exposes initial immutable base binding/read interfaces. Its
+  temporarily relocated `layerfs-workspace-legacy` source remains excluded.
+  FUSE/daemon/bridge/API/sandbox directories are presently excluded reference/
+  integration source; existence is not an implemented replacement.
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and
   [CAS/CDC/delta guide](../cas_cdc_deltaencoding_handbook.md). Use public contracts,

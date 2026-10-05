@@ -16,10 +16,11 @@ pub(crate) fn decode(row: &rusqlite::Row<'_>) -> rusqlite::Result<Inode> {
         serial: unsigned(row, 0)?,
         kind,
         mode: row.get(2)?,
-        mtime_ns: row.get(3)?,
-        nlink: unsigned(row, 4)?,
-        size: unsigned(row, 5)?,
-        inherited_cutoff: unsigned(row, 6)?,
+        mtime_seconds: row.get(3)?,
+        mtime_nanoseconds: row.get(4)?,
+        nlink: unsigned(row, 5)?,
+        size: unsigned(row, 6)?,
+        inherited_cutoff: unsigned(row, 7)?,
     })
 }
 impl Overlay {
@@ -56,7 +57,15 @@ impl Overlay {
         cell: Option<&Cell>,
     ) -> OverlayResult<Publication> {
         let serial = integer(inode.serial)?;
-        if serial == 0 || inode.mode > 0o777 {
+        let allowed = match inode.kind {
+            InodeKind::Directory => 0o1777,
+            _ => 0o777,
+        };
+        if serial == 0
+            || inode.mode & !allowed != 0
+            || (inode.kind == InodeKind::Symlink && inode.mode != 0o777)
+            || inode.mtime_nanoseconds >= 1_000_000_000
+        {
             return Err(OverlayError::Invalid("inode metadata"));
         }
         let size = integer(inode.size)?;
@@ -95,9 +104,9 @@ impl Overlay {
                 .len();
             self.execute(
                 StatementKind::Inode,
-                "INSERT INTO inode VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)
+                "INSERT INTO inode VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
                  ON CONFLICT(ns,serial,gen) DO UPDATE SET kind=excluded.kind,mode=excluded.mode,
-                 mtime_ns=excluded.mtime_ns,nlink=excluded.nlink,size=excluded.size,
+                 mtime_seconds=excluded.mtime_seconds,mtime_nanoseconds=excluded.mtime_nanoseconds,nlink=excluded.nlink,size=excluded.size,
                  inherited_cutoff=excluded.inherited_cutoff",
                 &[
                     &route.ns,
@@ -105,12 +114,13 @@ impl Overlay {
                     &generation.0,
                     &(inode.kind as i64),
                     &i64::from(inode.mode),
-                    &inode.mtime_ns,
+                    &inode.mtime_seconds,
+                    &i64::from(inode.mtime_nanoseconds),
                     &nlink,
                     &size,
                     &cutoff,
                 ],
-                72,
+                80,
             )?;
             let mut new_name = 0;
             if let Some(name) = name {

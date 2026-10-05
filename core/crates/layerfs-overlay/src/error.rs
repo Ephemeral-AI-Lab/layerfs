@@ -15,7 +15,7 @@ pub enum OverlayError {
     Quarantined,
     Uncertain {
         cause: Box<OverlayError>,
-        completion: Option<rusqlite::Error>,
+        completion: Option<Box<OverlayError>>,
     },
     UnsupportedPlatform,
 }

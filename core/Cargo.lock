@@ -351,6 +351,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-workspace"
+version = "0.1.6"
+dependencies = [
+ "layerfs-content",
+ "layerfs-overlay",
+ "layerfs-telemetry",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"

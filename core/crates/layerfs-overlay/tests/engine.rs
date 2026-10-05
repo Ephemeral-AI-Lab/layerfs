@@ -31,7 +31,8 @@ fn inode(serial: u64) -> Inode {
         serial,
         kind: InodeKind::File,
         mode: 0o644,
-        mtime_ns: 7,
+        mtime_seconds: 7,
+        mtime_nanoseconds: 9,
         nlink: 1,
         size: 4096,
         inherited_cutoff: 0,
@@ -57,6 +58,7 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
     let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
     assert!(Overlay::create(&temp.db(), ProfileConfig::default()).is_err());
     let p = db.profile();
+    assert_eq!(p.schema_version, 2);
     assert_eq!(
         (
             &*p.journal_mode,
@@ -143,7 +145,7 @@ fn local_publication_survives_lost_reply_and_capture_does_not_copy_cells() {
     let captured = db.capture(w).unwrap();
     assert_eq!(kind(db.diagnostics(), StatementKind::Payload), before);
     let mut later = inode(2);
-    later.mtime_ns = 22;
+    later.mtime_seconds = 22;
     let active = db.publish(w, &later, None, Some(&cell(22))).unwrap();
     db.reply_attempted(active).unwrap();
     assert_eq!(db.captured_inodes(captured, 0).unwrap(), vec![inode(2)]);
@@ -253,4 +255,35 @@ fn backed_owner_and_scratch_pages_have_no_total_record_limit() {
         Err(OverlayError::Missing)
     ));
     assert!(matches!(db.release(a, lease), Err(OverlayError::Missing)));
+}
+
+#[test]
+fn portable_time_range_and_directory_sticky_mode_are_preserved() {
+    let temp = Temp::new();
+    let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
+    let w = db.open_workspace([77; 32], [78; 32]).unwrap();
+    let mut value = inode(8);
+    value.kind = InodeKind::Directory;
+    value.mode = 0o1777;
+    value.mtime_seconds = i64::MAX;
+    value.mtime_nanoseconds = 999_999_999;
+    let publication = db.publish(w, &value, None, None).unwrap();
+    db.reply_attempted(publication).unwrap();
+    assert_eq!(db.inode(w, 8).unwrap(), Some(value.clone()));
+    value.mtime_seconds = i64::MIN;
+    let publication = db.publish(w, &value, None, None).unwrap();
+    db.reply_attempted(publication).unwrap();
+    assert_eq!(db.inode(w, 8).unwrap(), Some(value.clone()));
+    value.kind = InodeKind::File;
+    assert!(matches!(
+        db.publish(w, &value, None, None),
+        Err(OverlayError::Invalid(_))
+    ));
+    value.mode = 0o644;
+    value.mtime_nanoseconds = 1_000_000_000;
+    assert!(matches!(
+        db.publish(w, &value, None, None),
+        Err(OverlayError::Invalid(_))
+    ));
+    assert_eq!(db.inode(w, 8).unwrap().unwrap().kind, InodeKind::Directory);
 }

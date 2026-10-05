@@ -10,6 +10,12 @@ implementation and required evidence exist.
 
 ## Current checkpoint
 
+Initial overlay/prerequisite checkpoint `f2a381119` is committed locally, with
+all required host checks passing. S3 now has initial public content-built root
+binding/read APIs and immutable caching; its dormant predecessor is temporarily
+relocated intact. See [base architecture](../../architecture/20-workspace-base.md).
+This remains partial implementation, with all milestone exits outstanding.
+
 S0 in progress. Public-API proof in
 [interleaved_saves.rs](../../../crates/layerfs-persistence/tests/interleaved_saves.rs)
 demonstrates an initialized provider with independently initialized Storage

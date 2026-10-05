@@ -31,6 +31,12 @@ cell keys include serial, generation and aligned offset. Metadata queries exclud
 payload. Names, data and validity are BLOBs. Scratch/owners are independently keyed
 backed state, without resident membership collections.
 
+The following S3 checkpoint advances the disposable schema to version 2: portable
+mtime uses separate signed seconds and nanoseconds; mode validation preserves
+directory sticky bits, restricts regular files and fixes symlink mode. Startup
+reads back schema/application identity. The initial version-1 receipts below keep
+their source identity; new profiles accompany the version-2 statements.
+
 `publish` is a primitive for one changed inode, optional final name and optional
 4096-byte cell/512-byte mask. It is not S4 compound namespace semantics or S5
 byte-write normalization. Its transaction resolves active generation, changes

@@ -1,4 +1,4 @@
--- Disposable overlay schema v1. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v2. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -15,8 +15,9 @@ CREATE TABLE inode (
     serial INTEGER NOT NULL CHECK(serial>0),
     gen INTEGER NOT NULL CHECK(gen>0),
     kind INTEGER NOT NULL CHECK(kind IN (1,2,3)),
-    mode INTEGER NOT NULL CHECK(mode>=0 AND mode<=511),
-    mtime_ns INTEGER NOT NULL,
+    mode INTEGER NOT NULL CHECK(mode>=0 AND ((kind=1 AND mode<=511) OR (kind=2 AND mode<=1023) OR (kind=3 AND mode=511))),
+    mtime_seconds INTEGER NOT NULL,
+    mtime_nanoseconds INTEGER NOT NULL CHECK(mtime_nanoseconds>=0 AND mtime_nanoseconds<1000000000),
     nlink INTEGER NOT NULL CHECK(nlink>=0),
     size INTEGER NOT NULL CHECK(size>=0),
     inherited_cutoff INTEGER NOT NULL CHECK(inherited_cutoff>=0),
@@ -70,4 +71,4 @@ CREATE TABLE reclaim (
     PRIMARY KEY(ns,queue_key)
 ) STRICT, WITHOUT ROWID;
 PRAGMA application_id=1279676210;
-PRAGMA user_version=1;
+PRAGMA user_version=2;

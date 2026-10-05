@@ -1,38 +1,15 @@
-//! Bounded Workspace reads and file edits, projection coherence, and stage/Commit operations.
-//! Unix ownership checks and explicit private payload/metadata resource ownership.
-//! Transport and the Linux FUSE projection are assembled by their own libraries.
+//! Workspace semantics, with immutable content access and separate overlay jobs.
+//!
+//! The initial surface binds authentic immutable roots and retains demand read
+//! plans. Mutable filesystem operations, runtime/Commit and native FUSE remain
+//! separate implementation slices.
 #![forbid(unsafe_code)]
-pub mod backing;
-mod commit;
-mod commit_types;
-pub mod filesystem;
-mod overlay;
-mod runtime;
-mod types;
-pub use backing::payload::OwnedPayload;
-/// The page-store seam an external test drives to check one file's extent
-/// sequence without a mount or a service. Product callers use the Workspace.
-pub mod sequence {
-    pub use crate::backing::{
-        budget::Budget,
-        directory::Directory,
-        metadata::{Arena, MetadataHost, RootOwner},
-        metadata_pages::{self, PageRef, MAX_EXTENT},
-        metadata_pieces::{self, Cursor, PieceStore, Replacement, Splice},
-        payload::PayloadHost,
-        segments::Window,
-    };
-}
-pub use backing::reader::PayloadReader;
-pub use commit_types::*;
-pub use filesystem::{
-    ViewEntryData, ViewLeaseInfo, ViewLeaseStatus, ViewListPage, ViewReadData, ViewRelease,
-};
-pub use layerfs_bridge::contract::Code as ServiceCode;
-pub use overlay::pieces::{Piece, PieceKind};
-pub use runtime::coherence::{ProjectionMutationPermit, ProjectionReplyPermit};
-pub use runtime::host::WorkspaceHost;
-pub use runtime::lifecycle::MountLease;
-pub use runtime::state::Workspace;
-pub use runtime::view_leases::{MAXIMUM_VIEW_LEASES, VIEW_LEASE_BYTES};
-pub use types::*;
+
+mod base;
+mod cache;
+mod client;
+mod workspace;
+
+pub use base::{BaseRead, BaseStat, BaseView};
+pub use client::{CanonicalClient, ClientWork};
+pub use workspace::{Workspace, WorkspaceError, WorkspaceResult};

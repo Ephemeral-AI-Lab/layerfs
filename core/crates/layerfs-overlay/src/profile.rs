@@ -21,6 +21,7 @@ impl Default for ProfileConfig {
 /// Actual read-back engine/build settings. No crash durability is claimed.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseProfile {
+    pub schema_version: i64,
     pub sqlite_version: String,
     pub compile_options: Vec<String>,
     pub journal_mode: String,
@@ -49,6 +50,7 @@ pub(crate) fn initialize(c: &Connection, config: ProfileConfig) -> OverlayResult
     let integer = |name: &str| c.query_row(&format!("PRAGMA {name}"), [], |r| r.get(0));
     let text = |name: &str| c.query_row(&format!("PRAGMA {name}"), [], |r| r.get(0));
     let p = DatabaseProfile {
+        schema_version: 0,
         sqlite_version: rusqlite::version().to_owned(),
         compile_options: c
             .prepare("PRAGMA compile_options")?
