@@ -58,7 +58,15 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
     let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
     assert!(Overlay::create(&temp.db(), ProfileConfig::default()).is_err());
     let p = db.profile();
-    assert_eq!(p.schema_version, 2);
+    assert_eq!(p.schema_version, 3);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(temp.db()).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
     assert_eq!(
         (
             &*p.journal_mode,
@@ -286,4 +294,162 @@ fn portable_time_range_and_directory_sticky_mode_are_preserved() {
         Err(OverlayError::Invalid(_))
     ));
     assert_eq!(db.inode(w, 8).unwrap().unwrap().kind, InodeKind::Directory);
+}
+
+#[test]
+fn known_install_advances_base_without_replaying_or_losing_later_active_rows() {
+    let temp = Temp::new();
+    let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
+    let route = db.open_workspace([88; 32], [89; 32]).unwrap();
+    for cycle in 0..24 {
+        let base_only = db.publish(route, &inode(4), None, None).unwrap();
+        db.reply_attempted(base_only).unwrap();
+        let captured = db.capture(route).unwrap();
+        let mut later = inode(2);
+        later.mtime_seconds = cycle;
+        let published = db
+            .publish(route, &later, None, Some(&cell(cycle as u8)))
+            .unwrap();
+        let before = kind(db.diagnostics(), StatementKind::Payload);
+        let install_before = kind(db.diagnostics(), StatementKind::Capture);
+        if cycle == 0 {
+            println!(
+                "install plan and retirement VM={:?}",
+                db.explain_install(captured, [0; 32]).unwrap()
+            );
+        }
+        db.install(captured, [cycle as u8; 32]).unwrap();
+        if cycle == 0 {
+            let observed = kind(db.diagnostics(), StatementKind::Capture);
+            println!(
+                "install statements={}; rows_changed={}; vm_steps={}; fullscan_steps={}; sorts={}",
+                observed.attempts - install_before.attempts,
+                observed.rows_changed - install_before.rows_changed,
+                observed.vm_steps - install_before.vm_steps,
+                observed.fullscan_steps - install_before.fullscan_steps,
+                observed.sorts - install_before.sorts
+            );
+        }
+        assert_eq!(kind(db.diagnostics(), StatementKind::Payload), before);
+        let state = db.state(route).unwrap();
+        assert_eq!(state.base_root, [cycle as u8; 32]);
+        assert_eq!(state.installed, captured.generation.number());
+        assert!(state.captured.is_none());
+        assert_eq!(db.inode(route, 2).unwrap(), Some(later));
+        assert_eq!(
+            db.inode(route, 4).unwrap(),
+            None,
+            "installed-only value now delegates to new base"
+        );
+        assert_eq!(
+            db.cell(route, 2, published.generation, 0).unwrap(),
+            Some(cell(cycle as u8))
+        );
+        assert!(
+            !db.capture_ready(route).unwrap(),
+            "later pending reply remains owned"
+        );
+        db.reply_attempted(published).unwrap();
+        assert!(db.capture_ready(route).unwrap());
+        assert!(matches!(
+            db.install(captured, [0; 32]),
+            Err(OverlayError::Stale)
+        ));
+    }
+}
+
+#[test]
+fn captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes() {
+    let temp = Temp::new();
+    let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
+    let route = db.open_workspace([90; 32], [91; 32]).unwrap();
+    for key in 0..193 {
+        let name = Dentry {
+            parent: 1,
+            name: format!("n{key:04}").into_bytes(),
+            serial: Some(2),
+        };
+        let p = db.publish(route, &inode(2), Some(&name), None).unwrap();
+        db.reply_attempted(p).unwrap();
+    }
+    let capture = db.capture(route).unwrap();
+    for key in 200..1224 {
+        let name = Dentry {
+            parent: 1,
+            name: format!("n{key:04}").into_bytes(),
+            serial: Some(2),
+        };
+        let p = db.publish(route, &inode(2), Some(&name), None).unwrap();
+        db.reply_attempted(p).unwrap();
+    }
+    let plan = db.explain_dentry_capture(capture).unwrap();
+    assert!(plan.iter().any(|p| p.contains("dentry_capture")));
+    let mut after: Option<Dentry> = None;
+    let mut count = 0;
+    loop {
+        let before = kind(db.diagnostics(), StatementKind::Capture);
+        let page = db
+            .captured_dentries(
+                capture,
+                after.as_ref().map(|d| (d.parent, d.name.as_slice())),
+            )
+            .unwrap();
+        let observed = kind(db.diagnostics(), StatementKind::Capture);
+        println!("dentry plan={plan:?}; start={count}; rows={}; vm_steps={}; fullscan_steps={}; sorts={}", page.len(), observed.vm_steps-before.vm_steps, observed.fullscan_steps-before.fullscan_steps, observed.sorts-before.sorts);
+        if page.is_empty() {
+            break;
+        }
+        assert!(page.len() <= PAGE_ROWS);
+        for name in &page {
+            assert_eq!(name.name, format!("n{count:04}").as_bytes());
+            count += 1;
+        }
+        after = page.last().cloned();
+    }
+    assert_eq!(count, 193);
+}
+
+#[test]
+fn real_sqlite_full_aborts_one_mutation_without_losing_previous_publication() {
+    let temp = Temp::new();
+    let db = Overlay::create(
+        &temp.db(),
+        ProfileConfig {
+            pager_kib: 2048,
+            max_pages: 32,
+        },
+    )
+    .unwrap();
+    let a = db.open_workspace([92; 32], [93; 32]).unwrap();
+    let b = db.open_workspace([94; 32], [93; 32]).unwrap();
+    let mut failed = false;
+    for index in 0..64 {
+        let before = db.state(a).unwrap();
+        let prior = db.inode(a, 2).unwrap();
+        let mut data = cell(index as u8);
+        data.offset = index * CELL_BYTES as u64;
+        let mut changed = inode(2);
+        changed.size = data.offset + CELL_BYTES as u64;
+        match db.publish(a, &changed, None, Some(&data)) {
+            Ok(published) => db.reply_attempted(published).unwrap(),
+            Err(error) => {
+                assert!(
+                    matches!(&error, OverlayError::Sql(rusqlite::Error::SqliteFailure(code, _))
+                        if code.code == rusqlite::ErrorCode::DiskFull),
+                    "original database failure: {error:?}"
+                );
+                assert_eq!(db.state(a).unwrap(), before);
+                assert_eq!(db.inode(a, 2).unwrap(), prior);
+                assert!(db.cell(a, 2, before.active, data.offset).unwrap().is_none());
+                assert_eq!(db.state(b).unwrap().revision, 0);
+                println!(
+                    "one-attempt physical quota failure at cell {index}: {error:?}; pages={:?}",
+                    db.pages().unwrap()
+                );
+                failed = true;
+                break;
+            }
+        }
+    }
+    assert!(failed, "configured real page capacity must be exercised");
 }

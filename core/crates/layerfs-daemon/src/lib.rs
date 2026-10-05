@@ -1,13 +1,15 @@
+//! Daemon service ownership. SQL stays in the independently usable overlay crate.
+//!
+//! Initial service runs bounded typed jobs fairly and retains queue/reply credits.
+//! Native FUSE, process/control and authenticated upstream assembly remain later
+//! integration slices.
 #![forbid(unsafe_code)]
-//! Native process assembly for headless delivery and local Linux mounts.
-mod config;
-mod control;
-mod control_commit;
-mod control_view;
-mod execution;
-mod headless;
-mod lifecycle;
-mod run;
-mod transport;
 
-pub use run::run;
+mod commands;
+mod credits;
+mod owner;
+mod queue;
+
+pub use commands::{Command, Response, ServiceClass};
+pub use owner::{Completion, Owner, OwnerClient, OwnerConfig, OwnerError, Pending};
+pub use queue::OwnerWork;

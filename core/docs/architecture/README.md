@@ -55,6 +55,10 @@ The initial immutable base library is described in
 [20 — Workspace base](20-workspace-base.md), with explicit relocation and
 remaining runtime/install/qualification scope.
 
+The initial fair daemon SQL service is described in
+[21 — Daemon owner](21-daemon-owner.md), including finite capture ordering,
+retained-result credits, installed floors and remaining native/reclaim scope.
+
 ## Why these papers exist
 
 The only architecture study in this release,

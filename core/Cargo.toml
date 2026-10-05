@@ -17,12 +17,13 @@ members = [
     "crates/layerfs-telemetry",
     "crates/layerfs-overlay",
     "crates/layerfs-workspace",
+    "crates/layerfs-daemon",
 ]
 exclude = [
     "crates/layerfs-api/core",
     "crates/layerfs-api/sdk",
     "crates/layerfs-sandbox",
-    "crates/layerfs-daemon",
+    "crates/layerfs-daemon-legacy",
     "crates/layerfs-fuse",
     "crates/layerfs-workspace-legacy",
     "crates/layerfs-bridge",

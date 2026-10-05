@@ -15,3 +15,7 @@ layerfs-content = { path = "../../crates/layerfs-content" }
 [[bin]]
 name = "platform-proof"
 path = "platform.rs"
+
+[[bin]]
+name = "timestamp-proof"
+path = "timestamp.rs"

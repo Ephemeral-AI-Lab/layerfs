@@ -21,7 +21,7 @@ UNSAFE = re.compile(r"\bunsafe\b")
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
 }
-UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-persistence", "layerfs-project", "layerfs-overlay", "layerfs-workspace")
+UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry", "layerfs-persistence", "layerfs-project", "layerfs-overlay", "layerfs-workspace", "layerfs-daemon")
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
     "layerfs-content": "#![forbid(unsafe_code)]",
@@ -30,6 +30,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-project": "#![forbid(unsafe_code)]",
     "layerfs-overlay": "#![forbid(unsafe_code)]",
     "layerfs-workspace": "#![forbid(unsafe_code)]",
+    "layerfs-daemon": "#![forbid(unsafe_code)]",
 }
 
 
@@ -44,6 +45,7 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-project": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-telemetry"},
     "layerfs-overlay": set(),
     "layerfs-workspace": {"layerfs-content", "layerfs-overlay", "layerfs-telemetry"},
+    "layerfs-daemon": {"layerfs-overlay"},
 }
 DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-project"}
 ENGINES_AND_CLUSTER2 = {

@@ -1,0 +1,50 @@
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.42s
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-e637568d30ece70d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-42205d434ffd5a22)
+
+running 3 tests
+test stopping_cancels_unattempted_capture_and_fences_future_admission ... ok
+test parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation ... ok
+test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_overlay-eb6164ea2c2ab85f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine.rs (core/target/cluster2-linux/debug/deps/engine-32ad83dd1c087fd8)
+
+running 7 tests
+test portable_time_range_and_directory_sticky_mode_are_preserved ... ok
+readback=DatabaseProfile { schema_version: 3, sqlite_version: "3.53.2", compile_options: ["ATOMIC_INTRINSICS=1", "COMPILER=gcc-12.2.0", "DEFAULT_AUTOVACUUM", "DEFAULT_CACHE_SIZE=-2000", "DEFAULT_FILE_FORMAT=4", "DEFAULT_FOREIGN_KEYS", "DEFAULT_JOURNAL_SIZE_LIMIT=-1", "DEFAULT_MMAP_SIZE=0", "DEFAULT_PAGE_SIZE=4096", "DEFAULT_PCACHE_INITSZ=20", "DEFAULT_RECURSIVE_TRIGGERS", "DEFAULT_SECTOR_SIZE=4096", "DEFAULT_SYNCHRONOUS=2", "DEFAULT_WAL_AUTOCHECKPOINT=1000", "DEFAULT_WAL_SYNCHRONOUS=2", "DEFAULT_WORKER_THREADS=0", "DIRECT_OVERFLOW_READ", "ENABLE_API_ARMOR", "ENABLE_COLUMN_METADATA", "ENABLE_DBSTAT_VTAB", "ENABLE_FTS3", "ENABLE_FTS3_PARENTHESIS", "ENABLE_FTS5", "ENABLE_LOAD_EXTENSION", "ENABLE_MEMORY_MANAGEMENT", "ENABLE_RTREE", "ENABLE_STAT4", "HAVE_ISNAN", "MALLOC_SOFT_LIMIT=1024", "MAX_ATTACHED=10", "MAX_COLUMN=2000", "MAX_COMPOUND_SELECT=500", "MAX_DEFAULT_PAGE_SIZE=8192", "MAX_EXPR_DEPTH=1000", "MAX_FUNCTION_ARG=1000", "MAX_LENGTH=1000000000", "MAX_LIKE_PATTERN_LENGTH=50000", "MAX_MMAP_SIZE=0x7fff0000", "MAX_PAGE_COUNT=0xfffffffe", "MAX_PAGE_SIZE=65536", "MAX_SQL_LENGTH=1000000000", "MAX_TRIGGER_DEPTH=1000", "MAX_VARIABLE_NUMBER=32766", "MAX_VDBE_OP=250000000", "MAX_WORKER_THREADS=8", "MUTEX_PTHREADS", "SOUNDEX", "SYSTEM_MALLOC", "TEMP_STORE=1", "THREADSAFE=1", "USE_URI"], journal_mode: "memory", locking_mode: "exclusive", synchronous: 0, mmap_size: 0, cache_size: -2048, page_size: 4096, max_pages: 1048576, foreign_keys: 1, busy_timeout: 0, temp_store: 1 }; pages=(15, 0)
+point EXPLAIN=["SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)"]; runtime=StatementWork { attempts: 5, executions: 5, rows_returned: 2, rows_changed: 1, vm_steps: 177, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 200, elapsed_ns: 1775460 }
+test local_publication_survives_lost_reply_and_capture_does_not_copy_cells ... ok
+test profile_namespace_binary_values_and_atomic_refusals ... ok
+test backed_owner_and_scratch_pages_have_no_total_record_limit ... ok
+test known_install_advances_base_without_replaying_or_losing_later_active_rows ... ok
+capture plan before verification: ["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]
+active_population=128; plan=["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]; captured_rows=1; vm_steps=33; fullscan_steps=0; sorts=0; reprepare=0
+capture plan before verification: ["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]
+active_population=1024; plan=["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]; captured_rows=1; vm_steps=33; fullscan_steps=0; sorts=0; reprepare=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=0; rows=64; vm_steps=1042; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=64; rows=64; vm_steps=1249; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=128; rows=64; vm_steps=1249; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=192; rows=1; vm_steps=54; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=193; rows=0; vm_steps=35; fullscan_steps=0; sorts=0
+test captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes ... ok
+capture plan before verification: ["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]
+active_population=4096; plan=["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]; captured_rows=1; vm_steps=33; fullscan_steps=0; sorts=0; reprepare=0
+test fixed_capture_uses_generation_index_while_active_namespace_grows ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+

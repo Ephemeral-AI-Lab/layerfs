@@ -1,13 +1,10 @@
 [package]
-name="layerfs-daemon"
-description="Native bridge and Linux Workspace mount assembly"
-version.workspace=true
-edition.workspace=true
-rust-version.workspace=true
-license.workspace=true
+name = "layerfs-daemon"
+description = "Daemon-owned fair overlay service; native process/FUSE assembly follows."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
 [dependencies]
-layerfs-bridge={path="../layerfs-bridge"}
-layerfs-telemetry={path="../layerfs-telemetry",features=["native"]}
-layerfs-workspace={path="../layerfs-workspace"}
-layerfs-fuse={path="../layerfs-fuse"}
-nix={version="=0.31.3",features=["signal","process","fs","poll"]}
+layerfs-overlay = { path = "../layerfs-overlay" }

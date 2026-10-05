@@ -1,0 +1,4 @@
+    Checking layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.88s

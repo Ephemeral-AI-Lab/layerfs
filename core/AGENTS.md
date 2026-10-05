@@ -18,7 +18,9 @@ product mental model or campaign-specific benchmark procedures.
   [core/Cargo.toml](Cargo.toml) is the membership authority.
   Workspace now exposes initial immutable base binding/read interfaces. Its
   temporarily relocated `layerfs-workspace-legacy` source remains excluded.
-  FUSE/daemon/bridge/API/sandbox directories are presently excluded reference/
+  Daemon now exposes an initial fair SQL owner library; its relocated predecessor
+  remains excluded, and native executable/control/Exec integration is unfinished.
+  FUSE/bridge/API/sandbox directories are presently excluded reference/
   integration source; existence is not an implemented replacement.
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and

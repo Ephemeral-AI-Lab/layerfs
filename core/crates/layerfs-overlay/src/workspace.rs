@@ -31,7 +31,7 @@ impl Overlay {
         self.available()?;
         self.query(
             StatementKind::Workspace,
-            "SELECT active,captured,revision,base_root,dirty_inodes,dirty_names,lifecycle
+            "SELECT active,captured,revision,base_root,dirty_inodes,dirty_names,lifecycle,installed
              FROM workspace WHERE ns=?1 AND incarnation=?2",
             &[&route.ns, &route.incarnation.as_slice()],
             40,
@@ -41,6 +41,7 @@ impl Overlay {
                 Ok(WorkspaceState {
                     active: Generation(r.get(0)?),
                     captured: r.get::<_, Option<i64>>(1)?.map(Generation),
+                    installed: r.get(7)?,
                     revision: r.get(2)?,
                     base_root,
                     dirty_inodes: unsigned(r, 4)?,

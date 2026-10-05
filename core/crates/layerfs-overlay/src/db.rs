@@ -24,7 +24,14 @@ impl Overlay {
         if !cfg!(any(target_os = "macos", target_os = "linux")) {
             return Err(OverlayError::UnsupportedPlatform);
         }
-        let file = OpenOptions::new().write(true).create_new(true).open(path)?;
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let file = options.open(path)?;
         drop(file);
         let connection = Connection::open_with_flags(
             path,
@@ -42,7 +49,7 @@ impl Overlay {
             connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
         let application: i64 =
             connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
-        if profile.schema_version != 2 || application != 1279676210 {
+        if profile.schema_version != 3 || application != 1279676210 {
             return Err(OverlayError::Invalid("overlay schema readback"));
         }
         connection.set_prepared_statement_cache_capacity(48);

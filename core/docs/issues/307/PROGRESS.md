@@ -16,6 +16,19 @@ binding/read APIs and immutable caching; its dormant predecessor is temporarily
 relocated intact. See [base architecture](../../architecture/20-workspace-base.md).
 This remains partial implementation, with all milestone exits outstanding.
 
+S2 now has a built daemon SQL owner with fair namespaces/classes, finite capture
+ordering, lifecycle credits, retained-result accounting and event-driven parked
+readiness. Schema v3 install advances an indexed floor and preserves later active
+state; captured names use fixed keyset pages. The dormant daemon is temporarily
+relocated intact and remains counted. Physical reclamation/native integration and
+full reader/orphan/failure composition remain open.
+
+S0/S8 now has a source/build-proven external dependency gate:
+[FUSE timestamp blocker](FUSE-TIME-BLOCKER-20261005.md). The published fuser pin
+corrupts negative fractional time and panics before the callback at signed minimum.
+A decision on the unmodified upstream fix is pending; no dependency is changed.
+Independent ready engine/runtime/prerequisite work continues.
+
 S0 in progress. Public-API proof in
 [interleaved_saves.rs](../../../crates/layerfs-persistence/tests/interleaved_saves.rs)
 demonstrates an initialized provider with independently initialized Storage

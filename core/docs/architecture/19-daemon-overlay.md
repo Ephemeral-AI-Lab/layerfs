@@ -37,6 +37,11 @@ directory sticky bits, restricts regular files and fixes symlink mode. Startup
 reads back schema/application identity. The initial version-1 receipts below keep
 their source identity; new profiles accompany the version-2 statements.
 
+The S2 checkpoint advances the disposable schema to version 3 with an installed
+generation floor and fixed metadata install/retirement enqueue. Current lookups
+exclude retired rows; later active rows/replies survive. Physical cleanup and exact
+reader/orphan eligibility are still unfinished. New files are created mode 0600.
+
 `publish` is a primitive for one changed inode, optional final name and optional
 4096-byte cell/512-byte mask. It is not S4 compound namespace semantics or S5
 byte-write normalization. Its transaction resolves active generation, changes

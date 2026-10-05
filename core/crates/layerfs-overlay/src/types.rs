@@ -72,6 +72,10 @@ pub struct Publication {
     pub generation: Generation,
 }
 impl Publication {
+    /// Incarnation whose published mutation awaits its reply-send attempt.
+    pub const fn route(self) -> Route {
+        self.route
+    }
     /// Locally published revision; reply delivery is not implied.
     pub const fn revision(self) -> i64 {
         self.revision
@@ -85,11 +89,19 @@ pub struct Capture {
     pub revision: i64,
     pub base_root: [u8; 32],
 }
+impl Capture {
+    /// Namespace/incarnation owning this fixed captured domain.
+    pub const fn route(self) -> Route {
+        self.route
+    }
+}
 /// Bounded read-only installed state; no namespace counting or payload acquisition.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct WorkspaceState {
     pub active: Generation,
     pub captured: Option<Generation>,
+    /// Retired generations at/below this floor never enter the current view.
+    pub installed: i64,
     pub revision: i64,
     pub base_root: [u8; 32],
     pub dirty_inodes: u64,

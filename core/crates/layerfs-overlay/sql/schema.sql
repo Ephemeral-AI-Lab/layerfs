@@ -1,10 +1,11 @@
--- Disposable overlay schema v2. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v3. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
     base_root BLOB NOT NULL CHECK(length(base_root)=32),
     active INTEGER NOT NULL CHECK(active>0),
     captured INTEGER CHECK(captured>0),
+    installed INTEGER NOT NULL DEFAULT 0 CHECK(installed>=0),
     revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0),
     lifecycle INTEGER NOT NULL DEFAULT 0 CHECK(lifecycle IN (0,1)),
     dirty_inodes INTEGER NOT NULL DEFAULT 0 CHECK(dirty_inodes>=0),
@@ -71,4 +72,4 @@ CREATE TABLE reclaim (
     PRIMARY KEY(ns,queue_key)
 ) STRICT, WITHOUT ROWID;
 PRAGMA application_id=1279676210;
-PRAGMA user_version=2;
+PRAGMA user_version=3;

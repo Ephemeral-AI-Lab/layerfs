@@ -1,0 +1,52 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_daemon-48ee384b5cccf400)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/owner.rs (core/target/debug/deps/owner-54c693465b4c03b1)
+
+running 3 tests
+test stopping_cancels_unattempted_capture_and_fences_future_admission ... ok
+test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+test parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_overlay-40cf50d4caf06f50)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine.rs (core/target/debug/deps/engine-6bce881eeb426b21)
+
+running 8 tests
+install plan and retirement VM=["SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)", "0 Init 0 38 0", "1 OpenWrite 1 14 0", "2 Variable 1 2 0", "3 Variable 2 3 0", "4 Variable 2 4 0", "5 Integer 0 5 0", "6 Null 0 1 0", "7 HaltIfNull 1299 2 2", "8 HaltIfNull 1299 2 3", "9 HaltIfNull 1299 2 4", "10 HaltIfNull 1299 2 5", "11 TypeCheck 2 4 0", "12 Gt 13 14 3", "13 Halt 275 2 0", "14 Gt 13 16 4", "15 Halt 275 2 0", "16 Ge 13 18 5", "17 Halt 275 2 0", "18 Integer 0 14 0", "19 SCopy 2 7 0", "20 SCopy 3 8 0", "21 SCopy 4 9 0", "22 SCopy 5 10 0", "23 MakeRecord 7 4 6", "24 NoConflict 1 26 7", "25 Halt 1555 2 0", "26 IsNull 2 33 0", "27 SCopy 2 12 0", "28 MustBeInt 12 32 0", "29 OpenRead 2 2 0", "30 NotExists 2 32 12", "31 Goto 0 33 0", "32 Halt 787 2 0", "33 Close 2 0 0", "34 Integer 0 12 0", "35 Insert 1 6 12", "36 IdxInsert 1 6 7", "37 Halt 0 0 0", "38 Transaction 0 1 10", "39 Integer 0 13 0", "40 Goto 0 1 0"]
+install statements=2; rows_changed=2; vm_steps=72; fullscan_steps=0; sorts=0
+readback=DatabaseProfile { schema_version: 3, sqlite_version: "3.51.0", compile_options: ["ATOMIC_INTRINSICS=1", "BUG_COMPATIBLE_20160819", "CCCRYPT256", "CODEC=see-cccrypt", "COMPILER=clang-21.0.0", "DEFAULT_AUTOVACUUM", "DEFAULT_CACHE_SIZE=2000", "DEFAULT_CKPTFULLFSYNC", "DEFAULT_FILE_FORMAT=4", "DEFAULT_JOURNAL_SIZE_LIMIT=32768", "DEFAULT_LOOKASIDE=1200,102", "DEFAULT_MEMSTATUS=0", "DEFAULT_MMAP_SIZE=0", "DEFAULT_PAGE_SIZE=4096", "DEFAULT_PCACHE_INITSZ=20", "DEFAULT_RECURSIVE_TRIGGERS", "DEFAULT_SECTOR_SIZE=4096", "DEFAULT_SYNCHRONOUS=2", "DEFAULT_WAL_AUTOCHECKPOINT=1000", "DEFAULT_WAL_SYNCHRONOUS=1", "DEFAULT_WORKER_THREADS=0", "DIRECT_OVERFLOW_READ", "DQS=3", "ENABLE_API_ARMOR", "ENABLE_BYTECODE_VTAB", "ENABLE_COLUMN_METADATA", "ENABLE_DBSTAT_VTAB", "ENABLE_FTS3", "ENABLE_FTS3_PARENTHESIS", "ENABLE_FTS3_TOKENIZER", "ENABLE_FTS4", "ENABLE_FTS5", "ENABLE_LOCKING_STYLE=1", "ENABLE_MATH_FUNCTIONS", "ENABLE_NORMALIZE", "ENABLE_PREUPDATE_HOOK", "ENABLE_RTREE", "ENABLE_SESSION", "ENABLE_SETLK_TIMEOUT", "ENABLE_SNAPSHOT", "ENABLE_SQLLOG", "ENABLE_STMT_SCANSTATUS", "ENABLE_UNKNOWN_SQL_FUNCTION", "ENABLE_UPDATE_DELETE_LIMIT", "HAS_CODEC_RESTRICTED", "HAVE_ISNAN", "MALLOC_SOFT_LIMIT=1024", "MAX_ATTACHED=10", "MAX_COLUMN=2000", "MAX_COMPOUND_SELECT=500", "MAX_DEFAULT_PAGE_SIZE=8192", "MAX_EXPR_DEPTH=1000", "MAX_FUNCTION_ARG=127", "MAX_LENGTH=2147483645", "MAX_LIKE_PATTERN_LENGTH=50000", "MAX_MMAP_SIZE=1073741824", "MAX_PAGE_COUNT=1073741823", "MAX_PAGE_SIZE=65536", "MAX_SQL_LENGTH=1000000000", "MAX_TRIGGER_DEPTH=1000", "MAX_VARIABLE_NUMBER=500000", "MAX_VDBE_OP=250000000", "MAX_WORKER_THREADS=8", "MUTEX_UNFAIR", "OMIT_AUTORESET", "OMIT_LOAD_EXTENSION", "STMTJRNL_SPILL=131072", "SYSTEM_MALLOC", "TEMP_STORE=1", "THREADSAFE=2", "USE_URI"], journal_mode: "memory", locking_mode: "exclusive", synchronous: 0, mmap_size: 0, cache_size: -2048, page_size: 4096, max_pages: 1048576, foreign_keys: 1, busy_timeout: 0, temp_store: 1 }; pages=(15, 0)
+point EXPLAIN=["SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)"]; runtime=StatementWork { attempts: 5, executions: 5, rows_returned: 2, rows_changed: 1, vm_steps: 183, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 200, elapsed_ns: 176833 }
+test portable_time_range_and_directory_sticky_mode_are_preserved ... ok
+test local_publication_survives_lost_reply_and_capture_does_not_copy_cells ... ok
+test profile_namespace_binary_values_and_atomic_refusals ... ok
+one-attempt physical quota failure at cell 15: Sql(SqliteFailure(Error { code: DiskFull, extended_code: 13 }, Some("database or disk is full"))); pages=(32, 0)
+test real_sqlite_full_aborts_one_mutation_without_losing_previous_publication ... ok
+test backed_owner_and_scratch_pages_have_no_total_record_limit ... ok
+test known_install_advances_base_without_replaying_or_losing_later_active_rows ... ok
+capture plan before verification: ["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]
+active_population=128; plan=["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]; captured_rows=1; vm_steps=34; fullscan_steps=0; sorts=0; reprepare=0
+capture plan before verification: ["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]
+active_population=1024; plan=["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]; captured_rows=1; vm_steps=34; fullscan_steps=0; sorts=0; reprepare=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=0; rows=64; vm_steps=1043; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=64; rows=64; vm_steps=1250; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=128; rows=64; vm_steps=1250; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=192; rows=1; vm_steps=55; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=193; rows=0; vm_steps=36; fullscan_steps=0; sorts=0
+test captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes ... ok
+capture plan before verification: ["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]
+active_population=4096; plan=["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]; captured_rows=1; vm_steps=34; fullscan_steps=0; sorts=0; reprepare=0
+test fixed_capture_uses_generation_index_while_active_namespace_grows ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+

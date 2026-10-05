@@ -1,0 +1,6 @@
+requested mtime=SystemTime { tv_sec: -2, tv_nsec: 800000000 }
+received mtime=SystemTime { tv_sec: -3, tv_nsec: 200000000 }
+set_times outcome=Ok(())
+observed mtime=Ok(SystemTime { tv_sec: -3, tv_nsec: 200000000 })
+Error: "pinned FUSE timestamp capability FAILED"
+native cleanup=Ok(())

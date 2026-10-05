@@ -27,21 +27,22 @@ impl Overlay {
     /// Latest local inode at the current view; None delegates to immutable base.
     pub fn inode(&self, route: Route, serial: u64) -> OverlayResult<Option<Inode>> {
         let state = self.live(route)?;
-        self.inode_at(route, serial, state.active)
+        self.inode_at(route, serial, state.active, state.installed)
     }
     pub(crate) fn inode_at(
         &self,
         route: Route,
         serial: u64,
         gen: Generation,
+        installed: i64,
     ) -> OverlayResult<Option<Inode>> {
         let serial = integer(serial)?;
         Ok(self
             .query(
                 StatementKind::Inode,
                 sql::INODE_LOOKUP,
-                &[&route.ns, &serial, &gen.0],
-                24,
+                &[&route.ns, &serial, &gen.0, &installed],
+                32,
                 decode,
             )?
             .pop())
@@ -174,9 +175,9 @@ impl Overlay {
         Ok(self
             .query(
                 StatementKind::Dentry,
-                "SELECT serial FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen<=?4
+            "SELECT serial FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen<=?4 AND gen>?5
              ORDER BY gen DESC LIMIT 1",
-                &[&route.ns, &parent, &name, &state.active.0],
+            &[&route.ns, &parent, &name, &state.active.0, &state.installed],
                 24 + name.len() as u64,
                 |r| {
                     Ok(Dentry {
