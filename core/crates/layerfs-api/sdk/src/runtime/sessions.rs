@@ -100,6 +100,34 @@ impl<'a> Sessions<'a> {
         Ok(self.demand.policy())
     }
 
+    /// One authorized saved-file length window, without whole-file payload reads.
+    /// Trusts owning Store metadata; this does not attest payload integrity.
+    pub fn file_lengths(
+        &self,
+        binding: &Binding,
+        ids: &[ObjectId],
+        reply: &mut dyn super::LengthReply,
+    ) -> RuntimeResult<()> {
+        self.check_binding(binding)?;
+        if ids.len() > self.demand.capacities().read_objects {
+            return Err(RuntimeError::Invalid("file length window"));
+        }
+        self.authority.objects(
+            binding.peer,
+            binding.workspace,
+            binding.snapshot.branch.id,
+            ids,
+        )?;
+        let lengths = self.demand.reader()?.file_lengths(ids)?;
+        if lengths.len() != ids.len() {
+            return Err(RuntimeError::Invalid("file length cardinality"));
+        }
+        for (id, length) in ids.iter().zip(lengths) {
+            reply.file_length(*id, length)?;
+        }
+        Ok(())
+    }
+
     /// Admits one Save. An unavailable slot has no provider effect.
     pub fn begin(&mut self, binding: &Binding) -> RuntimeResult<SaveId> {
         self.check_binding(binding)?;

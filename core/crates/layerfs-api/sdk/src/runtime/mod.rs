@@ -9,4 +9,4 @@ pub use binding::{Authorization, Binding};
 pub use error::{RuntimeError, RuntimeResult};
 pub use owner::{Config, Runtime};
 pub use sessions::Sessions;
-pub use types::{Completion, CompletionPhase, ObjectReply, SaveId};
+pub use types::{Completion, CompletionPhase, LengthReply, ObjectReply, SaveId};

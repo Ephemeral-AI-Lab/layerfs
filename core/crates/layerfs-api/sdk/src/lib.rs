@@ -4,6 +4,6 @@
 
 pub mod runtime;
 pub use runtime::{
-    Authorization, Binding, Completion, CompletionPhase, Config, ObjectReply, Runtime,
+    Authorization, Binding, Completion, CompletionPhase, Config, LengthReply, ObjectReply, Runtime,
     RuntimeError, RuntimeResult, SaveId, Sessions,
 };

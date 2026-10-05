@@ -164,3 +164,11 @@ its narrower `CHECK (object_role BETWEEN 1 AND 6)` and therefore rejects the new
 roles explicitly; the new roles require a Store created with the widened
 constraint. No migration, remapping or silent rewrite happens. The schema stays
 version 4 with four tables and twenty-one columns.
+
+## Saved-file metadata lengths (#307 prerequisite)
+
+`Reader::file_lengths` preserves demand order within the existing 4,096-ID window.
+Whole-file lengths use acknowledged trusted Store descriptors without fetching
+payload; chunked/empty roots authenticate their small file states. This does not
+attest payload integrity or replace normal read checks. Missing/non-file roots and
+incompatible descriptors fail explicitly. [Owning evidence and remaining scope](../../docs/architecture/24-file-lengths.md).

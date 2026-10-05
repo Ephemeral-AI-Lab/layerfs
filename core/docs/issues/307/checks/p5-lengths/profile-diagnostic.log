@@ -1,0 +1,8 @@
+Retained stdout excerpt from the first scoped count diagnostic (not a benchmark or sealed release qualification).
+Command: cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-persistence --test file_lengths -- --nocapture
+Source: local P5 implementation after bfeec632c; product source unchanged by subsequent documentation and extra non-file refusal coverage. Final covering identity/checks are recorded in the checkpoint commit.
+Cache scope: fresh Storage handle; no OS/SQLite-page cold-state or latency claim.
+
+FILE_LENGTH rows=2 distinct=1 logical_each=131071 canonical_payload_read=0 locate=1 statements=3 vm_steps=29 returned_rows=1 fullscan=0 sorts=0 autoindex=0 reprepares=0 plans=[["SEARCH o USING PRIMARY KEY (object_id=?)", "SEARCH p USING INTEGER PRIMARY KEY (rowid=?)"]]
+FILE_LENGTH mixed rows=4 state_roots=2 payload_reads=0 payload_bytes=0 metadata_pack_calls=0 metadata_pack_bytes=926
+Outcome: 2 passed; 0 failed. Exact first-party source and relevant owning checks are recorded in the P5 checkpoint. This excerpt preserves actual observations without a second diagnostic sample.

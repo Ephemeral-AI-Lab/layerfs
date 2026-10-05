@@ -61,6 +61,16 @@ pub struct SqlWork {
     pub statements: u64,
     /// Actual sqlite3_stmt_status VM steps, not EXPLAIN instruction counts.
     pub vm_steps: u64,
+    /// Actual statement full-scan steps, including failed attempts.
+    pub fullscan_steps: u64,
+    /// Actual statement sort operations.
+    pub sorts: u64,
+    /// Rows inserted into automatic query indexes.
+    pub autoindex_rows: u64,
+    /// Automatic statement reprepares observed, without an application retry.
+    pub reprepares: u64,
+    /// Successfully decoded returned rows, including prefixes of failed statements.
+    pub returned_rows: u64,
     /// Input binding bytes; integer scalars count eight.
     pub bound_bytes: u64,
     /// Inclusive statement execution wall.

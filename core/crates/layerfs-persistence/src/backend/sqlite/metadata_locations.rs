@@ -10,6 +10,18 @@ use layerfs_storage::{
     port::{ObjectKey, PersistenceError},
 };
 use std::collections::BTreeSet;
+const LOCATE_PREFIX: &str = "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN";
+const LOCATE_ONE: &str = "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN(?)";
+fn locate_sql(count: usize) -> String {
+    format!(
+        "{}({})",
+        LOCATE_PREFIX,
+        std::iter::repeat_n("?", count)
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 pub(crate) fn info(r: &Record, start: usize) -> Result<PackInfo, BackendError> {
     checked_info(
         r.get(start)?,
@@ -63,10 +75,7 @@ pub(crate) fn read(
     if let [id] = ids {
         tx.input_limit(1, 256, 2)?;
         let bytes = id.as_bytes().as_slice();
-        let found = tx.mapped(
-            "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN(?)",
-            &[&bytes], 32, 1, typed_location,
-        )?;
+        let found = tx.mapped(LOCATE_ONE, &[&bytes], 32, 1, typed_location)?;
         out.extend(found);
         return Ok(());
     }
@@ -77,7 +86,7 @@ pub(crate) fn read(
         .into_iter()
         .collect();
     for page in ids.chunks(tx.input_limit(1, 256, 2)?) {
-        let sql=format!("SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN({})",std::iter::repeat_n("?",page.len()).collect::<Vec<_>>().join(","));
+        let sql = locate_sql(page.len());
         for r in tx.query(
             &sql,
             page.iter()
@@ -137,4 +146,39 @@ fn typed_location(r: &rusqlite::Row<'_>) -> Result<LocatedObject, BackendError> 
         },
         pack,
     })
+}
+
+pub(crate) fn explain(
+    tx: &Transaction<'_>,
+    ids: &[ObjectId],
+) -> Result<Vec<Vec<String>>, PersistenceError> {
+    if ids.len() > policy::READ_OBJECT_LIMIT {
+        return Err(PersistenceError::Malformed);
+    }
+    let ids: Vec<_> = ids
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let mut plans = Vec::new();
+    for page in ids.chunks(tx.input_limit(1, 256, 2)?) {
+        let sql = if page.len() == 1 {
+            LOCATE_ONE.to_owned()
+        } else {
+            locate_sql(page.len())
+        };
+        let plan = tx
+            .query(
+                &format!("EXPLAIN QUERY PLAN {sql}"),
+                page.iter()
+                    .map(|id| Param::Bytes(id.as_bytes().to_vec()))
+                    .collect(),
+            )?
+            .iter()
+            .map(|row| row.get::<String>(3))
+            .collect::<Result<Vec<_>, _>>()?;
+        plans.push(plan);
+    }
+    Ok(plans)
 }

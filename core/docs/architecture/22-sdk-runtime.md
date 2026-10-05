@@ -82,3 +82,7 @@ The old SDK is preserved byte-for-byte under `layerfs-sdk-legacy`, excluded, wit
 only the declared manifest package identity/relative dependency paths changed.
 Its product LOC remain counted. S11 must retire this source once replacement
 Init/control/transport has coverage; root reference remains until S13.
+
+The following P5 slice adds authorized saved-file lengths through a borrowed
+metadata sink. See [file-length facts](24-file-lengths.md) for the exact descriptor
+trust and owning DB/canonical work, and remaining base/stat integration.

@@ -54,3 +54,8 @@ pub trait ObjectReply {
     /// Transport must reserve its own bounded delivery capacity before copying.
     fn object(&mut self, id: ObjectId, canonical: &[u8]) -> RuntimeResult<()>;
 }
+/// Synchronous metadata delivery after owning provider work releases its locks.
+pub trait LengthReply {
+    /// Delivers one trusted Store file-length fact in demand order.
+    fn file_length(&mut self, id: ObjectId, logical_len: u64) -> RuntimeResult<()>;
+}

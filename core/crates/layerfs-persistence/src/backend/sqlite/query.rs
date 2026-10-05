@@ -147,6 +147,7 @@ pub(crate) fn mapped<T>(
             let _phase = super::statement_work::phase(work, 0, commit);
             connection.prepare_cached(sql).map_err(rows::error)?
         };
+        let mut returned = 0_u64;
         let result = (|| {
             let mut cursor = {
                 let _phase = super::statement_work::phase(work, 1, commit);
@@ -162,6 +163,7 @@ pub(crate) fn mapped<T>(
                     let Some(row) = next? else { break };
                     let _phase = super::statement_work::phase(work, 3, commit);
                     result.push(decode(row)?);
+                    returned += 1;
                 }
                 Ok(result)
             })();
@@ -171,16 +173,30 @@ pub(crate) fn mapped<T>(
             }
             result
         })();
-        let steps = {
+        let counters = {
             let _phase = super::statement_work::phase(work, 5, commit);
-            let steps = statement.get_status(StatementStatus::VmStep).max(0) as u64;
-            statement.reset_status(StatementStatus::VmStep);
-            steps
+            [
+                StatementStatus::VmStep,
+                StatementStatus::FullscanStep,
+                StatementStatus::Sort,
+                StatementStatus::AutoIndex,
+                StatementStatus::RePrepare,
+            ]
+            .map(|kind| {
+                let count = statement.get_status(kind).max(0) as u64;
+                statement.reset_status(kind);
+                count
+            })
         };
         {
             let mut w = work.borrow_mut();
             w.statements += 1;
-            w.vm_steps += steps;
+            w.vm_steps += counters[0];
+            w.fullscan_steps += counters[1];
+            w.sorts += counters[2];
+            w.autoindex_rows += counters[3];
+            w.reprepares += counters[4];
+            w.returned_rows += returned;
             w.bound_bytes += bytes;
         }
         {
@@ -211,6 +227,10 @@ pub(crate) fn batch(
             let mut w = work.borrow_mut();
             w.statements += 1;
             w.vm_steps += statement.get_status(StatementStatus::VmStep).max(0) as u64;
+            w.fullscan_steps += statement.get_status(StatementStatus::FullscanStep).max(0) as u64;
+            w.sorts += statement.get_status(StatementStatus::Sort).max(0) as u64;
+            w.autoindex_rows += statement.get_status(StatementStatus::AutoIndex).max(0) as u64;
+            w.reprepares += statement.get_status(StatementStatus::RePrepare).max(0) as u64;
             result?;
         }
         Ok(())

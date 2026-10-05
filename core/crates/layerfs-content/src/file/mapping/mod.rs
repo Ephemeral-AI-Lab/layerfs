@@ -13,7 +13,7 @@ pub use build::{build_streaming, emit_empty_leaf, emit_file_state, ExtentBuilder
 pub use codec::{
     chunk_canonical_len, decode_chunk_payload, decode_file_state, decode_node,
     decode_node_with_context, encode_chunk_object, encode_file_state, encode_node, profile_id,
-    CHUNK_MAGIC,
+    CHUNK_MAGIC, FILE_STATE_CANONICAL_BYTES,
 };
 pub use predecessor::PredecessorBase;
 pub(crate) use predecessor::PredecessorCursor;

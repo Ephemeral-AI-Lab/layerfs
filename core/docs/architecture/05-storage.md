@@ -1,5 +1,11 @@
 # Storage (C2, `layerfs-storage`)
 
+### #307 owning file-length metadata checkpoint
+
+The P5 slice after `bfeec632c` adds a saved-file length API and actual locator
+EXPLAIN/runtime evidence; see [file-length facts](24-file-lengths.md). This scope
+does not re-date the older source pins or measurements below.
+
 ### #302 second-chance positive-locator selection (2026-10-05)
 
 Described against parent `65668032e` and the accompanying implementation.

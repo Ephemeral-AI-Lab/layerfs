@@ -69,6 +69,10 @@ borrowed records, one-attempt I/O/quarantine and unfinished logical service scop
 
 ## Why these papers exist
 
+The owning saved-file metadata path is described in
+[24 — File lengths](24-file-lengths.md), including descriptor trust, actual
+EXPLAIN/runtime scope and remaining daemon/base/stat integration.
+
 The only architecture study in this release,
 [`architecture-overview.md`](../../../docs/roadmap/0.1/0.1.7/architecture-overview.md), is pinned to the
 reference tree: it cites `layerfs-layerstack-store`, `objects/admission.rs`,

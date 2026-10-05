@@ -198,6 +198,14 @@ impl ObjectReply for Reply {
         Ok(())
     }
 }
+#[derive(Default)]
+struct Lengths(Vec<(ObjectId, u64)>);
+impl layerfs_sdk::LengthReply for Lengths {
+    fn file_length(&mut self, id: ObjectId, length: u64) -> RuntimeResult<()> {
+        self.0.push((id, length));
+        Ok(())
+    }
+}
 fn binding(s: &Sessions<'_>, branch: BranchId, workspace: u8, peer: u8) -> Binding {
     let verified = verified(peer);
     s.bind(
@@ -285,6 +293,9 @@ fn independent_saves_pending_reads_retained_finish_and_slot_reuse() {
     let mut saved = Reply::default();
     s.read_objects(&b, None, &[rb], &mut saved).unwrap();
     assert_eq!(saved.0.len(), 1);
+    let mut lengths = Lengths::default();
+    s.file_lengths(&b, &[rb, rb], &mut lengths).unwrap();
+    assert_eq!(lengths.0, [(rb, 9), (rb, 9)]);
     assert!(
         matches!(s.begin(&b), Err(RuntimeError::AdmissionUnavailable)),
         "held receipt still consumes slot"

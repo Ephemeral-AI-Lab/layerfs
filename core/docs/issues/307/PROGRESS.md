@@ -65,6 +65,11 @@ compiled content, bundled rusqlite and fuser 0.18.0 with Rust 1.85.1 on ARM64.
 Actual native FUSE mount, file read, detach and worker join passed with `/dev/fuse`
 and `CAP_SYS_ADMIN`. This is prerequisite evidence, not product FUSE qualification.
 
+P5 has an owning saved-file metadata length API and authorized SDK delivery.
+Whole-file facts avoid payload reads; chunked/empty facts authenticate only small
+state roots. Paired actual locator EXPLAIN/runtime counters are retained. Base/stat
+and logical transport integration remain open; see [file lengths](../../architecture/24-file-lengths.md).
+
 ## Concrete next work
 
 The initial active overlay now provides typed namespace/metadata/cell/scratch/

@@ -26,6 +26,9 @@ const NODE_HEADER_LEN: usize = 31;
 const LEAF_ENTRY_LEN: usize = 40;
 const BRANCH_ENTRY_LEN: usize = 48;
 const FILE_STATE_VALUE_LEN: usize = 93;
+/// Exact canonical width of the current file-state grammar, including its envelope.
+pub const FILE_STATE_CANONICAL_BYTES: usize =
+    FILE_STATE_VALUE_LEN + codec::HEADER_LEN + codec::VALUE_LEN_BYTES;
 
 /// Frozen mapping profile identity.
 pub fn profile_id() -> ObjectId {

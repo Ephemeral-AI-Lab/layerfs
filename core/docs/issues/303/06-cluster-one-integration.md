@@ -208,6 +208,11 @@ feature, not assumed history behavior.
 | P13 | Backed validation, touched/zero/release state with bounded resident windows | Total row/name/demand checks derive from ordering_bytes/16; demanded/addition/parent collections and touched/zero/release collections remain resident; touched length is checked after collection |
 | P14 | Incremental checked parent/reverse-binding evidence preserving alias/cycle checks | Rebinding a stored non-file can trigger a whole-base namespace walk capped by ordering_bytes/1024; streaming that walk alone does not make tiny rename Commit incremental |
 
+P5 implementation checkpoint after `bfeec632c`: public saved-file length facts and
+authorized SDK delivery now avoid whole-file payload acquisition; see
+[owning implementation/evidence](../../architecture/24-file-lengths.md). Daemon
+base/stat and logical transport integration remain required, so this row is open.
+
 Assign engineering ownership; these are not permission to accept artificial caps.
 Current source links: [edit bound](../../../crates/layerfs-content/src/file/edit/tree.rs),
 [directory changes](../../../crates/layerfs-content/src/filesystem/input.rs),
