@@ -63,6 +63,10 @@ The initial application-embedded host runtime is described in
 [22 — SDK runtime](22-sdk-runtime.md), with scoped Save borrows, typed local
 authority/custody and explicit remaining transport/history/control qualification.
 
+The initial native authenticated channel is described in
+[23 — Native bridge](23-native-bridge.md), with completed KK peer binding, bounded
+borrowed records, one-attempt I/O/quarantine and unfinished logical service scope.
+
 ## Why these papers exist
 
 The only architecture study in this release,

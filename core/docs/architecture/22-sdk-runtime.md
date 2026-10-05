@@ -5,9 +5,9 @@
 The #307 checkpoint after `042849109` embeds an initial runtime at the planned
 [SDK composition path](../../crates/layerfs-api/sdk/src/runtime/mod.rs). The active
 package is `layerfs-sdk`; its normal product dependency graph contains content,
-storage, history, persistence and telemetry. It has no server dependency. Native
-bridge transport, history adapters, five Workspace operations and full S9 exits
-remain unfinished.
+storage, history, persistence, telemetry and the native bridge. It has no server
+dependency. Logical bridge service, history adapters, five Workspace operations
+and complete S9 exits remain unfinished.
 
 [Runtime](../../crates/layerfs-api/sdk/src/runtime/owner.rs) receives already-open
 `Handles`, initializes one demand Storage plus configured independent Save Storage
@@ -30,9 +30,10 @@ incarnation and must never reuse it. Bind authorizes the peer/Workspace/Branch,
 reads one coherent history snapshot and one authenticated canonical filesystem
 root, and verifies scope/profile. It does no whole-tree scan or import. Every
 operation rechecks authority before provider service, including exact object IDs
-and derived references. This authorizes a transport-supplied peer identity; it
-does not itself authenticate network bytes. No wire-capability constructor or
-crypto/framing qualification is claimed from typed local Rust capabilities.
+and derived references. The following bridge checkpoint requires a `VerifiedPeer`
+from a completed native KK handshake at SDK bind; raw bytes cannot construct it.
+See [native channels](23-native-bridge.md). Wire capabilities, logical codecs and
+complete framed service remain unfinished; direct SDK proofs do not qualify them.
 
 [Sessions](../../crates/layerfs-api/sdk/src/runtime/sessions.rs) indexes a fixed
 configured set of live/retained processing slots, each with a monotonically burned

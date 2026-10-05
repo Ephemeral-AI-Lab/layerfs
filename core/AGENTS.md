@@ -23,7 +23,11 @@ product mental model or campaign-specific benchmark procedures.
   SDK now embeds an initial host object/Save runtime with scoped sessions. Its
   predecessor is preserved in excluded `layerfs-sdk-legacy`; authenticated
   transport/history/control and full runtime acceptance remain unfinished.
-  FUSE/bridge/API-core/sandbox directories are presently excluded reference/
+  Bridge now builds initial pinned native KK channels and authenticates typed
+  peers for SDK binding. Its old protocol source is excluded at
+  `layerfs-bridge-legacy`; logical framing/multiplexing and complete transport/
+  runtime service qualification remain unfinished.
+  FUSE/API-core/sandbox directories are presently excluded reference/
   integration source; existence is not an implemented replacement.
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../cluster_one_handbook.md) and

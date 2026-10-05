@@ -1,5 +1,5 @@
-//! Logical operations and authenticated native delivery; no C1/C2 dependency.
+//! Authenticated native delivery; logical object/history/control codecs are separate.
 #![forbid(unsafe_code)]
+#![deny(missing_docs)]
 #[cfg(feature = "native")]
-pub mod adapters;
-pub mod contract;
+pub mod native;

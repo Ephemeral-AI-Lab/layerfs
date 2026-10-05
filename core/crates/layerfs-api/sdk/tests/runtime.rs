@@ -46,10 +46,11 @@ impl Drop for Temp {
 struct Allow {
     revoked: Rc<Cell<bool>>,
     deny: Rc<Cell<Option<ObjectId>>>,
+    peers: [[u8; 32]; 2],
 }
 impl Authorization for Allow {
     fn workspace(&self, peer: [u8; 32], _: WorkspaceId, _: BranchId) -> RuntimeResult<()> {
-        if self.revoked.get() || !(peer == [1; 32] || peer == [2; 32]) {
+        if self.revoked.get() || !self.peers.contains(&peer) {
             Err(RuntimeError::Denied)
         } else {
             Ok(())
@@ -173,6 +174,10 @@ impl Fixture {
             Box::new(Allow {
                 revoked: revoked.clone(),
                 deny: deny.clone(),
+                peers: [
+                    layerfs_bridge::native::public_key(&[1; 32]).unwrap(),
+                    layerfs_bridge::native::public_key(&[2; 32]).unwrap(),
+                ],
             }),
         )
         .unwrap();
@@ -194,12 +199,44 @@ impl ObjectReply for Reply {
     }
 }
 fn binding(s: &Sessions<'_>, branch: BranchId, workspace: u8, peer: u8) -> Binding {
+    let verified = verified(peer);
     s.bind(
-        [peer; 32],
+        &verified,
         WorkspaceId::from_authority([workspace; 32]).unwrap(),
         branch,
     )
     .unwrap()
+}
+fn verified(peer: u8) -> layerfs_bridge::native::VerifiedPeer {
+    use layerfs_bridge::native::{accept, initiate, public_key};
+    use std::{
+        net::{TcpListener, TcpStream},
+        thread,
+        time::Duration,
+    };
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let client_public = public_key(&[peer; 32]).unwrap();
+    let server_public = public_key(&[33; 32]).unwrap();
+    let worker = thread::spawn(move || {
+        let stream = listener.accept().unwrap().0;
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        stream
+            .set_write_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        accept(stream, &[33; 32], client_public).unwrap().peer
+    });
+    let stream = TcpStream::connect(address).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    stream
+        .set_write_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    let _connection = initiate(stream, &[peer; 32], server_public).unwrap();
+    worker.join().unwrap()
 }
 fn accept(s: &mut Sessions<'_>, b: &Binding, id: SaveId, bytes: &[u8]) -> ObjectId {
     let canonical = encode_whole_file_payload(bytes).unwrap();

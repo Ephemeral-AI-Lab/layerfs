@@ -45,6 +45,13 @@ counted. Transport authentication/fair dispatch/history/disconnect fences, compl
 root import and aggregate/runtime qualification remain unfinished. See
 [SDK runtime architecture](../../architecture/22-sdk-runtime.md).
 
+Bridge is active for initial pinned native KK channels, with fixed borrowed
+records, independent direction ownership and shared one-attempt quarantine. SDK
+bind requires its completed-handshake VerifiedPeer. Old protocol source is preserved
+in excluded `layerfs-bridge-legacy` and counted. Logical codecs, delivery/fair
+dispatch, multiplexing and disconnect/restart integration remain required; native
+channel proofs do not complete S0/S9.
+
 S0 in progress. Public-API proof in
 [interleaved_saves.rs](../../../crates/layerfs-persistence/tests/interleaved_saves.rs)
 demonstrates an initialized provider with independently initialized Storage

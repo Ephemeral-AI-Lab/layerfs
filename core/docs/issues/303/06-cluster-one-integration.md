@@ -2,8 +2,9 @@
 
 > **Status:** Proposal; target LayerFS 0.1.7; not a released contract.
 > Written 2026-10-05 against product `f96d97651` and design `334fc7437`, with
-> subsequent owner directions. Public libraries exist; the runtime adapters
-> described here do not. No build, workload or measurement was run.
+> subsequent owner directions. Public libraries and the later explicitly scoped
+> #307 object/Save/native-channel checkpoints exist; complete runtime adapters
+> remain unfinished. This design ran no build, workload or measurement.
 
 This is the authoritative integration map for the [operation documents](README.md#primary-design-documents).
 The replacement does not restore `layerfs-server`, rename its coordinator or
@@ -95,9 +96,11 @@ The [cluster-one handbook](../../../../cluster_one_handbook.md) and
 ## 3. Bridge operations
 
 These are **conceptual adapter contracts**, not callable product URLs or deployed
-endpoints. Existing dormant Noise/TCP framing can be reused after rebinding;
-[bridge source](../../../crates/layerfs-bridge/src/adapters/native/connection.rs)
-and old history wire are excluded reference code, not working replacement routes.
+endpoints. The #307 native-channel primitive authenticates peers through pinned
+KK and binds the SDK; [implemented scope](../../architecture/23-native-bridge.md)
+does not establish the logical routes below. The
+[old bridge source](../../../crates/layerfs-bridge-legacy/src/adapters/native/connection.rs)
+and old history wire are preserved excluded reference code.
 
 | Proposed adapter operation | Result / runtime binding |
 | --- | --- |

@@ -19,6 +19,7 @@ members = [
     "crates/layerfs-workspace",
     "crates/layerfs-daemon",
     "crates/layerfs-api/sdk",
+    "crates/layerfs-bridge",
 ]
 exclude = [
     "crates/layerfs-api/core",
@@ -27,7 +28,7 @@ exclude = [
     "crates/layerfs-daemon-legacy",
     "crates/layerfs-fuse",
     "crates/layerfs-workspace-legacy",
-    "crates/layerfs-bridge",
+    "crates/layerfs-bridge-legacy",
     "crates/layerfs-server",
 ]
 

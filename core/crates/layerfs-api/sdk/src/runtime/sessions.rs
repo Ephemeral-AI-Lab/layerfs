@@ -54,13 +54,14 @@ impl<'a> Sessions<'a> {
     }
 
     /// Authorizes one peer/Workspace/Branch and demand-loads only its root.
-    /// `peer` must already be authenticated by the host transport.
+    /// The peer is established by the native bridge's completed KK handshake.
     pub fn bind(
         &self,
-        peer: [u8; 32],
+        peer: &layerfs_bridge::native::VerifiedPeer,
         workspace: WorkspaceId,
         branch: BranchId,
     ) -> RuntimeResult<Binding> {
+        let peer = peer.public_key();
         if peer == [0; 32] {
             return Err(RuntimeError::Invalid("authenticated peer"));
         }
