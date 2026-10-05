@@ -12,6 +12,24 @@ rules apply to the replacement tree; existing root `crates/` remains reference
 code during migration. Follow the core-specific checks before claiming core work
 is verified; the root checks alone do not exercise that workspace.
 
+## Required reading before cluster two work
+
+Before starting cluster two implementation or integration (Workspace, FUSE,
+daemon, sandbox, or Commit integration), read both root-level handbooks:
+
+- [`cluster_one_handbook.md`](cluster_one_handbook.md) — active cluster one
+  architecture, public APIs, streaming workflows, completion/failure semantics,
+  persistence profiles, and source-qualified benchmark results.
+- [`cas_cdc_deltaencoding_handbook.md`](cas_cdc_deltaencoding_handbook.md) —
+  canonical identity, CDC, exact CAS reuse, payload and metadata delta encoding,
+  dependency reconstruction, and caller obligations.
+
+Use the current public contracts and observe each handbook's source pins and
+limitations. Cluster one/two are workstreams; C1/C2 in older component documents
+mean content/storage. The handbooks do not implement cluster two's mutable overlay
+or transport adapters and do not replace the normative rules in this file or
+`core/AGENTS.md`.
+
 Read before touching measurement, benchmark or release work:
 
 - [`docs/general/benchmark_rules.md`](docs/general/benchmark_rules.md) — the measurement contract
