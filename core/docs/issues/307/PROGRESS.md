@@ -70,6 +70,12 @@ Whole-file facts avoid payload reads; chunked/empty facts authenticate only smal
 state roots. Paired actual locator EXPLAIN/runtime counters are retained. Base/stat
 and logical transport integration remain open; see [file lengths](../../architecture/24-file-lengths.md).
 
+Terminal close now revokes new entry, retains exact owner/capture/reply custody
+and maintains a ready-only cleanup index. Daemon maintenance rotates short deletion
+windows automatically while idle and after finite foreground service. Native
+unmount, live-generation/orphan/failure/pressure and aggregate qualification remain
+open; see [terminal reclaim](../../architecture/25-terminal-reclaim.md).
+
 ## Concrete next work
 
 The initial active overlay now provides typed namespace/metadata/cell/scratch/
@@ -96,7 +102,8 @@ S0/S1/S2 acceptance requires the unimplemented service/lifetime/resource work.
 ## Preserved state and publication
 
 Untracked `core/docs/issues/301/`, the existing extent-normalization research and
-`output/` are unrelated and preserved. Root `crates/` remains the reference until
+`output/` are unrelated and preserved. Concurrent `docs/README.md` edits and
+untracked `docs/general/sandbox-cache-design.md` are also preserved without staging. Root `crates/` remains the reference until
 S12 qualification permits S13. Checkpoint hashes are local-only; no remote push,
 release or deployment is authorized. Append-only tracker texts are retained in
 [checkpoints](checkpoints/initial.md). Rust checks/LOC/evidence are recorded in

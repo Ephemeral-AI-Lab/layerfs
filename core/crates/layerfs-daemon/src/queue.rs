@@ -20,6 +20,10 @@ pub struct OwnerWork {
     pub credited_bytes: usize,
     pub peak_credited_bytes: usize,
     pub outstanding: usize,
+    pub maintenance_jobs: u64,
+    pub maintenance_rows: u64,
+    pub maintenance_data_bytes: u64,
+    pub maintenance_ns: u64,
 }
 pub(crate) struct Envelope {
     pub result: Result<Response, OwnerError>,
@@ -86,6 +90,8 @@ pub(crate) struct State {
     pub stopping: bool,
     pub next: u64,
     pub work: OwnerWork,
+    pub event: u64,
+    pub maintenance_error: Option<Arc<layerfs_overlay::OverlayError>>,
 }
 pub(crate) struct Shared {
     pub state: Mutex<State>,
@@ -101,26 +107,56 @@ impl Shared {
                 stopping: false,
                 next: 1,
                 work: OwnerWork::default(),
+                event: 0,
+                maintenance_error: None,
             }),
             wake: Condvar::new(),
             config,
         }
     }
-    pub fn take(&self) -> Option<Job> {
+    pub fn poll(&self) -> Option<(Option<Job>, u64)> {
         let mut state = self.state.lock().ok()?;
-        loop {
-            if state.stopping {
-                return None;
-            }
-            for _ in 0..state.rotation.len() {
-                let ns = state.rotation.pop_front()?;
-                state.rotation.push_back(ns);
-                if let Some(job) = state.lanes.get_mut(&ns)?.take() {
-                    return Some(job);
-                }
-            }
-            state = self.wake.wait(state).ok()?;
+        if state.stopping {
+            return None;
         }
+        for _ in 0..state.rotation.len() {
+            let ns = state.rotation.pop_front()?;
+            state.rotation.push_back(ns);
+            if let Some(job) = state.lanes.get_mut(&ns)?.take() {
+                return Some((Some(job), state.event));
+            }
+        }
+        Some((None, state.event))
+    }
+    pub fn wait(&self, event: u64) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        while !state.stopping && state.event == event {
+            let Ok(next) = self.wake.wait(state) else {
+                return;
+            };
+            state = next;
+        }
+    }
+    pub fn maintenance(&self, step: layerfs_overlay::ReclaimStep, ns: u64) {
+        if let Ok(mut state) = self.state.lock() {
+            state.work.maintenance_jobs = state.work.maintenance_jobs.saturating_add(1);
+            state.work.maintenance_rows = state.work.maintenance_rows.saturating_add(step.rows);
+            state.work.maintenance_data_bytes = state
+                .work
+                .maintenance_data_bytes
+                .saturating_add(step.data_bytes);
+            state.work.maintenance_ns = state.work.maintenance_ns.saturating_add(ns);
+        }
+    }
+    pub fn maintenance_failed(&self, error: layerfs_overlay::OverlayError) {
+        if let Ok(mut state) = self.state.lock() {
+            state.maintenance_error = Some(Arc::new(error));
+        }
+    }
+    pub fn stopped(&self) -> bool {
+        self.state.lock().map_or(true, |state| state.stopping)
     }
     pub fn park(&self, mut job: Job) {
         let mut state = match self.state.lock() {
@@ -154,6 +190,7 @@ impl Shared {
     }
     pub fn progress(&self, ns: i64, class: ServiceClass, wait: u64, service: u64) {
         if let Ok(mut state) = self.state.lock() {
+            state.event = state.event.wrapping_add(1);
             let work = &mut state.work;
             work.completed[class as usize] = work.completed[class as usize].saturating_add(1);
             work.queue_wait_ns[class as usize] =
@@ -173,6 +210,7 @@ impl Shared {
     pub fn stop(&self) {
         let jobs = if let Ok(mut state) = self.state.lock() {
             state.stopping = true;
+            state.event = state.event.wrapping_add(1);
             state
                 .lanes
                 .values_mut()

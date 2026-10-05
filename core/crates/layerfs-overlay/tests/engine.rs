@@ -53,12 +53,147 @@ fn kind(work: DatabaseWork, kind: StatementKind) -> StatementWork {
 }
 
 #[test]
+fn terminal_cleanup_waits_for_exact_owners_and_reply_attempts() {
+    let temp = Temp::new();
+    let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
+    let route = db.open_workspace([101; 32], [9; 32]).unwrap();
+    let other = db.open_workspace([102; 32], [9; 32]).unwrap();
+    let lease = Lease {
+        kind: LeaseKind::Open,
+        owner: 1,
+        resource: 7,
+    };
+    db.acquire(route, lease).unwrap();
+    let publication = db.publish(route, &inode(7), None, Some(&cell(9))).unwrap();
+    db.close(route).unwrap();
+    assert_eq!(db.cleanup_state(route).unwrap(), CleanupState::Held);
+    assert!(db.reclaim_closed(0).unwrap().is_none());
+    assert!(matches!(
+        db.publish(route, &inode(8), None, None),
+        Err(OverlayError::Closed)
+    ));
+    db.release(route, lease).unwrap();
+    assert_eq!(db.cleanup_state(route).unwrap(), CleanupState::Held);
+    // Closed state still accepts the exact earlier send-attempt ticket.
+    db.reply_attempted(publication).unwrap();
+    assert_eq!(db.cleanup_state(route).unwrap(), CleanupState::Queued);
+    let plans = db.explain_closed_reclaim().unwrap();
+    assert!(
+        plans
+            .iter()
+            .all(|line| !line.contains("SCAN") && !line.contains("TEMP B-TREE")),
+        "{plans:?}"
+    );
+    let mut steps = 0;
+    while let Some(step) = db.reclaim_closed(0).unwrap() {
+        assert!(step.rows <= 64);
+        assert!(step.data_bytes <= 65536);
+        steps += 1;
+    }
+    assert!(steps > 0);
+    assert_eq!(db.cleanup_state(route).unwrap(), CleanupState::Gone);
+    assert!(!db.state(other).unwrap().closed);
+}
+
+#[test]
+fn closed_capture_retains_its_existing_rows_until_explicit_known_release() {
+    let temp = Temp::new();
+    let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
+    let route = db.open_workspace([103; 32], [9; 32]).unwrap();
+    let published = db.publish(route, &inode(1), None, None).unwrap();
+    db.reply_attempted(published).unwrap();
+    let capture = db.capture(route).unwrap();
+    db.close(route).unwrap();
+    assert_eq!(db.cleanup_state(route).unwrap(), CleanupState::Held);
+    assert!(db.reclaim_closed(0).unwrap().is_none());
+    assert_eq!(db.captured_inodes(capture, 0).unwrap(), [inode(1)]);
+    db.release_closed_capture(capture).unwrap();
+    assert!(matches!(
+        db.release_closed_capture(capture),
+        Err(OverlayError::Stale)
+    ));
+    while db.reclaim_closed(0).unwrap().is_some() {}
+    assert_eq!(db.cleanup_state(route).unwrap(), CleanupState::Gone);
+}
+
+#[test]
+fn reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_scratch_values() {
+    let temp = Temp::new();
+    let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
+    let held = db.open_workspace([104; 32], [9; 32]).unwrap();
+    let ready = db.open_workspace([105; 32], [9; 32]).unwrap();
+    db.acquire(
+        held,
+        Lease {
+            kind: LeaseKind::Reader,
+            owner: 1,
+            resource: 0,
+        },
+    )
+    .unwrap();
+    for serial in 1..=1024 {
+        let p = db.publish(held, &inode(serial), None, None).unwrap();
+        db.reply_attempted(p).unwrap();
+    }
+    db.close(held).unwrap();
+    let op = Lease {
+        kind: LeaseKind::Operation,
+        owner: 8,
+        resource: 0,
+    };
+    db.acquire(ready, op).unwrap();
+    for key in 0..3 {
+        db.put_scratch(
+            ready,
+            8,
+            &ScratchRecord {
+                kind: 0,
+                key,
+                value: vec![7; 65536],
+            },
+        )
+        .unwrap();
+    }
+    db.release(ready, op).unwrap();
+    db.close(ready).unwrap();
+    let mut scratch_windows = 0;
+    loop {
+        let before = kind(db.diagnostics(), StatementKind::Reclaim);
+        let Some(step) = db.reclaim_closed(0).unwrap() else {
+            break;
+        };
+        let after = kind(db.diagnostics(), StatementKind::Reclaim);
+        assert_eq!(step.namespace, ready.namespace() as u64);
+        assert_eq!(after.fullscan_steps - before.fullscan_steps, 0);
+        assert_eq!(after.sorts - before.sorts, 0);
+        assert!(step.rows <= 64 && step.data_bytes <= 65536);
+        if step.data_bytes != 0 {
+            assert_eq!(step.rows, 1);
+            scratch_windows += 1;
+        }
+        println!(
+            "CLOSE_RECLAIM step={step:?} vm={} returned={} fullscan={} sorts={}",
+            after.vm_steps - before.vm_steps,
+            after.rows_returned - before.rows_returned,
+            after.fullscan_steps - before.fullscan_steps,
+            after.sorts - before.sorts
+        );
+    }
+    assert_eq!(scratch_windows, 3);
+    assert_eq!(db.cleanup_state(held).unwrap(), CleanupState::Held);
+    println!(
+        "CLOSE_RECLAIM plans={:?}",
+        db.explain_closed_reclaim().unwrap()
+    );
+}
+
+#[test]
 fn profile_namespace_binary_values_and_atomic_refusals() {
     let temp = Temp::new();
     let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
     assert!(Overlay::create(&temp.db(), ProfileConfig::default()).is_err());
     let p = db.profile();
-    assert_eq!(p.schema_version, 3);
+    assert_eq!(p.schema_version, 4);
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

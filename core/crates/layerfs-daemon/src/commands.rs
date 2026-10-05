@@ -21,6 +21,9 @@ pub enum Command {
         base_root: [u8; 32],
     },
     State,
+    CleanupState,
+    Close,
+    ReleaseClosedCapture(Capture),
     Inode(u64),
     Publish {
         inode: Inode,
@@ -53,6 +56,7 @@ pub enum Command {
 pub enum Response {
     Opened(Route),
     State(WorkspaceState),
+    CleanupState(layerfs_overlay::CleanupState),
     Inode(Option<Inode>),
     Published(Publication),
     Captured(Capture),
@@ -65,6 +69,9 @@ impl Command {
         match self {
             Self::Open { .. }
             | Self::State
+            | Self::CleanupState
+            | Self::Close
+            | Self::ReleaseClosedCapture(_)
             | Self::ReplyAttempted(_)
             | Self::Acquire(_)
             | Self::Release(_) => ServiceClass::Lifecycle,
@@ -109,6 +116,14 @@ impl Command {
         match self {
             Self::Open { .. } => unreachable!(),
             Self::State => db.state(route).map(Response::State),
+            Self::CleanupState => db.cleanup_state(route).map(Response::CleanupState),
+            Self::Close => db.close(route).map(|_| Response::Done),
+            Self::ReleaseClosedCapture(capture) => {
+                if capture.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.release_closed_capture(capture).map(|_| Response::Done)
+            }
             Self::Inode(serial) => db.inode(route, serial).map(Response::Inode),
             Self::Publish { inode, name, cell } => db
                 .publish(route, &inode, name.as_ref(), cell.as_ref())

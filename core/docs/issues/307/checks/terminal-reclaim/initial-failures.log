@@ -1,0 +1,5 @@
+Retained earlier diagnostic outcomes before repaired covering identity (not a performance arm).
+First compile: cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-overlay -p layerfs-daemon --all-targets -- --nocapture
+E0308 at daemon/tests/owner.rs:58: expected &Path, found PathBuf; test fixture passed an owned path. Repaired by borrowing the path; product code unchanged.
+Next run: 3 daemon tests passed, 1 failed. parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation failed at owner.rs:183: schema expectation left=4 right=3. The intended schema adds terminal-reclaim indexes and changes its readback to v4. Repaired the stale external test expectation; no product bypass or dependency change.
+The automatic-close proof already passed on that identity: 514 maintenance rows for 512 inode rows plus final queue/workspace rows; unrelated_progress=7. Actual final logs/evidence retain their own identity.

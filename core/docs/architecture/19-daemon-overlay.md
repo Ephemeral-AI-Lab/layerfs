@@ -82,3 +82,11 @@ metadata operations, cell transitions/truncate/holes, orphan/failure composition
 physical headroom, automatic live/idle reclaim, authenticated runtime, mounted
 cache/mmap/coherence/Exec, canonical construction and integrated qualification.
 No S0–S13 completion follows from this initial checkpoint.
+
+## Terminal maintenance checkpoint (#307)
+
+The slice after `c6df039e6` adds schema v4, exact close eligibility and bounded
+automatic terminal deletion during live/idle daemon periods. See
+[terminal reclaim](25-terminal-reclaim.md) for actual indexed scope, original
+error retention and remaining live-generation/orphan/pressure/kernel criteria.
+Earlier schema/profile evidence retains its original pin.

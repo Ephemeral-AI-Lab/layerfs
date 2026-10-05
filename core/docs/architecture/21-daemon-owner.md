@@ -74,3 +74,11 @@ Remaining: weighted automatic maintenance, physical admission/debt, full generat
 reader/orphan/failure composition, mutable filesystem semantics, actual deferred
 FUSE replies and coherent mmap caches, ordinary Bash streams, authenticated runtime,
 canonical Commit and integrated qualification. No completed milestone is inferred.
+
+## Terminal maintenance checkpoint (#307)
+
+The slice after `c6df039e6` adds schema v4, exact close eligibility and bounded
+automatic terminal deletion during live/idle daemon periods. See
+[terminal reclaim](25-terminal-reclaim.md) for actual indexed scope, original
+error retention and remaining live-generation/orphan/pressure/kernel criteria.
+Earlier schema/profile evidence retains its original pin.

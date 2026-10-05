@@ -227,6 +227,7 @@ impl OwnerClient {
             return Err((OwnerError::IdentityExhausted, command));
         };
         state.next = next;
+        state.event = state.event.wrapping_add(1);
         let credit = Arc::new(Credit {
             shared: Arc::downgrade(&self.shared),
             namespace,
@@ -270,6 +271,14 @@ impl OwnerClient {
             .map(|s| s.work)
             .map_err(|_| OwnerError::Stopped)
     }
+    /// First automatic-maintenance error, retained without an automatic retry.
+    pub fn maintenance_failure(&self) -> Result<Option<Arc<OverlayError>>, OwnerError> {
+        self.shared
+            .state
+            .lock()
+            .map(|s| s.maintenance_error.clone())
+            .map_err(|_| OwnerError::Stopped)
+    }
 }
 fn ns(route: Option<Route>) -> i64 {
     route.map_or(0, Route::namespace)
@@ -278,7 +287,41 @@ fn elapsed(start: Instant) -> u64 {
     start.elapsed().as_nanos().min(u64::MAX as u128) as u64
 }
 fn run(shared: &Shared, db: &Overlay) {
-    while let Some(job) = shared.take() {
+    let mut served = 0_u8;
+    let mut cursor = 0_u64;
+    let mut maintenance_failed = false;
+    while let Some((job, event)) = shared.poll() {
+        let mut maintained = false;
+        if !maintenance_failed && (served >= 8 || job.is_none()) {
+            let start = Instant::now();
+            match db.reclaim_closed(cursor) {
+                Ok(Some(step)) => {
+                    cursor = step.namespace;
+                    shared.maintenance(step, elapsed(start));
+                    served = 0;
+                    maintained = true;
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    maintenance_failed = true;
+                    shared.maintenance_failed(error);
+                }
+            }
+        }
+        let Some(job) = job else {
+            if !maintained {
+                shared.wait(event);
+            }
+            continue;
+        };
+        served = served.saturating_add(1);
+        if shared.stopped() {
+            let _ = job.reply.send(Envelope {
+                result: Err(OwnerError::Stopped),
+                _credit: job.credit,
+            });
+            continue;
+        }
         if matches!(job.command, Command::Capture) {
             if let Some(route) = job.route {
                 match db.capture_ready(route) {

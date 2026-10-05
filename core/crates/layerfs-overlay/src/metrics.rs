@@ -20,6 +20,7 @@ pub enum StatementKind {
     Scratch,
     Lease,
     Explain,
+    Reclaim,
 }
 /// Inclusive statement/check-out/binding/step/mapping observations.
 /// Elapsed nanoseconds are diagnostic wall, not exclusive CPU or a latency gate.
@@ -40,7 +41,7 @@ pub struct StatementWork {
 /// Connection-scoped counters. Snapshot around one exclusive owner job for scope.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseWork {
-    pub statements: [StatementWork; 13],
+    pub statements: [StatementWork; 14],
 }
 
 pub(crate) fn query<T>(

@@ -43,7 +43,7 @@ impl Overlay {
             if changed != 1 {
                 return Err(OverlayError::Missing);
             }
-            Ok(())
+            self.queue_closed(route)
         })
     }
     pub(crate) fn operation(&self, route: Route, owner: u64) -> OverlayResult<()> {

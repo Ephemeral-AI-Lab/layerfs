@@ -48,6 +48,140 @@ fn open(client: &OwnerClient, tag: u8) -> Route {
         x => panic!("open: {x:?}"),
     }
 }
+
+#[test]
+fn last_release_starts_automatic_cleanup_during_idle_and_unrelated_live_work() {
+    use layerfs_overlay::{CleanupState, Lease, LeaseKind};
+    use std::time::{Duration, Instant};
+    let temp = Temp::new();
+    let owner = Owner::start(
+        &temp.0.join("db"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let client = owner.client();
+    let target = open(&client, 110);
+    let other = open(&client, 111);
+    let lease = Lease {
+        kind: LeaseKind::Reader,
+        owner: 7,
+        resource: 0,
+    };
+    assert!(submit(&client, Some(target), Command::Acquire(lease))
+        .wait()
+        .unwrap()
+        .result()
+        .is_ok());
+    for serial in 1..=512 {
+        let done = write(&client, target, serial);
+        let p = match done.result() {
+            Ok(Response::Published(p)) => *p,
+            x => panic!("{x:?}"),
+        };
+        drop(done);
+        assert!(submit(&client, Some(target), Command::ReplyAttempted(p))
+            .wait()
+            .unwrap()
+            .result()
+            .is_ok());
+    }
+    assert!(submit(&client, Some(target), Command::Close)
+        .wait()
+        .unwrap()
+        .result()
+        .is_ok());
+    assert!(matches!(
+        submit(&client, Some(target), Command::CleanupState)
+            .wait()
+            .unwrap()
+            .result(),
+        Ok(Response::CleanupState(CleanupState::Held))
+    ));
+    assert!(submit(&client, Some(target), Command::Release(lease))
+        .wait()
+        .unwrap()
+        .result()
+        .is_ok());
+    // Verification stop fence only. Status is observation; no explicit reclaim command exists.
+    let stop = Instant::now() + Duration::from_secs(2);
+    let mut progress = 0;
+    loop {
+        assert!(Instant::now() < stop, "automatic cleanup did not progress");
+        let state = submit(&client, Some(target), Command::CleanupState)
+            .wait()
+            .unwrap();
+        if matches!(
+            state.result(),
+            Ok(Response::CleanupState(CleanupState::Gone))
+        ) {
+            break;
+        }
+        drop(state);
+        assert!(submit(&client, Some(other), Command::State)
+            .wait()
+            .unwrap()
+            .result()
+            .is_ok());
+        progress += 1;
+    }
+    assert!(client.diagnostics().unwrap().maintenance_rows >= 512);
+    assert!(client.maintenance_failure().unwrap().is_none());
+    println!(
+        "AUTOMATIC_CLOSE unrelated_progress={progress} work={:?}",
+        client.diagnostics().unwrap()
+    );
+    owner.stop().unwrap();
+}
+
+#[test]
+fn idle_cleanup_runs_without_an_explicit_reclaim_or_status_job() {
+    use std::time::{Duration, Instant};
+    let temp = Temp::new();
+    let owner = Owner::start(
+        &temp.0.join("db"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let client = owner.client();
+    let route = open(&client, 112);
+    for serial in 1..=128 {
+        let done = write(&client, route, serial);
+        let publication = match done.result() {
+            Ok(Response::Published(p)) => *p,
+            x => panic!("{x:?}"),
+        };
+        drop(done);
+        assert!(
+            submit(&client, Some(route), Command::ReplyAttempted(publication))
+                .wait()
+                .unwrap()
+                .result()
+                .is_ok()
+        );
+    }
+    assert!(submit(&client, Some(route), Command::Close)
+        .wait()
+        .unwrap()
+        .result()
+        .is_ok());
+    let stop = Instant::now() + Duration::from_secs(2);
+    // Fixed memory diagnostics do not admit a database/service job or wake it.
+    while client.diagnostics().unwrap().maintenance_rows < 130 {
+        assert!(Instant::now() < stop, "idle maintenance did not finish");
+        std::thread::yield_now();
+    }
+    assert!(matches!(
+        submit(&client, Some(route), Command::CleanupState)
+            .wait()
+            .unwrap()
+            .result(),
+        Ok(Response::CleanupState(layerfs_overlay::CleanupState::Gone))
+    ));
+    assert!(client.maintenance_failure().unwrap().is_none());
+    owner.stop().unwrap();
+}
 fn value(serial: u64) -> Inode {
     Inode {
         serial,
@@ -95,7 +229,7 @@ fn parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation
         OwnerConfig::default(),
     )
     .unwrap();
-    assert_eq!(owner.profile().schema_version, 3);
+    assert_eq!(owner.profile().schema_version, 4);
     let client = owner.client();
     let a = open(&client, 1);
     let b = open(&client, 2);

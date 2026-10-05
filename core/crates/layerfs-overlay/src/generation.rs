@@ -50,7 +50,7 @@ impl Overlay {
                 &[&capture.route.ns, &capture.generation.0],
                 16,
             )?;
-            Ok(())
+            self.queue_closed(capture.route())
         })
     }
     /// Final captured name bindings, indexed by their sealed generation. The
@@ -124,7 +124,7 @@ impl Overlay {
     /// inode/name/byte state and never claims kernel delivery.
     pub fn reply_attempted(&self, publication: Publication) -> OverlayResult<()> {
         self.atomic(|| {
-            self.live(publication.route)?;
+            self.state(publication.route)?;
             let changed = self.execute(
                 StatementKind::Frontier,
                 "DELETE FROM request WHERE ns=?1 AND revision=?2",
@@ -134,7 +134,7 @@ impl Overlay {
             if changed != 1 {
                 return Err(OverlayError::Stale);
             }
-            Ok(())
+            self.queue_closed(publication.route)
         })
     }
     /// Seals existing rows without copying them. The daemon parks capture until
@@ -168,7 +168,7 @@ impl Overlay {
         )
     }
     pub(crate) fn checked_capture(&self, capture: Capture) -> OverlayResult<()> {
-        let state = self.live(capture.route)?;
+        let state = self.state(capture.route)?;
         if state.captured != Some(capture.generation) {
             return Err(OverlayError::Stale);
         }

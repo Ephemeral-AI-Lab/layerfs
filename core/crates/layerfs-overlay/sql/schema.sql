@@ -1,4 +1,4 @@
--- Disposable overlay schema v3. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v4. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -49,6 +49,7 @@ CREATE TABLE request (
     revision INTEGER NOT NULL CHECK(revision>0),
     PRIMARY KEY(ns,revision)
 ) STRICT, WITHOUT ROWID;
+CREATE INDEX payload_namespace_row ON payload(ns,rowid);
 CREATE TABLE lease (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
     kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 4),
@@ -72,4 +73,5 @@ CREATE TABLE reclaim (
     PRIMARY KEY(ns,queue_key)
 ) STRICT, WITHOUT ROWID;
 PRAGMA application_id=1279676210;
-PRAGMA user_version=3;
+CREATE INDEX reclaim_ready ON reclaim(queue_key,ns);
+PRAGMA user_version=4;

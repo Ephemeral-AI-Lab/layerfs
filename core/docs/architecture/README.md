@@ -69,6 +69,10 @@ borrowed records, one-attempt I/O/quarantine and unfinished logical service scop
 
 ## Why these papers exist
 
+Initial terminal ownership/maintenance is described in
+[25 — Terminal reclaim](25-terminal-reclaim.md), with exact eligibility, short
+automatic service and unfinished live-generation/pressure/kernel integration.
+
 The owning saved-file metadata path is described in
 [24 — File lengths](24-file-lengths.md), including descriptor trust, actual
 EXPLAIN/runtime scope and remaining daemon/base/stat integration.
