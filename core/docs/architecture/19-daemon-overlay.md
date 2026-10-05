@@ -90,3 +90,13 @@ automatic terminal deletion during live/idle daemon periods. See
 [terminal reclaim](25-terminal-reclaim.md) for actual indexed scope, original
 error retention and remaining live-generation/orphan/pressure/kernel criteria.
 Earlier schema/profile evidence retains its original pin.
+
+## S1 closure audit and profile correction
+
+The closure slice after `14c8a7be4` removes the arbitrary default4GiB quota.
+`ProfileConfig.max_pages=None` selects/readbacks SQLite’s format ceiling; an
+explicit physical quota is separately recorded. Actual device headroom/pressure
+remains S6 work, and this setting supplies no large-capacity qualification.
+Operational plan diagnostics now cover exact cell/name/scratch/lease accesses
+through shared production query templates. [S1 exit audit](../issues/307/S1-EXIT-AUDIT.md)
+maps every criterion to source and scoped proof. S2/S4/S5/S6/S7 remain distinct exits.

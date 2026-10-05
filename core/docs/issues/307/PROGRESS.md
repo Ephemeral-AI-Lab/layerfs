@@ -5,8 +5,8 @@
 Owner: [tracker #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307).
 Design baseline: `c9861bc878583822a468e78dbc0f3740eacbecbe` on local main.
 The [implementation plan](../303/07-implementation-validation.md) owns milestone
-dependencies and exits. All S0–S13 items remain unchecked until their complete
-implementation and required evidence exist.
+dependencies and exits. S1 is complete with its exit audit and covering evidence. S0 and S2–S13 remain
+unchecked until their complete implementation and required evidence exist.
 
 ## Current checkpoint
 
@@ -14,7 +14,7 @@ Initial overlay/prerequisite checkpoint `f2a381119` is committed locally, with
 all required host checks passing. S3 now has initial public content-built root
 binding/read APIs and immutable caching; its dormant predecessor is temporarily
 relocated intact. See [base architecture](../../architecture/20-workspace-base.md).
-This remains partial implementation, with all milestone exits outstanding.
+The immutable base remains partial implementation; S1 engine closure is recorded below.
 
 S2 now has a built daemon SQL owner with fair namespaces/classes, finite capture
 ordering, lifecycle credits, retained-result accounting and event-driven parked
@@ -76,6 +76,15 @@ windows automatically while idle and after finite foreground service. Native
 unmount, live-generation/orphan/failure/pressure and aggregate qualification remain
 open; see [terminal reclaim](../../architecture/25-terminal-reclaim.md).
 
+## Completed milestone: S1; next completion target: S2
+
+[S1 exit audit](S1-EXIT-AUDIT.md) maps the engine exits to actual source/evidence.
+The current closure slice removes the arbitrary default total-page quota and
+adds missing paired payload/name/scratch/lease access evidence. All required S1
+covering checks pass on macOS and Linux ARM64; the local milestone-completion
+commit records the exact source/LOC identity. The native
+fuser gate is scoped to its owning acceptance, and does not obscure engine exits.
+
 ## Concrete next work
 
 The initial active overlay now provides typed namespace/metadata/cell/scratch/
@@ -83,16 +92,16 @@ ownership primitives and publication/reply-attempt/capture routing. Paired EXPLA
 and actual statement profiles caught and corrected a residual-generation scan.
 See [implemented architecture](../../architecture/19-daemon-overlay.md).
 The remaining list below includes initial interfaces already established; complete
-S0/S1/S2 acceptance requires the unimplemented service/lifetime/resource work.
+S0/S2 and later acceptance require the remaining service/lifetime/resource work.
 
-1. Extend established SDK object/Save service to authenticated transport and
-   typed history calls, with queued fair service, delivery credits, completion/
-   disconnect fences and complete contextual admission. Keep existing pins.
+1. Audit S2 frontier/success/failure custody against actual code and evidence;
+   implement its precise missing exit criteria as the next engine completion target.
+   Tie base/runtime work to a named dependency or risk, preserving all later exits.
 2. Close S0 algorithm gates for truncate/regrow, repeated failed capture and
    orphan composition, physical pressure and fair service; specify all R1–R8
    adversarial bounds and P1–P14 implementation ownership. These remain open,
    so prerequisite smoke proofs do not complete S0.
-3. Extend S1/S2 with physical pressure, automatic bounded reclamation and exact
+3. Extend the engine with physical pressure, automatic bounded reclamation and exact
    reader/orphan custody; retain paired SQL plans/profiles and fair short jobs.
 4. Extend S3/S4/S5 from the established immutable base and mutable engine APIs
    to effective namespace/payload semantics with bounded streaming windows.
@@ -107,4 +116,5 @@ untracked `docs/general/sandbox-cache-design.md` are also preserved without stag
 S12 qualification permits S13. Checkpoint hashes are local-only; no remote push,
 release or deployment is authorized. Append-only tracker texts are retained in
 [checkpoints](checkpoints/initial.md). Rust checks/LOC/evidence are recorded in
-each checkpoint commit and its tracker comment; no completed milestone is claimed.
+each checkpoint commit and its tracker comment. S1 alone is complete; later
+engine, native/runtime and integrated qualification exits remain explicit.

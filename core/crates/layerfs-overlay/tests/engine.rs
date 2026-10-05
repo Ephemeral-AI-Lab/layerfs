@@ -194,6 +194,8 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
     assert!(Overlay::create(&temp.db(), ProfileConfig::default()).is_err());
     let p = db.profile();
     assert_eq!(p.schema_version, 4);
+    assert_eq!(p.max_pages, i64::from(u32::MAX - 1));
+    assert_eq!(p.explicit_page_quota, None);
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -269,6 +271,112 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
         db.explain_inode(a, 2).unwrap(),
         kind(db.diagnostics(), StatementKind::Inode)
     );
+}
+
+#[test]
+fn payload_name_scratch_and_owner_access_keep_indexed_scope() {
+    let temp = Temp::new();
+    let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
+    let a = db.open_workspace([121; 32], [9; 32]).unwrap();
+    let b = db.open_workspace([122; 32], [9; 32]).unwrap();
+    let own = Lease {
+        kind: LeaseKind::Operation,
+        owner: 7,
+        resource: 0,
+    };
+    db.acquire(a, own).unwrap();
+    let name = b"binary-index";
+    let p = db
+        .publish(
+            a,
+            &inode(7),
+            Some(&Dentry {
+                parent: 1,
+                name: name.to_vec(),
+                serial: Some(7),
+            }),
+            Some(&cell(0)),
+        )
+        .unwrap();
+    db.reply_attempted(p).unwrap();
+    db.put_scratch(
+        a,
+        7,
+        &ScratchRecord {
+            kind: 4,
+            key: 0,
+            value: vec![0, 255, 0, 61],
+        },
+    )
+    .unwrap();
+    let plans = [
+        db.explain_cell(a, 7, p.generation, 0).unwrap(),
+        db.explain_dentry(a, 1, name).unwrap(),
+        db.explain_scratch(a, 7, 4, None).unwrap(),
+        db.explain_lease(a, own).unwrap(),
+    ];
+    for plan in &plans {
+        assert!(
+            plan.iter()
+                .all(|row| row.contains("SEARCH") && !row.contains("TEMP B-TREE")),
+            "{plan:?}"
+        );
+    }
+    let mut previous = 0;
+    for population in [128, 1024, 4096] {
+        for serial in previous + 1..=population {
+            let other = db
+                .publish(
+                    b,
+                    &inode(serial),
+                    Some(&Dentry {
+                        parent: 1,
+                        name: format!("n{serial:04}").into_bytes(),
+                        serial: Some(serial),
+                    }),
+                    Some(&cell(255)),
+                )
+                .unwrap();
+            db.reply_attempted(other).unwrap();
+            db.acquire(
+                b,
+                Lease {
+                    kind: LeaseKind::Reader,
+                    owner: serial,
+                    resource: serial,
+                },
+            )
+            .unwrap();
+        }
+        previous = population;
+        let before = db.diagnostics();
+        assert_eq!(db.cell(a, 7, p.generation, 0).unwrap(), Some(cell(0)));
+        assert_eq!(db.dentry(a, 1, name).unwrap().unwrap().serial, Some(7));
+        assert_eq!(
+            db.scratch_page(a, 7, 4, None).unwrap()[0].value,
+            [0, 255, 0, 61]
+        );
+        assert!(db.lease_exists(a, own).unwrap());
+        assert!(!db.lease_exists(b, own).unwrap());
+        let after = db.diagnostics();
+        for family in [
+            StatementKind::Payload,
+            StatementKind::Dentry,
+            StatementKind::Scratch,
+            StatementKind::Lease,
+        ] {
+            let start = kind(before, family);
+            let end = kind(after, family);
+            assert_eq!(end.fullscan_steps - start.fullscan_steps, 0);
+            assert_eq!(end.sorts - start.sorts, 0);
+            assert_eq!(end.reprepares - start.reprepares, 0);
+            assert!(
+                end.vm_steps - start.vm_steps < 128,
+                "{family:?} amplification"
+            );
+            println!("S1_ACCESS other_rows={population} family={family:?} vm={} returned={} runs={} bytes={} fullscan={} sorts={} autoindex={} reprepare={} plans={plans:?}",end.vm_steps-start.vm_steps,end.rows_returned-start.rows_returned,end.executions-start.executions,end.bound_bytes-start.bound_bytes,end.fullscan_steps-start.fullscan_steps,end.sorts-start.sorts,end.autoindex_rows-start.autoindex_rows,end.reprepares-start.reprepares);
+        }
+    }
 }
 
 #[test]
@@ -551,7 +659,7 @@ fn real_sqlite_full_aborts_one_mutation_without_losing_previous_publication() {
         &temp.db(),
         ProfileConfig {
             pager_kib: 2048,
-            max_pages: 32,
+            max_pages: Some(32),
         },
     )
     .unwrap();

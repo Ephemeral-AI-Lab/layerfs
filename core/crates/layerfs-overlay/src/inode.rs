@@ -175,9 +175,8 @@ impl Overlay {
         Ok(self
             .query(
                 StatementKind::Dentry,
-            "SELECT serial FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen<=?4 AND gen>?5
-             ORDER BY gen DESC LIMIT 1",
-            &[&route.ns, &parent, &name, &state.active.0, &state.installed],
+                sql::DENTRY_LOOKUP,
+                &[&route.ns, &parent, &name, &state.active.0, &state.installed],
                 24 + name.len() as u64,
                 |r| {
                     Ok(Dentry {

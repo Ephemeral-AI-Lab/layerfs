@@ -5,6 +5,7 @@
 //! they do not limit total files, changes, payload or Workspace lifetime.
 #![forbid(unsafe_code)]
 
+mod access_plan;
 mod close;
 mod db;
 mod error;
