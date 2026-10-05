@@ -14,6 +14,7 @@ driver.CASES = {
     'native_save': ['mounted-WRITE-and-read-progress-during-actual-C2-save'],
     'ingress': ['mounted-input-is-owned-before-return-without-large-base-copy-up'],
     'quota': ['mounted-quota-refusal-preserves-bytes-size-mtime-and-cleanup'],
+    'statfs': ['mounted-statfs-reports-private-backing-quota-and-admission-free-space'],
     'backing_failure': ['mounted-backing-failure-retains-accepted-prefix-and-accounted-failed-owner'],
     'origin': ['projection-write-origin-reply-slot-append-offset-and-single-attempt-contract'],
     'completion_failure': ['projection-write-known-publication-failure-is-reported-by-alias-flush'],

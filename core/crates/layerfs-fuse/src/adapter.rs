@@ -1,5 +1,5 @@
 //! Kernel argument checks and single-use replies; no filesystem algorithms.
-use crate::replies::{attributes, errno, inode, kind, serial};
+use crate::replies::{attributes, capacity, errno, inode, kind, serial};
 use crate::trace::trace;
 use fuser::*;
 use layerfs_workspace::{
@@ -398,8 +398,16 @@ impl Filesystem for Adapter {
     }
 
     fn statfs(&self, req: &Request, _: INodeNo, reply: ReplyStatfs) {
-        match self.guard(req) {
-            Ok(()) => reply.statfs(0, 0, 0, 0, 0, 4096, 255, 4096),
+        // A read-only mount admits no writes, so it reports no capacity.
+        let result = self.guard(req).and_then(|()| {
+            if self.writable {
+                capacity(self.workspace.backing_status().map_err(errno)?)
+            } else {
+                Ok((0, 0))
+            }
+        });
+        match result {
+            Ok((blocks, free)) => reply.statfs(blocks, free, free, 0, 0, 4096, 255, 4096),
             Err(error) => reply.error(error),
         }
     }

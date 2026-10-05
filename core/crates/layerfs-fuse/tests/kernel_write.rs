@@ -8,11 +8,16 @@ mod linux {
     use layerfs_bridge::contract::*;
     use layerfs_workspace::*;
     use std::{
+        ffi::CString,
         fs::{self, File, OpenOptions},
         io::{Seek, Write},
+        mem::MaybeUninit,
         os::{
             fd::AsRawFd,
-            unix::fs::{FileExt, MetadataExt, OpenOptionsExt},
+            unix::{
+                ffi::OsStrExt,
+                fs::{FileExt, MetadataExt, OpenOptionsExt},
+            },
         },
         process::Command,
         sync::{
@@ -530,6 +535,80 @@ mod linux {
         drop(file);
         finish(&f, data, &mut mount);
         check("mounted-quota-refusal-preserves-bytes-size-mtime-and-cleanup");
+    }
+
+    fn statvfs(f: &Fixture) -> libc::statvfs {
+        let path = CString::new(f.workspace.mount_path().as_os_str().as_bytes()).unwrap();
+        let mut value = MaybeUninit::uninit();
+        assert_eq!(
+            unsafe { libc::statvfs(path.as_ptr(), value.as_mut_ptr()) },
+            0
+        );
+        unsafe { value.assume_init() }
+    }
+    // Free fragments that statvfs reports, checked against quiescent backing accounting.
+    fn capacity(f: &Fixture, quota: u64) -> u64 {
+        let backing = f.workspace.backing_status().unwrap();
+        let value = statvfs(f);
+        let again = f.workspace.backing_status().unwrap();
+        assert_eq!(
+            (backing.allocated_bytes, backing.reserved_bytes),
+            (again.allocated_bytes, again.reserved_bytes)
+        );
+        assert_eq!(backing.quota_bytes, quota);
+        assert_eq!(
+            (value.f_bsize, value.f_frsize, value.f_namemax),
+            (4096, 4096, 255)
+        );
+        let free = (quota - backing.allocated_bytes - backing.reserved_bytes) / 4096;
+        assert_eq!(
+            (value.f_blocks, value.f_bfree, value.f_bavail),
+            (quota / 4096, free, free)
+        );
+        free
+    }
+    #[test]
+    #[ignore = "requires real privileged Linux FUSE and native service"]
+    fn kernel_write_statfs() {
+        let quota = 64 * 1024 * 1024;
+        let f = Fixture::with_quota(Gate::None, quota);
+        let data = data(&f, None);
+        let mut mount = layerfs_fuse::mount_writable(&f.workspace, deadline()).unwrap();
+        let empty = capacity(&f, quota);
+        let file = open_mounted(&f, "data.bin", false);
+        let written = vec![0xa5; 1024 * 1024];
+        file.write_all_at(&written, 0).unwrap();
+        quiescent(&f);
+        let after = capacity(&f, quota);
+        assert!(
+            after * 4096 + written.len() as u64 <= empty * 4096,
+            "{empty} {after}"
+        );
+        let df = Command::new("df")
+            .args(["-B4096", "--output=size,avail"])
+            .arg(f.workspace.mount_path())
+            .output()
+            .unwrap();
+        assert!(df.status.success(), "{df:?}");
+        let text = String::from_utf8(df.stdout).unwrap();
+        let row: Vec<u64> = text
+            .lines()
+            .nth(1)
+            .unwrap()
+            .split_whitespace()
+            .map(|v| v.parse().unwrap())
+            .collect();
+        assert_eq!(row, [quota / 4096, after]);
+        drop(file);
+        // Commit publishes the dirty range; the figures still follow the counters.
+        saved(&f);
+        let committed = capacity(&f, quota);
+        println!(
+            "STATFS_CAPACITY quota={quota} empty={empty} written={after} \
+             committed={committed} df={row:?}"
+        );
+        finish(&f, data, &mut mount);
+        check("mounted-statfs-reports-private-backing-quota-and-admission-free-space");
     }
 
     struct RestoreLimit;
