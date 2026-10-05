@@ -55,8 +55,9 @@ cleanup of a 4 MiB file removes 4,186,112 data bytes in 76 bounded turns while
 preserving newly written bytes; page count stays 1,189 and freelist rises to
 1,163. These are work/resource diagnostics, not throughput or residency gates.
 
-Unfinished S6 exits: independent orphan state and minted descriptor/captured-reader
-custody; whiteout elimination with exact base-binding facts; physical reservations,
+The following checkpoint implements [independent orphan, file/captured-reader and
+operation custody](33-independent-custody.md), including live removed-payload
+cleanup. Unfinished S6 exits: whiteout elimination with exact base-binding facts; physical reservations,
 cleanup headroom and actual device ENOSPC; comprehensive generation/owner/debt and
 EXPLAIN/runtime profiles. The current raw generic lease contract remains a trusted
 primitive. Integrated Commit, kernel references/output and transport cancellation

@@ -36,7 +36,7 @@ pub use install::PreparedBase;
 pub use job::{JobOutcome, NamespaceJob};
 pub use list::ViewListing;
 pub use operation::{Operation, Outcome, Position, Refusal, Time, WriteData};
-pub use port::{FileLengths, OverlayJobs, OverlayRead};
+pub use port::{FileLengths, OverlayFileRead, OverlayJobs, OverlayRead};
 pub use serials::{InodeSerials, SERIAL_REFILL};
 pub use view::{SourceView, ViewStat};
 pub use workspace::{Workspace, WorkspaceError, WorkspaceResult};

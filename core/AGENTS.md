@@ -19,8 +19,10 @@ product mental model or campaign-specific benchmark procedures.
   Workspace now exposes immutable base binding/read, effective source-qualified
   lookup/stat/paged name merge, prepared actor install and atomic ordinary
   namespace operations, bounded writes/truncate/regrow and composed payload
-  reads. Independent lifetime/reclamation/native semantics remain unfinished. Its
-  temporarily relocated `layerfs-workspace-legacy` source remains excluded.
+  reads. Independent file/captured/operation custody and bounded live reclamation
+  now have an S6 checkpoint; physical reservation/whiteout/native exits remain
+  unfinished. Its temporarily relocated `layerfs-workspace-legacy` source remains
+  excluded.
   Daemon now exposes an initial fair SQL owner library; its relocated predecessor
   remains excluded, and native executable/control/Exec integration is unfinished.
   SDK now embeds an initial host object/Save runtime with scoped sessions. Its

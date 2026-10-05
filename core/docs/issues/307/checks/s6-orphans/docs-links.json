@@ -1,0 +1,17 @@
+{
+  "files": [
+    "core/AGENTS.md",
+    "core/docs/architecture/21-daemon-owner.md",
+    "core/docs/architecture/30-namespace-operations.md",
+    "core/docs/architecture/31-payload-streams.md",
+    "core/docs/architecture/32-live-composition.md",
+    "core/docs/architecture/README.md",
+    "core/docs/architecture/25-terminal-reclaim.md",
+    "core/docs/architecture/19-daemon-overlay.md",
+    "core/docs/issues/307/PROGRESS.md",
+    "core/docs/issues/307/SOURCE-ORGANIZATION.md",
+    "core/docs/architecture/33-independent-custody.md"
+  ],
+  "relative_links": 150,
+  "errors": []
+}

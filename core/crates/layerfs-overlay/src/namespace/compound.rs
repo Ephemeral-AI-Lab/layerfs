@@ -87,10 +87,21 @@ impl Overlay {
                 return Err(OverlayError::Closed);
             }
             let route = source.route;
+            if let Some(file) = changes.open {
+                if file.route() != route
+                    || changes.inodes.len() != 1
+                    || changes.inodes[0].serial != file.serial()
+                    || !changes.names.is_empty()
+                {
+                    return Err(OverlayError::Invalid("descriptor mutation domain"));
+                }
+                self.check_file(file, true)?;
+            }
             let mut inodes = 0_i64;
             let mut layers = Vec::with_capacity(changes.inodes.len());
             for inode in &changes.inodes {
-                let (added, layer) = self.put_inode(route, &state, inode)?;
+                let (added, layer) =
+                    self.put_inode_domain(route, &state, inode, changes.open.is_some())?;
                 inodes += i64::from(added);
                 layers.push((inode.serial, layer));
             }
@@ -138,6 +149,9 @@ impl Overlay {
                     write.offset,
                     &write.data,
                 )?;
+            }
+            for inode in &changes.inodes {
+                self.detach_orphan(route, &state, inode)?;
             }
             self.settle(route, &state, inodes, names)
         })

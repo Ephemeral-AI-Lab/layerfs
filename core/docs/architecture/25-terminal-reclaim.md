@@ -3,9 +3,10 @@
 > **Status:** Current general guide; initial S6 slice, not complete lifetime/pressure qualification.
 
 The #307 checkpoint after `c6df039e6` adds overlay logical close and daemon-owned
-terminal maintenance. It does not implement live-generation retirement, effective
-open-unlinked filesystem semantics, repeated failed-capture composition or physical
-headroom admission. Complete S6/S8 exits remain open.
+terminal maintenance. Subsequent [live composition](32-live-composition.md) and
+[independent custody](33-independent-custody.md) add live generation/orphan
+cleanup and repeated definite-failure composition. Physical headroom admission
+and complete S6/S8 exits remain open.
 
 [Close](../../crates/layerfs-overlay/src/lifetime/close.rs) revokes new mutations/acquisitions
 in one short transaction. Existing exact releases, published reply-send-attempt

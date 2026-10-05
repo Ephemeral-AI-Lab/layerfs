@@ -50,6 +50,7 @@ pub(crate) fn remove(
         _ => {}
     }
     Ok(Some(Changes {
+        open: None,
         inodes: vec![
             dereferenced(&target),
             touched(&directory, now, false, true)?,

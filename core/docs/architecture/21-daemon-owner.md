@@ -10,6 +10,10 @@ large work snapshots are boxed so ordinary replies retain their prior size.
 See [payload streams](31-payload-streams.md) for retained whole-operation profiles
 and caller/native credit limitations. These diagnostics do not measure residency.
 
+S6 adds [independent custody jobs](33-independent-custody.md) for opens, read
+windows, sealed readers and processing scratch, with exact retained observations
+and releases. Physical reservation/headroom remains unfinished.
+
 Implemented source: the S2 checkpoint after `d9d8d1b04`, for
 [tracker #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307).
 This active daemon library owns SQL service; native executable/FUSE/control/Exec
@@ -22,7 +26,7 @@ a closure or hold the database across construction, transport or an entire Exec.
 No dependency or route invokes the retired server or old daemon implementation.
 
 [Queues](../../crates/layerfs-daemon/src/overlay/queue.rs) rotate between namespaces and
-five service classes. Their roster contains only admitted outstanding requests,
+six service classes. Their roster contains only admitted outstanding requests,
 not filesystem entries; configured concurrent slots/bytes bound it. When no job
 is runnable, a condition variable waits for admission/progress/shutdown events.
 There is no idle polling or a busy-inode waiter occupying the connection thread.

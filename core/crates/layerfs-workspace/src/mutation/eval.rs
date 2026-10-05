@@ -11,6 +11,7 @@ pub(crate) struct Eval<'a> {
     pub rows: SourceRows<'a>,
     pub facts: &'a BaseFacts,
     pub root: u64,
+    pub open_serial: Option<u64>,
     pub needs: Vec<Need>,
 }
 pub(crate) fn refuse<T>(refusal: Refusal) -> WorkspaceResult<T> {

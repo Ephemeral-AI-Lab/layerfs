@@ -1,8 +1,8 @@
 //! Typed bounded SQL jobs. No closure can hold the owner across network/Exec work.
 use layerfs_overlay::{
-    BaseSource, Capture, Cell, Dentry, Inode, Lease, NameWindow, Overlay, OverlayResult,
-    Publication, Route, ScratchRecord, WorkspaceState, CELL_BYTES, MASK_BYTES, PAGE_ROWS,
-    SCRATCH_BYTES,
+    BaseSource, Capture, CapturedReader, Cell, Dentry, FileRead, Inode, Lease, NameWindow,
+    OpenFile, OperationOwner, Overlay, OverlayResult, Publication, Route, ScratchRecord,
+    WorkspaceState, CELL_BYTES, MASK_BYTES, PAGE_ROWS, SCRATCH_BYTES,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -22,6 +22,60 @@ pub enum Command {
         incarnation: [u8; 32],
         base_root: [u8; 32],
     },
+    OpenFile {
+        source: BaseSource,
+        request: u64,
+        base: Inode,
+        writable: bool,
+    },
+    RetainedFile {
+        request: u64,
+    },
+    CloseFile(OpenFile),
+    AcquireFileRead {
+        source: BaseSource,
+        file: OpenFile,
+        request: u64,
+    },
+    RetainedFileRead {
+        request: u64,
+    },
+    ReleaseFileRead(FileRead),
+    FileRead {
+        read: FileRead,
+        offset: u64,
+        length: u32,
+    },
+    AcquireCapturedReader {
+        capture: Capture,
+        request: u64,
+    },
+    RetainedCapturedReader {
+        request: u64,
+    },
+    ReleaseCapturedReader(CapturedReader),
+    CapturedRead {
+        reader: CapturedReader,
+        serial: u64,
+        offset: u64,
+        length: u32,
+    },
+    AcquireOperation {
+        request: u64,
+    },
+    RetainedOperation {
+        request: u64,
+    },
+    ReleaseOperation(OperationOwner),
+    PutOwnedScratch {
+        owner: OperationOwner,
+        record: ScratchRecord,
+    },
+    OwnedScratchPage {
+        owner: OperationOwner,
+        kind: u32,
+        after: Option<u64>,
+    },
     State,
     /// Connection-scoped work snapshot for operator diagnostics; includes the
     /// route validation seek, without scanning namespace rows or payloads.
@@ -30,6 +84,7 @@ pub enum Command {
     MaintenanceIdle,
     /// Exact plans of the payload statements under an owned source window.
     PayloadPlans(BaseSource),
+    LifetimePlans,
     RetainedCapture,
     PendingPublications {
         after: u64,
@@ -120,11 +175,16 @@ pub enum Command {
 }
 #[derive(Debug)]
 pub enum Response {
+    Operation(Option<OperationOwner>),
+    File(Option<OpenFile>),
+    FileReader(Option<FileRead>),
+    CapturedReader(Option<CapturedReader>),
     Opened(Route),
     State(WorkspaceState),
     DatabaseWork(Box<layerfs_overlay::DatabaseWork>),
     MaintenanceIdle(bool),
     PayloadPlans(Vec<String>),
+    LifetimePlans(Vec<String>),
     CleanupState(layerfs_overlay::CleanupState),
     Inode(Option<Inode>),
     Published(Publication),
@@ -146,6 +206,20 @@ pub enum Response {
 impl Command {
     pub(crate) fn class(&self) -> ServiceClass {
         match self {
+            Self::AcquireOperation { .. }
+            | Self::RetainedOperation { .. }
+            | Self::ReleaseOperation(_) => ServiceClass::Lifecycle,
+            Self::PutOwnedScratch { .. } | Self::OwnedScratchPage { .. } => ServiceClass::Scratch,
+            Self::FileRead { .. } | Self::CapturedRead { .. } => ServiceClass::Read,
+            Self::OpenFile { .. }
+            | Self::RetainedFile { .. }
+            | Self::CloseFile(_)
+            | Self::AcquireFileRead { .. }
+            | Self::RetainedFileRead { .. }
+            | Self::ReleaseFileRead(_)
+            | Self::AcquireCapturedReader { .. }
+            | Self::RetainedCapturedReader { .. }
+            | Self::ReleaseCapturedReader(_) => ServiceClass::Lifecycle,
             Self::Open { .. }
             | Self::State
             | Self::DatabaseWork
@@ -163,7 +237,8 @@ impl Command {
             Self::Inode(_)
             | Self::PendingPublications { .. }
             | Self::CapturedCell { .. }
-            | Self::PayloadPlans(_) => ServiceClass::Read,
+            | Self::PayloadPlans(_)
+            | Self::LifetimePlans => ServiceClass::Read,
             Self::SourceInode { .. }
             | Self::SourceDentry { .. }
             | Self::SourceNames { .. }
@@ -183,7 +258,7 @@ impl Command {
         let base = std::mem::size_of::<Self>().checked_add(512)?;
         let (input, reply) = match self {
             Self::DatabaseWork => (0, std::mem::size_of::<layerfs_overlay::DatabaseWork>()),
-            Self::PayloadPlans(_) => (0, 8192),
+            Self::PayloadPlans(_) | Self::LifetimePlans => (0, 8192),
             Self::Publish { name, cell, .. } => (
                 name.as_ref().map_or(0, |n| n.name.capacity())
                     + if cell.is_some() {
@@ -193,8 +268,12 @@ impl Command {
                     },
                 128,
             ),
-            Self::PutScratch { record, .. } => (record.value.capacity(), 0),
-            Self::ScratchPage { .. } => (0, PAGE_ROWS * (SCRATCH_BYTES + 64)),
+            Self::PutScratch { record, .. } | Self::PutOwnedScratch { record, .. } => {
+                (record.value.capacity(), 0)
+            }
+            Self::ScratchPage { .. } | Self::OwnedScratchPage { .. } => {
+                (0, PAGE_ROWS * (SCRATCH_BYTES + 64))
+            }
             Self::CapturedInodes { .. } => (0, PAGE_ROWS * std::mem::size_of::<Inode>()),
             Self::CapturedDentries { after, .. } => (
                 after.as_ref().map_or(0, |(_, name)| name.capacity()),
@@ -205,7 +284,9 @@ impl Command {
                 (0, CELL_BYTES + MASK_BYTES + std::mem::size_of::<Cell>())
             }
             // Decided bytes plus one inherited bit per byte of the window.
-            Self::SourceRead { length, .. } => (
+            Self::SourceRead { length, .. }
+            | Self::FileRead { length, .. }
+            | Self::CapturedRead { length, .. } => (
                 0,
                 *length as usize
                     + (*length as usize).div_ceil(8)
@@ -283,10 +364,113 @@ impl Command {
         let route = route.ok_or(layerfs_overlay::OverlayError::Invalid("missing route"))?;
         match self {
             Self::Open { .. } | Self::InstallPrepared { .. } | Self::Namespace(_) => unreachable!(),
+            Self::AcquireOperation { request } => db
+                .acquire_operation(route, request)
+                .map(|o| Response::Operation(Some(o))),
+            Self::RetainedOperation { request } => db
+                .retained_operation(route, request)
+                .map(Response::Operation),
+            Self::ReleaseOperation(owner) => {
+                if owner.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.release_operation(owner).map(|_| Response::Done)
+            }
+            Self::PutOwnedScratch { owner, record } => {
+                if owner.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.put_owned_scratch(owner, &record).map(|_| Response::Done)
+            }
+            Self::OwnedScratchPage { owner, kind, after } => {
+                if owner.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.owned_scratch_page(owner, kind, after)
+                    .map(Response::Scratch)
+            }
+            Self::RetainedFile { request } => db.retained_file(route, request).map(Response::File),
+            Self::RetainedFileRead { request } => db
+                .retained_file_read(route, request)
+                .map(Response::FileReader),
+            Self::RetainedCapturedReader { request } => db
+                .retained_captured_reader(route, request)
+                .map(Response::CapturedReader),
+            Self::OpenFile {
+                source,
+                request,
+                base,
+                writable,
+            } => {
+                if source.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.open_file(source, request, &base, writable)
+                    .map(|value| Response::File(Some(value)))
+            }
+            Self::CloseFile(file) => {
+                if file.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.close_file(file).map(|_| Response::Done)
+            }
+            Self::AcquireFileRead {
+                source,
+                file,
+                request,
+            } => {
+                if source.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.acquire_file_read(source, file, request)
+                    .map(|value| Response::FileReader(Some(value)))
+            }
+            Self::ReleaseFileRead(read) => {
+                if read.source().route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.release_file_read(read).map(|_| Response::Done)
+            }
+            Self::FileRead {
+                read,
+                offset,
+                length,
+            } => {
+                if read.source().route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.read_file(read, offset, length).map(Response::Read)
+            }
+            Self::AcquireCapturedReader { capture, request } => {
+                if capture.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.acquire_captured_reader(capture, request)
+                    .map(|value| Response::CapturedReader(Some(value)))
+            }
+            Self::ReleaseCapturedReader(reader) => {
+                if reader.capture().route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.release_captured_reader(reader).map(|_| Response::Done)
+            }
+            Self::CapturedRead {
+                reader,
+                serial,
+                offset,
+                length,
+            } => {
+                if reader.capture().route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.read_captured(reader, serial, offset, length)
+                    .map(Response::Read)
+            }
             Self::DatabaseWork => {
                 db.state(route)?;
                 Ok(Response::DatabaseWork(Box::new(db.diagnostics())))
             }
+            Self::LifetimePlans => db.explain_lifetimes(route).map(Response::LifetimePlans),
             Self::MaintenanceIdle => db.maintenance_idle(route).map(Response::MaintenanceIdle),
             Self::PayloadPlans(source) => {
                 if source.route() != route {

@@ -51,7 +51,7 @@ impl NamespaceJob {
             _ => 0,
         };
         let data = match &self.operation {
-            Operation::Write { data, .. } => data.len(),
+            Operation::Write { data, .. } | Operation::WriteOpen { data, .. } => data.len(),
             _ => 0,
         };
         // Operation names and one symlink target are bounded by their grammar.
@@ -63,10 +63,18 @@ impl NamespaceJob {
         if self.now.nanoseconds >= 1_000_000_000 {
             return Ok(JobOutcome::Refused(Refusal::Invalid));
         }
+        let open = self.operation.file();
+        if let Some(file) = open {
+            if file.route() != self.source.route() {
+                return Err(layerfs_overlay::OverlayError::Stale.into());
+            }
+            db.check_file(file, true)?;
+        }
         let mut eval = Eval {
             rows: db.source_rows(self.source)?,
             facts: &self.facts,
             root: self.root,
+            open_serial: open.map(|file| file.serial()),
             needs: Vec::new(),
         };
         let planned = match self.plan(&mut eval) {
@@ -80,10 +88,13 @@ impl NamespaceJob {
             }
             None => Ok(JobOutcome::Needs(eval.needs)),
             Some((None, inode)) => Ok(JobOutcome::Unchanged { inode }),
-            Some((Some(changes), inode)) => Ok(JobOutcome::Applied {
-                publication: db.apply(self.source, &changes)?,
-                inode,
-            }),
+            Some((Some(mut changes), inode)) => {
+                changes.open = open;
+                Ok(JobOutcome::Applied {
+                    publication: db.apply(self.source, &changes)?,
+                    inode,
+                })
+            }
         }
     }
     fn fresh<'a>(
@@ -163,6 +174,19 @@ impl NamespaceJob {
                 now,
             )?
             .map(|changes| (changes, None)),
+            Operation::WriteOpen {
+                file,
+                position,
+                data,
+            } => write::write(eval, file.serial(), *position, data, now)?
+                .map(|(changes, inode)| (changes, Some(inode))),
+            Operation::SetOpenAttributes {
+                file,
+                mode,
+                mtime,
+                size,
+            } => attributes::set(eval, file.serial(), *mode, *mtime, *size, now)?
+                .map(|(changes, inode)| (changes, Some(inode))),
             Operation::SetAttributes {
                 serial,
                 mode,

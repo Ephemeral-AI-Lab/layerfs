@@ -1,7 +1,7 @@
 //! Ordinary namespace operations, their exact refusals and published results.
 use crate::ViewStat;
 use layerfs_content::filesystem::{PathName, SymlinkTarget};
-use layerfs_overlay::Publication;
+use layerfs_overlay::{OpenFile, Publication};
 use std::{fmt, ops::Deref, sync::Arc};
 
 /// Bytes of one write window. Shared, so an operation's owner rounds and its
@@ -98,6 +98,18 @@ pub enum Operation {
     },
     /// One byte window of at most `WRITE_WINDOW`; larger writes arrive as
     /// several operations. There is no total size, edit or flow limit.
+    /// Descriptor mutation revalidates exact open custody in every owner round.
+    WriteOpen {
+        file: OpenFile,
+        position: Position,
+        data: WriteData,
+    },
+    SetOpenAttributes {
+        file: OpenFile,
+        mode: Option<u32>,
+        mtime: Option<Time>,
+        size: Option<u64>,
+    },
     Write {
         serial: u64,
         position: Position,
@@ -105,6 +117,12 @@ pub enum Operation {
     },
 }
 impl Operation {
+    pub(crate) const fn file(&self) -> Option<OpenFile> {
+        match self {
+            Self::WriteOpen { file, .. } | Self::SetOpenAttributes { file, .. } => Some(*file),
+            _ => None,
+        }
+    }
     pub(crate) const fn creates(&self) -> bool {
         matches!(
             self,

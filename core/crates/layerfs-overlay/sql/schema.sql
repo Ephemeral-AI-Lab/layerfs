@@ -1,4 +1,4 @@
--- Disposable overlay schema v9. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v10. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -13,13 +13,14 @@ CREATE TABLE workspace (
     dirty_names INTEGER NOT NULL DEFAULT 0 CHECK(dirty_names>=0),
     base_readers INTEGER NOT NULL DEFAULT 0 CHECK(base_readers>=0),
     consolidating INTEGER CHECK(consolidating>0),
+    next_owner INTEGER NOT NULL DEFAULT 1 CHECK(next_owner>0),
     CHECK(captured IS NULL OR consolidating IS NULL),
     CHECK((captured IS NULL)=(captured_revision IS NULL))
 ) STRICT;
 CREATE TABLE inode (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
     serial INTEGER NOT NULL CHECK(serial>0),
-    gen INTEGER NOT NULL CHECK(gen>0),
+    gen INTEGER NOT NULL CHECK(gen=-1 OR gen>0),
     kind INTEGER NOT NULL CHECK(kind IN (1,2,3)),
     mode INTEGER NOT NULL CHECK(mode>=0 AND ((kind=1 AND mode<=511) OR (kind=2 AND mode<=1023) OR (kind=3 AND mode=511))),
     mtime_seconds INTEGER NOT NULL,
@@ -27,7 +28,7 @@ CREATE TABLE inode (
     nlink INTEGER NOT NULL CHECK(nlink>=0),
     size INTEGER NOT NULL CHECK(size>=0),
     inherited_cutoff INTEGER NOT NULL CHECK(inherited_cutoff>=0),
-    born INTEGER NOT NULL CHECK(born>=0 AND born<=gen),
+    born INTEGER NOT NULL CHECK(born>=0 AND (gen=-1 OR born<=gen)),
     entries INTEGER NOT NULL CHECK(entries>=0 AND (kind=2 OR entries=0)),
     epoch INTEGER NOT NULL CHECK(epoch>=0),
     height INTEGER NOT NULL CHECK(height>=0 AND height<=epoch),
@@ -47,7 +48,7 @@ CREATE TABLE payload (
     rowid INTEGER PRIMARY KEY,
     ns INTEGER NOT NULL REFERENCES workspace(ns),
     serial INTEGER NOT NULL CHECK(serial>0),
-    gen INTEGER NOT NULL CHECK(gen>0),
+    gen INTEGER NOT NULL CHECK(gen=-1 OR gen>0),
     cell_offset INTEGER NOT NULL CHECK(cell_offset>=0 AND cell_offset%4096=0),
     epoch INTEGER NOT NULL CHECK(epoch>=0),
     data BLOB NOT NULL CHECK(length(data) BETWEEN 1 AND 4096),
@@ -57,7 +58,7 @@ CREATE TABLE payload (
 CREATE TABLE shrink (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
     serial INTEGER NOT NULL CHECK(serial>0),
-    gen INTEGER NOT NULL CHECK(gen>0),
+    gen INTEGER NOT NULL CHECK(gen=-1 OR gen>0),
     depth INTEGER NOT NULL CHECK(depth>0),
     cell_offset INTEGER NOT NULL CHECK(cell_offset>=0 AND cell_offset%4096=0),
     epoch INTEGER NOT NULL CHECK(epoch>0),
@@ -74,16 +75,17 @@ CREATE INDEX payload_generation ON payload(ns,gen,serial,cell_offset);
 CREATE INDEX shrink_generation ON shrink(ns,gen,serial,depth);
 CREATE TABLE lease (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
-    kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 4),
+    kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 8),
     owner INTEGER NOT NULL CHECK(owner>0),
     resource INTEGER NOT NULL CHECK(resource>=0),
     PRIMARY KEY(ns,kind,owner,resource)
 ) STRICT, WITHOUT ROWID;
 CREATE TABLE base_source (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
+    kind INTEGER NOT NULL DEFAULT 0 CHECK(kind IN(0,1)),
     owner INTEGER NOT NULL CHECK(owner>0),
     base_root BLOB NOT NULL CHECK(length(base_root)=32),
-    PRIMARY KEY(ns,owner)
+    PRIMARY KEY(ns,kind,owner)
 ) STRICT, WITHOUT ROWID;
 CREATE TABLE scratch (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
@@ -105,7 +107,7 @@ CREATE INDEX reclaim_ready ON reclaim(queue_key,ns);
 CREATE INDEX lease_resource ON lease(ns,kind,resource,owner);
 CREATE TABLE maintenance (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
-    kind INTEGER NOT NULL CHECK(kind IN(1,3,4,5,6)),
+    kind INTEGER NOT NULL CHECK(kind IN(1,2,3,4,5,6,7)),
     resource INTEGER NOT NULL CHECK(resource>=0),
     target INTEGER NOT NULL CHECK(target<>0),
     phase INTEGER NOT NULL DEFAULT 0 CHECK(phase>=0),
@@ -117,4 +119,62 @@ CREATE TABLE maintenance (
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX maintenance_ready ON maintenance(ready,ns,kind,resource,target);
 CREATE INDEX maintenance_generation ON maintenance(ns,target,kind,resource);
-PRAGMA user_version=9;
+
+
+CREATE TABLE file_custody (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    serial INTEGER NOT NULL CHECK(serial>0),
+    opens INTEGER NOT NULL DEFAULT 0 CHECK(opens>=0),
+    lookups INTEGER NOT NULL DEFAULT 0 CHECK(lookups>=0),
+    readers INTEGER NOT NULL DEFAULT 0 CHECK(readers>=0),
+    PRIMARY KEY(ns,serial)
+) STRICT, WITHOUT ROWID;
+CREATE TABLE file_handle (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    request INTEGER NOT NULL CHECK(request>0),
+    owner INTEGER NOT NULL CHECK(owner>0),
+    serial INTEGER NOT NULL CHECK(serial>0),
+    writable INTEGER NOT NULL CHECK(writable IN(0,1)),
+    PRIMARY KEY(ns,owner), UNIQUE(ns,request)
+) STRICT, WITHOUT ROWID;
+CREATE TABLE file_read (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    request INTEGER NOT NULL CHECK(request>0),
+    owner INTEGER NOT NULL CHECK(owner>0),
+    serial INTEGER NOT NULL CHECK(serial>0),
+    PRIMARY KEY(ns,owner), UNIQUE(ns,request)
+) STRICT, WITHOUT ROWID;
+CREATE TABLE captured_reader (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    request INTEGER NOT NULL CHECK(request>0),
+    owner INTEGER NOT NULL CHECK(owner>0),
+    gen INTEGER NOT NULL CHECK(gen>0),
+    revision INTEGER NOT NULL CHECK(revision>=0),
+    base_root BLOB NOT NULL CHECK(length(base_root)=32),
+    installed INTEGER NOT NULL CHECK(installed>=0),
+    PRIMARY KEY(ns,owner), UNIQUE(ns,request)
+) STRICT, WITHOUT ROWID;
+CREATE TABLE orphan (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    serial INTEGER NOT NULL CHECK(serial>0),
+    base_root BLOB NOT NULL CHECK(length(base_root)=32),
+    lower_top INTEGER NOT NULL CHECK(lower_top>=0),
+    lower_floor INTEGER NOT NULL CHECK(lower_floor>=0 AND lower_floor<=lower_top),
+    PRIMARY KEY(ns,serial)
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE operation_owner (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    request INTEGER NOT NULL CHECK(request>0),
+    owner INTEGER NOT NULL CHECK(owner>0),
+    PRIMARY KEY(ns,owner), UNIQUE(ns,request)
+) STRICT, WITHOUT ROWID;
+CREATE TABLE owned_scratch (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    operation INTEGER NOT NULL CHECK(operation>0),
+    kind INTEGER NOT NULL CHECK(kind>=0),
+    key INTEGER NOT NULL CHECK(key>=0),
+    value BLOB NOT NULL CHECK(length(value)<=65536),
+    PRIMARY KEY(ns,operation,kind,key)
+) STRICT, WITHOUT ROWID;
+PRAGMA user_version=11;

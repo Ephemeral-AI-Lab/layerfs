@@ -1,0 +1,392 @@
+warning: variant `Filesystem` is never constructed
+  --> crates/layerfs-persistence/src/backend/records.rs:81:5
+   |
+76 | pub(crate) enum BackendError {
+   |                 ------------ variant in this enum
+...
+81 |     Filesystem(std::io::ErrorKind),
+   |     ^^^^^^^^^^
+   |
+   = note: `BackendError` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` on by default
+
+warning: `layerfs-persistence` (lib) generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-7ec46146107980cb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-723874cb1e070ef3)
+
+running 9 tests
+test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+test parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation ... ok
+test lost_source_completion_retains_backed_owner_and_terminal_release_makes_cleanup_eligible ... ok
+test known_install_fences_later_sources_while_existing_reads_mutations_and_other_work_progress ... ok
+test lost_internal_completions_keep_exact_backed_custody_and_release_result_credits ... ok
+test stopping_cancels_unattempted_capture_and_fences_future_admission ... ok
+test idle_cleanup_runs_without_an_explicit_reclaim_or_status_job ... ok
+S6_OWNER_FAILURE automatic_work=OwnerWork { sql_foreground: DatabaseWork { statements: [StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 520, executions: 520, rows_returned: 0, rows_changed: 0, vm_steps: 2600, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 1236159 }, StatementWork { attempts: 520, executions: 520, rows_returned: 0, rows_changed: 0, vm_steps: 1560, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 3959995 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 1561, executions: 1561, rows_returned: 1304, rows_changed: 258, vm_steps: 39055, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 60408, elapsed_ns: 5099910 }, StatementWork { attempts: 771, executions: 771, rows_returned: 0, rows_changed: 257, vm_steps: 36490, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 43176, elapsed_ns: 6621631 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 518, executions: 518, rows_returned: 0, rows_changed: 514, vm_steps: 13408, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 12368, elapsed_ns: 2187320 }, StatementWork { attempts: 4, executions: 4, rows_returned: 1, rows_changed: 3, vm_steps: 167, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 64, elapsed_ns: 54042 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 2, executions: 2, rows_returned: 0, rows_changed: 2, vm_steps: 75, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 64, elapsed_ns: 28958 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 2, executions: 2, rows_returned: 0, rows_changed: 2, vm_steps: 203, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 48, elapsed_ns: 113459 }] }, sql_maintenance: DatabaseWork { statements: [StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 261, executions: 261, rows_returned: 0, rows_changed: 0, vm_steps: 1305, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 105123 }, StatementWork { attempts: 261, executions: 261, rows_returned: 0, rows_changed: 0, vm_steps: 783, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 1002994 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 772, executions: 772, rows_returned: 516, rows_changed: 256, vm_steps: 16702, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 14432, elapsed_ns: 871334 }, StatementWork { attempts: 1537, executions: 1537, rows_returned: 768, rows_changed: 512, vm_steps: 67856, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 65560, elapsed_ns: 2985895 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 1, executions: 1, rows_returned: 0, rows_changed: 1, vm_steps: 32, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 8, elapsed_ns: 19250 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 516, executions: 516, rows_returned: 1, rows_changed: 0, vm_steps: 10099, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 8256, elapsed_ns: 997711 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 1295, executions: 1295, rows_returned: 260, rows_changed: 517, vm_steps: 47235, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 45576, elapsed_ns: 1710039 }] }, admitted: 521, completed: [0, 257, 3, 261, 0, 0], queue_wait_ns: [0, 3646629, 9261208, 5790994, 0, 0], service_ns: [0, 13190746, 56458, 6247947, 0, 0], credited_bytes: 0, peak_credited_bytes: 5440, outstanding: 0, maintenance_jobs: 260, maintenance_rows: 256, maintenance_data_bytes: 0, maintenance_ns: 8024838 }
+test failed_capture_waits_for_readers_while_later_writes_and_idle_composition_progress ... ok
+AUTOMATIC_CLOSE unrelated_progress=8 work=OwnerWork { sql_foreground: DatabaseWork { statements: [StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 1029, executions: 1029, rows_returned: 0, rows_changed: 0, vm_steps: 5145, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 2418766 }, StatementWork { attempts: 1029, executions: 1029, rows_returned: 0, rows_changed: 0, vm_steps: 3087, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 6080161 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 2074, executions: 2074, rows_returned: 1560, rows_changed: 515, vm_steps: 55047, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 78640, elapsed_ns: 6367255 }, StatementWork { attempts: 1536, executions: 1536, rows_returned: 0, rows_changed: 512, vm_steps: 72700, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 86016, elapsed_ns: 8061527 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 1024, executions: 1024, rows_returned: 0, rows_changed: 1024, vm_steps: 26624, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 24576, elapsed_ns: 2796688 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 2, executions: 2, rows_returned: 0, rows_changed: 2, vm_steps: 75, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 64, elapsed_ns: 404126 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 4, executions: 4, rows_returned: 2, rows_changed: 1, vm_steps: 119, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 48, elapsed_ns: 61583 }] }, sql_maintenance: DatabaseWork { statements: [StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 20, executions: 20, rows_returned: 0, rows_changed: 0, vm_steps: 100, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 11293 }, StatementWork { attempts: 20, executions: 20, rows_returned: 0, rows_changed: 0, vm_steps: 60, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 52211 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 0, executions: 0, rows_returned: 0, rows_changed: 0, vm_steps: 0, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 0, elapsed_ns: 0 }, StatementWork { attempts: 581, executions: 581, rows_returned: 531, rows_changed: 524, vm_steps: 18219, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 13248, elapsed_ns: 860418 }] }, admitted: 1047, completed: [0, 512, 0, 535, 0, 0], queue_wait_ns: [0, 7435672, 0, 8258442, 0, 0], service_ns: [0, 17876712, 0, 9849499, 0, 0], credited_bytes: 0, peak_credited_bytes: 1088, outstanding: 0, maintenance_jobs: 19, maintenance_rows: 514, maintenance_data_bytes: 0, maintenance_ns: 965999 }
+test last_release_starts_automatic_cleanup_during_idle_and_unrelated_live_work ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_overlay-64a458aa1df39a16)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compound.rs (core/target/cluster2-linux/debug/deps/compound-1c86f92338d1d3c4)
+
+running 3 tests
+test removed_names_keep_a_whiteout_only_where_a_lower_binding_exists ... ok
+test compound_job_publishes_every_final_value_with_one_ticket_or_nothing ... ok
+S4_COMPOUND siblings=128 complete_job_vm=1228 statements=33 rows_changed=8 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=["lower-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)", "active-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "drop-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "active-inode: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "put-name: vm-program opcodes=76 btree-cursors=3 btree-scan-opcodes=0", "put-inode: vm-program opcodes=231 btree-cursors=3 btree-scan-opcodes=0"]
+S4_COMPOUND siblings=1024 complete_job_vm=1228 statements=33 rows_changed=8 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=["lower-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)", "active-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "drop-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "active-inode: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "put-name: vm-program opcodes=76 btree-cursors=3 btree-scan-opcodes=0", "put-inode: vm-program opcodes=231 btree-cursors=3 btree-scan-opcodes=0"]
+S4_COMPOUND siblings=4096 complete_job_vm=1228 statements=33 rows_changed=8 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=["lower-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)", "active-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "drop-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "active-inode: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "put-name: vm-program opcodes=76 btree-cursors=3 btree-scan-opcodes=0", "put-inode: vm-program opcodes=231 btree-cursors=3 btree-scan-opcodes=0"]
+test compound_statements_keep_point_work_as_the_namespace_grows ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+     Running tests/engine.rs (core/target/cluster2-linux/debug/deps/engine-aafb0a25e53f0820)
+
+running 12 tests
+test portable_time_range_and_directory_sticky_mode_are_preserved ... ok
+install plan and retirement VM=["SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)", "0 Init 0 41 0", "1 OpenWrite 1 22 0", "2 OpenWrite 2 21 0", "3 Variable 1 2 0", "4 Variable 2 3 0", "5 Variable 2 4 0", "6 Integer 0 5 0", "7 Null 0 1 0", "8 HaltIfNull 1299 2 2", "9 HaltIfNull 1299 2 3", "10 HaltIfNull 1299 2 4", "11 HaltIfNull 1299 2 5", "12 TypeCheck 2 4 0", "13 Gt 16 15 3", "14 Halt 275 2 0", "15 Gt 16 17 4", "16 Halt 275 2 0", "17 Ge 16 19 5", "18 Halt 275 2 0", "19 Integer 0 17 0", "20 SCopy 3 7 0", "21 SCopy 2 8 0", "22 MakeRecord 7 2 6", "23 SCopy 2 10 0", "24 SCopy 3 11 0", "25 SCopy 4 12 0", "26 SCopy 5 13 0", "27 MakeRecord 10 4 9", "28 NoConflict 2 30 10", "29 Halt 1555 2 0", "30 IsNull 2 37 0", "31 SCopy 2 15 0", "32 MustBeInt 15 36 0", "33 OpenRead 3 2 0", "34 NotExists 3 36 15", "35 Goto 0 37 0", "36 Halt 787 2 0", "37 Close 3 0 0", "38 IdxInsert 1 6 7", "39 IdxInsert 2 9 10", "40 Halt 0 0 0", "41 Transaction 0 1 27", "42 Integer 0 16 0", "43 Goto 0 1 0"]
+test local_publication_survives_lost_reply_and_capture_does_not_copy_cells ... ok
+install statements=2; rows_changed=2; vm_steps=84; fullscan_steps=0; sorts=0
+test closed_capture_retains_its_existing_rows_until_explicit_known_release ... ok
+test backed_owner_and_scratch_pages_have_no_total_record_limit ... ok
+readback=DatabaseProfile { schema_version: 11, sqlite_version: "3.53.2", compile_options: ["ATOMIC_INTRINSICS=1", "COMPILER=gcc-12.2.0", "DEFAULT_AUTOVACUUM", "DEFAULT_CACHE_SIZE=-2000", "DEFAULT_FILE_FORMAT=4", "DEFAULT_FOREIGN_KEYS", "DEFAULT_JOURNAL_SIZE_LIMIT=-1", "DEFAULT_MMAP_SIZE=0", "DEFAULT_PAGE_SIZE=4096", "DEFAULT_PCACHE_INITSZ=20", "DEFAULT_RECURSIVE_TRIGGERS", "DEFAULT_SECTOR_SIZE=4096", "DEFAULT_SYNCHRONOUS=2", "DEFAULT_WAL_AUTOCHECKPOINT=1000", "DEFAULT_WAL_SYNCHRONOUS=2", "DEFAULT_WORKER_THREADS=0", "DIRECT_OVERFLOW_READ", "ENABLE_API_ARMOR", "ENABLE_COLUMN_METADATA", "ENABLE_DBSTAT_VTAB", "ENABLE_FTS3", "ENABLE_FTS3_PARENTHESIS", "ENABLE_FTS5", "ENABLE_LOAD_EXTENSION", "ENABLE_MEMORY_MANAGEMENT", "ENABLE_RTREE", "ENABLE_STAT4", "HAVE_ISNAN", "MALLOC_SOFT_LIMIT=1024", "MAX_ATTACHED=10", "MAX_COLUMN=2000", "MAX_COMPOUND_SELECT=500", "MAX_DEFAULT_PAGE_SIZE=8192", "MAX_EXPR_DEPTH=1000", "MAX_FUNCTION_ARG=1000", "MAX_LENGTH=1000000000", "MAX_LIKE_PATTERN_LENGTH=50000", "MAX_MMAP_SIZE=0x7fff0000", "MAX_PAGE_COUNT=0xfffffffe", "MAX_PAGE_SIZE=65536", "MAX_SQL_LENGTH=1000000000", "MAX_TRIGGER_DEPTH=1000", "MAX_VARIABLE_NUMBER=32766", "MAX_VDBE_OP=250000000", "MAX_WORKER_THREADS=8", "MUTEX_PTHREADS", "SOUNDEX", "SYSTEM_MALLOC", "TEMP_STORE=1", "THREADSAFE=1", "USE_URI"], journal_mode: "memory", locking_mode: "exclusive", synchronous: 0, mmap_size: 0, cache_size: -2048, page_size: 4096, max_pages: 4294967294, explicit_page_quota: None, foreign_keys: 1, busy_timeout: 0, temp_store: 1 }; pages=(39, 0)
+point EXPLAIN=["SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)"]; runtime=StatementWork { attempts: 9, executions: 9, rows_returned: 2, rows_changed: 1, vm_steps: 255, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 312, elapsed_ns: 1838832 }
+test profile_namespace_binary_values_and_atomic_refusals ... ok
+test known_install_advances_base_without_replaying_or_losing_later_active_rows ... ok
+capture plan before verification: ["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]
+active_population=128; plan=["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]; captured_rows=1; vm_steps=35; fullscan_steps=0; sorts=0; reprepare=0
+test terminal_cleanup_waits_for_exact_owners_and_reply_attempts ... ok
+one-attempt physical quota failure at cell 22: Sql(SqliteFailure(Error { code: DiskFull, extended_code: 13 }, Some("database or disk is full"))); pages=(64, 0)
+test real_sqlite_full_aborts_one_mutation_without_losing_previous_publication ... ok
+S1_ACCESS other_rows=128 family=Payload vm=21 returned=1 runs=1 bytes=32 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=128 family=Dentry vm=24 returned=1 runs=1 bytes=36 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=128 family=Scratch vm=24 returned=1 runs=1 bytes=32 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=128 family=Lease vm=48 returned=2 runs=3 bytes=88 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=67 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=66 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=66 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 1, data_bytes: 65536, done: false } vm=84 returned=4 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 1, data_bytes: 65536, done: false } vm=75 returned=3 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 1, data_bytes: 65536, done: false } vm=66 returned=2 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=66 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=70 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=66 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 1, data_bytes: 0, done: false } vm=77 returned=2 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=66 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=66 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=66 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=66 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 2, data_bytes: 0, done: true } vm=130 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM plans=["SEARCH reclaim USING INDEX reclaim_ready (queue_key=? AND ns>?)", "SEARCH payload USING INDEX payload_namespace_row (ns=?)"]
+test reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_scratch_values ... ok
+capture plan before verification: ["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]
+active_population=1024; plan=["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]; captured_rows=1; vm_steps=35; fullscan_steps=0; sorts=0; reprepare=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=0; rows=64; vm_steps=1042; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=64; rows=64; vm_steps=1249; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=128; rows=64; vm_steps=1249; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=192; rows=1; vm_steps=54; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=193; rows=0; vm_steps=35; fullscan_steps=0; sorts=0
+test captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes ... ok
+S1_ACCESS other_rows=1024 family=Payload vm=21 returned=1 runs=1 bytes=32 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=1024 family=Dentry vm=24 returned=1 runs=1 bytes=36 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=1024 family=Scratch vm=24 returned=1 runs=1 bytes=32 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=1024 family=Lease vm=48 returned=2 runs=3 bytes=88 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+capture plan before verification: ["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]
+active_population=4096; plan=["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]; captured_rows=1; vm_steps=35; fullscan_steps=0; sorts=0; reprepare=0
+test fixed_capture_uses_generation_index_while_active_namespace_grows ... ok
+S1_ACCESS other_rows=4096 family=Payload vm=21 returned=1 runs=1 bytes=32 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=4096 family=Dentry vm=24 returned=1 runs=1 bytes=36 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=4096 family=Scratch vm=24 returned=1 runs=1 bytes=32 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=4096 family=Lease vm=48 returned=2 runs=3 bytes=88 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+test payload_name_scratch_and_owner_access_keep_indexed_scope ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+     Running tests/frontier.rs (core/target/cluster2-linux/debug/deps/frontier-cfdf964ad6a238e4)
+
+running 3 tests
+test frozen_capture_and_tickets_reject_changed_identity_and_survive_close ... ok
+test equal_local_routing_keys_never_cross_engine_owners ... ok
+S2_FRONTIER other_rows=128 capture_vm=14 ticket_page_vm=396 returned=1/64 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)"], ["SEARCH request USING PRIMARY KEY (ns=? AND revision>?)"]]
+S2_FRONTIER other_rows=1024 capture_vm=14 ticket_page_vm=396 returned=1/64 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)"], ["SEARCH request USING PRIMARY KEY (ns=? AND revision>?)"]]
+S2_FRONTIER other_rows=4096 capture_vm=14 ticket_page_vm=396 returned=1/64 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)"], ["SEARCH request USING PRIMARY KEY (ns=? AND revision>?)"]]
+test exact_frontier_observations_visit_only_their_fixed_domain ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/lifetimes.rs (core/target/cluster2-linux/debug/deps/lifetimes-0729392aeb4934f8)
+
+running 3 tests
+test reader_custody_parks_composition_then_exact_release_enables_it ... ok
+S6_STALE jobs=76 bytes_removed=4186112 pages_before=(1201, 0) pages_after=(1201, 1163)
+S6_PLANS ["SEARCH maintenance USING INDEX maintenance_ready (ready=? AND (ns,kind,resource,target)>(?,?,?,?))"]
+test stale_cleanup_rechecks_epochs_and_never_deletes_regrown_new_bytes ... ok
+S6_FAILURE round=0 transition_statements=6 read_statements=8 read_vm=437 live_namespace_layers<=2
+S6_FAILURE round=1 transition_statements=6 read_statements=4 read_vm=246 live_namespace_layers<=2
+S6_FAILURE round=2 transition_statements=6 read_statements=4 read_vm=182 live_namespace_layers<=2
+S6_FAILURE round=3 transition_statements=6 read_statements=4 read_vm=142 live_namespace_layers<=2
+S6_FAILURE round=4 transition_statements=6 read_statements=4 read_vm=126 live_namespace_layers<=2
+S6_FAILURE round=5 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=6 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=7 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=8 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=9 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=10 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=11 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=12 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=13 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=14 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=15 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=16 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=17 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=18 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=19 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=20 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=21 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=22 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+S6_FAILURE round=23 transition_statements=6 read_statements=4 read_vm=118 live_namespace_layers<=2
+test definite_failures_compose_in_bounded_turns_without_growing_live_layers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/orphans.rs (core/target/cluster2-linux/debug/deps/orphans-3aa257dff6e84e4a)
+
+running 5 tests
+test operation_custody_never_reuses_an_exposed_owner_and_cleanup_cannot_delete_new_scratch ... ok
+test unowned_unlinked_payload_is_reclaimed_live_but_its_namespace_tombstone_remains ... ok
+test captured_reader_preserves_sealed_bytes_across_install_and_blocks_failed_fold ... ok
+S6_CUSTODY_PROFILE unrelated=128 open=(11, 261, 4) unlink=(19, 770, 8) acquire_read=(13, 335, 6) read=(8, 192, 0) descriptor_append=(19, 543, 5) fullscan=0 sorts=0 autoindex=0 reprepare=0
+test independent_orphan_survives_many_installs_and_failures_and_last_read_owner ... ok
+S6_CUSTODY_PROFILE unrelated=1024 open=(11, 261, 4) unlink=(19, 770, 8) acquire_read=(13, 335, 6) read=(8, 192, 0) descriptor_append=(19, 543, 5) fullscan=0 sorts=0 autoindex=0 reprepare=0
+S6_CUSTODY_PROFILE unrelated=4096 open=(11, 261, 4) unlink=(19, 770, 8) acquire_read=(13, 335, 6) read=(8, 192, 0) descriptor_append=(19, 543, 5) fullscan=0 sorts=0 autoindex=0 reprepare=0
+test custody_and_orphan_jobs_keep_point_work_beside_unrelated_owners ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-42b0a50e3b0ddc68)
+
+running 4 tests
+S5_HOLE logical_bytes=1099511627777 pages_added=0 hole_window_read_statements=4 vm=87
+S5_SHRINK discarded_cells_small=2 discarded_cells_large=2048 statements=18 vm=743 rows_changed=8 identical=true zero_truncate_statements=17 fullscan=0 sorts=0
+test shrink_work_is_independent_of_discarded_data_and_regrow_reads_zero ... ok
+S5_SPACE tiny_files=2000 logical_bytes_each=100 bytes_on_disk_each=199 amplification=1.99 dense_cells=2048 pages_per_cell=1.138 amplification=1.138 freelist=0 one_byte_append statements=15 vm=481 bound_bytes_rewritten<=4096
+test holes_cost_no_rows_and_tiny_and_dense_files_report_measured_pages ... ok
+test layered_reads_match_a_reference_model_across_writes_resizes_capture_and_install ... ok
+S5_STAIRCASE steps=1500 first_shrink_statements=20 last_shrink_statements=40 collapse_statements=38 read_window_across_steps_statements=356 bound_per_cell_log2=12 fullscan=0 sorts=0
+test a_tall_shrink_staircase_keeps_logarithmic_lookups_and_exact_bytes ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+     Running tests/payload_fragmentation.rs (core/target/cluster2-linux/debug/deps/payload_fragmentation-739dbb223839b34c)
+
+running 1 test
+S5_PLANS ["layers: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)", "active-layer: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "lower-layer: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)", "cell: SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)", "cell-window: SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>? AND cell_offset<?)", "drop-cell: SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)", "step: SEARCH shrink USING PRIMARY KEY (ns=? AND serial=? AND gen=? AND depth=?)"]
+S5_FRAGMENTATION one_byte_writes=65536 per_write_statements=15 per_write_vm=494 overwrite_128k statements=45 vm=2816 rows_changed=36 same_as_unfragmented=true edge_overwrite statements=40 read_window_fragmented statements=4 vm=343 read_window_unfragmented statements=4 vm=343 fullscan=0 sorts=0
+test dense_fragmentation_does_not_enlarge_a_later_request ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.84s
+
+     Running tests/source.rs (core/target/cluster2-linux/debug/deps/source-81affea124656912)
+
+running 4 tests
+BASE_SOURCE_CHANGE phase=acquire family=Begin runs=1 vm=5 returned=0 changed=0 bound_bytes=0
+BASE_SOURCE_CHANGE phase=acquire family=Commit runs=1 vm=3 returned=0 changed=0 bound_bytes=0
+BASE_SOURCE_CHANGE phase=acquire family=Workspace runs=2 vm=56 returned=1 changed=1 bound_bytes=48
+BASE_SOURCE_CHANGE phase=acquire family=Lease runs=1 vm=40 returned=0 changed=1 bound_bytes=48
+BASE_SOURCE_CHANGE phase=acquire total_vm=104 changed=2 fullscan=0 sorts=0 plans=["insert: 0 Init 0 43 0", "insert: 1 OpenWrite 1 19 0", "insert: 2 Variable 1 2 0", "insert: 3 Variable 4 3 0", "insert: 4 Variable 2 4 0", "insert: 5 Variable 3 5 0", "insert: 6 Null 0 1 0", "insert: 7 HaltIfNull 1299 2 2", "insert: 8 HaltIfNull 1299 2 3", "insert: 9 HaltIfNull 1299 2 4", "insert: 10 HaltIfNull 1299 2 5", "insert: 11 TypeCheck 2 4 0", "insert: 12 BitAnd 3 3 12", "insert: 13 Eq 3 17 13", "insert: 14 Eq 3 17 14", "insert: 15 IsNull 12 19 0", "insert: 16 Goto 0 18 0", "insert: 17 Goto 0 19 0", "insert: 18 Halt 275 2 0", "insert: 19 Gt 13 21 4", "insert: 20 Halt 275 2 0", "insert: 21 SCopy 5 15 0", "insert: 22 PureFunc 0 15 12", "insert: 23 Eq 16 25 12", "insert: 24 Halt 275 2 0", "insert: 25 Integer 0 17 0", "insert: 26 SCopy 2 7 0", "insert: 27 SCopy 3 8 0", "insert: 28 SCopy 4 9 0", "insert: 29 SCopy 5 10 0", "insert: 30 MakeRecord 7 4 6", "insert: 31 NoConflict 1 33 7", "insert: 32 Halt 1555 2 0", "insert: 33 IsNull 2 40 0", "insert: 34 SCopy 2 12 0", "insert: 35 MustBeInt 12 39 0", "insert: 36 OpenRead 2 2 0", "insert: 37 NotExists 2 39 12", "insert: 38 Goto 0 40 0", "insert: 39 Halt 787 2 0", "insert: 40 Close 2 0 0", "insert: 41 IdxInsert 1 6 7", "insert: 42 Halt 0 0 0", "insert: 43 Transaction 0 1 27", "insert: 44 Integer 0 13 0", "insert: 45 Integer 1 14 0", "insert: 46 Integer 32 16 0", "insert: 47 Goto 0 1 0", "increment: SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)", "decrement: SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)", "delete: SEARCH base_source USING PRIMARY KEY (ns=? AND kind=? AND owner=?)"]
+BASE_SOURCE_CHANGE phase=release family=Begin runs=1 vm=5 returned=0 changed=0 bound_bytes=0
+BASE_SOURCE_CHANGE phase=release family=Commit runs=1 vm=3 returned=0 changed=0 bound_bytes=0
+BASE_SOURCE_CHANGE phase=release family=Workspace runs=3 vm=78 returned=2 changed=1 bound_bytes=88
+BASE_SOURCE_CHANGE phase=release family=Lease runs=2 vm=40 returned=1 changed=1 bound_bytes=64
+BASE_SOURCE_CHANGE phase=release total_vm=126 changed=2 fullscan=0 sorts=0 plans=["insert: 0 Init 0 43 0", "insert: 1 OpenWrite 1 19 0", "insert: 2 Variable 1 2 0", "insert: 3 Variable 4 3 0", "insert: 4 Variable 2 4 0", "insert: 5 Variable 3 5 0", "insert: 6 Null 0 1 0", "insert: 7 HaltIfNull 1299 2 2", "insert: 8 HaltIfNull 1299 2 3", "insert: 9 HaltIfNull 1299 2 4", "insert: 10 HaltIfNull 1299 2 5", "insert: 11 TypeCheck 2 4 0", "insert: 12 BitAnd 3 3 12", "insert: 13 Eq 3 17 13", "insert: 14 Eq 3 17 14", "insert: 15 IsNull 12 19 0", "insert: 16 Goto 0 18 0", "insert: 17 Goto 0 19 0", "insert: 18 Halt 275 2 0", "insert: 19 Gt 13 21 4", "insert: 20 Halt 275 2 0", "insert: 21 SCopy 5 15 0", "insert: 22 PureFunc 0 15 12", "insert: 23 Eq 16 25 12", "insert: 24 Halt 275 2 0", "insert: 25 Integer 0 17 0", "insert: 26 SCopy 2 7 0", "insert: 27 SCopy 3 8 0", "insert: 28 SCopy 4 9 0", "insert: 29 SCopy 5 10 0", "insert: 30 MakeRecord 7 4 6", "insert: 31 NoConflict 1 33 7", "insert: 32 Halt 1555 2 0", "insert: 33 IsNull 2 40 0", "insert: 34 SCopy 2 12 0", "insert: 35 MustBeInt 12 39 0", "insert: 36 OpenRead 2 2 0", "insert: 37 NotExists 2 39 12", "insert: 38 Goto 0 40 0", "insert: 39 Halt 787 2 0", "insert: 40 Close 2 0 0", "insert: 41 IdxInsert 1 6 7", "insert: 42 Halt 0 0 0", "insert: 43 Transaction 0 1 27", "insert: 44 Integer 0 13 0", "insert: 45 Integer 1 14 0", "insert: 46 Integer 32 16 0", "insert: 47 Goto 0 1 0", "increment: SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)", "decrement: SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)", "delete: SEARCH base_source USING PRIMARY KEY (ns=? AND kind=? AND owner=?)"]
+test source_changes_have_finite_plans_and_correlated_runtime_work ... ok
+BASE_SOURCE unrelated_owners=128 point_vm=15 returned=1 fullscan=0 sorts=0 autoindex=0 reprepare=0 plan=["SEARCH base_source USING PRIMARY KEY (ns=? AND kind=? AND owner=?)"]
+test source_retains_selected_base_and_exact_close_custody_without_a_generation_pin ... ok
+BASE_SOURCE unrelated_owners=1024 point_vm=15 returned=1 fullscan=0 sorts=0 autoindex=0 reprepare=0 plan=["SEARCH base_source USING PRIMARY KEY (ns=? AND kind=? AND owner=?)"]
+S3_NAME_WINDOW unrelated_names=128 name_vm=804 returned=64 total_vm=942 total_runs=10 source_checks_and_parent_are_separate_families fullscan=0 sorts=0 plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND parent=? AND name>?)"]
+BASE_SOURCE unrelated_owners=4096 point_vm=15 returned=1 fullscan=0 sorts=0 autoindex=0 reprepare=0 plan=["SEARCH base_source USING PRIMARY KEY (ns=? AND kind=? AND owner=?)"]
+S3_NAME_WINDOW unrelated_names=1024 name_vm=804 returned=64 total_vm=942 total_runs=10 source_checks_and_parent_are_separate_families fullscan=0 sorts=0 plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND parent=? AND name>?)"]
+test source_owner_observation_keeps_indexed_work_as_unrelated_custody_grows ... ok
+S3_NAME_WINDOW unrelated_names=4096 name_vm=804 returned=64 total_vm=942 total_runs=10 source_checks_and_parent_are_separate_families fullscan=0 sorts=0 plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND parent=? AND name>?)"]
+test ordered_source_name_windows_visit_only_parent_and_generation_with_runtime_evidence ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_sdk-8372d111fc1dbc84)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/runtime.rs (core/target/cluster2-linux/debug/deps/runtime-856a50e0343c15a1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_workspace-8ca43b50fc9dfc6b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/base.rs (core/target/cluster2-linux/debug/deps/base-877d7657ffd7bbee)
+
+running 7 tests
+test retained_old_plan_and_new_root_use_exact_immutable_cache_identities ... ok
+test full_root_binding_aliases_metadata_symlinks_and_eof_use_content_apis ... ok
+test logical_workspace_open_binds_real_root_without_schema_or_namespace_import ... ok
+test source_errors_and_unattempted_actor_install_preserve_exact_custody ... ok
+test known_install_advances_selected_base_and_preserves_retained_plans_and_later_rows ... ok
+test actual_provider_wait_allows_shared_progress_and_actor_install_pairs_the_selected_base ... ok
+S3_MERGE visited=507 visible=377 empty_progress_pages=1
+test effective_alias_metadata_whiteouts_and_three_way_pages_advance_with_bounded_hidden_work ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/namespace.rs (core/target/cluster2-linux/debug/deps/namespace-04e816278f4702c2)
+
+running 5 tests
+test unrepresentable_names_targets_and_reservations_are_refused_before_any_job ... ok
+test chmod_and_utimens_follow_the_portable_grammar_and_keep_one_mtime ... ok
+test create_mkdir_symlink_and_link_publish_parent_and_reference_effects_atomically ... ok
+test unlink_and_rmdir_remove_one_reference_and_keep_directory_counts_exact ... ok
+test rename_moves_replaces_and_refuses_cycles_without_descendant_rows ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/namespace_daemon.rs (core/target/cluster2-linux/debug/deps/namespace_daemon-683f9c8649d6ff67)
+
+running 7 tests
+S6_CUSTODY_PLANS ["orphan: SEARCH orphan USING PRIMARY KEY (ns=? AND serial=?)", "file-owners: SEARCH file_custody USING PRIMARY KEY (ns=? AND serial=?)", "operation: SEARCH operation_owner USING PRIMARY KEY (ns=? AND owner=?)", "generation-held: SEARCH lease USING COVERING INDEX lease_resource (ns=? AND kind=? AND resource=?)"]
+S5_OWNER_PLANS ["layers: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)", "active-layer: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "lower-layer: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)", "cell: SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)", "cell-window: SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>? AND cell_offset<?)", "drop-cell: SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)", "step: SEARCH shrink USING PRIMARY KEY (ns=? AND serial=? AND gen=? AND depth=?)"]
+test closed_and_stopped_services_return_exact_outcomes_without_effect ... ok
+test a_blocked_base_fact_leaves_the_owner_free_and_publishes_after_a_capture ... ok
+S6_ORPHAN_OWNER captures=24 success=12 failed=12 inherited_bytes=10 orphan_bytes=9180 truncate_regrow=true last_read_outlives_close=true idle_cleanup=true
+test orphans::inherited_open_unlinked_log_keeps_bytes_through_owner_installs_failures_and_idle_cleanup ... ok
+S6_OWNER_OPERATION unrelated=128 operation=overwrite-128k foreground_statements=61 vm=3126 changed=40 bound_bytes=133056 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=128 operation=shrink foreground_statements=34 vm=1053 changed=12 bound_bytes=907 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=128 operation=regrow foreground_statements=29 vm=694 changed=8 bound_bytes=704 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=128 operation=read-128k foreground_statements=33 vm=759 changed=4 bound_bytes=920 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=128 operation=append foreground_statements=31 vm=782 changed=9 bound_bytes=780 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+test opposing_directory_moves_from_real_threads_never_form_a_cycle ... ok
+test concurrent_operations_through_real_owner_jobs_keep_counts_and_references_exact ... ok
+test concurrent_appenders_and_a_tail_reader_see_whole_records_through_real_owner_jobs ... ok
+S6_OWNER_OPERATION unrelated=1024 operation=overwrite-128k foreground_statements=61 vm=3126 changed=40 bound_bytes=133056 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=1024 operation=shrink foreground_statements=34 vm=1053 changed=12 bound_bytes=907 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=1024 operation=regrow foreground_statements=29 vm=694 changed=8 bound_bytes=704 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=1024 operation=read-128k foreground_statements=33 vm=759 changed=4 bound_bytes=920 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=1024 operation=append foreground_statements=31 vm=782 changed=9 bound_bytes=780 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=overwrite-128k foreground_statements=61 vm=3126 changed=40 bound_bytes=133056 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=shrink foreground_statements=34 vm=1053 changed=12 bound_bytes=907 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=regrow foreground_statements=29 vm=694 changed=8 bound_bytes=704 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=read-128k foreground_statements=33 vm=759 changed=4 bound_bytes=920 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=append foreground_statements=31 vm=782 changed=9 bound_bytes=780 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_MAINTENANCE statements=180 changed=57 vm=5367
+test payload_complete_operations_have_indexed_work_through_the_real_owner ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.98s
+
+     Running tests/namespace_profile.rs (core/target/cluster2-linux/debug/deps/namespace_profile-0108384c2aaa61ca)
+
+running 1 test
+S4_PLANS ["lower-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)", "active-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "drop-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "active-inode: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "put-name: vm-program opcodes=76 btree-cursors=3 btree-scan-opcodes=0", "put-inode: vm-program opcodes=231 btree-cursors=3 btree-scan-opcodes=0"]
+S4_OPERATION siblings=128 operation=create-inherited-parent owner_rounds=2 statements=42 vm_steps=1053 rows_changed=10 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=create-local-parent owner_rounds=1 statements=36 vm_steps=937 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=link-file owner_rounds=1 statements=37 vm_steps=1033 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=rename-replace owner_rounds=2 statements=58 vm_steps=1544 rows_changed=12 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=unlink owner_rounds=2 statements=48 vm_steps=1309 rows_changed=11 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=mkdir owner_rounds=2 statements=42 vm_steps=1053 rows_changed=10 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=rename-directory-across-parents owner_rounds=2 statements=71 vm_steps=1722 rows_changed=11 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=rmdir owner_rounds=1 statements=37 vm_steps=1022 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=chmod-utimens owner_rounds=1 statements=29 vm_steps=694 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=lookup-local owner_rounds=0 statements=23 vm_steps=451 rows_changed=4 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=lookup-inherited owner_rounds=0 statements=30 vm_steps=554 rows_changed=4 base_demand=14 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=list-window owner_rounds=0 statements=19 vm_steps=1132 rows_changed=4 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=create-inherited-parent owner_rounds=2 statements=42 vm_steps=1053 rows_changed=10 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=create-local-parent owner_rounds=1 statements=36 vm_steps=937 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=link-file owner_rounds=1 statements=37 vm_steps=1033 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=rename-replace owner_rounds=2 statements=58 vm_steps=1544 rows_changed=12 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=unlink owner_rounds=2 statements=48 vm_steps=1309 rows_changed=11 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=mkdir owner_rounds=2 statements=42 vm_steps=1053 rows_changed=10 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=rename-directory-across-parents owner_rounds=2 statements=71 vm_steps=1722 rows_changed=11 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=rmdir owner_rounds=1 statements=37 vm_steps=1022 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=chmod-utimens owner_rounds=1 statements=29 vm_steps=694 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=lookup-local owner_rounds=0 statements=23 vm_steps=451 rows_changed=4 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=lookup-inherited owner_rounds=0 statements=30 vm_steps=554 rows_changed=4 base_demand=14 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=list-window owner_rounds=0 statements=19 vm_steps=1132 rows_changed=4 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=create-inherited-parent owner_rounds=2 statements=42 vm_steps=1053 rows_changed=10 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=create-local-parent owner_rounds=1 statements=36 vm_steps=937 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=link-file owner_rounds=1 statements=37 vm_steps=1033 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=rename-replace owner_rounds=2 statements=58 vm_steps=1544 rows_changed=12 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=unlink owner_rounds=2 statements=48 vm_steps=1309 rows_changed=11 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=mkdir owner_rounds=2 statements=42 vm_steps=1053 rows_changed=10 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=rename-directory-across-parents owner_rounds=2 statements=71 vm_steps=1722 rows_changed=11 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=rmdir owner_rounds=1 statements=37 vm_steps=1022 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=chmod-utimens owner_rounds=1 statements=29 vm_steps=694 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=lookup-local owner_rounds=0 statements=23 vm_steps=451 rows_changed=4 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=lookup-inherited owner_rounds=0 statements=30 vm_steps=554 rows_changed=4 base_demand=14 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=list-window owner_rounds=0 statements=19 vm_steps=1132 rows_changed=4 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+test complete_operations_keep_point_work_as_names_and_inodes_grow ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
+     Running tests/namespace_view.rs (core/target/cluster2-linux/debug/deps/namespace_view-b0ecae85d60c1cfb)
+
+running 5 tests
+test a_rebound_name_between_owner_rounds_is_resolved_before_the_one_attempt ... ok
+test opposing_directory_moves_cannot_form_a_cycle_between_owner_rounds ... ok
+test known_install_folds_a_capture_and_keeps_later_namespace_changes ... ok
+test enumeration_returns_every_persistent_name_once_across_mutation_and_resume ... ok
+test name_and_inode_counts_have_no_cap_and_every_window_stays_bounded ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+     Running tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-8ec0aa670ac51563)
+
+running 3 tests
+S5_WRITE_DEMAND inherited_file_bytes=400000 first_write_upstream_bytes=2094 attribute_facts_upstream_bytes=2094 later_write_upstream_bytes=0 base_read_128k_upstream_bytes=33640
+test writes_change_only_their_window_and_never_read_the_inherited_payload ... ok
+test truncate_and_regrow_never_resurrect_bytes_across_capture_and_known_install ... ok
+S5_READ_GAPS inherited_gaps=2048 objects=5 upstream_bytes=33640 same_as_unfragmented_range=true overwritten_window_objects=0
+test fragmented_inherited_bytes_are_read_as_one_base_range ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+   Doc-tests layerfs_daemon
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_overlay
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_sdk
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_workspace
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

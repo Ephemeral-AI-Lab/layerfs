@@ -351,3 +351,5 @@ Source files cited above, by package:
 [`core/README.md`](../../README.md) ·
 [`tools/production_loc.py`](../../../tools/production_loc.py) ·
 [`core/tools/check_product_boundary.py`](../../tools/check_product_boundary.py)
+
+S6 independent custody: [file, captured-input and operation lifetimes](33-independent-custody.md).

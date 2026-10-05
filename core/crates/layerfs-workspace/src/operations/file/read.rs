@@ -1,7 +1,7 @@
 //! Composed file read: one local layered plan, then one inherited base range.
-use crate::{OverlayRead, SourceView, WorkspaceError, WorkspaceResult};
+use crate::{OverlayFileRead, OverlayRead, SourceView, WorkspaceError, WorkspaceResult};
 use layerfs_content::ContentError;
-use layerfs_overlay::{InodeKind, READ_WINDOW};
+use layerfs_overlay::{CapturedReader, FileRead, InodeKind, LocalRead, READ_WINDOW};
 use std::io::Write;
 
 impl SourceView {
@@ -26,8 +26,83 @@ impl SourceView {
             }
             .into());
         }
-        let Some(mut local) = overlay.read(self.source, serial, offset, length)? else {
-            let plan = self.base.plan_read(serial, offset, length)?;
+        let local = overlay.read(self.source, serial, offset, length)?;
+        self.emit_local(
+            serial,
+            offset,
+            length,
+            local,
+            self.base.identity().0.to_bytes(),
+            sink,
+        )
+    }
+    /// Descriptor-read processing custody is independent of descriptor lifetime.
+    pub fn read_file(
+        &self,
+        overlay: &impl OverlayFileRead,
+        read: FileRead,
+        offset: u64,
+        length: u32,
+        sink: &mut dyn Write,
+    ) -> WorkspaceResult<u64> {
+        if read.source().route() != self.source.route() {
+            return Err(layerfs_overlay::OverlayError::Stale.into());
+        }
+        let local = overlay.file_read(read, offset, length)?;
+        self.emit_local(
+            read.serial(),
+            offset,
+            length,
+            local,
+            read.source().root(),
+            sink,
+        )
+    }
+    /// Sealed input retains its original root even after a known install.
+    pub fn read_captured(
+        &self,
+        overlay: &impl OverlayFileRead,
+        reader: CapturedReader,
+        serial: u64,
+        offset: u64,
+        length: u32,
+        sink: &mut dyn Write,
+    ) -> WorkspaceResult<u64> {
+        if reader.capture().route() != self.source.route() {
+            return Err(layerfs_overlay::OverlayError::Stale.into());
+        }
+        let local = overlay.captured_read(reader, serial, offset, length)?;
+        self.emit_local(serial, offset, length, local, reader.root(), sink)
+    }
+    fn emit_local(
+        &self,
+        serial: u64,
+        offset: u64,
+        length: u32,
+        local: Option<LocalRead>,
+        root: [u8; 32],
+        sink: &mut dyn Write,
+    ) -> WorkspaceResult<u64> {
+        if length as usize > READ_WINDOW {
+            return Err(layerfs_overlay::OverlayError::Invalid("read window").into());
+        }
+        let root = local
+            .as_ref()
+            .and_then(|local| local.base_root)
+            .unwrap_or(root);
+        let rebound;
+        let base = if root == self.base.identity().0.to_bytes() {
+            &self.base
+        } else {
+            rebound = self
+                .base
+                .rebind(layerfs_content::filesystem::FilesystemRootId(
+                    layerfs_content::ObjectId::from_bytes(&root)?,
+                ))?;
+            &rebound
+        };
+        let Some(mut local) = local else {
+            let plan = base.plan_read(serial, offset, length)?;
             plan.emit(sink)?;
             return Ok(plan.length());
         };
@@ -39,7 +114,7 @@ impl SourceView {
                 .ok()
                 .filter(|span| *span as usize <= READ_WINDOW && from >= local.offset)
                 .ok_or(ContentError::InvalidRecord("inherited read span"))?;
-            let plan = self.base.plan_read(serial, from, span)?;
+            let plan = base.plan_read(serial, from, span)?;
             let mut inherited = Vec::with_capacity(plan.length() as usize);
             plan.emit(&mut inherited)?;
             let first = (from - local.offset) as usize;

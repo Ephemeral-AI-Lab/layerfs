@@ -99,8 +99,9 @@ with no change and no ticket. A moved inode keeps its serial and gets no row;
 nothing beneath a moved directory gets a row, because children are found by the
 directory's serial in both the overlay and the base. A removed inode keeps a row
 with no references so serial-addressed access cannot fall through to a still
-existing base inode. Reclaiming that row once no open, lookup or capture owner
-holds it is S6 work. The root has zero canonical references and is never
+existing base inode. [S6 custody](33-independent-custody.md) reclaims unowned
+payload live and retains the tombstone until install. Exact descriptor writes
+use the separate orphan domain. The root has zero canonical references and is never
 removed.
 
 **Emptiness** is the maintained `entries` count. A directory with no local row

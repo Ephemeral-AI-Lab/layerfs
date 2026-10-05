@@ -77,6 +77,9 @@ impl Overlay {
         installed: i64,
     ) -> OverlayResult<Option<Inode>> {
         let serial = integer(serial)?;
+        if let Some(orphan) = self.orphan_inode(route.ns, serial)? {
+            return Ok(Some(orphan));
+        }
         Ok(self
             .query(
                 StatementKind::Inode,
@@ -97,11 +100,25 @@ impl Overlay {
         state: &WorkspaceState,
         inode: &Inode,
     ) -> OverlayResult<(bool, Layer)> {
-        let gen = state.active.0;
-        if inode.born > gen as u64 {
+        self.put_inode_domain(route, state, inode, false)
+    }
+    pub(crate) fn put_inode_domain(
+        &self,
+        route: Route,
+        state: &WorkspaceState,
+        inode: &Inode,
+        owned: bool,
+    ) -> OverlayResult<(bool, Layer)> {
+        let serial = integer(inode.serial)?;
+        let orphan = owned && inode.nlink == 0 && self.orphan(route.ns, serial)?.is_some();
+        let gen = if orphan {
+            crate::lifetime::orphan::DOMAIN
+        } else {
+            state.active.0
+        };
+        if inode.born > state.active.0 as u64 {
             return Err(OverlayError::Invalid("inode creation generation"));
         }
-        let serial = integer(inode.serial)?;
         let active = self
             .query(
                 StatementKind::Inode,
@@ -131,6 +148,7 @@ impl Overlay {
         let mut layer = Layer {
             gen,
             kind: inode.kind,
+            nlink: inode.nlink,
             size,
             cutoff,
             epoch,
@@ -161,7 +179,7 @@ impl Overlay {
             ],
             112,
         )?;
-        Ok((added, layer))
+        Ok((added && !orphan, layer))
     }
     /// Binds or whiteouts one name at the active generation inside the caller's
     /// transaction; true when the active generation gained a row.
@@ -256,6 +274,7 @@ impl Overlay {
             if let Some(cell) = cell {
                 self.put_cell(route, integer(inode.serial)?, &layer, cell)?;
             }
+            self.detach_orphan(route, &state, inode)?;
             self.settle(route, &state, i64::from(added), names)
         })
     }

@@ -20,6 +20,9 @@ pub(crate) fn write(
         Some(None) => return refuse(Refusal::Missing),
         Some(Some(inode)) => inode,
     };
+    if !eval.alive(&old) && eval.open_serial != Some(serial) {
+        return refuse(Refusal::Missing);
+    }
     match old.kind {
         InodeKind::Directory => return refuse(Refusal::IsDirectory),
         InodeKind::Symlink => return refuse(Refusal::Invalid),

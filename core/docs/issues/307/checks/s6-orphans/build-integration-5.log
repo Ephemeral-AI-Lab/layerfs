@@ -1,0 +1,29 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+error[E0063]: missing field `open` in initializer of `Changes`
+  --> crates/layerfs-workspace/src/operations/namespace/create.rs:85:19
+   |
+85 |     let changes = Changes {
+   |                   ^^^^^^^ missing `open`
+
+error[E0063]: missing field `open` in initializer of `Changes`
+   --> crates/layerfs-workspace/src/operations/namespace/create.rs:119:19
+    |
+119 |     let changes = Changes {
+    |                   ^^^^^^^ missing `open`
+
+error[E0063]: missing field `open` in initializer of `Changes`
+  --> crates/layerfs-workspace/src/operations/namespace/remove.rs:52:13
+   |
+52 |     Ok(Some(Changes {
+   |             ^^^^^^^ missing `open`
+
+error[E0063]: missing field `open` in initializer of `Changes`
+   --> crates/layerfs-workspace/src/operations/namespace/rename.rs:120:18
+    |
+120 |     Ok(Some(Some(Changes {
+    |                  ^^^^^^^ missing `open`
+
+For more information about this error, try `rustc --explain E0063`.
+error: could not compile `layerfs-workspace` (lib) due to 4 previous errors
+warning: build failed, waiting for other jobs to finish...

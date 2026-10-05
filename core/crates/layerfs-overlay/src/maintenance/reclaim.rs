@@ -50,10 +50,13 @@ impl Overlay {
                 0 => self.delete_payload(ns)?,
                 1 => self.delete_names(ns)?,
                 2 => self.delete_inodes(ns)?,
-                3 => self.delete_scratch(ns)?,
+                3 => self.delete_scratch(ns, "scratch")?,
                 4 => self.delete_old_reclaim(ns)?,
                 5 => self.delete_steps(ns)?,
                 6 => self.delete_maintenance(ns)?,
+                7 => self.delete_orphan_metadata(ns, "orphan")?,
+                8 => self.delete_orphan_metadata(ns, "file_custody")?,
+                9 => self.delete_scratch(ns, "owned_scratch")?,
                 _ => {
                     self.execute(
                         StatementKind::Reclaim,
@@ -108,6 +111,25 @@ impl Overlay {
             |r| r.get::<_, String>(3),
         )?);
         Ok(plans)
+    }
+    fn delete_orphan_metadata(&self, ns: i64, table: &str) -> OverlayResult<(u64, u64)> {
+        // Only the two static names above reach this helper.
+        let rows = self.query(
+            StatementKind::Reclaim,
+            &format!("SELECT serial FROM {table} WHERE ns=?1 ORDER BY serial LIMIT 64"),
+            &[&ns],
+            8,
+            |r| r.get::<_, i64>(0),
+        )?;
+        for serial in &rows {
+            self.execute(
+                StatementKind::Reclaim,
+                &format!("DELETE FROM {table} WHERE ns=?1 AND serial=?2"),
+                &[&ns, serial],
+                16,
+            )?;
+        }
+        Ok((rows.len() as u64, 0))
     }
     fn delete_payload(&self, ns: i64) -> OverlayResult<(u64, u64)> {
         let rows = self.query(StatementKind::Reclaim, PAYLOAD, &[&ns], 8, |r| {
@@ -193,8 +215,8 @@ impl Overlay {
         }
         Ok((rows.len() as u64, 0))
     }
-    fn delete_scratch(&self, ns: i64) -> OverlayResult<(u64, u64)> {
-        let rows=self.query(StatementKind::Reclaim,"SELECT operation,kind,key,length(value) FROM scratch WHERE ns=?1 ORDER BY operation,kind,key LIMIT 64",&[&ns],8,|r|Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?,r.get::<_,i64>(2)?,unsigned(r,3)?)))?;
+    fn delete_scratch(&self, ns: i64, table: &str) -> OverlayResult<(u64, u64)> {
+        let rows=self.query(StatementKind::Reclaim,&format!("SELECT operation,kind,key,length(value) FROM {table} WHERE ns=?1 ORDER BY operation,kind,key LIMIT 64"),&[&ns],8,|r|Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?,r.get::<_,i64>(2)?,unsigned(r,3)?)))?;
         let mut count = 0;
         let mut bytes = 0;
         for (operation, kind, key, size) in &rows {
@@ -203,7 +225,7 @@ impl Overlay {
             }
             self.execute(
                 StatementKind::Reclaim,
-                "DELETE FROM scratch WHERE ns=?1 AND operation=?2 AND kind=?3 AND key=?4",
+                &format!("DELETE FROM {table} WHERE ns=?1 AND operation=?2 AND kind=?3 AND key=?4"),
                 &[&ns, operation, kind, key],
                 32,
             )?;

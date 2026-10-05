@@ -118,6 +118,7 @@ pub(crate) fn rename(
     // The moved inode keeps its serial and attributes: no row for it, and no
     // row for anything beneath a moved directory.
     Ok(Some(Some(Changes {
+        open: None,
         inodes,
         names: vec![
             unbind(action.parent, action.name, inherited),

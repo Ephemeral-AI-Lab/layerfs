@@ -2,3 +2,5 @@
 pub(crate) mod access_plan;
 pub(crate) mod metrics;
 pub(crate) mod source_plan;
+
+mod lifetime_plan;

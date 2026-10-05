@@ -1,0 +1,12 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.05s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_daemon-c46ececdd993474e)
+  Executable tests/owner.rs (core/target/debug/deps/owner-f13e3b52de22f9e9)
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_sdk-33c8c90f8f9d6263)
+  Executable tests/runtime.rs (core/target/debug/deps/runtime-e75646e62b883e6e)
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_workspace-7ff1834dd6cc1e68)
+  Executable tests/base.rs (core/target/debug/deps/base-4d6c73eff9140030)
+  Executable tests/namespace.rs (core/target/debug/deps/namespace-29e92abb9cfd73a9)
+  Executable tests/namespace_daemon.rs (core/target/debug/deps/namespace_daemon-56ce90ae03237edc)
+  Executable tests/namespace_profile.rs (core/target/debug/deps/namespace_profile-fc20aef9ac4614db)
+  Executable tests/namespace_view.rs (core/target/debug/deps/namespace_view-54780618de446b5c)
+  Executable tests/payload.rs (core/target/debug/deps/payload-a57db2727daf00ef)

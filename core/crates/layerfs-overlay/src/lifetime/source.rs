@@ -18,7 +18,7 @@ impl Overlay {
             self.execute(
                 StatementKind::Lease,
                 sql::BASE_SOURCE_INSERT,
-                &[&route.ns, &key, &state.base_root.as_slice()],
+                &[&route.ns, &key, &state.base_root.as_slice(), &0_i64],
                 48,
             )?;
             self.execute(
@@ -30,6 +30,7 @@ impl Overlay {
             Ok(BaseSource {
                 route,
                 owner,
+                class: 0,
                 root: state.base_root,
                 installed: state.installed,
             })
@@ -43,24 +44,26 @@ impl Overlay {
         owner: u64,
     ) -> OverlayResult<Option<BaseSource>> {
         let installed = self.state(route)?.installed;
-        self.base_source_by_owner(route, owner, installed)
+        self.base_source_by_owner(route, owner, installed, 0)
     }
     fn base_source_by_owner(
         &self,
         route: Route,
         owner: u64,
         installed: i64,
+        class: i64,
     ) -> OverlayResult<Option<BaseSource>> {
         self.query(
             StatementKind::Lease,
             sql::BASE_SOURCE_LOOKUP,
-            &[&route.ns, &integer(owner)?],
+            &[&route.ns, &integer(owner)?, &class],
             16,
             |row| {
                 let root: Vec<u8> = row.get(0)?;
                 Ok(BaseSource {
                     route,
                     owner,
+                    class,
                     root: root.try_into().map_err(|_| rusqlite::Error::InvalidQuery)?,
                     installed,
                 })
@@ -71,8 +74,12 @@ impl Overlay {
     pub(crate) fn source_state(&self, source: BaseSource) -> OverlayResult<WorkspaceState> {
         let state = self.state(source.route)?;
         if state.base_root != source.root
-            || self.base_source_by_owner(source.route, source.owner, state.installed)?
-                != Some(source)
+            || self.base_source_by_owner(
+                source.route,
+                source.owner,
+                state.installed,
+                source.class,
+            )? != Some(source)
         {
             return Err(OverlayError::Stale);
         }
@@ -87,29 +94,36 @@ impl Overlay {
     /// One exact release after the request/provider continuation is fenced.
     /// Original errors leave this source in custody; no hidden Drop SQL/retry.
     pub fn release_base_source(&self, source: BaseSource) -> OverlayResult<()> {
-        self.atomic(|| {
-            self.source_state(source)?;
-            let changed = self.execute(
-                StatementKind::Lease,
-                sql::BASE_SOURCE_DELETE,
-                &[
-                    &source.route.ns,
-                    &integer(source.owner)?,
-                    &source.root.as_slice(),
-                ],
-                48,
-            )?;
-            if changed != 1 {
-                return Err(OverlayError::Stale);
-            }
-            self.execute(
-                StatementKind::Workspace,
-                sql::BASE_SOURCE_DECREMENT,
-                &[&source.route.ns],
-                8,
-            )?;
-            self.queue_closed(source.route)
-        })
+        if source.class != 0 {
+            return Err(OverlayError::Invalid(
+                "file read source requires file-read release",
+            ));
+        }
+        self.atomic(|| self.release_source_inner(source))
+    }
+    pub(crate) fn release_source_inner(&self, source: BaseSource) -> OverlayResult<()> {
+        self.source_state(source)?;
+        let changed = self.execute(
+            StatementKind::Lease,
+            sql::BASE_SOURCE_DELETE,
+            &[
+                &source.route.ns,
+                &integer(source.owner)?,
+                &source.root.as_slice(),
+                &source.class,
+            ],
+            48,
+        )?;
+        if changed != 1 {
+            return Err(OverlayError::Stale);
+        }
+        self.execute(
+            StatementKind::Workspace,
+            sql::BASE_SOURCE_DECREMENT,
+            &[&source.route.ns],
+            8,
+        )?;
+        self.queue_closed(source.route)
     }
     /// Production-template plan for one source-owner point observation.
     pub fn explain_base_source(&self, route: Route, owner: u64) -> OverlayResult<Vec<String>> {
@@ -117,7 +131,7 @@ impl Overlay {
         self.query(
             StatementKind::Explain,
             &format!("EXPLAIN QUERY PLAN {}", sql::BASE_SOURCE_LOOKUP),
-            &[&route.ns, &integer(owner)?],
+            &[&route.ns, &integer(owner)?, &0_i64],
             16,
             |row| row.get(3),
         )

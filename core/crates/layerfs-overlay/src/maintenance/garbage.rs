@@ -16,6 +16,9 @@ impl Overlay {
                     ORDER BY serial,cell_offset LIMIT 14", &[&ns,&gen,&item.cursor,&item.aux],32,
                     |r|Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?,unsigned(r,2)?)))?;
                 for (serial, cell, size) in &rows {
+                    if self.orphan_holds(ns, *serial, gen)? {
+                        continue;
+                    }
                     self.execute(
                         StatementKind::Reclaim,
                         sql::CELL_DROP,
@@ -34,6 +37,9 @@ impl Overlay {
                     WHERE ns=?1 AND gen=?2 AND (serial,depth)>(?3,?4) ORDER BY serial,depth LIMIT 64",
                     &[&ns,&gen,&item.cursor,&item.aux],32,|r|Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?)))?;
                 for (serial, depth) in &rows {
+                    if self.orphan_holds(ns, *serial, gen)? {
+                        continue;
+                    }
                     self.execute(
                         StatementKind::Reclaim,
                         "DELETE FROM shrink WHERE ns=?1 AND serial=?2 AND gen=?3 AND depth=?4",
@@ -79,6 +85,9 @@ impl Overlay {
                     |r| r.get::<_, i64>(0),
                 )?;
                 for serial in &rows {
+                    if self.orphan_holds(ns, *serial, gen)? {
+                        continue;
+                    }
                     self.execute(
                         StatementKind::Reclaim,
                         "DELETE FROM inode WHERE ns=?1 AND serial=?2 AND gen=?3",
@@ -165,10 +174,17 @@ impl Overlay {
         Ok((count as u64, bytes, count == 0))
     }
     fn clean_scratch(&self, item: &Item) -> OverlayResult<(u64, u64, bool)> {
+        let table = if item.target == 1 {
+            "owned_scratch"
+        } else {
+            "scratch"
+        };
         let rows = self.query(
-            StatementKind::Reclaim,
-            "SELECT kind,key,length(value) FROM scratch
-            WHERE ns=?1 AND operation=?2 AND (kind,key)>(?3,?4) ORDER BY kind,key LIMIT 64",
+            StatementKind::Scratch,
+            &format!(
+                "SELECT kind,key,length(value) FROM {table}
+            WHERE ns=?1 AND operation=?2 AND (kind,key)>(?3,?4) ORDER BY kind,key LIMIT 64"
+            ),
             &[&item.ns, &item.resource, &item.cursor, &item.aux],
             32,
             |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, unsigned(r, 2)?)),
@@ -180,7 +196,7 @@ impl Overlay {
             }
             self.execute(
                 StatementKind::Reclaim,
-                "DELETE FROM scratch WHERE ns=?1 AND operation=?2 AND kind=?3 AND key=?4",
+                &format!("DELETE FROM {table} WHERE ns=?1 AND operation=?2 AND kind=?3 AND key=?4"),
                 &[&item.ns, &item.resource, kind, key],
                 32,
             )?;

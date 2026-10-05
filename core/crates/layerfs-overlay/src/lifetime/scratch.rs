@@ -8,6 +8,15 @@ use crate::{
 impl Overlay {
     /// Acquires one exact independently keyed owner. Duplicate acquisition fails.
     pub fn acquire(&self, route: Route, lease: Lease) -> OverlayResult<()> {
+        if matches!(
+            lease.kind,
+            LeaseKind::FileReader
+                | LeaseKind::CapturedReader
+                | LeaseKind::FileHandle
+                | LeaseKind::Processing
+        ) {
+            return Err(OverlayError::Invalid("minted owner kind"));
+        }
         let owner = integer(lease.owner)?;
         let resource = integer(lease.resource)?;
         if owner == 0 {
@@ -21,12 +30,24 @@ impl Overlay {
                 &[&route.ns, &(lease.kind as i64), &owner, &resource],
                 32,
             )?;
+            if lease.resource != 0 {
+                self.file_ref(route.ns, resource, lease.kind, true)?;
+            }
             Ok(())
         })
     }
     /// Last-owner release is exact, with no whole-namespace owner sweep.
     /// Automatic eligibility/reclamation scheduling is the later S6/daemon lane.
     pub fn release(&self, route: Route, lease: Lease) -> OverlayResult<()> {
+        if matches!(
+            lease.kind,
+            LeaseKind::FileReader
+                | LeaseKind::CapturedReader
+                | LeaseKind::FileHandle
+                | LeaseKind::Processing
+        ) {
+            return Err(OverlayError::Invalid("minted owner kind"));
+        }
         self.atomic(|| {
             self.state(route)?;
             let changed = self.execute(
@@ -43,6 +64,9 @@ impl Overlay {
             if changed != 1 {
                 return Err(OverlayError::Missing);
             }
+            if lease.resource != 0 {
+                self.file_ref(route.ns, integer(lease.resource)?, lease.kind, false)?;
+            }
             if lease.kind == LeaseKind::Reader {
                 self.wake_generation(route.ns, lease.resource)?;
             }
@@ -51,7 +75,7 @@ impl Overlay {
                     route.ns,
                     crate::maintenance::SCRATCH,
                     integer(lease.owner)?,
-                    1,
+                    -2,
                 )?;
             }
             self.queue_closed(route)

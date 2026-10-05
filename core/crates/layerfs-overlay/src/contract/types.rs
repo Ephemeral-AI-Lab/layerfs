@@ -97,6 +97,8 @@ pub struct NameChange {
 /// windows bound one job; they are not Workspace totals.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Changes {
+    /// Exact descriptor authority for mutations of independently owned orphans.
+    pub open: Option<crate::OpenFile>,
     pub inodes: Vec<Inode>,
     pub names: Vec<NameChange>,
     /// One payload cell of a changed inode, published in the same transaction.
@@ -123,6 +125,9 @@ pub struct LocalRead {
     pub data: Vec<u8>,
     pub inherited: Vec<u8>,
     pub span: Option<(u64, u64)>,
+    /// Exact independent inherited root, when the read is orphan/captured
+    /// input. Ordinary current-source reads use the source's bound root.
+    pub base_root: Option<[u8; 32]>,
 }
 /// Local rows of one name: the active generation and the latest lower one.
 /// The outer None is "no row"; the inner None is a whiteout.
@@ -196,6 +201,7 @@ pub struct WorkspaceState {
 pub struct BaseSource {
     pub(crate) route: Route,
     pub(crate) owner: u64,
+    pub(crate) class: i64,
     pub(crate) root: [u8; 32],
     pub(crate) installed: i64,
 }
@@ -233,6 +239,10 @@ pub enum LeaseKind {
     Open = 2,
     Lookup = 3,
     Operation = 4,
+    FileReader = 5,
+    CapturedReader = 6,
+    FileHandle = 7,
+    Processing = 8,
 }
 /// One exact owner/resource reference, not a retry token.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

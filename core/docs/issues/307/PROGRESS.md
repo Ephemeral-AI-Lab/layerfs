@@ -34,6 +34,12 @@ The owner-selected [source organization](SOURCE-ORGANIZATION.md) now has its
 links use responsibility folders; historical receipts retain their original
 paths/pins. S6 additions follow the lifetime/maintenance/database boundaries.
 
+The next S6 checkpoint implements independent orphans and minted file/read,
+captured-input and operation custody. See [independent custody](../../architecture/33-independent-custody.md)
+and [retained checks](checks/s6-orphans/). Physical reservations/headroom,
+exact whiteout simplification and complete resource/debt evidence remain open;
+S6 is not complete.
+
 S4 is complete at the local milestone-completion commit after `8d691ab8a`: atomic
 ordinary namespace operations as compound owner jobs, maintained directory
 counts, verified rename ancestry and owning serial ranges. See the

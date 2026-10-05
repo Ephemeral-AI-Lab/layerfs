@@ -89,7 +89,7 @@ impl Overlay {
             length,
         )
     }
-    fn read_layers(
+    pub(crate) fn read_layers(
         &self,
         ns: i64,
         serial: u64,
@@ -104,6 +104,26 @@ impl Overlay {
         let serial = integer(serial)?;
         integer(offset)?;
         let layers = self.layers(ns, serial, top, installed)?;
+        if layers
+            .first()
+            .is_some_and(|layer| layer.kind == InodeKind::File && layer.nlink == 0)
+        {
+            return Err(OverlayError::Missing);
+        }
+        self.compose_layers(ns, serial, offset, length, layers)
+    }
+    pub(crate) fn compose_layers(
+        &self,
+        ns: i64,
+        serial: i64,
+        offset: u64,
+        length: u32,
+        layers: Vec<Layer>,
+    ) -> OverlayResult<Option<LocalRead>> {
+        if length as usize > READ_WINDOW {
+            return Err(OverlayError::Invalid("read window"));
+        }
+        integer(offset)?;
         let Some(first) = layers.first() else {
             return Ok(None);
         };
@@ -116,6 +136,7 @@ impl Overlay {
             data: vec![0; (end - start) as usize],
             inherited: Vec::new(),
             span: None,
+            base_root: None,
         };
         if first.kind != InodeKind::File || start == end {
             return Ok(Some(read));

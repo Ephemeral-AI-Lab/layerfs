@@ -11,6 +11,7 @@ const CELL: u64 = CELL_BYTES as u64;
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Layer {
     pub gen: i64,
+    pub nlink: u64,
     pub kind: InodeKind,
     pub size: u64,
     pub cutoff: u64,
@@ -44,6 +45,7 @@ impl Overlay {
                     cutoff: unsigned(row, 3)?,
                     epoch: row.get(4)?,
                     height: row.get(5)?,
+                    nlink: unsigned(row, 6)?,
                 })
             },
         )

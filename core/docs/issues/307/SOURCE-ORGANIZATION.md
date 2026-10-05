@@ -91,7 +91,8 @@ core/crates/layerfs-workspace/src/
 └── ports/
     ├── mod.rs
     ├── overlay.rs              OverlayRead and OverlayJobs from port.rs
-    └── lengths.rs              FileLengths from port.rs
+    ├── lengths.rs              FileLengths from port.rs
+    └── files.rs                independent file/captured read jobs
 ```
 
 `driver.rs` retains `Workspace::mutate`: reserve a serial when needed, submit an
@@ -143,20 +144,27 @@ core/crates/layerfs-overlay/
     │   ├── source.rs
     │   ├── scratch.rs
     │   ├── close.rs
-    │   └── composition.rs
+    │   ├── composition.rs
+    │   ├── file_owners.rs
+    │   ├── captured_reader.rs
+    │   ├── operation.rs
+    │   └── orphan.rs
     ├── maintenance/
     │   ├── mod.rs
     │   ├── ready.rs            formerly maintenance.rs
     │   ├── garbage.rs
-    │   └── reclaim.rs
+    │   ├── reclaim.rs
+    │   └── orphan.rs
     ├── diagnostics/
     │   ├── mod.rs
     │   ├── metrics.rs
     │   ├── access_plan.rs
-    │   └── source_plan.rs
+    │   ├── source_plan.rs
+    │   └── lifetime_plan.rs
     └── contract/
         ├── mod.rs
         ├── types.rs
+        ├── custody.rs
         └── error.rs
 ```
 
@@ -173,7 +181,7 @@ physical allocation/headroom in `database/`, and deletion/serviceable debt in
 
 ## Daemon
 
-Group the current SQL owner library under `overlay/`. These five modules comprise
+Group the current SQL owner library under `overlay/`. These service modules comprise
 one service boundary: startup/ownership, scheduling, credits, typed commands and
 Workspace adaptation.
 
@@ -186,7 +194,8 @@ core/crates/layerfs-daemon/src/
     ├── queue.rs
     ├── credits.rs
     ├── commands.rs
-    └── read_port.rs
+    ├── read_port.rs
+    └── file_port.rs
 ```
 
 Future real registry, lifecycle, execution, upstream and control implementations
@@ -481,15 +490,17 @@ root-reference and excluded-source accounting until their authorized retirement.
 
 ## Alignment checklist
 
-- [ ] All 11 active packages follow the destination folders above, with any justified adjustment recorded explicitly.
-- [ ] Workspace filesystem rules and FUSE/kernel adaptation remain in their owning crates.
-- [ ] New S6 modules have appropriate lifetime, payload, database or maintenance homes; no empty future scaffolds exist.
-- [ ] Public API/module paths, trait/type identities, platform behavior and production algorithms are preserved.
-- [ ] Entry modules obey the declaration/delegation and size rules; SQL remains covered and counted.
-- [ ] Tests remain discoverable, examples compile, and current source/documentation links match the relocated tree.
-- [ ] Required covering checks and actual platform scope are recorded, with failures/gaps retained.
-- [ ] The standalone organization commit records exact production LOC and the counted committed tree.
-- [ ] The main agent then continues the remaining S6 exits without claiming completion from organization alone.
+- [x] All 11 active packages follow the destination folders above, with any justified adjustment recorded explicitly.
+- [x] Workspace filesystem rules and FUSE/kernel adaptation remain in their owning crates.
+- [x] New S6 modules have appropriate lifetime, payload, database or maintenance homes; no empty future scaffolds exist.
+- [x] Public API/module paths, trait/type identities, platform behavior and production algorithms are preserved.
+- [x] Entry modules obey the declaration/delegation and size rules; SQL remains covered and counted.
+- [x] Tests remain discoverable, examples compile, and current source/documentation links match the relocated tree.
+- [x] Required covering checks and actual platform scope are recorded, with failures/gaps retained.
+- [x] The standalone organization commit records exact production LOC and the counted committed tree.
+- [x] The main agent then continues the remaining S6 exits without claiming completion from organization alone.
 
 These boxes belong to the owning implementation checkpoint. Creating this guide
 does not mark them passed, modify product source or create a completion receipt.
+
+Alignment evidence: local-only organization commit `1775fdf98f2207563ea6335bdd2af1cb4e2e8704`, tree `bb389a65a0cf5da26332ce0b288c4199d535d432`. [Receipt](SOURCE-ORGANIZATION-RECEIPT.md) and retained checks support the boxes above. S6 continues; no S6 or release acceptance follows from relocation.

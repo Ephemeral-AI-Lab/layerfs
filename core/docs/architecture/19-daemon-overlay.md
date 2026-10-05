@@ -23,8 +23,10 @@ retains system SQLite; Linux alone enables the existing driver's bundled feature
 Global Store persistence is unchanged. Disposable state has no sync/checkpoint,
 crash-survival or restart-recovery claim.
 
-The [schema](../../crates/layerfs-overlay/sql/schema.sql) has eight application
-tables plus SQLite's AUTOINCREMENT allocator. Namespace IDs are not reused.
+The original schema had eight application tables. Current schema v11 adds
+[bounded live composition](32-live-composition.md) and
+[independent file/processing custody](33-independent-custody.md), alongside
+SQLite's AUTOINCREMENT allocator. Namespace IDs are not reused.
 Every job constrains namespace and checks incarnation against its routing row.
 Inode/name keys support both current lookup and generation-selective capture;
 cell keys include serial, generation and aligned offset. Metadata queries exclude
@@ -48,8 +50,8 @@ byte-write normalization. Its transaction resolves active generation, changes
 values/counters and records a publication ticket. A later reply-send attempt
 removes only that ticket, including when delivery is lost; published bytes remain.
 `capture` refuses outstanding send-attempt custody, then advances fixed metadata
-fields without copying inode/name/payload populations. Resolution/install and
-automatic reclamation are not yet implemented.
+fields without copying inode/name/payload populations. Resolution/install and bounded automatic reclamation are now implemented at
+the scope of the S6 checkpoint guides; physical admission remains unfinished.
 
 `captured_inodes` uses fixed `(ns,gen,serial)` membership, keyset pagination and
 64-row windows, explicitly selecting `inode_capture`. Initial macOS EXPLAIN chose
@@ -62,7 +64,7 @@ An indexed SEARCH/fullscan counter of zero alone was insufficient evidence.
 The [profiler](../../crates/layerfs-overlay/src/diagnostics/metrics.rs) observes actual step
 executions, VM/fullscan/sort/autoindex/reprepare counters, returned/attempted changed
 rows, bound bytes and inclusive statement wall. It resets cached counters before
-each invocation and aggregates in thirteen fixed slots. Exclusive owner-job
+each invocation and aggregates in fourteen fixed slots. Exclusive owner-job
 snapshots provide attribution; shared lifetime counters are not phase/per-Workspace
 resource peaks. Bootstrap PRAGMA/schema work is outside job counters. B-tree
 internal page visits, journal/dirty/device bytes, copy allocation and process/kernel

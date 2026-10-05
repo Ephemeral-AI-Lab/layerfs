@@ -120,6 +120,37 @@ impl Overlay {
             return Ok((0, 0, true));
         };
         let serial = integer(lower.serial)?;
+        if self.orphan_holds(item.ns, serial, item.target)? {
+            // The independent orphan retains bytes; the namespace still needs
+            // its zero-reference metadata over an unchanged immutable base.
+            if lower.nlink == 0
+                && self
+                    .layers(item.ns, serial, state.active.0, state.active.0 - 1)?
+                    .is_empty()
+            {
+                self.put_inode(route, &state, &lower)?;
+                self.execute(
+                    StatementKind::Workspace,
+                    "UPDATE workspace SET dirty_inodes=dirty_inodes+1 WHERE ns=?1",
+                    &[&item.ns],
+                    8,
+                )?;
+            }
+            if let Some(next) = serial.checked_add(1) {
+                self.advance_item(item, 1, next, -1, &[])?;
+                return Ok((1, 0, false));
+            }
+            // The maximum representable serial is already the last key.
+            self.execute(
+                StatementKind::Capture,
+                "UPDATE workspace SET consolidating=NULL WHERE ns=?1",
+                &[&item.ns],
+                8,
+            )?;
+            self.enqueue(item.ns, RETIRE, 0, item.target)?;
+            self.finish_item(item)?;
+            return Ok((1, 0, true));
+        }
         let layers = self.layers(item.ns, serial, state.active.0, state.installed)?;
         let bottom = layers
             .iter()
@@ -154,7 +185,11 @@ impl Overlay {
             )?
             .pop();
         if let Some(cell) = cell {
-            let bytes = self.compose_cell(item.ns, serial, bottom, &top, cell)?;
+            let bytes = if top.nlink == 0 {
+                0
+            } else {
+                self.compose_cell(item.ns, serial, bottom, &top, cell)?
+            };
             self.execute(
                 StatementKind::Reclaim,
                 sql::CELL_DROP,

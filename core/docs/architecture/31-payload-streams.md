@@ -35,8 +35,10 @@ Per write, work is O(request bytes + touched cells times indexed key work), plus
 O(log shrink height) for stale partial edges. Read costs actual window bytes per
 live layer and indexed cell/staircase work. S5 alone does not bound layer depth
 across failed captures or reclaim stale cells/abandoned steps; S6 owns both.
-Serial-addressed zero-reference rows still prevent fall-through to the base,
-pending independent orphan custody. Symlinks retain their one creation cell.
+S6 now provides [bounded live composition and independent custody](33-independent-custody.md).
+Positive zero-reference tombstones prevent fall-through until install; descriptor
+writes require exact open authority and use the independent orphan domain.
+Symlinks retain their one creation cell.
 
 `construct_runs`, `FileRuns`, `FileRun` and `RunConstruction` belong to content.
 The [zero-run derivation](../issues/307/S5-HOLE-CONTRACT.md) preserves the frozen

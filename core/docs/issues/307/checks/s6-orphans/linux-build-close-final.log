@@ -1,0 +1,38 @@
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+warning: variant `Filesystem` is never constructed
+  --> crates/layerfs-persistence/src/backend/records.rs:81:5
+   |
+76 | pub(crate) enum BackendError {
+   |                 ------------ variant in this enum
+...
+81 |     Filesystem(std::io::ErrorKind),
+   |     ^^^^^^^^^^
+   |
+   = note: `BackendError` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` on by default
+
+warning: `layerfs-persistence` (lib) generated 1 warning
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+    Finished `test` profile [optimized + debuginfo] target(s) in 13.93s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-7ec46146107980cb)
+  Executable tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-723874cb1e070ef3)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_overlay-64a458aa1df39a16)
+  Executable tests/compound.rs (core/target/cluster2-linux/debug/deps/compound-1c86f92338d1d3c4)
+  Executable tests/engine.rs (core/target/cluster2-linux/debug/deps/engine-aafb0a25e53f0820)
+  Executable tests/frontier.rs (core/target/cluster2-linux/debug/deps/frontier-cfdf964ad6a238e4)
+  Executable tests/lifetimes.rs (core/target/cluster2-linux/debug/deps/lifetimes-0729392aeb4934f8)
+  Executable tests/orphans.rs (core/target/cluster2-linux/debug/deps/orphans-3aa257dff6e84e4a)
+  Executable tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-42b0a50e3b0ddc68)
+  Executable tests/payload_fragmentation.rs (core/target/cluster2-linux/debug/deps/payload_fragmentation-739dbb223839b34c)
+  Executable tests/source.rs (core/target/cluster2-linux/debug/deps/source-81affea124656912)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_sdk-8372d111fc1dbc84)
+  Executable tests/runtime.rs (core/target/cluster2-linux/debug/deps/runtime-856a50e0343c15a1)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_workspace-8ca43b50fc9dfc6b)
+  Executable tests/base.rs (core/target/cluster2-linux/debug/deps/base-877d7657ffd7bbee)
+  Executable tests/namespace.rs (core/target/cluster2-linux/debug/deps/namespace-04e816278f4702c2)
+  Executable tests/namespace_daemon.rs (core/target/cluster2-linux/debug/deps/namespace_daemon-683f9c8649d6ff67)
+  Executable tests/namespace_profile.rs (core/target/cluster2-linux/debug/deps/namespace_profile-0108384c2aaa61ca)
+  Executable tests/namespace_view.rs (core/target/cluster2-linux/debug/deps/namespace_view-b0ecae85d60c1cfb)
+  Executable tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-8ec0aa670ac51563)

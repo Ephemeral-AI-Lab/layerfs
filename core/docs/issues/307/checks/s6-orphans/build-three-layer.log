@@ -1,0 +1,3 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.79s
+  Executable tests/orphans.rs (core/target/debug/deps/orphans-491219fdf2762d7e)

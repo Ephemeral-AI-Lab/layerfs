@@ -2,6 +2,8 @@
 use crate::{db::integer, Overlay, OverlayError, OverlayResult, ReclaimStep, StatementKind};
 
 pub(crate) const FOLD: i64 = 1;
+pub(crate) const ORPHAN: i64 = 2;
+pub(crate) const SERIAL_RETIRE: i64 = 7;
 pub(crate) const RETIRE: i64 = 3;
 pub(crate) const STALE: i64 = 4;
 pub(crate) const STEPS: i64 = 5;
@@ -128,8 +130,7 @@ impl Overlay {
         Ok(!self
             .query(
                 StatementKind::Lease,
-                "SELECT 1 FROM lease INDEXED BY lease_resource
-            WHERE ns=?1 AND kind=1 AND resource=?2 LIMIT 1",
+                crate::sql::GENERATION_HELD,
                 &[&ns, &generation],
                 16,
                 |_| Ok(()),
@@ -178,6 +179,8 @@ impl Overlay {
                 match item.kind {
                     FOLD => self.fold_namespace(&item)?,
                     RETIRE => self.retire_generation(&item)?,
+                    ORPHAN => self.maintain_orphan(&item)?,
+                    SERIAL_RETIRE => self.retire_serial(&item)?,
                     STALE | STEPS | SCRATCH => self.clean_live_item(&item)?,
                     _ => return Err(OverlayError::Invalid("maintenance kind")),
                 }
@@ -208,7 +211,7 @@ impl Overlay {
         let changed = self.execute(
             StatementKind::Reclaim,
             "UPDATE maintenance SET ready=1
-            WHERE ns=?1 AND target=?2 AND kind IN(1,3)",
+            WHERE ns=?1 AND target=?2 AND kind IN(1,3,7)",
             &[&ns, &integer(generation)?],
             16,
         )?;

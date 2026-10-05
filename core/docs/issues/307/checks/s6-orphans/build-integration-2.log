@@ -1,0 +1,55 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+error[E0308]: mismatched types
+  --> crates/layerfs-workspace/src/operations/file/read.rs:30:56
+   |
+30 |         self.emit_local(serial, offset, length, local, self.base.identity().0, sink)
+   |              ----------                                ^^^^^^^^^^^^^^^^^^^^^^ expected `[u8; 32]`, found `ObjectId`
+   |              |
+   |              arguments to this method are incorrect
+   |
+note: method defined here
+  --> crates/layerfs-workspace/src/operations/file/read.rs:70:8
+   |
+70 |     fn emit_local(
+   |        ^^^^^^^^^^
+...
+76 |         root: [u8; 32],
+   |         --------------
+
+error[E0277]: can't compare `[u8; 32]` with `ObjectId`
+  --> crates/layerfs-workspace/src/operations/file/read.rs:87:28
+   |
+87 |         let base = if root == self.base.identity().0 {
+   |                            ^^ no implementation for `[u8; 32] == ObjectId`
+   |
+   = help: the trait `PartialEq<ObjectId>` is not implemented for `[u8; 32]`
+   = help: the following other types implement trait `PartialEq<Rhs>`:
+             `&[T]` implements `PartialEq<Vec<U, A>>`
+             `&[T]` implements `PartialEq<[U; N]>`
+             `&mut [T]` implements `PartialEq<Vec<U, A>>`
+             `&mut [T]` implements `PartialEq<[U; N]>`
+             `[T; N]` implements `PartialEq<&[U]>`
+             `[T; N]` implements `PartialEq<&mut [U]>`
+             `[T; N]` implements `PartialEq<[U; N]>`
+             `[T; N]` implements `PartialEq<[U]>`
+           and 3 others
+
+error[E0308]: mismatched types
+  --> crates/layerfs-workspace/src/operations/file/read.rs:92:71
+   |
+92 |                 .rebind(layerfs_content::filesystem::FilesystemRootId(root))?;
+   |                         --------------------------------------------- ^^^^ expected `ObjectId`, found `[u8; 32]`
+   |                         |
+   |                         arguments to this struct are incorrect
+   |
+note: tuple struct defined here
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/filesystem/root.rs:37:12
+   |
+37 | pub struct FilesystemRootId(pub ObjectId);
+   |            ^^^^^^^^^^^^^^^^
+
+Some errors have detailed explanations: E0277, E0308.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `layerfs-workspace` (lib) due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...

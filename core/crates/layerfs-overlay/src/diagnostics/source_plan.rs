@@ -13,7 +13,12 @@ impl Overlay {
         let mut plans = self.query(
             StatementKind::Explain,
             &format!("EXPLAIN {}", sql::BASE_SOURCE_INSERT),
-            &[&route.ns, &integer(owner)?, &state.base_root.as_slice()],
+            &[
+                &route.ns,
+                &integer(owner)?,
+                &state.base_root.as_slice(),
+                &0_i64,
+            ],
             48,
             |row| {
                 Ok(format!(
@@ -41,7 +46,12 @@ impl Overlay {
         plans.extend(self.query(
             StatementKind::Explain,
             &format!("EXPLAIN QUERY PLAN {}", sql::BASE_SOURCE_DELETE),
-            &[&route.ns, &integer(owner)?, &state.base_root.as_slice()],
+            &[
+                &route.ns,
+                &integer(owner)?,
+                &state.base_root.as_slice(),
+                &0_i64,
+            ],
             48,
             |row| Ok(format!("delete: {}", row.get::<_, String>(3)?)),
         )?);

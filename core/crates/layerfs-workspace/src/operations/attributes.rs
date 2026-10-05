@@ -19,6 +19,9 @@ pub(crate) fn set(
         Some(None) => return refuse(Refusal::Missing),
         Some(Some(inode)) => inode,
     };
+    if !eval.alive(&old) && eval.open_serial != Some(serial) {
+        return refuse(Refusal::Missing);
+    }
     let mut new = old.clone();
     if let Some(mode) = mode {
         let allowed = match old.kind {

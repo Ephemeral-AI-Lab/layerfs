@@ -65,6 +65,7 @@ fn removed(parent: u64, name: &[u8], inherited: bool) -> NameChange {
 }
 fn names(names: Vec<NameChange>) -> Changes {
     Changes {
+        open: None,
         names,
         ..Changes::default()
     }
@@ -90,6 +91,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         validity,
     };
     let changes = Changes {
+        open: None,
         inodes: vec![directory(10, 1), file(20, active)],
         names: vec![bound(10, b"bin\xff\0name", 20)],
         cell: Some((20, cell.clone())),
@@ -123,6 +125,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
     // A value refused inside the transaction, after an earlier inode write,
     // leaves no inode, name, ticket, revision or dirty-count change.
     let refused = Changes {
+        open: None,
         inodes: vec![file(30, active), file(31, active + 1)],
         names: vec![bound(10, b"later", 30)],
         cell: None,
@@ -149,10 +152,12 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
     for invalid in [
         Changes::default(),
         Changes {
+            open: None,
             inodes: (40..45).map(|serial| file(serial, 0)).collect(),
             ..Changes::default()
         },
         Changes {
+            open: None,
             inodes: vec![file(40, 0), file(40, 0)],
             ..Changes::default()
         },
@@ -167,6 +172,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         names(vec![bound(10, b"", 40)]),
         names(vec![bound(10, &[b'n'; 256], 40)]),
         Changes {
+            open: None,
             inodes: vec![Inode {
                 entries: 1,
                 ..file(40, 0)
@@ -174,6 +180,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
             ..Changes::default()
         },
         Changes {
+            open: None,
             inodes: vec![file(40, 0)],
             cell: Some((
                 41,
@@ -347,6 +354,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
         db.apply(
             source,
             &Changes {
+                open: None,
                 inodes: vec![directory(1, 0), directory(2, 0)],
                 ..Changes::default()
             },
@@ -385,6 +393,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
             db.apply(
                 source,
                 &Changes {
+                    open: None,
                     inodes: vec![file(count, 0), file(count + 1, 0)],
                     names: vec![bound(1, &from, count), bound(1, &to, count + 1)],
                     cell: None,
@@ -404,6 +413,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
             .apply(
                 source,
                 &Changes {
+                    open: None,
                     inodes: vec![
                         directory(1, count),
                         directory(2, 1),
@@ -441,6 +451,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
         totals.windows(2).all(|pair| pair[0] == pair[1]),
         "work must not grow with unrelated rows: {totals:?}"
     );
-    // Three inodes, one dropped name, one rebound name, one ticket, one state row.
-    assert_eq!(totals[0].2, 7);
+    // Three inodes, one dropped name, one rebound name, one ticket, one state
+    // row and the targeted unlinked-payload cleanup item introduced in S6.
+    assert_eq!(totals[0].2, 8);
 }

@@ -21,8 +21,9 @@ pub(crate) const STEP_GET: &str =
 pub(crate) const STEP_PUT: &str = "INSERT INTO shrink VALUES(?1,?2,?3,?4,?5,?6)
     ON CONFLICT(ns,serial,gen,depth) DO UPDATE SET cell_offset=excluded.cell_offset,
     epoch=excluded.epoch";
-pub(crate) const LAYERS: &str = "SELECT gen,kind,size,inherited_cutoff,epoch,height FROM inode
-    WHERE ns=?1 AND serial=?2 AND gen<=?3 AND gen>?4 ORDER BY gen DESC";
+pub(crate) const LAYERS: &str =
+    "SELECT gen,kind,size,inherited_cutoff,epoch,height,nlink FROM inode
+    WHERE ns=?1 AND serial=?2 AND gen<=?3 AND gen>?4 ORDER BY gen DESC LIMIT 4";
 pub(crate) const LAYER_ACTIVE: &str = "SELECT size,inherited_cutoff,epoch,height FROM inode
     WHERE ns=?1 AND serial=?2 AND gen=?3";
 pub(crate) const LAYER_LOWER: &str = "SELECT size FROM inode
@@ -35,11 +36,11 @@ pub(crate) const RETAINED_CAPTURE: &str = "SELECT captured,captured_revision,bas
 pub(crate) const PUBLICATION_PAGE: &str = "SELECT revision,gen FROM request
     WHERE ns=?1 AND revision>?2 ORDER BY revision LIMIT 64";
 pub(crate) const BASE_SOURCE_LOOKUP: &str =
-    "SELECT base_root FROM base_source WHERE ns=?1 AND owner=?2";
+    "SELECT base_root FROM base_source WHERE ns=?1 AND owner=?2 AND kind=?3";
 pub(crate) const BASE_SOURCE_INSERT: &str =
-    "INSERT INTO base_source(ns,owner,base_root) VALUES(?1,?2,?3)";
+    "INSERT INTO base_source(ns,owner,base_root,kind) VALUES(?1,?2,?3,?4)";
 pub(crate) const BASE_SOURCE_DELETE: &str =
-    "DELETE FROM base_source WHERE ns=?1 AND owner=?2 AND base_root=?3";
+    "DELETE FROM base_source WHERE ns=?1 AND owner=?2 AND base_root=?3 AND kind=?4";
 pub(crate) const BASE_SOURCE_INCREMENT: &str =
     "UPDATE workspace SET base_readers=base_readers+1 WHERE ns=?1";
 pub(crate) const BASE_SOURCE_DECREMENT: &str =
@@ -67,3 +68,14 @@ pub(crate) const DENTRY_DROP: &str =
 pub(crate) const TICKET_PUT: &str = "INSERT INTO request(ns,revision,gen) VALUES(?1,?2,?3)";
 pub(crate) const FRONTIER_ADVANCE: &str = "UPDATE workspace SET revision=?2,
     dirty_inodes=dirty_inodes+?3,dirty_names=dirty_names+?4 WHERE ns=?1";
+
+pub(crate) const ORPHAN_LOOKUP: &str =
+    "SELECT base_root,lower_top,lower_floor FROM orphan WHERE ns=?1 AND serial=?2";
+
+pub(crate) const FILE_REFS: &str =
+    "SELECT opens+lookups+readers FROM file_custody WHERE ns=?1 AND serial=?2";
+
+pub(crate) const OPERATION_CUSTODY: &str = "SELECT 1 FROM operation_owner WHERE ns=?1 AND owner=?2";
+
+pub(crate) const GENERATION_HELD: &str = "SELECT 1 FROM lease INDEXED BY lease_resource
+            WHERE ns=?1 AND kind IN(1,6) AND resource=?2 LIMIT 1";

@@ -9,7 +9,7 @@ fn error(error: OwnerError) -> WorkspaceError {
     WorkspaceError::Service(Box::new(error))
 }
 impl OwnerClient {
-    fn read_job(
+    pub(crate) fn read_job(
         &self,
         source: BaseSource,
         command: Command,

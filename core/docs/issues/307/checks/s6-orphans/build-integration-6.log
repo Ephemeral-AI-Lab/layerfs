@@ -1,0 +1,29 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+error[E0063]: missing field `open` in initializer of `layerfs_overlay::Changes`
+  --> crates/layerfs-overlay/tests/compound.rs:92:19
+   |
+92 |     let changes = Changes {
+   |                   ^^^^^^^ missing `open`
+
+error[E0063]: missing field `open` in initializer of `layerfs_overlay::Changes`
+   --> crates/layerfs-overlay/tests/compound.rs:125:19
+    |
+125 |     let refused = Changes {
+    |                   ^^^^^^^ missing `open`
+
+error[E0063]: missing field `open` in initializer of `layerfs_overlay::Changes`
+   --> crates/layerfs-overlay/tests/compound.rs:387:18
+    |
+387 |                 &Changes {
+    |                  ^^^^^^^ missing `open`
+
+error[E0063]: missing field `open` in initializer of `layerfs_overlay::Changes`
+   --> crates/layerfs-overlay/tests/compound.rs:406:18
+    |
+406 |                 &Changes {
+    |                  ^^^^^^^ missing `open`
+
+For more information about this error, try `rustc --explain E0063`.
+error: could not compile `layerfs-overlay` (test "compound") due to 4 previous errors
+warning: build failed, waiting for other jobs to finish...

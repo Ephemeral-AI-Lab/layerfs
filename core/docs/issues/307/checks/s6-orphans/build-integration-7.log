@@ -1,0 +1,21 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error: path separator must be a double colon
+  --> crates/layerfs-overlay/tests/compound.rs:67:13
+   |
+67 |         open:None,
+   |             ^
+   |
+help: use a double colon instead
+   |
+67 |         open::None,
+   |              +
+
+error: expected one of `!`, `.`, `::`, `;`, `?`, `{`, `}`, or an operator, found `,`
+  --> crates/layerfs-overlay/tests/compound.rs:67:18
+   |
+67 |         open:None,
+   |                  ^ expected one of 8 possible tokens
+
+error: could not compile `layerfs-overlay` (test "compound") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

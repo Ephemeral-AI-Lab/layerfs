@@ -51,7 +51,7 @@ struct Service {
     owner: Option<Owner>,
     client: OwnerClient,
     route: Route,
-    workspace: Workspace,
+    workspace: Arc<Workspace>,
     allocator: Allocator,
     owners: AtomicU64,
     gate: Arc<Gate>,
@@ -107,7 +107,7 @@ impl Service {
             owner: Some(owner),
             client,
             route,
-            workspace: Workspace::bind(route, base),
+            workspace: Arc::new(Workspace::bind(route, base)),
             allocator: Allocator {
                 next: AtomicU64::new(1000),
                 calls: AtomicU64::new(0),
@@ -312,7 +312,12 @@ fn a_blocked_base_fact_leaves_the_owner_free_and_publishes_after_a_capture() {
     service.gate.state.lock().unwrap().0 = true;
     thread::scope(|scope| {
         let blocked = scope.spawn(|| service.applied(create(1, "gated")).unwrap());
-        service.waiting.lock().unwrap().recv().unwrap();
+        service
+            .waiting
+            .lock()
+            .unwrap()
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .unwrap();
         // The same Workspace keeps publishing complete operations meanwhile.
         let free = service.applied(create(1, "free")).unwrap();
         let dir = service.applied(mkdir(1, "dir")).unwrap();
@@ -641,3 +646,6 @@ fn payload_complete_operations_have_indexed_work_through_the_real_owner() {
             .sum::<u64>()
     );
 }
+
+#[path = "namespace_daemon_cases/orphans.rs"]
+mod orphans;
