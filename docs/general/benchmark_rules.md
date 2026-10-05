@@ -11,14 +11,36 @@
 > The declared topology change is the experimental treatment. Its single-run
 > results remain release-admission-ineligible; other profiles are unchanged.
 
-**Permanent hosting rule:** benchmark SDK/coordinator, Workspace processing,
-spool, and SQLite MUST run on the macOS host. Docker is only for Linux
-daemon/FUSE/workloads. Docker-owned SQLite, prepared Store images, and
-container-side benchmark coordinators MUST NOT be restored or executed.
-Unsupported families require host migration, never a Docker fallback. This
-rule supersedes older Docker-owned benchmark plans; historical results remain
-evidence only for their recorded topology.
+## Hosting scope for cluster one and cluster two
 
+Owner/current-design consolidation, 2026-10-05: topology is scoped to the actual
+product operation and registered family. Both current workstreams implement in
+core; root crates are the v0.1.6 reference until cluster-two retirement.
+
+- Current cluster-one global Store/storage encoding/history persistence run on
+  the supported macOS host. The host application embeds their public libraries.
+  The active provider is host-local SQLite; unavailable backends/platforms fail
+  explicitly. No Docker-owned global Store, prepared Store image or alternate
+  coordinator is an error-driven substitute.
+- The target cluster-two Linux daemon owns FUSE, mutable Workspace metadata and
+  physical payload, one local overlay SQLite per daemon, and logical content
+  reads/construction. Global Storage/Save encoding and history use bounded
+  authenticated host-runtime adapters. The retired layerfs-server is not revived.
+  This placement is a target contract, not a claim that integration is built.
+- New integrated measurements must register and exercise that authentic path,
+  include all owning process/cache/resource scopes, and establish correctness.
+  Supporting the daemon overlay does not move the global provider into Linux or
+  authorize a harness-only replacement, hidden prep, reduced root or warm credit.
+- Retained v0.1.6 host-owned Workspace/spool/SQLite families and the September
+  sandbox-snapshot exception keep their originally frozen topology and verdicts.
+  Do not retarget, rewrite or promote old receipts through this clarification.
+  A changed operation/topology requires a prospective identity/selection.
+
+The former blanket host-only Workspace/SQLite wording is superseded for the
+replacement daemon overlay/content path. Historical host-only families remain
+host-only; unsupported global providers still require real integration rather
+than a fallback. Read the [cluster-one handbook](../../cluster_one_handbook.md)
+and [cluster-two design](../../core/docs/issues/303/README.md) for current scope.
 
 This document is the normative policy for LayerFS performance benchmarks.
 `MUST`, `MUST NOT`, `SHOULD`, and `MAY` are normative. A `MUST` or `MUST

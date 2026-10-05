@@ -11,6 +11,10 @@ Retirement update 2026-10-05 against parent `8dd9e37f3`: the retained S3 crate
 is now deleted. This advances the provider-presence description only; algorithms
 and benchmark receipts keep the source pins above and in section 9.
 
+API documentation correction 2026-10-05, verified at design/source checkpoint
+`334fc7437`: `FilesystemRootId` is a tuple struct; examples use `.0`, not
+`.object()`. No product API or benchmark identity changed.
+
 **Terminology:** cluster one and cluster two are implementation workstreams.
 Older source comments use C1 for `layerfs-content`, C2 for `layerfs-storage`,
 and C5 for `layerfs-history`. Those component numbers do not mean clusters.
@@ -204,7 +208,7 @@ and new serial rows are sorted/unique. Directory changes describe final name
 bindings, not a chronological rename log. Cursors must be replayable and keyed
 lookups must agree with them. `FilesystemInput` is a resident helper; a custom
 `PreparedRows` can provide bounded backing. `FilesystemResult.root` is a typed
-`FilesystemRootId`; use `.object()` when a history request requires `ObjectId`.
+`FilesystemRootId`; use `.0` when a history request requires `ObjectId`.
 
 `EditRequest` contains `root`, `edits: &dyn EditSequence`, and
 `source: &dyn EditSource`. Supply a stable sequence and stable replacement bytes
@@ -322,7 +326,7 @@ provider and sink contracts. For example, after file objects have been accepted:
 let mut sink = save.sink();
 let mut objects = FilesystemObjects::new(&save, &mut sink);
 let fs = update_filesystem(&mut objects, &rows, backing)?;
-let candidate_root = fs.root.object();
+let candidate_root = fs.root.0;
 drop(objects);
 drop(sink);
 let outcome = save.finish()?;

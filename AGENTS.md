@@ -1,291 +1,174 @@
 # AGENTS.md
 
-Repo-wide rules for coding agents working in `layerfs`. This file routes; it does
-not replace the normative documents below, and where they disagree with this page,
-they win.
+> **Status:** Current general guide.
 
-For the replacement product under `core/`, also read
-[`core/AGENTS.md`](core/AGENTS.md). It defines product-only source, external tests,
-the 999-physical-line production-file ceiling, and the stricter 200-line
-declaration/delegation limit for `lib.rs` and `mod.rs`. These
-rules apply to the replacement tree; existing root `crates/` remains reference
-code during migration. Follow the core-specific checks before claiming core work
-is verified; the root checks alone do not exercise that workspace.
+Repository-wide instructions for LayerFS. Also read [core/AGENTS.md](core/AGENTS.md)
+for implementation under `core/`. Current owner instructions and documented
+supersessions govern; a closed handoff or historical receipt is not a new assignment.
 
-## Required reading before cluster two work
+## Product scope and current workstreams
 
-Before starting cluster two implementation or integration (Workspace, FUSE,
-daemon, sandbox, or Commit integration), read both root-level handbooks:
+**Implement both cluster one and cluster two in `core/`.** Root `crates/` is the
+v0.1.6 reference implementation, retained for inspection and explicitly selected
+baseline comparisons. It is not a dependency, source include or fallback for core.
+Owner direction: remove that legacy tree once cluster two is complete; do not
+delete it early or preserve it as a second product. Retain historical evidence
+and report retirement honestly in the source-size comparison.
 
-- [`cluster_one_handbook.md`](cluster_one_handbook.md) — active cluster one
-  architecture, public APIs, streaming workflows, completion/failure semantics,
-  persistence profiles, and source-qualified benchmark results.
-- [`cas_cdc_deltaencoding_handbook.md`](cas_cdc_deltaencoding_handbook.md) —
-  canonical identity, CDC, exact CAS reuse, payload and metadata delta encoding,
-  dependency reconstruction, and caller obligations.
+| Workstream | Current scope | Entry point |
+| --- | --- | --- |
+| Cluster one | Implemented content, storage, history, persistence, project Init and telemetry libraries | [Cluster-one handbook](cluster_one_handbook.md), [CAS/CDC/delta handbook](cas_cdc_deltaencoding_handbook.md) |
+| Cluster two | Workspace, FUSE, daemon, execution and Commit/runtime integration design and implementation | [Current design index](core/docs/issues/303/README.md) and its seven primary contracts |
+| Legacy reference | v0.1.6 under root `crates/`; retire after cluster two completes | Read only when the task needs a reference/baseline |
 
-Use the current public contracts and observe each handbook's source pins and
-limitations. Cluster one/two are workstreams; C1/C2 in older component documents
-mean content/storage. The handbooks do not implement cluster two's mutable overlay
-or transport adapters and do not replace the normative rules in this file or
-`core/AGENTS.md`.
+Cluster names are workstreams. C1/C2/C5 in older component documents mean
+content/storage/history. Check [core/Cargo.toml](core/Cargo.toml) for active
+members: a directory or old test does not establish a built replacement.
+Source and public contracts establish implemented behavior. Owner requirements
+and proposals establish target behavior; research establishes neither capability
+nor qualification. Preserve source pins, limits, failures and open prerequisites.
 
-Read before touching measurement, benchmark or release work:
+## LayerFS mental model
 
-- [`docs/general/benchmark_rules.md`](docs/general/benchmark_rules.md) — the measurement contract
-- [`benchmark/AGENTS.md`](benchmark/AGENTS.md) — benchmark-tree specifics and the v0.1.6 exception
-- [`benchmark/fs-bench-pro/QUICKSTART.md`](benchmark/fs-bench-pro/QUICKSTART.md) — build, reuse and run mechanics
-- [`benchmark_agent_report.md`](benchmark_agent_report.md) — required per-family tables and Server/daemon attribution for every benchmark run
-- [`docs/general/release-policy.md`](docs/general/release-policy.md), [`docs/general/documentation-policy.md`](docs/general/documentation-policy.md)
+- A Workspace is a complete mutable filesystem view over an immutable committed
+  root. Include `.git` and its index, ignored files, dependencies, symlinks,
+  caches and output; Git ignore rules do not filter LayerFS state.
+- Support both per-tool-call and per-task orchestration. Per-tool-call is the
+  expected common case and needs fast bootstrap. A Workspace can serve multiple
+  sequential/concurrent calls, last a long time and Commit incrementally.
+- Workspace granularity, Exec duration and Commit cadence are independent.
+  Commands may be short or long-lived in either mode. Ordinary Bash has no
+  automatic runtime timeout, command-specific restore/install, implicit Commit
+  or automatic unmount. Only explicit terminal unmount closes local ownership.
+- Initial full-root acquisition is explicit. Repeated mount binds the complete
+  root without a whole-tree scan/copy/materialization, dependency restoration or
+  new database. Demand-loaded metadata/content still pay real I/O.
+- One local overlay SQLite database belongs to each daemon and is initialized
+  before readiness. Workspace metadata, physical payload, scratch and custody
+  are namespaced within it. One SQLite writer does not serialize whole Execs or
+  Commits; use short atomic jobs and bounded fair service.
+- Commit captures the shared locally published Workspace frontier, potentially
+  including several calls' changes. Retain stable existing input without a bulk
+  overlay copy. Construct/save/publish it; known install advances the base while
+  preserving later active mutations and the effective live view.
+- A lost reply does not remove an already published mutation. Bash exit is not
+  proof that descendants, descriptors, dirty mappings or requests are finished.
+  UpToDate need not create a new Commit; invocation auditing is separate.
+- FUSE must preserve permissions, stable identity, coherent caches and exact
+  request/open/lookup ownership. Qualify both frequent fresh mounts and sustained
+  same-mount calls/Commits. Kernel writeback remains off under the target contract.
+- Large files, huge namespaces and mutation bursts require indexed/backed state,
+  bounded windows, streaming and backpressure. Resident containers/transport
+  frames must not impose artificial total file/edit/Workspace/Commit/flow/time
+  caps. Physical capacity, platform/format limits and explicit admission remain.
+- Automatic bounded local reclamation follows last-owner release, including
+  during live activity and idle periods. Terminal unmount includes close/cleanup;
+  physical SQL deletion may finish later. It does not delete global history or
+  imply that the shared database file shrinks.
+- The host application embeds cluster-one libraries and supplies authenticated
+  runtime adapters. Do not revive `layerfs-server`. Immutable objects support
+  reuse/distribution; authority, reference closure, mutable history, durability
+  and safe GC still require exact contracts. Filesystem history is not a process,
+  memory, socket or stdout/stderr checkpoint.
+
+## Read the current contract for the task
+
+Before cluster-two implementation/integration, read both root handbooks and the
+[current design index](core/docs/issues/303/README.md), then the relevant primary
+operation, [engine](core/docs/issues/303/daemon-sqlite.md),
+[FUSE](core/docs/issues/303/fuse.md) and
+[runtime integration](core/docs/issues/303/06-cluster-one-integration.md) contracts.
+The [optimization investigation](core/docs/issues/303/fuse-optimization-investigation.md)
+is research; it does not silently select new algorithms, profiles or capabilities.
+
+Completed/superseded Stage 0–6 prompts are historical references, not default
+routing. Preserve canonical compatibility and evidence, but do not resume old
+loops, reopen closed rows or run old campaigns unless the current task selects
+that work. Do not choose authority by issue number alone.
+
+For documentation/release work, read the
+[documentation policy](docs/general/documentation-policy.md) and
+[release policy](docs/general/release-policy.md).
+For measurements, read the [agent measurement workflow](docs/general/agent-measurement-policy.md),
+[benchmark rules](docs/general/benchmark_rules.md),
+[report template](benchmark_agent_report.md) and owning harness/family contract.
+Core routing is [core/benchmark/fs-bench-pro/AGENTS.md](core/benchmark/fs-bench-pro/AGENTS.md).
+Root [benchmark/AGENTS.md](benchmark/AGENTS.md) and its
+[Quickstart](benchmark/fs-bench-pro/QUICKSTART.md) apply to selected legacy/reference
+work, not automatically to new core operations.
 
 ## 1. A warm cache must never credit a measured phase
 
-The harness runs timers; the OS, the Store and the page cache are not part of the
-product's work. Two rules follow, and they are absolute:
-
-**A measured phase pays for its own work from a declared cache state.** If the
-machine had just booted and no page cache held this process's data, would the
-work still have to happen inside the timed phase? If yes, the phase must pay for
-it — every run, in every arm.
-
-Forbidden, without exception:
-
-- letting pages left resident by setup, preparation, an earlier sample, another
-  arm or another phase serve a timed phase (a transfer that reads its own recent
-  writes out of cache is the canonical case: it measured 19 GB/s instead of the
-  2.1 GiB/s the same bytes cost from storage);
-- pre-touching, priming, warming or "just checking" the paths a timed phase will
-  read, or priming selected ranges with expected-result data;
-- measuring arm A warm and arm B cold, or invalidating caches for one arm only —
-  cache state MUST be declared and enforced equally, and cold and warm rows MUST
-  NOT be pooled;
-- re-running a case until a warm variant produces a passing number and reporting
-  only that run;
-- quoting a lifetime counter as a phase number (cgroup `memory.peak` is a
-  lifetime total unless it was verifiably reset after setup);
-- excusing file-size-proportional spool or cgroup page-cache growth because the
-  process heap is bounded.
-- inflating a timeout, changing worker counts, or relaxing a cache/buffer policy
-  to turn a miss into a pass;
-- dropping a failing cell, or omitting a registered selection, from a report;
-- rewriting, re-labelling or promoting a historical receipt after the fact.
-
-Allowed, and expected: untimed, deterministic, recorded preconditioning;
-preparing pristine fixtures once outside the measured child; using the harness's
-own cold contract — for the families it covers, `shared/cold.py` invalidates
-source data pages before the timed sample and checks whole-input residency, so a
-row with resident pages is reported `INELIGIBLE` rather than quietly fast.
-
-If a phase's cache state is undeclared, unknown, or different between arms, its
-number is `INCOMPLETE` or `INELIGIBLE` — never `PASS`. Say so in the receipt and
-in the report.
+Each measured phase pays for its own work from an equally declared/enforced
+cache state. No setup/earlier-phase warmth, pre-touching, own-write cache credit,
+lifetime-peak substitution or file-sized backing/page-cache growth disguised by a
+bounded heap. Unknown or mismatched cache state is INCOMPLETE/INELIGIBLE, not PASS.
+Preserve failures and historical verdicts. Full rules and the retained example:
+[measurement workflow §1](docs/general/agent-measurement-policy.md#1-a-warm-cache-must-never-credit-a-measured-phase).
 
 ## 2. Reuse setup (`--setup clone`); never reuse measurement
 
-Agents MUST avoid repeating setup, and MUST NOT let that reuse reach inside a
-timed phase. The test is where the saved work lives: reuse that removes work
-**outside** the timers is required; reuse that removes work **inside** a timed
-phase is cheating.
-
-- **Fixtures: use `--setup clone`, not a fresh regeneration, for every
-  post-initialization case.** Clone takes the closed, validated prepared master
-  and gives the run an independent writable byte copy, so no sample pays the
-  preparation again. `--setup fresh` is for initialization and fresh-output cases
-  only — the harness rejects `clone` there. Do not run a family's `setup.sh`
-  before every sample, do not clear protected caches routinely, and never reuse a
-  mutated sample.
-- **A clone is setup reuse, never a cold claim.** Clone means a closed,
-  validated, independent writable byte copy — not an APFS clone and not a
-  cold-OS-cache claim. Declare the clone/copy method with the row, treat ordinary
-  OS-cache effects consistently, never pool clone and fresh rows, and never let
-  the master's or the clone's warmed pages credit a timed phase. A family that
-  needs a cold claim needs the cold contract's invalidation-plus-residency check,
-  not a clone.
-- **Verification: `--reuse-pass <verification.json>`** accepts one
-  identity-matched `status=PASS`, cleanup-`PASS` receipt instead of re-running
-  verification. It fails closed on any schema, identity, hard-limit or wall
-  mismatch and records `reused_proof_identities` plus an explicit omission.
-- **Builds and images: reuse through seals.** Incremental host builds, the shared
-  Cargo target, image layers keyed by the compilation seal, and immutable
-  `binary-archive/<sha256>/` executables (a host-only Python/shell change may
-  reuse an image whose compilation seal still matches; `--prune-builds` retains
-  owned targets).
-
-Never: warm starts, replaying a previous receipt as a new sample, moving cold
-product work into setup, priming the paths a timed phase will read, or treating a
-cached acquisition or a clone as evidence about the measured operation. Anything
-reused MUST be visible in the receipt (`clone_method`, `build_mode`,
-`dependency_reuse`, `reused_proof_identities`, `cache_contract`) and stated in
-the report.
+Reuse closed prepared inputs, sealed builds/images and qualifying proof receipts
+through the declared mechanisms. Use `--setup clone` for post-initialization
+cases where supported; fresh is for initialization/fresh-output cases.
+A clone is an independent writable byte copy, not a cold claim. Never reuse a
+mutated sample or remove timed product work through setup. Record all reuse and
+enforce residency for a cold claim. See
+[measurement workflow §2](docs/general/agent-measurement-policy.md#2-reuse-setup---setup-clone-never-reuse-measurement).
 
 ## 3. Running a measurement
 
-**Current Core SDK Init profile (owner direction, 2026-09-24):**
-`core/benchmark/fs-bench-pro` measures `init_namespace` with locked Cargo
-**release** binaries only. Build with `--release` and use the driver and
-independent verifier from `target/release/examples/`; a debug binary or
-unmarked/debug build cache is forbidden for every new SDK Init measurement.
-Historical debug receipts retain their original profile and status and must
-never be relabeled, pooled with release rows, or used as a release speed arm.
-The SDK selection's mandatory separate verifier is a scoped exception to the
-exploratory performance-only default below; see
-[`core/benchmark/fs-bench-pro/AGENTS.md`](core/benchmark/fs-bench-pro/AGENTS.md).
+The [measurement workflow](docs/general/agent-measurement-policy.md#3-running-a-measurement)
+owns detailed procedures, scoped SDK rules and budget exceptions. Its requirements
+remain binding; moving them out of this file does not weaken them.
 
-1. **One sample per case per arm, and do not sample.** No n3, no best-of
-   selection, and no second run of an arm to confirm stability, to characterise
-   spread, or to replace a number that came out inconveniently. **Sampling is not
-   the method here and it is not free.** A row's spread is a property of the
-   machine and the window rather than of the code — the campaign's own record has
-   the same executable reading 16.7 s, 17.6 s and 26.0 s in three windows, and
-   this lane's own row carries a teardown term that swings 6.7-469.9 ms on
-   identical source — so repeating an arm buys a wider distribution, not a truer
-   number, while costing the wall time the work itself needed.
-
-   An anomaly is therefore diagnosed **from the receipts already taken**, or with
-   a **labelled diagnostic that measures the cause**: a count-driven instrument
-   (statements issued, calls made, bytes written, microseconds per call) that is
-   reproducible across rows, never another sample of the same arm. Diagnostics
-   are allowed and MUST be labelled as diagnostics and reported alongside the gate
-   sample. The one carve-out is the #118 material-regression rule for ordinary
-   regression screens (`docs/general/benchmark_rules.md`), which is a different
-   activity — screening a tree for a slowdown by median of prospectively declared
-   pairs — and is not a licence to repeat a treatment arm.
-2. Fresh `--output` path per run; receipts are append-only evidence and are never
-   overwritten. Failures, `INELIGIBLE` rows and discarded attempts stay on disk.
-3. Pin identities: source commit/seal/tree, product, compilation and dependency
-   seals, image ID, harness identity, workload-source hash. A rebuilt artifact
-   needs a rebuilt matched arm; a harness change invalidates the pair.
-4. **Default exploratory benchmarks to performance only.** Run the selected
-   case through the fast lane without full verification; record `SKIPPED` and
-   keep the row diagnostic. Verification wall is separate from the performance
-   timer and never enters a speed comparison. During an experiment, record a
-   verifier defect or timeout and keep working on the measured mechanism; fix
-   it then only if it prevents the performance run, corrupts its evidence, or
-   blocks a proof the current decision actually requires. A verifier that misses
-   its bound cannot turn the row into an admission PASS.
-
-   At a frozen final source identity, verify separately with the exact
-   identities from the performance receipt. A performance PASS alone is not
-   release admission. **Verify once, with the commands that cover the change;
-   do not verify or test iteratively.** A red test is diagnosed from its output
-   and the source, the fix is applied once, and the covering commands then run
-   once. Do not rerun an unchanged performance arm to select a better number.
-
-   **Earlier-family fast path (owner direction, 2026-09-30):** reuse unaffected
-   earlier-family evidence instead of routinely rerunning it, especially the
-   Family 2 retained-history group. Benchmark, example, report or observer
-   changes alone do not trigger an earlier-family sweep merely because a broad
-   harness/source seal changed. Record the unchanged relevant product,
-   compilation and binary scope and the reused receipts. For a disruptive
-   production/API/format/policy change, identify the families it can affect and
-   run only their necessary regression checkpoint. This direction supersedes
-   #286's older broad-harness-seal regression trigger; it does not permit reuse
-   across a changed measured mechanism or relabel a historical receipt.
-5. Respect the measurement lock — it is **per worktree** (owner direction,
-   2026-09-21): builds and measurements in different worktrees do not exclude each
-   other, two runs in one worktree still never overlap, and no build may take a
-   Cargo target directory outside its own worktree. A build that overlaps a timed
-   phase is recorded as declared interference on the row rather than prevented;
-   see [`measurement-isolation.md`](docs/roadmap/0.1/0.1.7/measurement-isolation.md).
-   Never interrupt another owner's run.
-6. Record it: append an entry to the active ledger
-   (`docs/roadmap/0.1/0.1.6/evidence/issue151-experiment-ledger.md` and its
-   successors) with exact numbers, limits, the arithmetic, the identities, the
-   reproduction command, and every non-passing line. Report FAIL, INCOMPLETE and
-   unrun work as plainly as PASS. **Before every benchmark invocation, read
-   [`benchmark_agent_report.md`](benchmark_agent_report.md); after it, use the
-   applicable table in the round report and retain every registered case and
-   its actual verdict.** A template placeholder never substitutes for a receipt.
-7. **Fit the budgets.** Preparation is fast and reusable — prepared inputs are
-   acquired once and reused with identity checks, and repeated setup before a
-   sample is forbidden. A performance selection's **complete command** (product
-   timer + container lifecycle + cleanup) is **≤ 15 s**, with a small, declared
-   exception list allowed up to **25 s** (declare it in the group report with the
-   measured wall time; no sign-off blocks the run). **Verification is small:
-   under 10 s, and typically a fraction of a second** — a row that spends more
-   than that on verification is spending it on something other than the question,
-   and there is no 60 s allowance to grow into. For scale: the
-   `pipeline-namespace-10000` row's complete command is **3.1-4.8 s** (a 300 MB
-   namespace written into a 302 MB Store, one sample) with verification at
-   **0.33-0.36 s**, so a case of that shape has no reason to approach the limit.
-   A selection that cannot fit is
-   reused from a qualifying receipt with its evidence cited, or recorded as `NOT_RUN`
-   with the measured wall time and the reason — never made to fit by moving work
-   outside the timer, enlarging a timeout, or shrinking the workload.
-8. **One construction worker — for every case except namespace init.** Commit,
-   capture and snapshot run with a single worker, in the default wiring and not only
-   by environment variable: `construction_worker_limit()`
-   (`crates/layerfs-workspace/src/changes.rs`, today
-   `available_parallelism().min(8)`) and the canonical construction it feeds
-   (`objects::construct_files`, today capped at `SMALL_CONTENT_WORKERS = 4`) must both
-   be single-producer. Every run also exports `LAYERFS_CONSTRUCTION_WORKERS=1`, no run
-   raises it, and no second lane or helper worker is added to pass a gate.
-   **`init_namespace` is the only exception:** its initialization path
-   (`LayerStackStore::initialize_layerstack` →
-   `direct_initialize_root_directories_inner` / `prepare_parallel_root_directories`)
-   legitimately uses multiple workers/threads and keeps its 2.7 s cold Init target — do
-   not collapse it to one. **A performance drop against v0.1.5 is expected** for the
-   single-worker cases and is absorbed by the bounded acceptance rule, never by adding
-   workers back.
-9. **Reject lopsided storage-for-speed trades.** Never accept about a **50% speed
-   loss** merely to recover about **5% allocated storage** or to eliminate a
-   similarly small storage overage. A roughly **5% storage benefit for a 5%
-   speed cost** can be acceptable when both axes are measured under declared,
-   comparable conditions and correctness and command budgets still pass.
-   Show the raw byte and time deltas before choosing the treatment. If an
-   already-frozen storage gate would force a worse trade, preserve its FAIL and
-   freeze a new owner-approved tolerance/profile before another sample; never
-   relabel or overwrite the old receipt.
+1. One sample per case/arm, no best-of or repeated unchanged treatment.
+   Diagnose retained receipts or labeled count-driven causes. The separately
+   scoped regression-screen exception is not treatment resampling.
+2. Fresh append-only outputs; retain failed, ineligible and unrun selections.
+3. Pin source/product/compilation/dependency/binary/image/harness/workload/cache
+   identities. No dirty seal compared as a sealed arm.
+4. Exploratory timing is diagnostic; verification is separate. At final identity,
+   run covering proof once. Reuse unaffected earlier-family evidence; rerun only
+   the necessary affected checkpoint, without relabeling old receipts.
+5. Use worktree-local measurement locks and Cargo targets; no same-worktree
+   overlap. Declare cross-worktree interference; never interrupt another owner.
+6. Read the report template before each invocation; record exact metrics, limits,
+   arithmetic, commands and all outcomes in the campaign-owned ledger/receipts.
+7. Default complete performance command ≤15 s; declared exceptions up to 25 s;
+   default independent proof <10 s. Frozen family/profile limits retain their
+   declared scope. No timeout/workload/cache changes to turn a miss into PASS.
+8. Commit/capture/snapshot have one construction producer in normal wiring and
+   each measured operation; export `LAYERFS_CONSTRUCTION_WORKERS=1`.
+   Namespace Init alone retains its supported parallel construction profile.
+   No extra helper/lane to pass a gate; FUSE dispatch is a separate concern.
+9. Measure both speed and storage. Reject about 50% speed loss for about 5%
+   storage benefit; report raw deltas and preserve frozen-gate failures.
 
 ## 4. Code, build and docs
 
-- New replacement-product and future application-adapter production files follow
-  the 999-physical-line ceiling and the stricter 200-line declaration/delegation
-  limit for lib.rs/mod.rs. Keep product-only source and external tests. Existing
-  root crates/ remain reference; extend guard coverage when new product formats
-  or adapter paths are introduced rather than using them to evade the rules.
-- **This repository runs no CI and no aggregate pre-push gate** (owner decisions:
-  GitHub Actions is disabled and `.github/workflows/ci.yml` removed — ledger L21 —
-  and `tools/preflight.sh` is **permanently retired** — ledger L32). Do not run
-  `tools/preflight.sh`, do not restore it, and do not reintroduce an equivalent
-  aggregate gate, workflow or wrapper. During the architecture shift it costs minutes
-  and verifies a tree that is no longer the deliverable.
-  CI being off is not permission to skip verification. Verify the tree you actually
-  changed, per workspace, with the commands that cover it — for the replacement
-  product that is `cargo +1.85.1 test/clippy/fmt --manifest-path core/Cargo.toml
-  --locked` plus `core/tools/check_product_boundary.py` — and report exactly which
-  checks ran, which did not, and why. No push may claim "CI green" or "the preflight
-  passed".
-- Keep the tree clean for sealed builds — a dirty source seal is recorded and cannot
-  be compared against a sealed arm.
-- No new dependencies when an existing crate already provides the capability;
-  keep platform-specific code `cfg`-gated. In the replacement product, unsupported
-  required capabilities fail explicitly; no silent no-op or error-driven fallback.
-- **Never patch, vendor, fork or locally modify a third-party crate or package.**
-  No `[patch]`/`[replace]` sections, no vendored copies, no edits in the Cargo
-  registry or under `~/.cargo`, no forked dependency substituted for a published
-  one. Builds stay `--locked`. If a dependency appears to need a change, stop and
-  report the blocker with evidence instead of satisfying it locally.
-- **aarch64 has exactly one AEAD profile, and it is a build input.** The native
-  transport negotiates AES-GCM on the ARMv8 crypto extension; that requires the
-  `aes_armv8`/`polyval_armv8` cfgs and the `+aes,+sha2` target features, which only
-  a global flag can set. The repository-root `.cargo/config.toml` supplies them for
-  every build made from inside this repository — it is at the root, not under
-  `core/`, because cargo discovers config by walking up from the *current working
-  directory* and this repository's prescribed commands run from the root with
-  `--manifest-path core/Cargo.toml`. A build made from outside the repository must
-  pass the flags explicitly (an explicit `RUSTFLAGS` overrides the config table, so
-  repeat all four); `core/crates/layerfs-bridge` refuses to compile for aarch64
-  without them instead of silently negotiating the 2–4x slower ChaCha20-Poly1305
-  fallback (measured 214 vs 802 MiB/s on one stream, 425 vs 1556 MiB/s on two).
-  Any identity set that pins build flags must record the repository-root
-  `.cargo/config.toml` (the transport-probe manifests used to name
-  `core/.cargo/config.toml`, which no longer exists). Do not "fix" a slowdown here
-  by disabling that refusal or by patching the crates.
-- Never claim durability the contract does not provide: no `fsync`/`fdatasync`/
-  `sync_data`/`sync_all` on Workspace backing, and memory hints are hints.
-- Documentation states measured facts, limits and open rulings; roadmap READMEs
-  link to the ledger rather than paraphrasing numbers.
+- Preserve unrelated work. Build the current core implementation, not legacy
+  aliases, source includes or error-driven substitutes. Keep platform cfgs.
+- No new dependency if an existing crate supplies the capability. Never patch,
+  fork, vendor, replace or edit third-party code/registry packages; use locked
+  builds and report an incompatible required dependency with evidence.
+- One attempted operation; no automatic retry/busy handler, refresh/reprepare
+  or failed-operation replay. Readiness waits are not retries. Preserve exact
+  failure/uncertainty and custody; no guessed resend, deletion or success.
+- There is no CI or aggregate pre-push gate. `tools/preflight.sh` is permanently
+  retired; do not restore it or an equivalent wrapper. Verify the changed scope
+  with [core checks](core/AGENTS.md#checks-and-completion), report checks/gaps,
+  and never claim CI green or that an empty guard scan proves implementation.
+- Preserve [repository ARM64 build inputs](.cargo/config.toml); explicit
+  RUSTFLAGS must repeat the profile. Details are in the core guide.
+- Persistence profiles are scoped to the store. Claim only their guarantees;
+  no `fsync`/`fdatasync`/`sync_data`/`sync_all` on disposable Workspace backing.
+  Memory hints are hints, not evidence of resident bounds.
+- New core/application production files obey the 999-line ceiling and 200-line
+  declaration/delegation ceiling for `lib.rs`/`mod.rs`. Product-only source,
+  external tests and guard coverage are detailed in the core guide.
+- Update affected source architecture/API documentation with implementation
+  changes. Keep proposal, research, implemented and measured claims distinct.
 
 ### Production LOC comparison for every commit
 
@@ -331,17 +214,6 @@ the number. Complete the comparison before committing; do not invent estimates.
 
 ## 5. Why these rules exist (worked example)
 
-`#151`'s B2 case wrote a 500 MiB payload through FUSE into the sandbox, which
-then read it back during the measured Commit. Because the workload's own writes
-had left that payload resident, the transfer looked like 0.026 s (19 GB/s) and the
-sandbox's memory looked like the payload itself (563 MB container peak, of which
-524 MB was `file` cache and 4.6 MB anonymous). Both readings violated this page:
-one was cache-credited, the other was page-cache growth proportional to file size.
-After the spool was given a bounded resident window, the sandbox's own residency
-fell to ≤ 2.6 MiB and the same transfer cost a storage read — the honest price,
-which then showed up as a Commit-phase FAIL against a limit derived from a
-cache-served control. Six identical runs also produced container lifetime peaks
-from 24.6 MB to 189.8 MB, which is why a lifetime cgroup number cannot decide a
-memory gate. See
-[`issue151-experiment-ledger.md`](docs/roadmap/0.1/0.1.6/evidence/issue151-experiment-ledger.md)
-L18.
+The historical cache-credit failure and its immutable ledger remain linked in
+[the measurement workflow](docs/general/agent-measurement-policy.md#5-why-these-rules-exist-worked-example).
+Historical explanation is retained outside default implementation routing.

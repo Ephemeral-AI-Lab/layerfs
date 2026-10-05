@@ -12,6 +12,16 @@ case. The [benchmark rules](docs/general/benchmark_rules.md) and each frozen
 family specification govern the limits and claim; this file governs report
 layout only.
 
+Current implementation is in `core/` for both cluster-one libraries and
+cluster-two integration; root `crates/` is the v0.1.6 reference until cluster two
+completes. The tables below retain family/profile-specific layouts, including
+legacy SDK/Server routes. Apply only the layout and limits of the selected frozen
+family. New core reports identify their actual public operation, persistence
+profile and runtime/daemon owners; absent legacy Server/SDK scopes are N/A.
+Do not revive retired packages or relabel older receipts to populate a table.
+See [current core routing](core/benchmark/fs-bench-pro/AGENTS.md) and the
+[agent measurement workflow](docs/general/agent-measurement-policy.md).
+
 ## Identity and custody for every run
 
 | Field | Receipt value |
@@ -32,7 +42,7 @@ single-sample observation as a median or repeatability claim.
 
 ## Family 1 — public SDK Project Init
 
-The inner timer surrounds `ProjectApi::new(&server).init(...)`; Server creation,
+In the retained SDK family, the inner timer surrounds `ProjectApi::new(&server).init(...)`; Server creation,
 fixture preparation, process launch and the independent verifier are distinct.
 There is no daemon/FUSE scope. The current four tiers use a 15 s complete
 command bound and a separate 9.5 s lite-verifier bound. The verifier covers

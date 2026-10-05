@@ -1,4 +1,75 @@
-# v0.1.7 SDK Init benchmark workflow
+# Core benchmark routing and evidence
+
+> **Status:** Current general guide.
+> Updated 2026-10-05 for current cluster-one contracts and cluster-two design.
+> Retained receipts and frozen family limits are unchanged.
+
+Read [root instructions](../../../AGENTS.md), [core instructions](../../AGENTS.md),
+[measurement workflow](../../../docs/general/agent-measurement-policy.md),
+[benchmark rules](../../../docs/general/benchmark_rules.md) and
+[report template](../../../benchmark_agent_report.md) before changing a harness
+or collecting a sample. Product implementation belongs in core. Root crates are
+the v0.1.6 reference until cluster two completes.
+
+## Select the actual operation and profile
+
+`runner.py` routes several distinct families; their presence does not make them
+equivalent or authorize rerunning closed experiments. Inspect the selected case
+registry, driver, frozen contract, source/profile and closure before invoking it.
+
+- Current cluster-one SQLite comparisons use
+  [phase7_sqlite.py](families/phase7_sqlite.py) and
+  [phase7_history.py](families/phase7_history.py), with the declared
+  [SQLite contract](shared/sqlite_contract.py). They exercise public core Init/
+  content/storage/history operations, not a recreated server.
+- Use the [cluster-one handbook](../../../cluster_one_handbook.md) for exact
+  APIs, persistence/layout profiles and retained results. The current global
+  provider is host-local macOS SQLite; it is not PostgreSQL/MinIO.
+- [Owner-closure results](../../docs/issues/302/SQLITE-OWNER-CLOSURE-RESULTS-20261005.md)
+  and the handbook retain the SQLite campaign's failed/withdrawn/unrun outcomes.
+  Reuse unaffected qualified evidence by exact identity. A new campaign needs
+  its own prospective selection; no automatic old-family sweep or resampling.
+- Cluster-two qualification must exercise the actual full-root Workspace/FUSE/
+  daemon path described by the [design index](../../docs/issues/303/README.md).
+  Current source integration and prospective registrations are prerequisites;
+  component Init or a passthrough prototype is not an integrated measurement.
+- Legacy SDK/reference cases require their compatible pinned source and explicit
+  selection. Do not re-enable excluded API/server packages merely to make the
+  current product resemble an old driver. Baseline evidence keeps its own scope.
+
+Global persistence stays on its supported host. Target cluster-two overlay,
+Workspace/content processing and FUSE run in the Linux daemon; host Storage
+encoding/history are reached through runtime-owned adapters. Follow the selected
+authentic topology and [hosting scope](../../../docs/general/benchmark_rules.md#hosting-scope-for-cluster-one-and-cluster-two);
+do not retarget a frozen old family or copy a global Store into Docker as fallback.
+
+## Common execution and reporting requirements
+
+Use locked release binaries for new Init measurements. Keep preparation,
+performance, independent proof and complete command wall separate. Declare
+source/binary/profile/layout/workload/cold-residency identities and actual owners;
+report absent legacy Server/daemon scopes as N/A rather than inventing them.
+
+Worktree-local outputs/targets/locks and sealed prepared masters are required.
+Reuse setup and qualifying proofs only through declared mechanisms. No unchanged
+sample repeated, best-of result, hidden warm credit, workload reduction or relaxed
+timeout/cache/worker policy. Retain every failed, ineligible and unrun row.
+
+General defaults and exact family-specific exceptions are in the measurement
+workflow and frozen contracts. Init may use supported parallel construction;
+Commit/capture/snapshot remain single-producer. FUSE dispatch concurrency is
+separate. Product command lifetimes are not benchmark watchdogs.
+
+After harness edits run scoped owning tests; at final implementation identity
+run covering core checks. There is no CI or aggregate pre-push gate.
+Report exactly what ran, failed or was reused; do not claim a newer source is
+qualified by an older receipt.
+
+## Retained SDK Init selection
+
+The following scoped procedure applies only when the current task explicitly
+selects the original SDK family at its compatible pinned identity. It is not
+default routing for direct cluster-one Init or new cluster-two operations.
 
 Read repository `AGENTS.md`, `core/AGENTS.md`, the general benchmark rules,
 and [the current release-only lite-verifier contract](../../docs/benchmark/fs-bench-pro/issue-231/SDK-VERIFIER-LITE-20260924.md)
@@ -56,19 +127,9 @@ including `FAIL`, `INELIGIBLE` and `NOT_RUN`. Check the focused Python tests
 after a harness edit and the owning Core checks once at final source identity;
 there is no CI or aggregate pre-push gate.
 
+## Retired backend comparison routing
 
-## Scoped Phase 7 cluster 1 comparison (#302, owner 2026-10-04)
-
-New phase7 selections in runner.py may compare unmodified baseline
-7edddbdb8 ProjectApi::init with the candidate layerfs_project::init composed
-directly over PostgreSQL/MinIO. Candidate engine open/validation/connections
-are inside its timer. Baseline Server::create precedes its raw Init timer and
-is included in complete command wall; disclose that conservative asymmetry.
-Empty C2/C5 schemas are bootstrapped in untimed setup per plan §3.2, without workload inputs. Initial v1 creation-inclusive diagnostic receipts retain their scope/status.
-This exception changes neither old SDK identities nor their INELIGIBLE status.
-All four Init and three retained-history cases require candidate < baseline
-and the declared storage gate together. Equality fails. Init allocation has no
-numeric ceiling; retain the gap. Release binaries, separate sampled Init proof,
-strict input residency, fresh owned services, one sample/arm, default service
-durability and pinned resources remain mandatory. No timer/cache/harness freeze
-or M5 admission follows from implementing this exception.
+The former #302 PostgreSQL/MinIO comparison instructions are superseded by the
+implemented SQLite profiles and their closure. Historical plans/receipts remain
+at their original identity and in Git; do not execute them as a current backend
+assignment or relabel them as SQLite/product qualification.

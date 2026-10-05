@@ -6,6 +6,22 @@
 > copied from a retained report and keeps that report's status. Claim labels are
 > defined in the [entry point](README.md#claim-labels).
 
+Review revision 2026-10-05: supersedes the algorithms and bounds of design
+`334fc743751b9a181e670d0601a24fb3169208f9` where identified below. Product
+source remains pinned to `f96d97651`; no implementation or new measurement
+accompanies this revision. Required corrections and proof obligations are
+tracked in [README](README.md#required-corrections-before-implementation).
+
+Owner update 2026-10-05: one local overlay SQLite database per daemon, initialized
+once before readiness; Workspace rows are namespaced within it. Bash Exec has
+no automatic runtime timeout. This supersedes the per-Workspace-file proposal;
+shared writer/pager/failure accounting and fair admission apply below.
+
+Current kernel/optimization contract: [fuse.md](fuse.md). This file retains
+source and historical diagnostic assessment; earlier target/profile rows are
+context, not a second authority. Full per-tool-call roots include ignored files,
+dependencies, caches and output. No numerical result here qualifies that path.
+
 ## 1. What was measured and what was not
 
 **No retained cell in #305 or #306 exercised product code.** [source-verified]
@@ -153,10 +169,10 @@ cache correct. Correctness comes from one invariant:
 > that mount, or (b) a daemon operation that notifies the kernel before it is
 > acknowledged.**
 
-Under (a) the kernel keeps its own caches coherent: it updates the dentry cache
-on create, unlink and rename, and it owns the page cache for the bytes it wrote
-through. Under (b) the daemon must act. The complete list of view-changing
-events:
+Write-through cached I/O is a reasonable foundation for (a); the invariant
+alone does not prove callback/reply ordering, attributes or alias coherence.
+Mounted proofs below must establish those details. Under (b), notify after the
+SQL commit and before acknowledgement. The event inventory is:
 
 | Event | Changes the view? | Required action |
 | --- | --- | --- |
@@ -164,19 +180,21 @@ events:
 | A second Exec in the same Workspace | Same mount, same kernel caches | None |
 | Capture | No. The generation number changes; no name, attribute or byte does | None |
 | Install after a known Commit | No. The new base equals the captured overlay by construction, and inode numbers and times are preserved (§5) | None. This is a proof obligation: [07](07-implementation-validation.md) carries the stat-identity check across install |
-| Commit refused, conflicted or uncertain | No | None |
+| Commit refused, conflicted or uncertain | Required to preserve view | Prove replacement failure composition and custody; old synchronous fold withdrawn |
 | Retirement of folded rows | No | None |
 | A mutation that does not arrive as a FUSE request (an SDK or control-plane write, if any is kept) | Yes | `inval_entry(parent, name)` for a name change and `inval_inode(ino, offset, length)` for data or attributes, after the SQL commit and before the caller is answered |
-| Discard or rebase of a mounted Workspace | Yes, wholesale | Refused while mounted in the first slice. Unmount, change, mount |
+| Discard or rebase of a mounted Workspace | Yes, wholesale | Refused while mounted in the first slice. Terminal unmount discards the local overlay; a new mount opens the selected committed base |
 | A different Workspace | Separate mount, separate caches | None |
 
 **Kernel dirty pages.** With writeback off, `write()` is synchronous to the
 daemon. A shared writable mapping is not: its dirty pages reach the daemon at
 `msync`, at the last close, or when the kernel flushes. Capture therefore
-includes exactly the FUSE requests acknowledged before it. A Commit taken while
-a process still holds dirty mapped pages does not include them. A Commit taken
-after the Exec has exited does, because the last close flushes them. This is a
-stated semantic, not a defect to hide.
+includes the locally published mutation frontier ordered with earlier reply-send
+attempts; fuser does not expose a kernel delivery receipt. A Commit taken while
+a process still holds dirty mapped pages does not include them. Do not infer mapped-page inclusion solely from Exec exit. Establish the
+actual flush/lifetime boundary on the mounted kernel, including inherited
+descriptors and mappings. Unpublished mapping stores are outside capture, while
+lost replies do not exclude already published state. No crash durability follows.
 
 ## 5. Identity and attributes
 
@@ -210,7 +228,9 @@ past `mtime`. It is recorded as owner question O-9.
 
 [proposed design]
 
-**Files.** OPEN returns a handle that carries no per-open table entry beyond a
+**Files.** The revised orphan ownership rules of [04 §7](04-concurrency-commit.md#7-open-unlinked-files)
+are prerequisites; successive successful Commits must not pin additional orphan
+generations. OPEN returns a handle that carries no per-open table entry beyond a
 per-inode open count. There is no handle cap; the bound is the process
 descriptor limit of the commands. RELEASE decrements the count. An inode whose
 link count is zero keeps its rows until the count reaches zero
@@ -249,14 +269,14 @@ than moderate and nothing is product evidence.
 | 2 | Negative-entry caching | Absent; a base miss is an upstream call | Install replay: 252,231 lookups among 604,145 requests | Reply with node 0 and a lifetime | E12 604,146 → 460,360 | A name created by anything other than a kernel request stays invisible until `inval_entry`. With §4's invariant that is only the non-FUSE mutation row | Kernel negative dentries; a bounded daemon miss cache | count; 4 records; measured with permissions off | Re-measure with `default_permissions` on and an overlay create path | **investigate**; first candidate after the first slice |
 | 3 | Kernel page cache (`KEEP_CACHE`) | `FOPEN_DIRECT_IO` on writable opens | Every read syscall is a READ: E15 5.230 s vs 0.641 s; E05 42.26 s vs 5.14 s | Cached opens; write-through keeps kernel writes coherent | Repeated READ; exec and mapping faults | Remove the per-WRITE `inval_inode`. §4 for non-kernel changes | Guest page cache grows with file size. Root `AGENTS.md` §1 forbids excusing that; it needs a phase-local cgroup gate | moderate, confounded with row 1 | Matched arms; cgroup file-cache domain from a reset cgroup | **adopt**, with the memory gate |
 | 4 | Kernel writeback cache | Off; a cached WRITE is refused (`adapter.rs:565-572`) | Small writes are one request each (E16: 10,240) | None | Would batch small writes | Breaks "an accepted write has reached the daemon" and with it exact capture | Dirty pages in guest memory | none; no arm enabled it | — | **reject** |
-| 5 | Request size above 128 KiB | 128 KiB | E03: 10.5 s of 20.8 s Exec inside READ callbacks | Raise `max_write`, `max_read`, `max_pages` | Up to 8× fewer sequential READ/WRITE | One request stays one transaction; larger extents ([02 §5](02-base-overlay.md#5-payload-extents)) | Larger per-request buffers | none; no arm varied it | Count requests and bytes per request on E03, E15, C06–C11 | **investigate** |
+| 5 | Request size above 128 KiB | 128 KiB | E03: 10.5 s of 20.8 s Exec inside READ callbacks | Raise `max_write`, `max_read`, `max_pages` | Up to 8× fewer sequential READ/WRITE | One request stays one transaction; larger extents ([02 §5](02-base-overlay.md#5-payload-replacement-required)) | Larger per-request buffers | none; no arm varied it | Count requests and bytes per request on E03, E15, C06–C11 | **investigate** |
 | 6 | READDIRPLUS | Refused; READDIR resolves each child and discards it | E02: 16,867 lookups after enumeration | `DO_READDIRPLUS`, probably with the adaptive flag | The LOOKUP after each listed entry | Each returned entry takes a lookup reference to count and release | The kernel instantiates an inode per entry; Unmount rose to 0.121 s | weak and mixed: −6.3%, −4.5%, **+7.9%** on E10 | Adaptive mode on the overlay | **investigate**; never always-plus |
 | 7 | Stable enumeration cookies | Name-anchored per-handle cookies (product) | About 0.7 KiB charged per listed entry until RELEASEDIR | §6: keep the semantics, hold one reply per handle | Per-entry bookkeeping | §6 bullets | Bounded memory per handle | none measured. The experiment's positional cookies are **not** stable | Concurrent rename/unlink during enumeration | **retain** the semantics, **replace** the representation |
-| 8 | Cached directory listings | OPENDIR returns no cache flag | A second walk repeats enumeration | `FOPEN_CACHE_DIR` | Smoke count only: a second walk sent no enumeration request | `inval_inode` on the directory for a non-kernel name change | Kernel readdir cache | weak; a smoke count, not a record | Matters only if a mount outlives one call | **investigate** |
+| 8 | Cached directory listings | OPENDIR returns no cache flag | A second walk repeats enumeration | `FOPEN_CACHE_DIR` | Smoke count only: a second walk sent no enumeration request | `inval_inode` on the directory for a non-kernel name change | Kernel readdir cache | weak; a smoke count, not a record | Repeated walks within one call and across calls on the required persistent Workspace; mutation/install proof | **investigate** |
 | 9 | Handle-free files and directories | Every open takes one of at most 128 handles | OPEN + FLUSH + RELEASE per file: 14,121 each on E04 | `NO_OPEN_SUPPORT`, `NO_OPENDIR_SUPPORT` | E04 80,682 → 38,360; E05 136,355 → 50,871 | (1) With no OPEN or RELEASE the daemon cannot count opens, so an unlinked file must live until the kernel's last FORGET with **correct lookup counting**; the experiment released on the first FORGET. (2) Unlinked-open inodes must survive capture and retirement. (3) Per-open state disappears: access mode, append, exec check. (4) Unmount loses its drain signal. (5) `ENOSYS` is sticky and mount-wide; a CREATE handle then gets no RELEASE | Removes handle state; adds retained unlinked inodes | moderate on time, **measured only with permissions off** | Re-measure with `default_permissions` on; open-unlinked and capture tests | **investigate**; adopt only after (1)–(5) are designed and proved |
 | 10 | FLUSH elision | FLUSH takes the Workspace lock | E17: FLUSH is 10,000 of 60,002 requests | FLUSH → `ENOSYS` in a write-through profile | E17 60,002 → 50,003 | Nothing may be deferred to close | None | count | A FLUSH-only arm with OPEN retained and permissions on | **investigate**; cheap, decide in slice S8 |
 | 11 | Removing `default_permissions` | Set | The kernel refetches parent attributes after each directory change: E12 94,149 GETATTR for 95,021 changes | None that preserves enforcement is known | E14 232,821 → 150,793 | With cached reads there is no request at which the daemon could check a read. The measured arm let a mode-000 file be read | None | count; the report calls it "not a product candidate" | Decide the command identity model first (O-8) | **reject** removal; **retain** kernel enforcement |
-| 12 | Thread count | 2; admission refuses a third reply | The owner requires several Execs and activity during Commit | Keep 2 in the first slice; mutations **wait** on the Workspace mutex instead of being refused | Removes `EBUSY`, not requests | One mutation at a time per Workspace stays, as a short wait | 16 MiB virtual buffer per fuser thread | none; every arm used 2 and Stage C is NOT_RUN | Four-Exec and writer-during-Commit scenarios; lock-wait counter | **retain** 2; **investigate** more |
+| 12 | Thread count | 2; admission refuses a third reply | Two busy-inode waiters can occupy both workers and block unrelated requests | Keep initial 2 only with deferred waiters and fair runnable admission | Removes `EBUSY`, not requests | One mutation at a time per Workspace stays, as a short wait | 16 MiB virtual buffer per fuser thread | none; every arm used 2 and Stage C is NOT_RUN | Four-Exec and writer-during-Commit scenarios; lock-wait counter | **retain** 2; **investigate** more |
 | 13 | `max_background` / congestion | 1 / 1 | Under a cached profile readahead is background I/O; E03/A2 21.4 s vs 9.2 s native, cause not isolated | Raise with the thread count | None; raises concurrency | The daemon must admit that many replies | More in-flight buffers | none | In-flight depth on E03, C08, C09 | **retain**; **investigate** with row 12 |
 | 14 | CPU pinning | Absent | About 40 µs per request is cross-CPU wake-up in this VM | None as policy | None; changes cost per request | A fixed pin is a harness setting. E08 was 35.1% slower pinned; the native build alone lost 21.8 s on one CPU | Starves compute-bound commands | moderate for this VM; "not answerable" for a Linux host | Run the pipe half of `roundtrip_diag.py` on a target host first | **reject** fixed pinning; **investigate** placement |
 | 15 | Splice / zero copy | `read` then `writev`; two extra full copies per READ | Not isolated | Remove the avoidable copies first | Copies, not requests | SQLite reads copy by nature | Fewer transient buffers | weak | Bytes copied per READ, as a counter | **investigate**, low priority |
@@ -279,6 +299,24 @@ than moderate and nothing is product evidence.
 | Base acquisition | Nothing | The base was a local directory in every arm |
 | Construction | Nothing | Stage C is NOT_RUN; the prototype's Commit is an untimed stand-in |
 | Lifecycle | Passthrough Mount 17–29 ms and Unmount 5–18 ms; B prototype Mount 0.140 s and 0.083 s | The product's attach, control calls, drain and container lifecycle are unmeasured |
+
+## 9. Required mounted proofs after review
+
+[proposed validation; not run]
+
+- Two Execs with overlapping write/read ranges, separate O_APPEND descriptors,
+  hard-link aliases and independently identifiable records; clarify atomicity
+  when one syscall is split into several FUSE requests.
+- Truncate/regrow cached page tails, rename replacement, negative entries if
+  later enabled, and attribute replies racing mutations.
+- Capture/install/failure resolution preserve bytes, names, times, links and
+  stable serials; a read planned before install retains its immutable roots.
+- Repeated Commits with one open-unlinked descriptor; bounded orphan read depth.
+- Dirty shared mmap stores, msync and Exec exit with retained descriptors/mappings.
+- Two guarded-inode waiters plus an unrelated request: neither worker stays
+  occupied by a Condvar/resource wait. Cancellation drains deferred replies.
+- Separate overlay/FUSE file-cache residency and lookup bookkeeping on the full
+  tree, under sustained writes and tail reads.
 
 The consequence for design: the evidence justifies removing **requests** (rows
 1, 3, 17, 18, 19) and says nothing yet about the cost of the overlay itself.

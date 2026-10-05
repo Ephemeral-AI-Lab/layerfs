@@ -7,6 +7,34 @@
 > counter on that commit. Every "after" size is an estimate and is labelled as
 > one. Claim labels are defined in the [entry point](README.md#claim-labels).
 
+Execution progress is tracked in
+[implementation issue #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307).
+Use the [handoff prompt](09-implementation-handoff.md) for continuous iteration,
+checkpoint commits and milestone evidence updates. This plan owns dependencies
+and exit criteria; tracker preparation does not satisfy them.
+
+Review revision 2026-10-05: supersedes the algorithms and bounds of design
+`334fc743751b9a181e670d0601a24fb3169208f9` where identified below. Product
+source remains pinned to `f96d97651`; no implementation or new measurement
+accompanies this revision. Required corrections and proof obligations are
+tracked in [README](README.md#required-corrections-before-implementation).
+
+Implementation sequencing revision 2026-10-05: includes the mandatory optimization
+EXPLAIN/profile gate, P13/P14, cached mmap/reply-frontier prerequisites, persistent
+multi-call incremental Commit, and post-qualification root-v0.1.6 retirement.
+Product source and retained numeric evidence are unchanged.
+
+Layout/size planning revision 2026-10-05: specifies the default SDK runtime-adapter
+placement and a new responsibility-based LOC range in §4.3–4.4. The range includes
+the expanded ownership, profiling, FUSE and runtime scope; it is an estimate, not
+implementation evidence or a code-size acceptance gate. A fresh read-only count
+confirmed the unchanged production baseline below.
+
+Owner update 2026-10-05: one local overlay SQLite database per daemon, initialized
+once before readiness; Workspace rows are namespaced within it. Bash Exec has
+no automatic runtime timeout. This supersedes the per-Workspace-file proposal;
+shared writer/pager/failure accounting and fair admission apply below.
+
 ## 1. Starting point
 
 [implemented and source-verified]
@@ -37,57 +65,142 @@
 
 ## 2. Build structure
 
-[proposed design]
+[proposed design; current implementation sequence]
 
-- New and rewritten crates join the `members` of `core/Cargo.toml` when they
-  build, one at a time, so the prescribed core commands cover them.
-- `layerfs-overlay` and the semantic part of `layerfs-workspace` contain no
-  Linux-only code. They build and test on the macOS host, linked against the
-  system SQLite like `layerfs-persistence`. Only the daemon image enables
-  `rusqlite`'s `bundled` feature, as a Linux-target dependency. Slice S0 must
-  confirm that this does not change the features of the host build; if it
-  does, the daemon image builds from its own manifest.
-- `layerfs-fuse` and `layerfs-daemon` keep their Linux code behind
-  `cfg(target_os = "linux")`, as today.
-- The dormant `layerfs-workspace` is moved to `layerfs-workspace-legacy` in S1
-  so the replacement can be built at its final path. That move is relocation:
-  production LOC delta 0, labelled as such. The legacy crate stays excluded and
-  is deleted whole in S11.
-- Every production file stays under 1,000 physical lines and every `lib.rs`
-  and `mod.rs` under 200. Product code only under `src/`; tests under `tests/`.
+Both workstreams implement in `core/`. Root `crates/` is the v0.1.6 reference
+until cluster two completes; its retirement is S13, after integrated qualification.
+No new core component depends on legacy source or revives `layerfs-server`.
+
+- Add rewritten/new members only when they have real product implementation and
+  build coverage. Directory presence and active-cluster-one tests do not qualify
+  excluded Workspace/FUSE/daemon/API/bridge/sandbox source.
+- `layerfs-overlay` owns SQLite rows/indexes/payload/scratch/ownership and real
+  profiling. Workspace owns filesystem semantics and stable composition, without
+  SQL, kernel protocol or physical-pack knowledge.
+- Portable content, overlay and semantic Workspace code must build on the owning
+  hosts. Confirm locked Linux content/bundled SQLite and host feature isolation.
+  Reuse existing published dependencies, preserve ARM64 build inputs and report
+  an unsupported capability; do not patch/fork or choose a fallback.
+- Host application composition embeds current Handles/Storage/HistoryCatalog
+  and runtime-owned object/Save/history adapters. The default placement is
+  `layerfs-api/sdk/src/runtime/`, embedding the current libraries rather than
+  reviving a server/coordinator package. Global persistence is the supported
+  host-local Store; the daemon overlay is separate. Confirm public constructor
+  and Save lifetimes in S0; proposed paths do not prove a sound implementation.
+- Replace dormant Workspace code at its final path. A temporary excluded
+  `layerfs-workspace-legacy` relocation may preserve migration/reference access,
+  but is not a dependency or lasting second implementation. Confirm source
+  classification/LOC from exact staged trees when moving or retiring it.
+- Retain useful FUSE semantic checks, stable identity and mounted test contracts.
+  Rewrite service, cache/mmap compatibility and reference disposal around the new
+  engine; do not rename legacy APIs to hide incompatible contracts.
+
+```text
+S0: source/API/build/lifetime decisions + adversarial cost contracts
+ |
+ +--> engine lane: S1 -> S2 -> S4 -> S5 -> S6 -> S7 -> S8 --+
+ |                         ^                              |
+ +--> base/runtime lane: S3 + S9 -------------------------+--> S10 Commit
+ |                                                        |       |
+ +--> cluster-one lane: backed construction/validation, ---+       v
+      incremental topology, holes, faithful import             S11 cleanup
+                                                                  |
+                                                               S12 qualify
+                                                                  |
+                                                               S13 retire
+```
+
+The lanes describe dependencies, not automatic delegation or extra construction
+workers. Runtime/cluster-one integration can advance alongside the engine.
+Actual Save lifetime/interleaving, stable ownership and correct large-input
+contracts must be proved before integrated Commit is accepted. Algorithms whose
+bounds are still unresolved are implementation gates, not permission to raise
+limits or defer their cost to an unbounded background job.
+
+### 2.1 Checkout and execution environment
+
+[owner execution direction, 2026-10-05; environment availability checked]
+
+Implement in the existing primary repository checkout on **local `main`**, under
+`core/`. No separate implementation branch/worktree is planned. This session
+fast-forwarded local main from `f96d97651` to the existing documentation commit
+`334fc7437` and switched the checkout without changing product source or losing
+uncommitted documentation. This is local branch preparation, not a push or a new
+implementation commit. Retained evidence/source pins above keep their original
+identities.
+
+| Layer | Development / execution environment | Ownership |
+| --- | --- | --- |
+| Authoring and host checks | Existing macOS ARM64 checkout; installed Rust 1.85.1; locked core manifest | Cluster-one provider, SDK runtime composition, portable library checks and product-boundary tooling |
+| Sandbox integration | Running Linux ARM64 Docker backend; checked client/server version 29.5.2 | Actual daemon, SQLite overlay, Linux FUSE mounts and ordinary Bash execution |
+| Host runtime | macOS process embedding current Handles/Storage/HistoryCatalog | Selected global Store profile; authenticated object/Save/history adapters, initialized once |
+| Sandbox runtime | Linux sandbox with a daemon initialized before Workspace readiness | One overlay database per daemon; multiple namespaced Workspaces and independent process/stream custody |
+| Build outputs | Worktree-owned `core/target/`; distinct owned Linux target such as `core/target/cluster2-linux/` | Reuse matching build seals; no target/cache borrowed from another worktree |
+
+Docker availability does not prove mounted FUSE readiness or the locked Linux
+toolchain. S0 still establishes the real image/build configuration, `/dev/fuse`
+access, required capabilities, bundled SQLite support and native mount/teardown
+behavior. Actual target-dependent checks run on the owning platform; a macOS
+test pass cannot cover excluded Linux adapters. The root `.cargo/config.toml`
+ARMv8 AEAD inputs must reach Linux builds too; an explicit RUSTFLAGS/image build
+must preserve them. Do not patch dependencies or select a fallback to hide an
+unsupported required capability.
+
+Reuse initialized host runtime and sandbox daemon across Workspace opens.
+Workspace-per-tool-call does not imply a new container, provider or database per
+call. Each logical open binds the complete immutable base and namespaced local
+state; native FUSE attach cost remains part of the actual operation. A persistent
+Workspace can serve multiple calls and incremental Commits in the same environment.
+
+Local main is the single integration line. Coordinate file ownership for any
+explicitly authorized parallel work and account for combined changes before each
+commit. Preserve unrelated work; source moves, dependency changes and retirement
+remain explicit. Freeze/commit the required source and build identities before
+qualification measurements, obey the per-worktree measurement lock, and record
+any build interference under the existing measurement contract. Working on main
+does not authorize a remote push or change any proof/cache/budget rule.
 
 ## 3. Slices
 
-[proposed design] Each slice is the smallest complete vertical piece. A slice
-is done when its exit condition holds and its commit carries the production LOC
-line. "Core checks" means, from the repository root:
+[proposed design] Each slice delivers real behavior, its focused correctness
+proof and source/work evidence. Follow [core verification](../../../AGENTS.md#checks-and-completion)
+and the [optimization guide](../../../../docs/general/optimization-guide.md);
+use exact per-commit production LOC and architecture updates. No runtime
+benchmark or new code was produced to revise this plan.
 
-```sh
-cargo +1.85.1 test --manifest-path core/Cargo.toml --locked
-cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings
-cargo +1.85.1 fmt --manifest-path core/Cargo.toml --check
-python3 core/tools/check_product_boundary.py
-python3 -m unittest discover -s core/tools -p 'test_*.py'
-```
+SQL EXPLAIN and correlated runtime database profiling start in S1 and accompany
+each changed hot path. S7 consolidates evidence; it is not the first point at which
+the engine is instrumented. Complexity analysis rejects quadratic/amplified work
+at operation, command and repeated-Workspace-lifetime scales.
 
-| Slice | What changes | Needs | Verification | Exit |
-| --- | --- | --- | --- | --- |
-| **S0 Contracts** | Owner answers to O-1 … O-5. A cluster one follow-up issue for prerequisites P1, P3–P7 of [06 §6](06-cluster-one-integration.md#6-prerequisites-outside-cluster-two). Two build probes, as labelled preparation: `layerfs-content` and a bundled-SQLite crate for `aarch64-unknown-linux-musl` | — | The two probes compile `--locked`; host feature set unchanged | Placement (K2) and profile (K3) confirmed or replaced by their stated fallbacks |
-| **S1 Scaffolding** | Move the dormant Workspace crate to `-legacy`. Add `layerfs-overlay` with its real profile and schema code, not a placeholder | S0 | Core checks; a settings test in which every `PRAGMA` reads back and an unsupported one fails the open | LOC: relocation 26,835 → 26,835, delta 0 |
-| **S2 Generations and names** | `ws`, `inode`, `dentry` rows; newest-row lookups; capture, install, retire at the row level | S1 | Row-level tests of the visibility, write and capture rules | The rules of [02 §4](02-base-overlay.md#4-generations-and-visibility) hold by test |
-| **S3 Base reads** | The base client, `BaseCache`, and base lookups in `layerfs-workspace` over an in-memory `AuthenticatedObjects` provider under `tests/`, with trees built by `build_filesystem` | S1 | Lookup, listing, readlink and range reads over an empty and a non-empty base | An empty base is a real cluster one root; the Workspace has no "empty" branch |
-| **S4 Namespace operations** | lookup, getattr, create, mkdir, symlink, link, unlink, rmdir, rename, readdir, chmod, utimens; mutation-time refusals | S2, S3 | The namespace cases of the legacy external tests, ported; a 100,000-entry listing with bounded memory | Every operation is one transaction |
-| **S5 Bytes** | Extents, the read plan, truncate, holes, the append hint | S4 | The write, resize and readable cases, ported; scattered-overwrite and sparse-file cases; a 5 GiB sparse file | A write never calls the base client, by counter |
-| **S6 Lifetimes and maintenance** | Open counts, open-unlinked files, pins; reclaim and retirement steps; the pressure rule; quota | S5 | Unlinked-open across install; backlog bound under truncate-and-regrow cycles; `ENOSPC` only when live data exceeds the quota | [03 §7](03-mutation-hot-path.md#7-maintenance) holds by test |
-| **S7 Count diagnostic** | Counters for statements, transactions, pages written and base calls per operation class. Freeze extent size and page size from the candidates | S6 | A **labelled diagnostic**, count-driven, on the host; not a benchmark sample | Targets T1–T3 of [03 §8](03-mutation-hot-path.md#8-proposed-targets) met or reported as missed with the counts |
-| **S8 Mount and daemon** | `layerfs-fuse` on the new Workspace with the target profile; registry, several Workspaces and Execs; concurrent control calls; the command identity; event-driven drain | S6; O-8 | Mounted tests in the container route; the coherence cases of [05 §4](05-fuse-assessment.md#4-coherence-a-lifetime-is-not-a-design); four Execs with zero `EBUSY`; trust probes | Generic commands run on an empty base through the real mount |
-| **S9 Store host and adapters** | `layerfs-server` rewritten over `Handles` and `Storage`: the owner thread, `ReadObjects`, `Attributes`, `GetPolicy`, the Save session with its admission check, history calls. Bridge contract updated | S0; P1 | Host-side integration tests against a real Store; two interleaved Save sessions; the daemon's object authentication | A Workspace opens on a real committed base and reads it |
-| **S10 Commit** | Construction, Save, stage, transition, install; every outcome of [04 §6](04-concurrency-commit.md#6-outcomes); fold | S8, S9 | Committed bytes, metadata and history checked independently; the overlap witness (§5.2); conflict, refusal, cancellation and each uncertain phase | A Commit while commands write publishes exactly the captured state |
-| **S11 Retirement** | Delete `layerfs-workspace-legacy`, the bridge contracts of host-side construction, the daemon's old upstream path, the duplicate Init code in the server | S10 | Core checks | Removal totals recorded per commit (§4) |
-| **S12 Qualification** | Prospectively frozen specifications, then the runs | O-1 | §5.4 | The seven families have terminal dispositions |
+| Slice | Deliverable | Dependencies | Exit evidence |
+| --- | --- | --- | --- |
+| **S0 Contracts and build risks** | Derive R1–R8 algorithms/ownership/service bounds; assign P1–P14, including backed validation/touched/release state and incremental topology. Confirm Linux content/SQLite/transport capabilities and actual Save lifetimes; select concrete payload/pressure and command-identity semantics | Current handbooks/design/source | No withdrawn extent/fold/pin rule used. Adversarial work/custody contracts and real public API/build paths established; unresolved algorithms identified explicitly |
+| **S1 Shared overlay engine** | One daemon database initialized once; schema/version/settings, namespaced metadata/payload/scratch/ownership, prepared SQL, indexed access, real EXPLAIN/profile observations and atomic errors | S0 | Settings read back; binary payload and namespace routing correct; plan/runtime profile for first queries; no per-Workspace DB or custom mutable tree/graph engine |
+| **S2 Generations and fair service** | Incarnation routing, short shared-owner jobs, active/captured membership and fixed EOF, publication/reply-attempt frontier, install/retire; bounded queue credits and lifecycle progress | S1 | Tiny capture during growing active namespace visits only its domain; no bulk copy; unrelated service progresses; failure retains exact state |
+| **S3 Immutable base access** | Current content APIs for root/child/inode/list/readlink/range; exact immutable cache keys, EOF/attributes, base-overlay merge and retained read roots | S0; usable S1 interfaces | Real content-built roots behave correctly, including symlinks/hard links and retained roots across install; no mount scan/copy or special empty-base branch |
+| **S4 Namespace semantics** | lookup/getattr/create/mkdir/symlink/link/unlink/rmdir/rename/readdir/chmod/utimens; serial ranges, byte-name ordering, parent/reference ownership and bounded cursors | S2, S3 | Atomic ordinary effects, correct aliases/rename/resume and permissions; SQL plans/profiles support visited-work bounds; no resident name/handle cap |
+| **S5 Payload and stream semantics** | Selected bounded cells/tails/validity, append/overwrite, inherited reads, cutoff truncate/regrow and hole handling; explicit representation transitions | S4; R1 and content hole contracts | Dense fragmentation does not enlarge one request's work; no base WRITE copy-up; READ gap demands bounded; tiny-file/page/journal/copy amplification reported |
+| **S6 Lifetimes and reclamation** | Independent orphan custody, bounded success/failure composition, reservations/headroom, exact reader/capture/operation owners and weighted automatic reclaim | S5; R4/R6/R8 | Repeated log/orphan/Commit failures do not grow read depth or require payload-sized busy folding. Reclaim progresses while live/idle; stale deletion cannot remove new data |
+| **S7 Engine cost gate** | Consolidate per-operation EXPLAIN/profile, request/statement/VM/row/page/byte/copy and queue/debt evidence; select physical layout through declared tradeoffs | S1–S6 | Derived worst-case/amortized/cumulative work demonstrated or rejected. No quadratic mechanism, hidden scan, input-sized resident set or raised cap accepted from a small timing win |
+| **S8 FUSE, daemon and explicit APIs** | Native mount, deferred owned replies/fair dispatch, coherent promoted cached profile, kernel-origin mmap/time updates, cheap individual FORGET, event-driven lifecycle; registry plus mount/exec/commit/status/unmount contracts and ordinary Bash streams | S3, S6, S7; runtime reads may use S9 | Mounted alias/truncate/mmap/capture-frontier tests; blocked requests leave unrelated work runnable. Short/long Exec and multi-call same mount work; actual buffer/thread/teardown costs visible |
+| **S9 Runtime adapters and complete roots** | Embed existing host libraries; bounded authenticated object/policy/serial/Save/history calls; pending-Save visibility, fair demand/finish service and exact disconnect fences. Fix faithful bounded initial import, symlinks/large files, runtime-compatible complete execution state | S0; P1/P2/P5/P12; parallel to S1–S8 | Real Store reads and two interleaved Saves work through actual APIs; no whole-Save connection checkout or guessed outcome. Full root includes ignored/dependency/cache/output data without per-call restoration |
+| **S10 Incremental Commit** | Normalize captured final state; bounded file/namespace construction and operation scratch; Save finish, stage, conditional transition, known install and exact refused/conflicted/uncertain custody | S6, S8, S9; P3/P4/P6/P7/P13/P14 corrected | Published root equals captured state; later active changes remain. Repeated same-mount Commit, same-Branch conflict and phase failures preserve identity/bytes/ownership without whole-base alias walks |
+| **S11 Integration cleanup** | Remove superseded core Workspace backing, host-construction/duplicate Init routes and retired server integration after replacement coverage. Update SDK/sandbox/bridge wiring and active members | S10 | One authentic core path; no legacy aliases/fallback/parallel implementation; source removals/relocations classified. Root v0.1.6 reference retained for S12 comparisons |
+| **S12 Integrated qualification** | Prospectively selected full-root correctness/resource and seven-family reporting on actual integrated source; fresh/retained Workspaces, short/long Execs, concurrency and sustained cleanup | S11; actual implementation and frozen specifications | Required proof/resource rows pass; every selection retains its actual outcome. EXPLAIN/profile and bounded-work evidence accompany performance claims; historical failures remain unchanged |
+| **S13 Legacy-root retirement** | After cluster-two completion/qualification, remove root `crates/` and obsolete manifest/build/test wiring; retain required shared root config, immutable receipts and reproducible Git/baseline identities | S12; verified migration closure | Core builds/checks and current dependencies are independent of the removed tree. Per-commit legacy/core/combined LOC recorded; no reference deletion described as measured algorithmic speedup |
 
-Up to S8 nothing is needed from the store host. S9 can proceed in parallel with
-S4–S8 once S0 is settled.
+Bring-up may use test providers under tests over real content-built roots; that
+does not qualify real Store/runtime or complete execution readiness. The
+cluster-one follow-up lane covers P3/P4/P5/P6/P7/P12/P13/P14 through existing
+public contracts or explicit first-party contract changes, preserving canonical
+compatibility. SQLite-backed mutable scratch does not replace canonical trees.
+
+The first implementation tranche is S0/S1 with the minimal S2/S3 interfaces:
+one initialized indexed/profiled engine, correct generations and one real-root
+read/mutation/capture path. Progress it alongside the highest-risk cluster-one
+and Save-lifetime proofs. Do not begin with cache/worker tuning or a full legacy
+crate port.
 
 ## 4. Source removal, relocation and estimates
 
@@ -98,13 +211,16 @@ S4–S8 once S0 is settled.
 | `layerfs-workspace`, all 101 files | 26,835 | S11 | Replacement of a mechanism. `backing/` (13,866 per the #303 ledger) is deleted outright. `filesystem/` and `runtime/` implement behaviour that is kept and rewritten, so their removal is not a simplification claim |
 | Bridge files of host-side construction: `contract/prepared_stream.rs` 387, `contract/metadata.rs` 23, `contract/source.rs` 29, `adapters/native/protocol/metadata.rs` 945, `adapters/native/protocol/prepared.rs` 48 | 1,432 | S11 | Deletion, to be confirmed file by file when the slice opens them |
 | Daemon `transport.rs` 88, `headless.rs` 133 | 221 | S11 | Replaced by the upstream pool |
-| `layerfs-server`, all 31 files | 3,996 | S9, S11 | Rewritten. Of this, `service/save/import/` (645) and `service/init_project.rs` (60) duplicate what `layerfs-project` already provides (799 LOC on `main`): retiring them is removal of a duplicate, not a simplification |
+| `layerfs-server`, all 31 files | 3,996 | S11 | Retired target, not rewritten/restored. Existing directory is excluded reference at the pin. Duplicate Init/import behavior already belongs in layerfs-project; runtime adapters reuse current public libraries |
 
 Under placement option C the bridge's history contracts
 (`contract/history.rs` 349, `protocol/history_failure.rs` 163) are **kept**:
 history calls cross the bridge. The prepared plan deleted them.
 
 ### 4.2 Relocation
+
+This is a possible temporary reference-preservation step, not a mandatory
+runtime package or an authoritative count for a future staged tree.
 
 | Move | LOC | Delta |
 | --- | ---: | ---: |
@@ -114,107 +230,249 @@ No other relocation is planned. Init already lives in `layerfs-project`.
 
 ### 4.3 Estimated future size
 
-> **Estimate. Not a measurement and not a commitment.** It must never be
-> quoted as a production-LOC result. The per-commit comparison from
-> `tools/production_loc.py` is the only record of actual size.
+> **Planning estimate, revised 2026-10-05. Not measured future source and not a
+> commitment or size gate.** R1–R8 and sound Save/service lifetimes still need
+> concrete algorithms. Preserve required behavior and validation even if the
+> resulting implementation exceeds this range; revise the estimate explicitly.
 
-| Crate | Now (measured) | After (estimate) | Basis |
+The current working-tree production count was confirmed with
+`python3 -B tools/production_loc.py --json`, using counter SHA-256
+`c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb`.
+No production source differs from the pin in §1. These are source-size counts,
+not benchmarks. SQL schema/statements and shipped runtime adapters count as
+production; tests, docs, examples and tools do not.
+
+| Responsibility / placement | Now (counted production LOC) | After (planning LOC) | Basis |
 | --- | ---: | ---: | --- |
-| `layerfs-overlay` | — | 1,500–2,500 | Eleven small files of typed row operations and one schema |
-| `layerfs-workspace` | 26,835 | 6,000–9,000 | The old `filesystem/` covered the same operations in 4,909; add the base client, Commit construction, fold and maintenance |
-| `layerfs-fuse` | 1,447 | 1,300–1,600 | Same adapter shape |
-| `layerfs-daemon` | 2,151 | 2,200–2,800 | Registry, upstream pool and concurrent control added; 221 removed |
-| `layerfs-bridge` | 6,834 | 5,000–5,800 | 5,402 after the whole-file deletions (measured); object and Save operations added; content operations removed from four files |
-| `layerfs-server` | 3,996 | 1,200–2,000 | An owner thread and five operation families |
-| `layerfs-sandbox` | 1,106 | 1,100–1,300 | Identity and environment changes |
-| `layerfs-api` | 796 | 750–900 | Commit outcome type; Init through `layerfs-project` |
-| **Cluster two scope** | **43,165** | **19,050–25,900** | |
+| `layerfs-overlay` | — | 3,000–4,500 | Schema, typed indexed metadata/payload/scratch operations, generation ownership, physical pressure/reclaim and real DB profiling; SQLite supplies the mutable indexing/page engine |
+| `layerfs-workspace` | 26,835 | 6,000–8,000 | Existing filesystem operations are 4,909 LOC; retain their semantics, reuse public cluster-one construction/read APIs, add stable capture/composition and exact Commit outcomes; no private page/tree/pack engine |
+| `layerfs-fuse` | 1,447 | 1,500–2,200 | Adapter and mount custody plus owned deferred jobs, coherence/send ordering, cached mmap compatibility and request telemetry |
+| `layerfs-daemon` | 2,151 | 1,500–2,500 | Registry/incarnation routing, fair short overlay jobs, upstream service and ordinary Bash process/stream lifecycle; no host construction path |
+| `layerfs-bridge` | 6,834 | 4,500–5,500 | Keep authenticated native transport, typed history/control/outcomes; remove prepared-stream construction, add bounded object/Save contracts and multiplexing |
+| SDK host runtime adapters, inside `layerfs-api/sdk/src/runtime/` | Included in the old server scope, not a separate current subtotal | 1,200–2,000 | Compose current Handles/Storage/HistoryCatalog; own authenticated object/Save/history handlers, semantic admission and fair provider/session service; no new coordinator crate |
+| `layerfs-server` | 3,996 | 0 (target retirement) | No implementation restored here; required runtime adapter work is counted explicitly above |
+| `layerfs-sandbox` | 1,106 | 1,000–1,300 | Container/native attachment and teardown custody; no per-call content preparation |
+| API contracts + SDK forwarding, excluding the runtime row above | 796 | 800–1,000 | Five Workspace operations plus existing Project/Sandbox composition; ordinary Exec and exact typed outcomes |
+| **Cluster two replacement scope** | **43,165** | **19,500–27,000** | Sum of the non-overlapping responsibility estimates, including runtime adapters and shipped SQL |
 
-If `layerfs-workspace` passes the top of its range before S10, that is reported
-as a finding, not absorbed.
+The working estimate is therefore **about 20–27 thousand production LOC**, with
+roughly 24 thousand as a planning reference. Against 43,165 this would be
+16,165–23,665 fewer lines, or about 37–55%; the reduction is projected, not
+achieved. This is not an instruction to fit code by suppressing errors, merging
+responsibilities, removing validation or compressing lines. FUSE/daemon/transport
+can grow where correctness and service ownership require it.
+
+The private `backing/` subtotal was independently recomputed through the same
+counter functions: **13,866 LOC in 47 files**. The other old Workspace subtotals
+are filesystem 4,909, Commit 3,996, runtime 2,485, overlay 993 and source-root
+types/declarations 586. Their combined 26,835 is replaced as a whole; only the
+private backing mechanism disappears outright. Retained filesystem behavior is
+not counted as deleted merely because its implementation moves or is rewritten.
+
+The current cluster-one product subtotal is **30,835**. Adding the replacement
+estimate gives **50,335–57,835 core production LOC before the still-unestimated
+cluster-one prerequisite changes**. P3/P4/P6/P7/P12/P13/P14 and other actual
+handbook changes must be counted in their owning crates, not hidden outside the
+estimate or claimed to cost zero. Runtime handlers count at their real path even
+if final S0 placement changes.
+
+Root `crates/` contributes **65,417** separate reference LOC today. Its S13
+retirement is migration removal, not another 65,417-line algorithmic improvement;
+it happens only after integrated qualification. Current core plus reference is
+139,417. Temporary relocation/duplication remains counted until actually removed.
+Earlier pre-review ranges in design Git `334fc7437` remain withdrawn as budgets;
+this revision replaces that planning table, not any historical measurement receipt.
+Recompute every implementation commit from exact parent/staged/committed trees.
 
 ### 4.4 File ownership
 
-[proposed design] One line per production file. Names are proposals; a file is
-created in the slice that first needs it.
+[proposed design] The crate boundaries are intentional; individual file names
+are proposals. Create files only when a slice needs real implementation. The
+payload modules name responsibilities without selecting an unproved R1/R4
+algorithm. Each crate has external `tests/`; examples, fixtures, harnesses and
+diagnostics remain outside product `src/`.
 
 ```text
-core/crates/layerfs-overlay/                   knows SQLite; knows nothing else
-  sql/schema.sql            the five tables and one index
-  src/lib.rs                declarations
-  src/profile.rs            open; apply and read back every setting; quota
-  src/error.rs              OverlayError and its classes
-  src/generation.rs         the ws row: view numbers, capture, install, clear
-  src/inode.rs              inode rows: newest, upsert, delete, relabel, pin
-  src/dentry.rs             name rows: newest, upsert, whiteout, delete, listing page
-  src/extent.rs             overlap queries, insert, in-place write, inline append, range delete
-  src/scan.rs               keyset pages of a generation
-  src/reclaim.rs            the reclaim queue; bounded delete steps; page accounting
-  src/counters.rs           statements, transactions, pages (product telemetry)
+core/
+  Cargo.toml, Cargo.lock
+  crates/
+    layerfs-content/                          cluster-one canonical content APIs
+    layerfs-storage/                          cluster-one immutable Save/read
+    layerfs-history/                          cluster-one stage/conditional head
+    layerfs-persistence/                      cluster-one provider ownership
+    layerfs-project/                          faithful initial root acquisition
+    layerfs-telemetry/                        shared product observations
 
-core/crates/layerfs-workspace/                 knows semantics; no SQL text, no kernel, no framing
-  src/lib.rs                declarations
-  src/types.rs, error.rs    public types; mapping from overlay and content errors
-  src/ports.rs              what the daemon supplies: object fetch, Save session, history calls
-  src/workspace.rs          open, close; Core, its mutex, busy flags
-  src/base/client.rs        AuthenticatedObjects over the object-fetch port
-  src/base/cache.rs         BaseCache and the attribute cache
-  src/base/view.rs          child, inode, listing page, link target, attributes, file range
-  src/view.rs               newest state of a name or inode; the read plan
-  src/ops/                  lookup, open, read, write, resize, attr, create, remove, rename, readdir
-  src/orphan.rs             open counts; unlinked-open records; pins
-  src/maintenance.rs        retirement, reclaim steps, the pressure rule
-  src/commit/slot.rs        admission and state
-  src/commit/capture.rs     capture and install
-  src/commit/file.rs        captured extents to EditSequence, EditSource or a stream
-  src/commit/namespace.rs   captured rows to PreparedRows; the scratch database
-  src/commit/publish.rs     Save finish, stage, transition, outcome classification
-  src/commit/fold.rs        drain the captured generation into the active one
-  src/commit/outcome.rs     result types
+    layerfs-overlay/                          only owner of mutable SQL/payload
+      sql/schema.sql                         rows, indexes, scratch, ownership
+      src/lib.rs                             declarations/reexports
+      src/db.rs, profile.rs, error.rs         engine setup and typed errors
+      src/workspace.rs, generation.rs        namespace rows and atomic frontier
+      src/inode.rs, dentry.rs                 typed metadata and name operations
+      src/payload/                           bounded byte/validity/read operations
+      src/ownership.rs, scratch.rs            pins, leases and operation scratch
+      src/scan.rs, reclaim.rs                 keyset walks, debt and physical space
+      src/metrics.rs                         SQL/BLOB/transaction runtime profiling
+      tests/
 
-core/crates/layerfs-fuse/                      adapter.rs, mount.rs, replies.rs changed; trace.rs removed
-core/crates/layerfs-daemon/
-  src/registry.rs           new: Workspaces and Execs, configured limits
-  src/upstream.rs           new: connection pool; implements the Workspace ports
-  src/control*.rs           changed: concurrent calls; no slot lock
-  src/execution.rs          changed: command identity, cleared environment, event-driven exit
-  src/transport.rs, headless.rs   deleted
-core/crates/layerfs-bridge/
-  src/contract/object.rs    new: ReadObjects, Attributes, GetPolicy
-  src/contract/save.rs      new: the Save session
-  src/contract/request.rs, history.rs, outcome.rs   changed
-  (deleted files: §4.1)
-core/crates/layerfs-server/
-  src/host/                 acceptor, assembly, config, run: rebound to Handles and Storage
-  src/service/owner.rs      new: the store owner thread and its two-class queue
-  src/service/objects.rs    new: ReadObjects, Attributes, GetPolicy
-  src/service/save.rs       new: Save sessions
-  src/service/admission.rs  new: identity, role and reference check
-  src/service/history.rs    rebound history calls
-  (the construction and import service is deleted)
+    layerfs-workspace/                        filesystem semantics; no SQL/framing
+      src/lib.rs, types.rs, error.rs          declarations and public results
+      src/ports.rs                           actual object/Save/history boundary
+      src/workspace.rs, view.rs               open/retire and base-overlay view
+      src/base/client.rs, cache.rs, view.rs   authenticated immutable base access
+      src/ops/                               lookup/open/read/write/resize/attrs
+                                             create/link/remove/rename/readdir
+      src/ownership.rs                       open, lookup, orphan and read leases
+      src/commit/slot.rs, capture.rs          admission and stable capture
+      src/commit/file.rs, namespace.rs        public content APIs + backed inputs
+      src/commit/publish.rs, resolve.rs       exact Save/stage/Commit disposition
+      src/commit/install.rs, outcome.rs       safe base advance, retained active rows
+      tests/
+
+    layerfs-fuse/                             kernel adapter and native custody
+      src/lib.rs, adapter.rs, replies.rs      checked callbacks and owned replies
+      src/mount.rs, jobs.rs                   attach/detach and deferred job bridge
+      src/coherence.rs, metrics.rs           cache/send ordering and request costs
+      tests/
+
+    layerfs-daemon/                           service ownership and orchestration
+      src/main.rs, lib.rs, run.rs, config.rs  readiness and process composition
+      src/registry.rs, lifecycle.rs           Workspace/Exec identity and custody
+      src/overlay_owner.rs                   bounded fair short engine jobs
+      src/upstream.rs                        object/Save/history client sessions
+      src/control.rs, control_commit.rs      mount/exec/commit/unmount/status routing
+      src/execution.rs                       ordinary Bash and streamed process I/O
+      tests/
+
+    layerfs-bridge/                           wire contracts, not FS construction
+      src/lib.rs
+      src/contract/                          object, Save, history, control, outcome
+      src/adapters/native/                   framing/auth/multiplex/backpressure
+      tests/
+
+    layerfs-sandbox/                          container and daemon attachment
+      src/                                   existing focused owner/session modules
+      tests/
+
+    layerfs-api/
+      core/src/                              public operation types/contracts
+      core/tests/
+      sdk/src/                               Project/Sandbox/Workspace forwarding
+      sdk/src/runtime/                       embedded host composition, no server
+        owner.rs                             Handles/Storage/HistoryCatalog setup
+        objects.rs, save.rs, history.rs       authenticated typed request handlers
+        admission.rs                         fair provider jobs and resource shares
+      sdk/tests/
+
+  docs/                                      current architecture and contracts
+  benchmark/                                 external integrated workloads
+  tools/                                     development checks
+
+No layerfs-server package in the finished product.
+No private backing/page/tree/pack implementation under Workspace.
+Root crates/ remains reference only until S13 qualification and retirement.
 ```
 
-`layerfs-workspace/src/ports.rs` holds the only traits introduced: they sit on
-a process boundary. No interface is created per algorithm.
+The four main mutable-workspace responsibilities are overlay storage, Workspace
+semantics, FUSE adaptation and daemon service ownership. Keep one authoritative
+representation of each fact: SQL rows own persisted mutable state; Workspace
+decides filesystem/Commit semantics; daemon routes/schedules active calls; FUSE
+maps kernel requests and owns native replies. Caches and maintained observations
+do not become a second resident namespace or persistent custom index.
+
+The daemon owns the overlay instance and its fair executor; the overlay crate
+owns SQL connections/transactions. In the current single-owner candidate this
+means one connection initialized at daemon startup, not a connection/database per
+Workspace. Do not duplicate a general scheduler inside every crate. Short SQL
+jobs can interleave multiple Execs/Commits; an entire Exec or Commit never occupies
+a database-wide lock. The selected SQLite profile and Save lifetimes still require
+their S0–S2 proofs.
+
+`layerfs-workspace/src/ports.rs` owns actual process/runtime port traits. Reuse
+existing content backing contracts or add a needed independently usable boundary
+through its owning API; do not create an interface per algorithm. Reuse
+cluster-one canonical trees, CDC, CAS and delta code rather than copying their
+implementation into Workspace or the SDK. Native framing/authentication stays in
+bridge; the SDK runtime binds it to current public libraries without recreating
+the retired construction/coordinator service.
+
+Use ordinary focused Rust files and shipped SQL. Every production file is at
+most 999 physical lines; `lib.rs`/`mod.rs` are declaration/delegation-only and at
+most 200. These ceilings are distinct from the production-LOC estimates above.
+Required payload/job modules split by responsibility before either ceiling.
+
+### 4.5 Physical state layout
+
+[proposed design] Code layout and runtime storage are different. Application-
+selected paths host the global cluster-one Store; the daemon has one separate
+disposable overlay database. This is ownership shape, not fixed filenames or an
+implemented recovery/profile promise.
+
+```text
+host-selected global Store location/
+  existing cluster-one provider data          immutable objects + mutable history
+
+sandbox daemon state/
+  overlay.sqlite                             all local Workspace namespaces
+                                             metadata + physical payload + scratch
+                                             ownership + automatic reclaim debt
+  SQLite-managed sidecars                    only as required by selected profile
+
+sandbox mount locations/
+  workspace-A/                               FUSE view of base root + A rows
+  workspace-B/                               FUSE view of base root + B rows
+```
+
+There is no database, private payload pack or copied base tree per Workspace or
+Commit. Payload bytes are physically held in the daemon database under the
+selected bounded representation; a mount path is a filesystem view. Terminal
+unmount retires that namespace and automatically schedules eligible row removal;
+shared tables/database and other Workspaces stay live. SQL deletion makes
+cells/pages reusable and does not promise database-file shrink. Immutable global
+objects/history are outside local teardown. Aggregate processing windows limit
+resident/queued work, not total Workspace files, bytes, edits or Bash duration.
 
 ## 5. Validation
 
 ### 5.1 Correctness precedes any timing
 
+The seven [primary documents](README.md#primary-design-documents) own workload
+coverage. Their case IDs are design coverage, not registered benchmark selections.
+Review complete-root readiness and R1–R8 before implementation. Both per-tool-call
+and per-task modes are required, with per-tool-call the expected common case.
+Mount -> ordinary Exec -> explicit affected-state Commit -> terminal unmount is
+the smallest-lifetime example. A persistent Workspace can serve multiple calls
+and incremental Commits before its final unmount. Exec duration is independent
+of mode; cover short and long-lived commands in both. Initial acquisition includes every
+supported entry, including ignored caches/output and all symlinks; if a required
+entry cannot be represented, readiness fails explicitly rather than omitting it.
+
+Report each phase and the complete call, including output drain and automatic
+cleanup debt; a fast Exec alone is not load-bearing admission. Status is optional,
+bounded observation, never a mandatory progress/Commit checkpoint. No benchmark,
+measurement profile, cache contract or proof budget is silently changed here.
+
 [proposed design]
 
 | Requirement | Test |
 | --- | --- |
-| Accepted-write semantics | A write is readable by another Exec as soon as it returns; a failed write leaves no partial row (fault injected by quota, through the public API) |
+| Accepted-write semantics | A successful write is readable by another Exec; definite failure before publication changes no partial data/metadata; a lost reply after local publication preserves the actual changed state |
 | Exact capture | Rows of a request are never split across generations: a writer loop and a capture loop, then a row audit |
 | No edit-count limit | 10,240 and 100,000 writes to one file, appended, dispersed and repeated; Commit of each |
-| No whole-file or whole-Workspace work | The S7 counters, flat against file size, edit index and Workspace size |
-| Repeated edits across Commit | The first interleaving of [04 §9](04-concurrency-commit.md#9-worked-interleavings), asserted on stored rows |
-| Open-unlinked lifetime | Across capture, install, retirement and fold |
-| Truncate | Shrink, regrow, read zeros; shrink racing a write |
+| No unrelated whole-file/Workspace work | Derived point/window work and indexed depth explicit; no old-fragment, whole-base or quadratic amplification hidden behind a small statement/window count |
+| Repeated edits across Commit | The first interleaving of [04 §9](04-concurrency-commit.md#9-required-interleavings), asserted on stored rows |
+| Open-unlinked lifetime | One descriptor across many successful/failed Commits; bound versions/read depth and prove content |
+| Truncate | Logical cutoff, regrow zeros; capture/install/retirement before old cleanup resumes |
 | Rename of a base directory | No descendant row; children resolve; Commit publishes the move |
 | Enumeration | Entries present throughout appear exactly once under concurrent rename and unlink; resume at a partially consumed reply |
-| Two Workspaces | One fills its quota; the other is unaffected. Both commit to one Branch: one published, one conflict, stage discarded |
+| Two Workspaces | Shared writer fairness, namespace isolation and global database failure; logical quota and physical headroom separately; continuous reads plus simultaneous Saves; same-Branch conflict with exact stage disposition |
+| Persistent multi-call Workspace | Sequential/overlapping calls, repeated incremental Commits and later active writes; same-mount caches/identity, bounded orphan/version ownership and reclamation during live activity; no automatic teardown |
+| Duration independent of mode | Short and long-lived Execs in both per-tool-call and per-task orchestration; process/stream/request custody and backpressure remain valid without command classification or default timeout |
+| Capture row lifetimes | Existing G rows retained without bulk copy; only affected G+1 state and operation scratch created; install never deletes active writes |
+| Automatic cleanup while idle | After Commit/install and terminal unmount, issue no further API calls; observe fair batched SQL deletion/debt completion without manual trigger or TTL; retained-owner release gates respected |
+| SQL space reuse | Rows removed, cell/page/freelist behavior correctly accounted; database file need not shrink and shared tables/other Workspaces remain live |
+| Terminal unmount | Detaches/fences, invalidates incarnation and owns automatic cleanup; no separate close/implicit Commit; pre-effect Busy/Uncertain refusal preserves usability, later failure retains exact stopping/native custody |
+| Ordinary shell Exec | Same command through Exec and another authorized shell on the mount has identical filesystem semantics; Bash syntax, no automatic runtime timeout, long-running process and output streaming, no implicit capture/Commit/path routing/status observer |
 | Stat identity | Identical `ino`, `size`, `mtime`, `ctime`, `mode` across two mounts and across an install |
 | Coherence | One test per row of [05 §4](05-fuse-assessment.md#4-coherence-a-lifetime-is-not-a-design) |
 | Mutation-time refusals | Each row of the refusal table in [02 §6](02-base-overlay.md#6-names-and-inodes) |
@@ -223,27 +481,89 @@ a process boundary. No interface is created per algorithm.
 Tests use the public API of the production library. No test-only branch, hook
 or feature is added under `src/`.
 
-### 5.2 The overlap witness
+### 5.2 Acceptance and adversarial proofs
 
-[proposed design] A deterministic proof that commands keep writing while a
-Commit runs and that the Commit publishes exactly the captured state:
+[owner bootstrap/Exec requirements]
 
-1. Write state S1. Start a Commit through a Save-session port, implemented
-   under `tests/`, that blocks at its first accepted object.
-2. While it is blocked: overwrite a captured block, truncate a captured file,
-   rename a captured name, create a file, unlink an open file. Assert each
-   returns without waiting for the Commit.
-3. Release the port. Assert the published root equals S1 exactly, by an
-   independent read of the Store.
-4. Assert the mount shows S1 plus the step-2 changes, and that a second Commit
-   publishes them.
+Prove daemon startup initializes exactly one overlay database/schema and subsequent
+Workspace opens do no additional database open/schema setup or base scan. Report
+base binding, logical open and actual FUSE mount separately; no bootstrap time is
+claimed from removing file creation alone. Terminal unmount detaches/fences the namespace
+without an inline full-row delete; background cleanup cannot starve another mount.
+Audit metadata/payload/scratch queries for Workspace prefixes and intended indexes.
+
+Exec has no automatic shell runtime timeout or the old 30 s wire/SDK cap. Test
+explicit cancellation and streamed output separately from storage RPC deadlines.
+Harness stop budgets remain measurement rules, not product shell semantics.
+
+[proposed validation; no current product acceptance]
+
+| Dimension | Full repository | Continuous file log | Concurrent Workspaces |
+| --- | --- | --- | --- |
+| Correctness | Faithful base and persisted full-tree proof required | Append/rotation/alias/mmap proof required | Authorization and outcome fencing required |
+| Mutation latency | R1/R5/R6 changes required | R1/R4/R6 changes required | R5/R6 changes required |
+| Sustained throughput | Integrated evidence absent | Pager/tail/journal costs unmeasured | Shared Store/device service unmeasured |
+| Commit progress | R2/R3 changes required | Tail route reasonable; failure/orphan R4 required | R5 scheduling/transport required |
+| Fairness | Deferred workers required | Same-inode progress required | Per-Workspace service shares required |
+| Processing memory | R3 plus aggregate windows required | Residency/journal bounds required | Queue/session/cache totals required |
+| Versions/disk pressure | Reservation and actual debt accounting required | No growing orphan pin chain; rotation debt bounded | Shared physical headroom and outcome-aware teardown required |
+
+The full fixture remains 130,045 entries and 3,475,776,149 regular-file bytes:
+103,108 files, 16,867 directories, 10,070 symlinks. Copied source HEAD
+`639ed015397290b3745d163aafe02ffee4aa3f84`, manifest SHA-256
+`98fd26440b9087bcfd5c23bec9e5497434a2dcb9a27fc85ad0b823ba9c516658`.
+Retained preparation evidence is on `codex/phase7-experiment-305` at
+`1451b68a720bbe2175a103dd9b35693ad05e2be1`,
+`core/docs/issues/305/PREPARATION-REPORT.md`. These are historical manifest
+observations, not a new scan. Full replay is 95,021 entries / 2,126,509,110 bytes.
+Preserve .git, dependencies, symlinks, caches, output and hard-link aliases; no
+small fixture substitutes for final full affected-state proof.
+
+Native Init currently refuses symlinks (P12). Establish a bounded faithful full
+base and compatible Linux toolchain. Historical pure-JavaScript builds/copy-link
+replay do not prove real installer lifecycle scripts/concurrency or native tools.
+
+Before timing, use deterministic public-port/mounted interleavings:
+
+1. Block Save acceptance after capture of S1. Overwrite/truncate/rename/create/
+   unlink while blocked; prove published state equals S1 and live state includes
+   later writes. A second Commit publishes them.
+2. Alternating-byte fragments -> full-window overwrite: bound BLOB/SQL/page/journal
+   work. Nonzero shrink -> capture/install/retire -> resumed cleanup preserves zeros.
+3. Capture one key while full dependency replay grows A: fixed EOF, generation
+   selective visits and replayed membership. Fragmented/wide/sparse Commit completes
+   with fixed processing windows; no inflated resource cap substitutes.
+4. Retain one unlinked descriptor across many Commits; bound versions/depth. Inject
+   late definite failure with large C/A log streams; prove latest attributes/bytes
+   without payload-sized busy pause. Logging means file append; stdout alone bypasses it.
+5. Two inode waiters plus unrelated request; continuous reads plus two Saves; all
+   configured Save sessions plus independent demand read. Prove finite progress.
+6. Rotation/delete near quota: actual freed pages, reserved headroom, queue delays,
+   debt and other-Workspace service. Test physical-disk pressure separately.
+7. Malformed roles/references, oversized input, cross-session/history authority;
+   unknown Save/stage/transition/discard and forced terminal unmount during every queued wait.
+8. Mounted coherence cases in 05 §9, full git status across mounts/.git index,
+   compatible build/output mutation, copy/link replay and full Commit survival.
+
+Fault coordination lives under tests/ and uses public ports/behavior; no test-only
+production hooks. A labelled count diagnostic measures causes, not repeated gate
+samples. Every proof's scope and limitations are prospectively declared.
 
 ### 5.3 Count diagnostics
+
+Follow the [optimization guide](../../../../docs/general/optimization-guide.md).
+SQLite debugging requires paired EXPLAIN and correlated runtime DB profiles,
+including real VM steps, statement/transaction/BLOB observations and scope.
+A plan or command wall alone is insufficient; unavailable required profiling
+leaves the claim unqualified. Derived work must reject quadratic scaling across
+operations and repeated call/Commit lifetimes. These checks begin with S1.
 
 [proposed design] Count-driven instruments, reproducible across windows,
 labelled as diagnostics and never as samples of a benchmark arm (root
 `AGENTS.md` §3.1): statements, transactions and pages written per operation
-class; base calls per operation class; bridge calls and bytes per Commit;
+class, including BLOB opens/writes, validity work, journal peaks and index splits;
+visited/returned captured-active-retired rows per replay and worker occupancy;
+base calls per operation class; bridge calls and bytes per Commit;
 objects emitted, reused and inserted per Commit (`WriteOutcome`); lock-wait
 maximum per phase; garbage pages over time.
 
@@ -254,8 +574,9 @@ maximum per phase; garbage pages over time.
 **Before any run.** Read `benchmark_agent_report.md` and
 `docs/general/benchmark_rules.md`. The following must exist first:
 
-1. The owner's amendment of the hosting rule (O-1). Until then no measurement
-   of this design is admissible.
+1. The [current hosting scope](../../../../docs/general/benchmark_rules.md#hosting-scope-for-cluster-one-and-cluster-two)
+   is applied to a real integrated implementation. O-1 routing is resolved;
+   the policy update alone supplies no implementation or measurement admission.
 2. A committed specification per family that freezes case identities, order,
    limits, the cache contract and the verifier before sampling.
 3. A declared cache contract that names every cache of
@@ -268,10 +589,12 @@ maximum per phase; garbage pages over time.
 
 **Acceptance.** The owner's acceptance for this cluster is the seven
 `fs-bench-pro` families on the integrated product (#303). A family is complete
-when, at one frozen integrated source, every registered selection has a
+as a report when, at one frozen integrated source, every registered selection has a
 terminal status recorded in the applicable table of
 `benchmark_agent_report.md`: a functional `PASS` with its command budget,
 independent verifier and cleanup, or a non-`PASS` status reported as plainly.
+Terminal dispositions complete the report, not product acceptance: required
+correctness/resource rows must pass; FAIL/NOT_RUN remain failures/omissions.
 Numeric latency stays `INELIGIBLE` unless the cache contract is declared and
 enforced equally.
 

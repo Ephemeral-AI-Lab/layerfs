@@ -5,6 +5,17 @@
 > `main` `f96d97651`. Claim labels are defined in the
 > [entry point](README.md#claim-labels).
 
+Review revision 2026-10-05: supersedes the algorithms and bounds of design
+`334fc743751b9a181e670d0601a24fb3169208f9` where identified below. Product
+source remains pinned to `f96d97651`; no implementation or new measurement
+accompanies this revision. Required corrections and proof obligations are
+tracked in [README](README.md#required-corrections-before-implementation).
+
+Owner update 2026-10-05: one local overlay SQLite database per daemon, initialized
+once before readiness; Workspace rows are namespaced within it. Bash Exec has
+no automatic runtime timeout. This supersedes the per-Workspace-file proposal;
+shared writer/pager/failure accounting and fair admission apply below.
+
 ## 1. Provenance
 
 Every source this set was reconciled from, where it lives, and its state on
@@ -53,30 +64,39 @@ review. Where they disagreed, §6 records the resolution.
 
 ## 3. Decisions of this design
 
-Each is [proposed design]. "Reverses" names a prepared item marked decided.
+Each is [proposed design]. Revised/withdrawn entries supersede 334fc7437.
+Unrevised historical rationale is retained as provenance, not evidence that
+R1–R8 bounds are implemented. "Reverses" names a prepared item marked decided.
 
 | # | Decision | Evidence that decided it | Reverses |
 | --- | --- | --- | --- |
-| K1 | One overlay database file per Workspace | Independent writers, O(1) close, `max_page_count` as the quota, failure confined to one Workspace ([01 §7](01-architecture.md#7-decisions-that-shape-the-architecture)) | "One database per daemon, shared tables keyed by Workspace" (#303 planning prompt) |
-| K2 | Content construction and logical base reads in the daemon; storage and history on the host | `layerfs-persistence` opens only on macOS; `apply_edits` needs a replayable source; a cache keyed by `ObjectId` survives base changes | "Construction is local and the engines are wired in the daemon"; also conflicts with the hosting rule (O-1) |
-| K3 | `MEMORY` journal, `EXCLUSIVE` locking, `synchronous = OFF`, one connection | No write-ahead log means no checkpoint and one payload write; root `AGENTS.md` §4 forbids sync on Workspace backing; a Workspace is lost with its daemon today | WAL with a writer and reader connections and explicit `PASSIVE` checkpoints (#301 packet 02 §10; plan D4) |
+| K1 | **Owner update:** one overlay SQLite database/connection per daemon, initialized once before readiness | Fast logical Workspace open; Workspace-prefixed indexed metadata/payload/scratch; fair shared writer | Per-Workspace-file isolation proposal withdrawn; DB/pager/failure domain shared |
+| K2 | Content construction and logical base reads in the daemon; host semantic admission/storage/history, conditional on P1/P2 | `layerfs-persistence` opens only on macOS; `apply_edits` needs a replayable source; a cache keyed by `ObjectId` survives base changes | "Construction is local and the engines are wired in the daemon"; also conflicts with the hosting rule (O-1) |
+| K3 | MEMORY/OFF for disposable overlay, conditional on crash policy | No WAL checkpoint; journal/dirty-page and residency costs still require bounds | WAL/recovery alternative remains O-3 |
 | K4 | One short SQL transaction per mutating request; reads are unframed statements under the mutex | The owner's stated path; a failed batch commit would lose acknowledged operations | Nothing for writes. Review C's proposal to batch several requests per transaction is not adopted |
-| K5 | Payload as non-overlapping extents of at most 128 KiB, overwritten in place; no copy-up | The base is behind a bridge call, so a write must not read it | Fixed block grid of at most 8 KiB with copy-up (plan D3) |
+| K5 | **Revised:** bounded payload update representation with no base-payload copy-up | Immutable extent boundaries failed the fragmentation counterexample; [02 §5](02-base-overlay.md#5-payload-replacement-required) requires a replacement algorithm | Original byte-exact extent algorithm withdrawn |
 | K6 | Payload rows carry a stream number, not an inode and generation | Truncate to zero, relabel and unlinked-file retention then never rewrite payload | — |
-| K7 | Keys `(ino, gen)` and `(parent, name, gen)` | The newest row is one seek whatever the generation count | Review C proposed generation-leading keys; see §6 |
-| K8 | At most two live generations; a failed Commit folds the captured rows into the active generation before returning | Hard version bound; constant read depth | "A refused Commit clears `frozen_gen` and nothing else; no compaction is built" (plan §0.3) |
-| K9 | An open unlinked file retains only its own rows | One deleted-but-open file must not hold back all retirement | The single retire floor (plan §0.3) |
+| K7 | **Revised:** lookup-leading primary keys plus generation-selective cursors/indexes | Two versions per key did not bound disjoint active keys or scan EOF | Original no-secondary-index/factor-of-two argument withdrawn |
+| K8 | **Replacement required:** short failed-capture resolution plus bounded consolidation | Foreground payload merge pauses the hot inode; bounded retention/progress must be derived | Synchronous failed-Commit fold withdrawn |
+| K9 | **Replacement required:** orphan owner independent of namespace capture | Successive pins accumulated O(Commit count) versions for one descriptor | Capture pin-until-close rule withdrawn |
 | K10 | Five tables; custody and allocators in memory | The database dies with the daemon | Six tables with `handle` and `xattr` (#301 packet 06); agrees with the plan's four plus `reclaim` |
 | K11 | The owner-promoted mount profile, made correct by the coherence invariant; the per-WRITE invalidation is removed | [05 §3–§4](05-fuse-assessment.md#3-target-mount-profile) | "The mount keeps direct I/O" (#303 planning prompt), already reversed by the owner on #305 |
 | K12 | Stat identity is an invariant; `ctime = mtime` | E18 request counts; cluster one stores no ctime | — |
-| K13 | Mutations wait on the Workspace mutex; no `EBUSY`; no daemon-wide slot | Owner requirements R4–R7 | The product's refusal-based coherence |
+| K13 | **Revised:** fair runnable admission, deferred inode/resource waiters | Two blocked request threads stalled unrelated files; no contention EBUSY remains a requirement | Blocking Condvar admission withdrawn |
 | K14 | A second Commit request is refused at once with a typed result | One stage per Workspace; the two-version bound | Retained from the prepared design |
 | K15 | Save finish, stage and transition are three bridge calls; a conflict discards the stage by exact token | The current history API | "One publication call with five outcomes" (plan contract C5) |
 | K16 | `Uncertain` defines no resolution | `core/AGENTS.md` and the handbook grant none | The plan assumed its own rule text (Q1) was in force |
-| K17 | One store owner thread on the host; reads before writes | `try_lock` returns `Busy`; `Storage` is not `Sync` | Contract C1's "one `Send + Sync` value" |
-| K18 | Maintenance in bounded steps; a per-Workspace pressure rule; reclamation before `ENOSPC` | [03 §7](03-mutation-hot-path.md#7-maintenance) | Inline checkpointing in the #305 prototype |
-| K19 | What cluster one cannot express is refused at the mutation | A Commit must not fail for a reason the command could have been told | — |
+| K17 | **Revised:** embedded cluster-one runtime with starvation-free per-Workspace/service-class queues and demand transport capacity | Strict reads-first starved Saves; whole-Save checkouts exhausted upstream capacity | Reads-before-writes and serial whole-Commit fallback withdrawn |
+| K18 | **Revised:** bounded maintenance, reserved headroom, actual allocation accounting | Pre-reply quota loops and inferred garbage pages did not establish bounds | Mutation-triggered reclamation and repeated preflight cleanup withdrawn |
+| K19 | Unsupported format semantics refused at mutation; R3 processing limits removed through integration | Format refusals do not authorize artificial edit/Commit caps | — |
 | K20 | Pinned SDK views are not designed here | They change the version bound; no owner answer exists | — (O-10) |
+| K21 | Ordinary Bash Exec with no automatic runtime timeout, explicit lifecycle and bounded streaming output | Owner direction 2026-10-05; [01 §9](01-architecture.md#9-exec-is-an-ordinary-shell-process) | Dormant sh/30 s/8 KiB/status-polling wrapper is not the target contract |
+| K22 | Terminal unmount includes logical close and automatic cleanup; no required public close | Owner direction 2026-10-05; [04 §10](04-concurrency-commit.md#10-second-commit-and-terminal-unmount) | Separate detach-only unmount and close lifecycle withdrawn |
+| K23 | Complete filesystem at one-call minimum granularity; long-lived multi-call Workspaces with incremental Commits supported | Owner clarification: lifetime independent of call/task; ignored files/dependencies/caches/output ready; Commit advances base and preserves later changes | Source-only/filter/reinstall projections and mandatory one-call teardown rejected |
+| K24 | Retired layerfs-server remains absent from target dependencies; embed cluster-one runtime through public adapters | Owner clarification plus current source: package excluded/reference, provider host-local SQLite | Earlier proposed server rewrite withdrawn; immutability is not a complete distributed protocol |
+| K25 | Capture retains existing rows; later active mutations and operation scratch create separate required state | Discussion clarification; [Commit §5.1](workspace-api/commit.md#51-existing-captured-rows-new-active-rows-and-scratch) | No bulk overlay snapshot copy or premature captured deletion |
+| K26 | Automatic bounded SQL row deletion after logical retirement, including idle periods | [engine §6.1](daemon-sqlite.md#61-automatic-batched-sql-deletion) | No manual cleanup, intentional TTL, shared-table DROP or implied file shrink; throughput still unqualified |
+| K27 | Both per-tool-call and per-task modes; per-tool-call expected commonly; Exec duration independent of either | Owner clarification: commands may be short or long-lived; multi-call reuse and incremental Commit supported | Presumed short Exec, one-call ownership limit and automatic lifecycle by command class rejected |
 
 ## 4. Disposition of prepared items
 
@@ -89,21 +109,21 @@ the #301 documents; "#304" the study.
 | Item | Source | Status | Note |
 | --- | --- | --- | --- |
 | A daemon-owned SQLite overlay holding names, inodes and payload; no private backing files | #303 goal | **retain** | Owner requirement |
-| Generation-keyed rows; capture is one statement; install is one statement | packet 02 §2–§4 | **retain** | [02 §4](02-base-overlay.md#4-generations-and-visibility) |
-| Within a generation a rewrite replaces in place | packet README | **retain** | In-place BLOB write |
+| Generation-keyed rows; short capture/install | packet 02 §2–§4 | **retain with R2/R4 ownership corrections** | [02 §4](02-base-overlay.md#4-generations-and-visibility) |
+| Within a generation only latest visible bytes remain | packet README | **retain semantics; replace algorithm** | R1 bounds fragmentation and binary tail growth |
 | Parent-serial plus name directory rows; a directory rename writes two rows | packet 02 §5 | **retain** | Depends on `resolve_child` and `list_inode`, which exist |
 | `inherit_len` | packet 02 §5 | **retain**, renamed `lower_len` | — |
 | No opaque marker; a recreated directory gets a new serial | packet 02 §5 | **retain** | — |
 | A removal always writes a whiteout | plan §0.5 | **replace** | A name born and removed in one generation leaves no row (`below`) |
-| One database per daemon, `ws`-prefixed keys | planning prompt | **replace** | K1 |
+| One database per daemon, `ws`-prefixed keys | planning prompt and owner clarification | **retain / restored** | K1 owner update; one startup connection/schema, fair shared writer |
 | Fixed block grid, 4 KiB blocks on 8 KiB pages | plan D3 | **replace** | K5; by file-format arithmetic that pair fits one block per leaf |
 | Extents "kept as the alternative" | packet 02 §8 | **retain**, promoted | K5 |
 | Six tables; `handle` and `xattr` tables | packet 06 | **replace** | K10 |
-| Shrink deletes the active generation's rows beyond the new size | packet 02 §5 | **retain** for a non-zero size; **replace** for zero | K6 |
+| Shrink deletes rows before reply | packet 02 §5 | **replace** for nonzero shrink; zero stream swap retained | R1 logical cutoff |
 | Single retire floor | plan §0.3 | **replace** | K9 |
-| A failed Commit adds a layer | packet 02 §6; plan §0.3 | **replace** | K8 |
+| A failed Commit adds a layer | packet 02 §6; plan §0.3 | **replace; algorithm required** | R4 must bound composition without foreground payload merge |
 | Drop folded rows after install (D9) | plan | **retain** | The kernel page cache softens the re-read |
-| Storage quota as a page budget | packet 02 §8 | **retain** | `max_page_count` per file |
+| Storage quota as a page budget | packet 02 §8 | **revise** | max_page_count is daemon-wide; logical per-Workspace admission and global physical reserves |
 | WAL; writer plus readers; explicit `PASSIVE` checkpoints; `mmap_size = 0`; bundled SQLite | packet 02 §10 | **replace** except bundled and `mmap_size` | K3 |
 | "WAL so a killed daemon leaves a consistent database" | packet 02 §10 | **unresolved** | O-3 |
 
@@ -114,17 +134,17 @@ the #301 documents; "#304" the study.
 | Commands are never paused for a Commit; no transaction spans construction, transport or Exec | planning prompt | **retain** | Owner requirement |
 | One pending Commit per Workspace; one construction worker | planning prompt | **retain** | Owner requirement; root `AGENTS.md` §3.8 |
 | One mutation at a time per Workspace; one transaction per request; reply after commit | plan §0.4; #304 | **retain** | K4. The cost objection came from the prototype's framing of reads, which is removed |
-| "Every Workspace shares the one overlay writer" | plan | **replace** | K1 |
+| Every Workspace shares the overlay writer/pager | plan and owner clarification | **retain with fair bounded scheduling** | Shared physical/database failure and admission accounting |
 | Copy-up pre-read outside the transaction, re-checked inside | plan §0.4 | **delete** | No write reads the base |
 | Kernel invalidation kept, one per mutation | plan §0.5 | **delete** | [05 §4](05-fuse-assessment.md#4-coherence-a-lifetime-is-not-a-design) |
 | Serial range reserved once and used locally | plan F12 | **retain**, with background refill | — |
 | Several Workspaces and Execs with configured limits, refused not queued beyond the limit | plan amendment 1 | **retain** | Recorded only in untracked files; consistent with the owner's requirements here |
 | No capacity ceiling on accumulated changes | plan amendment 2 | **retain** | Same |
-| Kept "windows": 128 handles, 32 views, 4 GiB per file | plan Q12 | **replace** (handles), **unresolved** (views, O-10; file size, O-11) | — |
+| Kept "windows": 128 handles, 32 views, 4 GiB per file | plan Q12 | **replace** (handles), **unresolved** (views, O-10); file cap removal already required | — |
 | Commit phases admit, capture, construct, publish, install, retire | packet 03 §2 | **retain**, with stage and transition | [04 §5](04-concurrency-commit.md#5-save-stage-transition-install-retire) |
 | Four outcomes | packet 03 §5 | **replace** | [04 §6](04-concurrency-commit.md#6-outcomes) distinguishes where an answer was lost |
 | Resolve Uncertain by `CommitId` lookup (D7) | plan | **unresolved** | O-4. The stage token gives a stricter exact read |
-| Overlap witness at the port level | plan §3.1 | **retain** | [07 §5.2](07-implementation-validation.md#52-the-overlap-witness) |
+| Overlap witness at the port level | plan §3.1 | **retain** | [07 §5.2](07-implementation-validation.md#52-acceptance-and-adversarial-proofs) |
 | End-to-end gate by pausing the MinIO container | plan §3.1 | **delete** | — |
 | View model with pinned SDK leases | plan §0.3 | **unresolved** | O-10 |
 
@@ -140,7 +160,7 @@ the #301 documents; "#304" the study.
 | Contract C4 Save session with Refused/Uncertain classes and a resolver | plan §6 | **replace** | `begin_save`, `accept`, `finish`, `take_failure`; no resolver exists |
 | Contract C5 one publication call; C6 a conclusive `NotPublished` | plan §6 | **replace** / **unresolved** | K15; O-4 |
 | Contract C9 cluster one stops refusing on accumulated change | plan amendment | **unresolved** | Never sent; #302 closed ([06 §6](06-cluster-one-integration.md#6-prerequisites-outside-cluster-two) P3, P7) |
-| `layerfs-server` retired | #303 "done when" | **replace** | Rewritten as the store host |
+| layerfs-server retired | Owner clarification / #303 done-when | **retain** | No revival/rename; host application embeds current cluster-one libraries and bounded runtime adapters |
 | Bridge payload and history contracts deleted | #303 comment 3 | **replace** | Construction contracts deleted; history contracts kept |
 | Rename the old crate to `-legacy`, delete it at the end | plan S1 | **retain** | As a relocation of a dormant crate |
 | Rollout S0–S14 | plan §2 | **replace** | [07 §3](07-implementation-validation.md#3-slices) |
@@ -160,55 +180,57 @@ the #301 documents; "#304" the study.
 | 3 | Documents say PostgreSQL and MinIO; `main` has host-local SQLite | §2 |
 | 4 | "Bridge control only" against a Store that only the host can open | K2 |
 | 5 | The committed hosting rule forbids Docker-owned SQLite; the owner requires a daemon-owned overlay | **Not resolvable here.** O-1 |
-| 6 | One transaction per mutation against "extremely fast" | K4. The 1,259,910 transactions of B/E10 were mostly framed reads; the prototype also `stat`ed its log after every write |
+| 6 | One transaction per mutation against "extremely fast" | K4 retains acknowledgement atomicity; R1/R5/R6 and sustained counts must establish cost. Prototype counts do not prove throughput |
 | 7 | Six tables or four; custody persisted or in memory | K10 |
 | 8 | Does a Workspace survive a daemon restart? | Designed for "no" (K3) with a stated alternative; O-3 |
-| 9 | `core/AGENTS.md:156-161` still names PostgreSQL and MinIO and the handbook says otherwise | Reported; the rule text is the owner's to correct |
+| 9 | Earlier core agent rules named PostgreSQL/MinIO and blanket MEMORY/OFF despite the current global Store profiles | Resolved 2026-10-05: refreshed root/core rules distinguish global Durable/Disposable SQLite, daemon overlay proposal and unsupported backends; no product change |
 | 10 | Uncertain-outcome lookup assumed by the plan; not granted by any committed rule | K16; O-4 |
 | 11 | The two owner amendments exist only in untracked files | Treated as owner requirements because the task brief states them; they should be recorded on #303 |
-| 12 | "Remove artificial limits" against kept windows (4 GiB, 32 views, 128 handles) | Handles removed; O-10, O-11 for the rest |
+| 12 | "Remove artificial limits" against kept windows (4 GiB, 32 views, 128 handles) | Handle/file-cap removal required; SDK views remain O-10 |
 | 13 | Today's daemon contradicts multi-Workspace, multi-Exec and activity during Commit | K13 |
 | 14 | "Phase 7 keeps the trust boundary" against a base that has none | New work in S8; O-8 |
 | 15 | Rollout mechanics assume buildable legacy crates | [07 §2](07-implementation-validation.md#2-build-structure) |
 | 16 | Families 1–2 "covered by cluster one M5" | [07 §5.4](07-implementation-validation.md#54-qualification) |
-| 17 | Background compaction proposed in the packet, "not built" in the plan | K8: fold after failure, in the foreground of the failing Commit |
+| 17 | Background compaction proposed in the packet, foreground fold at 334fc7437 | R4: foreground payload fold withdrawn; bounded replacement algorithm required |
 
 ## 6. Where the reviews disagreed
 
 | Topic | Positions | Resolution |
 | --- | --- | --- |
 | Several FUSE requests per SQL transaction | The integration review proposed batching with savepoints. The owner's brief specifies a short transaction per mutation | K4: one transaction per mutating request. Batching would let a failed commit lose acknowledged operations |
-| Key order | The integration review proposed generation-leading keys so a generation is one key range | K7: `(ino, gen)`. With two live generations the scan cost differs by at most a factor of two, and the newest-row lookup is one seek instead of two |
-| Payload unit | The integration review proposed one extent per 128 KiB cell with gap fill from below | K5: several extents, never a gap fill, because gap fill is a base read on the mutation path |
-| Truncate | The integration review proposed range tombstones with sequence stamps on every block row | K6: a stream swap for truncate to zero; a bounded synchronous delete for a non-zero shrink |
+| Key order | Generation-leading access was originally rejected | Review correction: retain lookup-leading primary keys and add generation-selective access; disjoint active keys disprove the factor-of-two argument |
+| Payload unit | Cells with base gap fill were rejected; immutable extents then failed overlap bounds | R1 considers validity-masked cells without base gap fill or bounded normalization; algorithm not yet selected |
+| Truncate | Nonzero shrink originally deleted before replying | R1: atomic logical cutoff and background reclaim; regrow/capture ownership proof required |
 | Placement | The audit and the FUSE review left it open; the integration review recommended option C | K2, with option A as the stated fallback and O-2 for the owner |
 | Negative-entry caching | The FUSE review marked it "adopt with invalidation" | Not in the first slice; first candidate after it. It was measured only with permissions off |
 | `MAX_AFFECTED = 128` | The plan called it a limit; the audit showed it is a scan page size | The audit is right; not listed as a limit |
 
 ## 7. Questions only the owner can answer
 
-Each can be answered in one line. "Blocks" names the slice that cannot start
-without the answer.
+Only product/policy choices require owner input. The no-cap, bounded-memory,
+smooth-mutation and concurrent-progress requirements are already given. No
+implementation or qualification is claimed by resolving a question. Historical
+IDs are kept below so earlier references remain traceable.
 
 | # | Question | Recommendation | Blocks |
 | --- | --- | --- | --- |
-| O-1 | Amend the permanent hosting rule (`docs/general/benchmark_rules.md:14-20`) so that (a) the daemon-owned overlay SQLite and (b) canonical construction by `layerfs-content` may run in the sandbox container, with the Store, encoding and history on the host? (both / (a) only / no) | Both. "(a) only" selects placement option A | S12; with "(a) only", S0 |
-| O-2 | Placement: option C (construct in the daemon; the host validates and stores) or option A (the host constructs from raw changes)? | C, conditional on prerequisites P1 and P2 | S0 |
+| O-1 | **Resolved routing:** target daemon overlay and logical content/construction are Linux-owned; global Store/encoding/history remain on the supported host | [Hosting scope](../../../../docs/general/benchmark_rules.md#hosting-scope-for-cluster-one-and-cluster-two) updated 2026-10-05 to match cluster-one/two boundaries; old frozen families retain their topology | Integrated implementation/registration/proof still required; no new measurement admission |
+| O-2 | Placement option C remains the proposed direction, conditional on semantic admission/Linux build | Engineering prerequisites P1/P2; owner may change placement preference | No extra approval gate inferred |
 | O-3 | Must a Workspace survive a daemon process crash? (no / yes) | No. "Yes" selects the write-ahead alternative and a restart protocol not designed here | S1 |
-| O-4 | May an unknown `commit_staged` outcome be settled by exact reads (`stage(workspace)`, then `commit(id)`), with nothing resent and nothing deleted? If so, with what rule text in `core/AGENTS.md`? | Yes | S10 handles `Uncertain` as terminal without it |
+| O-4 | May exact uncertain-history resolution be added, with completion fencing and coherent authorized reads, no resend/delete on a guess? | Specify policy; two unfenced reads are insufficient | Terminal Uncertain remains until permitted and implemented |
 | O-5 | Does the integrated global Store run Durable or Disposable? | — (it decides whether parallel read handles are possible on the host) | S9 tuning only |
 | O-6 | After a conflict, what does the product offer: reopen on the new head, commit to a fork, or leave it to the caller? | Leave it to the caller in the first release | — |
 | O-7 | May the overlay start writeback and drop clean pages on its own files to bound guest page cache, given that root `AGENTS.md` §4 forbids sync calls on Workspace backing? | — | Target T8 |
 | O-8 | Which uid:gid do commands run as, and is it one identity per daemon or one per Workspace? Under a shared identity a command of one Workspace can open another's mount | One per Workspace | S8 |
 | O-9 | Is reporting `ctime = mtime` accepted? | Yes | S4 |
 | O-10 | Are pinned read-only SDK views kept? Each one is an extra live generation | Defer them | — |
-| O-11 | Is the 4 GiB per-file contract removed on the Workspace path? | Yes | S5 |
-| O-12 | Who owns the cluster one prerequisites P1 and P3–P7, now that #302 is closed? | Open a cluster one follow-up issue | S0 |
-| O-13 | Default values for `max_workspaces` and `max_execs`? | 2 and 4, the values Stage C of #305 planned | S8 |
-| O-14 | Does a close with uncommitted changes discard or refuse? | Refuse unless forced | S8 |
-| O-15 | May a mount outlive one tool call? | — (it decides how much the kernel caches and lifecycle shortcuts are worth) | — |
+| O-11 | **Resolved by requirement:** remove inherited 4 GiB Workspace file cap | Engineering work; retain platform/resource limits | No additional owner gate |
+| O-12 | **Engineering assignment:** allocate P1/P3–P7/P12 follow-up ownership | Required integration scope, not a request to weaken requirements | No additional owner gate |
+| O-13 | **Engineering defaults:** start with 2 Workspaces/4 Execs as proposed, expose explicit resource settings | Defaults must pass sustained progress/resource proofs; no qualification claimed | No additional owner gate |
+| O-14 | **Resolved:** unmount includes logical close and cleanup; successful unmount discards uncommitted local state, no implicit Commit | Normal Busy/Uncertain preserves state; explicit force handles cancellation/unknown custody | No separate public close |
+| O-15 | **Resolved by owner:** a Workspace may serve many sequential/concurrent calls over a long lifetime and Commit incrementally | Same mount and current live view; no automatic teardown on call exit or Commit; lifetime independent of task | Qualify both fast fresh mounts and persistent cache/ownership/reclaim behavior |
 | O-16 | For registered selections whose subject is a removed mechanism, is `NOT_RUN — mechanism removed`, shown beside a prospectively registered successor, the accepted disposition? | Yes | S12 |
-| O-17 | Approve `rusqlite`'s `bundled` feature for the Linux daemon only? | Yes | S1 |
+| O-17 | **Engineering linkage:** bundled SQLite for Linux daemon only, existing dependency and locked build | Verify host feature/binary scope isolation; do not patch dependencies | No additional owner gate |
 
 **Earlier questions on #303.** None of Q1–Q13 has a recorded answer.
 
@@ -238,14 +260,54 @@ without the answer.
   open deliverables are covered as noted in §4.3.
 - The #305 and #306 reports and receipts are evidence and were not touched.
 
-## 9. Not verified
+## 9. Review corrections and remaining proof obligations
+
+Three subagents reviewed the owner's seven readiness/load-bearing questions before
+writing the primary operation/engine documents. Findings are consolidated in
+[README](README.md#pre-write-review-of-the-owners-seven-questions). One-time full
+root preparation and demand-mounted per-call readiness differ; ignored files and
+symlinks cannot be restored during Exec or omitted from Commit. Phase-4.5 structure
+and transport caps must disappear through actual streaming/backing API work.
+
+The new source-qualified docs distinguish current host-local library composition
+from future distributed providers and do not restore layerfs-server. Immutable
+canonical IDs improve reuse/replication safety; role/reference/authority checks,
+mutable history CAS, durability and retention remain load-bearing obligations.
+
+The independent review used design `334fc743751b9a181e670d0601a24fb3169208f9`,
+tree `c453cfbf622aaeaace0788fee553811568e7f9df`; product tree remained
+`05c00c5d62889ae316bec9ea09dba16e93ba888e`, identical to `f96d97651`.
+Root/core rules, both handbooks, all nine documents, complete #303/#305/#306
+bodies/comments, relevant product APIs and local experiment evidence were read.
+No workload/build or command in the original deepseek-harness checkout was run.
+
+Confirmed design contradictions: immutable extent-boundary fragmentation cost,
+active-key capture scan growth, foreground shrink/fold stalls, accumulating orphan
+pins, blocking two-worker dispatch, strict-read starvation and pressure loops.
+Confirmed source constraints: deferred construction refusal, directory Vec,
+new-parent map, sparse zero input, symlink-refusing native Init, global quarantine.
+Owner clarification restores one local SQLite per daemon for fast bootstrap,
+with Workspace-prefixed state and one shared fair writer/pager. Concurrent SQL
+writers and per-Workspace database corruption isolation are not claimed. Exec
+has no automatic runtime timeout; the legacy 30-second cap must be removed.
+
+Required proofs: replacement composition/normalization, actual page accounting,
+Save lifetime/interleaving, kernel cache ordering, aggregate residency and exact
+operation fencing. R1–R8 track these without claiming a completed implementation.
+
+The handbook `.object()` error is corrected to `.0` in this documentation revision.
+Reports/receipts and owner-promoted A2 candidate retain their original identities
+and limitations. Historical estimates are not updated as if they were measurements.
+
+## 10. Not verified
 
 - Nothing was compiled, run or measured for this set.
 - That `layerfs-content` and a bundled SQLite build for
   `aarch64-unknown-linux-musl`.
-- Every SQLite page, overflow and journal statement: file-format arithmetic and
-  documented behaviour, to be confirmed by the count diagnostic of slice S7.
-- `rusqlite` 0.40.2's positional BLOB API as used for in-place writes.
+- Replacement page/index/journal bounds, reservation arithmetic and actual
+  reclamation capacity under sustained writes; old illustrative counts withdrawn.
+- The replacement BLOB schema/counts. Fixed-length positional writes exist in
+  pinned rusqlite; resizing requires SQL/binding and binary tail proofs.
 - That two `Storage` values over one provider can run interleaved Saves on one
   thread as the comment on `begin_save` says.
 - How `update_filesystem` treats a removed name the base does not bind, and
