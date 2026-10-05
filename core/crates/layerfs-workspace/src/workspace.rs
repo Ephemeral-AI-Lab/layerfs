@@ -5,16 +5,24 @@ use layerfs_content::{
     ContentError,
 };
 use layerfs_overlay::{Overlay, OverlayError, Route};
-use std::{fmt, sync::Arc};
+use std::{
+    fmt,
+    sync::{Arc, RwLock},
+};
 
 pub struct Workspace {
     route: Route,
-    base: BaseView,
+    pub(crate) base: RwLock<BaseView>,
 }
 #[derive(Debug)]
 pub enum WorkspaceError {
     Content(ContentError),
     Overlay(OverlayError),
+    BindingPoisoned,
+    BaseChanged {
+        expected: [u8; 32],
+        actual: [u8; 32],
+    },
 }
 pub type WorkspaceResult<T> = Result<T, WorkspaceError>;
 impl fmt::Display for WorkspaceError {
@@ -44,12 +52,19 @@ impl Workspace {
     ) -> WorkspaceResult<Self> {
         let base = BaseView::open(client, root, scope)?;
         let route = overlay.open_workspace(incarnation, root.0.to_bytes())?;
-        Ok(Self { route, base })
+        Ok(Self {
+            route,
+            base: RwLock::new(base),
+        })
     }
     pub const fn route(&self) -> Route {
         self.route
     }
-    pub fn base(&self) -> &BaseView {
-        &self.base
+    /// Retains the selected immutable binding with no lock across content IO.
+    pub fn base(&self) -> WorkspaceResult<BaseView> {
+        self.base
+            .read()
+            .map(|base| base.clone())
+            .map_err(|_| WorkspaceError::BindingPoisoned)
     }
 }

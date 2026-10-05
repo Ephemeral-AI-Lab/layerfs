@@ -92,6 +92,10 @@ owner routing with matching local keys. Closed captures keep immutable cell acce
 Final host565/Linux21 tests and all prescribed core checks pass. Live-generation/
 orphan/normal failed-Commit resolution, pressure and native ownership remain later gates.
 
+[S3 exit audit](S3-EXIT-AUDIT.md) now records prepared known install and old-root
+retention against actual engine install. Effective point/name/metadata merge and
+P5 stat/runtime integration remain required. S3 is still unchecked.
+
 ## Concrete next work
 
 The initial active overlay now provides typed namespace/metadata/cell/scratch/

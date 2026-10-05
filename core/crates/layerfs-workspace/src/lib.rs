@@ -8,8 +8,10 @@
 mod base;
 mod cache;
 mod client;
+mod install;
 mod workspace;
 
 pub use base::{BaseRead, BaseStat, BaseView};
 pub use client::{CanonicalClient, ClientWork};
+pub use install::PreparedBase;
 pub use workspace::{Workspace, WorkspaceError, WorkspaceResult};

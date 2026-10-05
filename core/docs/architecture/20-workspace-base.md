@@ -74,3 +74,13 @@ identity. Exact nested rollback errors are preserved in uncertain custody.
 Remaining: base/overlay merge, mutable operations, install/read leases, orphan/
 failure composition, fair service/reclamation, authenticated runtime and canonical
 Commit construction, actual mounted daemon/Exec and required qualification.
+
+## Prepared install checkpoint (#307)
+
+The S3 slice after `8e2976e4e` adds a scope-checked prepared next base and a
+paired one-attempt engine/Workspace binding transition. `Workspace::base()` now
+returns a retained BaseView through WorkspaceResult, releasing the binding lock
+before content I/O. Old plans survive actual install; refusal returns original
+error plus prepared custody. See [prepared install](27-prepared-base-install.md)
+and [S3 exit audit](../issues/307/S3-EXIT-AUDIT.md). Effective namespace merge and
+P5 stat/runtime integration remain unfinished; the earlier source pins are unchanged.

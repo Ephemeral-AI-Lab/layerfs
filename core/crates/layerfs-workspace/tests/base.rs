@@ -302,3 +302,153 @@ fn logical_workspace_open_binds_real_root_without_schema_or_namespace_import() {
     drop(overlay);
     std::fs::remove_file(path).unwrap();
 }
+
+#[test]
+fn known_install_advances_selected_base_and_preserves_retained_plans_and_later_rows() {
+    use layerfs_overlay::{
+        Cell, Inode, InodeKind as LocalKind, OverlayError, CELL_BYTES, MASK_BYTES,
+    };
+    use layerfs_workspace::WorkspaceError;
+    let f = fixture();
+    let client = Arc::new(CanonicalClient::new(Arc::new(f.store.clone()), 512));
+    let path = std::env::temp_dir().join(format!(
+        "layerfs-base-install-{}.sqlite",
+        std::process::id()
+    ));
+    let overlay = Overlay::create(&path, ProfileConfig::default()).unwrap();
+    let workspace = Workspace::open(&overlay, client.clone(), f.root, f.scope, [92; 32]).unwrap();
+    let other = Workspace::open(&overlay, client, f.root, f.scope, [93; 32]).unwrap();
+    let old = workspace.base().unwrap();
+    let retained = old.plan_read(2, 0, 64).unwrap();
+    let changed = b"changed";
+    let mut data = Box::new([0; CELL_BYTES]);
+    data[..changed.len()].copy_from_slice(changed);
+    let mut validity = Box::new([0; MASK_BYTES]);
+    validity[0] = 0x7f;
+    let changed_inode = Inode {
+        serial: 2,
+        kind: LocalKind::File,
+        mode: 0o644,
+        mtime_seconds: i64::MAX,
+        mtime_nanoseconds: 999_999_999,
+        nlink: 2,
+        size: changed.len() as u64,
+        inherited_cutoff: 0,
+    };
+    let publication = overlay
+        .publish(
+            workspace.route(),
+            &changed_inode,
+            None,
+            Some(&Cell {
+                offset: 0,
+                data,
+                validity,
+            }),
+        )
+        .unwrap();
+    overlay.reply_attempted(publication).unwrap();
+    let capture = overlay.capture(workspace.route()).unwrap();
+    let mut value = old.inode(2).unwrap().value;
+    value.content_root = file(&f.store, changed);
+    let updates = [InodeUpdate { serial: 2, value }];
+    let mut sink = f.store.clone();
+    let mut objects = FilesystemObjects::new(&f.store, &mut sink);
+    let input = FilesystemInput {
+        base: Some(f.root),
+        scope: f.scope,
+        root_serial: 1,
+        directories: &[],
+        inodes: &updates,
+        new_inodes: &[],
+        resources: FilesystemResources::default(),
+    };
+    let root = update_filesystem(&mut objects, &input, None).unwrap().root;
+    let before = f.store.demand.load(Ordering::Relaxed);
+    let prepared = workspace.prepare_base_install(capture, root).unwrap();
+    assert_eq!(
+        f.store.demand.load(Ordering::Relaxed) - before,
+        1,
+        "prepare must only acquire the new root"
+    );
+    assert_eq!(prepared.capture(), capture);
+    assert_eq!(prepared.root(), root);
+    assert_eq!(
+        overlay.state(workspace.route()).unwrap().base_root,
+        f.root.0.to_bytes()
+    );
+    let error = other
+        .install_prepared_base(&overlay, prepared)
+        .err()
+        .unwrap();
+    assert!(matches!(
+        error.0,
+        WorkspaceError::Overlay(OverlayError::Stale)
+    ));
+    assert_eq!(error.1.root(), root);
+    drop(error);
+    assert_eq!(other.base().unwrap().identity(), f.root);
+    assert_eq!(
+        overlay.retained_capture(workspace.route()).unwrap(),
+        Some(capture)
+    );
+    let mut malformed = capture;
+    malformed.revision += 1;
+    let invalid = workspace.prepare_base_install(malformed, root).unwrap();
+    let error = workspace
+        .install_prepared_base(&overlay, invalid)
+        .err()
+        .unwrap();
+    assert!(matches!(
+        error.0,
+        WorkspaceError::Overlay(OverlayError::Stale)
+    ));
+    assert_eq!(error.1.capture(), malformed);
+    assert_eq!(error.1.root(), root);
+    drop(error);
+    assert_eq!(workspace.base().unwrap().identity(), f.root);
+    assert_eq!(
+        overlay.retained_capture(workspace.route()).unwrap(),
+        Some(capture)
+    );
+    let prepared = workspace.prepare_base_install(capture, root).unwrap();
+    let mut later = changed_inode;
+    later.size = 10;
+    later.mtime_seconds = 23;
+    let later_publication = overlay
+        .publish(workspace.route(), &later, None, None)
+        .unwrap();
+    workspace
+        .install_prepared_base(&overlay, prepared)
+        .map_err(|(error, _)| error)
+        .unwrap();
+    assert_eq!(workspace.base().unwrap().identity(), root);
+    assert_eq!(
+        overlay.state(workspace.route()).unwrap().base_root,
+        root.0.to_bytes()
+    );
+    assert_eq!(overlay.inode(workspace.route(), 2).unwrap(), Some(later));
+    assert_eq!(
+        overlay.pending_publications(workspace.route(), 0).unwrap(),
+        [later_publication]
+    );
+    let current = workspace.base().unwrap();
+    assert_eq!(current.child(1, &name("file")).unwrap().serial, 2);
+    assert_eq!(current.child(1, &name("alias")).unwrap().serial, 2);
+    assert_eq!(current.readlink(3).unwrap().as_bytes(), b"../.git/index");
+    let mut bytes = Vec::new();
+    current
+        .plan_read(2, 0, 64)
+        .unwrap()
+        .emit(&mut bytes)
+        .unwrap();
+    assert_eq!(bytes, changed);
+    bytes.clear();
+    retained.emit(&mut bytes).unwrap();
+    assert_eq!(bytes, b"original\0\xff");
+    assert_eq!(old.identity(), f.root);
+    assert_eq!(old.inode(2).unwrap().value.namespace_ref_count, 2);
+    assert_eq!(other.base().unwrap().identity(), f.root);
+    drop(overlay);
+    std::fs::remove_file(path).unwrap();
+}
