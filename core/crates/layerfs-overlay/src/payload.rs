@@ -1,7 +1,7 @@
-//! Binary bounded cells, with namespace-qualified access and frozen generations.
+//! Raw single-cell access: namespace-qualified rows of an exact generation.
 use crate::{
-    db::integer, sql, Capture, Cell, Generation, Overlay, OverlayError, OverlayResult, Route,
-    StatementKind, CELL_BYTES, MASK_BYTES,
+    db::integer, layers::Layer, Capture, Cell, Generation, Overlay, OverlayError, OverlayResult,
+    Route, CELL_BYTES,
 };
 
 pub(crate) fn check(cell: &Cell) -> OverlayResult<()> {
@@ -12,22 +12,31 @@ pub(crate) fn check(cell: &Cell) -> OverlayResult<()> {
     Ok(())
 }
 impl Overlay {
+    /// Replaces one whole cell of a layer inside the caller's transaction,
+    /// stamped with that layer's epoch. A cell with no valid byte leaves no row.
     pub(crate) fn put_cell(
         &self,
         route: Route,
         serial: i64,
-        gen: Generation,
+        layer: &Layer,
         cell: &Cell,
     ) -> OverlayResult<()> {
-        self.execute(StatementKind::Payload,
-            "INSERT INTO payload(ns,serial,gen,cell_offset,data,validity) VALUES(?1,?2,?3,?4,?5,?6)
-             ON CONFLICT(ns,serial,gen,cell_offset) DO UPDATE SET data=excluded.data,validity=excluded.validity",
-            &[&route.ns,&serial,&gen.0,&integer(cell.offset)?,&cell.data.as_slice(),&cell.validity.as_slice()],
-            (32+CELL_BYTES+MASK_BYTES) as u64)?;
-        Ok(())
+        let window = crate::cells::Window {
+            data: cell.data.clone(),
+            mask: cell.validity.clone(),
+        };
+        self.store(
+            route.ns,
+            serial,
+            layer.gen,
+            integer(cell.offset)?,
+            layer.epoch,
+            window.trim(),
+        )
     }
-    /// Reads exactly one retained physical cell. No raw rowid crosses this boundary.
-    /// Composition of invalid bytes with immutable base belongs to Workspace.
+    /// Reads exactly one stored physical cell of a live generation, expanded to
+    /// its full window. This is the raw row: layer composition, staleness after
+    /// a shrink and base fall-through belong to `source_read`.
     pub fn cell(
         &self,
         route: Route,
@@ -41,9 +50,9 @@ impl Overlay {
         }
         self.cell_at(route, serial, generation, offset)
     }
-    /// Exact immutable capture bytes, including while terminal close awaits
-    /// fenced construction/history disposition. Install/release invalidates the
-    /// capability; observing bytes never changes its ownership.
+    /// The raw stored cell of a retained capture, including while terminal
+    /// close awaits fenced construction/history disposition. Install/release
+    /// invalidates the capability; observing bytes never changes its ownership.
     pub fn captured_cell(
         &self,
         capture: Capture,
@@ -54,8 +63,7 @@ impl Overlay {
         self.cell_at(capture.route(), serial, capture.generation, offset)
     }
     /// One cell written at an exact live generation of an owned source, such as
-    /// the creation generation of a local symlink target. Byte composition over
-    /// several generations belongs to the payload read contract.
+    /// the creation generation of a local symlink target.
     pub fn source_cell(
         &self,
         source: crate::BaseSource,
@@ -77,30 +85,16 @@ impl Overlay {
         generation: Generation,
         offset: u64,
     ) -> OverlayResult<Option<Cell>> {
-        let serial = integer(serial)?;
-        let key = integer(offset)?;
-        Ok(self
-            .query(
-                StatementKind::Payload,
-                sql::CELL_LOOKUP,
-                &[&route.ns, &serial, &generation.0, &key],
-                32,
-                |r| {
-                    let data: Vec<u8> = r.get(0)?;
-                    let validity: Vec<u8> = r.get(1)?;
-                    Ok(Cell {
-                        offset,
-                        data: data
-                            .into_boxed_slice()
-                            .try_into()
-                            .map_err(|_| rusqlite::Error::InvalidQuery)?,
-                        validity: validity
-                            .into_boxed_slice()
-                            .try_into()
-                            .map_err(|_| rusqlite::Error::InvalidQuery)?,
-                    })
-                },
-            )?
-            .pop())
+        let Some(stored) =
+            self.stored(route.ns, integer(serial)?, generation.0, integer(offset)?)?
+        else {
+            return Ok(None);
+        };
+        let window = stored.expand()?;
+        Ok(Some(Cell {
+            offset,
+            data: window.data,
+            validity: window.mask,
+        }))
     }
 }

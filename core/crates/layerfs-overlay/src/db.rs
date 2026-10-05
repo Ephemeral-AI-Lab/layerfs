@@ -53,7 +53,7 @@ impl Overlay {
             connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
         let application: i64 =
             connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
-        if profile.schema_version != 7 || application != 1279676210 {
+        if profile.schema_version != 8 || application != 1279676210 {
             return Err(OverlayError::Invalid("overlay schema readback"));
         }
         connection.set_prepared_statement_cache_capacity(48);

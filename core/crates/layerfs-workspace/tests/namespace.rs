@@ -374,6 +374,7 @@ fn chmod_and_utimens_follow_the_portable_grammar_and_keep_one_mtime() {
         serial,
         mode,
         mtime,
+        size: None,
     };
     let changed = b.applied(set(2, Some(0o600), None), T1).unwrap();
     assert_eq!(

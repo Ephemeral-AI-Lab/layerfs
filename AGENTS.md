@@ -159,6 +159,16 @@ remain binding; moving them out of this file does not weaken them.
   retired; do not restore it or an equivalent wrapper. Verify the changed scope
   with [core checks](core/AGENTS.md#checks-and-completion), report checks/gaps,
   and never claim CI green or that an empty guard scan proves implementation.
+- **No test command runs longer than 2 minutes.** Give every test invocation an
+  explicit wall timeout of at most 120 s and stop it when it expires; never
+  leave one running, background it to wait it out, or wrap it in a repeat loop.
+  Build first (`--no-run`) so compilation is not mistaken for a slow test, and
+  select by package/test when the whole suite cannot fit. A test that reaches
+  the ceiling has FAILED as a hang: diagnose it from source and bounded output
+  before any rerun, and report it. Write tests so they cannot wait forever:
+  bounded waits, and a spawned thread's exit must not depend on another thread
+  finishing without panicking. This is a ceiling, not a target; the scoped
+  measurement and proof budgets in §3 stay stricter.
 - Preserve [repository ARM64 build inputs](.cargo/config.toml); explicit
   RUSTFLAGS must repeat the profile. Details are in the core guide.
 - Persistence profiles are scoped to the store. Claim only their guarantees;

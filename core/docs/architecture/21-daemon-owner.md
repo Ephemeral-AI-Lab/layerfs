@@ -2,6 +2,14 @@
 
 > **Status:** Current general guide.
 
+S5 update after `f5558fc22`: `SourceRead` provides one composed local byte
+window, with base I/O outside the owner. `DatabaseWork` exposes a connection
+counter snapshot after route validation, and `PayloadPlans` exposes the actual
+payload plans under an owned source. Their response capacities are credited;
+large work snapshots are boxed so ordinary replies retain their prior size.
+See [payload streams](31-payload-streams.md) for retained whole-operation profiles
+and caller/native credit limitations. These diagnostics do not measure residency.
+
 Implemented source: the S2 checkpoint after `d9d8d1b04`, for
 [tracker #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307).
 This active daemon library owns SQL service; native executable/FUSE/control/Exec

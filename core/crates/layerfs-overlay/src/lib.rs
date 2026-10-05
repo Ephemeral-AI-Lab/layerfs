@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 mod access_plan;
+mod cells;
 mod close;
 mod compound;
 mod db;
@@ -13,6 +14,7 @@ mod error;
 mod frontier;
 mod generation;
 mod inode;
+mod layers;
 mod metrics;
 mod payload;
 mod profile;
@@ -22,6 +24,7 @@ mod source;
 mod source_names;
 mod source_plan;
 mod sql;
+mod stream;
 mod types;
 mod workspace;
 
@@ -34,7 +37,7 @@ pub use profile::{DatabaseProfile, ProfileConfig};
 pub use reclaim::ReclaimStep;
 pub use types::{
     BaseSource, Binding, Capture, Cell, Changes, Dentry, Generation, Inode, InodeKind, Lease,
-    LeaseKind, NameChange, NameLayers, NameWindow, Publication, Route, ScratchRecord,
-    WorkspaceState, CELL_BYTES, COMPOUND_INODES, COMPOUND_NAMES, MASK_BYTES, PAGE_ROWS,
-    SCRATCH_BYTES,
+    LeaseKind, LocalRead, NameChange, NameLayers, NameWindow, PayloadWrite, Publication, Route,
+    ScratchRecord, WorkspaceState, CELL_BYTES, COMPOUND_INODES, COMPOUND_NAMES, MASK_BYTES,
+    PAGE_ROWS, READ_WINDOW, SCRATCH_BYTES, WRITE_WINDOW,
 };

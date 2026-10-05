@@ -1,0 +1,23 @@
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.13s
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-eed025404273d72b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-ea54a23a5a9ed9ab)
+
+running 8 tests
+test stopping_cancels_unattempted_capture_and_fences_future_admission ... ok
+test lost_source_completion_retains_backed_owner_and_terminal_release_makes_cleanup_eligible ... ok
+test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+test parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation ... ok
+test known_install_fences_later_sources_while_existing_reads_mutations_and_other_work_progress ... ok
+test lost_internal_completions_keep_exact_backed_custody_and_release_result_credits ... ok
+test idle_cleanup_runs_without_an_explicit_reclaim_or_status_job ... ok
+AUTOMATIC_CLOSE unrelated_progress=7 work=OwnerWork { admitted: 1045, completed: [0, 512, 0, 533, 0, 0], queue_wait_ns: [0, 9334025, 0, 10158534, 0, 0], service_ns: [0, 12904090, 0, 7252658, 0, 0], credited_bytes: 0, peak_credited_bytes: 1088, outstanding: 0, maintenance_jobs: 15, maintenance_rows: 514, maintenance_data_bytes: 0, maintenance_ns: 855623 }
+test last_release_starts_automatic_cleanup_during_idle_and_unrelated_live_work ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+

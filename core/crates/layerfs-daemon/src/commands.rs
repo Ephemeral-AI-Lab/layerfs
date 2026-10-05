@@ -23,6 +23,11 @@ pub enum Command {
         base_root: [u8; 32],
     },
     State,
+    /// Connection-scoped work snapshot for operator diagnostics; includes the
+    /// route validation seek, without scanning namespace rows or payloads.
+    DatabaseWork,
+    /// Exact plans of the payload statements under an owned source window.
+    PayloadPlans(BaseSource),
     RetainedCapture,
     PendingPublications {
         after: u64,
@@ -53,6 +58,13 @@ pub enum Command {
         serial: u64,
         generation: u64,
         offset: u64,
+    },
+    /// Local layers of one read window; base bytes are fetched by the caller.
+    SourceRead {
+        source: BaseSource,
+        serial: u64,
+        offset: u64,
+        length: u32,
     },
     /// One complete ordinary namespace operation round: Workspace evaluates it
     /// over the rows current in this job and publishes at most once.
@@ -105,6 +117,8 @@ pub enum Command {
 pub enum Response {
     Opened(Route),
     State(WorkspaceState),
+    DatabaseWork(Box<layerfs_overlay::DatabaseWork>),
+    PayloadPlans(Vec<String>),
     CleanupState(layerfs_overlay::CleanupState),
     Inode(Option<Inode>),
     Published(Publication),
@@ -120,6 +134,7 @@ pub enum Response {
     RetainedBaseSource(Option<BaseSource>),
     Scratch(Vec<ScratchRecord>),
     Namespace(layerfs_workspace::JobOutcome),
+    Read(Option<layerfs_overlay::LocalRead>),
     Done,
 }
 impl Command {
@@ -127,6 +142,7 @@ impl Command {
         match self {
             Self::Open { .. }
             | Self::State
+            | Self::DatabaseWork
             | Self::RetainedCapture
             | Self::RetainedBaseSource { .. }
             | Self::ReleaseBaseSource(_)
@@ -136,13 +152,15 @@ impl Command {
             | Self::ReplyAttempted(_)
             | Self::Acquire(_)
             | Self::Release(_) => ServiceClass::Lifecycle,
-            Self::Inode(_) | Self::PendingPublications { .. } | Self::CapturedCell { .. } => {
-                ServiceClass::Read
-            }
+            Self::Inode(_)
+            | Self::PendingPublications { .. }
+            | Self::CapturedCell { .. }
+            | Self::PayloadPlans(_) => ServiceClass::Read,
             Self::SourceInode { .. }
             | Self::SourceDentry { .. }
             | Self::SourceNames { .. }
-            | Self::SourceCell { .. } => ServiceClass::Read,
+            | Self::SourceCell { .. }
+            | Self::SourceRead { .. } => ServiceClass::Read,
             Self::AcquireBaseSource { .. } => ServiceClass::Source,
             Self::Publish { .. } | Self::Namespace(_) => ServiceClass::Mutation,
             Self::Capture
@@ -156,6 +174,8 @@ impl Command {
     pub(crate) fn charge(&self) -> Option<usize> {
         let base = std::mem::size_of::<Self>().checked_add(512)?;
         let (input, reply) = match self {
+            Self::DatabaseWork => (0, std::mem::size_of::<layerfs_overlay::DatabaseWork>()),
+            Self::PayloadPlans(_) => (0, 8192),
             Self::Publish { name, cell, .. } => (
                 name.as_ref().map_or(0, |n| n.name.capacity())
                     + if cell.is_some() {
@@ -176,6 +196,13 @@ impl Command {
             Self::CapturedCell { .. } | Self::SourceCell { .. } => {
                 (0, CELL_BYTES + MASK_BYTES + std::mem::size_of::<Cell>())
             }
+            // Decided bytes plus one inherited bit per byte of the window.
+            Self::SourceRead { length, .. } => (
+                0,
+                *length as usize
+                    + (*length as usize).div_ceil(8)
+                    + std::mem::size_of::<layerfs_overlay::LocalRead>(),
+            ),
             // The boxed job, its bounded facts/names, and at most one reply of
             // needed names or one changed inode.
             Self::Namespace(job) => (
@@ -248,6 +275,28 @@ impl Command {
         let route = route.ok_or(layerfs_overlay::OverlayError::Invalid("missing route"))?;
         match self {
             Self::Open { .. } | Self::InstallPrepared { .. } | Self::Namespace(_) => unreachable!(),
+            Self::DatabaseWork => {
+                db.state(route)?;
+                Ok(Response::DatabaseWork(Box::new(db.diagnostics())))
+            }
+            Self::PayloadPlans(source) => {
+                if source.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.explain_payload(source).map(Response::PayloadPlans)
+            }
+            Self::SourceRead {
+                source,
+                serial,
+                offset,
+                length,
+            } => {
+                if source.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.source_read(source, serial, offset, length)
+                    .map(Response::Read)
+            }
             Self::SourceCell {
                 source,
                 serial,

@@ -10,6 +10,14 @@ not introduce a new format, configuration, transport endpoint, or qualification.
 The linked source contracts govern. For API composition and benchmark evidence,
 read the [Cluster One Handbook](cluster_one_handbook.md).
 
+S5 addition after `f5558fc22`, 2026-10-05: the public `construct_runs` API
+accepts explicit logical zeros and preserves the frozen CDC/canonical profile.
+The all-zero chunk period is 32 KiB; complete zero chunks and mapping subtrees
+are reused without scanning their logical length. Bounded edge/threshold work
+remains. [Payload streams](core/docs/architecture/31-payload-streams.md) records
+root equality/work proofs and the unimplemented sparse localized-edit/Commit
+integration. Earlier numerical receipts retain their identities and verdicts.
+
 ## 1. The three mechanisms and their boundaries
 
 **CDC chooses pieces, CAS recognizes identical canonical objects, and delta

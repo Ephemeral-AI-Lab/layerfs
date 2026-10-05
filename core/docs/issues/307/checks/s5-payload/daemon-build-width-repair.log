@@ -1,0 +1,3 @@
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.15s
+  Executable tests/namespace_daemon.rs (core/target/debug/deps/namespace_daemon-2d9a73b7f39baa9f)

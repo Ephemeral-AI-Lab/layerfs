@@ -45,6 +45,7 @@ object::FinalizedConsumer bounded sink; DiscardingConsumer is the non-persisting
 object::inode_leaf        checked compact inode value/leaf grammar and pooled layout
 file::construct_bytes     known-length complete-file construction
 file::construct_stream    unknown-length construction with a bounded cutoff probe
+file::construct_runs      bounded data/zero runs; identical fresh streamed root
 file::read_all(_bounded)  logical read of a whole file
 file::read_range          logical ranged read across extents and pages
 file::FileView            one authenticated base, opened once per operation

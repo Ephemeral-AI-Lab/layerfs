@@ -67,6 +67,20 @@ impl Overlay {
                 return Err(OverlayError::Invalid("compound cell owner"));
             }
         }
+        if let Some(write) = &changes.write {
+            // The owner's final value must already cover the written window.
+            let end = write.offset.checked_add(write.data.len() as u64);
+            let owner = changes
+                .inodes
+                .iter()
+                .find(|inode| inode.serial == write.serial && inode.kind == crate::InodeKind::File);
+            if write.data.is_empty()
+                || write.data.len() > crate::WRITE_WINDOW
+                || owner.is_none_or(|inode| end.is_none_or(|end| end > inode.size))
+            {
+                return Err(OverlayError::Invalid("compound write window"));
+            }
+        }
         self.atomic(|| {
             let state = self.source_state(source)?;
             if state.closed {
@@ -74,9 +88,19 @@ impl Overlay {
             }
             let route = source.route;
             let mut inodes = 0_i64;
+            let mut layers = Vec::with_capacity(changes.inodes.len());
             for inode in &changes.inodes {
-                inodes += i64::from(self.put_inode(route, state.active, inode)?);
+                let (added, layer) = self.put_inode(route, &state, inode)?;
+                inodes += i64::from(added);
+                layers.push((inode.serial, layer));
             }
+            let layer = |serial: u64| {
+                layers
+                    .iter()
+                    .find(|(owner, _)| *owner == serial)
+                    .map(|(_, layer)| layer)
+                    .ok_or(OverlayError::Invalid("compound payload owner"))
+            };
             let mut names = 0_i64;
             for (change, (parent, target)) in changes.names.iter().zip(&keys) {
                 let whiteout = match change.binding {
@@ -104,7 +128,16 @@ impl Overlay {
                 }
             }
             if let Some((serial, cell)) = &changes.cell {
-                self.put_cell(route, integer(*serial)?, state.active, cell)?;
+                self.put_cell(route, integer(*serial)?, layer(*serial)?, cell)?;
+            }
+            if let Some(write) = &changes.write {
+                self.write_cells(
+                    route.ns,
+                    integer(write.serial)?,
+                    layer(write.serial)?,
+                    write.offset,
+                    &write.data,
+                )?;
             }
             self.settle(route, &state, inodes, names)
         })
@@ -158,7 +191,7 @@ impl Overlay {
             ),
             (
                 "active-inode",
-                sql::INODE_ACTIVE,
+                sql::LAYER_ACTIVE,
                 vec![&ns, &1_i64, &state.active.0],
             ),
         ] {
@@ -188,6 +221,8 @@ impl Overlay {
                     &0_i64,
                     &0_i64,
                     &1_i64,
+                    &0_i64,
+                    &0_i64,
                     &0_i64,
                     &0_i64,
                     &0_i64,

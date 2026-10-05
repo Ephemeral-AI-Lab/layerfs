@@ -56,5 +56,6 @@ pub(crate) fn remove(
         ],
         names: vec![unbind(parent, name, inherited)],
         cell: None,
+        write: None,
     }))
 }

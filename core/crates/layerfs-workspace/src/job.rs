@@ -4,6 +4,7 @@ use crate::create::{self, Fresh};
 use crate::eval::Eval;
 use crate::remove;
 use crate::rename::{self, Move};
+use crate::write;
 use crate::{BaseFacts, Need, Operation, Refusal, Time, WorkspaceError, WorkspaceResult};
 use layerfs_content::ContentError;
 use layerfs_overlay::{BaseSource, Changes, Inode, InodeKind, Overlay, Publication};
@@ -49,8 +50,12 @@ impl NamespaceJob {
             }),
             _ => 0,
         };
+        let data = match &self.operation {
+            Operation::Write { data, .. } => data.len(),
+            _ => 0,
+        };
         // Operation names and one symlink target are bounded by their grammar.
-        self.facts.charge() + names + 2 * 255 + 4096
+        self.facts.charge() + names + data + 2 * 255 + 4096
     }
     /// Runs inside one owner job. A refusal or a need publishes nothing; the
     /// single `apply` is the operation's only attempt and is never replayed.
@@ -162,7 +167,14 @@ impl NamespaceJob {
                 serial,
                 mode,
                 mtime,
-            } => attributes::set(eval, *serial, *mode, *mtime)?
+                size,
+            } => attributes::set(eval, *serial, *mode, *mtime, *size, now)?
+                .map(|(changes, inode)| (changes, Some(inode))),
+            Operation::Write {
+                serial,
+                position,
+                data,
+            } => write::write(eval, *serial, *position, data, now)?
                 .map(|(changes, inode)| (changes, Some(inode))),
         })
     }

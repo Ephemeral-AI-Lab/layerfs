@@ -86,6 +86,7 @@ pub(crate) fn create(
         inodes: vec![inode.clone(), touched(&directory, now, true, false)?],
         names: vec![bind(parent, name, fresh.serial)],
         cell,
+        write: None,
     };
     Ok(Some((changes, inode)))
 }
@@ -119,6 +120,7 @@ pub(crate) fn link(
         inodes: vec![file.clone(), touched(&directory, now, true, false)?],
         names: vec![bind(parent, name, serial)],
         cell: None,
+        write: None,
     };
     Ok(Some((changes, file)))
 }

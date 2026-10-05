@@ -8,6 +8,10 @@ pub const MASK_BYTES: usize = CELL_BYTES / 8;
 pub const PAGE_ROWS: usize = 64;
 /// Maximum bytes in one scratch record, not a total operation limit.
 pub const SCRATCH_BYTES: usize = 65_536;
+/// Largest byte window of one write job; larger requests arrive as several.
+pub const WRITE_WINDOW: usize = 128 * 1024;
+/// Largest byte window of one local read plan.
+pub const READ_WINDOW: usize = 128 * 1024;
 /// Maximum changed inodes in one compound namespace job, not a namespace limit.
 pub const COMPOUND_INODES: usize = 4;
 /// Maximum changed name bindings in one compound namespace job.
@@ -53,6 +57,11 @@ pub struct Inode {
     pub mtime_nanoseconds: u32,
     pub nlink: u64,
     pub size: u64,
+    /// Bytes below this that are not written in the row's generation fall
+    /// through to the lower view. The engine maintains it: on a serial's first
+    /// local row it is the caller-supplied lower length (the inherited base
+    /// file's length, zero for a new inode), and every shrink lowers it. A
+    /// later value supplied by a caller is ignored.
     pub inherited_cutoff: u64,
     /// Generation that created this serial locally; zero inherits a base inode.
     /// A value above the installed floor means the bound base has no such inode.
@@ -92,6 +101,28 @@ pub struct Changes {
     pub names: Vec<NameChange>,
     /// One payload cell of a changed inode, published in the same transaction.
     pub cell: Option<(u64, Cell)>,
+    /// One byte window written into a changed regular file, same transaction.
+    pub write: Option<PayloadWrite>,
+}
+/// Bytes of one bounded write job. Shared, so job rounds never copy them.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PayloadWrite {
+    pub serial: u64,
+    pub offset: u64,
+    pub data: std::sync::Arc<[u8]>,
+}
+/// Local layers of one read window, composed in one owner job. `data` holds
+/// every byte decided locally (written bytes and zeros) from `offset`, clamped
+/// to the file size. A set bit in `inherited` marks a byte the immutable base
+/// file supplies instead; `span` is the one base range covering all of them.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocalRead {
+    pub kind: InodeKind,
+    pub size: u64,
+    pub offset: u64,
+    pub data: Vec<u8>,
+    pub inherited: Vec<u8>,
+    pub span: Option<(u64, u64)>,
 }
 /// Local rows of one name: the active generation and the latest lower one.
 /// The outer None is "no row"; the inner None is a whiteout.

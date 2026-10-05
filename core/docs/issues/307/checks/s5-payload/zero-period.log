@@ -1,0 +1,22 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-content', '--test', 'zero_cdc', '--', '--nocapture']
+TIMEOUT: 120s
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+error[E0599]: `std::io::Repeat` is not an iterator
+ --> crates/layerfs-content/tests/zero_cdc.rs:6:36
+  |
+6 |     let zeros = std::io::repeat(0).take((MAXIMUM_CHUNK_BYTES * 4 + 17) as u64);
+  |                                    ^^^^ `std::io::Repeat` is not an iterator
+  |
+  = note: the following trait bounds were not satisfied:
+          `std::io::Repeat: Iterator`
+          which is required by `&mut std::io::Repeat: Iterator`
+  = help: items from traits can only be used if the trait is in scope
+help: trait `Read` which provides `take` is implemented but not in scope; perhaps you want to import it
+  |
+1 + use std::io::Read;
+  |
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `layerfs-content` (test "zero_cdc") due to 1 previous error
+
+EXIT: 101; WALL: 0.185s

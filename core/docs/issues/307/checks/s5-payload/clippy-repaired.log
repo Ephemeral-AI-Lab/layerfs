@@ -1,0 +1,36 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Checking layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error: large size difference between variants
+   --> crates/layerfs-daemon/src/commands.rs:117:1
+    |
+117 | / pub enum Response {
+118 | |     Opened(Route),
+119 | |     State(WorkspaceState),
+120 | |     DatabaseWork(layerfs_overlay::DatabaseWork),
+    | |     ------------------------------------------- the largest variant contains at least 1232 bytes
+...   |
+133 | |     Names(NameWindow),
+    | |     ----------------- the second-largest variant contains at least 224 bytes
+...   |
+138 | |     Done,
+139 | | }
+    | |_^ the entire enum is at least 1240 bytes
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#large_enum_variant
+    = note: `-D clippy::large-enum-variant` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::large_enum_variant)]`
+help: consider boxing the large fields to reduce the total size of the enum
+    |
+120 |     DatabaseWork(Box<layerfs_overlay::DatabaseWork>),
+    |                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error: could not compile `layerfs-daemon` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-daemon` (lib test) due to 1 previous error

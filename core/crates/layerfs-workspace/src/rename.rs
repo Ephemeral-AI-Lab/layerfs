@@ -128,5 +128,6 @@ pub(crate) fn rename(
             },
         ],
         cell: None,
+        write: None,
     })))
 }

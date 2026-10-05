@@ -1,7 +1,7 @@
 //! Workspace read and namespace-job composition through real short owner jobs,
 //! outside provider IO.
 use crate::{Command, OwnerClient, OwnerError, Response};
-use layerfs_overlay::{BaseSource, Cell, Dentry, Inode, NameWindow};
+use layerfs_overlay::{BaseSource, Cell, Dentry, Inode, LocalRead, NameWindow};
 use layerfs_workspace::{
     JobOutcome, NamespaceJob, OverlayJobs, OverlayRead, WorkspaceError, WorkspaceResult,
 };
@@ -75,6 +75,30 @@ impl OverlayRead for OwnerClient {
         )?;
         match done.result() {
             Ok(Response::Names(value)) => Ok(value.clone()),
+            _ => Err(WorkspaceError::Service(Box::new(done))),
+        }
+    }
+    fn read(
+        &self,
+        source: BaseSource,
+        serial: u64,
+        offset: u64,
+        length: u32,
+    ) -> WorkspaceResult<Option<LocalRead>> {
+        if length as usize > layerfs_overlay::READ_WINDOW {
+            return Err(layerfs_overlay::OverlayError::Invalid("read window").into());
+        }
+        let done = self.read_job(
+            source,
+            Command::SourceRead {
+                source,
+                serial,
+                offset,
+                length,
+            },
+        )?;
+        match done.result() {
+            Ok(Response::Read(value)) => Ok(value.clone()),
             _ => Err(WorkspaceError::Service(Box::new(done))),
         }
     }

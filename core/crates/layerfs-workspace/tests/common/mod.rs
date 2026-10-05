@@ -26,13 +26,22 @@ pub struct Store {
     pub objects: Arc<Mutex<BTreeMap<ObjectId, Vec<u8>>>>,
     pub demand: Arc<AtomicU64>,
     pub lengths: Arc<Mutex<BTreeMap<ObjectId, u64>>>,
+    /// Canonical bytes served upstream, to tell metadata demand from payload.
+    pub served: Arc<AtomicU64>,
 }
 impl AuthenticatedObjects for Store {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
         self.demand.fetch_add(ids.len() as u64, Ordering::Relaxed);
         let objects = self.objects.lock().unwrap();
         ids.iter()
-            .map(|id| objects.get(id).cloned().ok_or(ContentError::MissingObject))
+            .map(|id| {
+                let value = objects
+                    .get(id)
+                    .cloned()
+                    .ok_or(ContentError::MissingObject)?;
+                self.served.fetch_add(value.len() as u64, Ordering::Relaxed);
+                Ok(value)
+            })
             .collect()
     }
 }

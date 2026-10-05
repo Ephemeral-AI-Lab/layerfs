@@ -6,7 +6,7 @@ use crate::{
 };
 const BYTES: u64 = 65536;
 const READY:&str="SELECT ns,cursor FROM reclaim INDEXED BY reclaim_ready WHERE queue_key=?1 AND ns>?2 ORDER BY ns LIMIT 1";
-const PAYLOAD:&str="SELECT rowid FROM payload INDEXED BY payload_namespace_row WHERE ns=?1 ORDER BY rowid LIMIT 14";
+const PAYLOAD:&str="SELECT rowid,length(data)+ifnull(length(validity),0) FROM payload INDEXED BY payload_namespace_row WHERE ns=?1 ORDER BY rowid LIMIT 14";
 
 /// One short physical cleanup step; bytes count declared BLOB/name data, not pages.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -47,6 +47,7 @@ impl Overlay {
                 2 => self.delete_inodes(ns)?,
                 3 => self.delete_scratch(ns)?,
                 4 => self.delete_old_reclaim(ns)?,
+                5 => self.delete_steps(ns)?,
                 _ => {
                     self.execute(
                         StatementKind::Reclaim,
@@ -104,17 +105,43 @@ impl Overlay {
     }
     fn delete_payload(&self, ns: i64) -> OverlayResult<(u64, u64)> {
         let rows = self.query(StatementKind::Reclaim, PAYLOAD, &[&ns], 8, |r| {
-            r.get::<_, i64>(0)
+            Ok((r.get::<_, i64>(0)?, unsigned(r, 1)?))
         })?;
-        for row in &rows {
+        let mut bytes = 0;
+        for (row, size) in &rows {
             self.execute(
                 StatementKind::Reclaim,
                 "DELETE FROM payload WHERE rowid=?1 AND ns=?2",
                 &[row, &ns],
                 16,
             )?;
+            bytes += size;
         }
-        Ok((rows.len() as u64, rows.len() as u64 * 4608))
+        Ok((rows.len() as u64, bytes))
+    }
+    fn delete_steps(&self, ns: i64) -> OverlayResult<(u64, u64)> {
+        let rows = self.query(
+            StatementKind::Reclaim,
+            "SELECT serial,gen,depth FROM shrink WHERE ns=?1 ORDER BY serial,gen,depth LIMIT 64",
+            &[&ns],
+            8,
+            |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            },
+        )?;
+        for (serial, gen, depth) in &rows {
+            self.execute(
+                StatementKind::Reclaim,
+                "DELETE FROM shrink WHERE ns=?1 AND serial=?2 AND gen=?3 AND depth=?4",
+                &[&ns, serial, gen, depth],
+                32,
+            )?;
+        }
+        Ok((rows.len() as u64, 0))
     }
     fn delete_names(&self, ns: i64) -> OverlayResult<(u64, u64)> {
         let rows = self.query(

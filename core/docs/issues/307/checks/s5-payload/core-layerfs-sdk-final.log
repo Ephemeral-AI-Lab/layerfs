@@ -1,0 +1,25 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-sdk', '--all-targets', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_sdk-33c8c90f8f9d6263)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/runtime.rs (core/target/debug/deps/runtime-e75646e62b883e6e)
+
+running 6 tests
+S4_OWNING_SERIALS first=1 refill=1024 next=1031 scope_allocator=history_catalog
+test workspace_serials_come_from_the_owning_scope_allocator_under_authority ... ok
+test refused_admission_retains_the_exact_phase_without_replay ... ok
+test missing_dependency_finish_is_retained_as_the_original_storage_error ... ok
+S3_OWNING_STAT logical=131071 namespace_refs=2 owning_payload_bytes=0 owning_pack_bytes=0 locate=1
+test workspace_stat_uses_authenticated_scoped_owning_lengths_without_payload_or_fallback ... ok
+test capability_scope_authority_and_read_window_are_checked_before_service ... ok
+test independent_saves_pending_reads_retained_finish_and_slot_reuse ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+EXIT: 0; WALL: 1.514s

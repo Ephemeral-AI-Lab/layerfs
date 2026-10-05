@@ -1,0 +1,140 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-telemetry', '--all-targets', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_telemetry-3afe2833a24cc155)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/full_disk.rs (core/target/debug/deps/full_disk-0584c400b4d61039)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/native.rs (core/target/debug/deps/native-db8d7bc1e54510bc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/observations.rs (core/target/debug/deps/observations-674570a3b5552833)
+
+running 2 tests
+
+thread 'optional_windows_release_on_return_error_and_unwind' panicked at crates/layerfs-telemetry/tests/observations.rs:90:51:
+original
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test long_shared_windows_preserve_first_and_sampled_max ... ok
+test optional_windows_release_on_return_error_and_unwind ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/off_allocations.rs (core/target/debug/deps/off_allocations-1b095138e4f1b0d8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/owned_allocations.rs (core/target/debug/deps/owned_allocations-1d1fe14a1aa4ffc3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stalled_output.rs (core/target/debug/deps/stalled_output-bdd82137b6314118)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer.rs (core/target/debug/deps/timer-4a88fa8f3c1832d0)
+
+running 21 tests
+test a_parent_can_recover_from_a_child_error ... ok
+test an_imported_incomplete_node_marks_the_attachment_point ... ok
+test disabled_recording_runs_the_operation_and_records_nothing ... ok
+test disabled_and_clipped_reports_are_distinguishable ... ok
+test errors_are_recorded_before_early_returns_keep_completed_nodes ... ok
+test durations_are_inclusive_monotonic_elapsed_time ... ok
+test depth_budget_clips_detail_and_keeps_running_the_operation ... ok
+test attached_reports_become_owned_children ... ok
+test imported_labels_are_clipped_on_a_utf8_boundary ... ok
+test attachment_cannot_exceed_the_depth_budget ... ok
+test independent_recordings_compose_without_shared_state ... ok
+test long_labels_are_clipped_on_a_utf8_boundary ... ok
+test missing_or_disabled_detail_marks_the_node_and_its_ancestors ... ok
+test nested_children_are_recorded_in_start_order ... ok
+test a_panic_caught_inside_the_operation_leaves_the_recording_usable ... ok
+test repeated_labels_are_distinct_invocations_in_start_order ... ok
+test panic_unwinds_without_a_fabricated_report ... ok
+test uncalled_operations_have_no_node ... ok
+test attachment_consumes_the_assembled_tree_remaining_budget ... ok
+test synthetic_nodes_are_bounded_by_the_aggregate_limits ... ok
+test node_budget_clips_detail_and_keeps_running_the_operation ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_bounds.rs (core/target/debug/deps/timer_bounds-bc1fee14d4f6486f)
+
+running 3 tests
+
+thread 'recording_budget_pool_unwind_and_encoding' panicked at crates/layerfs-telemetry/tests/timer_bounds.rs:49:51:
+original
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test public_labels_are_normalized_before_attachment ... ok
+test owned_capacity_is_not_retained ... ok
+test recording_budget_pool_unwind_and_encoding ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_compile_fail.rs (core/target/debug/deps/timer_compile_fail-c1b37047be894fff)
+
+running 1 test
+test external_compile_fail_checks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s
+
+     Running tests/timer_format.rs (core/target/debug/deps/timer_format-7d7b494d6869f876)
+
+running 6 tests
+test disabled_report_is_explicit ... ok
+test markers_show_error_and_missing_detail ... ok
+test labels_are_escaped_for_display ... ok
+test writer_failures_propagate ... ok
+test text_renders_a_readable_tree ... ok
+test a_real_recording_renders_its_structure ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_json.rs (core/target/debug/deps/timer_json-578f54f73c7d08d4)
+
+running 10 tests
+test outcome_and_incomplete_fields_are_opt_in ... ok
+test writer_failures_propagate ... ok
+test a_flush_failure_is_surfaced ... ok
+test a_real_recording_round_trips_through_json ... ok
+test durations_beyond_the_schema_are_reported_not_saturated ... ok
+test json_matches_the_documented_shape ... ok
+test saving_uses_no_clobber_creation_and_stays_separate_from_the_product_result ... ok
+test a_disabled_report_serializes_to_null ... ok
+test escaping_round_trips_through_an_independent_parser ... ok
+test a_failed_write_leaves_a_partial_file_and_surfaces_the_error ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running unittests examples/timer_composition.rs (core/target/debug/examples/timer_composition-2d34d47f2f794ad9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/timer_nested.rs (core/target/debug/examples/timer_nested-02d47d4217474c6e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+EXIT: 0; WALL: 1.569s

@@ -1,4 +1,4 @@
--- Disposable overlay schema v7. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v8. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -27,6 +27,8 @@ CREATE TABLE inode (
     inherited_cutoff INTEGER NOT NULL CHECK(inherited_cutoff>=0),
     born INTEGER NOT NULL CHECK(born>=0 AND born<=gen),
     entries INTEGER NOT NULL CHECK(entries>=0 AND (kind=2 OR entries=0)),
+    epoch INTEGER NOT NULL CHECK(epoch>=0),
+    height INTEGER NOT NULL CHECK(height>=0 AND height<=epoch),
     PRIMARY KEY(ns,serial,gen)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX inode_capture ON inode(ns,gen,serial);
@@ -45,10 +47,20 @@ CREATE TABLE payload (
     serial INTEGER NOT NULL CHECK(serial>0),
     gen INTEGER NOT NULL CHECK(gen>0),
     cell_offset INTEGER NOT NULL CHECK(cell_offset>=0 AND cell_offset%4096=0),
-    data BLOB NOT NULL CHECK(length(data)=4096),
-    validity BLOB NOT NULL CHECK(length(validity)=512),
+    epoch INTEGER NOT NULL CHECK(epoch>=0),
+    data BLOB NOT NULL CHECK(length(data) BETWEEN 1 AND 4096),
+    validity BLOB CHECK(validity IS NULL OR length(validity)=(length(data)+7)/8),
     UNIQUE(ns,serial,gen,cell_offset)
 ) STRICT;
+CREATE TABLE shrink (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    serial INTEGER NOT NULL CHECK(serial>0),
+    gen INTEGER NOT NULL CHECK(gen>0),
+    depth INTEGER NOT NULL CHECK(depth>0),
+    cell_offset INTEGER NOT NULL CHECK(cell_offset>=0 AND cell_offset%4096=0),
+    epoch INTEGER NOT NULL CHECK(epoch>0),
+    PRIMARY KEY(ns,serial,gen,depth)
+) STRICT, WITHOUT ROWID;
 CREATE TABLE request (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
     revision INTEGER NOT NULL CHECK(revision>0),
@@ -86,4 +98,4 @@ CREATE TABLE reclaim (
 ) STRICT, WITHOUT ROWID;
 PRAGMA application_id=1279676210;
 CREATE INDEX reclaim_ready ON reclaim(queue_key,ns);
-PRAGMA user_version=7;
+PRAGMA user_version=8;

@@ -18,8 +18,8 @@ product mental model or campaign-specific benchmark procedures.
   [core/Cargo.toml](Cargo.toml) is the membership authority.
   Workspace now exposes immutable base binding/read, effective source-qualified
   lookup/stat/paged name merge, prepared actor install and atomic ordinary
-  namespace operations. Mutable payload/lifetime/native semantics remain
-  unfinished. Its
+  namespace operations, bounded writes/truncate/regrow and composed payload
+  reads. Independent lifetime/reclamation/native semantics remain unfinished. Its
   temporarily relocated `layerfs-workspace-legacy` source remains excluded.
   Daemon now exposes an initial fair SQL owner library; its relocated predecessor
   remains excluded, and native executable/control/Exec integration is unfinished.
@@ -165,6 +165,11 @@ cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check
 python3 -B core/tools/check_product_boundary.py
 python3 -B -m unittest discover -s core/tools -p 'test_*.py'
 ```
+
+Every test invocation obeys the repository's
+[2-minute test ceiling](../AGENTS.md#4-code-build-and-docs): run it under an
+explicit timeout of at most 120 s, per package when the whole suite cannot fit,
+and treat reaching the ceiling as a hang to diagnose, not a run to wait for.
 
 For docs-only changes, check links/anchors, status/claim accuracy and whitespace;
 report why Rust/runtime checks are inapplicable. For tooling/harness changes run

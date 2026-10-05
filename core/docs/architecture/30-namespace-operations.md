@@ -4,6 +4,12 @@
 > orphan/lifetime/pressure ownership and S8 native kernel adaptation are separate
 > unfinished milestones. Not release or performance qualification.
 
+S5 update after `f5558fc22`: the same ordinary owner job now publishes bounded
+`Write` windows and `SetAttributes { size }` through the engine's payload layers.
+Append chooses the current EOF in that job. [Payload streams](31-payload-streams.md)
+owns truncate/regrow, inherited reads, holes, updated work and remaining S6/S8
+custody. Schema v8 inode rewrites maintain cutoff/epoch/height internally.
+
 Workspace performs create, mkdir, symlink, link, unlink, rmdir, rename, chmod and
 utimens over stable inode serials and checked names. Each operation publishes all
 of its inode and name finals in one overlay transaction with one reply-attempt

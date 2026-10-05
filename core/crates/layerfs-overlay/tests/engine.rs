@@ -195,7 +195,7 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
     let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
     assert!(Overlay::create(&temp.db(), ProfileConfig::default()).is_err());
     let p = db.profile();
-    assert_eq!(p.schema_version, 7);
+    assert_eq!(p.schema_version, 8);
     assert_eq!(p.max_pages, i64::from(u32::MAX - 1));
     assert_eq!(p.explicit_page_quota, None);
     #[cfg(unix)]
@@ -402,6 +402,9 @@ fn local_publication_survives_lost_reply_and_capture_does_not_copy_cells() {
     let active = db.publish(w, &later, None, Some(&cell(22))).unwrap();
     db.reply_attempted(active).unwrap();
     assert_eq!(db.captured_inodes(captured, 0).unwrap(), vec![inode(2)]);
+    // A row first written in a new generation is a new payload layer: bytes it
+    // does not write fall through to the sealed layer below, up to its length.
+    later.inherited_cutoff = later.size;
     assert_eq!(db.inode(w, 2).unwrap(), Some(later));
     assert_eq!(
         db.cell(w, 2, captured.generation, 0).unwrap(),
@@ -580,7 +583,15 @@ fn known_install_advances_base_without_replaying_or_losing_later_active_rows() {
         assert_eq!(state.base_root, [cycle as u8; 32]);
         assert_eq!(state.installed, captured.generation.number());
         assert!(state.captured.is_none());
-        assert_eq!(db.inode(route, 2).unwrap(), Some(later));
+        assert_eq!(
+            db.inode(route, 2).unwrap(),
+            // The first cycle has no lower local row; afterwards the sealed
+            // previous row is the lower view this layer falls through to.
+            Some(Inode {
+                inherited_cutoff: if cycle == 0 { 0 } else { later.size },
+                ..later.clone()
+            })
+        );
         assert_eq!(
             db.inode(route, 4).unwrap(),
             None,

@@ -1,0 +1,3 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.24s
+  Executable tests/runs.rs (core/target/debug/deps/runs-5c6ef8e3bd9527f3)

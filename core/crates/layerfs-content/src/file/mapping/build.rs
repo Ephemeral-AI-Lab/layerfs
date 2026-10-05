@@ -45,13 +45,13 @@ pub struct MappingBuild {
     pub nodes: u64,
 }
 
-enum Pending {
+pub(super) enum Pending {
     Extents(Vec<ExtentSlice>),
     Children(Vec<NodeSummary>),
 }
 
 impl Pending {
-    fn len(&self) -> usize {
+    pub(super) fn len(&self) -> usize {
         match self {
             Self::Extents(entries) => entries.len(),
             Self::Children(entries) => entries.len(),
@@ -65,9 +65,9 @@ impl Pending {
 /// change, so the retained entry count is bounded by the height and the page
 /// capacity rather than by the file length or the number of edits.
 pub struct ExtentBuilder {
-    levels: Vec<Pending>,
-    flush_at: usize,
-    build: MappingBuild,
+    pub(super) levels: Vec<Pending>,
+    pub(super) flush_at: usize,
+    pub(super) build: MappingBuild,
     peak_pending: usize,
 }
 
@@ -169,7 +169,7 @@ impl ExtentBuilder {
         self.flush_streaming(consumer, 0)
     }
 
-    fn note_pending(&mut self) {
+    pub(super) fn note_pending(&mut self) {
         let pending = self.pending_entries();
         if pending > self.peak_pending {
             self.peak_pending = pending;
@@ -199,7 +199,7 @@ impl ExtentBuilder {
     /// page capacity rather than of the file. The canonical partition is untouched:
     /// a flush emits a full page and `finish_levels` still partitions whatever
     /// remains, including the half-partition of an exactly-overfull level.
-    fn flush_streaming(
+    pub(super) fn flush_streaming(
         &mut self,
         consumer: &mut dyn FinalizedConsumer,
         level: usize,
@@ -391,7 +391,7 @@ pub fn emit_file_state(
     Ok(id)
 }
 
-fn emit_node(
+pub(super) fn emit_node(
     consumer: &mut dyn FinalizedConsumer,
     node: &ExtentNode,
     build: &mut MappingBuild,
@@ -417,6 +417,6 @@ fn emit_node(
     Ok(summary)
 }
 
-fn add(left: u64, right: u64) -> ContentResult<u64> {
+pub(super) fn add(left: u64, right: u64) -> ContentResult<u64> {
     left.checked_add(right).ok_or(ContentError::LengthOverflow)
 }

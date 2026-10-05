@@ -1,6 +1,6 @@
 //! Short read-job boundary; canonical demand belongs outside its owner.
 use crate::{JobOutcome, NamespaceJob, WorkspaceResult};
-use layerfs_overlay::{BaseSource, Cell, Dentry, Inode, NameWindow};
+use layerfs_overlay::{BaseSource, Cell, Dentry, Inode, LocalRead, NameWindow};
 /// The actual overlay service, independently of kernel/runtime adaptation.
 /// Each method is one bounded job; it must not execute provider/content I/O.
 pub trait OverlayRead {
@@ -26,6 +26,15 @@ pub trait OverlayRead {
         generation: u64,
         offset: u64,
     ) -> WorkspaceResult<Option<Cell>>;
+    /// The local layers of one read window, composed in one owner job. None
+    /// means the inode has no local row and is entirely inherited.
+    fn read(
+        &self,
+        source: BaseSource,
+        serial: u64,
+        offset: u64,
+        length: u32,
+    ) -> WorkspaceResult<Option<LocalRead>>;
 }
 /// Runs one complete namespace job inside the SQL owner. The job is data: its
 /// evaluation and single publication share one owner job, with no provider or
@@ -39,6 +48,16 @@ impl OverlayJobs for layerfs_overlay::Overlay {
     }
 }
 impl OverlayRead for layerfs_overlay::Overlay {
+    fn read(
+        &self,
+        source: BaseSource,
+        serial: u64,
+        offset: u64,
+        length: u32,
+    ) -> WorkspaceResult<Option<LocalRead>> {
+        self.source_read(source, serial, offset, length)
+            .map_err(Into::into)
+    }
     fn cell(
         &self,
         source: BaseSource,

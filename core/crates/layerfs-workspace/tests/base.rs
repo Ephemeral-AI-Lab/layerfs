@@ -263,6 +263,9 @@ fn known_install_advances_selected_base_and_preserves_retained_plans_and_later_r
         overlay.state(workspace.route()).unwrap().base_root,
         root.0.to_bytes()
     );
+    // The later row is a new payload layer over the sealed 7-byte view, which
+    // the installed root now holds: unwritten bytes below 7 fall through.
+    later.inherited_cutoff = 7;
     assert_eq!(overlay.inode(workspace.route(), 2).unwrap(), Some(later));
     assert_eq!(
         overlay.pending_publications(workspace.route(), 0).unwrap(),

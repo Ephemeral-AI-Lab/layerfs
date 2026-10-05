@@ -35,7 +35,12 @@ impl AuthenticatedObjects for Gate {
             state.0 = false;
             self.entered.send(()).unwrap();
             while !state.1 {
-                state = self.wake.wait(state).unwrap();
+                let waited = self
+                    .wake
+                    .wait_timeout(state, std::time::Duration::from_secs(10))
+                    .unwrap();
+                state = waited.0;
+                assert!(!waited.1.timed_out(), "base gate deadline");
             }
         }
         drop(state);
@@ -116,7 +121,9 @@ impl Service {
     /// Submits one owner job. Admission refusal precedes any attempt and
     /// returns the original command, so waiting for credits is not a replay.
     fn job<T>(&self, mut command: Command, read: impl FnOnce(&Response) -> T) -> T {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         let pending = loop {
+            assert!(std::time::Instant::now() < deadline, "admission deadline");
             match self.client.try_submit(Some(self.route), command) {
                 Ok(pending) => break pending,
                 Err((OwnerError::AdmissionFull, original)) => {
@@ -126,7 +133,13 @@ impl Service {
                 Err((error, _)) => panic!("{error:?}"),
             }
         };
-        let done = pending.wait().unwrap();
+        let done = loop {
+            assert!(std::time::Instant::now() < deadline, "owner job deadline");
+            if let Some(done) = pending.try_complete().unwrap() {
+                break done;
+            }
+            thread::yield_now();
+        };
         match done.result() {
             Ok(response) => read(response),
             Err(error) => panic!("{error:?}"),
@@ -396,4 +409,205 @@ fn closed_and_stopped_services_return_exact_outcomes_without_effect() {
         "{text}"
     );
     let _ = OverlayRead::inode(&service.client, source, dir).unwrap_err();
+}
+
+// The original test used width 24 for 23-byte records. Writer panics left the
+// tail spinning; retain both the correct width and panic-safe stop custody.
+#[test]
+fn concurrent_appenders_and_a_tail_reader_see_whole_records_through_real_owner_jobs() {
+    const THREADS: usize = 4;
+    const RECORDS: usize = 250;
+    const WIDTH: usize = 23;
+    let service = Service::new("append");
+    let log = service.applied(create(1, "build.log")).unwrap().serial;
+    let content = |service: &Service| {
+        let mut bytes = Vec::new();
+        service
+            .window(|view| view.read(&service.client, log, 0, 128 * 1024, &mut bytes))
+            .unwrap();
+        bytes
+    };
+    let done = std::sync::atomic::AtomicBool::new(false);
+    // Set on every exit, including a writer panic, so the tail cannot spin on.
+    struct Stop<'a>(&'a std::sync::atomic::AtomicBool);
+    impl Drop for Stop<'_> {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::Relaxed);
+        }
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    let snapshots = thread::scope(|scope| {
+        let _stop = Stop(&done);
+        // The tail reader takes whole-file windows while the writers append.
+        let tail = scope.spawn(|| {
+            let (mut last, mut taken) = (0, 0_u64);
+            while !done.load(Ordering::Relaxed) {
+                assert!(std::time::Instant::now() < deadline, "tail deadline");
+                let bytes = content(&service);
+                assert!(bytes.len() >= last, "a tail never sees the file shrink");
+                assert_eq!(bytes.len() % WIDTH, 0, "only whole records are visible");
+                assert!(bytes.chunks(WIDTH).all(|record| record.ends_with(b"\n")));
+                last = bytes.len();
+                taken += 1;
+            }
+            taken
+        });
+        let writers: Vec<_> = (0..THREADS)
+            .map(|t| {
+                let service = &service;
+                scope.spawn(move || {
+                    for n in 0..RECORDS {
+                        let record = format!("writer-{t}-record-{n:06}\n");
+                        assert_eq!(record.len(), WIDTH);
+                        let stat = service
+                            .applied(Operation::Write {
+                                serial: log,
+                                position: layerfs_workspace::Position::End,
+                                data: record.as_bytes().into(),
+                            })
+                            .unwrap();
+                        assert_eq!(stat.logical_len % WIDTH as u64, 0);
+                    }
+                })
+            })
+            .collect();
+        for writer in writers {
+            writer.join().unwrap();
+        }
+        done.store(true, Ordering::Relaxed);
+        tail.join().unwrap()
+    });
+    // Every record landed once, each writer's in its own order, none split.
+    let bytes = content(&service);
+    assert_eq!(bytes.len(), THREADS * RECORDS * WIDTH);
+    let mut next = [0_usize; THREADS];
+    for record in bytes.chunks(WIDTH) {
+        let text = std::str::from_utf8(record).unwrap();
+        let writer: usize = text[7..8].parse().unwrap();
+        let number: usize = text[16..22].parse().unwrap();
+        assert_eq!(number, next[writer], "{text}");
+        next[writer] += 1;
+    }
+    assert_eq!(next, [RECORDS; THREADS]);
+    assert!(snapshots > 0);
+    assert_eq!(
+        service.lookup(1, "build.log").unwrap().logical_len,
+        (THREADS * RECORDS * WIDTH) as u64
+    );
+}
+
+#[test]
+fn payload_complete_operations_have_indexed_work_through_the_real_owner() {
+    use layerfs_overlay::DatabaseWork;
+    let service = Service::new("payload-profile");
+    let file = service.applied(create(1, "profile.bin")).unwrap().serial;
+    service.applied(Operation::Write {
+        serial: file,
+        position: layerfs_workspace::Position::At(0),
+        data: vec![7; 131072].into(),
+    });
+    let plans = service.window(|view| {
+        service.job(
+            Command::PayloadPlans(view.source()),
+            |response| match response {
+                Response::PayloadPlans(plans) => plans.clone(),
+                other => panic!("{other:?}"),
+            },
+        )
+    });
+    assert!(plans
+        .iter()
+        .all(|plan| plan.contains("SEARCH") && !plan.contains("SCAN") && !plan.contains("TEMP")));
+    println!("S5_OWNER_PLANS {plans:?}");
+    let snapshot = || {
+        service.job(Command::DatabaseWork, |response| match response {
+            Response::DatabaseWork(work) => **work,
+            other => panic!("{other:?}"),
+        })
+    };
+    let profile = |label: &str, scale, work: &dyn Fn()| {
+        let before: DatabaseWork = snapshot();
+        work();
+        let after = snapshot();
+        let mut totals = [0; 4];
+        for (a, b) in before.statements.iter().zip(after.statements) {
+            assert_eq!(
+                (a.fullscan_steps, a.sorts, a.autoindex_rows, a.reprepares),
+                (b.fullscan_steps, b.sorts, b.autoindex_rows, b.reprepares)
+            );
+            for (total, delta) in totals.iter_mut().zip([
+                b.executions - a.executions,
+                b.vm_steps - a.vm_steps,
+                b.rows_changed - a.rows_changed,
+                b.bound_bytes - a.bound_bytes,
+            ]) {
+                *total += delta;
+            }
+        }
+        println!("S5_OWNER_OPERATION unrelated={scale} operation={label} statements={} vm={} changed={} bound_bytes={} fullscan=0 sorts=0 autoindex=0 reprepare=0 includes_post_observation_route_seek=true", totals[0], totals[1], totals[2], totals[3]);
+        totals
+    };
+    let (mut filled, mut reference) = (0, None);
+    for scale in [128, 1024, 4096] {
+        while filled < scale {
+            service.applied(create(1, &format!("other-{filled:05}")));
+            filled += 1;
+        }
+        // Each scale starts with the same file history. Reusing the prior
+        // mutated file would add a shrink step and confound unrelated growth.
+        let file = service
+            .applied(create(1, &format!("profile-{scale}")))
+            .unwrap()
+            .serial;
+        service.applied(Operation::Write {
+            serial: file,
+            position: layerfs_workspace::Position::At(0),
+            data: vec![7; 131072].into(),
+        });
+        let mut row = Vec::new();
+        row.push(profile("overwrite-128k", scale, &|| {
+            service.applied(Operation::Write {
+                serial: file,
+                position: layerfs_workspace::Position::At(0),
+                data: vec![8; 131072].into(),
+            });
+        }));
+        row.push(profile("shrink", scale, &|| {
+            service.applied(Operation::SetAttributes {
+                serial: file,
+                mode: None,
+                mtime: Some(T2),
+                size: Some(65539),
+            });
+        }));
+        row.push(profile("regrow", scale, &|| {
+            service.applied(Operation::SetAttributes {
+                serial: file,
+                mode: None,
+                mtime: Some(T1),
+                size: Some(131072),
+            });
+        }));
+        row.push(profile("read-128k", scale, &|| {
+            let mut bytes = Vec::new();
+            service
+                .window(|view| view.read(&service.client, file, 0, 131072, &mut bytes))
+                .unwrap();
+            assert_eq!(bytes.len(), 131072);
+            assert!(bytes[..65539].iter().all(|byte| *byte == 8));
+            assert!(bytes[65539..].iter().all(|byte| *byte == 0));
+        }));
+        row.push(profile("append", scale, &|| {
+            service.applied(Operation::Write {
+                serial: file,
+                position: layerfs_workspace::Position::End,
+                data: b"tail".as_slice().into(),
+            });
+        }));
+        if let Some(ref expected) = reference {
+            assert_eq!(&row, expected);
+        } else {
+            reference = Some(row);
+        }
+    }
 }

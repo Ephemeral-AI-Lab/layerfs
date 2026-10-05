@@ -95,7 +95,7 @@ impl FastCdc {
     }
 }
 
-pub(super) struct Scanner {
+pub(crate) struct Scanner {
     chunk: Vec<u8>,
     pending: Option<u8>,
     hash: u64,
@@ -123,7 +123,7 @@ fn scan_region(bytes: &[u8], mut hash: u64, shifted_mask: u64, mask: u64) -> (u6
 }
 
 impl Scanner {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             chunk: Vec::with_capacity(MAXIMUM_CHUNK_BYTES),
             pending: None,
@@ -131,7 +131,7 @@ impl Scanner {
         }
     }
 
-    fn consume<F: FnMut(&[u8]) -> ContentResult<()>>(
+    pub(crate) fn consume<F: FnMut(&[u8]) -> ContentResult<()>>(
         &mut self,
         mut bytes: &[u8],
         on_chunk: &mut F,
@@ -267,7 +267,7 @@ impl Scanner {
         Ok(())
     }
 
-    fn finish<F: FnMut(&[u8]) -> ContentResult<()>>(
+    pub(crate) fn finish<F: FnMut(&[u8]) -> ContentResult<()>>(
         &mut self,
         on_chunk: &mut F,
         counters: &mut CdcCounters,

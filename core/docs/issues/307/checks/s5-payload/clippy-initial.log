@@ -1,0 +1,15 @@
+    Checking layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+error: this boolean expression can be simplified
+  --> crates/layerfs-overlay/src/compound.rs:79:20
+   |
+79 |                 || !owner.is_some_and(|inode| end.is_some_and(|end| end <= inode.size))
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `owner.is_none_or(|inode| end.is_none_or(|end| end > inode.size))`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#nonminimal_bool
+   = note: `-D clippy::nonminimal-bool` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::nonminimal_bool)]`
+
+error: could not compile `layerfs-overlay` (lib test) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-overlay` (lib) due to 1 previous error

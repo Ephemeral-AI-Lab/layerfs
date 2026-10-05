@@ -140,6 +140,7 @@ fn complete_operations_keep_point_work_as_names_and_inodes_grow() {
                         serial: local,
                         mode: Some(0o700 + (scale as u32 % 7)),
                         mtime: Some(T2),
+                        size: None,
                     },
                     T1,
                 );

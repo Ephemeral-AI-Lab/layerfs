@@ -141,3 +141,13 @@ write helpers. See [namespace operations](30-namespace-operations.md) for the
 semantics, work derivation and paired plan/runtime evidence. Earlier receipts
 keep their schema pins. Byte-stream transitions, removed-inode reclamation,
 failure composition and pressure remain S5/S6.
+
+## S5 payload checkpoint
+
+The work after `f5558fc22` advances schema v8 with trimmed cells, optional
+validity, engine-maintained lower-layer cutoffs and indexed shrink staircases.
+Compound jobs carry one bounded byte write. Effective reads compose local layers
+and one inherited range; raw cell APIs remain stored observations. See
+[payload streams](31-payload-streams.md) for complexity, amplification, custody
+and the paired real-owner evidence. Stale garbage, failure depth, orphans and
+physical pressure remain S6; earlier receipts retain their schema/source pins.

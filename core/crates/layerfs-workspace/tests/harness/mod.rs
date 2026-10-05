@@ -80,6 +80,15 @@ impl OverlayRead for Port<'_> {
     ) -> WorkspaceResult<layerfs_overlay::NameWindow> {
         OverlayRead::names(&self.0.overlay, source, parent, after)
     }
+    fn read(
+        &self,
+        source: layerfs_overlay::BaseSource,
+        serial: u64,
+        offset: u64,
+        length: u32,
+    ) -> WorkspaceResult<Option<layerfs_overlay::LocalRead>> {
+        OverlayRead::read(self.local(), source, serial, offset, length)
+    }
     fn cell(
         &self,
         source: layerfs_overlay::BaseSource,
@@ -88,6 +97,11 @@ impl OverlayRead for Port<'_> {
         offset: u64,
     ) -> WorkspaceResult<Option<layerfs_overlay::Cell>> {
         OverlayRead::cell(&self.0.overlay, source, serial, generation, offset)
+    }
+}
+impl Port<'_> {
+    fn local(&self) -> &Overlay {
+        &self.0.overlay
     }
 }
 impl OverlayJobs for Port<'_> {
@@ -269,5 +283,55 @@ pub fn rename(
         new_name: name(to.1),
         replace,
         destination_path,
+    }
+}
+pub fn write(serial: u64, offset: u64, data: &[u8]) -> Operation {
+    Operation::Write {
+        serial,
+        position: layerfs_workspace::Position::At(offset),
+        data: data.into(),
+    }
+}
+pub fn append(serial: u64, data: &[u8]) -> Operation {
+    Operation::Write {
+        serial,
+        position: layerfs_workspace::Position::End,
+        data: data.into(),
+    }
+}
+pub fn resize(serial: u64, size: u64) -> Operation {
+    Operation::SetAttributes {
+        serial,
+        mode: None,
+        mtime: None,
+        size: Some(size),
+    }
+}
+impl Bench {
+    /// The whole file through bounded read windows.
+    pub fn content(&self, serial: u64) -> Vec<u8> {
+        let mut all = Vec::new();
+        loop {
+            let read = self
+                .window(|view| {
+                    view.read(
+                        &self.overlay,
+                        serial,
+                        all.len() as u64,
+                        layerfs_overlay::READ_WINDOW as u32,
+                        &mut all,
+                    )
+                })
+                .unwrap();
+            if read < layerfs_overlay::READ_WINDOW as u64 {
+                return all;
+            }
+        }
+    }
+    pub fn read_at(&self, serial: u64, offset: u64, length: u32) -> Vec<u8> {
+        let mut out = Vec::new();
+        self.window(|view| view.read(&self.overlay, serial, offset, length, &mut out))
+            .unwrap();
+        out
     }
 }

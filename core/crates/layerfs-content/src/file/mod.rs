@@ -8,6 +8,7 @@ pub mod mapping;
 
 mod content;
 mod read;
+mod runs;
 mod view;
 
 pub use content::{
@@ -21,4 +22,5 @@ pub use edit::{
 };
 pub use mapping::{ExtentBuilder, PredecessorBase, ReadCounters};
 pub use read::{read_all, read_all_bounded, read_range};
+pub use runs::{construct_runs, FileRun, FileRuns, RunConstruction};
 pub use view::FileView;

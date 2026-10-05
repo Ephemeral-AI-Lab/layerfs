@@ -2,6 +2,40 @@
 use crate::ViewStat;
 use layerfs_content::filesystem::{PathName, SymlinkTarget};
 use layerfs_overlay::Publication;
+use std::{fmt, ops::Deref, sync::Arc};
+
+/// Bytes of one write window. Shared, so an operation's owner rounds and its
+/// publication never copy them, and printed by length only.
+#[derive(Clone, Eq, PartialEq)]
+pub struct WriteData(pub(crate) Arc<[u8]>);
+impl From<Vec<u8>> for WriteData {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self(bytes.into())
+    }
+}
+impl From<&[u8]> for WriteData {
+    fn from(bytes: &[u8]) -> Self {
+        Self(bytes.into())
+    }
+}
+impl Deref for WriteData {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &self.0
+    }
+}
+impl fmt::Debug for WriteData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "WriteData({} bytes)", self.0.len())
+    }
+}
+/// Where a write lands. `End` is resolved against the size current in the
+/// publishing owner job, so concurrent appends never overlap.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Position {
+    At(u64),
+    End,
+}
 
 /// Caller-supplied wall time. Workspace owns no clock; portable metadata keeps
 /// one mtime and reports it as ctime.
@@ -54,11 +88,20 @@ pub enum Operation {
         replace: bool,
         destination_path: Option<Vec<PathName>>,
     },
-    /// chmod and/or utimens of one inode; absent fields are unchanged.
+    /// chmod, utimens and/or truncate of one inode; absent fields are
+    /// unchanged. A changed size sets the mtime unless one is given.
     SetAttributes {
         serial: u64,
         mode: Option<u32>,
         mtime: Option<Time>,
+        size: Option<u64>,
+    },
+    /// One byte window of at most `WRITE_WINDOW`; larger writes arrive as
+    /// several operations. There is no total size, edit or flow limit.
+    Write {
+        serial: u64,
+        position: Position,
+        data: WriteData,
     },
 }
 impl Operation {
@@ -99,6 +142,8 @@ pub enum Refusal {
     Invalid,
     /// The canonical reference count cannot grow further (EMLINK).
     TooManyLinks,
+    /// The file would exceed the largest representable offset (EFBIG).
+    TooLarge,
     /// A directory changes parent and no destination path evidence was given.
     AncestryRequired,
     /// The supplied destination path does not resolve to the destination parent.

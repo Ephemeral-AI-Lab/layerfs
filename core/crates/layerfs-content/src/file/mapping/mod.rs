@@ -6,6 +6,7 @@ mod build;
 mod codec;
 mod predecessor;
 mod read;
+mod repeated;
 mod types;
 
 pub(crate) use build::build_streaming_with_predecessor;

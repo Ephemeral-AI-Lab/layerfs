@@ -5,17 +5,27 @@
 Owner: [tracker #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307).
 Design baseline: `c9861bc878583822a468e78dbc0f3740eacbecbe` on local main.
 The [implementation plan](../303/07-implementation-validation.md) owns milestone
-dependencies and exits. S1, S2, S3 and S4 are complete with their exit audits and covering evidence. S0 and S5–S13 remain
+dependencies and exits. S1–S5 are complete with their exit audits and covering evidence. S0 and S6–S13 remain
 unchecked until their complete implementation and required evidence exist.
 
 ## Current checkpoint
+
+S5 completion after `f5558fc22`: bounded cells/tails/validity, atomic append and
+overwrite, cutoff truncate/regrow, composed reads and canonical zero-run reuse.
+See [S5 exit audit](S5-EXIT-AUDIT.md) and retained checks/failures. The original
+hang was a test width error (23-byte records expected as 24), followed by an
+unbounded tail wait after writer panic. Its correction and panic-safe bounded
+proof pass on macOS/Linux. The [S5–S6 handoff](HANDOFF-S5-S6.md) retains the
+earlier paused snapshot, not current verification status. P3 is explicitly
+carried to backed S10 editing; it is not resolved. S6 lifetimes/reclamation,
+failure composition and physical headroom are the next required milestone.
 
 S4 is complete at the local milestone-completion commit after `8d691ab8a`: atomic
 ordinary namespace operations as compound owner jobs, maintained directory
 counts, verified rename ancestry and owning serial ranges. See the
 [S4 exit audit](S4-EXIT-AUDIT.md) and
 [namespace operations](../../architecture/30-namespace-operations.md). The next
-ready work is S5 payload and stream semantics, then S6 lifetimes and reclamation.
+ready work is now S6 lifetimes and reclamation.
 
 S3 is complete at local-only `c4b49a121aec15a6eae58c04d8074fd9eb2772db`, tree
 `67a6b34e5b135ea5d30c48fa5d0bd977c4aa1356`, with its

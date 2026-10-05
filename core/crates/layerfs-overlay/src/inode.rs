@@ -1,4 +1,5 @@
 //! Bounded metadata/payload publication, with one transaction per attempted job.
+use crate::layers::Layer;
 use crate::{
     db::{integer, unsigned},
     sql, Cell, Dentry, Generation, Inode, InodeKind, Overlay, OverlayError, OverlayResult,
@@ -87,46 +88,80 @@ impl Overlay {
             .pop())
     }
     /// Writes one checked inode at the active generation inside the caller's
-    /// transaction; true when the active generation gained a row.
+    /// transaction and returns its payload layer. The first row of a serial in
+    /// a generation starts a fresh layer whose cutoff is the lower view's
+    /// length; a smaller size on a regular file is a shrink of that layer.
     pub(crate) fn put_inode(
         &self,
         route: Route,
-        generation: Generation,
+        state: &WorkspaceState,
         inode: &Inode,
-    ) -> OverlayResult<bool> {
-        if inode.born > generation.0 as u64 {
+    ) -> OverlayResult<(bool, Layer)> {
+        let gen = state.active.0;
+        if inode.born > gen as u64 {
             return Err(OverlayError::Invalid("inode creation generation"));
         }
         let serial = integer(inode.serial)?;
-        let added = self
+        let active = self
             .query(
                 StatementKind::Inode,
-                sql::INODE_ACTIVE,
-                &[&route.ns, &serial, &generation.0],
+                sql::LAYER_ACTIVE,
+                &[&route.ns, &serial, &gen],
                 24,
-                |r| r.get::<_, i64>(0),
+                |r| Ok((unsigned(r, 0)?, unsigned(r, 1)?, r.get(2)?, r.get(3)?)),
             )?
-            .is_empty();
+            .pop();
+        let added = active.is_none();
+        let (size, cutoff, epoch, height) = match active {
+            Some(layer) => layer,
+            None => {
+                let lower = self
+                    .query(
+                        StatementKind::Inode,
+                        sql::LAYER_LOWER,
+                        &[&route.ns, &serial, &gen, &state.installed],
+                        32,
+                        |r| unsigned(r, 0),
+                    )?
+                    .pop()
+                    .unwrap_or(inode.inherited_cutoff);
+                (lower, lower, 0, 0)
+            }
+        };
+        let mut layer = Layer {
+            gen,
+            kind: inode.kind,
+            size,
+            cutoff,
+            epoch,
+            height,
+        };
+        if inode.kind == InodeKind::File && inode.size < layer.size {
+            self.shrink(route.ns, serial, &mut layer, inode.size)?;
+        }
+        layer.size = inode.size;
         self.execute(
             StatementKind::Inode,
             sql::INODE_PUT,
             &[
                 &route.ns,
                 &serial,
-                &generation.0,
+                &gen,
                 &(inode.kind as i64),
                 &i64::from(inode.mode),
                 &inode.mtime_seconds,
                 &i64::from(inode.mtime_nanoseconds),
                 &integer(inode.nlink)?,
                 &integer(inode.size)?,
-                &integer(inode.inherited_cutoff)?,
+                &integer(layer.cutoff)?,
                 &integer(inode.born)?,
                 &integer(inode.entries)?,
+                &layer.epoch,
+                &layer.height,
             ],
-            96,
+            112,
         )?;
-        Ok(added)
+        Ok((added, layer))
     }
     /// Binds or whiteouts one name at the active generation inside the caller's
     /// transaction; true when the active generation gained a row.
@@ -212,16 +247,16 @@ impl Overlay {
         }
         self.atomic(|| {
             let state = self.live(route)?;
-            let inodes = i64::from(self.put_inode(route, state.active, inode)?);
+            let (added, layer) = self.put_inode(route, &state, inode)?;
             let mut names = 0;
             if let (Some(name), Some((parent, target))) = (name, key) {
                 names =
                     i64::from(self.put_name(route, state.active, parent, &name.name, target)?);
             }
             if let Some(cell) = cell {
-                self.put_cell(route, integer(inode.serial)?, state.active, cell)?;
+                self.put_cell(route, integer(inode.serial)?, &layer, cell)?;
             }
-            self.settle(route, &state, inodes, names)
+            self.settle(route, &state, i64::from(added), names)
         })
     }
     /// Final local name row, with a whiteout distinguishable from no overlay row.

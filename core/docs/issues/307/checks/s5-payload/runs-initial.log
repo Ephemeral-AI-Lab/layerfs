@@ -1,0 +1,34 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-content', '--test', 'runs', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/runs.rs (core/target/debug/deps/runs-5c6ef8e3bd9527f3)
+
+running 4 tests
+ZERO_EQUAL prefix=0 zero=0 suffix=0 window=31 processed=0 chunks=0 nodes=1
+test invalid_windows_and_consumer_failure_stop_the_single_operation ... ok
+ZERO_EQUAL prefix=7 zero=19 suffix=11 window=1 processed=19 chunks=0 nodes=0
+ZERO_EQUAL prefix=0 zero=131071 suffix=0 window=32768 processed=131071 chunks=0 nodes=0
+
+thread 'terabyte_zero_runs_emit_logarithmic_objects_and_read_exact_boundaries' panicked at crates/layerfs-content/src/file/cdc/gear.rs:141:26:
+index out of bounds: the len is 0 but the index is 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test terabyte_zero_runs_emit_logarithmic_objects_and_read_exact_boundaries ... FAILED
+ZERO_EQUAL prefix=0 zero=131072 suffix=0 window=32768 processed=131072 chunks=4 nodes=1
+ZERO_EQUAL prefix=0 zero=131073 suffix=0 window=32768 processed=131073 chunks=5 nodes=1
+ZERO_EQUAL prefix=131077 zero=32769 suffix=9001 window=113 processed=32769 chunks=10 nodes=1
+ZERO_EQUAL prefix=131083 zero=4259847 suffix=32873 window=777 processed=32775 chunks=12 nodes=3
+test multi_level_repetition_matches_streaming_extent_builder_without_zero_byte_scan ... ok
+ZERO_EQUAL prefix=32771 zero=6324225 suffix=3 window=255 processed=131073 chunks=7 nodes=3
+ZERO_EQUAL prefix=131091 zero=12615680 suffix=10003 window=32767 processed=32768 chunks=11 nodes=5
+test run_roots_equal_streaming_at_cutoff_cdc_and_leaf_partition_boundaries ... ok
+
+failures:
+
+failures:
+    terabyte_zero_runs_emit_logarithmic_objects_and_read_exact_boundaries
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+error: test failed, to rerun pass `-p layerfs-content --test runs`
+
+EXIT: 101; WALL: 1.047s

@@ -4,6 +4,8 @@
 > not a product contract. This set selects no architecture, freezes no scope
 > and decides no open ruling.
 
+S5 implementation: [payload streams and canonical zero runs](31-payload-streams.md).
+
 Issue: [#175](https://github.com/Ephemeral-AI-Lab/layerfs/issues/175).
 Release: [v0.1.7](../../../docs/roadmap/0.1/0.1.7/README.md). Design discussion:
 [#160](https://github.com/Ephemeral-AI-Lab/layerfs/issues/160).

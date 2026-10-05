@@ -1,0 +1,12 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-workspace', '--test', 'namespace_daemon', 'closed_and_stopped_services_return_exact_outcomes_without_effect', '--', '--exact', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.02s
+     Running tests/namespace_daemon.rs (core/target/debug/deps/namespace_daemon-2d9a73b7f39baa9f)
+
+running 1 test
+test closed_and_stopped_services_return_exact_outcomes_without_effect ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.01s
+
+
+EXIT: 0; WALL: 0.079s

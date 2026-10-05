@@ -2,6 +2,12 @@
 
 > **Status:** Research; informative and not a product contract.
 
+API addition after `f5558fc22`: content provides `construct_runs` over the
+bounded `FileRuns` data/zero/EOF source. It preserves the ordinary streamed root
+while reusing complete zero subtrees in logarithmic hole work. See
+[payload streams](31-payload-streams.md) and its canonical equality evidence.
+Earlier source descriptions/evidence below retain their original scope.
+
 Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
 [index](README.md).

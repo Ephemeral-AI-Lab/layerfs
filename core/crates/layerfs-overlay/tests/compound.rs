@@ -93,6 +93,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         inodes: vec![directory(10, 1), file(20, active)],
         names: vec![bound(10, b"bin\xff\0name", 20)],
         cell: Some((20, cell.clone())),
+        write: None,
     };
     let publication = db.apply(source, &changes).unwrap();
     let state = db.state(route).unwrap();
@@ -125,6 +126,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         inodes: vec![file(30, active), file(31, active + 1)],
         names: vec![bound(10, b"later", 30)],
         cell: None,
+        write: None,
     };
     assert!(matches!(
         db.apply(source, &refused),
@@ -386,6 +388,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
                     inodes: vec![file(count, 0), file(count + 1, 0)],
                     names: vec![bound(1, &from, count), bound(1, &to, count + 1)],
                     cell: None,
+                    write: None,
                 },
             )
             .unwrap(),
@@ -411,6 +414,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
                     ],
                     names: vec![removed(1, &from, false), bound(1, &to, count)],
                     cell: None,
+                    write: None,
                 },
             )
             .unwrap();

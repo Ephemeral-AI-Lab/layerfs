@@ -15,6 +15,13 @@ API documentation correction 2026-10-05, verified at design/source checkpoint
 `334fc7437`: `FilesystemRootId` is a tuple struct; examples use `.0`, not
 `.object()`. No product API or benchmark identity changed.
 
+S5 API addition after `f5558fc22`, 2026-10-05: `construct_runs` accepts a bounded
+`FileRuns` source (`FileRun::Data`, `Zero`, `End`) and returns `RunConstruction`.
+Explicit holes preserve the fresh streamed canonical root while complete zero
+subtrees are reused logarithmically; [implementation and evidence](core/docs/architecture/31-payload-streams.md)
+are separately pinned from the older handbook/benchmark source. Storage/Save
+completion rules stay the same. Backed localized editing remains P3/S10.
+
 **Terminology:** cluster one and cluster two are implementation workstreams.
 Older source comments use C1 for `layerfs-content`, C2 for `layerfs-storage`,
 and C5 for `layerfs-history`. Those component numbers do not mean clusters.

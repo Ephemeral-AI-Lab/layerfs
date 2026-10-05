@@ -2,6 +2,13 @@
 
 > **Status:** Implemented S3 completion after `bdc6ed4af`; S4 namespace mutation, S5 byte composition and S6 kernel/orphan/resource ownership are separate unfinished milestones.
 
+S5 update after `f5558fc22`: `SourceView::read` composes the local layered
+window and fetches its single covering inherited canonical range. `stat` takes
+the mutable logical EOF; writes do not demand inherited payload. Shrink/regrow
+uses the lower-layer cutoff rather than a caller-supplied base cutoff. See
+[payload streams](31-payload-streams.md); raw cell access does not establish the
+effective view. S6 ownership and S8 output/kernel custody remain open.
+
 Workspace retains a checked complete immutable root, with exact ObjectId caching,
 public content child/inode/list/readlink and FileView range plans. No repeated open
 imports, scans, copies or restores that base. A source-issued SourceView retains

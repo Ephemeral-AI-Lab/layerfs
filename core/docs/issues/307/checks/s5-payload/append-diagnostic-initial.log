@@ -1,0 +1,42 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-workspace', '--test', 'namespace_daemon', 'concurrent_appenders_and_a_tail_reader_see_whole_records_through_real_owner_jobs', '--', '--exact', '--ignored', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.02s
+     Running tests/namespace_daemon.rs (core/target/debug/deps/namespace_daemon-2d9a73b7f39baa9f)
+
+running 1 test
+
+thread '<unnamed>' panicked at crates/layerfs-workspace/tests/namespace_daemon.rs:450:25:
+assertion `left == right` failed
+  left: 23
+ right: 24
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread '<unnamed>' panicked at crates/layerfs-workspace/tests/namespace_daemon.rs:450:25:
+assertion `left == right` failed
+  left: 23
+ right: 24
+
+thread '<unnamed>' panicked at crates/layerfs-workspace/tests/namespace_daemon.rs:450:25:
+assertion `left == right` failed
+  left: 23
+ right: 24
+
+thread '<unnamed>' panicked at crates/layerfs-workspace/tests/namespace_daemon.rs:450:25:
+assertion `left == right` failed
+  left: 23
+ right: 24
+
+thread 'concurrent_appenders_and_a_tail_reader_see_whole_records_through_real_owner_jobs' panicked at crates/layerfs-workspace/tests/namespace_daemon.rs:464:27:
+called `Result::unwrap()` on an `Err` value: Any { .. }
+test concurrent_appenders_and_a_tail_reader_see_whole_records_through_real_owner_jobs ... FAILED
+
+failures:
+
+failures:
+    concurrent_appenders_and_a_tail_reader_see_whole_records_through_real_owner_jobs
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-workspace --test namespace_daemon`
+
+EXIT: 101; WALL: 0.076s
