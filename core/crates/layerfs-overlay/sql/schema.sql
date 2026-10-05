@@ -1,4 +1,4 @@
--- Disposable overlay schema v10. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v12. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -41,6 +41,7 @@ CREATE TABLE dentry (
     name BLOB NOT NULL CHECK(length(name)>0 AND length(name)<=255),
     gen INTEGER NOT NULL CHECK(gen>0),
     serial INTEGER CHECK(serial>0),
+    inherited INTEGER NOT NULL CHECK(inherited IN(0,1)),
     PRIMARY KEY(ns,parent,name,gen)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX dentry_capture ON dentry(ns,gen,parent,name);
@@ -75,7 +76,7 @@ CREATE INDEX payload_generation ON payload(ns,gen,serial,cell_offset);
 CREATE INDEX shrink_generation ON shrink(ns,gen,serial,depth);
 CREATE TABLE lease (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
-    kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 8),
+    kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 9),
     owner INTEGER NOT NULL CHECK(owner>0),
     resource INTEGER NOT NULL CHECK(resource>=0),
     PRIMARY KEY(ns,kind,owner,resource)
@@ -177,4 +178,11 @@ CREATE TABLE owned_scratch (
     value BLOB NOT NULL CHECK(length(value)<=65536),
     PRIMARY KEY(ns,operation,kind,key)
 ) STRICT, WITHOUT ROWID;
-PRAGMA user_version=11;
+CREATE TABLE lookup_owner (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    request INTEGER NOT NULL CHECK(request>0),
+    owner INTEGER NOT NULL CHECK(owner>0),
+    serial INTEGER NOT NULL CHECK(serial>0),
+    PRIMARY KEY(ns,owner), UNIQUE(ns,request)
+) STRICT, WITHOUT ROWID;
+PRAGMA user_version=12;

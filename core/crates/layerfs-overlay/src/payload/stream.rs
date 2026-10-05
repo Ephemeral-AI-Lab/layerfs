@@ -60,6 +60,13 @@ impl Overlay {
         length: u32,
     ) -> OverlayResult<Option<LocalRead>> {
         let state = self.source_state(source)?;
+        let key = integer(serial)?;
+        if let Some(orphan) = self.orphan(source.route.ns, key)? {
+            if self.orphan_layer(source.route.ns, key)?.kind == InodeKind::File {
+                return Err(OverlayError::Missing);
+            }
+            return self.orphan_read(source.route.ns, key, orphan, offset, length);
+        }
         self.read_layers(
             source.route.ns,
             serial,
@@ -106,7 +113,7 @@ impl Overlay {
         let layers = self.layers(ns, serial, top, installed)?;
         if layers
             .first()
-            .is_some_and(|layer| layer.kind == InodeKind::File && layer.nlink == 0)
+            .is_some_and(|layer| layer.kind != InodeKind::Directory && layer.nlink == 0)
         {
             return Err(OverlayError::Missing);
         }
@@ -138,7 +145,7 @@ impl Overlay {
             span: None,
             base_root: None,
         };
-        if first.kind != InodeKind::File || start == end {
+        if first.kind == InodeKind::Directory || start == end {
             return Ok(Some(read));
         }
         // 0: undecided, 1: decided locally (a written byte or a zero).

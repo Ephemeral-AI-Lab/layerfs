@@ -1,0 +1,9 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.38s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_daemon-c46ececdd993474e)
+  Executable tests/owner.rs (core/target/debug/deps/owner-f13e3b52de22f9e9)
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_sdk-33c8c90f8f9d6263)
+  Executable tests/runtime.rs (core/target/debug/deps/runtime-e75646e62b883e6e)

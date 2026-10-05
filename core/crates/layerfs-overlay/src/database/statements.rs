@@ -28,7 +28,7 @@ pub(crate) const LAYER_ACTIVE: &str = "SELECT size,inherited_cutoff,epoch,height
     WHERE ns=?1 AND serial=?2 AND gen=?3";
 pub(crate) const LAYER_LOWER: &str = "SELECT size FROM inode
     WHERE ns=?1 AND serial=?2 AND gen<?3 AND gen>?4 ORDER BY gen DESC LIMIT 1";
-pub(crate) const DENTRY_LOOKUP:&str="SELECT serial FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen<=?4 AND gen>?5 ORDER BY gen DESC LIMIT 1";
+pub(crate) const DENTRY_LOOKUP:&str="SELECT serial,inherited FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen<=?4 AND gen>?5 ORDER BY gen DESC LIMIT 1";
 pub(crate) const LEASE_LOOKUP: &str =
     "SELECT 1 FROM lease WHERE ns=?1 AND kind=?2 AND owner=?3 AND resource=?4";
 pub(crate) const RETAINED_CAPTURE: &str = "SELECT captured,captured_revision,base_root
@@ -45,11 +45,11 @@ pub(crate) const BASE_SOURCE_INCREMENT: &str =
     "UPDATE workspace SET base_readers=base_readers+1 WHERE ns=?1";
 pub(crate) const BASE_SOURCE_DECREMENT: &str =
     "UPDATE workspace SET base_readers=base_readers-1 WHERE ns=?1";
-pub(crate) const DENTRY_CAPTURE: &str = "SELECT parent,name,serial
+pub(crate) const DENTRY_CAPTURE: &str = "SELECT parent,name,serial,inherited
     FROM dentry INDEXED BY dentry_capture WHERE ns=?1 AND gen=?2
     AND (parent,name)>(?3,?4) ORDER BY parent,name LIMIT 64";
 pub(crate) const SOURCE_NAMES: &str =
-    "SELECT parent,name,serial FROM dentry INDEXED BY dentry_capture
+    "SELECT parent,name,serial,inherited FROM dentry INDEXED BY dentry_capture
     WHERE ns=?1 AND gen=?2 AND parent=?3 AND name>?4 ORDER BY name LIMIT 64";
 pub(crate) const SCRATCH_PAGE: &str = "SELECT kind,key,value FROM scratch
     WHERE ns=?1 AND operation=?2 AND kind=?3 AND key>?4 ORDER BY key LIMIT 64";
@@ -60,9 +60,9 @@ pub(crate) const INODE_PUT: &str = "INSERT INTO inode
     nlink=excluded.nlink,size=excluded.size,inherited_cutoff=excluded.inherited_cutoff,
     born=excluded.born,entries=excluded.entries,epoch=excluded.epoch,height=excluded.height";
 pub(crate) const DENTRY_ACTIVE: &str =
-    "SELECT serial FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
-pub(crate) const DENTRY_PUT: &str = "INSERT INTO dentry VALUES(?1,?2,?3,?4,?5)
-    ON CONFLICT(ns,parent,name,gen) DO UPDATE SET serial=excluded.serial";
+    "SELECT serial,inherited FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
+pub(crate) const DENTRY_PUT: &str = "INSERT INTO dentry VALUES(?1,?2,?3,?4,?5,?6)
+    ON CONFLICT(ns,parent,name,gen) DO UPDATE SET serial=excluded.serial,inherited=excluded.inherited";
 pub(crate) const DENTRY_DROP: &str =
     "DELETE FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen=?4";
 pub(crate) const TICKET_PUT: &str = "INSERT INTO request(ns,revision,gen) VALUES(?1,?2,?3)";

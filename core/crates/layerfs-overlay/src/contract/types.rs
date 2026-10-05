@@ -72,6 +72,8 @@ pub struct Inode {
 /// One final name binding; None is a whiteout, names remain binary in SQL.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Dentry {
+    /// Whether the immediately lower view binds this name.
+    pub inherited: bool,
     pub parent: u64,
     pub name: Vec<u8>,
     pub serial: Option<u64>,
@@ -79,7 +81,10 @@ pub struct Dentry {
 /// Final state of one name in a compound job.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Binding {
-    Bound(u64),
+    Bound {
+        serial: u64,
+        inherited: bool,
+    },
     /// `inherited` states whether the owned immutable base binds this name; a
     /// lower local row, when present, decides instead of this fact.
     Removed {
@@ -97,6 +102,8 @@ pub struct NameChange {
 /// windows bound one job; they are not Workspace totals.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Changes {
+    /// Semantically removed non-root inode; distinguishes zero-count root metadata.
+    pub detached: Option<u64>,
     /// Exact descriptor authority for mutations of independently owned orphans.
     pub open: Option<crate::OpenFile>,
     pub inodes: Vec<Inode>,
@@ -133,6 +140,7 @@ pub struct LocalRead {
 /// The outer None is "no row"; the inner None is a whiteout.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NameLayers {
+    pub active_inherited: Option<bool>,
     pub active: Option<Option<u64>>,
     pub lower: Option<Option<u64>>,
 }
@@ -243,6 +251,7 @@ pub enum LeaseKind {
     CapturedReader = 6,
     FileHandle = 7,
     Processing = 8,
+    LookupOwner = 9,
 }
 /// One exact owner/resource reference, not a retry token.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

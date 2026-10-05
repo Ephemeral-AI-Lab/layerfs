@@ -4,8 +4,8 @@ use crate::{
     inode,
     layers::Layer,
     maintenance::{ORPHAN, SERIAL_RETIRE},
-    sql, FileRead, Inode, InodeKind, LocalRead, Overlay, OverlayError, OverlayResult, Route,
-    StatementKind, WorkspaceState,
+    sql, FileRead, Inode, LocalRead, Overlay, OverlayError, OverlayResult, Route, StatementKind,
+    WorkspaceState,
 };
 pub(crate) const DOMAIN: i64 = -1;
 #[derive(Clone, Copy)]
@@ -49,7 +49,7 @@ impl Overlay {
         state: &WorkspaceState,
         inode: &Inode,
     ) -> OverlayResult<()> {
-        if inode.nlink != 0 || inode.kind != InodeKind::File {
+        if inode.nlink != 0 {
             return Ok(());
         }
         let serial = integer(inode.serial)?;
@@ -139,6 +139,16 @@ impl Overlay {
         let Some(orphan) = self.orphan(ns, serial)? else {
             return self.source_read(read.source, read.serial, offset, length);
         };
+        self.orphan_read(ns, serial, orphan, offset, length)
+    }
+    pub(crate) fn orphan_read(
+        &self,
+        ns: i64,
+        serial: i64,
+        orphan: Orphan,
+        offset: u64,
+        length: u32,
+    ) -> OverlayResult<Option<LocalRead>> {
         let mut layers = vec![self.orphan_layer(ns, serial)?];
         layers.extend(self.layers(ns, serial, orphan.top, orphan.floor)?);
         if layers.len() > 3 {

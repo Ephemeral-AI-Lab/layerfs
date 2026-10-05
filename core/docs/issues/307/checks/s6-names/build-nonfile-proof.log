@@ -1,0 +1,13 @@
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+warning: unused import: `Changes`
+ --> crates/layerfs-workspace/tests/nonfile.rs:6:23
+  |
+6 | use layerfs_overlay::{Changes, Inode, InodeKind, MaintenanceCursor};
+  |                       ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: `layerfs-workspace` (test "nonfile") generated 1 warning (run `cargo fix --test "nonfile"` to apply 1 suggestion)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.14s
+  Executable tests/nonfile.rs (core/target/debug/deps/nonfile-6ceca1de548e80db)

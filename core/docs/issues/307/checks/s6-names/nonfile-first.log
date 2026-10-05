@@ -1,0 +1,22 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-workspace', '--test', 'nonfile', '--', '--nocapture']
+TIMEOUT: 120s
+warning: unused import: `Changes`
+ --> crates/layerfs-workspace/tests/nonfile.rs:6:23
+  |
+6 | use layerfs_overlay::{Changes, Inode, InodeKind, MaintenanceCursor};
+  |                       ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: `layerfs-workspace` (test "nonfile") generated 1 warning (run `cargo fix --test "nonfile"` to apply 1 suggestion)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.06s
+     Running tests/nonfile.rs (core/target/debug/deps/nonfile-6ceca1de548e80db)
+
+running 2 tests
+test non_file_lookup_and_processing_owners_preserve_removed_metadata_and_target ... ok
+test linked_symlink_targets_follow_effective_layers_through_repeated_failed_captures ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+EXIT: 0; WALL: 1.804s

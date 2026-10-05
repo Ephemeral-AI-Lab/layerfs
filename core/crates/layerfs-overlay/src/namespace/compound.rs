@@ -36,6 +36,14 @@ impl Overlay {
         {
             return Err(OverlayError::Invalid("compound window"));
         }
+        if changes.detached.is_some_and(|serial| {
+            !changes
+                .inodes
+                .iter()
+                .any(|i| i.serial == serial && i.nlink == 0)
+        }) {
+            return Err(OverlayError::Invalid("removed inode final"));
+        }
         for (index, inode) in changes.inodes.iter().enumerate() {
             check(inode)?;
             if changes.inodes[..index]
@@ -49,8 +57,10 @@ impl Overlay {
         for (index, change) in changes.names.iter().enumerate() {
             let parent = check_name(change.parent, &change.name)?;
             let target = match change.binding {
-                Binding::Bound(0) => return Err(OverlayError::Invalid("zero inode serial")),
-                Binding::Bound(serial) => Some(integer(serial)?),
+                Binding::Bound { serial: 0, .. } => {
+                    return Err(OverlayError::Invalid("zero inode serial"))
+                }
+                Binding::Bound { serial, .. } => Some(integer(serial)?),
                 Binding::Removed { .. } => None,
             };
             if changes.names[..index]
@@ -114,19 +124,20 @@ impl Overlay {
             };
             let mut names = 0_i64;
             for (change, (parent, target)) in changes.names.iter().zip(&keys) {
-                let whiteout = match change.binding {
-                    Binding::Bound(_) => true,
-                    Binding::Removed { inherited } => self
-                        .lower_name(&state, route.ns, *parent, &change.name)?
-                        .map_or(inherited, |row| row.is_some()),
+                let inherited = match change.binding {
+                    Binding::Bound { inherited, .. } | Binding::Removed { inherited } => inherited,
                 };
+                let (_, cutoff) =
+                    self.name_inheritance(&state, route.ns, *parent, &change.name, inherited)?;
+                let whiteout = target.is_some() || cutoff;
                 if whiteout {
                     names += i64::from(self.put_name(
                         route,
-                        state.active,
+                        &state,
                         *parent,
                         &change.name,
                         *target,
+                        inherited,
                     )?);
                 } else {
                     // Nothing below binds this name: no row is the final state.
@@ -151,7 +162,9 @@ impl Overlay {
                 )?;
             }
             for inode in &changes.inodes {
-                self.detach_orphan(route, &state, inode)?;
+                if inode.kind == crate::InodeKind::File || changes.detached == Some(inode.serial) {
+                    self.detach_orphan(route, &state, inode)?;
+                }
             }
             self.settle(route, &state, inodes, names)
         })
@@ -221,7 +234,7 @@ impl Overlay {
             (
                 "put-name",
                 sql::DENTRY_PUT,
-                vec![&ns, &1_i64, &name, &state.active.0, &none],
+                vec![&ns, &1_i64, &name, &state.active.0, &none, &false],
             ),
             (
                 "put-inode",
@@ -303,10 +316,14 @@ impl SourceRows<'_> {
                 sql::DENTRY_ACTIVE,
                 &[&ns, &key, &name, &self.state.active.0],
                 24 + name.len() as u64,
-                |row| optional_serial(row.get(0)?, 0),
+                |row| Ok((optional_serial(row.get(0)?, 0)?, row.get::<_, bool>(1)?)),
             )?
             .pop();
         let lower = self.db.lower_name(&self.state, ns, key, name)?;
-        Ok(NameLayers { active, lower })
+        Ok(NameLayers {
+            active: active.map(|r| r.0),
+            active_inherited: active.map(|r| r.1),
+            lower,
+        })
     }
 }

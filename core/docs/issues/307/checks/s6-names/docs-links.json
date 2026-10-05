@@ -1,0 +1,15 @@
+{
+  "files": [
+    "core/docs/issues/307/PROGRESS.md",
+    "core/docs/architecture/33-independent-custody.md",
+    "core/docs/architecture/32-live-composition.md",
+    "core/docs/issues/307/SOURCE-ORGANIZATION.md",
+    "core/docs/architecture/README.md",
+    "core/AGENTS.md",
+    "core/docs/architecture/31-payload-streams.md",
+    "core/docs/architecture/34-name-and-lookup-custody.md",
+    "core/docs/issues/307/S6-NAME-CUSTODY-CONTRACT.md"
+  ],
+  "links": 118,
+  "errors": []
+}

@@ -1,0 +1,3 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.87s
+  Executable tests/compound.rs (core/target/debug/deps/compound-cca6e9b42fb4506c)

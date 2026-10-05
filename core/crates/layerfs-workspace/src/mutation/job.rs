@@ -89,7 +89,37 @@ impl NamespaceJob {
             None => Ok(JobOutcome::Needs(eval.needs)),
             Some((None, inode)) => Ok(JobOutcome::Unchanged { inode }),
             Some((Some(mut changes), inode)) => {
+                for change in &mut changes.names {
+                    let name = layerfs_content::filesystem::PathName::from_bytes(&change.name)?;
+                    let Some(parent) = eval.inode(change.parent)? else {
+                        return Ok(JobOutcome::Needs(eval.needs));
+                    };
+                    let layers = eval.layers(change.parent, &name)?;
+                    let Some(inherited) =
+                        eval.inherited(change.parent, parent.as_ref(), &name, layers)
+                    else {
+                        return Ok(JobOutcome::Needs(eval.needs));
+                    };
+                    change.binding = match change.binding {
+                        layerfs_overlay::Binding::Bound { serial, .. } => {
+                            layerfs_overlay::Binding::Bound { serial, inherited }
+                        }
+                        layerfs_overlay::Binding::Removed { .. } => {
+                            layerfs_overlay::Binding::Removed { inherited }
+                        }
+                    };
+                }
                 changes.open = open;
+                if matches!(
+                    self.operation,
+                    Operation::Unlink { .. } | Operation::Rmdir { .. } | Operation::Rename { .. }
+                ) {
+                    changes.detached = changes
+                        .inodes
+                        .iter()
+                        .find(|i| i.nlink == 0 && i.serial != self.root)
+                        .map(|i| i.serial);
+                }
                 Ok(JobOutcome::Applied {
                     publication: db.apply(self.source, &changes)?,
                     inode,

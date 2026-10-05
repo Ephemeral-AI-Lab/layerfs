@@ -179,6 +179,7 @@ fn ordered_source_name_windows_visit_only_parent_and_generation_with_runtime_evi
                 route,
                 &inode(),
                 Some(&Dentry {
+                    inherited: false,
                     parent: 1,
                     name: format!("n{n:04}").into_bytes(),
                     serial: Some(2),
@@ -199,6 +200,7 @@ fn ordered_source_name_windows_visit_only_parent_and_generation_with_runtime_evi
                     other,
                     &inode(),
                     Some(&Dentry {
+                        inherited: false,
                         parent: 1,
                         name: format!("n{n:04}").into_bytes(),
                         serial: Some(2),

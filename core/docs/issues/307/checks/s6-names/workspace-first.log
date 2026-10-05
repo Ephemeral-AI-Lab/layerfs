@@ -1,0 +1,126 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-workspace', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_workspace-98052cb4f35bbf38)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/base.rs (core/target/debug/deps/base-5f7971ceb0bcbbda)
+
+running 7 tests
+test retained_old_plan_and_new_root_use_exact_immutable_cache_identities ... ok
+test full_root_binding_aliases_metadata_symlinks_and_eof_use_content_apis ... ok
+test logical_workspace_open_binds_real_root_without_schema_or_namespace_import ... ok
+test source_errors_and_unattempted_actor_install_preserve_exact_custody ... ok
+test known_install_advances_selected_base_and_preserves_retained_plans_and_later_rows ... ok
+test actual_provider_wait_allows_shared_progress_and_actor_install_pairs_the_selected_base ... ok
+S3_MERGE visited=507 visible=377 empty_progress_pages=1
+test effective_alias_metadata_whiteouts_and_three_way_pages_advance_with_bounded_hidden_work ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/namespace.rs (core/target/debug/deps/namespace-538b80510d7e2be5)
+
+running 5 tests
+test unrepresentable_names_targets_and_reservations_are_refused_before_any_job ... ok
+test chmod_and_utimens_follow_the_portable_grammar_and_keep_one_mtime ... ok
+test create_mkdir_symlink_and_link_publish_parent_and_reference_effects_atomically ... ok
+test unlink_and_rmdir_remove_one_reference_and_keep_directory_counts_exact ... ok
+test rename_moves_replaces_and_refuses_cycles_without_descendant_rows ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/namespace_daemon.rs (core/target/debug/deps/namespace_daemon-2d9a73b7f39baa9f)
+
+running 8 tests
+S6_CUSTODY_PLANS ["orphan: SEARCH orphan USING PRIMARY KEY (ns=? AND serial=?)", "file-owners: SEARCH file_custody USING PRIMARY KEY (ns=? AND serial=?)", "operation: SEARCH operation_owner USING PRIMARY KEY (ns=? AND owner=?)", "generation-held: SEARCH lease USING COVERING INDEX lease_resource (ns=? AND kind=? AND resource=?)"]
+S5_OWNER_PLANS ["layers: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)", "active-layer: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "lower-layer: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)", "cell: SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)", "cell-window: SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>? AND cell_offset<?)", "drop-cell: SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)", "step: SEARCH shrink USING PRIMARY KEY (ns=? AND serial=? AND gen=? AND depth=?)"]
+test closed_and_stopped_services_return_exact_outcomes_without_effect ... ok
+test a_blocked_base_fact_leaves_the_owner_free_and_publishes_after_a_capture ... ok
+S6_NONFILE_OWNER captures=12 success=6 failures=6 directory_metadata=true inherited_symlink_bytes=true lookup_release_before_last_request=true idle_terminal_cleanup=true
+test orphans::non_file_lookup_custody_survives_real_owner_installs_and_a_last_consumer ... ok
+S6_ORPHAN_OWNER captures=24 success=12 failed=12 inherited_bytes=10 orphan_bytes=9180 truncate_regrow=true last_read_outlives_close=true idle_cleanup=true
+test orphans::inherited_open_unlinked_log_keeps_bytes_through_owner_installs_failures_and_idle_cleanup ... ok
+S6_OWNER_OPERATION unrelated=128 operation=overwrite-128k foreground_statements=61 vm=3184 changed=40 bound_bytes=133056 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=128 operation=shrink foreground_statements=34 vm=1087 changed=12 bound_bytes=907 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=128 operation=regrow foreground_statements=29 vm=720 changed=8 bound_bytes=704 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=128 operation=read-128k foreground_statements=34 vm=803 changed=4 bound_bytes=936 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=128 operation=append foreground_statements=31 vm=809 changed=9 bound_bytes=780 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+test opposing_directory_moves_from_real_threads_never_form_a_cycle ... ok
+test concurrent_appenders_and_a_tail_reader_see_whole_records_through_real_owner_jobs ... ok
+test concurrent_operations_through_real_owner_jobs_keep_counts_and_references_exact ... ok
+S6_OWNER_OPERATION unrelated=1024 operation=overwrite-128k foreground_statements=61 vm=3184 changed=40 bound_bytes=133056 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=1024 operation=shrink foreground_statements=34 vm=1087 changed=12 bound_bytes=907 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=1024 operation=regrow foreground_statements=29 vm=720 changed=8 bound_bytes=704 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=1024 operation=read-128k foreground_statements=34 vm=803 changed=4 bound_bytes=936 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=1024 operation=append foreground_statements=31 vm=809 changed=9 bound_bytes=780 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=overwrite-128k foreground_statements=61 vm=3184 changed=40 bound_bytes=133056 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=shrink foreground_statements=34 vm=1087 changed=12 bound_bytes=907 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=regrow foreground_statements=29 vm=720 changed=8 bound_bytes=704 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=read-128k foreground_statements=34 vm=803 changed=4 bound_bytes=936 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=append foreground_statements=31 vm=809 changed=9 bound_bytes=780 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_MAINTENANCE statements=180 changed=57 vm=5523
+test payload_complete_operations_have_indexed_work_through_the_real_owner ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s
+
+     Running tests/namespace_profile.rs (core/target/debug/deps/namespace_profile-a5d7d4de57ba6f13)
+
+running 1 test
+S4_PLANS ["lower-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)", "active-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "drop-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "active-inode: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "put-name: vm-program opcodes=100 btree-cursors=3 btree-scan-opcodes=0", "put-inode: vm-program opcodes=234 btree-cursors=3 btree-scan-opcodes=0"]
+S4_OPERATION siblings=128 operation=create-inherited-parent owner_rounds=2 statements=49 vm_steps=1244 rows_changed=10 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=create-local-parent owner_rounds=1 statements=43 vm_steps=1122 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=link-file owner_rounds=1 statements=44 vm_steps=1218 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=rename-replace owner_rounds=1 statements=55 vm_steps=1550 rows_changed=12 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=unlink owner_rounds=1 statements=44 vm_steps=1270 rows_changed=11 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=mkdir owner_rounds=2 statements=49 vm_steps=1244 rows_changed=10 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=rename-directory-across-parents owner_rounds=1 statements=62 vm_steps=1609 rows_changed=11 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=rmdir owner_rounds=1 statements=44 vm_steps=1270 rows_changed=11 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=chmod-utimens owner_rounds=1 statements=29 vm_steps=720 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=lookup-local owner_rounds=0 statements=23 vm_steps=474 rows_changed=4 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=lookup-inherited owner_rounds=0 statements=30 vm_steps=583 rows_changed=4 base_demand=14 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=list-window owner_rounds=0 statements=19 vm_steps=1214 rows_changed=4 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=create-inherited-parent owner_rounds=2 statements=49 vm_steps=1244 rows_changed=10 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=create-local-parent owner_rounds=1 statements=43 vm_steps=1122 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=link-file owner_rounds=1 statements=44 vm_steps=1218 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=rename-replace owner_rounds=1 statements=55 vm_steps=1550 rows_changed=12 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=unlink owner_rounds=1 statements=44 vm_steps=1270 rows_changed=11 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=mkdir owner_rounds=2 statements=49 vm_steps=1244 rows_changed=10 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=rename-directory-across-parents owner_rounds=1 statements=62 vm_steps=1609 rows_changed=11 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=rmdir owner_rounds=1 statements=44 vm_steps=1270 rows_changed=11 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=chmod-utimens owner_rounds=1 statements=29 vm_steps=720 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=lookup-local owner_rounds=0 statements=23 vm_steps=474 rows_changed=4 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=lookup-inherited owner_rounds=0 statements=30 vm_steps=583 rows_changed=4 base_demand=14 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=list-window owner_rounds=0 statements=19 vm_steps=1214 rows_changed=4 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=create-inherited-parent owner_rounds=2 statements=49 vm_steps=1244 rows_changed=10 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=create-local-parent owner_rounds=1 statements=43 vm_steps=1122 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=link-file owner_rounds=1 statements=44 vm_steps=1218 rows_changed=10 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=rename-replace owner_rounds=1 statements=55 vm_steps=1550 rows_changed=12 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=unlink owner_rounds=1 statements=44 vm_steps=1270 rows_changed=11 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=mkdir owner_rounds=2 statements=49 vm_steps=1244 rows_changed=10 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=rename-directory-across-parents owner_rounds=1 statements=62 vm_steps=1609 rows_changed=11 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=rmdir owner_rounds=1 statements=44 vm_steps=1270 rows_changed=11 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=chmod-utimens owner_rounds=1 statements=29 vm_steps=720 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=lookup-local owner_rounds=0 statements=23 vm_steps=474 rows_changed=4 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=lookup-inherited owner_rounds=0 statements=30 vm_steps=583 rows_changed=4 base_demand=14 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=list-window owner_rounds=0 statements=19 vm_steps=1214 rows_changed=4 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+
+thread 'complete_operations_keep_point_work_as_names_and_inodes_grow' panicked at crates/layerfs-workspace/tests/namespace_profile.rs:193:5:
+assertion `left == right` failed
+  left: 1
+ right: 2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test complete_operations_keep_point_work_as_names_and_inodes_grow ... FAILED
+
+failures:
+
+failures:
+    complete_operations_keep_point_work_as_names_and_inodes_grow
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.93s
+
+error: test failed, to rerun pass `-p layerfs-workspace --test namespace_profile`
+
+EXIT: 101; WALL: 6.163s

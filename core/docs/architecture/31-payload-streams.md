@@ -38,7 +38,8 @@ across failed captures or reclaim stale cells/abandoned steps; S6 owns both.
 S6 now provides [bounded live composition and independent custody](33-independent-custody.md).
 Positive zero-reference tombstones prevent fall-through until install; descriptor
 writes require exact open authority and use the independent orphan domain.
-Symlinks retain their one creation cell.
+Symlinks retain one format-bounded target window; [S6 composed readlink](34-name-and-lookup-custody.md)
+follows its effective layers and independent lookup/request custody.
 
 `construct_runs`, `FileRuns`, `FileRun` and `RunConstruction` belong to content.
 The [zero-run derivation](../issues/307/S5-HOLE-CONTRACT.md) preserves the frozen

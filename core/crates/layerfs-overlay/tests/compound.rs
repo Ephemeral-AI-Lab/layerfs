@@ -53,7 +53,10 @@ fn bound(parent: u64, name: &[u8], serial: u64) -> NameChange {
     NameChange {
         parent,
         name: name.to_vec(),
-        binding: Binding::Bound(serial),
+        binding: Binding::Bound {
+            serial,
+            inherited: false,
+        },
     }
 }
 fn removed(parent: u64, name: &[u8], inherited: bool) -> NameChange {
@@ -66,6 +69,7 @@ fn removed(parent: u64, name: &[u8], inherited: bool) -> NameChange {
 fn names(names: Vec<NameChange>) -> Changes {
     Changes {
         open: None,
+        detached: None,
         names,
         ..Changes::default()
     }
@@ -92,6 +96,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
     };
     let changes = Changes {
         open: None,
+        detached: None,
         inodes: vec![directory(10, 1), file(20, active)],
         names: vec![bound(10, b"bin\xff\0name", 20)],
         cell: Some((20, cell.clone())),
@@ -114,6 +119,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
     assert_eq!(
         rows.name(10, b"bin\xff\0name").unwrap(),
         NameLayers {
+            active_inherited: Some(false),
             active: Some(Some(20)),
             lower: None
         }
@@ -126,6 +132,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
     // leaves no inode, name, ticket, revision or dirty-count change.
     let refused = Changes {
         open: None,
+        detached: None,
         inodes: vec![file(30, active), file(31, active + 1)],
         names: vec![bound(10, b"later", 30)],
         cell: None,
@@ -153,11 +160,13 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         Changes::default(),
         Changes {
             open: None,
+            detached: None,
             inodes: (40..45).map(|serial| file(serial, 0)).collect(),
             ..Changes::default()
         },
         Changes {
             open: None,
+            detached: None,
             inodes: vec![file(40, 0), file(40, 0)],
             ..Changes::default()
         },
@@ -173,6 +182,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         names(vec![bound(10, &[b'n'; 256], 40)]),
         Changes {
             open: None,
+            detached: None,
             inodes: vec![Inode {
                 entries: 1,
                 ..file(40, 0)
@@ -181,6 +191,7 @@ fn compound_job_publishes_every_final_value_with_one_ticket_or_nothing() {
         },
         Changes {
             open: None,
+            detached: None,
             inodes: vec![file(40, 0)],
             cell: Some((
                 41,
@@ -236,6 +247,7 @@ fn removed_names_keep_a_whiteout_only_where_a_lower_binding_exists() {
     assert_eq!(
         layers(b"temporary"),
         NameLayers {
+            active_inherited: None,
             active: None,
             lower: None
         }
@@ -260,6 +272,7 @@ fn removed_names_keep_a_whiteout_only_where_a_lower_binding_exists() {
     assert_eq!(
         layers(b"captured"),
         NameLayers {
+            active_inherited: Some(true),
             active: Some(None),
             lower: Some(Some(21))
         }
@@ -270,6 +283,7 @@ fn removed_names_keep_a_whiteout_only_where_a_lower_binding_exists() {
     assert_eq!(
         layers(b"inherited"),
         NameLayers {
+            active_inherited: Some(false),
             active: Some(Some(22)),
             lower: Some(None)
         }
@@ -278,6 +292,7 @@ fn removed_names_keep_a_whiteout_only_where_a_lower_binding_exists() {
     assert_eq!(
         layers(b"inherited"),
         NameLayers {
+            active_inherited: None,
             active: None,
             lower: Some(None)
         }
@@ -298,7 +313,8 @@ fn removed_names_keep_a_whiteout_only_where_a_lower_binding_exists() {
     );
 
     // Known install folds the sealed generation into the base: its rows leave
-    // the view, so the same removal now depends on the new base fact alone.
+    // the view. The active cutoff is relative to that same sealed view and
+    // remains true over the new equivalent base, without a name rewrite.
     db.release_base_source(source).unwrap();
     db.install(capture, [5; 32]).unwrap();
     let source = db.acquire_base_source(route, 2).unwrap();
@@ -308,6 +324,7 @@ fn removed_names_keep_a_whiteout_only_where_a_lower_binding_exists() {
             .name(1, b"captured")
             .unwrap(),
         NameLayers {
+            active_inherited: Some(true),
             active: Some(None),
             lower: None
         }
@@ -323,7 +340,8 @@ fn removed_names_keep_a_whiteout_only_where_a_lower_binding_exists() {
             .name(1, b"captured")
             .unwrap(),
         NameLayers {
-            active: None,
+            active_inherited: Some(true),
+            active: Some(None),
             lower: None
         }
     );
@@ -355,6 +373,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
             source,
             &Changes {
                 open: None,
+                detached: None,
                 inodes: vec![directory(1, 0), directory(2, 0)],
                 ..Changes::default()
             },
@@ -373,6 +392,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
                         target,
                         &file(serial, 0),
                         Some(&Dentry {
+                            inherited: false,
                             parent: 1,
                             name: format!("sibling-{filled:05}").into_bytes(),
                             serial: Some(serial),
@@ -394,6 +414,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
                 source,
                 &Changes {
                     open: None,
+                    detached: None,
                     inodes: vec![file(count, 0), file(count + 1, 0)],
                     names: vec![bound(1, &from, count), bound(1, &to, count + 1)],
                     cell: None,
@@ -414,6 +435,7 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
                 source,
                 &Changes {
                     open: None,
+                    detached: None,
                     inodes: vec![
                         directory(1, count),
                         directory(2, 1),

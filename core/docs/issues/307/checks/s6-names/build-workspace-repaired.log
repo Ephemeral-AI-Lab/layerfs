@@ -1,0 +1,10 @@
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.73s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_workspace-98052cb4f35bbf38)
+  Executable tests/base.rs (core/target/debug/deps/base-5f7971ceb0bcbbda)
+  Executable tests/namespace.rs (core/target/debug/deps/namespace-538b80510d7e2be5)
+  Executable tests/namespace_daemon.rs (core/target/debug/deps/namespace_daemon-2d9a73b7f39baa9f)
+  Executable tests/namespace_profile.rs (core/target/debug/deps/namespace_profile-a5d7d4de57ba6f13)
+  Executable tests/namespace_view.rs (core/target/debug/deps/namespace_view-1620f05868b514a1)
+  Executable tests/nonfile.rs (core/target/debug/deps/nonfile-6ceca1de548e80db)
+  Executable tests/payload.rs (core/target/debug/deps/payload-f35b6fa3415b68e3)

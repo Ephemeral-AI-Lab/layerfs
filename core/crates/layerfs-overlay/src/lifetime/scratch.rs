@@ -14,6 +14,7 @@ impl Overlay {
                 | LeaseKind::CapturedReader
                 | LeaseKind::FileHandle
                 | LeaseKind::Processing
+                | LeaseKind::LookupOwner
         ) {
             return Err(OverlayError::Invalid("minted owner kind"));
         }
@@ -45,6 +46,7 @@ impl Overlay {
                 | LeaseKind::CapturedReader
                 | LeaseKind::FileHandle
                 | LeaseKind::Processing
+                | LeaseKind::LookupOwner
         ) {
             return Err(OverlayError::Invalid("minted owner kind"));
         }

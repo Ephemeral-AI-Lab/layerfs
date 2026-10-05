@@ -189,8 +189,9 @@ fn complete_operations_keep_point_work_as_names_and_inodes_grow() {
         (1, 0)
     );
     assert_eq!(work("create-inherited-parent").rounds, 2);
-    // Leaving an inherited directory asks once whether the base binds the name.
-    assert_eq!(work("rename-directory-across-parents").rounds, 2);
+    // The stored active inheritance fact decides this local source name,
+    // avoiding a base-name round while retaining exact facts.
+    assert_eq!(work("rename-directory-across-parents").rounds, 1);
     assert_eq!(work("rmdir").rounds, 1);
     assert_eq!(work("lookup-local").base_demand, 0);
 }

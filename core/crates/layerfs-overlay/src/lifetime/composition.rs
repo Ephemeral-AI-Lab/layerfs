@@ -60,7 +60,7 @@ impl Overlay {
             let row = self
                 .query(
                     StatementKind::Reclaim,
-                    "SELECT parent,name,serial FROM dentry INDEXED BY dentry_capture
+                    "SELECT parent,name,serial,inherited FROM dentry INDEXED BY dentry_capture
                 WHERE ns=?1 AND gen=?2 AND (parent,name)>(?3,?4) ORDER BY parent,name LIMIT 1",
                     &[&item.ns, &item.target, &item.cursor, &item.name],
                     24 + item.name.len() as u64,
@@ -69,27 +69,54 @@ impl Overlay {
                             r.get::<_, i64>(0)?,
                             r.get::<_, Vec<u8>>(1)?,
                             r.get::<_, Option<i64>>(2)?,
+                            r.get::<_, bool>(3)?,
                         ))
                     },
                 )?
                 .pop();
-            if let Some((parent, name, serial)) = row {
-                let added = self
+            if let Some((parent, name, serial, inherited)) = row {
+                let active = self
                     .query(
                         StatementKind::Dentry,
                         sql::DENTRY_ACTIVE,
                         &[&item.ns, &parent, &name, &state.active.0],
                         24 + name.len() as u64,
-                        |_| Ok(()),
+                        |r| r.get::<_, Option<i64>>(0),
                     )?
-                    .is_empty();
-                if added {
-                    self.put_name(route, state.active, parent, &name, serial)?;
+                    .pop();
+                let final_serial = active.unwrap_or(serial);
+                let delta = if final_serial.is_some() || inherited {
+                    self.execute(
+                        StatementKind::Dentry,
+                        sql::DENTRY_PUT,
+                        &[
+                            &item.ns,
+                            &parent,
+                            &name,
+                            &state.active.0,
+                            &final_serial,
+                            &inherited,
+                        ],
+                        33 + name.len() as u64,
+                    )?;
+                    i64::from(active.is_none())
+                } else if active.is_some() {
+                    self.execute(
+                        StatementKind::Dentry,
+                        sql::DENTRY_DROP,
+                        &[&item.ns, &parent, &name, &state.active.0],
+                        24 + name.len() as u64,
+                    )?;
+                    -1
+                } else {
+                    0
+                };
+                if delta != 0 {
                     self.execute(
                         StatementKind::Workspace,
-                        "UPDATE workspace SET dirty_names=dirty_names+1 WHERE ns=?1",
-                        &[&item.ns],
-                        8,
+                        "UPDATE workspace SET dirty_names=dirty_names+?2 WHERE ns=?1",
+                        &[&item.ns, &delta],
+                        16,
                     )?;
                 }
                 self.execute(

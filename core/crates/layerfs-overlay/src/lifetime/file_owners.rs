@@ -36,7 +36,7 @@ impl Overlay {
     ) -> OverlayResult<()> {
         let column = match kind {
             LeaseKind::Open | LeaseKind::FileHandle => "opens",
-            LeaseKind::Lookup => "lookups",
+            LeaseKind::Lookup | LeaseKind::LookupOwner => "lookups",
             LeaseKind::FileReader => "readers",
             _ => return Ok(()),
         };
@@ -236,46 +236,54 @@ impl Overlay {
                 return Err(OverlayError::Stale);
             }
             self.check_file(file, false)?;
-            let owner = self.mint_owner(source.route)?;
-            let serial = integer(file.serial)?;
-            self.execute(
-                StatementKind::Lease,
-                "INSERT INTO file_read VALUES(?1,?2,?3,?4)",
-                &[&source.route.ns, &request, &integer(owner)?, &serial],
-                32,
-            )?;
-            self.execute(
-                StatementKind::Lease,
-                sql::BASE_SOURCE_INSERT,
-                &[
-                    &source.route.ns,
-                    &integer(owner)?,
-                    &source.root.as_slice(),
-                    &1_i64,
-                ],
-                56,
-            )?;
-            self.execute(
-                StatementKind::Workspace,
-                sql::BASE_SOURCE_INCREMENT,
-                &[&source.route.ns],
-                8,
-            )?;
-            self.execute(
-                StatementKind::Lease,
-                "INSERT INTO lease VALUES(?1,5,?2,?3)",
-                &[&source.route.ns, &integer(owner)?, &serial],
-                24,
-            )?;
-            self.file_ref(source.route.ns, serial, LeaseKind::FileReader, true)?;
-            Ok(FileRead {
-                source: BaseSource {
-                    owner,
-                    class: 1,
-                    ..source
-                },
-                serial: file.serial,
-            })
+            self.retain_serial_read(source, file.serial, request)
+        })
+    }
+    pub(crate) fn retain_serial_read(
+        &self,
+        source: BaseSource,
+        serial: u64,
+        request: i64,
+    ) -> OverlayResult<FileRead> {
+        let owner = self.mint_owner(source.route)?;
+        let serial = integer(serial)?;
+        self.execute(
+            StatementKind::Lease,
+            "INSERT INTO file_read VALUES(?1,?2,?3,?4)",
+            &[&source.route.ns, &request, &integer(owner)?, &serial],
+            32,
+        )?;
+        self.execute(
+            StatementKind::Lease,
+            sql::BASE_SOURCE_INSERT,
+            &[
+                &source.route.ns,
+                &integer(owner)?,
+                &source.root.as_slice(),
+                &1_i64,
+            ],
+            56,
+        )?;
+        self.execute(
+            StatementKind::Workspace,
+            sql::BASE_SOURCE_INCREMENT,
+            &[&source.route.ns],
+            8,
+        )?;
+        self.execute(
+            StatementKind::Lease,
+            "INSERT INTO lease VALUES(?1,5,?2,?3)",
+            &[&source.route.ns, &integer(owner)?, &serial],
+            24,
+        )?;
+        self.file_ref(source.route.ns, serial, LeaseKind::FileReader, true)?;
+        Ok(FileRead {
+            source: BaseSource {
+                owner,
+                class: 1,
+                ..source
+            },
+            serial: serial as u64,
         })
     }
     pub fn retained_file_read(

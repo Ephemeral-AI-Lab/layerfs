@@ -29,7 +29,10 @@ fn bind(parent: u64, name: &PathName, serial: u64) -> NameChange {
     NameChange {
         parent,
         name: name.as_bytes().to_vec(),
-        binding: Binding::Bound(serial),
+        binding: Binding::Bound {
+            serial,
+            inherited: false,
+        },
     }
 }
 pub(crate) fn create(
@@ -84,6 +87,7 @@ pub(crate) fn create(
     });
     let changes = Changes {
         open: None,
+        detached: None,
         inodes: vec![inode.clone(), touched(&directory, now, true, false)?],
         names: vec![bind(parent, name, fresh.serial)],
         cell,
@@ -119,6 +123,7 @@ pub(crate) fn link(
     };
     let changes = Changes {
         open: None,
+        detached: None,
         inodes: vec![file.clone(), touched(&directory, now, true, false)?],
         names: vec![bind(parent, name, serial)],
         cell: None,

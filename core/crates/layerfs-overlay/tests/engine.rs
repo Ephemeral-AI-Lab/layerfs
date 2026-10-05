@@ -195,7 +195,7 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
     let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
     assert!(Overlay::create(&temp.db(), ProfileConfig::default()).is_err());
     let p = db.profile();
-    assert_eq!(p.schema_version, 11);
+    assert_eq!(p.schema_version, 12);
     assert_eq!(p.max_pages, i64::from(u32::MAX - 1));
     assert_eq!(p.explicit_page_quota, None);
     #[cfg(unix)]
@@ -231,6 +231,7 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
             a,
             &inode(2),
             Some(&Dentry {
+                inherited: false,
                 parent: 1,
                 name: b"ignored.bin".to_vec(),
                 serial: Some(2),
@@ -293,6 +294,7 @@ fn payload_name_scratch_and_owner_access_keep_indexed_scope() {
             a,
             &inode(7),
             Some(&Dentry {
+                inherited: false,
                 parent: 1,
                 name: name.to_vec(),
                 serial: Some(7),
@@ -332,6 +334,7 @@ fn payload_name_scratch_and_owner_access_keep_indexed_scope() {
                     b,
                     &inode(serial),
                     Some(&Dentry {
+                        inherited: false,
                         parent: 1,
                         name: format!("n{serial:04}").into_bytes(),
                         serial: Some(serial),
@@ -621,6 +624,7 @@ fn captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes() {
     let route = db.open_workspace([90; 32], [91; 32]).unwrap();
     for key in 0..193 {
         let name = Dentry {
+            inherited: false,
             parent: 1,
             name: format!("n{key:04}").into_bytes(),
             serial: Some(2),
@@ -631,6 +635,7 @@ fn captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes() {
     let capture = db.capture(route).unwrap();
     for key in 200..1224 {
         let name = Dentry {
+            inherited: false,
             parent: 1,
             name: format!("n{key:04}").into_bytes(),
             serial: Some(2),
@@ -672,7 +677,7 @@ fn real_sqlite_full_aborts_one_mutation_without_losing_previous_publication() {
         &temp.db(),
         ProfileConfig {
             pager_kib: 2048,
-            // Schema v11 itself exceeds the former 32-page fixture. This
+            // Schema v12 itself exceeds the former 32-page fixture. This
             // explicit quota still exercises one-attempt SQLITE_FULL below.
             max_pages: Some(64),
         },

@@ -65,3 +65,19 @@ impl OperationOwner {
         self.route
     }
 }
+
+/// One actual lookup reference, independently retained until exact FORGET/release.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LookupOwner {
+    pub(crate) route: Route,
+    pub(crate) owner: u64,
+    pub(crate) serial: u64,
+}
+impl LookupOwner {
+    pub const fn route(self) -> Route {
+        self.route
+    }
+    pub const fn serial(self) -> u64 {
+        self.serial
+    }
+}

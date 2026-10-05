@@ -84,6 +84,7 @@ impl Overlay {
             24 + name.len() as u64,
             |row| {
                 Ok(crate::Dentry {
+                    inherited: row.get(3)?,
                     parent: crate::db::unsigned(row, 0)?,
                     name: row.get(1)?,
                     serial: row

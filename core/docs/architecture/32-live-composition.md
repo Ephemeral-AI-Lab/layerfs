@@ -57,7 +57,8 @@ preserving newly written bytes; page count stays 1,189 and freelist rises to
 
 The following checkpoint implements [independent orphan, file/captured-reader and
 operation custody](33-independent-custody.md), including live removed-payload
-cleanup. Unfinished S6 exits: whiteout elimination with exact base-binding facts; physical reservations,
+cleanup. The subsequent [name/non-file checkpoint](34-name-and-lookup-custody.md) supplies
+exact whiteout facts and lookup/symlink custody. Unfinished S6 exits: physical reservations,
 cleanup headroom and actual device ENOSPC; comprehensive generation/owner/debt and
 EXPLAIN/runtime profiles. The current raw generic lease contract remains a trusted
 primitive. Integrated Commit, kernel references/output and transport cancellation

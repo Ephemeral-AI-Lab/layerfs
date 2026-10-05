@@ -1,8 +1,8 @@
 //! Typed bounded SQL jobs. No closure can hold the owner across network/Exec work.
 use layerfs_overlay::{
-    BaseSource, Capture, CapturedReader, Cell, Dentry, FileRead, Inode, Lease, NameWindow,
-    OpenFile, OperationOwner, Overlay, OverlayResult, Publication, Route, ScratchRecord,
-    WorkspaceState, CELL_BYTES, MASK_BYTES, PAGE_ROWS, SCRATCH_BYTES,
+    BaseSource, Capture, CapturedReader, Cell, Dentry, FileRead, Inode, Lease, LookupOwner,
+    NameWindow, OpenFile, OperationOwner, Overlay, OverlayResult, Publication, Route,
+    ScratchRecord, WorkspaceState, CELL_BYTES, MASK_BYTES, PAGE_ROWS, SCRATCH_BYTES,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -75,6 +75,29 @@ pub enum Command {
         owner: OperationOwner,
         kind: u32,
         after: Option<u64>,
+    },
+    AcquireLookup {
+        source: BaseSource,
+        request: u64,
+        base: Inode,
+        root: u64,
+    },
+    RetainedLookup {
+        request: u64,
+    },
+    ReleaseLookup(LookupOwner),
+    AcquireLookupRead {
+        source: BaseSource,
+        lookup: LookupOwner,
+        request: u64,
+    },
+    ReaderInodes {
+        reader: CapturedReader,
+        after: u64,
+    },
+    ReaderDentries {
+        reader: CapturedReader,
+        after: Option<(u64, Vec<u8>)>,
     },
     State,
     /// Connection-scoped work snapshot for operator diagnostics; includes the
@@ -175,6 +198,7 @@ pub enum Command {
 }
 #[derive(Debug)]
 pub enum Response {
+    Lookup(Option<LookupOwner>),
     Operation(Option<OperationOwner>),
     File(Option<OpenFile>),
     FileReader(Option<FileRead>),
@@ -206,11 +230,18 @@ pub enum Response {
 impl Command {
     pub(crate) fn class(&self) -> ServiceClass {
         match self {
+            Self::AcquireLookup { .. }
+            | Self::RetainedLookup { .. }
+            | Self::ReleaseLookup(_)
+            | Self::AcquireLookupRead { .. } => ServiceClass::Lifecycle,
             Self::AcquireOperation { .. }
             | Self::RetainedOperation { .. }
             | Self::ReleaseOperation(_) => ServiceClass::Lifecycle,
             Self::PutOwnedScratch { .. } | Self::OwnedScratchPage { .. } => ServiceClass::Scratch,
-            Self::FileRead { .. } | Self::CapturedRead { .. } => ServiceClass::Read,
+            Self::FileRead { .. }
+            | Self::CapturedRead { .. }
+            | Self::ReaderInodes { .. }
+            | Self::ReaderDentries { .. } => ServiceClass::Read,
             Self::OpenFile { .. }
             | Self::RetainedFile { .. }
             | Self::CloseFile(_)
@@ -274,8 +305,10 @@ impl Command {
             Self::ScratchPage { .. } | Self::OwnedScratchPage { .. } => {
                 (0, PAGE_ROWS * (SCRATCH_BYTES + 64))
             }
-            Self::CapturedInodes { .. } => (0, PAGE_ROWS * std::mem::size_of::<Inode>()),
-            Self::CapturedDentries { after, .. } => (
+            Self::CapturedInodes { .. } | Self::ReaderInodes { .. } => {
+                (0, PAGE_ROWS * std::mem::size_of::<Inode>())
+            }
+            Self::CapturedDentries { after, .. } | Self::ReaderDentries { after, .. } => (
                 after.as_ref().map_or(0, |(_, name)| name.capacity()),
                 PAGE_ROWS * (std::mem::size_of::<Dentry>() + 255),
             ),
@@ -364,6 +397,51 @@ impl Command {
         let route = route.ok_or(layerfs_overlay::OverlayError::Invalid("missing route"))?;
         match self {
             Self::Open { .. } | Self::InstallPrepared { .. } | Self::Namespace(_) => unreachable!(),
+            Self::ReaderInodes { reader, after } => {
+                if reader.capture().route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.reader_inodes(reader, after).map(Response::Inodes)
+            }
+            Self::ReaderDentries { reader, after } => {
+                if reader.capture().route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.reader_dentries(reader, after.as_ref().map(|(p, n)| (*p, n.as_slice())))
+                    .map(Response::Dentries)
+            }
+            Self::AcquireLookup {
+                source,
+                request,
+                base,
+                root,
+            } => {
+                if source.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.acquire_lookup(source, request, &base, root)
+                    .map(|l| Response::Lookup(Some(l)))
+            }
+            Self::RetainedLookup { request } => {
+                db.retained_lookup(route, request).map(Response::Lookup)
+            }
+            Self::ReleaseLookup(lookup) => {
+                if lookup.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.release_lookup(lookup).map(|_| Response::Done)
+            }
+            Self::AcquireLookupRead {
+                source,
+                lookup,
+                request,
+            } => {
+                if source.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.acquire_lookup_read(source, lookup, request)
+                    .map(|r| Response::FileReader(Some(r)))
+            }
             Self::AcquireOperation { request } => db
                 .acquire_operation(route, request)
                 .map(|o| Response::Operation(Some(o))),

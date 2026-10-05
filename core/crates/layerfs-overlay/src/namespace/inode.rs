@@ -183,28 +183,59 @@ impl Overlay {
     }
     /// Binds or whiteouts one name at the active generation inside the caller's
     /// transaction; true when the active generation gained a row.
-    pub(crate) fn put_name(
+    pub(crate) fn name_inheritance(
         &self,
-        route: Route,
-        generation: Generation,
+        state: &WorkspaceState,
+        ns: i64,
         parent: i64,
         name: &[u8],
-        target: Option<i64>,
-    ) -> OverlayResult<bool> {
-        let added = self
+        base: bool,
+    ) -> OverlayResult<(bool, bool)> {
+        let active = self
             .query(
                 StatementKind::Dentry,
                 sql::DENTRY_ACTIVE,
-                &[&route.ns, &parent, &name, &generation.0],
+                &[&ns, &parent, &name, &state.active.0],
                 24 + name.len() as u64,
+                |r| r.get::<_, bool>(1),
+            )?
+            .pop();
+        if let Some(inherited) = active {
+            return Ok((false, inherited));
+        }
+        let lower = self
+            .query(
+                StatementKind::Dentry,
+                sql::DENTRY_LOOKUP,
+                &[&ns, &parent, &name, &(state.active.0 - 1), &state.installed],
+                32 + name.len() as u64,
                 |r| r.get::<_, Option<i64>>(0),
             )?
-            .is_empty();
+            .pop();
+        Ok((true, lower.map_or(base, |serial| serial.is_some())))
+    }
+    pub(crate) fn put_name(
+        &self,
+        route: Route,
+        state: &WorkspaceState,
+        parent: i64,
+        name: &[u8],
+        target: Option<i64>,
+        base: bool,
+    ) -> OverlayResult<bool> {
+        let (added, inherited) = self.name_inheritance(state, route.ns, parent, name, base)?;
         self.execute(
             StatementKind::Dentry,
             sql::DENTRY_PUT,
-            &[&route.ns, &parent, &name, &generation.0, &target],
-            32 + name.len() as u64,
+            &[
+                &route.ns,
+                &parent,
+                &name,
+                &state.active.0,
+                &target,
+                &inherited,
+            ],
+            33 + name.len() as u64,
         )?;
         Ok(added)
     }
@@ -268,13 +299,21 @@ impl Overlay {
             let (added, layer) = self.put_inode(route, &state, inode)?;
             let mut names = 0;
             if let (Some(name), Some((parent, target))) = (name, key) {
-                names =
-                    i64::from(self.put_name(route, state.active, parent, &name.name, target)?);
+                names = i64::from(self.put_name(
+                    route,
+                    &state,
+                    parent,
+                    &name.name,
+                    target,
+                    name.inherited,
+                )?);
             }
             if let Some(cell) = cell {
                 self.put_cell(route, integer(inode.serial)?, &layer, cell)?;
             }
-            self.detach_orphan(route, &state, inode)?;
+            if inode.kind == InodeKind::File {
+                self.detach_orphan(route, &state, inode)?;
+            }
             self.settle(route, &state, i64::from(added), names)
         })
     }
@@ -290,6 +329,7 @@ impl Overlay {
                 24 + name.len() as u64,
                 |r| {
                     Ok(Dentry {
+                        inherited: r.get(1)?,
                         parent: parent as u64,
                         name: name.to_vec(),
                         serial: optional_serial(r.get(0)?, 0)?,

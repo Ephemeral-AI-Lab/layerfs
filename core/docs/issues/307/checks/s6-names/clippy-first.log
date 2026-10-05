@@ -1,0 +1,42 @@
+    Checking layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error: returning the result of a `let` binding from a block
+   --> crates/layerfs-workspace/tests/namespace_daemon_cases/orphans.rs:243:5
+    |
+228 | /     let next = update_filesystem(
+229 | |         &mut objects,
+230 | |         &FilesystemInput {
+231 | |             base: Some(base.identity()),
+...   |
+241 | |     .unwrap()
+242 | |     .root;
+    | |__________- unnecessary `let` binding
+243 |       next
+    |       ^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#let_and_return
+    = note: `-D clippy::let-and-return` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::let_and_return)]`
+help: return the expression directly
+    |
+228 ~     
+229 ~     update_filesystem(
+230 +         &mut objects,
+231 +         &FilesystemInput {
+232 +             base: Some(base.identity()),
+233 +             scope: base.root().scope(),
+234 +             root_serial: 1,
+235 +             directories: &directories,
+236 +             inodes: &inodes,
+237 +             new_inodes: &[],
+238 +             resources: FilesystemResources::default(),
+239 +         },
+240 +         None,
+241 +     )
+242 +     .unwrap()
+243 +     .root
+    |
+
+error: could not compile `layerfs-workspace` (test "namespace_daemon") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

@@ -138,30 +138,84 @@ impl SourceView {
         .ok_or(ContentError::PathNotFound)?;
         self.stat(overlay, serial)
     }
-    /// Target of a symlink: the local creation cell, or the inherited object.
+    /// Effective local symlink layers, followed by exact immutable demand.
     pub fn readlink(
         &self,
         overlay: &impl OverlayRead,
         serial: u64,
     ) -> WorkspaceResult<layerfs_content::filesystem::SymlinkTarget> {
-        let Some(local) = overlay.inode(self.source, serial)? else {
-            return Ok(self.base.readlink(serial)?);
+        let local = overlay.read(self.source, serial, 0, layerfs_overlay::CELL_BYTES as u32)?;
+        self.emit_link(serial, local, self.source.root())
+    }
+    /// An independent request reference survives lookup release. The caller
+    /// releases it only after target/output consumers have finished.
+    pub fn readlink_owned(
+        &self,
+        overlay: &impl crate::OverlayFileRead,
+        read: layerfs_overlay::FileRead,
+    ) -> WorkspaceResult<layerfs_content::filesystem::SymlinkTarget> {
+        if read.source().route() != self.source.route() {
+            return Err(layerfs_overlay::OverlayError::Stale.into());
+        }
+        let local = overlay.file_read(read, 0, layerfs_overlay::CELL_BYTES as u32)?;
+        self.emit_link(read.serial(), local, read.source().root())
+    }
+    pub fn readlink_captured(
+        &self,
+        overlay: &impl crate::OverlayFileRead,
+        reader: layerfs_overlay::CapturedReader,
+        serial: u64,
+    ) -> WorkspaceResult<layerfs_content::filesystem::SymlinkTarget> {
+        if reader.capture().route() != self.source.route() {
+            return Err(layerfs_overlay::OverlayError::Stale.into());
+        }
+        let local = overlay.captured_read(reader, serial, 0, layerfs_overlay::CELL_BYTES as u32)?;
+        self.emit_link(serial, local, reader.root())
+    }
+    fn emit_link(
+        &self,
+        serial: u64,
+        local: Option<layerfs_overlay::LocalRead>,
+        root: [u8; 32],
+    ) -> WorkspaceResult<layerfs_content::filesystem::SymlinkTarget> {
+        let retained = local.as_ref().and_then(|r| r.base_root).unwrap_or(root);
+        let rebound;
+        let base = if retained == self.base.identity().0.to_bytes() {
+            &self.base
+        } else {
+            rebound = self
+                .base
+                .rebind(layerfs_content::filesystem::FilesystemRootId(
+                    layerfs_content::ObjectId::from_bytes(&retained)?,
+                ))?;
+            &rebound
+        };
+        let Some(mut local) = local else {
+            return Ok(base.readlink(serial)?);
         };
         if local.kind != layerfs_overlay::InodeKind::Symlink {
             return Err(ContentError::WrongLogicalRole.into());
         }
-        if !self.source.created_above(local.born) {
-            return Ok(self.base.readlink(serial)?);
+        if local.size > layerfs_overlay::CELL_BYTES as u64
+            || local.data.len() != local.size as usize
+        {
+            return Err(ContentError::InvalidRecord("symlink window").into());
         }
-        let cell = overlay
-            .cell(self.source, serial, local.born, 0)?
-            .ok_or(ContentError::InvalidRecord("local symlink target"))?;
-        let length = usize::try_from(local.size)
-            .ok()
-            .filter(|length| *length <= cell.data.len())
-            .ok_or(ContentError::InvalidRecord("local symlink target"))?;
-        Ok(layerfs_content::filesystem::SymlinkTarget::new(
-            cell.data[..length].to_vec(),
-        )?)
+        if local.span.is_some() {
+            let target = base.readlink(serial)?;
+            for (slot, byte) in local.data.iter_mut().enumerate() {
+                if local
+                    .inherited
+                    .get(slot / 8)
+                    .is_some_and(|b| b & (1 << (slot % 8)) != 0)
+                {
+                    *byte = *target
+                        .as_bytes()
+                        .get(slot)
+                        .ok_or(ContentError::InvalidRecord("inherited symlink span"))?;
+                }
+            }
+        }
+        Ok(layerfs_content::filesystem::SymlinkTarget::new(local.data)?)
     }
 }

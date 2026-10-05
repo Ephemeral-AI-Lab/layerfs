@@ -97,8 +97,11 @@ impl Eval<'_> {
         name: &PathName,
         layers: NameLayers,
     ) -> Option<bool> {
-        if layers.lower.is_some() {
-            return Some(false);
+        if let Some(inherited) = layers.active_inherited {
+            return Some(inherited);
+        }
+        if let Some(lower) = layers.lower {
+            return Some(lower.is_some());
         }
         self.base_name(serial, parent, name)
             .map(|base| base.is_some())

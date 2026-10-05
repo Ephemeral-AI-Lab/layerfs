@@ -353,3 +353,5 @@ Source files cited above, by package:
 [`core/tools/check_product_boundary.py`](../../tools/check_product_boundary.py)
 
 S6 independent custody: [file, captured-input and operation lifetimes](33-independent-custody.md).
+
+S6 names/lookup custody: [exact inherited names and non-file references](34-name-and-lookup-custody.md).

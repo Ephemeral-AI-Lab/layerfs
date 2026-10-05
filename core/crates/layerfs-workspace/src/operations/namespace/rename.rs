@@ -119,13 +119,17 @@ pub(crate) fn rename(
     // row for anything beneath a moved directory.
     Ok(Some(Some(Changes {
         open: None,
+        detached: None,
         inodes,
         names: vec![
             unbind(action.parent, action.name, inherited),
             NameChange {
                 parent: action.new_parent,
                 name: action.new_name.as_bytes().to_vec(),
-                binding: Binding::Bound(moved.serial),
+                binding: Binding::Bound {
+                    serial: moved.serial,
+                    inherited: false,
+                },
             },
         ],
         cell: None,

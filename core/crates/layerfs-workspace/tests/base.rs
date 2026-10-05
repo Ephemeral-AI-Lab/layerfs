@@ -318,6 +318,7 @@ fn publish_name(
             route,
             inode,
             Some(&layerfs_overlay::Dentry {
+                inherited: false,
                 parent: 1,
                 name: key.to_vec(),
                 serial: target,

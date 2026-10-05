@@ -11,3 +11,5 @@ pub(crate) mod source;
 pub(crate) mod workspace;
 
 mod operation;
+
+mod lookup;

@@ -126,8 +126,12 @@ fn captured_reader_preserves_sealed_bytes_across_install_and_blocks_failed_fold(
     let capture = db.capture(route).unwrap();
     let reader = db.acquire_captured_reader(capture, 1).unwrap();
     assert_eq!(db.retained_captured_reader(route, 1).unwrap(), Some(reader));
+    let sealed_rows = db.reader_inodes(reader, 0).unwrap();
+    let sealed_names = db.reader_dentries(reader, None).unwrap();
     db.install(capture, [115; 32]).unwrap();
     maintain(&db);
+    assert_eq!(db.reader_inodes(reader, 0).unwrap(), sealed_rows);
+    assert_eq!(db.reader_dentries(reader, None).unwrap(), sealed_names);
     assert_eq!(
         db.read_captured(reader, 9, 0, 32).unwrap().unwrap().data,
         b"sealed"

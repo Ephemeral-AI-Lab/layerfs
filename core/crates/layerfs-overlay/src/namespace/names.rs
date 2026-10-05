@@ -5,6 +5,7 @@ use crate::{
 };
 fn decode(row: &rusqlite::Row<'_>) -> rusqlite::Result<Dentry> {
     Ok(Dentry {
+        inherited: row.get(3)?,
         parent: unsigned(row, 0)?,
         name: row.get(1)?,
         serial: row
@@ -66,6 +67,7 @@ impl Overlay {
             32 + name.len() as u64,
             |row| {
                 Ok(Dentry {
+                    inherited: row.get(1)?,
                     parent,
                     name: name.to_vec(),
                     serial: row

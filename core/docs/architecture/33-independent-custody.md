@@ -72,8 +72,6 @@ The [checkpoint checks](../issues/307/checks/s6-orphans/) retain successful/fail
 runs and arithmetic. These are correctness/work diagnostics, not latency, resident
 memory, physical device headroom or sustained-rate qualification.
 
-Remaining S6 ownership work includes non-file lookup custody and a symlink read
-view that survives failed composition. The earlier one-creation-cell readlink
-path is still a carried gap. Neither regular-file proofs nor raw generic leases
-complete those behaviors. Physical reservation/headroom and exact whiteout
-base facts also remain required before the S6 exit.
+The following [name/non-file checkpoint](34-name-and-lookup-custody.md) adds lookup
+owners, effective symlink views and exact whiteout facts. Physical reservation,
+headroom and full resource/debt/device evidence remain required for the S6 exit.

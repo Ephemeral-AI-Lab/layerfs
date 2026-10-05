@@ -20,7 +20,7 @@ product mental model or campaign-specific benchmark procedures.
   lookup/stat/paged name merge, prepared actor install and atomic ordinary
   namespace operations, bounded writes/truncate/regrow and composed payload
   reads. Independent file/captured/operation custody and bounded live reclamation
-  now have an S6 checkpoint; physical reservation/whiteout/native exits remain
+  now have an S6 checkpoint; physical reservation/native exits remain
   unfinished. Its temporarily relocated `layerfs-workspace-legacy` source remains
   excluded.
   Daemon now exposes an initial fair SQL owner library; its relocated predecessor

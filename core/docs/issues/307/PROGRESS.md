@@ -172,3 +172,9 @@ release or deployment is authorized. Append-only tracker texts are retained in
 [checkpoints](checkpoints/initial.md). Rust checks/LOC/evidence are recorded in
 each checkpoint commit and its tracker comment. S1–S3 are complete; later
 engine, native/runtime and integrated qualification exits remain explicit.
+
+S6 name/non-file checkpoint: minted lookup/request custody, composed live/sealed
+symlink targets and relative lower-binding facts now have public and actual-owner
+proofs. See [name/lookup architecture](../../architecture/34-name-and-lookup-custody.md).
+Physical reservation/headroom, device-full and complete debt evidence remain the
+next required S6 slice. Earlier pending lists above retain their checkpoint dates.

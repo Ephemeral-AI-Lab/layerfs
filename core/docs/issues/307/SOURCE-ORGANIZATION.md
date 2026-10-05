@@ -145,6 +145,7 @@ core/crates/layerfs-overlay/
     │   ├── scratch.rs
     │   ├── close.rs
     │   ├── composition.rs
+    │   ├── lookup.rs
     │   ├── file_owners.rs
     │   ├── captured_reader.rs
     │   ├── operation.rs
