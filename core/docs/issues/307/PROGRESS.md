@@ -10,11 +10,15 @@ unchecked until their complete implementation and required evidence exist.
 
 ## Current checkpoint
 
-Initial overlay/prerequisite checkpoint `f2a381119` is committed locally, with
-all required host checks passing. S3 now has initial public content-built root
-binding/read APIs and immutable caching; its dormant predecessor is temporarily
-relocated intact. See [base architecture](../../architecture/20-workspace-base.md).
-S3 immutable/effective read closure is recorded below; full mutable filesystem/native implementation remains outstanding.
+S3 is complete at local-only `c4b49a121aec15a6eae58c04d8074fd9eb2772db`, tree
+`67a6b34e5b135ea5d30c48fa5d0bd977c4aa1356`, with its
+[tracker completion receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-5994947845).
+The standalone [S4–S6 handoff](HANDOFF-S4-S6.md) records ready APIs, reusable
+checks, preserved checkout/runtime state, remaining corrections and the first
+S4 slice. Its documentation-only commit follows that tested product identity.
+The owner requested this handoff and a stop before S4; no S4 implementation was
+started. The dormant predecessor remains temporarily relocated and counted.
+See [base architecture](../../architecture/20-workspace-base.md).
 
 S2 now has a built daemon SQL owner with fair namespaces/classes, finite capture
 ordering, lifecycle credits, retained-result accounting and event-driven parked
@@ -106,9 +110,11 @@ See [implemented architecture](../../architecture/19-daemon-overlay.md).
 The remaining list below includes initial interfaces already established; complete
 S0 and later acceptance require the remaining service/lifetime/resource work.
 
-1. Write, verify and commit HANDOFF-S4-S6.md, publish the handoff receipt, then
-   stop before S4 as explicitly requested by the owner. The next agent owns the
-   complete mutable filesystem group; this thread starts no later milestone.
+1. The producing thread commits the checked [S4–S6 handoff](HANDOFF-S4-S6.md),
+   publishes its receipt, then stops before S4 as explicitly requested. The next
+   agent starts atomic bounded namespace/metadata transactions and Workspace
+   create/link/unlink semantics, using the completed S2/S3 dependencies; it owns
+   the complete S4–S6 group and its actual exit evidence.
 2. Close S0 algorithm gates for truncate/regrow, repeated failed capture and
    orphan composition, physical pressure and fair service; specify all R1–R8
    adversarial bounds and P1–P14 implementation ownership. These remain open,
@@ -124,8 +130,10 @@ S0 and later acceptance require the remaining service/lifetime/resource work.
 
 Untracked `core/docs/issues/301/`, the existing extent-normalization research and
 `output/` are unrelated and preserved. Concurrent `docs/README.md` edits and
-untracked `docs/general/sandbox-cache-design.md` and
-`docs/general/workspace-filesystem-view.md` are also preserved without staging. Root `crates/` remains the reference until
+untracked `docs/general/sandbox-cache-design.md`,
+`docs/general/workspace-filesystem-view.md` and
+`docs/general/workspace-queue-scheduling.md` are also preserved without staging.
+Root `crates/` remains the reference until
 S12 qualification permits S13. Checkpoint hashes are local-only; no remote push,
 release or deployment is authorized. Append-only tracker texts are retained in
 [checkpoints](checkpoints/initial.md). Rust checks/LOC/evidence are recorded in
