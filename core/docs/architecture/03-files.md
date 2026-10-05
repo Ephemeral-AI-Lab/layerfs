@@ -26,7 +26,7 @@ canonical format or C1 partition rules; older sections keep their source pin.
 
 ### 3.1 The representation dispatch
 
-`core/crates/layerfs-content/src/policy.rs` owns one selector:
+`core/crates/layerfs-content/src/contract/policy.rs` owns one selector:
 
 ```rust
 pub const fn representation(self, logical_len: u64) -> Representation {

@@ -1,0 +1,219 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-persistence', '--all-targets', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.05s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_persistence-cc89418160e6b6ac)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/file_lengths.rs (core/target/debug/deps/file_lengths-8885c06688acdf7c)
+
+running 2 tests
+FILE_LENGTH rows=2 distinct=1 logical_each=131071 canonical_payload_read=0 locate=1 statements=3 vm_steps=29 returned_rows=1 fullscan=0 sorts=0 autoindex=0 reprepares=0 plans=[["SEARCH o USING PRIMARY KEY (object_id=?)", "SEARCH p USING INTEGER PRIMARY KEY (rowid=?)"]]
+test a_cold_whole_file_length_uses_only_indexed_catalogue_rows ... ok
+FILE_LENGTH mixed rows=4 state_roots=2 payload_reads=0 payload_bytes=0 metadata_pack_calls=0 metadata_pack_bytes=926
+test mixed_lengths_preserve_order_without_fetching_chunk_payloads ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/history_allocation.rs (core/target/debug/deps/history_allocation-ae289dce51ef3650)
+
+running 3 tests
+test counts_are_checked_and_the_terminal_endpoint_is_refused ... ok
+test a_consumed_reservation_survives_a_later_failure ... ok
+test reservations_are_monotone_half_open_and_per_scope ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/history_conditional_updates.rs (core/target/debug/deps/history_conditional_updates-9c31e21dc51693c4)
+
+running 6 tests
+test stage_insertion_enforces_the_frozen_context ... ok
+test a_stale_loser_keeps_its_exact_stage ... ok
+test an_exact_token_is_the_only_stage_a_discard_removes ... ok
+test an_exact_earlier_publication_is_up_to_date_before_a_stale_head ... ok
+test a_commit_whose_root_equals_its_base_is_no_changes ... ok
+test two_branches_commit_independently_and_one_wins_the_stack_head ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/history_history_pages.rs (core/target/debug/deps/history_history_pages-5b41b6d5300cfdd2)
+
+running 3 tests
+test a_cursor_is_bound_to_its_range_subject_and_content ... ok
+test every_bounded_list_paginates_without_gaps_or_repeats ... ok
+test an_immutable_anchor_keeps_a_cursor_valid_as_the_branch_advances ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/history_lifecycle.rs (core/target/debug/deps/history_lifecycle-068f9bc1d8f21ef0)
+
+running 3 tests
+test genesis_is_atomic_and_unique ... ok
+test fork_shares_content_and_uses_the_selected_commit_base ... ok
+test history_reads_return_the_recorded_ancestry_and_chain ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/history_remediation.rs (core/target/debug/deps/history_remediation-eac8f9d9018c6819)
+
+running 12 tests
+test empty_history_checks_page_and_cursor_before_returning_empty ... ok
+test last_representable_reservation_is_consumed_and_terminal_refusal_is_atomic ... ok
+test read_only_cursor_capability_survives_reopen_and_rejects_wrong_keys ... ok
+test unknown_statement_outcome_quarantines_without_implicit_rollback ... ok
+test concurrent_reservations_never_overlap_and_discard_does_not_refund ... ok
+test all_legal_name_widths_paginate_by_identity ... ok
+test exact_source_publication_revalidates_immutable_provenance ... ok
+test forged_sibling_position_and_obsolete_checksum_are_refused ... ok
+test advancing_the_actual_subject_preserves_both_anchor_forms ... ok
+test stale_base_precedes_no_changes_and_derived_provenance_collision ... ok
+test reopen_refuses_each_independent_schema_or_binding_corruption ... ok
+test explicit_membership_ceiling_is_capacity_but_old_authenticated_anchor_stays_valid ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.04s
+
+     Running tests/history_reopen.rs (core/target/debug/deps/history_reopen-4f5e99953bc52c4a)
+
+running 3 tests
+test a_read_only_reopen_reads_every_record_and_mutates_nothing ... ok
+test an_incompatible_or_foreign_catalog_is_refused ... ok
+test a_stage_written_by_one_handle_is_visible_to_a_read_only_handle ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/interleaved_saves.rs (core/target/debug/deps/interleaved_saves-ff8a0bbba23f38cc)
+
+running 1 test
+test scoped_registry_interleaves_pending_reads_finish_abort_and_slot_reuse ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/semantic_admission.rs (core/target/debug/deps/semantic_admission-41991402795bdc3d)
+
+running 2 tests
+test omitted_wire_references_cannot_hide_an_inode_dependency_from_save ... ok
+test admitted_complete_root_closes_and_reconstructs_through_the_real_store ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/sqlite_allocation_release.rs (core/target/debug/deps/sqlite_allocation_release-38c16b717c74d776)
+
+running 8 tests
+test disposable_completion_refuses_new_hardlink_ownership ... ok
+test disposable_completion_refuses_replaced_path_without_touching_replacement ... ok
+test disposable_finalization_releases_extents_without_wal_and_preserves_bytes ... ok
+test readonly_checkpoint_refuses_before_sql_or_allocation_work ... ok
+test obstructed_checkpoint_does_not_release_extra_extents ... ok
+test checkpoint_releases_extra_extents_and_preserves_acknowledged_canonical_bytes ... ok
+test scratch_creation_refusal_is_explicit_and_leaves_store_data_intact ... ok
+test shared_pack_headroom_is_bounded_and_final_release_preserves_canonical_bytes ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/sqlite_group_rows.rs (core/target/debug/deps/sqlite_group_rows-ba50d433ea251e0d)
+
+running 7 tests
+test complete_reads_reassemble_exact_bytes_and_digest_for_every_lane ... ok
+test late_locator_failure_rolls_back_control_and_every_unit ... ok
+test exact_physical_fanout_refuses_over_budget_batch_before_begin ... ok
+test explicit_creation_reopens_declared_units_and_keeps_sparse_canonical_order ... ok
+test unread_corruption_is_scoped_and_whole_audit_refuses_it ... ok
+test malformed_unit_extent_is_refused_before_any_unit_blob_read ... ok
+test oversized_control_is_rejected_before_group_blob_acquisition ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/sqlite_group_rows_indexed.rs (core/target/debug/deps/sqlite_group_rows_indexed-1c6c464933e45739)
+
+running 9 tests
+test multigroup_read_reopens_one_cursor_and_never_retains_it_between_requests ... ok
+test mapping_is_covered_and_complete_pack_reassembles_exactly ... ok
+test missing_covering_index_is_refused_at_open_without_automatic_repair ... ok
+test wrong_reopened_body_length_is_refused_and_cursor_is_checked_closed ... ok
+test covered_mapping_still_refuses_wrong_extents_before_blob_open ... ok
+test typed_singleton_matches_batch_results_missing_ids_and_statement_boundary ... ok
+test declared_layouts_reopen_without_mutating_or_promoting_their_schema ... ok
+test typed_descriptor_rejects_invalid_domain_digest_and_length_before_blob_open ... ok
+test typed_singleton_rejects_invalid_role_and_signed_coordinates ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/sqlite_ordinal_lookahead.rs (core/target/debug/deps/sqlite_ordinal_lookahead-d52323a5420a04b5)
+
+running 2 tests
+test four_fresh_leaves_share_one_exact_reservation_and_deduplicate_values ... ok
+test a_foreign_acknowledged_reservation_is_never_recycled_by_the_plan ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/sqlite_pack_selection.rs (core/target/debug/deps/sqlite_pack_selection-fb7d337033d0043c)
+
+running 1 test
+test sqlite_selected_ranges_scan_once_close_and_match_the_full_body ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/sqlite_publication.rs (core/target/debug/deps/sqlite_publication-d1e36b64dd368bf0)
+
+running 13 tests
+test writable_open_does_not_migrate_an_unrelated_database_journal ... ok
+test readonly_refusal_and_external_writer_busy_do_not_retry ... ok
+test wal_full_settings_and_unavailable_engine_are_explicit ... ok
+test failure_after_body_insert_rolls_back_the_entire_unit_and_published_body_is_immutable ... ok
+test final_body_multirow_locators_and_first_wins_have_one_atomic_ack ... ok
+test signature_pages_share_one_acknowledgement_at_the_existing_row_bound ... ok
+test failing_signature_page_rolls_back_prior_body_and_all_signature_rows ... ok
+test pack_insert_pages_preserve_bodies_and_atomic_conflict_refusal ... ok
+test signature_publication_is_bounded_set_based_and_preserves_stamps ... ok
+test canonical_save_read_reuse_and_persisted_reservations_survive_reopen ... ok
+test pack_insert_pages_keep_large_blob_binding_ownership_separate ... ok
+test multi_page_publication_preserves_first_wins_loss_order_and_late_failure_atomicity ... ok
+test explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/sqlite_recovery.rs (core/target/debug/deps/sqlite_recovery-c8bae7a6517ff80d)
+
+running 2 tests
+test crash_child ... ok
+test sigkill_preserves_acknowledged_body_locator_and_reservation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/sqlite_reference_acquisition.rs (core/target/debug/deps/sqlite_reference_acquisition-af4d8bac5f950aba)
+
+running 3 tests
+test missing_logical_child_is_still_refused ... ok
+test exact_reuse_still_acquires_and_compares_canonical_bytes ... ok
+DIAGNOSTIC logical child acquisition: batched=0 individual=0 bytes=0
+test new_extent_leaf_checks_child_membership_without_reading_child_packs ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/sqlite_transaction_units.rs (core/target/debug/deps/sqlite_transaction_units-677cf916d8486ca1)
+
+running 9 tests
+test successful_save_history_retains_selection_and_group_work_from_final_drain ... ok
+test reader_reuses_authenticated_pack_within_one_operation ... ok
+test unused_pack_ids_transfer_across_saves_without_recycling_used_ids ... ok
+test dropping_unfinished_save_does_not_return_consumed_ids_to_the_unused_tail ... ok
+test same_save_read_and_dependency_force_closure_of_carried_queue ... ok
+DIAGNOSTIC sealed packs=4 publications=3
+test partial_pack_queue_survives_wave_boundary_within_existing_budget ... ok
+test canonical_and_shared_physical_bytes_are_bounded_independently ... ok
+DIAGNOSTIC pack reservations=1 body inserts=21
+test a_small_acknowledged_pack_tail_serves_a_larger_following_wave ... ok
+test allocation_replenishes_before_pressure_seals_when_the_tail_is_consumed ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+
+     Running unittests examples/metadata_allocation_probe.rs (core/target/debug/examples/metadata_allocation_probe-a0e6a3d08857b3e4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+EXIT: 0; WALL: 23.334s

@@ -1,0 +1,32 @@
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+   Compiling layerfs-history v0.1.6 (/work/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+warning: variant `Filesystem` is never constructed
+  --> crates/layerfs-persistence/src/backend/records.rs:81:5
+   |
+76 | pub(crate) enum BackendError {
+   |                 ------------ variant in this enum
+...
+81 |     Filesystem(std::io::ErrorKind),
+   |     ^^^^^^^^^^
+   |
+   = note: `BackendError` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` on by default
+
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+warning: `layerfs-persistence` (lib) generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 16.68s
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_sdk-8372d111fc1dbc84)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/runtime.rs (core/target/cluster2-linux/debug/deps/runtime-856a50e0343c15a1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

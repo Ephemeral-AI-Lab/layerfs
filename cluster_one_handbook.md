@@ -2,6 +2,11 @@
 
 > Status: Current general guide.
 
+Source organization after `32bd3bec0`, 2026-10-05: current source links use the
+owner-selected responsibility folders. [Organization receipt](core/docs/issues/307/SOURCE-ORGANIZATION-RECEIPT.md)
+records unchanged APIs/canonical behavior and scoped checks. Earlier product and
+benchmark source pins below retain their original evidence identity.
+
 Written 2026-10-05 against product source `8cbeadef07dc9ac1e79cd59eaee3dca494e2ff87`.
 This is an integration guide to the implemented cluster one libraries, not a
 release qualification or a new API contract. Source-linked contracts govern.
@@ -107,7 +112,7 @@ backends must not be used as instructions for the current implementation.
 Sources: [workspace](core/Cargo.toml),
 [content public surface](core/crates/layerfs-content/src/lib.rs),
 [storage public surface](core/crates/layerfs-storage/src/lib.rs),
-[history contract](core/crates/layerfs-history/src/catalog.rs),
+[history contract](core/crates/layerfs-history/src/contract/catalog.rs),
 [SQLite implementation round](core/docs/issues/302/SQLITE-IMPLEMENTATION-ROUND.md).
 
 ## 2. Data model: know which root you hold
@@ -185,10 +190,10 @@ let construction = storage.policy().construction();
 let capacities = construction.capacities();
 ```
 
-Source: [configuration](core/crates/layerfs-persistence/src/config.rs),
-[open/create](core/crates/layerfs-persistence/src/open.rs),
-[handles](core/crates/layerfs-persistence/src/handles.rs),
-[storage](core/crates/layerfs-storage/src/storage.rs).
+Source: [configuration](core/crates/layerfs-persistence/src/store/config.rs),
+[open/create](core/crates/layerfs-persistence/src/store/open.rs),
+[handles](core/crates/layerfs-persistence/src/store/handles.rs),
+[storage](core/crates/layerfs-storage/src/store/handle.rs).
 
 ### 3.2 Construction, read, and filesystem APIs
 
@@ -241,7 +246,7 @@ transport adapters for object reads, streamed output, backpressure, and outcomes
 those adapters are integration work, not endpoints callers can invoke today.
 
 Sources: [content exports](core/crates/layerfs-content/src/lib.rs),
-[file construction](core/crates/layerfs-content/src/file/content.rs),
+[file construction](core/crates/layerfs-content/src/file/construction/bytes.rs),
 [filesystem exports](core/crates/layerfs-content/src/filesystem/mod.rs),
 [filesystem construction](core/crates/layerfs-content/src/filesystem/update.rs).
 
@@ -398,8 +403,8 @@ do not recycle serials after an aborted construction.
 Generation capture and live overlay reconciliation are caller responsibilities;
 this section specifies the cluster one history boundary only.
 
-Source: [history requests/outcomes](core/crates/layerfs-history/src/records.rs),
-[semantic catalog](core/crates/layerfs-history/src/catalog.rs).
+Source: [history requests/outcomes](core/crates/layerfs-history/src/contract/records.rs),
+[semantic catalog](core/crates/layerfs-history/src/contract/catalog.rs).
 
 ### 4.4 Native namespace Init
 
@@ -419,7 +424,7 @@ genesis LayerStack, not just file payload storage. The deadline is shared with
 workers; it is not a rollback boundary. Checkpoint is a separate handle lifecycle
 operation, not a substitute for either Save finish.
 
-Source: [Init API](core/crates/layerfs-project/src/init.rs).
+Source: [Init API](core/crates/layerfs-project/src/import/init.rs).
 
 ## 5. Streaming workflow and large-load behavior
 
@@ -528,10 +533,10 @@ must still provide stable input: those checks are not a general snapshot service
 Ordering scratch for filesystem construction does not remove the retained scan
 collections. A fully file-count-bounded importer remains additional work.
 
-Sources: [worker scan](core/crates/layerfs-project/src/scan.rs),
-[batch/channel](core/crates/layerfs-project/src/batch.rs),
-[storage bounds](core/crates/layerfs-storage/src/policy.rs),
-[construction](core/crates/layerfs-content/src/file/content.rs).
+Sources: [worker scan](core/crates/layerfs-project/src/import/scan.rs),
+[batch/channel](core/crates/layerfs-project/src/import/batch.rs),
+[storage bounds](core/crates/layerfs-storage/src/store/policy.rs),
+[construction](core/crates/layerfs-content/src/file/construction/bytes.rs).
 
 ## 6. Localized reads, authentication, and reuse
 
@@ -630,7 +635,7 @@ succeeds. Do not implement guessed cleanup of shared immutable objects.
 
 Source: [Save lifecycle](core/crates/layerfs-storage/src/save/operation.rs),
 [Core failure rules](core/AGENTS.md),
-[history errors](core/crates/layerfs-history/src/error.rs).
+[history errors](core/crates/layerfs-history/src/contract/error.rs).
 
 ## 8. Persistence profiles, physical layout, and integration limits
 

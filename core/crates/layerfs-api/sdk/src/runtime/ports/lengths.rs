@@ -1,5 +1,5 @@
 //! Scoped owning metadata delivery into Workspace stat, with exact errors.
-use super::{Binding, LengthReply, RuntimeError, RuntimeResult, Sessions};
+use crate::runtime::{Binding, LengthReply, RuntimeError, RuntimeResult, Sessions};
 use layerfs_content::ObjectId;
 use layerfs_workspace::{FileLengths, WorkspaceError, WorkspaceResult};
 /// A borrowed authenticated serving-scope length port, not a new Store handle.

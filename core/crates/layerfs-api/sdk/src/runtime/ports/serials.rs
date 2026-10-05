@@ -1,5 +1,5 @@
 //! Scoped owning inode-serial reservations for Workspace creation.
-use super::{Binding, RuntimeError, RuntimeResult, Sessions};
+use crate::runtime::{Binding, RuntimeError, RuntimeResult, Sessions};
 use layerfs_history::{HistoryCatalog, ReserveRequest};
 use layerfs_workspace::{InodeSerials, WorkspaceError, WorkspaceResult};
 

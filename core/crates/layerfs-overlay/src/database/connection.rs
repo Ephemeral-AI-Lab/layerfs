@@ -50,7 +50,7 @@ impl Overlay {
         let work = RefCell::new(DatabaseWork::default());
         // Startup DDL is finite schema work, independently recorded from jobs.
         use rusqlite::fallible_iterator::FallibleIterator;
-        let mut batch = rusqlite::Batch::new(&connection, include_str!("../sql/schema.sql"));
+        let mut batch = rusqlite::Batch::new(&connection, include_str!("../../sql/schema.sql"));
         while let Some(mut statement) = batch.next()? {
             statement.execute([])?;
         }

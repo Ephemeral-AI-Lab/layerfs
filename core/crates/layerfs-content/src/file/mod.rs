@@ -6,9 +6,10 @@ pub mod cdc;
 pub mod edit;
 pub mod mapping;
 
-mod content;
+mod construction;
+pub(crate) use construction::bytes as content;
 mod read;
-mod runs;
+pub(crate) use construction::runs;
 mod view;
 
 pub use content::{

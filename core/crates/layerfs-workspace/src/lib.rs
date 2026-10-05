@@ -5,26 +5,29 @@
 //! Lifetimes, runtime/Commit and native FUSE remain separate implementation slices.
 #![forbid(unsafe_code)]
 
-mod attributes;
 mod base;
-mod cache;
-mod client;
-mod create;
-mod eval;
-mod facts;
-mod install;
-mod job;
-mod list;
-mod mutate;
-mod operation;
-mod port;
-mod read;
-mod remove;
-mod rename;
-mod serials;
-mod view;
+mod mutation;
+mod operations;
 mod workspace;
-mod write;
+pub(crate) use operations::attributes;
+
+pub(crate) use base::cache;
+pub(crate) use base::client;
+pub(crate) use mutation::eval;
+pub(crate) use mutation::facts;
+pub(crate) use mutation::job;
+pub(crate) use operations::namespace::create;
+pub(crate) use operations::namespace::list;
+pub(crate) use operations::types as operation;
+pub(crate) use workspace::install;
+mod ports;
+pub(crate) use operations::namespace::remove;
+pub(crate) use operations::namespace::rename;
+pub(crate) use ports as port;
+pub(crate) use workspace::serials;
+pub(crate) use workspace::view;
+
+pub(crate) use operations::file::write;
 
 pub use base::{BaseRead, BaseStat, BaseView};
 pub use client::{CanonicalClient, ClientWork};

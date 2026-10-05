@@ -16,11 +16,12 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-pub mod error;
+mod contract;
+pub use contract::error;
 pub mod file;
 pub mod filesystem;
 pub mod object;
-pub mod policy;
+pub use contract::policy;
 
 pub use error::{ContentError, ContentResult};
 pub use file::{

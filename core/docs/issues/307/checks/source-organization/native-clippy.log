@@ -1,0 +1,4 @@
+   Compiling nix v0.31.3
+   Compiling libproc v0.14.11
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.57s

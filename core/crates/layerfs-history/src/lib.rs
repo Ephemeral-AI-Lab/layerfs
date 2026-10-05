@@ -17,11 +17,12 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-pub mod catalog;
-pub mod error;
-pub mod identity;
-pub mod query;
-pub mod records;
+mod contract;
+pub use contract::catalog;
+pub use contract::error;
+pub use contract::identity;
+pub use contract::query;
+pub use contract::records;
 
 pub use catalog::{HistoryCatalog, HistoryCatalogConfig};
 pub use error::{HistoryError, HistoryResult};

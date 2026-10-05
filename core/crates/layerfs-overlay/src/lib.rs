@@ -5,31 +5,27 @@
 //! they do not limit total files, changes, payload or Workspace lifetime.
 #![forbid(unsafe_code)]
 
-mod access_plan;
-mod cells;
-mod close;
-mod composition;
-mod compound;
-mod db;
-mod error;
-mod frontier;
-mod garbage;
-mod generation;
-mod inode;
-mod layers;
+mod contract;
+mod database;
+mod diagnostics;
+mod lifetime;
 mod maintenance;
-mod metrics;
+mod namespace;
 mod payload;
-mod profile;
-mod reclaim;
-mod scratch;
-mod source;
-mod source_names;
-mod source_plan;
-mod sql;
-mod stream;
-mod types;
-mod workspace;
+pub(crate) use contract::error;
+pub(crate) use database::connection as db;
+pub(crate) use lifetime::close;
+pub(crate) use namespace::compound;
+pub(crate) use namespace::inode;
+pub(crate) use payload::cells;
+pub(crate) use payload::layers;
+
+pub(crate) use diagnostics::metrics;
+
+pub(crate) use contract::types;
+pub(crate) use database::profile;
+pub(crate) use database::statements as sql;
+pub(crate) use maintenance::reclaim;
 
 pub use close::CleanupState;
 pub use compound::SourceRows;

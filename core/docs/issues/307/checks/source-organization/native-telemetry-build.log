@@ -1,0 +1,22 @@
+    Blocking waiting for file lock on build directory
+   Compiling libc v0.2.189
+   Compiling nix v0.31.3
+   Compiling clang-sys v1.9.1
+   Compiling bindgen v0.72.1
+   Compiling libproc v0.14.11
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry)
+    Finished `test` profile [optimized + debuginfo] target(s) in 12.55s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_telemetry-eebd1630548ded5b)
+  Executable tests/full_disk.rs (core/target/debug/deps/full_disk-24e17927340beabd)
+  Executable tests/native.rs (core/target/debug/deps/native-8138bdad4c96e5d2)
+  Executable tests/observations.rs (core/target/debug/deps/observations-8d6d603c2d5c0afb)
+  Executable tests/off_allocations.rs (core/target/debug/deps/off_allocations-ea07734a86ba2fe9)
+  Executable tests/owned_allocations.rs (core/target/debug/deps/owned_allocations-c6b068668d4f8138)
+  Executable tests/stalled_output.rs (core/target/debug/deps/stalled_output-31f4a467a21bd6f3)
+  Executable tests/timer.rs (core/target/debug/deps/timer-29b4b72e18505f19)
+  Executable tests/timer_bounds.rs (core/target/debug/deps/timer_bounds-521ce936066339b5)
+  Executable tests/timer_compile_fail.rs (core/target/debug/deps/timer_compile_fail-e8b90a9cc7b9e153)
+  Executable tests/timer_format.rs (core/target/debug/deps/timer_format-e9147a40c871a034)
+  Executable tests/timer_json.rs (core/target/debug/deps/timer_json-03e14d2b0681c7f9)
+  Executable unittests examples/timer_composition.rs (core/target/debug/examples/timer_composition-826187cf26262f2f)
+  Executable unittests examples/timer_nested.rs (core/target/debug/examples/timer_nested-78e23092253beb56)

@@ -12,15 +12,16 @@
 #![deny(unsafe_code)]
 
 pub mod encoding;
-pub mod error;
-pub mod location;
+mod store;
+pub use store::error;
+pub use store::location;
 pub mod pack;
-pub mod policy;
+pub use store::policy;
 pub mod port;
 pub mod read;
 pub mod save;
-pub mod source;
-mod storage;
+pub(crate) use store::handle as storage;
+pub use store::source;
 
 pub use error::{StorageError, StorageResult};
 pub use policy::{StorageCapacities, StoragePolicy};

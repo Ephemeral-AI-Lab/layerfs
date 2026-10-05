@@ -4,13 +4,13 @@
 > `a0dc7da9b`; S6 remains IN PROGRESS, not acceptance or release qualification.
 
 Schema v9 adds a single `consolidating` generation and indexed backed maintenance
-items. [Failure resolution](../../crates/layerfs-overlay/src/composition.rs)
+items. [Failure resolution](../../crates/layerfs-overlay/src/lifetime/composition.rs)
 requires the caller to establish definite nonpublication and fence external work.
 Unknown history retains the original capture. Resolution changes six statements
 of ownership metadata, with no payload scan/copy. A next capture is not ready
 until this one lower namespace domain is composed; ordinary writes remain live.
 
-[Maintenance](../../crates/layerfs-overlay/src/maintenance.rs) rotates ready
+[Maintenance](../../crates/layerfs-overlay/src/maintenance/ready.rs) rotates ready
 `(ns,kind,resource,target)` keys through a fixed cursor. A fold turn transfers one
 name or effective cell into active state, preserving newer finals. Current upper
 cutoff/epoch/staleness are re-read within each transaction; a discarded lower cell
@@ -20,7 +20,7 @@ later attributes stay correct. Names use the same active-plus-lower bounded view
 during composition. Reader leases on the exact generation park that target;
 their exact release makes it ready without an owner sweep.
 
-[Garbage jobs](../../crates/layerfs-overlay/src/garbage.rs) visit at most 14 cells
+[Garbage jobs](../../crates/layerfs-overlay/src/maintenance/garbage.rs) visit at most 14 cells
 or 64 small metadata/step records per turn. Retired domains use generation indexes
 and keyset cursors. Stale-cell work starts at the shrink boundary, and rechecks
 the current epoch/staircase before deleting. Rewrites after regrow survive.

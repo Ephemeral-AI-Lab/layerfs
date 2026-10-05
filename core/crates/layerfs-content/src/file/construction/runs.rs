@@ -1,5 +1,5 @@
 //! Hole-aware complete construction through the ordinary canonical builder.
-use super::{
+use crate::file::{
     cdc::{CdcCounters, Scanner, MAXIMUM_CHUNK_BYTES},
     construct_bytes, mapping, ConstructedFile, ExtentBuilder,
 };

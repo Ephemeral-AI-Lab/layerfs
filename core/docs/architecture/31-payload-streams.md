@@ -7,9 +7,9 @@ The selected [payload derivation](../issues/307/S5-PAYLOAD-CONTRACT.md) describe
 schema v8. Each live inode generation has a lower-view cutoff, shrink epoch and
 indexed shrink staircase. Cells store bytes only through their last valid byte;
 NULL validity means every stored byte is valid. A partial cell carries a trimmed
-bit mask. [Cell normalization](../../crates/layerfs-overlay/src/cells.rs),
-[layers/shrink](../../crates/layerfs-overlay/src/layers.rs) and
-[window operations](../../crates/layerfs-overlay/src/stream.rs) own these rules.
+bit mask. [Cell normalization](../../crates/layerfs-overlay/src/payload/cells.rs),
+[layers/shrink](../../crates/layerfs-overlay/src/payload/layers.rs) and
+[window operations](../../crates/layerfs-overlay/src/payload/stream.rs) own these rules.
 
 Workspace exposes `Write { serial, position: At|End, data: WriteData }`, size
 changes in `SetAttributes`, and `SourceView::read`. Append selects the current

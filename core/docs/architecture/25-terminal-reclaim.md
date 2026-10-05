@@ -7,7 +7,7 @@ terminal maintenance. It does not implement live-generation retirement, effectiv
 open-unlinked filesystem semantics, repeated failed-capture composition or physical
 headroom admission. Complete S6/S8 exits remain open.
 
-[Close](../../crates/layerfs-overlay/src/close.rs) revokes new mutations/acquisitions
+[Close](../../crates/layerfs-overlay/src/lifetime/close.rs) revokes new mutations/acquisitions
 in one short transaction. Existing exact releases, published reply-send-attempt
 tickets and already allocated captures remain owned. Closed captures stay readable;
 known install can finish an existing capture, or an explicit closed-capture release
@@ -23,7 +23,7 @@ ready scan; many long-lived references cannot enlarge another namespace's cleanu
 query. The ready key uses reserved i64 maximum, which capture cannot allocate
 because it must first allocate the next active generation.
 
-[Reclaim](../../crates/layerfs-overlay/src/reclaim.rs) rotates ready namespaces by
+[Reclaim](../../crates/layerfs-overlay/src/maintenance/reclaim.rs) rotates ready namespaces by
 keyset, then deletes fixed windows from payload, names, inodes, scratch and old
 retirement rows. It holds at most 64 selected metadata keys. Payload selects at
 most 14 fixed cells (64,512 declared BLOB bytes); scratch selects length metadata
@@ -40,7 +40,7 @@ counters are observed from the first path. Every statement retains namespace
 predicates, including rowid deletion. One connection/profile remains initialized
 before readiness; no sync call or Store profile change is introduced.
 
-[Daemon](../../crates/layerfs-daemon/src/owner.rs) gives maintenance one short turn
+[Daemon](../../crates/layerfs-daemon/src/overlay/owner.rs) gives maintenance one short turn
 after at most eight dispatched jobs and runs remaining ready work while idle.
 Namespace rotation keeps large closed work from monopolizing cleanup. Idle waiting
 checks an event revision under the queue mutex before sleeping, so admission/

@@ -29,6 +29,11 @@ coherent composition checkpoint, apply that relocation in a separate checkpoint,
 then continue the original S6 exits. No S6 completion or later milestone is
 claimed by either checkpoint.
 
+The owner-selected [source organization](SOURCE-ORGANIZATION.md) now has its
+[separate implementation receipt](SOURCE-ORGANIZATION-RECEIPT.md). Current source
+links use responsibility folders; historical receipts retain their original
+paths/pins. S6 additions follow the lifetime/maintenance/database boundaries.
+
 S4 is complete at the local milestone-completion commit after `8d691ab8a`: atomic
 ordinary namespace operations as compound owner jobs, maintained directory
 counts, verified rename ancestry and owning serial ranges. See the

@@ -15,13 +15,13 @@ Implemented source: the S2 checkpoint after `d9d8d1b04`, for
 This active daemon library owns SQL service; native executable/FUSE/control/Exec
 and complete S2/S8 acceptance remain unfinished.
 
-[Owner](../../crates/layerfs-daemon/src/owner.rs) starts one connection thread,
+[Owner](../../crates/layerfs-daemon/src/overlay/owner.rs) starts one connection thread,
 creates/checks the overlay there and acknowledges readiness only after schema/
 profile readback. Clients submit typed short SQL windows. A command cannot contain
 a closure or hold the database across construction, transport or an entire Exec.
 No dependency or route invokes the retired server or old daemon implementation.
 
-[Queues](../../crates/layerfs-daemon/src/queue.rs) rotate between namespaces and
+[Queues](../../crates/layerfs-daemon/src/overlay/queue.rs) rotate between namespaces and
 five service classes. Their roster contains only admitted outstanding requests,
 not filesystem entries; configured concurrent slots/bytes bound it. When no job
 is runnable, a condition variable waits for admission/progress/shutdown events.
@@ -35,7 +35,7 @@ Reads, lifecycle/reply attempts and other namespaces remain runnable. After seal
 later mutations resolve the new active generation inside their ordinary transaction.
 These are service/SQL proofs; no native kernel delivery receipt is inferred.
 
-[Credits](../../crates/layerfs-daemon/src/credits.rs) count queued, executing and
+[Credits](../../crates/layerfs-daemon/src/overlay/credits.rs) count queued, executing and
 caller-retained results. They include actual owned Vec capacity, fixed cell bytes,
 declared worst reply windows and bookkeeping allowance. Weak backreferences avoid
 an ownership cycle. Completion data stays borrowed from its charged owner. Ordinary

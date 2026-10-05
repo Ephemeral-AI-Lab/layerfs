@@ -1,0 +1,13 @@
+[
+  "cluster_one_handbook.md",
+  "cas_cdc_deltaencoding_handbook.md",
+  "core/docs/architecture/21-daemon-owner.md",
+  "core/docs/architecture/20-workspace-base.md",
+  "core/docs/architecture/30-namespace-operations.md",
+  "core/docs/architecture/03-files.md",
+  "core/docs/architecture/31-payload-streams.md",
+  "core/docs/architecture/32-live-composition.md",
+  "core/docs/architecture/25-terminal-reclaim.md",
+  "core/docs/architecture/19-daemon-overlay.md",
+  "core/docs/architecture/24-file-lengths.md"
+]

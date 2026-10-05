@@ -13,10 +13,10 @@ custody. Schema v8 inode rewrites maintain cutoff/epoch/height internally.
 Workspace performs create, mkdir, symlink, link, unlink, rmdir, rename, chmod and
 utimens over stable inode serials and checked names. Each operation publishes all
 of its inode and name finals in one overlay transaction with one reply-attempt
-ticket, or publishes nothing. Source: [operations](../../crates/layerfs-workspace/src/operation.rs),
-[owner job](../../crates/layerfs-workspace/src/job.rs),
-[driver](../../crates/layerfs-workspace/src/mutate.rs),
-[engine compound job](../../crates/layerfs-overlay/src/compound.rs).
+ticket, or publishes nothing. Source: [operations](../../crates/layerfs-workspace/src/operations/types.rs),
+[owner job](../../crates/layerfs-workspace/src/mutation/job.rs),
+[driver](../../crates/layerfs-workspace/src/mutation/driver.rs),
+[engine compound job](../../crates/layerfs-overlay/src/namespace/compound.rs).
 
 ## Where each decision is made
 

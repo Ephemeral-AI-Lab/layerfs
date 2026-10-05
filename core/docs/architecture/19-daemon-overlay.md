@@ -14,7 +14,7 @@ once; `open_workspace` inserts only a root/incarnation/routing row, without
 another connection, schema or immutable-root walk/materialization. Root authority
 and filesystem semantic checks remain the Workspace/runtime caller's obligation.
 
-The [profile](../../crates/layerfs-overlay/src/profile.rs) reads back MEMORY
+The [profile](../../crates/layerfs-overlay/src/database/profile.rs) reads back MEMORY
 journal, OFF synchronization, EXCLUSIVE locking, zero mmap/busy timeout, foreign
 keys, 4096-byte pages, configured pager/max-page settings, SQLite version and
 compile options. Pager size is a suggestion, not a resident ceiling. Temporary
@@ -59,7 +59,7 @@ rows. The [failure](../issues/307/checks/s1-initial/residual-plan-failure.log) a
 [corrected profiles](../issues/307/checks/s1-initial/repaired-engine.log) are retained.
 An indexed SEARCH/fullscan counter of zero alone was insufficient evidence.
 
-The [profiler](../../crates/layerfs-overlay/src/metrics.rs) observes actual step
+The [profiler](../../crates/layerfs-overlay/src/diagnostics/metrics.rs) observes actual step
 executions, VM/fullscan/sort/autoindex/reprepare counters, returned/attempted changed
 rows, bound bytes and inclusive statement wall. It resets cached counters before
 each invocation and aggregates in thirteen fixed slots. Exclusive owner-job

@@ -1,9 +1,10 @@
 //! Scoped host object/Save service; transport and Workspace control are separate.
 mod binding;
 mod error;
-mod length_port;
+mod ports;
+pub(crate) use ports::lengths as length_port;
 mod owner;
-mod serial_port;
+pub(crate) use ports::serials as serial_port;
 mod sessions;
 mod types;
 

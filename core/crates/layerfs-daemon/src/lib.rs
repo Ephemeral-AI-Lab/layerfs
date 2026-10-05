@@ -5,11 +5,11 @@
 //! integration slices.
 #![forbid(unsafe_code)]
 
-mod commands;
-mod credits;
-mod owner;
-mod queue;
-mod read_port;
+mod overlay;
+pub(crate) use overlay::commands;
+pub(crate) use overlay::credits;
+pub(crate) use overlay::owner;
+pub(crate) use overlay::queue;
 
 pub use commands::{Command, Response, ServiceClass};
 pub use owner::{Completion, Owner, OwnerClient, OwnerConfig, OwnerError, Pending};

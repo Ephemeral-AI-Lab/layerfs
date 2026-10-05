@@ -2,6 +2,11 @@
 
 > Status: Current general guide.
 
+Current source links follow the responsibility-folder relocation after
+`32bd3bec0`; [organization evidence](core/docs/issues/307/SOURCE-ORGANIZATION-RECEIPT.md)
+records preserved canonical/profile behavior. Existing measurement and mechanism
+source pins remain unchanged.
+
 Written 2026-10-05 against product source
 `27d87a2b3` (documentation checkpoint; underlying product unchanged from
 `8cbeadef07dc9ac1e79cd59eaee3dca494e2ff87`).
@@ -220,8 +225,8 @@ of immediate resynchronization, a fixed number of changed chunks, or a guarantee
 reuse percentage. High-entropy data may still benefit from exact unchanged-chunk
 reuse even when its newly written chunks do not compress well.
 
-Source: [stream constructor](core/crates/layerfs-content/src/file/content.rs),
-[policy](core/crates/layerfs-content/src/policy.rs),
+Source: [stream constructor](core/crates/layerfs-content/src/file/construction/bytes.rs),
+[policy](core/crates/layerfs-content/src/contract/policy.rs),
 [CDC scanner/profile](core/crates/layerfs-content/src/file/cdc/gear.rs).
 
 ## 4. CAS: exact reuse and collision checks
@@ -469,8 +474,8 @@ validation scope. Returned canonical objects are authenticated in both; selected
 units do not imply an audit of all unread pack bytes.
 
 Source: [chain resolver](core/crates/layerfs-storage/src/encoding/delta/read.rs),
-[storage budgets](core/crates/layerfs-storage/src/policy.rs),
-[construction depth policy](core/crates/layerfs-content/src/policy.rs).
+[storage budgets](core/crates/layerfs-storage/src/store/policy.rs),
+[construction depth policy](core/crates/layerfs-content/src/contract/policy.rs).
 
 ## 7. Localized edits versus fresh CDC construction
 

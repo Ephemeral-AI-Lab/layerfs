@@ -1,0 +1,162 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-telemetry', '--all-targets', '--features', 'native', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_telemetry-eebd1630548ded5b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/full_disk.rs (core/target/debug/deps/full_disk-24e17927340beabd)
+
+running 1 test
+test actual_enospc_preserves_the_original_result ... ignored, requires a dedicated disposable filesystem no larger than 64 MiB
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/native.rs (core/target/debug/deps/native-8138bdad4c96e5d2)
+
+running 8 tests
+test disabled_runtime_ignores_invalid_native_configuration ... ok
+test native_cpu_units_match_posix_process_counters ... ok
+test independent_measurement_selection_and_aggregate_configuration ... ok
+test concurrent_final_handles_release_the_owned_writer ... ok
+test owned_retention_queue_and_producer_churn ... ok
+test retention_expiry_open_reader_and_deletion_failure ... ok
+test output_failure_is_independent_and_encoding_is_valid ... ok
+test native_monitor_retains_active_window_across_ring_wrap ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/observations.rs (core/target/debug/deps/observations-8d6d603c2d5c0afb)
+
+running 2 tests
+
+thread 'optional_windows_release_on_return_error_and_unwind' panicked at crates/layerfs-telemetry/tests/observations.rs:90:51:
+original
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test long_shared_windows_preserve_first_and_sampled_max ... ok
+test optional_windows_release_on_return_error_and_unwind ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/off_allocations.rs (core/target/debug/deps/off_allocations-ea07734a86ba2fe9)
+
+running 1 test
+test master_off_allocates_nothing_after_configuration_is_supplied ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/owned_allocations.rs (core/target/debug/deps/owned_allocations-c6b068668d4f8138)
+
+running 2 tests
+test maximum_envelope_child ... ignored, subprocess helper, invoked by maximum_owned_envelope_and_closing_producers
+
+running 1 test
+test maximum_envelope_child ... ENV05_SNAPSHOT heap_held=11077918 rss=24297472 virtual=452843077632 threads=13 before_encoder_threads=5 closing_producers=16
+ENV05_RESULT heap_peak=11094190 heap_residual=336 producer_allowance=8388608 collector_allowance=16777216 collector_queue_allowance=8388608 recording_owners=8 encoded_owners=8 active_windows=32 collector_producers=16 telemetry_worker_stack_requests=786432 external_encoder_stack_requests=2097152 stderr_pipe_filled=65536 closing_released=true
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.03s
+
+test maximum_owned_envelope_and_closing_producers ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.04s
+
+     Running tests/stalled_output.rs (core/target/debug/deps/stalled_output-31f4a467a21bd6f3)
+
+running 2 tests
+test stalled_writer_child ... ignored, subprocess helper; invoked by blocked_native_stderr_preserves_result_and_process_exit
+test blocked_native_stderr_preserves_result_and_process_exit ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.04s
+
+     Running tests/timer.rs (core/target/debug/deps/timer-29b4b72e18505f19)
+
+running 21 tests
+test a_parent_can_recover_from_a_child_error ... ok
+test a_panic_caught_inside_the_operation_leaves_the_recording_usable ... ok
+test an_imported_incomplete_node_marks_the_attachment_point ... ok
+test attached_reports_become_owned_children ... ok
+test attachment_cannot_exceed_the_depth_budget ... ok
+test depth_budget_clips_detail_and_keeps_running_the_operation ... ok
+test disabled_and_clipped_reports_are_distinguishable ... ok
+test disabled_recording_runs_the_operation_and_records_nothing ... ok
+test durations_are_inclusive_monotonic_elapsed_time ... ok
+test errors_are_recorded_before_early_returns_keep_completed_nodes ... ok
+test imported_labels_are_clipped_on_a_utf8_boundary ... ok
+test long_labels_are_clipped_on_a_utf8_boundary ... ok
+test independent_recordings_compose_without_shared_state ... ok
+test attachment_consumes_the_assembled_tree_remaining_budget ... ok
+test missing_or_disabled_detail_marks_the_node_and_its_ancestors ... ok
+test nested_children_are_recorded_in_start_order ... ok
+test node_budget_clips_detail_and_keeps_running_the_operation ... ok
+test panic_unwinds_without_a_fabricated_report ... ok
+test repeated_labels_are_distinct_invocations_in_start_order ... ok
+test uncalled_operations_have_no_node ... ok
+test synthetic_nodes_are_bounded_by_the_aggregate_limits ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_bounds.rs (core/target/debug/deps/timer_bounds-521ce936066339b5)
+
+running 3 tests
+
+thread 'recording_budget_pool_unwind_and_encoding' panicked at crates/layerfs-telemetry/tests/timer_bounds.rs:49:51:
+original
+test public_labels_are_normalized_before_attachment ... ok
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test owned_capacity_is_not_retained ... ok
+test recording_budget_pool_unwind_and_encoding ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_compile_fail.rs (core/target/debug/deps/timer_compile_fail-e8b90a9cc7b9e153)
+
+running 1 test
+test external_compile_fail_checks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+
+     Running tests/timer_format.rs (core/target/debug/deps/timer_format-e9147a40c871a034)
+
+running 6 tests
+test markers_show_error_and_missing_detail ... ok
+test disabled_report_is_explicit ... ok
+test a_real_recording_renders_its_structure ... ok
+test writer_failures_propagate ... ok
+test labels_are_escaped_for_display ... ok
+test text_renders_a_readable_tree ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_json.rs (core/target/debug/deps/timer_json-03e14d2b0681c7f9)
+
+running 10 tests
+test outcome_and_incomplete_fields_are_opt_in ... ok
+test writer_failures_propagate ... ok
+test a_flush_failure_is_surfaced ... ok
+test json_matches_the_documented_shape ... ok
+test saving_uses_no_clobber_creation_and_stays_separate_from_the_product_result ... ok
+test durations_beyond_the_schema_are_reported_not_saturated ... ok
+test a_real_recording_round_trips_through_json ... ok
+test escaping_round_trips_through_an_independent_parser ... ok
+test a_disabled_report_serializes_to_null ... ok
+test a_failed_write_leaves_a_partial_file_and_surfaces_the_error ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running unittests examples/timer_composition.rs (core/target/debug/examples/timer_composition-826187cf26262f2f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/timer_nested.rs (core/target/debug/examples/timer_nested-78e23092253beb56)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+EXIT: 0; WALL: 16.395s

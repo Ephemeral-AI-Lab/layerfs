@@ -1,0 +1,124 @@
+   Compiling libc v0.2.189
+   Compiling nix v0.31.3
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+   Compiling getrandom v0.2.17
+   Compiling cpufeatures v0.2.17
+   Compiling cpufeatures v0.3.1
+   Compiling sha2 v0.11.0
+   Compiling rand_core v0.6.4
+   Compiling crypto-common v0.1.7
+   Compiling universal-hash v0.5.1
+   Compiling cipher v0.4.4
+   Compiling aead v0.5.2
+   Compiling digest v0.10.7
+   Compiling polyval v0.6.2
+   Compiling poly1305 v0.8.0
+   Compiling chacha20 v0.9.1
+   Compiling ghash v0.5.1
+   Compiling ctr v0.9.2
+   Compiling aes v0.8.4
+   Compiling blake2 v0.10.6
+   Compiling sha2 v0.10.9
+   Compiling chacha20poly1305 v0.10.1
+   Compiling aes-gcm v0.10.3
+   Compiling layerfs-telemetry v0.1.6 (/work/core/crates/layerfs-telemetry)
+   Compiling snow v0.9.6
+   Compiling layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-history v0.1.6 (/work/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+   Compiling layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+warning: variant `Filesystem` is never constructed
+  --> crates/layerfs-persistence/src/backend/records.rs:81:5
+   |
+76 | pub(crate) enum BackendError {
+   |                 ------------ variant in this enum
+...
+81 |     Filesystem(std::io::ErrorKind),
+   |     ^^^^^^^^^^
+   |
+   = note: `BackendError` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` on by default
+
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+warning: `layerfs-persistence` (lib) generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 49.40s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_content-d3c91b103835814f)
+  Executable tests/chunk_predecessor.rs (core/target/cluster2-linux/debug/deps/chunk_predecessor-7534383d11f548af)
+  Executable tests/edit_batch.rs (core/target/cluster2-linux/debug/deps/edit_batch-32899c55edc06e3a)
+  Executable tests/edit_bounds.rs (core/target/cluster2-linux/debug/deps/edit_bounds-f2f02a5fa69ff65a)
+  Executable tests/edit_localized.rs (core/target/cluster2-linux/debug/deps/edit_localized-7e862f16d303ba0f)
+  Executable tests/edit_model.rs (core/target/cluster2-linux/debug/deps/edit_model-79d0efb90c258099)
+  Executable tests/edit_noop.rs (core/target/cluster2-linux/debug/deps/edit_noop-a654db7e5d0b12d9)
+  Executable tests/edit_reference.rs (core/target/cluster2-linux/debug/deps/edit_reference-84b3b2ae3169dd1e)
+  Executable tests/edit_single.rs (core/target/cluster2-linux/debug/deps/edit_single-5acb33334e2894a7)
+  Executable tests/edit_timing.rs (core/target/cluster2-linux/debug/deps/edit_timing-71685b33f31f1203)
+  Executable tests/edit_transitions.rs (core/target/cluster2-linux/debug/deps/edit_transitions-0043e57236470296)
+  Executable tests/file_complete.rs (core/target/cluster2-linux/debug/deps/file_complete-7814ad3227672be3)
+  Executable tests/file_read.rs (core/target/cluster2-linux/debug/deps/file_read-6a5108e4bddb745c)
+  Executable tests/filesystem_attributes.rs (core/target/cluster2-linux/debug/deps/filesystem_attributes-5afaa2a4c13913d9)
+  Executable tests/filesystem_bounds.rs (core/target/cluster2-linux/debug/deps/filesystem_bounds-a2a89e3ccfc8e54a)
+  Executable tests/filesystem_codec.rs (core/target/cluster2-linux/debug/deps/filesystem_codec-d76518c1a5881005)
+  Executable tests/filesystem_failure.rs (core/target/cluster2-linux/debug/deps/filesystem_failure-4040107976a1eeb4)
+  Executable tests/filesystem_hardlinks.rs (core/target/cluster2-linux/debug/deps/filesystem_hardlinks-c386ce9d05ba37b4)
+  Executable tests/filesystem_limits.rs (core/target/cluster2-linux/debug/deps/filesystem_limits-45abb19cf01a86a8)
+  Executable tests/filesystem_ordering.rs (core/target/cluster2-linux/debug/deps/filesystem_ordering-05c35acd5953dc43)
+  Executable tests/filesystem_ordering_consolidate.rs (core/target/cluster2-linux/debug/deps/filesystem_ordering_consolidate-1ee51f676ec90e50)
+  Executable tests/filesystem_ordering_scan.rs (core/target/cluster2-linux/debug/deps/filesystem_ordering_scan-e767bc2f567d002e)
+  Executable tests/filesystem_parent_lookup.rs (core/target/cluster2-linux/debug/deps/filesystem_parent_lookup-3738f9cdc24fa664)
+  Executable tests/filesystem_profile.rs (core/target/cluster2-linux/debug/deps/filesystem_profile-2cbc19423930a6f8)
+  Executable tests/filesystem_read.rs (core/target/cluster2-linux/debug/deps/filesystem_read-af74a7ef15b01e49)
+  Executable tests/filesystem_reference.rs (core/target/cluster2-linux/debug/deps/filesystem_reference-6474d88a74172ce2)
+  Executable tests/filesystem_rows.rs (core/target/cluster2-linux/debug/deps/filesystem_rows-97c8c403aad1a468)
+  Executable tests/filesystem_sorted.rs (core/target/cluster2-linux/debug/deps/filesystem_sorted-f29dec825e196f4a)
+  Executable tests/filesystem_timing.rs (core/target/cluster2-linux/debug/deps/filesystem_timing-cd734284962d2bff)
+  Executable tests/filesystem_topology.rs (core/target/cluster2-linux/debug/deps/filesystem_topology-8129c4d3e13e0a91)
+  Executable tests/filesystem_updates.rs (core/target/cluster2-linux/debug/deps/filesystem_updates-b40422dbc5058f0a)
+  Executable tests/fixture_seal.rs (core/target/cluster2-linux/debug/deps/fixture_seal-b141af830eb85e2d)
+  Executable tests/inode_leaf.rs (core/target/cluster2-linux/debug/deps/inode_leaf-560787e99355f015)
+  Executable tests/object_admission.rs (core/target/cluster2-linux/debug/deps/object_admission-59473658826e8f13)
+  Executable tests/object_identity.rs (core/target/cluster2-linux/debug/deps/object_identity-373b983c6db4f843)
+  Executable tests/runs.rs (core/target/cluster2-linux/debug/deps/runs-4eba2b64dc81aa3f)
+  Executable tests/streaming.rs (core/target/cluster2-linux/debug/deps/streaming-bbc2984716babead)
+  Executable tests/timing.rs (core/target/cluster2-linux/debug/deps/timing-f6660375b7838fe9)
+  Executable tests/zero_cdc.rs (core/target/cluster2-linux/debug/deps/zero_cdc-1a75f97a3c1719bb)
+  Executable unittests examples/edit_memory_probe.rs (core/target/cluster2-linux/debug/examples/edit_memory_probe-f623c0d79fcf4727)
+  Executable unittests examples/edit_timing_c1.rs (core/target/cluster2-linux/debug/examples/edit_timing_c1-58128b9a74986713)
+  Executable unittests examples/filesystem_primitives_candidate.rs (core/target/cluster2-linux/debug/examples/filesystem_primitives_candidate-f6552d8b538b4fa1)
+  Executable unittests examples/filesystem_timing_c1.rs (core/target/cluster2-linux/debug/examples/filesystem_timing_c1-8c77b3456abbeed9)
+  Executable unittests examples/fingerprint_collision_search.rs (core/target/cluster2-linux/debug/examples/fingerprint_collision_search-ba46fa6b1ffcf381)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-ea5b0e1718b9cd85)
+  Executable tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-909bacf1b5b6eebe)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_overlay-64a458aa1df39a16)
+  Executable tests/compound.rs (core/target/cluster2-linux/debug/deps/compound-1c86f92338d1d3c4)
+  Executable tests/engine.rs (core/target/cluster2-linux/debug/deps/engine-aafb0a25e53f0820)
+  Executable tests/frontier.rs (core/target/cluster2-linux/debug/deps/frontier-cfdf964ad6a238e4)
+  Executable tests/lifetimes.rs (core/target/cluster2-linux/debug/deps/lifetimes-0729392aeb4934f8)
+  Executable tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-42b0a50e3b0ddc68)
+  Executable tests/payload_fragmentation.rs (core/target/cluster2-linux/debug/deps/payload_fragmentation-739dbb223839b34c)
+  Executable tests/source.rs (core/target/cluster2-linux/debug/deps/source-81affea124656912)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_sdk-b0370817ed99c3cf)
+  Executable tests/runtime.rs (core/target/cluster2-linux/debug/deps/runtime-1a47c02843994e51)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_telemetry-62421b6c18ae7efd)
+  Executable tests/full_disk.rs (core/target/cluster2-linux/debug/deps/full_disk-e36e2a2ccb4d9090)
+  Executable tests/native.rs (core/target/cluster2-linux/debug/deps/native-9d6a88e75e9135c5)
+  Executable tests/observations.rs (core/target/cluster2-linux/debug/deps/observations-1a1eb0ef035ff7ad)
+  Executable tests/off_allocations.rs (core/target/cluster2-linux/debug/deps/off_allocations-2fe589f6aa2ff92f)
+  Executable tests/owned_allocations.rs (core/target/cluster2-linux/debug/deps/owned_allocations-26bb02802a4413cd)
+  Executable tests/stalled_output.rs (core/target/cluster2-linux/debug/deps/stalled_output-f5fc3f1f4f6faf12)
+  Executable tests/timer.rs (core/target/cluster2-linux/debug/deps/timer-45f1583387a9eb04)
+  Executable tests/timer_bounds.rs (core/target/cluster2-linux/debug/deps/timer_bounds-6f2a0c02ebbaaa83)
+  Executable tests/timer_compile_fail.rs (core/target/cluster2-linux/debug/deps/timer_compile_fail-a9bd903f47fd1419)
+  Executable tests/timer_format.rs (core/target/cluster2-linux/debug/deps/timer_format-3ba2df4efda5fc12)
+  Executable tests/timer_json.rs (core/target/cluster2-linux/debug/deps/timer_json-c0c32a4a99a8f824)
+  Executable unittests examples/timer_composition.rs (core/target/cluster2-linux/debug/examples/timer_composition-f29f0fd90a06a03c)
+  Executable unittests examples/timer_nested.rs (core/target/cluster2-linux/debug/examples/timer_nested-cbb0d8156be8c346)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_workspace-952371fe16b93efe)
+  Executable tests/base.rs (core/target/cluster2-linux/debug/deps/base-d3a464850e6a0d2d)
+  Executable tests/namespace.rs (core/target/cluster2-linux/debug/deps/namespace-9d2e9d2057998509)
+  Executable tests/namespace_daemon.rs (core/target/cluster2-linux/debug/deps/namespace_daemon-c7a0f3ee28611c25)
+  Executable tests/namespace_profile.rs (core/target/cluster2-linux/debug/deps/namespace_profile-0478815c53c4c347)
+  Executable tests/namespace_view.rs (core/target/cluster2-linux/debug/deps/namespace_view-30c4c02d05b5b015)
+  Executable tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-c126cf8b73278d90)

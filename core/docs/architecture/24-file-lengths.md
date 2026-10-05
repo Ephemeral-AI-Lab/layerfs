@@ -29,7 +29,7 @@ immutable base/stat integration remain required. BaseView still opens FileView f
 regular-file length, so complete P5/S3/S9 acceptance is not claimed from this API.
 
 Catalogue work uses the same actual location SQL as normal reads, now centralized
-for query and [Handles::explain_locate](../../crates/layerfs-persistence/src/handles.rs).
+for query and [Handles::explain_locate](../../crates/layerfs-persistence/src/store/handles.rs).
 The read-only diagnostic respects distinct-ID paging on the initialized database.
 Runtime SqlWork records/reset actual fullscan/sort/autoindex/reprepare counters
 and decoded returned rows alongside existing VM/binding/wall/transaction/BLOB

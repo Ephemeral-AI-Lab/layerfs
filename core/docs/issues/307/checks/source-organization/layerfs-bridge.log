@@ -1,0 +1,24 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-bridge', '--all-targets', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.05s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_bridge-11a65a9ad9813a8d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/native.rs (core/target/debug/deps/native-9f0e32919917494c)
+
+running 5 tests
+test wrong_static_identity_fails_the_actual_handshake ... ok
+test malformed_record_quarantines_both_directions_before_body_allocation ... ok
+test corrupted_authenticated_record_retains_the_crypto_failure_without_replay ... ok
+test oversized_unattempted_record_does_not_consume_a_nonce ... ok
+NATIVE suite=Noise_KK_25519_AESGCM_SHA256 server_receive=ChannelWork { records: 5, plaintext_bytes: 196564, io_calls: 15, wire_bytes: 196654, plain_capacity: 65519, sealed_capacity: 65535 } server_send=ChannelWork { records: 5, plaintext_bytes: 196564, io_calls: 10, wire_bytes: 196654, plain_capacity: 0, sealed_capacity: 65535 } handshake=ChannelWork { records: 0, plaintext_bytes: 0, io_calls: 4, wire_bytes: 100, plain_capacity: 0, sealed_capacity: 0 }
+NATIVE client_send=ChannelWork { records: 5, plaintext_bytes: 196564, io_calls: 10, wire_bytes: 196654, plain_capacity: 0, sealed_capacity: 65535 } client_receive=ChannelWork { records: 5, plaintext_bytes: 196564, io_calls: 14, wire_bytes: 196654, plain_capacity: 65519, sealed_capacity: 65535 }
+test authenticated_duplex_records_stream_beyond_one_window_with_fixed_buffers ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+EXIT: 0; WALL: 0.291s

@@ -6,7 +6,7 @@ Implemented source: the S3 checkpoint on local main following `f2a381119`, for
 [tracker #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307). This is an
 initial active library, not complete Workspace or S3 install/lease qualification.
 
-The replacement [Workspace](../../crates/layerfs-workspace/src/workspace.rs)
+The replacement [Workspace](../../crates/layerfs-workspace/src/workspace/state.rs)
 binds a checked canonical filesystem root to one overlay route. `BaseView::open`
 acquires one root through public `FilesystemRead` and checks allocation scope;
 it does not enumerate paths or reconstruct payload. `Workspace::open` then
@@ -14,7 +14,7 @@ creates bounded logical state in the already initialized overlay. No special
 empty-base branch exists. Runtime root/Branch authority and native mount readiness
 remain separate future integration work.
 
-[BaseView](../../crates/layerfs-workspace/src/base.rs) uses current public content
+[BaseView](../../crates/layerfs-workspace/src/base/view.rs) uses current public content
 APIs for child/inode lookup, directory listing, portable metadata and symlink
 targets. Its file range plan opens public `FileView`, clamps EOF, retains that
 immutable file root/classification and streams to a caller sink. The 128 KiB read
@@ -23,7 +23,7 @@ root when a new BaseView binds another root; actual overlay install/reader lease
 integration is still outstanding. Global cluster one currently has no content GC;
 this pointer retention is not a future distributed retention lease.
 
-[CanonicalClient](../../crates/layerfs-workspace/src/client.rs) reauthenticates
+[CanonicalClient](../../crates/layerfs-workspace/src/base/client.rs) reauthenticates
 returned canonical bytes against exact object IDs, checks demand cardinality and
 canonical-object/window limits, and restores demand order. Cache locks are released
 before upstream calls and authentication. There is no retry or error substitution.
@@ -31,7 +31,7 @@ The upstream public provider must enforce its own authority/allocation contract
 before returning a batch; the client cannot undo upstream allocation. Authenticated
 runtime framing/admission is S9/P1 work, not established by this library seam.
 
-The [cache](../../crates/layerfs-workspace/src/cache.rs) keys immutable object IDs,
+The [cache](../../crates/layerfs-workspace/src/base/cache.rs) keys immutable object IDs,
 never a mutable path/serial. Bounded standard maps track values and recency; there
 is no authoritative namespace mirror. An object larger than the cache allowance
 bypasses retention and stays readable. Cache hits check remaining demand allowance

@@ -1,0 +1,143 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-project', '--all-targets', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_project-cffae0e2b52819f6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/history_proof_memo.rs (core/target/debug/deps/history_proof_memo-63e0a379bb7f70d8)
+
+running 4 tests
+test identity_and_missing_failures_are_not_cached ... ok
+test short_source_batch_is_refused_before_cache_admission ... ok
+test mixed_hits_misses_duplicates_and_order_keep_exact_bytes ... ok
+test eviction_respects_both_fixed_bounds_and_fresh_invocation_starts_empty ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/init_memory.rs (core/target/debug/deps/init_memory-4dff77e098c7527d)
+
+running 1 test
+DIAGNOSTIC init-memory-100 Diagnostics { policy: 1, locate: 6, read_packs: 0, read_pack_selections: 1, whole_selected: 1, whole_due_density: 0, whole_due_singleton: 0, whole_due_small: 1, whole_due_reuse: 0, range_selected: 0, range_scan_bytes: 0, range_acquired_bytes: 0, range_materialized_bytes: 0, value_groups: 2, signatures: 1, reserve: 2, publish: 5, payload_reads: 1, payload_read_bytes: 377, pack_read_bytes: 0, pack_write_bytes: 36542, pooled_packs: 1, pooled_groups: 2, reserved_directory_bytes: 4096, ordinal_reservations: 1, locator_hits: 868, locator_misses: 571, locator_evictions: 0, locator_eviction_probes: 0, locator_second_chances: 0, locator_bookkeeping_live_peak_bytes: 64, pack_hits: 304, pack_misses: 1, pack_evictions: 0, pack_evicted_bytes: 0, directory_validations: 617, directory_unshared_walks: 617, directory_entry_bounds: 617, prefetch_group_decodes: 0, forced_seals: 0 }
+DIAGNOSTIC init-memory-1000 Diagnostics { policy: 1, locate: 24, read_packs: 0, read_pack_selections: 2, whole_selected: 2, whole_due_density: 1, whole_due_singleton: 0, whole_due_small: 1, whole_due_reuse: 0, range_selected: 0, range_scan_bytes: 0, range_acquired_bytes: 0, range_materialized_bytes: 0, value_groups: 2, signatures: 1, reserve: 4, publish: 11, payload_reads: 2, payload_read_bytes: 11714, pack_read_bytes: 0, pack_write_bytes: 413291, pooled_packs: 2, pooled_groups: 20, reserved_directory_bytes: 8192, ordinal_reservations: 3, locator_hits: 9141, locator_misses: 5163, locator_evictions: 0, locator_eviction_probes: 0, locator_second_chances: 0, locator_bookkeeping_live_peak_bytes: 608, pack_hits: 3113, pack_misses: 2, pack_evictions: 0, pack_evicted_bytes: 0, directory_validations: 6238, directory_unshared_walks: 6238, directory_entry_bounds: 6238, prefetch_group_decodes: 0, forced_seals: 3 }
+test init_100_and_1000_over_memory_ports_pass_the_full_namespace_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+     Running tests/init_sqlite.rs (core/target/debug/deps/init_sqlite-a81263fb89d61840)
+
+running 1 test
+DIAGNOSTIC Durable-init-100 SQL=SqlWork { statements: 1883, vm_steps: 64857, fullscan_steps: 72, sorts: 16, autoindex_rows: 0, reprepares: 3, returned_rows: 1306, bound_bytes: 137800, statement_ns: 32051082, statement_phases: [StatementPhaseWork { calls: 1859, wall_ns: 1980913 }, StatementPhaseWork { calls: 1859, wall_ns: 184403 }, StatementPhaseWork { calls: 3165, wall_ns: 27644371 }, StatementPhaseWork { calls: 1306, wall_ns: 287453 }, StatementPhaseWork { calls: 1859, wall_ns: 44317 }, StatementPhaseWork { calls: 1859, wall_ns: 93838 }, StatementPhaseWork { calls: 1859, wall_ns: 383938 }], commit_phases: [StatementPhaseWork { calls: 597, wall_ns: 66280 }, StatementPhaseWork { calls: 597, wall_ns: 15077 }, StatementPhaseWork { calls: 597, wall_ns: 22802380 }, StatementPhaseWork { calls: 0, wall_ns: 0 }, StatementPhaseWork { calls: 597, wall_ns: 14910 }, StatementPhaseWork { calls: 597, wall_ns: 24548 }, StatementPhaseWork { calls: 597, wall_ns: 70242 }], commit_ns: 23126952, transactions: 597, write_transactions: 10, write_commits: 10, commits: 597, rollbacks: 0, transaction_ns: 32482542, sealed_inserts: 8, sealed_body_bytes: 36546, blob_open_calls: 10, blob_reopen_calls: 0, blob_read_calls: 30, blob_requested_bytes: 44601, blob_read_bytes: 44601, blob_read_ns: 10585, blob_close_calls: 10, preallocation_calls: 1, preallocation_bytes: 3141632, preallocation_ns: 404667, preallocation_close_ns: 0, checkpoint_ns: 0 } namespace=NamespaceWork { entries: 111, entry_capacity_bytes: 14856, jobs: 100, job_capacity_bytes: 19916, frontier: 10, frontier_capacity_bytes: 2472, directory_children: 10, child_vector_bytes: 16896, serial_capacity_bytes: 888, inode_capacity_bytes: 9768, directory_bindings: 110, directory_capacity_bytes: 352, change_capacity_bytes: 7040 }
+DIAGNOSTIC Durable-init-1000 SQL=SqlWork { statements: 15482, vm_steps: 555616, fullscan_steps: 72, sorts: 34, autoindex_rows: 0, reprepares: 3, returned_rows: 10394, bound_bytes: 1016441, statement_ns: 78240011, statement_phases: [StatementPhaseWork { calls: 15458, wall_ns: 5731496 }, StatementPhaseWork { calls: 15458, wall_ns: 1256247 }, StatementPhaseWork { calls: 25852, wall_ns: 61304203 }, StatementPhaseWork { calls: 10394, wall_ns: 1660491 }, StatementPhaseWork { calls: 15458, wall_ns: 380345 }, StatementPhaseWork { calls: 15458, wall_ns: 607034 }, StatementPhaseWork { calls: 15458, wall_ns: 2354312 }], commit_phases: [StatementPhaseWork { calls: 5104, wall_ns: 530733 }, StatementPhaseWork { calls: 5104, wall_ns: 123283 }, StatementPhaseWork { calls: 5104, wall_ns: 28849521 }, StatementPhaseWork { calls: 0, wall_ns: 0 }, StatementPhaseWork { calls: 5104, wall_ns: 132196 }, StatementPhaseWork { calls: 5104, wall_ns: 199107 }, StatementPhaseWork { calls: 5104, wall_ns: 522276 }], commit_ns: 31564353, transactions: 5104, write_transactions: 17, write_commits: 17, commits: 5104, rollbacks: 0, transaction_ns: 83489858, sealed_inserts: 20, sealed_body_bytes: 290995, blob_open_calls: 24, blob_reopen_calls: 0, blob_read_calls: 72, blob_requested_bytes: 329162, blob_read_bytes: 329162, blob_read_ns: 59254, blob_close_calls: 24, preallocation_calls: 1, preallocation_bytes: 3141632, preallocation_ns: 310792, preallocation_close_ns: 0, checkpoint_ns: 0 } namespace=NamespaceWork { entries: 1011, entry_capacity_bytes: 119708, jobs: 1000, job_capacity_bytes: 180728, frontier: 10, frontier_capacity_bytes: 2472, directory_children: 100, child_vector_bytes: 135168, serial_capacity_bytes: 8088, inode_capacity_bytes: 88968, directory_bindings: 1010, directory_capacity_bytes: 352, change_capacity_bytes: 51840 }
+DIAGNOSTIC Disposable-init-100 SQL=SqlWork { statements: 1883, vm_steps: 64857, fullscan_steps: 72, sorts: 16, autoindex_rows: 0, reprepares: 3, returned_rows: 1306, bound_bytes: 137811, statement_ns: 10720070, statement_phases: [StatementPhaseWork { calls: 1859, wall_ns: 1662162 }, StatementPhaseWork { calls: 1859, wall_ns: 149898 }, StatementPhaseWork { calls: 3165, wall_ns: 6932714 }, StatementPhaseWork { calls: 1306, wall_ns: 219214 }, StatementPhaseWork { calls: 1859, wall_ns: 45709 }, StatementPhaseWork { calls: 1859, wall_ns: 81477 }, StatementPhaseWork { calls: 1859, wall_ns: 346988 }], commit_phases: [StatementPhaseWork { calls: 597, wall_ns: 59637 }, StatementPhaseWork { calls: 597, wall_ns: 14331 }, StatementPhaseWork { calls: 597, wall_ns: 1242674 }, StatementPhaseWork { calls: 0, wall_ns: 0 }, StatementPhaseWork { calls: 597, wall_ns: 15538 }, StatementPhaseWork { calls: 597, wall_ns: 23750 }, StatementPhaseWork { calls: 597, wall_ns: 62858 }], commit_ns: 1552045, transactions: 597, write_transactions: 10, write_commits: 10, commits: 597, rollbacks: 0, transaction_ns: 11428785, sealed_inserts: 8, sealed_body_bytes: 36557, blob_open_calls: 10, blob_reopen_calls: 0, blob_read_calls: 30, blob_requested_bytes: 44612, blob_read_bytes: 44612, blob_read_ns: 13124, blob_close_calls: 10, preallocation_calls: 1, preallocation_bytes: 3010560, preallocation_ns: 162876, preallocation_close_ns: 750, checkpoint_ns: 0 } namespace=NamespaceWork { entries: 111, entry_capacity_bytes: 14856, jobs: 100, job_capacity_bytes: 19916, frontier: 10, frontier_capacity_bytes: 2472, directory_children: 10, child_vector_bytes: 16896, serial_capacity_bytes: 888, inode_capacity_bytes: 9768, directory_bindings: 110, directory_capacity_bytes: 352, change_capacity_bytes: 7040 }
+DIAGNOSTIC Disposable-init-1000 SQL=SqlWork { statements: 15481, vm_steps: 555594, fullscan_steps: 72, sorts: 34, autoindex_rows: 0, reprepares: 3, returned_rows: 10394, bound_bytes: 1016715, statement_ns: 80774631, statement_phases: [StatementPhaseWork { calls: 15457, wall_ns: 5542878 }, StatementPhaseWork { calls: 15457, wall_ns: 1285132 }, StatementPhaseWork { calls: 25851, wall_ns: 63748775 }, StatementPhaseWork { calls: 10394, wall_ns: 1757134 }, StatementPhaseWork { calls: 15457, wall_ns: 375244 }, StatementPhaseWork { calls: 15457, wall_ns: 617951 }, StatementPhaseWork { calls: 15457, wall_ns: 2443069 }], commit_phases: [StatementPhaseWork { calls: 5104, wall_ns: 558788 }, StatementPhaseWork { calls: 5104, wall_ns: 125694 }, StatementPhaseWork { calls: 5104, wall_ns: 8322101 }, StatementPhaseWork { calls: 0, wall_ns: 0 }, StatementPhaseWork { calls: 5104, wall_ns: 131302 }, StatementPhaseWork { calls: 5104, wall_ns: 200113 }, StatementPhaseWork { calls: 5104, wall_ns: 521933 }], commit_ns: 11038474, transactions: 5104, write_transactions: 17, write_commits: 17, commits: 5104, rollbacks: 0, transaction_ns: 86691880, sealed_inserts: 20, sealed_body_bytes: 291269, blob_open_calls: 24, blob_reopen_calls: 0, blob_read_calls: 72, blob_requested_bytes: 321549, blob_read_bytes: 321549, blob_read_ns: 135829, blob_close_calls: 24, preallocation_calls: 1, preallocation_bytes: 3010560, preallocation_ns: 255499, preallocation_close_ns: 1375, checkpoint_ns: 0 } namespace=NamespaceWork { entries: 1011, entry_capacity_bytes: 119708, jobs: 1000, job_capacity_bytes: 180728, frontier: 10, frontier_capacity_bytes: 2472, directory_children: 100, child_vector_bytes: 135168, serial_capacity_bytes: 8088, inode_capacity_bytes: 88968, directory_bindings: 1010, directory_capacity_bytes: 352, change_capacity_bytes: 51840 }
+test selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.06s
+
+     Running tests/namespace_scaling.rs (core/target/debug/deps/namespace_scaling-9ba4bcc3e4bcccd6)
+
+running 1 test
+DIAGNOSTIC namespace-count-100 NamespaceWork { entries: 111, entry_capacity_bytes: 14856, jobs: 100, job_capacity_bytes: 19916, frontier: 10, frontier_capacity_bytes: 2472, directory_children: 10, child_vector_bytes: 16896, serial_capacity_bytes: 888, inode_capacity_bytes: 9768, directory_bindings: 110, directory_capacity_bytes: 352, change_capacity_bytes: 7040 }
+DIAGNOSTIC namespace-count-1000 NamespaceWork { entries: 1011, entry_capacity_bytes: 119708, jobs: 1000, job_capacity_bytes: 180728, frontier: 10, frontier_capacity_bytes: 2472, directory_children: 100, child_vector_bytes: 135168, serial_capacity_bytes: 8088, inode_capacity_bytes: 88968, directory_bindings: 1010, directory_capacity_bytes: 352, change_capacity_bytes: 51840 }
+test retained_collection_counts_expose_entry_count_growth ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running unittests examples/benchmark_history.rs (core/target/debug/examples/benchmark_history-25eeb0e283ed40d5)
+
+running 28 tests
+test workload::gitoid::tests::a_blob_oid_is_the_header_plus_the_bytes ... ok
+test workload::gitoid::tests::object_ids_parse_and_render_round_trip ... ok
+test workload::gitoid::tests::the_buffer_boundaries_are_exact ... ok
+test workload::history::tests::a_blob_that_does_not_identify_is_refused_both_ways ... ok
+test workload::history::tests::a_malformed_oracle_is_refused_rather_than_counted ... ok
+test workload::history::tests::a_missing_corpus_is_refused_rather_than_defaulted ... ok
+test workload::history::tests::a_selection_that_is_not_the_declared_shape_is_refused ... ok
+test workload::history::tests::a_transition_counts_and_sizes_only_what_it_added_or_modified ... ok
+test workload::history::tests::a_tree_line_parses_in_the_corpus_column_order ... ok
+test workload::history::tests::an_oracle_parses_files_and_directories_apart ... ok
+test workload::history::tests::hex_decoding_refuses_odd_lengths_and_non_hex ... ok
+test workload::history::tests::path_states_are_not_the_manifest_file_count ... ok
+PROBE missing f5f32f2d850500cb3a3da5d9test workload::history::tests::sealed_oracle_counts_cover_all_checkpoints_and_refuse_drift ... ok
+f2e853266fed134a1e0fa7test workload::history::tests::a_malformed_tree_line_names_its_line_and_is_refused ... ok
+9deb1af3c7d1fd0072 admitted=false chain=6 allowed=3 served=1 refused=1 demanded=2
+test workload::history::tests::the_pinned_totals_agree_with_the_selections ... ok
+PROBE missing 9ectest workload::history::tests::the_three_selections_are_the_declared_indices ... ok
+54df692test workload::json::tests::a_duplicate_key_is_refused_rather_than_resolved ... ok
+d13dd9bd162281e44fed0b99153a66f241a5580692c2fe5btest workload::json::tests::accessors_are_typed_rather_than_coercing ... ok
+4test workload::json::tests::escapes_resolve_including_a_surrogate_pair ... ok
+9test workload::json::tests::counting_agrees_with_building ... ok
+test workload::json::tests::malformed_documents_are_refused ... okba7e admitted=false chain=
+6 allowed=4 served=4 refused=1 demanded=5
+PROBE missing test workload::json::tests::scalars_and_containers_round_trip ... ok
+10e80bf5atest workload::json::tests::the_depth_guard_refuses_rather_than_overflowing ... ok
+94eca10296a8test workload::providers::tests::a_cumulative_prefix_serves_bytes_and_demand_order_identically ... ok
+57277234d2acftest workload::providers::tests::a_batch_demanding_a_later_object_gets_the_snapshot_error ... ok
+27f6220ee2938182324471f3e5c133 admitted=false chain=6 allowed=4 served=4 refused=2 demanded=6
+test workload::providers::tests::prefix_keys_admit_the_snapshot_and_nothing_else ... ok
+test workload::gitoid::tests::sha1_matches_the_published_vectors ... ok
+test workload::gitoid::tests::blob_oid_matches_scalar_across_blocks_and_large_payloads ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests examples/benchmark_init.rs (core/target/debug/examples/benchmark_init-458c4c4d44746f69)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/cause_namespace.rs (core/target/debug/examples/cause_namespace-7aedcb121d53d725)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/verify_history.rs (core/target/debug/examples/verify_history-902dc25e49e113ab)
+
+running 28 tests
+test workload::gitoid::tests::a_blob_oid_is_the_header_plus_the_bytes ... ok
+test workload::gitoid::tests::object_ids_parse_and_render_round_trip ... ok
+test workload::gitoid::tests::the_buffer_boundaries_are_exact ... ok
+test workload::history::tests::a_blob_that_does_not_identify_is_refused_both_ways ... ok
+test workload::history::tests::a_malformed_oracle_is_refused_rather_than_counted ... ok
+test workload::history::tests::a_missing_corpus_is_refused_rather_than_defaulted ... ok
+test workload::history::tests::a_selection_that_is_not_the_declared_shape_is_refused ... ok
+test workload::history::tests::a_transition_counts_and_sizes_only_what_it_added_or_modified ... ok
+test workload::history::tests::an_oracle_parses_files_and_directories_apart ... ok
+test workload::history::tests::hex_decoding_refuses_odd_lengths_and_non_hex ... ok
+test workload::history::tests::path_states_are_not_the_manifest_file_count ... ok
+test workload::history::tests::the_pinned_totals_agree_with_the_selections ... ok
+test workload::history::tests::the_three_selections_are_the_declared_indices ... ok
+PROBE missing f5f32f2d850500cb3a3da5d9f2test workload::json::tests::a_duplicate_key_is_refused_rather_than_resolved ... ok
+e853266fedtest workload::json::tests::accessors_are_typed_rather_than_coercing ... ok
+test workload::json::tests::counting_agrees_with_building ... ok
+134a1e0fa7test workload::json::tests::escapes_resolve_including_a_surrogate_pair ... ok
+9deb1af3c7d1test workload::json::tests::malformed_documents_are_refused ... fd0ok
+072 admitted=false chain=6 allowed=3 served=1 refused=1 demanded=2
+test workload::json::tests::scalars_and_containers_round_trip ... ok
+PROBE missing 9ec54df692dtest workload::json::tests::the_depth_guard_refuses_rather_than_overflowing ... ok
+13dd9test workload::providers::tests::a_cumulative_prefix_serves_bytes_and_demand_order_identically ... ok
+test workload::history::tests::sealed_oracle_counts_cover_all_checkpoints_and_refuse_drift ... bok
+d162281e44fed0btest workload::history::tests::a_tree_line_parses_in_the_corpus_column_order ... ok991
+53a66f241a5580692c2fe5b49ba7test workload::providers::tests::a_batch_demanding_a_later_object_gets_the_snapshot_error ... ok
+e admitted=false chain=6 allowed=test workload::history::tests::a_malformed_tree_line_names_its_line_and_is_refused ... ok
+4 served=4 refused=1 demanded=5
+PROBE missing 10e80bf5a94eca10296a857277234d2acf27f6220ee2938182324471f3e5c133 admitted=false chain=6 allowed=4 served=4 refused=2 demanded=6
+test workload::providers::tests::prefix_keys_admit_the_snapshot_and_nothing_else ... ok
+test workload::gitoid::tests::sha1_matches_the_published_vectors ... ok
+test workload::gitoid::tests::blob_oid_matches_scalar_across_blocks_and_large_payloads ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests examples/verify_namespace.rs (core/target/debug/examples/verify_namespace-bb9c33c4490085ee)
+
+running 1 test
+test tests::lite_sample_covers_anchors_empty_sizes_and_tree_tail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+EXIT: 0; WALL: 9.238s
