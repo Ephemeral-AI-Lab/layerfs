@@ -342,6 +342,29 @@ fn run(shared: &Shared, db: &Overlay) {
                 }
             }
         }
+        if let Command::Install { capture, .. } = &job.command {
+            let ready = if job.route == Some(capture.route()) {
+                db.install_ready(*capture)
+            } else {
+                Err(OverlayError::Stale)
+            };
+            match ready {
+                Ok(false) => {
+                    shared.park(job);
+                    continue;
+                }
+                Err(error) => {
+                    let class = job.command.class();
+                    shared.progress(ns(job.route), class, elapsed(job.admitted), 0);
+                    let _ = job.reply.send(Envelope {
+                        result: Err(OwnerError::Overlay(error)),
+                        _credit: job.credit,
+                    });
+                    continue;
+                }
+                Ok(true) => {}
+            }
+        }
         let class = job.command.class();
         let namespace = ns(job.route);
         let wait = elapsed(job.admitted);

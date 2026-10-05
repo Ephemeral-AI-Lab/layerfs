@@ -12,6 +12,7 @@ pub enum OverlayError {
     Closed,
     CaptureInFlight,
     ReplyAttemptsPending,
+    BaseSourcesPending,
     Quarantined,
     Uncertain {
         cause: Box<OverlayError>,

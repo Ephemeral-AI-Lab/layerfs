@@ -66,7 +66,7 @@ impl Overlay {
     }
     pub(crate) fn queue_closed(&self, route: Route) -> OverlayResult<()> {
         let state = self.state(route)?;
-        if !state.closed || state.captured.is_some() {
+        if !state.closed || state.captured.is_some() || state.base_readers != 0 {
             return Ok(());
         }
         let held=self.query(StatementKind::Reclaim,

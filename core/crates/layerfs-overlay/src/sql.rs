@@ -14,6 +14,16 @@ pub(crate) const RETAINED_CAPTURE: &str = "SELECT captured,captured_revision,bas
     FROM workspace WHERE ns=?1 AND incarnation=?2";
 pub(crate) const PUBLICATION_PAGE: &str = "SELECT revision,gen FROM request
     WHERE ns=?1 AND revision>?2 ORDER BY revision LIMIT 64";
+pub(crate) const BASE_SOURCE_LOOKUP: &str =
+    "SELECT base_root FROM base_source WHERE ns=?1 AND owner=?2";
+pub(crate) const BASE_SOURCE_INSERT: &str =
+    "INSERT INTO base_source(ns,owner,base_root) VALUES(?1,?2,?3)";
+pub(crate) const BASE_SOURCE_DELETE: &str =
+    "DELETE FROM base_source WHERE ns=?1 AND owner=?2 AND base_root=?3";
+pub(crate) const BASE_SOURCE_INCREMENT: &str =
+    "UPDATE workspace SET base_readers=base_readers+1 WHERE ns=?1";
+pub(crate) const BASE_SOURCE_DECREMENT: &str =
+    "UPDATE workspace SET base_readers=base_readers-1 WHERE ns=?1";
 pub(crate) const DENTRY_CAPTURE: &str = "SELECT parent,name,serial
     FROM dentry INDEXED BY dentry_capture WHERE ns=?1 AND gen=?2
     AND (parent,name)>(?3,?4) ORDER BY parent,name LIMIT 64";

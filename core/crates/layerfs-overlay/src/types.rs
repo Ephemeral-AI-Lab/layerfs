@@ -111,6 +111,27 @@ pub struct WorkspaceState {
     pub dirty_inodes: u64,
     pub dirty_names: u64,
     pub closed: bool,
+    /// Maintained exact pending base-source windows, not a namespace scan.
+    pub base_readers: u64,
+}
+/// One exact transient immutable-base source window. Release requires actual
+/// request completion/fencing; open-file and command lifetime are independent.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BaseSource {
+    pub(crate) route: Route,
+    pub(crate) owner: u64,
+    pub(crate) root: [u8; 32],
+}
+impl BaseSource {
+    pub const fn route(self) -> Route {
+        self.route
+    }
+    pub const fn owner(self) -> u64 {
+        self.owner
+    }
+    pub const fn root(self) -> [u8; 32] {
+        self.root
+    }
 }
 /// Independently keyed custody, not a resident owner map.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

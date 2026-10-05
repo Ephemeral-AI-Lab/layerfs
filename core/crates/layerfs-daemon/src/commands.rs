@@ -1,7 +1,7 @@
 //! Typed bounded SQL jobs. No closure can hold the owner across network/Exec work.
 use layerfs_overlay::{
-    Capture, Cell, Dentry, Inode, Lease, Overlay, OverlayResult, Publication, Route, ScratchRecord,
-    WorkspaceState, CELL_BYTES, MASK_BYTES, PAGE_ROWS, SCRATCH_BYTES,
+    BaseSource, Capture, Cell, Dentry, Inode, Lease, Overlay, OverlayResult, Publication, Route,
+    ScratchRecord, WorkspaceState, CELL_BYTES, MASK_BYTES, PAGE_ROWS, SCRATCH_BYTES,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -12,6 +12,7 @@ pub enum ServiceClass {
     Capture,
     Lifecycle,
     Scratch,
+    Source,
 }
 /// One fixed SQL window, never a whole Exec or content-construction operation.
 #[derive(Debug)]
@@ -24,6 +25,17 @@ pub enum Command {
     RetainedCapture,
     PendingPublications {
         after: u64,
+    },
+    AcquireBaseSource {
+        owner: u64,
+    },
+    RetainedBaseSource {
+        owner: u64,
+    },
+    ReleaseBaseSource(BaseSource),
+    SourceInode {
+        source: BaseSource,
+        serial: u64,
     },
     CleanupState,
     Close,
@@ -78,6 +90,8 @@ pub enum Response {
     Inodes(Vec<Inode>),
     Dentries(Vec<Dentry>),
     Cell(Option<Cell>),
+    BaseSource(BaseSource),
+    RetainedBaseSource(Option<BaseSource>),
     Scratch(Vec<ScratchRecord>),
     Done,
 }
@@ -87,6 +101,8 @@ impl Command {
             Self::Open { .. }
             | Self::State
             | Self::RetainedCapture
+            | Self::RetainedBaseSource { .. }
+            | Self::ReleaseBaseSource(_)
             | Self::CleanupState
             | Self::Close
             | Self::ReleaseClosedCapture(_)
@@ -96,6 +112,8 @@ impl Command {
             Self::Inode(_) | Self::PendingPublications { .. } | Self::CapturedCell { .. } => {
                 ServiceClass::Read
             }
+            Self::SourceInode { .. } => ServiceClass::Read,
+            Self::AcquireBaseSource { .. } => ServiceClass::Source,
             Self::Publish { .. } => ServiceClass::Mutation,
             Self::Capture
             | Self::Install { .. }
@@ -147,6 +165,24 @@ impl Command {
             Self::PendingPublications { after } => db
                 .pending_publications(route, after)
                 .map(Response::Publications),
+            Self::AcquireBaseSource { owner } => db
+                .acquire_base_source(route, owner)
+                .map(Response::BaseSource),
+            Self::RetainedBaseSource { owner } => db
+                .retained_base_source(route, owner)
+                .map(Response::RetainedBaseSource),
+            Self::ReleaseBaseSource(source) => {
+                if source.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.release_base_source(source).map(|_| Response::Done)
+            }
+            Self::SourceInode { source, serial } => {
+                if source.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.source_inode(source, serial).map(Response::Inode)
+            }
             Self::CleanupState => db.cleanup_state(route).map(Response::CleanupState),
             Self::Close => db.close(route).map(|_| Response::Done),
             Self::ReleaseClosedCapture(capture) => {

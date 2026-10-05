@@ -1,0 +1,13 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.93s
+     Running tests/source.rs (core/target/debug/deps/source-17c5614d44c506ff)
+
+running 2 tests
+test source_retains_selected_base_and_exact_close_custody_without_a_generation_pin ... ok
+BASE_SOURCE unrelated_owners=128 point_vm=14 returned=1 fullscan=0 sorts=0 autoindex=0 reprepare=0 plan=["SEARCH base_source USING PRIMARY KEY (ns=? AND owner=?)"]
+BASE_SOURCE unrelated_owners=1024 point_vm=14 returned=1 fullscan=0 sorts=0 autoindex=0 reprepare=0 plan=["SEARCH base_source USING PRIMARY KEY (ns=? AND owner=?)"]
+BASE_SOURCE unrelated_owners=4096 point_vm=14 returned=1 fullscan=0 sorts=0 autoindex=0 reprepare=0 plan=["SEARCH base_source USING PRIMARY KEY (ns=? AND owner=?)"]
+test source_owner_observation_keeps_indexed_work_as_unrelated_custody_grows ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

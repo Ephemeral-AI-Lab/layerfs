@@ -44,3 +44,12 @@ retention is checked; effective later inherited-byte semantics are still S5.
 Cross-Workspace prepared input and altered capture revision are refused with the
 candidate intact. No full development workload, cache-cold timing or complete
 Commit/runtime claim follows from this fixture.
+
+## Base-source prerequisite checkpoint
+
+The slice after `6e84b9181` adds schema6 transient source custody and maintained
+install readiness. The owner now has six classes: new source acquisitions wait
+behind a finite known-install fence while existing reads/releases, mutations and
+other namespaces progress. See [base-source windows](28-base-source-windows.md).
+Earlier schema/class/query receipts keep their original pins. Actual prepared
+Workspace/actor/native composition and effective merge remain required.

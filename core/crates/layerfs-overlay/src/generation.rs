@@ -37,7 +37,7 @@ impl Overlay {
     /// work is queued; last-owner eligibility/automatic deletion is S6 work.
     pub fn install(&self, capture: Capture, root: [u8; 32]) -> OverlayResult<()> {
         self.atomic(|| {
-            self.checked_capture(capture)?;
+            if !self.install_ready(capture)? { return Err(OverlayError::BaseSourcesPending); }
             self.execute(
                 StatementKind::Capture,
                 "UPDATE workspace SET base_root=?2,installed=?3,captured=NULL,captured_revision=NULL WHERE ns=?1",
@@ -52,6 +52,12 @@ impl Overlay {
             )?;
             self.queue_closed(capture.route())
         })
+    }
+    /// Readiness before the one known-install attempt. The daemon fences later
+    /// source acquisitions and parks the original job until exact releases.
+    pub fn install_ready(&self, capture: Capture) -> OverlayResult<bool> {
+        self.checked_capture(capture)?;
+        Ok(self.state(capture.route())?.base_readers == 0)
     }
     /// Final captured name bindings, indexed by their sealed generation. The
     /// resume key is (parent,binary name); no OFFSET or active-domain filtering.

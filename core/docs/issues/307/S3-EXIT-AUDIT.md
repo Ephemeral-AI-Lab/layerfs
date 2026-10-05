@@ -32,3 +32,20 @@ view selection through short backed/owned plans, without retaining a SQL owner
 across provider I/O. Then reconcile every S3 exit before a completion commit.
 S0's payload/failure/pressure algorithm gates remain named dependencies for S5/S6;
 S1/S2 remain complete and fuser native acceptance remains independently blocked.
+
+## Source-window prerequisite checkpoint
+
+The slice after `6e84b9181` implements the [source fence](S3-SOURCE-FENCE.md):
+exact backed root windows, maintained readiness count and fair six-class install/
+acquisition ordering. Host571/Linux30 tests and all prescribed checks pass; raw
+logs are [s3-source](checks/s3-source/core-test.log). Source-family point work is
+macOS14/Linux13 VM with zero scans/sorts beside128/1024/4096 unrelated owners.
+Effective lookup/metadata/name merging and actual provider/native actor composition
+remain required; S3 is still unchecked. [Architecture](../../architecture/28-base-source-windows.md)
+records implementation, work scope and resource debt.
+
+The final source-change evidence also covers insertion VM and counter/delete
+point plans with actual99/123 VM macOS and94/117 VM Linux live acquire/release work,
+including all invoked families. Covering571/30 tests and boundary496 files pass
+after adding the diagnostic API; initial passing570/29 logs are preserved with
+their earlier scope. [DML diagnostic](checks/s3-source/source-change-profile.log).

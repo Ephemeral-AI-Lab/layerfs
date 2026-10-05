@@ -91,3 +91,12 @@ and bounded charged name/cell/ticket replies. [S2 exit audit](../issues/307/S2-E
 maps every exit to source/host/Linux evidence. The earlier checkpoint limitations
 above retain their source scope; live-generation/orphan/normal failed-Commit
 resolution, physical pressure and native deferred replies remain S6/S8 work.
+
+## Base-source prerequisite checkpoint
+
+The slice after `6e84b9181` adds schema6 transient source custody and maintained
+install readiness. The owner now has six classes: new source acquisitions wait
+behind a finite known-install fence while existing reads/releases, mutations and
+other namespaces progress. See [base-source windows](28-base-source-windows.md).
+Earlier schema/class/query receipts keep their original pins. Actual prepared
+Workspace/actor/native composition and effective merge remain required.

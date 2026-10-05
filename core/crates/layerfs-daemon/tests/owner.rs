@@ -229,7 +229,7 @@ fn parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation
         OwnerConfig::default(),
     )
     .unwrap();
-    assert_eq!(owner.profile().schema_version, 5);
+    assert_eq!(owner.profile().schema_version, 6);
     let client = owner.client();
     let a = open(&client, 1);
     let b = open(&client, 2);
@@ -529,5 +529,163 @@ fn lost_internal_completions_keep_exact_backed_custody_and_release_result_credit
     reply(&client, later_p);
     assert!(client.diagnostics().unwrap().peak_credited_bytes <= OwnerConfig::default().bytes);
     assert!(client.maintenance_failure().unwrap().is_none());
+    owner.stop().unwrap();
+}
+
+#[test]
+fn known_install_fences_later_sources_while_existing_reads_mutations_and_other_work_progress() {
+    let temp = Temp::new();
+    let owner = Owner::start(
+        &temp.0.join("db"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let client = owner.client();
+    let route = open(&client, 130);
+    let other = open(&client, 131);
+    let done = write(&client, route, 2);
+    reply(&client, publication(&done));
+    drop(done);
+    let captured = submit(&client, Some(route), Command::Capture)
+        .wait()
+        .unwrap();
+    let capture = match captured.result() {
+        Ok(Response::Captured(c)) => *c,
+        x => panic!("{x:?}"),
+    };
+    drop(captured);
+    let earlier = submit(
+        &client,
+        Some(route),
+        Command::AcquireBaseSource { owner: 7 },
+    );
+    let install = submit(
+        &client,
+        Some(route),
+        Command::Install {
+            capture,
+            root: [77; 32],
+        },
+    );
+    let later = submit(
+        &client,
+        Some(route),
+        Command::AcquireBaseSource { owner: 8 },
+    );
+    let earlier = earlier.wait().unwrap();
+    let source = match earlier.result() {
+        Ok(Response::BaseSource(s)) => *s,
+        x => panic!("{x:?}"),
+    };
+    drop(earlier);
+    assert_eq!(source.root(), [17; 32]);
+    assert!(install.try_complete().unwrap().is_none());
+    assert!(later.try_complete().unwrap().is_none());
+    let read = submit(
+        &client,
+        Some(route),
+        Command::SourceInode { source, serial: 2 },
+    )
+    .wait()
+    .unwrap();
+    assert!(matches!(read.result(),Ok(Response::Inode(Some(i))) if i.serial==2));
+    drop(read);
+    let mutation = write(&client, route, 3);
+    let publication = publication(&mutation);
+    drop(mutation);
+    reply(&client, publication);
+    assert!(submit(&client, Some(other), Command::State)
+        .wait()
+        .unwrap()
+        .result()
+        .is_ok());
+    assert!(
+        submit(&client, Some(route), Command::ReleaseBaseSource(source))
+            .wait()
+            .unwrap()
+            .result()
+            .is_ok()
+    );
+    assert!(install.wait().unwrap().result().is_ok());
+    let later = later.wait().unwrap();
+    let next = match later.result() {
+        Ok(Response::BaseSource(s)) => *s,
+        x => panic!("{x:?}"),
+    };
+    drop(later);
+    assert_eq!(next.root(), [77; 32]);
+    assert!(
+        submit(&client, Some(route), Command::ReleaseBaseSource(next))
+            .wait()
+            .unwrap()
+            .result()
+            .is_ok()
+    );
+    let state = submit(&client, Some(route), Command::State).wait().unwrap();
+    assert!(
+        matches!(state.result(),Ok(Response::State(s)) if s.base_readers==0&&s.base_root==[77;32])
+    );
+    drop(state);
+    assert!(
+        client.diagnostics().unwrap().completed[layerfs_daemon::ServiceClass::Source as usize] >= 2
+    );
+    owner.stop().unwrap();
+}
+
+#[test]
+fn lost_source_completion_retains_backed_owner_and_terminal_release_makes_cleanup_eligible() {
+    use std::time::{Duration, Instant};
+    let temp = Temp::new();
+    let owner = Owner::start(
+        &temp.0.join("db"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let client = owner.client();
+    let route = open(&client, 132);
+    drop(submit(
+        &client,
+        Some(route),
+        Command::AcquireBaseSource { owner: 19 },
+    ));
+    let stop = Instant::now() + Duration::from_secs(2);
+    while client.diagnostics().unwrap().outstanding != 0 {
+        assert!(Instant::now() < stop);
+        std::thread::yield_now();
+    }
+    let retained = submit(
+        &client,
+        Some(route),
+        Command::RetainedBaseSource { owner: 19 },
+    )
+    .wait()
+    .unwrap();
+    let source = match retained.result() {
+        Ok(Response::RetainedBaseSource(Some(s))) => *s,
+        x => panic!("{x:?}"),
+    };
+    drop(retained);
+    assert!(submit(&client, Some(route), Command::Close)
+        .wait()
+        .unwrap()
+        .result()
+        .is_ok());
+    let state = submit(&client, Some(route), Command::CleanupState)
+        .wait()
+        .unwrap();
+    assert!(matches!(
+        state.result(),
+        Ok(Response::CleanupState(layerfs_overlay::CleanupState::Held))
+    ));
+    drop(state);
+    assert!(
+        submit(&client, Some(route), Command::ReleaseBaseSource(source))
+            .wait()
+            .unwrap()
+            .result()
+            .is_ok()
+    );
     owner.stop().unwrap();
 }

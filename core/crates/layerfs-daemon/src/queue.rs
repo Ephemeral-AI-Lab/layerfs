@@ -14,9 +14,9 @@ use std::{
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OwnerWork {
     pub admitted: u64,
-    pub completed: [u64; 5],
-    pub queue_wait_ns: [u64; 5],
-    pub service_ns: [u64; 5],
+    pub completed: [u64; 6],
+    pub queue_wait_ns: [u64; 6],
+    pub service_ns: [u64; 6],
     pub credited_bytes: usize,
     pub peak_credited_bytes: usize,
     pub outstanding: usize,
@@ -39,7 +39,7 @@ pub(crate) struct Job {
     pub blocked: bool,
 }
 pub(crate) struct Lane {
-    pub queues: [VecDeque<Job>; 5],
+    pub queues: [VecDeque<Job>; 6],
     pub next: usize,
     pub ordinary: usize,
     pub lifecycle: usize,
@@ -54,13 +54,30 @@ impl Lane {
         }
     }
     fn take(&mut self) -> Option<Job> {
-        for _ in 0..5 {
+        for _ in 0..6 {
             let index = self.next;
-            self.next = (self.next + 1) % 5;
+            self.next = (self.next + 1) % 6;
             let Some(front) = self.queues[index].front() else {
                 continue;
             };
             if front.blocked {
+                continue;
+            }
+            // A known install waits only for its finite earlier base-source
+            // frontier. New acquisitions park outside the SQL attempt; existing
+            // reads/releases use other classes and remain runnable.
+            if index == ServiceClass::Source as usize
+                && self.queues[ServiceClass::Capture as usize]
+                    .iter()
+                    .any(|job| matches!(job.command, Command::Install { .. }) && job.id < front.id)
+            {
+                continue;
+            }
+            if matches!(front.command, Command::Install { .. })
+                && self.queues[ServiceClass::Source as usize]
+                    .iter()
+                    .any(|job| job.id < front.id)
+            {
                 continue;
             }
             // Drain only the finite pre-capture mutation/reply frontier. Later

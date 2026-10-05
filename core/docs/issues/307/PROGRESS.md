@@ -94,7 +94,9 @@ orphan/normal failed-Commit resolution, pressure and native ownership remain lat
 
 [S3 exit audit](S3-EXIT-AUDIT.md) now records prepared known install and old-root
 retention against actual engine install. Effective point/name/metadata merge and
-P5 stat/runtime integration remain required. S3 is still unchecked.
+P5 stat/runtime integration remain required. Exact short base-source leases and
+finite install readiness now provide the source lifetime prerequisite; see
+[source windows](../../architecture/28-base-source-windows.md). S3 is still unchecked.
 
 ## Concrete next work
 
@@ -123,7 +125,8 @@ S0 and later acceptance require the remaining service/lifetime/resource work.
 
 Untracked `core/docs/issues/301/`, the existing extent-normalization research and
 `output/` are unrelated and preserved. Concurrent `docs/README.md` edits and
-untracked `docs/general/sandbox-cache-design.md` are also preserved without staging. Root `crates/` remains the reference until
+untracked `docs/general/sandbox-cache-design.md` and
+`docs/general/workspace-filesystem-view.md` are also preserved without staging. Root `crates/` remains the reference until
 S12 qualification permits S13. Checkpoint hashes are local-only; no remote push,
 release or deployment is authorized. Append-only tracker texts are retained in
 [checkpoints](checkpoints/initial.md). Rust checks/LOC/evidence are recorded in

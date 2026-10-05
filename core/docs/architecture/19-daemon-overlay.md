@@ -109,3 +109,12 @@ identity after lost completions; captured bytes remain readable during close.
 See [capture custody](26-capture-custody.md) and its S2 exit/evidence map.
 S1 evidence keeps its schema4 pin; physical live-generation/failure/pressure
 acceptance remains S6/S7.
+
+## Base-source prerequisite checkpoint
+
+The slice after `6e84b9181` adds schema6 transient source custody and maintained
+install readiness. The owner now has six classes: new source acquisitions wait
+behind a finite known-install fence while existing reads/releases, mutations and
+other namespaces progress. See [base-source windows](28-base-source-windows.md).
+Earlier schema/class/query receipts keep their original pins. Actual prepared
+Workspace/actor/native composition and effective merge remain required.
