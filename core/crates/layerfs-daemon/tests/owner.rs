@@ -229,7 +229,7 @@ fn parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation
         OwnerConfig::default(),
     )
     .unwrap();
-    assert_eq!(owner.profile().schema_version, 4);
+    assert_eq!(owner.profile().schema_version, 5);
     let client = owner.client();
     let a = open(&client, 1);
     let b = open(&client, 2);
@@ -346,4 +346,188 @@ fn stopping_cancels_unattempted_capture_and_fences_future_admission() {
         Err((OwnerError::Stopped, _))
     ));
     assert!(matches!(published.result(), Ok(Response::Published(_))));
+}
+
+#[test]
+fn lost_internal_completions_keep_exact_backed_custody_and_release_result_credits() {
+    use layerfs_overlay::{Cell, Dentry, OverlayError, CELL_BYTES, MASK_BYTES};
+    use std::time::{Duration, Instant};
+    let temp = Temp::new();
+    let owner = Owner::start(
+        &temp.0.join("db"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let client = owner.client();
+    let route = open(&client, 120);
+    let other = open(&client, 121);
+    // Receiver disappears before the worker's result send. This does not cancel
+    // an admitted attempted operation or release its separate DB reply ticket.
+    drop(submit(
+        &client,
+        Some(route),
+        Command::Publish {
+            inode: value(2),
+            name: Some(Dentry {
+                parent: 1,
+                name: vec![0xff; 255],
+                serial: Some(2),
+            }),
+            cell: Some(Cell {
+                offset: 0,
+                data: Box::new([17; CELL_BYTES]),
+                validity: Box::new([255; MASK_BYTES]),
+            }),
+        },
+    ));
+    let stop = Instant::now() + Duration::from_secs(2);
+    while client.diagnostics().unwrap().outstanding != 0 {
+        assert!(
+            Instant::now() < stop,
+            "lost completion kept resident credits"
+        );
+        std::thread::yield_now();
+    }
+    let tickets = submit(
+        &client,
+        Some(route),
+        Command::PendingPublications { after: 0 },
+    )
+    .wait()
+    .unwrap();
+    let p = match tickets.result() {
+        Ok(Response::Publications(p)) if p.len() == 1 => p[0],
+        x => panic!("{x:?}"),
+    };
+    assert_eq!(p.revision(), 1);
+    drop(tickets);
+    // Explicit caller notification of its actual reply-send attempt; observation
+    // above did not settle it. Native kernel integration remains a separate proof.
+    reply(&client, p);
+    drop(submit(&client, Some(route), Command::Capture));
+    let stop = Instant::now() + Duration::from_secs(2);
+    while client.diagnostics().unwrap().outstanding != 0 {
+        assert!(
+            Instant::now() < stop,
+            "lost capture completion kept resident credits"
+        );
+        std::thread::yield_now();
+    }
+    let retained = submit(&client, Some(route), Command::RetainedCapture)
+        .wait()
+        .unwrap();
+    let capture = match retained.result() {
+        Ok(Response::RetainedCapture(Some(c))) => *c,
+        x => panic!("{x:?}"),
+    };
+    assert_eq!(capture.revision, 1);
+    drop(retained);
+    let later = write(&client, route, 3);
+    let later_p = publication(&later);
+    drop(later);
+    let observed = submit(&client, Some(route), Command::RetainedCapture)
+        .wait()
+        .unwrap();
+    assert!(matches!(observed.result(),Ok(Response::RetainedCapture(Some(c))) if *c==capture));
+    drop(observed);
+    let names = submit(
+        &client,
+        Some(route),
+        Command::CapturedDentries {
+            capture,
+            after: None,
+        },
+    )
+    .wait()
+    .unwrap();
+    let after = match names.result() {
+        Ok(Response::Dentries(rows)) => {
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].name, vec![0xff; 255]);
+            assert!(client.diagnostics().unwrap().credited_bytes >= rows[0].name.capacity());
+            Some((rows[0].parent, rows[0].name.clone()))
+        }
+        x => panic!("{x:?}"),
+    };
+    drop(names);
+    let end = submit(
+        &client,
+        Some(route),
+        Command::CapturedDentries { capture, after },
+    )
+    .wait()
+    .unwrap();
+    assert!(matches!(end.result(),Ok(Response::Dentries(rows)) if rows.is_empty()));
+    drop(end);
+    let invalid = submit(
+        &client,
+        Some(route),
+        Command::CapturedDentries {
+            capture,
+            after: Some((1, vec![1; 256])),
+        },
+    )
+    .wait()
+    .unwrap();
+    assert!(matches!(
+        invalid.result(),
+        Err(OwnerError::Overlay(OverlayError::Invalid(_)))
+    ));
+    drop(invalid);
+    let wrong_route = submit(
+        &client,
+        Some(other),
+        Command::CapturedCell {
+            capture,
+            serial: 2,
+            offset: 0,
+        },
+    )
+    .wait()
+    .unwrap();
+    assert!(matches!(
+        wrong_route.result(),
+        Err(OwnerError::Overlay(OverlayError::Stale))
+    ));
+    drop(wrong_route);
+    assert!(submit(&client, Some(route), Command::Close)
+        .wait()
+        .unwrap()
+        .result()
+        .is_ok());
+    let bytes = submit(
+        &client,
+        Some(route),
+        Command::CapturedCell {
+            capture,
+            serial: 2,
+            offset: 0,
+        },
+    )
+    .wait()
+    .unwrap();
+    assert!(
+        matches!(bytes.result(),Ok(Response::Cell(Some(cell))) if cell.data.iter().all(|b|*b==17))
+    );
+    assert!(client.diagnostics().unwrap().credited_bytes >= CELL_BYTES + MASK_BYTES);
+    drop(bytes);
+    assert!(submit(&client, Some(other), Command::State)
+        .wait()
+        .unwrap()
+        .result()
+        .is_ok());
+    // No upstream construction/Save/history was entered in this operation. The
+    // consumer is fenced, so explicit release has a known local-only disposition.
+    assert!(
+        submit(&client, Some(route), Command::ReleaseClosedCapture(capture))
+            .wait()
+            .unwrap()
+            .result()
+            .is_ok()
+    );
+    reply(&client, later_p);
+    assert!(client.diagnostics().unwrap().peak_credited_bytes <= OwnerConfig::default().bytes);
+    assert!(client.maintenance_failure().unwrap().is_none());
+    owner.stop().unwrap();
 }

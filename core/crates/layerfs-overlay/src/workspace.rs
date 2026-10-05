@@ -23,15 +23,19 @@ impl Overlay {
                 64,
                 |r| r.get(0),
             )?[0];
-            Ok(Route { ns, incarnation })
+            Ok(Route {
+                engine: self.identity,
+                ns,
+                incarnation,
+            })
         })
     }
     /// One route-qualified point observation. It does not enumerate/count payload.
     pub fn state(&self, route: Route) -> OverlayResult<WorkspaceState> {
-        self.available()?;
+        self.check_route(route)?;
         self.query(
             StatementKind::Workspace,
-            "SELECT active,captured,revision,base_root,dirty_inodes,dirty_names,lifecycle,installed
+            "SELECT active,captured,revision,base_root,dirty_inodes,dirty_names,lifecycle,installed,captured_revision
              FROM workspace WHERE ns=?1 AND incarnation=?2",
             &[&route.ns, &route.incarnation.as_slice()],
             40,
@@ -41,6 +45,7 @@ impl Overlay {
                 Ok(WorkspaceState {
                     active: Generation(r.get(0)?),
                     captured: r.get::<_, Option<i64>>(1)?.map(Generation),
+                    captured_revision: r.get(8)?,
                     installed: r.get(7)?,
                     revision: r.get(2)?,
                     base_root,

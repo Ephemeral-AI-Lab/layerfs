@@ -10,6 +10,10 @@ pub(crate) const CELL_LOOKUP: &str = "SELECT data,validity FROM payload
 pub(crate) const DENTRY_LOOKUP:&str="SELECT serial FROM dentry WHERE ns=?1 AND parent=?2 AND name=?3 AND gen<=?4 AND gen>?5 ORDER BY gen DESC LIMIT 1";
 pub(crate) const LEASE_LOOKUP: &str =
     "SELECT 1 FROM lease WHERE ns=?1 AND kind=?2 AND owner=?3 AND resource=?4";
+pub(crate) const RETAINED_CAPTURE: &str = "SELECT captured,captured_revision,base_root
+    FROM workspace WHERE ns=?1 AND incarnation=?2";
+pub(crate) const PUBLICATION_PAGE: &str = "SELECT revision,gen FROM request
+    WHERE ns=?1 AND revision>?2 ORDER BY revision LIMIT 64";
 pub(crate) const DENTRY_CAPTURE: &str = "SELECT parent,name,serial
     FROM dentry INDEXED BY dentry_capture WHERE ns=?1 AND gen=?2
     AND (parent,name)>(?3,?4) ORDER BY parent,name LIMIT 64";

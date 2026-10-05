@@ -10,7 +10,7 @@ impl Overlay {
     pub fn explain_install(&self, capture: Capture, root: [u8; 32]) -> OverlayResult<Vec<String>> {
         self.checked_capture(capture)?;
         let mut plan = self.query(StatementKind::Explain,
-            "EXPLAIN QUERY PLAN UPDATE workspace SET base_root=?2,installed=?3,captured=NULL WHERE ns=?1",
+            "EXPLAIN QUERY PLAN UPDATE workspace SET base_root=?2,installed=?3,captured=NULL,captured_revision=NULL WHERE ns=?1",
             &[&capture.route.ns,&root.as_slice(),&capture.generation.0],48,|row|row.get(3))?;
         let vm = self.query(
             StatementKind::Explain,
@@ -40,7 +40,7 @@ impl Overlay {
             self.checked_capture(capture)?;
             self.execute(
                 StatementKind::Capture,
-                "UPDATE workspace SET base_root=?2,installed=?3,captured=NULL WHERE ns=?1",
+                "UPDATE workspace SET base_root=?2,installed=?3,captured=NULL,captured_revision=NULL WHERE ns=?1",
                 &[&capture.route.ns, &root.as_slice(), &capture.generation.0],
                 48,
             )?;
@@ -62,6 +62,9 @@ impl Overlay {
     ) -> OverlayResult<Vec<crate::Dentry>> {
         self.checked_capture(capture)?;
         let (parent, name) = after.unwrap_or((0, &[]));
+        if name.len() > 255 {
+            return Err(OverlayError::Invalid("captured name cursor"));
+        }
         self.query(
             StatementKind::Capture,
             sql::DENTRY_CAPTURE,
@@ -127,9 +130,13 @@ impl Overlay {
             self.state(publication.route)?;
             let changed = self.execute(
                 StatementKind::Frontier,
-                "DELETE FROM request WHERE ns=?1 AND revision=?2",
-                &[&publication.route.ns, &publication.revision],
-                16,
+                "DELETE FROM request WHERE ns=?1 AND revision=?2 AND gen=?3",
+                &[
+                    &publication.route.ns,
+                    &publication.revision,
+                    &publication.generation.0,
+                ],
+                24,
             )?;
             if changed != 1 {
                 return Err(OverlayError::Stale);
@@ -150,7 +157,7 @@ impl Overlay {
             }
             let next=state.active.0.checked_add(1).ok_or(OverlayError::Invalid("generation exhausted"))?;
             self.execute(StatementKind::Capture,
-                "UPDATE workspace SET captured=active,active=?2,dirty_inodes=0,dirty_names=0 WHERE ns=?1",
+                "UPDATE workspace SET captured=active,captured_revision=revision,active=?2,dirty_inodes=0,dirty_names=0 WHERE ns=?1",
                 &[&route.ns,&next],16)?;
             Ok(Capture {route,generation:state.active,revision:state.revision,base_root:state.base_root})
         })
@@ -169,7 +176,10 @@ impl Overlay {
     }
     pub(crate) fn checked_capture(&self, capture: Capture) -> OverlayResult<()> {
         let state = self.state(capture.route)?;
-        if state.captured != Some(capture.generation) {
+        if state.captured != Some(capture.generation)
+            || state.captured_revision != Some(capture.revision)
+            || state.base_root != capture.base_root
+        {
             return Err(OverlayError::Stale);
         }
         Ok(())

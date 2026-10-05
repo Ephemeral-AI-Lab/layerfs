@@ -193,7 +193,7 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
     let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
     assert!(Overlay::create(&temp.db(), ProfileConfig::default()).is_err());
     let p = db.profile();
-    assert_eq!(p.schema_version, 4);
+    assert_eq!(p.schema_version, 5);
     assert_eq!(p.max_pages, i64::from(u32::MAX - 1));
     assert_eq!(p.explicit_page_quota, None);
     #[cfg(unix)]
@@ -665,6 +665,9 @@ fn real_sqlite_full_aborts_one_mutation_without_losing_previous_publication() {
     .unwrap();
     let a = db.open_workspace([92; 32], [93; 32]).unwrap();
     let b = db.open_workspace([94; 32], [93; 32]).unwrap();
+    let initial = db.publish(a, &inode(2), None, Some(&cell(97))).unwrap();
+    db.reply_attempted(initial).unwrap();
+    let retained = db.capture(a).unwrap();
     let mut failed = false;
     for index in 0..64 {
         let before = db.state(a).unwrap();
@@ -682,6 +685,8 @@ fn real_sqlite_full_aborts_one_mutation_without_losing_previous_publication() {
                     "original database failure: {error:?}"
                 );
                 assert_eq!(db.state(a).unwrap(), before);
+                assert_eq!(db.retained_capture(a).unwrap(), Some(retained));
+                assert_eq!(db.captured_cell(retained, 2, 0).unwrap(), Some(cell(97)));
                 assert_eq!(db.inode(a, 2).unwrap(), prior);
                 assert!(db.cell(a, 2, before.active, data.offset).unwrap().is_none());
                 assert_eq!(db.state(b).unwrap().revision, 0);

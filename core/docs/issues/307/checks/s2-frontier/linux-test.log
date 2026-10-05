@@ -1,0 +1,96 @@
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.79s
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-e637568d30ece70d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-42205d434ffd5a22)
+
+running 6 tests
+test stopping_cancels_unattempted_capture_and_fences_future_admission ... ok
+test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+test parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation ... ok
+test lost_internal_completions_keep_exact_backed_custody_and_release_result_credits ... ok
+test idle_cleanup_runs_without_an_explicit_reclaim_or_status_job ... ok
+AUTOMATIC_CLOSE unrelated_progress=6 work=OwnerWork { admitted: 1043, completed: [0, 512, 0, 531, 0], queue_wait_ns: [0, 11693833, 0, 13254711, 0], service_ns: [0, 14887542, 0, 8063214, 0], credited_bytes: 0, peak_credited_bytes: 904, outstanding: 0, maintenance_jobs: 14, maintenance_rows: 514, maintenance_data_bytes: 0, maintenance_ns: 791708 }
+test last_release_starts_automatic_cleanup_during_idle_and_unrelated_live_work ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_overlay-eb6164ea2c2ab85f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine.rs (core/target/cluster2-linux/debug/deps/engine-32ad83dd1c087fd8)
+
+running 12 tests
+install plan and retirement VM=["SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)", "0 Init 0 41 0", "1 OpenWrite 1 16 0", "2 OpenWrite 2 15 0", "3 Variable 1 2 0", "4 Variable 2 3 0", "5 Variable 2 4 0", "6 Integer 0 5 0", "7 Null 0 1 0", "8 HaltIfNull 1299 2 2", "9 HaltIfNull 1299 2 3", "10 HaltIfNull 1299 2 4", "11 HaltIfNull 1299 2 5", "12 TypeCheck 2 4 0", "13 Gt 16 15 3", "14 Halt 275 2 0", "15 Gt 16 17 4", "16 Halt 275 2 0", "17 Ge 16 19 5", "18 Halt 275 2 0", "19 Integer 0 17 0", "20 SCopy 3 7 0", "21 SCopy 2 8 0", "22 MakeRecord 7 2 6", "23 SCopy 2 10 0", "24 SCopy 3 11 0", "25 SCopy 4 12 0", "26 SCopy 5 13 0", "27 MakeRecord 10 4 9", "28 NoConflict 2 30 10", "29 Halt 1555 2 0", "30 IsNull 2 37 0", "31 SCopy 2 15 0", "32 MustBeInt 15 36 0", "33 OpenRead 3 2 0", "34 NotExists 3 36 15", "35 Goto 0 37 0", "36 Halt 787 2 0", "37 Close 3 0 0", "38 IdxInsert 1 6 7", "39 IdxInsert 2 9 10", "40 Halt 0 0 0", "41 Transaction 0 1 12", "42 Integer 0 16 0", "43 Goto 0 1 0"]
+test portable_time_range_and_directory_sticky_mode_are_preserved ... ok
+install statements=2; rows_changed=2; vm_steps=80; fullscan_steps=0; sorts=0
+test local_publication_survives_lost_reply_and_capture_does_not_copy_cells ... ok
+test closed_capture_retains_its_existing_rows_until_explicit_known_release ... ok
+test backed_owner_and_scratch_pages_have_no_total_record_limit ... ok
+readback=DatabaseProfile { schema_version: 5, sqlite_version: "3.53.2", compile_options: ["ATOMIC_INTRINSICS=1", "COMPILER=gcc-12.2.0", "DEFAULT_AUTOVACUUM", "DEFAULT_CACHE_SIZE=-2000", "DEFAULT_FILE_FORMAT=4", "DEFAULT_FOREIGN_KEYS", "DEFAULT_JOURNAL_SIZE_LIMIT=-1", "DEFAULT_MMAP_SIZE=0", "DEFAULT_PAGE_SIZE=4096", "DEFAULT_PCACHE_INITSZ=20", "DEFAULT_RECURSIVE_TRIGGERS", "DEFAULT_SECTOR_SIZE=4096", "DEFAULT_SYNCHRONOUS=2", "DEFAULT_WAL_AUTOCHECKPOINT=1000", "DEFAULT_WAL_SYNCHRONOUS=2", "DEFAULT_WORKER_THREADS=0", "DIRECT_OVERFLOW_READ", "ENABLE_API_ARMOR", "ENABLE_COLUMN_METADATA", "ENABLE_DBSTAT_VTAB", "ENABLE_FTS3", "ENABLE_FTS3_PARENTHESIS", "ENABLE_FTS5", "ENABLE_LOAD_EXTENSION", "ENABLE_MEMORY_MANAGEMENT", "ENABLE_RTREE", "ENABLE_STAT4", "HAVE_ISNAN", "MALLOC_SOFT_LIMIT=1024", "MAX_ATTACHED=10", "MAX_COLUMN=2000", "MAX_COMPOUND_SELECT=500", "MAX_DEFAULT_PAGE_SIZE=8192", "MAX_EXPR_DEPTH=1000", "MAX_FUNCTION_ARG=1000", "MAX_LENGTH=1000000000", "MAX_LIKE_PATTERN_LENGTH=50000", "MAX_MMAP_SIZE=0x7fff0000", "MAX_PAGE_COUNT=0xfffffffe", "MAX_PAGE_SIZE=65536", "MAX_SQL_LENGTH=1000000000", "MAX_TRIGGER_DEPTH=1000", "MAX_VARIABLE_NUMBER=32766", "MAX_VDBE_OP=250000000", "MAX_WORKER_THREADS=8", "MUTEX_PTHREADS", "SOUNDEX", "SYSTEM_MALLOC", "TEMP_STORE=1", "THREADSAFE=1", "USE_URI"], journal_mode: "memory", locking_mode: "exclusive", synchronous: 0, mmap_size: 0, cache_size: -2048, page_size: 4096, max_pages: 4294967294, explicit_page_quota: None, foreign_keys: 1, busy_timeout: 0, temp_store: 1 }; pages=(18, 0)
+point EXPLAIN=["SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)"]; runtime=StatementWork { attempts: 5, executions: 5, rows_returned: 2, rows_changed: 1, vm_steps: 177, fullscan_steps: 0, sorts: 0, autoindex_rows: 0, reprepares: 0, bound_bytes: 200, elapsed_ns: 2083667 }
+test profile_namespace_binary_values_and_atomic_refusals ... ok
+one-attempt physical quota failure at cell 12: Sql(SqliteFailure(Error { code: DiskFull, extended_code: 13 }, Some("database or disk is full"))); pages=(32, 0)
+test real_sqlite_full_aborts_one_mutation_without_losing_previous_publication ... ok
+test terminal_cleanup_waits_for_exact_owners_and_reply_attempts ... ok
+test known_install_advances_base_without_replaying_or_losing_later_active_rows ... ok
+capture plan before verification: ["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]
+active_population=128; plan=["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]; captured_rows=1; vm_steps=33; fullscan_steps=0; sorts=0; reprepare=0
+S1_ACCESS other_rows=128 family=Payload vm=20 returned=1 runs=1 bytes=32 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=128 family=Dentry vm=24 returned=1 runs=1 bytes=36 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=128 family=Scratch vm=24 returned=1 runs=1 bytes=32 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=128 family=Lease vm=48 returned=2 runs=3 bytes=88 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=66 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=66 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=66 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 1, data_bytes: 65536, done: false } vm=84 returned=4 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 1, data_bytes: 65536, done: false } vm=75 returned=3 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 1, data_bytes: 65536, done: false } vm=66 returned=2 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=66 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 0, data_bytes: 0, done: false } vm=70 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM step=ReclaimStep { namespace: 2, rows: 2, data_bytes: 0, done: true } vm=90 returned=1 fullscan=0 sorts=0
+CLOSE_RECLAIM plans=["SEARCH reclaim USING INDEX reclaim_ready (queue_key=? AND ns>?)", "SEARCH payload USING COVERING INDEX payload_namespace_row (ns=?)"]
+test reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_scratch_values ... ok
+capture plan before verification: ["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]
+active_population=1024; plan=["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]; captured_rows=1; vm_steps=33; fullscan_steps=0; sorts=0; reprepare=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=0; rows=64; vm_steps=1042; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=64; rows=64; vm_steps=1249; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=128; rows=64; vm_steps=1249; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=192; rows=1; vm_steps=54; fullscan_steps=0; sorts=0
+dentry plan=["SEARCH dentry USING INDEX dentry_capture (ns=? AND gen=? AND (parent,name)>(?,?))"]; start=193; rows=0; vm_steps=35; fullscan_steps=0; sorts=0
+test captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes ... ok
+S1_ACCESS other_rows=1024 family=Payload vm=20 returned=1 runs=1 bytes=32 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=1024 family=Dentry vm=24 returned=1 runs=1 bytes=36 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=1024 family=Scratch vm=24 returned=1 runs=1 bytes=32 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=1024 family=Lease vm=48 returned=2 runs=3 bytes=88 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+capture plan before verification: ["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]
+active_population=4096; plan=["SEARCH inode USING INDEX inode_capture (ns=? AND gen=? AND serial>?)"]; captured_rows=1; vm_steps=33; fullscan_steps=0; sorts=0; reprepare=0
+test fixed_capture_uses_generation_index_while_active_namespace_grows ... ok
+S1_ACCESS other_rows=4096 family=Payload vm=20 returned=1 runs=1 bytes=32 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=4096 family=Dentry vm=24 returned=1 runs=1 bytes=36 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=4096 family=Scratch vm=24 returned=1 runs=1 bytes=32 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+S1_ACCESS other_rows=4096 family=Lease vm=48 returned=2 runs=3 bytes=88 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)"], ["SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)"], ["SEARCH scratch USING PRIMARY KEY (ns=? AND operation=? AND kind=? AND key>?)"], ["SEARCH lease USING PRIMARY KEY (ns=? AND kind=? AND owner=? AND resource=?)"]]
+test payload_name_scratch_and_owner_access_keep_indexed_scope ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+     Running tests/frontier.rs (core/target/cluster2-linux/debug/deps/frontier-0420c57dfa375bd2)
+
+running 3 tests
+test frozen_capture_and_tickets_reject_changed_identity_and_survive_close ... ok
+test equal_local_routing_keys_never_cross_engine_owners ... ok
+S2_FRONTIER other_rows=128 capture_vm=14 ticket_page_vm=396 returned=1/64 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)"], ["SEARCH request USING PRIMARY KEY (ns=? AND revision>?)"]]
+S2_FRONTIER other_rows=1024 capture_vm=14 ticket_page_vm=396 returned=1/64 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)"], ["SEARCH request USING PRIMARY KEY (ns=? AND revision>?)"]]
+S2_FRONTIER other_rows=4096 capture_vm=14 ticket_page_vm=396 returned=1/64 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)"], ["SEARCH request USING PRIMARY KEY (ns=? AND revision>?)"]]
+test exact_frontier_observations_visit_only_their_fixed_domain ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+

@@ -21,6 +21,10 @@ pub enum Command {
         base_root: [u8; 32],
     },
     State,
+    RetainedCapture,
+    PendingPublications {
+        after: u64,
+    },
     CleanupState,
     Close,
     ReleaseClosedCapture(Capture),
@@ -39,6 +43,15 @@ pub enum Command {
     CapturedInodes {
         capture: Capture,
         after: u64,
+    },
+    CapturedDentries {
+        capture: Capture,
+        after: Option<(u64, Vec<u8>)>,
+    },
+    CapturedCell {
+        capture: Capture,
+        serial: u64,
+        offset: u64,
     },
     Acquire(Lease),
     Release(Lease),
@@ -60,7 +73,11 @@ pub enum Response {
     Inode(Option<Inode>),
     Published(Publication),
     Captured(Capture),
+    RetainedCapture(Option<Capture>),
+    Publications(Vec<Publication>),
     Inodes(Vec<Inode>),
+    Dentries(Vec<Dentry>),
+    Cell(Option<Cell>),
     Scratch(Vec<ScratchRecord>),
     Done,
 }
@@ -69,17 +86,21 @@ impl Command {
         match self {
             Self::Open { .. }
             | Self::State
+            | Self::RetainedCapture
             | Self::CleanupState
             | Self::Close
             | Self::ReleaseClosedCapture(_)
             | Self::ReplyAttempted(_)
             | Self::Acquire(_)
             | Self::Release(_) => ServiceClass::Lifecycle,
-            Self::Inode(_) => ServiceClass::Read,
-            Self::Publish { .. } => ServiceClass::Mutation,
-            Self::Capture | Self::Install { .. } | Self::CapturedInodes { .. } => {
-                ServiceClass::Capture
+            Self::Inode(_) | Self::PendingPublications { .. } | Self::CapturedCell { .. } => {
+                ServiceClass::Read
             }
+            Self::Publish { .. } => ServiceClass::Mutation,
+            Self::Capture
+            | Self::Install { .. }
+            | Self::CapturedInodes { .. }
+            | Self::CapturedDentries { .. } => ServiceClass::Capture,
             Self::PutScratch { .. } | Self::ScratchPage { .. } => ServiceClass::Scratch,
         }
     }
@@ -98,6 +119,12 @@ impl Command {
             Self::PutScratch { record, .. } => (record.value.capacity(), 0),
             Self::ScratchPage { .. } => (0, PAGE_ROWS * (SCRATCH_BYTES + 64)),
             Self::CapturedInodes { .. } => (0, PAGE_ROWS * std::mem::size_of::<Inode>()),
+            Self::CapturedDentries { after, .. } => (
+                after.as_ref().map_or(0, |(_, name)| name.capacity()),
+                PAGE_ROWS * (std::mem::size_of::<Dentry>() + 255),
+            ),
+            Self::PendingPublications { .. } => (0, PAGE_ROWS * std::mem::size_of::<Publication>()),
+            Self::CapturedCell { .. } => (0, CELL_BYTES + MASK_BYTES + std::mem::size_of::<Cell>()),
             _ => (0, 256),
         };
         base.checked_add(input)?.checked_add(reply)
@@ -116,6 +143,10 @@ impl Command {
         match self {
             Self::Open { .. } => unreachable!(),
             Self::State => db.state(route).map(Response::State),
+            Self::RetainedCapture => db.retained_capture(route).map(Response::RetainedCapture),
+            Self::PendingPublications { after } => db
+                .pending_publications(route, after)
+                .map(Response::Publications),
             Self::CleanupState => db.cleanup_state(route).map(Response::CleanupState),
             Self::Close => db.close(route).map(|_| Response::Done),
             Self::ReleaseClosedCapture(capture) => {
@@ -146,6 +177,29 @@ impl Command {
                     return Err(layerfs_overlay::OverlayError::Stale);
                 }
                 db.captured_inodes(capture, after).map(Response::Inodes)
+            }
+            Self::CapturedDentries { capture, after } => {
+                if capture.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.captured_dentries(
+                    capture,
+                    after
+                        .as_ref()
+                        .map(|(parent, name)| (*parent, name.as_slice())),
+                )
+                .map(Response::Dentries)
+            }
+            Self::CapturedCell {
+                capture,
+                serial,
+                offset,
+            } => {
+                if capture.route() != route {
+                    return Err(layerfs_overlay::OverlayError::Stale);
+                }
+                db.captured_cell(capture, serial, offset)
+                    .map(Response::Cell)
             }
             Self::Acquire(lease) => db.acquire(route, lease).map(|_| Response::Done),
             Self::Release(lease) => db.release(route, lease).map(|_| Response::Done),

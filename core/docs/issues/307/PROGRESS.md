@@ -5,7 +5,7 @@
 Owner: [tracker #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307).
 Design baseline: `c9861bc878583822a468e78dbc0f3740eacbecbe` on local main.
 The [implementation plan](../303/07-implementation-validation.md) owns milestone
-dependencies and exits. S1 is complete with its exit audit and covering evidence. S0 and S2–S13 remain
+dependencies and exits. S1 and S2 are complete with their exit audits and covering evidence. S0 and S3–S13 remain
 unchecked until their complete implementation and required evidence exist.
 
 ## Current checkpoint
@@ -76,7 +76,7 @@ windows automatically while idle and after finite foreground service. Native
 unmount, live-generation/orphan/failure/pressure and aggregate qualification remain
 open; see [terminal reclaim](../../architecture/25-terminal-reclaim.md).
 
-## Completed milestone: S1; next completion target: S2
+## Completed milestones: S1 and S2; next completion target: S3
 
 [S1 exit audit](S1-EXIT-AUDIT.md) maps the engine exits to actual source/evidence.
 The current closure slice removes the arbitrary default total-page quota and
@@ -85,6 +85,13 @@ covering checks pass on macOS and Linux ARM64; the local milestone-completion
 commit records the exact source/LOC identity. The native
 fuser gate is scoped to its owning acceptance, and does not obscure engine exits.
 
+[S2 exit audit](S2-EXIT-AUDIT.md) reconciles the generation/service exits. Schema5
+retains frozen capture revision and exact ticket generation; lost internal results
+leave backed custody and release resident credits. Engine identity prevents cross-
+owner routing with matching local keys. Closed captures keep immutable cell access.
+Final host565/Linux21 tests and all prescribed core checks pass. Live-generation/
+orphan/normal failed-Commit resolution, pressure and native ownership remain later gates.
+
 ## Concrete next work
 
 The initial active overlay now provides typed namespace/metadata/cell/scratch/
@@ -92,11 +99,11 @@ ownership primitives and publication/reply-attempt/capture routing. Paired EXPLA
 and actual statement profiles caught and corrected a residual-generation scan.
 See [implemented architecture](../../architecture/19-daemon-overlay.md).
 The remaining list below includes initial interfaces already established; complete
-S0/S2 and later acceptance require the remaining service/lifetime/resource work.
+S0 and later acceptance require the remaining service/lifetime/resource work.
 
-1. Audit S2 frontier/success/failure custody against actual code and evidence;
-   implement its precise missing exit criteria as the next engine completion target.
-   Tie base/runtime work to a named dependency or risk, preserving all later exits.
+1. Audit and implement S3 effective base-overlay merge and retained-root integration.
+   Existing real-root reads and S2 engine interfaces satisfy its usable dependencies;
+   prove each remaining exit before starting the S4 namespace completion target.
 2. Close S0 algorithm gates for truncate/regrow, repeated failed capture and
    orphan composition, physical pressure and fair service; specify all R1–R8
    adversarial bounds and P1–P14 implementation ownership. These remain open,
@@ -116,5 +123,5 @@ untracked `docs/general/sandbox-cache-design.md` are also preserved without stag
 S12 qualification permits S13. Checkpoint hashes are local-only; no remote push,
 release or deployment is authorized. Append-only tracker texts are retained in
 [checkpoints](checkpoints/initial.md). Rust checks/LOC/evidence are recorded in
-each checkpoint commit and its tracker comment. S1 alone is complete; later
+each checkpoint commit and its tracker comment. S1 and S2 are complete; later
 engine, native/runtime and integrated qualification exits remain explicit.

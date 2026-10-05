@@ -9,6 +9,7 @@ mod access_plan;
 mod close;
 mod db;
 mod error;
+mod frontier;
 mod generation;
 mod inode;
 mod metrics;

@@ -31,12 +31,13 @@ impl Overlay {
     pub fn release_closed_capture(&self, capture: Capture) -> OverlayResult<()> {
         self.atomic(|| {
             let state = self.state(capture.route())?;
-            if !state.closed || state.captured != Some(capture.generation) {
+            self.checked_capture(capture)?;
+            if !state.closed {
                 return Err(OverlayError::Stale);
             }
             self.execute(
                 StatementKind::Capture,
-                "UPDATE workspace SET captured=NULL WHERE ns=?1",
+                "UPDATE workspace SET captured=NULL,captured_revision=NULL WHERE ns=?1",
                 &[&capture.route().ns],
                 8,
             )?;
@@ -45,6 +46,7 @@ impl Overlay {
     }
     /// One maintained point observation; no owner/payload COUNT or scan.
     pub fn cleanup_state(&self, route: Route) -> OverlayResult<CleanupState> {
+        self.check_route(route)?;
         let rows=self.query(StatementKind::Workspace,
             "SELECT incarnation,lifecycle,EXISTS(SELECT 1 FROM reclaim WHERE ns=?1 AND queue_key=?2) FROM workspace WHERE ns=?1",
             &[&route.ns,&CLOSE_KEY],16,|row|Ok((row.get::<_,Vec<u8>>(0)?,row.get::<_,i64>(1)?,row.get::<_,i64>(2)?)))?;

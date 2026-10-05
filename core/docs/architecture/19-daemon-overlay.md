@@ -100,3 +100,12 @@ remains S6 work, and this setting supplies no large-capacity qualification.
 Operational plan diagnostics now cover exact cell/name/scratch/lease accesses
 through shared production query templates. [S1 exit audit](../issues/307/S1-EXIT-AUDIT.md)
 maps every criterion to source and scoped proof. S2/S4/S5/S6/S7 remain distinct exits.
+
+## S2 exact custody closure
+
+The closure after `7019801f9` advances schema5 with frozen capture revision,
+exact ticket generation and route engine affinity. Bounded observations retain
+identity after lost completions; captured bytes remain readable during close.
+See [capture custody](26-capture-custody.md) and its S2 exit/evidence map.
+S1 evidence keeps its schema4 pin; physical live-generation/failure/pressure
+acceptance remains S6/S7.

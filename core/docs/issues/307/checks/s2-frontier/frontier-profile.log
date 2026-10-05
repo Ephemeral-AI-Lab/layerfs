@@ -1,0 +1,13 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.78s
+     Running tests/frontier.rs (core/target/debug/deps/frontier-90b3a0727eeb6c05)
+
+running 2 tests
+test frozen_capture_and_tickets_reject_changed_identity_and_survive_close ... ok
+S2_FRONTIER other_rows=128 capture_vm=15 ticket_page_vm=397 returned=1/64 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)"], ["SEARCH request USING PRIMARY KEY (ns=? AND revision>?)"]]
+S2_FRONTIER other_rows=1024 capture_vm=15 ticket_page_vm=397 returned=1/64 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)"], ["SEARCH request USING PRIMARY KEY (ns=? AND revision>?)"]]
+S2_FRONTIER other_rows=4096 capture_vm=15 ticket_page_vm=397 returned=1/64 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=[["SEARCH workspace USING INTEGER PRIMARY KEY (rowid=?)"], ["SEARCH request USING PRIMARY KEY (ns=? AND revision>?)"]]
+test exact_frontier_observations_visit_only_their_fixed_domain ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+

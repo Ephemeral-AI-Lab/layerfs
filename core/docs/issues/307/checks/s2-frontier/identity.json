@@ -1,0 +1,36 @@
+{
+  "parent": "7019801f91d3a7ba9c16ef381aa4a57474feaae5",
+  "platforms": [
+    "macOS ARM64",
+    "Linux ARM64 Docker"
+  ],
+  "rust": "1.85.1",
+  "linux_image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "source_sha256": {
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "core/Cargo.lock": "0977aadd5b4c572bc7f3138d2fda54a1f74f26fed62ab10b71572055bedebb17",
+    "core/crates/layerfs-daemon/src/commands.rs": "53298b482879813a6907791f598ba087b547c7e3d74f5427b2f5c2913fddf7fd",
+    "core/crates/layerfs-daemon/src/credits.rs": "6c45dc369ffd631a1457eaa110db2e77282e9622be6117a36caa824e53728173",
+    "core/crates/layerfs-daemon/src/lib.rs": "475d99dbad47e6a74b41c9cb94d27445aab1f724bb0a0030250a85b90c7f70e3",
+    "core/crates/layerfs-daemon/src/owner.rs": "84da43a9d96d68e0bfe9abca2c03a2a053fcc1321dbb32672211ffa1135dbb74",
+    "core/crates/layerfs-daemon/src/queue.rs": "b9ff46e49eda1568f080073913604db71cae5a6cc4b109dd0b6717dc7877996a",
+    "core/crates/layerfs-overlay/sql/schema.sql": "ee381bf31d1b11e584e083b9bc43913970cd38a6743f12d1f1c8796eb2e6adea",
+    "core/crates/layerfs-overlay/src/access_plan.rs": "c1262956ee91afb214e8a75b7918f2c0c815a34ac5e077bb7738a65662b0d971",
+    "core/crates/layerfs-overlay/src/close.rs": "34229c2b963beef7825962d46d882d03bd757eeaee46069b39669ee85e2b0c4e",
+    "core/crates/layerfs-overlay/src/db.rs": "98a27a9f1444107b40d47d2933ca63ef68f11eb08a9ec6f11087ba0518e72aa1",
+    "core/crates/layerfs-overlay/src/error.rs": "bf876d61081bded5a6ce6107e5f9aebbed69eca5688d58fc63bb96ed36a21b28",
+    "core/crates/layerfs-overlay/src/frontier.rs": "826cb19ef6c3936b3e0edbb50a663b832786766711fb8c2d12b396d9488f9c4e",
+    "core/crates/layerfs-overlay/src/generation.rs": "4fe5c199fec1bdd0ebf259a161cb70a059d7652c30d6b85f325f0103b444674d",
+    "core/crates/layerfs-overlay/src/inode.rs": "fe2860cbb4fa5c1803bbcb5a47f704c1d67341dbc44b6d95a3b55bc30ce983b5",
+    "core/crates/layerfs-overlay/src/lib.rs": "d825ff2efc46094419862ae034af8629a66f03476225fd7a6f5205317781ec0c",
+    "core/crates/layerfs-overlay/src/metrics.rs": "38f434f29e158fb9e21a7495b9a537f65d56855e02a1dae08a05e6f8692357d6",
+    "core/crates/layerfs-overlay/src/payload.rs": "71cde98854639075471f03d4c8cdf73284e0bdf6fd8c6de1442610a3132aaaa2",
+    "core/crates/layerfs-overlay/src/profile.rs": "0e6816c19bdf6963d7a0eef6e46603d4987cda13784cb6abc34de93ebdba95a8",
+    "core/crates/layerfs-overlay/src/reclaim.rs": "843786f31806877fe77897d27c4823b84a149880c0a741c3fce005f99b6097e3",
+    "core/crates/layerfs-overlay/src/scratch.rs": "eaee97b80606d8e151b7b28ca6b59c8221296be27751fb3ec36e7865050d645e",
+    "core/crates/layerfs-overlay/src/sql.rs": "c50b55cb955e1ff13981fd7ae0c2f81584dd8adda24d441fa585a24fddf1eb7c",
+    "core/crates/layerfs-overlay/src/types.rs": "8126687476903ef95767b7228c94e6ffda400db5f1979c6295a20c8e5a1c8b01",
+    "core/crates/layerfs-overlay/src/workspace.rs": "826ecdde47ace740f587b7e35bc694090463c99892f00f6128a9a3848eb09d99"
+  },
+  "diagnostic_scope": "first macOS frontier diagnostic precedes affinity only; SQL/frontier templates unchanged; final covering host/Linux proofs include all product changes; no performance campaign"
+}

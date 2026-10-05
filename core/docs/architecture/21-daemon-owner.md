@@ -82,3 +82,12 @@ automatic terminal deletion during live/idle daemon periods. See
 [terminal reclaim](25-terminal-reclaim.md) for actual indexed scope, original
 error retention and remaining live-generation/orphan/pressure/kernel criteria.
 Earlier schema/profile evidence retains its original pin.
+
+## S2 completion reconciliation
+
+The closure after `7019801f9` completes the generation/service exits, including
+lost internal completion custody, full capture identity, engine-affine routing
+and bounded charged name/cell/ticket replies. [S2 exit audit](../issues/307/S2-EXIT-AUDIT.md)
+maps every exit to source/host/Linux evidence. The earlier checkpoint limitations
+above retain their source scope; live-generation/orphan/normal failed-Commit
+resolution, physical pressure and native deferred replies remain S6/S8 work.

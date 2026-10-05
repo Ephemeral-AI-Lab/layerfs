@@ -150,9 +150,9 @@ impl Overlay {
             }
             self.execute(
                 StatementKind::Frontier,
-                "INSERT INTO request VALUES(?1,?2)",
-                &[&route.ns, &revision],
-                16,
+                "INSERT INTO request(ns,revision,gen) VALUES(?1,?2,?3)",
+                &[&route.ns, &revision, &generation.0],
+                24,
             )?;
             self.execute(
                 StatementKind::Workspace,

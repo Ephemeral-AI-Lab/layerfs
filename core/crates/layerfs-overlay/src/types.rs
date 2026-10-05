@@ -12,6 +12,7 @@ pub const SCRATCH_BYTES: usize = 65_536;
 /// Incarnation-qualified routing capability issued by this daemon engine.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Route {
+    pub(crate) engine: u64,
     pub(crate) ns: i64,
     pub(crate) incarnation: [u8; 32],
 }
@@ -100,6 +101,9 @@ impl Capture {
 pub struct WorkspaceState {
     pub active: Generation,
     pub captured: Option<Generation>,
+    /// Frozen local publication revision of the retained capture, independent
+    /// of later active publication. Paired with captured in the schema.
+    pub captured_revision: Option<i64>,
     /// Retired generations at/below this floor never enter the current view.
     pub installed: i64,
     pub revision: i64,

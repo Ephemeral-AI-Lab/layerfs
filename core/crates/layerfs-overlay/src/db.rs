@@ -8,10 +8,14 @@ use std::{
     cell::{Cell, RefCell},
     fs::OpenOptions,
     path::Path,
+    sync::atomic::{AtomicU64, Ordering},
 };
+
+static NEXT_ENGINE: AtomicU64 = AtomicU64::new(1);
 
 /// Daemon-local engine. The daemon schedules short jobs on its owning thread.
 pub struct Overlay {
+    pub(crate) identity: u64,
     pub(crate) connection: Connection,
     pub(crate) work: RefCell<DatabaseWork>,
     pub(crate) quarantined: Cell<bool>,
@@ -49,11 +53,20 @@ impl Overlay {
             connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
         let application: i64 =
             connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
-        if profile.schema_version != 4 || application != 1279676210 {
+        if profile.schema_version != 5 || application != 1279676210 {
             return Err(OverlayError::Invalid("overlay schema readback"));
         }
         connection.set_prepared_statement_cache_capacity(48);
+        // A process-local capability cannot cross daemon owners even when their
+        // local namespace/incarnation numbers happen to match. Remote routing
+        // still requires the authenticated runtime's daemon incarnation.
+        let identity = NEXT_ENGINE
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+                next.checked_add(1)
+            })
+            .map_err(|_| OverlayError::Invalid("engine identity exhausted"))?;
         Ok(Self {
+            identity,
             connection,
             work,
             quarantined: Cell::new(false),
@@ -89,6 +102,13 @@ impl Overlay {
         } else {
             Ok(())
         }
+    }
+    pub(crate) fn check_route(&self, route: crate::Route) -> OverlayResult<()> {
+        self.available()?;
+        if route.engine != self.identity {
+            return Err(OverlayError::Stale);
+        }
+        Ok(())
     }
     pub(crate) fn query<T>(
         &self,

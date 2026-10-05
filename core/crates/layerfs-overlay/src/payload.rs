@@ -1,7 +1,7 @@
 //! Binary bounded cells, with namespace-qualified access and frozen generations.
 use crate::{
-    db::integer, sql, Cell, Generation, Overlay, OverlayError, OverlayResult, Route, StatementKind,
-    CELL_BYTES, MASK_BYTES,
+    db::integer, sql, Capture, Cell, Generation, Overlay, OverlayError, OverlayResult, Route,
+    StatementKind, CELL_BYTES, MASK_BYTES,
 };
 
 pub(crate) fn check(cell: &Cell) -> OverlayResult<()> {
@@ -39,6 +39,27 @@ impl Overlay {
         if generation != state.active && Some(generation) != state.captured {
             return Err(OverlayError::Stale);
         }
+        self.cell_at(route, serial, generation, offset)
+    }
+    /// Exact immutable capture bytes, including while terminal close awaits
+    /// fenced construction/history disposition. Install/release invalidates the
+    /// capability; observing bytes never changes its ownership.
+    pub fn captured_cell(
+        &self,
+        capture: Capture,
+        serial: u64,
+        offset: u64,
+    ) -> OverlayResult<Option<Cell>> {
+        self.checked_capture(capture)?;
+        self.cell_at(capture.route(), serial, capture.generation, offset)
+    }
+    fn cell_at(
+        &self,
+        route: Route,
+        serial: u64,
+        generation: Generation,
+        offset: u64,
+    ) -> OverlayResult<Option<Cell>> {
         let serial = integer(serial)?;
         let key = integer(offset)?;
         Ok(self

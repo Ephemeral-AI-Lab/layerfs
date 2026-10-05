@@ -1,15 +1,17 @@
--- Disposable overlay schema v4. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v5. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
     base_root BLOB NOT NULL CHECK(length(base_root)=32),
     active INTEGER NOT NULL CHECK(active>0),
     captured INTEGER CHECK(captured>0),
+    captured_revision INTEGER CHECK(captured_revision>=0),
     installed INTEGER NOT NULL DEFAULT 0 CHECK(installed>=0),
     revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0),
     lifecycle INTEGER NOT NULL DEFAULT 0 CHECK(lifecycle IN (0,1)),
     dirty_inodes INTEGER NOT NULL DEFAULT 0 CHECK(dirty_inodes>=0),
-    dirty_names INTEGER NOT NULL DEFAULT 0 CHECK(dirty_names>=0)
+    dirty_names INTEGER NOT NULL DEFAULT 0 CHECK(dirty_names>=0),
+    CHECK((captured IS NULL)=(captured_revision IS NULL))
 ) STRICT;
 CREATE TABLE inode (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
@@ -47,6 +49,7 @@ CREATE TABLE payload (
 CREATE TABLE request (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
     revision INTEGER NOT NULL CHECK(revision>0),
+    gen INTEGER NOT NULL CHECK(gen>0),
     PRIMARY KEY(ns,revision)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX payload_namespace_row ON payload(ns,rowid);
@@ -74,4 +77,4 @@ CREATE TABLE reclaim (
 ) STRICT, WITHOUT ROWID;
 PRAGMA application_id=1279676210;
 CREATE INDEX reclaim_ready ON reclaim(queue_key,ns);
-PRAGMA user_version=4;
+PRAGMA user_version=5;
