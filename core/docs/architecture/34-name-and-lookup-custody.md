@@ -54,3 +54,11 @@ inherited symlink target, then automatic terminal cleanup follows last release.
 These are scoped correctness/work diagnostics, not FUSE, latency, RSS or physical
 headroom qualification. Per-Workspace/whole-system buffer and kernel custody remain
 later integration work; a copied capability does not acquire a reference.
+
+S6 completion update after `be651a048`: schema14 now includes backed resource
+accounting and indexed source waits; physical reservation, cleanup headroom,
+bounded generation wakes and nonduplicating orphan migration are implemented.
+See [shared physical capacity](35-shared-physical-capacity.md) and the
+[S6 exit audit](../issues/307/S6-EXIT-AUDIT.md) for current scope/evidence. Earlier
+checkpoint limitations and numbers above retain their original source identity.
+Native/runtime/kernel and integrated qualification remain later milestones.

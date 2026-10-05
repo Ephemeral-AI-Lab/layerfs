@@ -36,7 +36,7 @@ impl Overlay {
     /// Later active rows and pending replies remain untouched. Physical retire
     /// work is queued; last-owner eligibility/automatic deletion is S6 work.
     pub fn install(&self, capture: Capture, root: [u8; 32]) -> OverlayResult<()> {
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             if !self.install_ready(capture)? { return Err(OverlayError::BaseSourcesPending); }
             self.execute(
                 StatementKind::Capture,
@@ -51,6 +51,7 @@ impl Overlay {
                 16,
             )?;
             self.enqueue(capture.route.ns,crate::maintenance::RETIRE,0,capture.generation.0)?;
+            self.wake_orphan_sources(capture.route.ns,capture.generation.0)?;
             self.queue_closed(capture.route())
         })
     }
@@ -137,7 +138,7 @@ impl Overlay {
     /// Records a send attempt, including a lost reply. It never removes published
     /// inode/name/byte state and never claims kernel delivery.
     pub fn reply_attempted(&self, publication: Publication) -> OverlayResult<()> {
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             self.state(publication.route)?;
             let changed = self.execute(
                 StatementKind::Frontier,
@@ -158,7 +159,7 @@ impl Overlay {
     /// Seals existing rows without copying them. The daemon parks capture until
     /// earlier reply attempts settle; this method does not block a SQL owner.
     pub fn capture(&self, route: Route) -> OverlayResult<Capture> {
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             let state=self.live(route)?;
             if state.captured.is_some() {return Err(OverlayError::CaptureInFlight);}
             if state.consolidating.is_some() {return Err(OverlayError::Consolidating);}

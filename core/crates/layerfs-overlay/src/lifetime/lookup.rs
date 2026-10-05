@@ -121,7 +121,7 @@ impl Overlay {
     }
     /// Call only after native/request continuations using this reference finish.
     pub fn release_lookup(&self, lookup: LookupOwner) -> OverlayResult<()> {
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             self.check_lookup(lookup)?;
             self.execute(
                 StatementKind::Lease,

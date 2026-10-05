@@ -41,10 +41,16 @@ fn dense_fragmentation_does_not_enlarge_a_later_request() {
     );
     let read_dense = work(&db, || dense.check());
     let read_fresh = work(&db, || fresh.check());
-    // Full-window overwrite: identical work on both files, and no cell read.
+    // Full-window overwrite: identical statement/change work and no cell read.
+    // Accounting visits each old mask once; its NULL branch adds a fixed VM
+    // step per aggregate update, independent of earlier fragment count.
     let over_fresh = work(&db, || fresh.write(0, &window));
     let over_dense = work(&db, || dense.write(0, &window));
-    assert_eq!(over_dense, over_fresh);
+    assert_eq!((over_dense.0, over_dense.2), (over_fresh.0, over_fresh.2));
+    assert!(
+        over_dense.1 <= over_fresh.1,
+        "fragmentation enlarged VM work"
+    );
     dense.check();
     assert!(db
         .source_read(source, 21, 0, READ_WINDOW as u32)
@@ -57,20 +63,22 @@ fn dense_fragmentation_does_not_enlarge_a_later_request() {
     let edge_fresh = work(&db, || fresh.write(1_000, part));
     let edge_dense = work(&db, || dense.write(1_000, part));
     assert_eq!(edge_dense, edge_fresh);
-    // 32 covered cells become 25 touched cells, two of them read first.
+    // Each cell DML also runs its accounting trigger. 32 covered cells
+    // become 25 touched cells, with two additional edge-cell point reads.
     assert_eq!(
         edge_fresh.0,
-        over_fresh.0 - 32 + 25 + 2,
+        over_fresh.0 - 32 * 2 + 25 * 2 + 2,
         "two edge-cell point reads"
     );
     dense.check();
     println!(
-        "S5_FRAGMENTATION one_byte_writes=65536 per_write_statements={} per_write_vm={} overwrite_128k statements={} vm={} rows_changed={} same_as_unfragmented=true edge_overwrite statements={} read_window_fragmented statements={} vm={} read_window_unfragmented statements={} vm={} fullscan=0 sorts=0",
+        "S5_FRAGMENTATION one_byte_writes=65536 per_write_statements={} per_write_vm={} overwrite_128k statements={} vm={} rows_changed={} never_fragmented_vm={} same_statement_and_change_work=true edge_overwrite statements={} read_window_fragmented statements={} vm={} read_window_unfragmented statements={} vm={} fullscan=0 sorts=0",
         fragments.0 / 65536,
         fragments.1 / 65536,
         over_dense.0,
         over_dense.1,
         over_dense.2,
+        over_fresh.1,
         edge_dense.0,
         read_dense.0,
         read_dense.1,

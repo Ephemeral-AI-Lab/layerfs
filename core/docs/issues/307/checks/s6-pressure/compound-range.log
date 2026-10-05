@@ -1,0 +1,29 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'compound', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.03s
+     Running tests/compound.rs (core/target/debug/deps/compound-f27037c54631a7cf)
+
+running 3 tests
+test compound_job_publishes_every_final_value_with_one_ticket_or_nothing ... ok
+test removed_names_keep_a_whiteout_only_where_a_lower_binding_exists ... ok
+S4_COMPOUND siblings=128 complete_job_vm=1542 statements=37 rows_changed=14 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=["lower-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)", "active-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "drop-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "active-inode: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "put-name: vm-program opcodes=179 btree-cursors=5 btree-scan-opcodes=0", "put-inode: vm-program opcodes=313 btree-cursors=5 btree-scan-opcodes=0"]
+S4_COMPOUND siblings=1024 complete_job_vm=1542 statements=37 rows_changed=14 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=["lower-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)", "active-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "drop-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "active-inode: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "put-name: vm-program opcodes=179 btree-cursors=5 btree-scan-opcodes=0", "put-inode: vm-program opcodes=313 btree-cursors=5 btree-scan-opcodes=0"]
+S4_COMPOUND siblings=4096 complete_job_vm=1542 statements=37 rows_changed=14 fullscan=0 sorts=0 autoindex=0 reprepare=0 plans=["lower-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)", "active-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "drop-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "active-inode: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "put-name: vm-program opcodes=179 btree-cursors=5 btree-scan-opcodes=0", "put-inode: vm-program opcodes=313 btree-cursors=5 btree-scan-opcodes=0"]
+
+thread 'compound_statements_keep_point_work_as_the_namespace_grows' panicked at crates/layerfs-overlay/tests/compound.rs:478:5:
+assertion `left == right` failed
+  left: 14
+ right: 8
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test compound_statements_keep_point_work_as_the_namespace_grows ... FAILED
+
+failures:
+
+failures:
+    compound_statements_keep_point_work_as_the_namespace_grows
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+
+error: test failed, to rerun pass `-p layerfs-overlay --test compound`
+
+EXIT: 101; WALL: 4.035s

@@ -1,0 +1,11 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Finished `test` profile [optimized + debuginfo] target(s) in 7.66s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_overlay-7af2ec524cfae021)
+  Executable tests/compound.rs (core/target/debug/deps/compound-f27037c54631a7cf)
+  Executable tests/engine.rs (core/target/debug/deps/engine-b4fac0808988bc6c)
+  Executable tests/frontier.rs (core/target/debug/deps/frontier-0725703cc71f2a91)
+  Executable tests/lifetimes.rs (core/target/debug/deps/lifetimes-9bdeccb2fc8d6202)
+  Executable tests/orphans.rs (core/target/debug/deps/orphans-7a988e93ca86f715)
+  Executable tests/payload.rs (core/target/debug/deps/payload-68ae5eb9eeaeeafc)
+  Executable tests/payload_fragmentation.rs (core/target/debug/deps/payload_fragmentation-3cfdcf30996bed04)
+  Executable tests/source.rs (core/target/debug/deps/source-bbe134429b700afa)

@@ -1,0 +1,14 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'resources', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.06s
+     Running tests/resources.rs (core/target/debug/deps/resources-85eaf02848d9fc65)
+
+running 1 test
+S6_RESOURCES before=Resources { counts: StoredCounts { namespaces: 1, inode_rows: 1, name_rows: 0, payload_cells: 32, payload_bytes: 131072, shrink_rows: 0, scratch_rows: 0, scratch_bytes: 0, orphan_rows: 0, owner_rows: 0, source_rows: 1, owner_details: 0, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 }, allocation: AllocationState { logical_bytes: 327680, allocated_bytes: 100843520, reserved_tail_bytes: 100515840, cleanup_headroom_bytes: 33554432, work: AllocationWork { attempts: 2, requested_bytes: 100843520, admitted_jobs: 5, refusals: 0 } }, database_pages: 80, free_pages: 0, debt_upper_bytes: 0 } pending=Resources { counts: StoredCounts { namespaces: 1, inode_rows: 1, name_rows: 0, payload_cells: 32, payload_bytes: 126977, shrink_rows: 1, scratch_rows: 0, scratch_bytes: 0, orphan_rows: 0, owner_rows: 0, source_rows: 1, owner_details: 0, reply_tickets: 0, retire_targets: 0, maintenance_targets: 2, ready_targets: 2 }, allocation: AllocationState { logical_bytes: 327680, allocated_bytes: 100990976, reserved_tail_bytes: 100663296, cleanup_headroom_bytes: 33554432, work: AllocationWork { attempts: 3, requested_bytes: 100990976, admitted_jobs: 7, refusals: 0 } }, database_pages: 80, free_pages: 1, debt_upper_bytes: 164865 } after=Resources { counts: StoredCounts { namespaces: 1, inode_rows: 1, name_rows: 0, payload_cells: 1, payload_bytes: 1, shrink_rows: 1, scratch_rows: 0, scratch_bytes: 0, orphan_rows: 0, owner_rows: 0, source_rows: 1, owner_details: 0, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 }, allocation: AllocationState { logical_bytes: 327680, allocated_bytes: 100990976, reserved_tail_bytes: 100663296, cleanup_headroom_bytes: 33554432, work: AllocationWork { attempts: 3, requested_bytes: 100990976, admitted_jobs: 13, refusals: 0 } }, database_pages: 80, free_pages: 36, debt_upper_bytes: 0 }
+S6_ACCOUNTING_PLAN ["SEARCH accounting USING INTEGER PRIMARY KEY (rowid=?)"]
+test physical_reserve_counts_allocation_separately_from_logical_rows_and_reusable_pages ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+EXIT: 0; WALL: 0.435s

@@ -14,7 +14,7 @@ impl Overlay {
     /// fencing. Unknown stage/transition/discard must retain original custody.
     /// This performs fixed metadata work; payload composition is maintained.
     pub fn resolve_failed_capture(&self, capture: Capture) -> OverlayResult<()> {
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             self.checked_capture(capture)?;
             if self.state(capture.route)?.closed {
                 return Err(OverlayError::Closed);
@@ -26,6 +26,7 @@ impl Overlay {
                 &[&capture.route.ns],
                 8,
             )?;
+            self.wake_orphan_sources(capture.route.ns, capture.generation.0)?;
             self.enqueue(capture.route.ns, FOLD, 0, capture.generation.0)
         })
     }

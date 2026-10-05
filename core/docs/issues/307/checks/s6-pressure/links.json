@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "links_checked": 174,
+  "files": [
+    "core/AGENTS.md",
+    "core/docs/architecture/19-daemon-overlay.md",
+    "core/docs/architecture/21-daemon-owner.md",
+    "core/docs/architecture/25-terminal-reclaim.md",
+    "core/docs/architecture/32-live-composition.md",
+    "core/docs/architecture/33-independent-custody.md",
+    "core/docs/architecture/34-name-and-lookup-custody.md",
+    "core/docs/architecture/README.md",
+    "core/docs/issues/307/PROGRESS.md",
+    "core/docs/architecture/35-shared-physical-capacity.md",
+    "core/docs/issues/307/S6-RESERVATION-CONTRACT.md",
+    "core/docs/issues/307/S6-EXIT-AUDIT.md",
+    "core/docs/issues/307/HANDOFF-S7-S13.md",
+    "core/docs/issues/307/checkpoints/be651a048.md",
+    "core/docs/issues/307/checks/s6-pressure/FAILURES.md"
+  ]
+}

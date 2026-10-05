@@ -1,0 +1,626 @@
+{
+  "allocation-host-first.log": {
+    "sha256": "a02ead41a7edd543a8582f23b998cdd20b8ed67aafa5627c7632b93a1c5d143c",
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'engine', 'portable_time_range', '--', '--nocapture']",
+    "exit": [
+      "0"
+    ]
+  },
+  "boundary-final.log": {
+    "sha256": "15ff18f89593cd59ff38f40bb73826fbe85f21e51586be93634121b5436fcc39",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['python3', '-B', 'core/tools/check_product_boundary.py']",
+    "exit": [
+      "0"
+    ]
+  },
+  "boundary-first.log": {
+    "sha256": "30c970c1f970e35ccbd917605367a36c3d179a38c97d37480fc4016af92849ae",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-accounting-1.log": {
+    "sha256": "9d0b22ad3f9d0bf6338b5ba547755fd4741cb6e3b4b31e7101ed576304fbde0c",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-accounting-2.log": {
+    "sha256": "4ac178490eb6a0ae0d71f64c8d3cf21ad4d65d7b0a5af75b8db0574cbe1115a3",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-allocation-1.log": {
+    "sha256": "ee64810f72d94ea6bba25ff160a9821c54917887ede1113003b9346444590410",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-bounded-wake.log": {
+    "sha256": "9d98fdf54ad011fddeb7f6f21d9b3ef47852c8bfcaf7d4e577077f29d36f1ee0",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '-p', 'layerfs-daemon', '-p', 'layerfs-workspace', '-p', 'layerfs-sdk', '--all-targets', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-cookie.log": {
+    "sha256": "5c88e62809a2bc8b65d6f8061b6819f20ba0b484636773bcb8c2554b287c043f",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '-p', 'layerfs-workspace', '-p', 'layerfs-daemon', '-p', 'layerfs-sdk', '--all-targets', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-device-fixture-diagnostic.log": {
+    "sha256": "fd75f4b427b2ea8169f8777a59c1b569aa8d5a20ce361f9e4f3f576143be9022",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-device-host.log": {
+    "sha256": "f788a79d8c52bf74f20fe60a4cb3fbdd951f2eca8aea5087e4e3047a9d0d9fff",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-device-linux.log": {
+    "sha256": "dd25f40750e95c42c2280f1e71cd9eb8edcdc9c63884f82e96bd2934e6023b7f",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-device-range-final.log": {
+    "sha256": "07534f90d385a37dba94171537596a422d034c3de4f5583d6ca4136732628e4c",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-device-build', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'timeout', '--signal=KILL', '120', 'cargo', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '-p', 'layerfs-daemon', '--all-targets', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-device-v2.log": {
+    "sha256": "0c5c43b79595f166c57dde04af2e0f9f6e14f9d5213ab2f07d3cf534ae3fdef2",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-final-scope.log": {
+    "sha256": "ce25404ceda361cc6e6d515d67d262dadd226700c3f6a0c998a0fdbb87aa298e",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '--all-targets', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-fragment-accounting.log": {
+    "sha256": "e6789836295125804f907e36602b722249adc5174d4e3b04aeccbf42c475fbd8",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--all-targets', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-freelist.log": {
+    "sha256": "0d563c00bc6c5b09628428af0f5564b9cfca4d85cfe1399354043a69620ad950",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '--all-targets', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-integration-first.log": {
+    "sha256": "92624bfc7b4dd7976a87052012db01b1076ebbfa800715f507264e6fd352e069",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-linux-final.log": {
+    "sha256": "dda0082e47677ae0c578bffc68e43332525341d85d83f09cd7916723188c9133",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-final-build', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'timeout', '--signal=KILL', '120', 'cargo', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '-p', 'layerfs-daemon', '-p', 'layerfs-workspace', '-p', 'layerfs-sdk', '--all-targets', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-linux-snapshots.log": {
+    "sha256": "9c5bc48a5e3700a5a6feacd983e8db13b3c06caa3f28408637697fd652e29aea",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-snapshot-build', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'timeout', '--signal=KILL', '120', 'cargo', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '-p', 'layerfs-daemon', '--all-targets', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-main-headers.log": {
+    "sha256": "7dedcd2fd51464d2879667fc0fca22096f3e74f4d2977a6a3ef06e416f378123",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '--all-targets', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-move-proof.log": {
+    "sha256": "333deef55a109671254355904d7447b12b2484789486a40d4d3d0218afab5b81",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-owner-device.log": {
+    "sha256": "89577859eb78cd981f060d436a7c5872d9834c5faabbd2b4dba9c77bda049b6c",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '-p', 'layerfs-daemon', '-p', 'layerfs-workspace', '-p', 'layerfs-sdk', '--all-targets', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-owner-refill.log": {
+    "sha256": "650c04cf098e0dd1bcbbfe53d98c15a888106ddfaa41e58938376df4173175bb",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-owner-refill-build', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'timeout', '--signal=KILL', '120', 'cargo', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-daemon', '--test', 'device_capacity', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-range.log": {
+    "sha256": "a2aa7fca8a92c504dd851a45d6080dea508447c879dc514dd0399a8cdd7c4898",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '-p', 'layerfs-daemon', '-p', 'layerfs-workspace', '-p', 'layerfs-sdk', '--all-targets', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-resource-observation.log": {
+    "sha256": "70017dae5719a361a7462b02ed67164bf7e0fe7f1002740b0d5274bca9f2193e",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '--all-targets', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-resource-port.log": {
+    "sha256": "32dd2d8bbb8a8ce6b8abb4d2294d472aafd27ff5bb952564da7bbcaa2ef1cc1b",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-snapshot-final.log": {
+    "sha256": "c2e1f445ab2576533057d349137e48420791b4fa3b31bff0f2c3b1734daf84b2",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '--all-targets', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "build-source-wait-1.log": {
+    "sha256": "bb5719a03e50c07ef9c0ccb33042fa6a81ba8855e14bbc0097e52a125df4756b",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-source-wait-2.log": {
+    "sha256": "cd1d18f745152ebc5eb43a522dd8d90241c2510a672e278c0a3c3d80ccba5b0c",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-source-wait-3.log": {
+    "sha256": "4dbe047ac29872e94910d3e418854e2ba3459af2e9985f715577095ba8ccf55f",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "build-uncertainty.log": {
+    "sha256": "16fb1a70a7bcd0e2ef8f1fbf9254a55f0842b89838b1c0ae8d6ea9a5cd26af64",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'resources', '--no-run']",
+    "exit": [
+      "0"
+    ]
+  },
+  "clippy-final.log": {
+    "sha256": "92727608b4dfcb652bb06e4384bc7c7c8baf58a3a9ed61d0942ae798458d4331",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'clippy', '--manifest-path', 'core/Cargo.toml', '--locked', '--all-targets', '--', '-D', 'warnings']",
+    "exit": [
+      "0"
+    ]
+  },
+  "clippy-first.log": {
+    "sha256": "a33e86f5356fa638e2487cb0bf1b67903e8b8815f94857438fd641746e8387a8",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "clippy-sealed.log": {
+    "sha256": "041a7222326241d890e4608cea16b441c409e9816271889b6f8e3a2ef28f21b4",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'clippy', '--manifest-path', 'core/Cargo.toml', '--locked', '--all-targets', '--', '-D', 'warnings']",
+    "exit": [
+      "0"
+    ]
+  },
+  "compound-range.log": {
+    "sha256": "19b3143c91021888d7fcef65c6868c87c9de4764e6bade45b2541538a61cf16e",
+    "passed": 2,
+    "failed": 1,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'compound', '--', '--nocapture']",
+    "exit": [
+      "101"
+    ]
+  },
+  "core-final.log": {
+    "sha256": "27257b0ce873f4644e738f5db4c094c2d15c5ca43dc61f58dbe336c3fd3ff9ed",
+    "passed": 302,
+    "failed": 1,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '--all-targets', '--', '--nocapture']",
+    "exit": [
+      "101"
+    ]
+  },
+  "daemon-final.log": {
+    "sha256": "b66ae51a98e102bc45b6a716d47aa6f909175fcd01a3c18fb523cff026ab68b3",
+    "passed": 9,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-daemon', '--all-targets', '--', '--nocapture']",
+    "exit": [
+      "0"
+    ]
+  },
+  "device-ext4-final.log": {
+    "sha256": "a5e92fa2a4b1ded5832f878f6bf3e5e2c497a2f496a17aa7a581c2fec1ee389b",
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-device-overlay', '--privileged', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'sh', 'core/crates/layerfs-overlay/tests/device_fixture.sh', 'overlay']",
+    "exit": [
+      "0"
+    ]
+  },
+  "device-ext4-first.log": {
+    "sha256": "01d653d2aef0b2d4720750cb86cff8831f0df5fd3eecad8817fadaee48826c1e",
+    "passed": 0,
+    "failed": 1,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "device-ext4-fixture-diagnostic.log": {
+    "sha256": "4ae11c88c31bc1974ee34be9162baef8ee207aabfa4b237bf7b1e3e5f4e8a7ae",
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "device-overlay-sealed.log": {
+    "sha256": "122a5dbafd16007f01bd0bbc69a452041c8739473e73444603ec09128687afd2",
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-overlay-sealed', '--privileged', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'sh', 'core/crates/layerfs-overlay/tests/device_fixture.sh', 'overlay']",
+    "exit": [
+      "0"
+    ]
+  },
+  "device-owner-ext4-final.log": {
+    "sha256": "99439f4d3e492304fe8a1196a5a3418407f8d756434a9f5997465aea0fd71c7e",
+    "passed": 0,
+    "failed": 1,
+    "ignored": 0,
+    "command": "COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-device-owner', '--privileged', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'sh', 'core/crates/layerfs-overlay/tests/device_fixture.sh', 'daemon']",
+    "exit": [
+      "101"
+    ]
+  },
+  "device-owner-ext4-refill.log": {
+    "sha256": "0daeab0c6946e9cd605e9a966241fbea72759b2b363d024c7ad85dfadf0d6483",
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-owner-refill-proof', '--privileged', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'sh', 'core/crates/layerfs-overlay/tests/device_fixture.sh', 'daemon']",
+    "exit": [
+      "0"
+    ]
+  },
+  "device-owner-sealed.log": {
+    "sha256": "9d8ece0cd8d9921b53b17426dbd94715c20167085751e2cc0aa114db5b94d516",
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-owner-sealed', '--privileged', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'sh', 'core/crates/layerfs-overlay/tests/device_fixture.sh', 'daemon']",
+    "exit": [
+      "0"
+    ]
+  },
+  "fmt-final.log": {
+    "sha256": "e78092c34858abbde56df9d8bde241386fc15c5204cacce9310f899d7fd513dd",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'fmt', '--manifest-path', 'core/Cargo.toml', '--all', '--', '--check']",
+    "exit": [
+      "0"
+    ]
+  },
+  "fmt-first.log": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "Earlier diagnostic raw stdout; command scope identified in ledger",
+    "exit": []
+  },
+  "fmt-sealed.log": {
+    "sha256": "17d4b5c94c4ee3914a0dbe971cb90dc591131995df9ab9219a6b6a1d1fed96a9",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'fmt', '--manifest-path', 'core/Cargo.toml', '--all', '--', '--check']",
+    "exit": [
+      "0"
+    ]
+  },
+  "linux-final.log": {
+    "sha256": "f35a6bbc459f3ad16102431983ec788f99885038977ffee76ebaa8f30b6a6cf7",
+    "passed": 83,
+    "failed": 0,
+    "ignored": 2,
+    "command": "COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-final-tests', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'timeout', '--signal=KILL', '120', 'cargo', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '-p', 'layerfs-daemon', '-p', 'layerfs-workspace', '-p', 'layerfs-sdk', '--all-targets', '--', '--nocapture']",
+    "exit": [
+      "0"
+    ]
+  },
+  "linux-resource-observation.log": {
+    "sha256": "40ae645369c29c75bd37ba8f4247057bf431a644476f5223a9e4464057e455ff",
+    "passed": 6,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-resource-observation', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'timeout', '--signal=KILL', '120', 'cargo', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'resources', '--', '--nocapture']",
+    "exit": [
+      "0"
+    ]
+  },
+  "orphan-source-wait.log": {
+    "sha256": "647ce0e4c82ddd9f699abd28cb4478216572244256f957eae33ee9679ea9d157",
+    "passed": 7,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'orphans', '--', '--nocapture']",
+    "exit": [
+      "0"
+    ]
+  },
+  "overlay-completion-tail.log": {
+    "sha256": "045c5ef27fb06d4f25d70a0690d5ec4791bca61ba1a23e27dff0923d456c69c9",
+    "passed": 8,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'payload_fragmentation', '--test', 'resources', '--test', 'source', '--', '--nocapture']",
+    "exit": [
+      "0"
+    ]
+  },
+  "overlay-cookie-final.log": {
+    "sha256": "9e0f7a39cefe8ab895b9db7b34aabab6c62b9a7099c6f78542cdb57ad9171923",
+    "passed": 42,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--all-targets', '--', '--nocapture']",
+    "exit": [
+      "0"
+    ]
+  },
+  "overlay-final-first.log": {
+    "sha256": "893e9e1c668a55538deee47ffa83740f6d6d663ff0a825aed1b473176e91bb79",
+    "passed": 32,
+    "failed": 1,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--all-targets', '--', '--nocapture']",
+    "exit": [
+      "101"
+    ]
+  },
+  "overlay-integrated-first.log": {
+    "sha256": "1c954e8b9bd15c36bedfebd5471af31a2e7332c37f82d2b1b948aa0066d9d3ac",
+    "passed": 2,
+    "failed": 1,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--', '--nocapture']",
+    "exit": [
+      "101"
+    ]
+  },
+  "overlay-main-final.log": {
+    "sha256": "eb794293f5d1b0c79cb2b8beaeaf256f98acec0be71d39ebe2ec24cfee53c3b5",
+    "passed": 2,
+    "failed": 1,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--all-targets', '--', '--nocapture']",
+    "exit": [
+      "101"
+    ]
+  },
+  "persistence-final.log": {
+    "sha256": "705e5d3f6bd3639efe1ce3c638a72d053f98793f7e7f26c2871f06dd993db003",
+    "passed": 89,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-persistence', '--all-targets']",
+    "exit": [
+      "0"
+    ]
+  },
+  "project-final.log": {
+    "sha256": "901faa13183cf10510d758aa32c2dd848a8280aec5564a81492e8378974576fb",
+    "passed": 64,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-project', '--all-targets']",
+    "exit": [
+      "0"
+    ]
+  },
+  "resources-host.log": {
+    "sha256": "9a7dd281bcd3e6a7be4b39935d55ea90c03395a293c038a7e09af7947d331b72",
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'resources', '--', '--nocapture']",
+    "exit": [
+      "0"
+    ]
+  },
+  "resources-move-host.log": {
+    "sha256": "4bbd5f327d434d2bca22e9f36d3bcd9639a22a8809269289268a9f8f6ffa8472",
+    "passed": 2,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'resources', '--', '--nocapture']",
+    "exit": [
+      "0"
+    ]
+  },
+  "resources-sealed-host.log": {
+    "sha256": "1dc76d6e0e429e6388e7165cd011abe71015ba480779d6e82c820c1064f5f9a9",
+    "passed": 6,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'resources', '--', '--nocapture']",
+    "exit": [
+      "0"
+    ]
+  },
+  "sdk-final.log": {
+    "sha256": "bc63a9cd5091611eb3f1ec38ce3a3e018c42b0719d1d9e7b2ec3abe72862f743",
+    "passed": 6,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-sdk', '--all-targets', '--', '--nocapture']",
+    "exit": [
+      "0"
+    ]
+  },
+  "storage-final.log": {
+    "sha256": "06586320181e0178d77acede9cf2413eee12ebd7d16f6a2fa85384def7715ba4",
+    "passed": 55,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-storage', '--all-targets']",
+    "exit": [
+      "0"
+    ]
+  },
+  "telemetry-final.log": {
+    "sha256": "b7fe7ad82c43c0a504327f6177a7cb40ec22994f37b46a49fadd26dc25843e9e",
+    "passed": 43,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-telemetry', '--all-targets']",
+    "exit": [
+      "0"
+    ]
+  },
+  "tools-final.log": {
+    "sha256": "c39b5eec6caaff0bebfccdd95114f2e1a057cd28c24cf34d154ec9169ddb85a1",
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['python3', '-B', '-m', 'unittest', 'discover', '-s', 'core/tools', '-p', 'test_*.py']",
+    "exit": [
+      "0"
+    ]
+  },
+  "uncertainty-host.log": {
+    "sha256": "05343e5c03427f249fe5bc8accd62141c22eaa6fae0b370376408bbd0e3d02c7",
+    "passed": 2,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'resources', 'quarantin', '--', '--nocapture']",
+    "exit": [
+      "0"
+    ]
+  },
+  "workspace-final.log": {
+    "sha256": "fb0a91295f29726f12fb63c2e696d3f41f911d48941fa826e8ce1bf33a0651ea",
+    "passed": 32,
+    "failed": 0,
+    "ignored": 0,
+    "command": "COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-workspace', '--all-targets', '--', '--nocapture']",
+    "exit": [
+      "0"
+    ]
+  }
+}

@@ -123,7 +123,7 @@ impl Overlay {
     }
     /// Exact last-consumer fence. Cleanup owns scratch independently afterwards.
     pub fn release_operation(&self, owner: OperationOwner) -> OverlayResult<()> {
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             self.check_operation(owner)?;
             self.execute(
                 StatementKind::Lease,

@@ -1,0 +1,7 @@
+COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-owner-refill-build', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'timeout', '--signal=KILL', '120', 'cargo', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-daemon', '--test', 'device_capacity', '--no-run']
+TIMEOUT: 120s
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.85s
+  Executable tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-febdf05a59cb464b)
+
+EXIT: 0; WALL: 2.177s

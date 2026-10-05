@@ -1,0 +1,17 @@
+COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-device-overlay', '--privileged', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'sh', 'core/crates/layerfs-overlay/tests/device_fixture.sh', 'overlay']
+TIMEOUT: 120s
+OWNED DEVICE image=/tmp/layerfs-307-device.61rVHv/device.img loop=/dev/loop0 mount=/tmp/layerfs-307-device.61rVHv/mount
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.11s
+     Running tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-7071dfaa290c647a)
+
+running 1 test
+S6_DEVICE_FIXTURE requested_bytes=242077696 fill=Err(ENOSPC) residual_free_blocks=2621 available_blocks=0
+S6_DEVICE_ENOSPC fixture_requested_bytes=242077696 before=Resources { counts: StoredCounts { wait_refs: 0, namespaces: 1, inode_rows: 1, name_rows: 0, payload_cells: 32, payload_bytes: 131072, shrink_rows: 0, scratch_rows: 0, scratch_bytes: 0, orphan_rows: 0, owner_rows: 0, source_rows: 1, owner_details: 0, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 }, allocation: AllocationState { logical_bytes: 335872, allocated_bytes: 268771328, reserved_tail_bytes: 268435456, cleanup_headroom_bytes: 134217728, work: AllocationWork { attempts: 9, requested_bytes: 2013265920, admitted_jobs: 9, refusals: 0 } }, database_pages: 82, free_pages: 0, debt_upper_bytes: 0 } after=Resources { counts: StoredCounts { wait_refs: 0, namespaces: 1, inode_rows: 0, name_rows: 0, payload_cells: 0, payload_bytes: 0, shrink_rows: 0, scratch_rows: 0, scratch_bytes: 0, orphan_rows: 0, owner_rows: 0, source_rows: 0, owner_details: 0, reply_tickets: 0, retire_targets: 0, maintenance_targets: 0, ready_targets: 0 }, allocation: AllocationState { logical_bytes: 483328, allocated_bytes: 268771328, reserved_tail_bytes: 268288000, cleanup_headroom_bytes: 134217728, work: AllocationWork { attempts: 33, requested_bytes: 5498462208, admitted_jobs: 32, refusals: 1 } }, database_pages: 118, free_pages: 72, debt_upper_bytes: 0 } unrelated_namespace_unchanged=true cleanup_headroom=true
+test real_device_enospc_refuses_before_sql_and_retains_cleanup_headroom ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+OWNED PROOF COMPLETED; normal teardown follows
+OWNED TEARDOWN unmounted=true loop_detached=true artifacts_removed=true
+
+EXIT: 0; WALL: 0.513s

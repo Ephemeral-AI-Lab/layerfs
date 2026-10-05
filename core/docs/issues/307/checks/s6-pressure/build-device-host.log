@@ -1,0 +1,28 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+warning: unused import: `layerfs_overlay::*`
+ --> crates/layerfs-overlay/tests/device_capacity.rs:3:5
+  |
+3 | use layerfs_overlay::*;
+  |     ^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `payload_support::*`
+ --> crates/layerfs-overlay/tests/device_capacity.rs:4:5
+  |
+4 | use payload_support::*;
+  |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `File`, `OpenOptions`, `path::PathBuf`, and `sync::Arc`
+ --> crates/layerfs-overlay/tests/device_capacity.rs:6:10
+  |
+6 |     fs::{File, OpenOptions},
+  |          ^^^^  ^^^^^^^^^^^
+7 |     path::PathBuf,
+  |     ^^^^^^^^^^^^^
+8 |     sync::Arc,
+  |     ^^^^^^^^^
+
+warning: `layerfs-overlay` (test "device_capacity") generated 3 warnings (run `cargo fix --test "device_capacity"` to apply 3 suggestions)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.22s
+  Executable tests/device_capacity.rs (core/target/debug/deps/device_capacity-9fc393ba6f0e8794)

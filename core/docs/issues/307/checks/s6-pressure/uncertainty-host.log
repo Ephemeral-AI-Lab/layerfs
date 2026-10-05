@@ -1,0 +1,15 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'resources', 'quarantin', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.03s
+     Running tests/resources.rs (core/target/debug/deps/resources-85eaf02848d9fc65)
+
+running 2 tests
+S6_UNCERTAIN_PATH error=Uncertain { cause: Io(Os { code: 2, kind: NotFound, message: "No such file or directory" }), completion: None } backing_unchanged=true begin_not_attempted=true exact_capture=Capture { route: Route { engine: 2, ns: 1, incarnation: [211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211, 211] }, generation: Generation(1), revision: 1, base_root: [212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212, 212] } release_refused=true
+test lost_backing_path_quarantines_without_sql_or_releasing_published_capture ... ok
+S6_UNCERTAIN_SQL error=Uncertain { cause: Sql(SqliteFailure(Error { code: DatabaseCorrupt, extended_code: 11 }, Some("database disk image is malformed"))), completion: None } exact_capture=Capture { route: Route { engine: 1, ns: 1, incarnation: [213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213, 213] }, generation: Generation(1), revision: 8, base_root: [214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214] } artifact_retained=true no_release_authority=true
+test real_backing_corruption_retains_original_sql_cause_and_quarantines_custody ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.02s
+
+
+EXIT: 0; WALL: 3.414s

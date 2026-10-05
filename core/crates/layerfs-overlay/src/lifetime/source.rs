@@ -99,7 +99,7 @@ impl Overlay {
                 "file read source requires file-read release",
             ));
         }
-        self.atomic(|| self.release_source_inner(source))
+        self.atomic_cleanup(|| self.release_source_inner(source))
     }
     pub(crate) fn release_source_inner(&self, source: BaseSource) -> OverlayResult<()> {
         self.source_state(source)?;

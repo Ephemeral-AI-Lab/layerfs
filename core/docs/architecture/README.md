@@ -355,3 +355,11 @@ Source files cited above, by package:
 S6 independent custody: [file, captured-input and operation lifetimes](33-independent-custody.md).
 
 S6 names/lookup custody: [exact inherited names and non-file references](34-name-and-lookup-custody.md).
+
+S6 completion update after `be651a048`: schema14 now includes backed resource
+accounting and indexed source waits; physical reservation, cleanup headroom,
+bounded generation wakes and nonduplicating orphan migration are implemented.
+See [shared physical capacity](35-shared-physical-capacity.md) and the
+[S6 exit audit](../issues/307/S6-EXIT-AUDIT.md) for current scope/evidence. Earlier
+checkpoint limitations and numbers above retain their original source identity.
+Native/runtime/kernel and integrated qualification remain later milestones.

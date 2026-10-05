@@ -75,3 +75,11 @@ memory, physical device headroom or sustained-rate qualification.
 The following [name/non-file checkpoint](34-name-and-lookup-custody.md) adds lookup
 owners, effective symlink views and exact whiteout facts. Physical reservation,
 headroom and full resource/debt/device evidence remain required for the S6 exit.
+
+S6 completion update after `be651a048`: schema14 now includes backed resource
+accounting and indexed source waits; physical reservation, cleanup headroom,
+bounded generation wakes and nonduplicating orphan migration are implemented.
+See [shared physical capacity](35-shared-physical-capacity.md) and the
+[S6 exit audit](../issues/307/S6-EXIT-AUDIT.md) for current scope/evidence. Earlier
+checkpoint limitations and numbers above retain their original source identity.
+Native/runtime/kernel and integrated qualification remain later milestones.

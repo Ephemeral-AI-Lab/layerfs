@@ -50,7 +50,7 @@ impl Overlay {
         ) {
             return Err(OverlayError::Invalid("minted owner kind"));
         }
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             self.state(route)?;
             let changed = self.execute(
                 StatementKind::Lease,

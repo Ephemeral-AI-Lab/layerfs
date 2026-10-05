@@ -125,7 +125,7 @@ impl Overlay {
     }
     /// Exact release after all captured consumers and external calls finish.
     pub fn release_captured_reader(&self, reader: CapturedReader) -> OverlayResult<()> {
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             self.check_captured_reader(reader)?;
             let c = reader.capture;
             self.execute(

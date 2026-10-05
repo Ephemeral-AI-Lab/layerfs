@@ -66,3 +66,11 @@ namespace beside ready work, 65,536-byte scratch windows, actual plans/counters,
 unrelated live progress and idle completion without a reclaim/status job. Native
 FUSE/unmount owner drain is unimplemented; these proofs do not establish kernel
 reference or full teardown qualification.
+
+S6 completion update after `be651a048`: schema14 now includes backed resource
+accounting and indexed source waits; physical reservation, cleanup headroom,
+bounded generation wakes and nonduplicating orphan migration are implemented.
+See [shared physical capacity](35-shared-physical-capacity.md) and the
+[S6 exit audit](../issues/307/S6-EXIT-AUDIT.md) for current scope/evidence. Earlier
+checkpoint limitations and numbers above retain their original source identity.
+Native/runtime/kernel and integrated qualification remain later milestones.

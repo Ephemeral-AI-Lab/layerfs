@@ -1,0 +1,5 @@
+COMMAND: ['python3', '-B', 'core/tools/check_product_boundary.py']
+TIMEOUT: 120s
+PASS: scanned 563 production Rust/SQL files; semantic review still required
+
+EXIT: 0; WALL: 0.474s

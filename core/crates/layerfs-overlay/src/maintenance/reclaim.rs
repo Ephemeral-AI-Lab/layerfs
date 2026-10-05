@@ -24,7 +24,7 @@ impl Overlay {
         if !self.closed_ready.get() {
             return Ok(None);
         }
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             let after = integer(after_namespace)?;
             let mut rows = self.query(
                 StatementKind::Reclaim,
@@ -57,6 +57,7 @@ impl Overlay {
                 7 => self.delete_orphan_metadata(ns, "orphan")?,
                 8 => self.delete_orphan_metadata(ns, "file_custody")?,
                 9 => self.delete_scratch(ns, "owned_scratch")?,
+                10 => self.delete_wait(ns)?,
                 _ => {
                     self.execute(
                         StatementKind::Reclaim,
@@ -127,6 +128,24 @@ impl Overlay {
                 &format!("DELETE FROM {table} WHERE ns=?1 AND serial=?2"),
                 &[&ns, serial],
                 16,
+            )?;
+        }
+        Ok((rows.len() as u64, 0))
+    }
+    fn delete_wait(&self, ns: i64) -> OverlayResult<(u64, u64)> {
+        let rows = self.query(
+            StatementKind::Reclaim,
+            "SELECT gen,serial FROM orphan_wait WHERE ns=?1 ORDER BY gen,serial LIMIT 64",
+            &[&ns],
+            8,
+            |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)),
+        )?;
+        for (gen, serial) in &rows {
+            self.execute(
+                StatementKind::Reclaim,
+                "DELETE FROM orphan_wait WHERE ns=?1 AND gen=?2 AND serial=?3",
+                &[&ns, gen, serial],
+                24,
             )?;
         }
         Ok((rows.len() as u64, 0))

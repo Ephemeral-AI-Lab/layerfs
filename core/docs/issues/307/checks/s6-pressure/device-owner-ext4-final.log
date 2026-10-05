@@ -1,0 +1,24 @@
+COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-device-owner', '--privileged', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'sh', 'core/crates/layerfs-overlay/tests/device_fixture.sh', 'daemon']
+TIMEOUT: 120s
+OWNED DEVICE image=/tmp/layerfs-307-device.2zkZ0a/device.img loop=/dev/loop0 mount=/tmp/layerfs-307-device.2zkZ0a/mount
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.14s
+     Running tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-febdf05a59cb464b)
+
+running 1 test
+
+thread 'real_owner_reclaims_at_device_full_after_last_owner_without_a_cleanup_job' panicked at crates/layerfs-daemon/tests/device_capacity.rs:137:5:
+Ok(Published(Publication { route: Route { engine: 1, ns: 1, incarnation: [191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191, 191] }, revision: 129, generation: Generation(2) }))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test real_owner_reclaims_at_device_full_after_last_owner_without_a_cleanup_job ... FAILED
+
+failures:
+
+failures:
+    real_owner_reclaims_at_device_full_after_last_owner_without_a_cleanup_job
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+error: test failed, to rerun pass `-p layerfs-daemon --test device_capacity`
+OWNED TEARDOWN unmounted=true loop_detached=true artifacts_removed=true
+
+EXIT: 101; WALL: 0.797s

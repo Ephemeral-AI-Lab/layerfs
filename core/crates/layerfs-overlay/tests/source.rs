@@ -161,7 +161,8 @@ fn source_changes_have_finite_plans_and_correlated_runtime_work() {
             total_rows += b.rows_changed - a.rows_changed;
             println!("BASE_SOURCE_CHANGE phase={phase} family={family:?} runs={} vm={} returned={} changed={} bound_bytes={}",b.executions-a.executions,b.vm_steps-a.vm_steps,b.rows_returned-a.rows_returned,b.rows_changed-a.rows_changed,b.bound_bytes-a.bound_bytes);
         }
-        assert_eq!(total_rows, 2);
+        // Source insert/delete updates namespace and daemon counts as well.
+        assert_eq!(total_rows, 4);
         println!("BASE_SOURCE_CHANGE phase={phase} total_vm={total_vm} changed={total_rows} fullscan=0 sorts=0 plans={plans:?}");
     }
     assert_eq!(db.state(route).unwrap().base_readers, 0);

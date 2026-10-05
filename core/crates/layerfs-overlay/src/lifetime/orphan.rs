@@ -109,6 +109,12 @@ impl Overlay {
     ) -> OverlayResult<()> {
         self.execute(
             StatementKind::Lease,
+            "DELETE FROM orphan_wait WHERE ns=?1 AND gen=?2 AND serial=?3",
+            &[&ns, &gen, &serial],
+            24,
+        )?;
+        self.execute(
+            StatementKind::Lease,
             "UPDATE orphan SET lower_top=?3 WHERE ns=?1 AND serial=?2",
             &[&ns, &serial, &next],
             24,

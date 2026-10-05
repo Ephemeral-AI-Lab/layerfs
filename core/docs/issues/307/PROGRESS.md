@@ -178,3 +178,13 @@ symlink targets and relative lower-binding facts now have public and actual-owne
 proofs. See [name/lookup architecture](../../architecture/34-name-and-lookup-custody.md).
 Physical reservation/headroom, device-full and complete debt evidence remain the
 next required S6 slice. Earlier pending lists above retain their checkpoint dates.
+
+## S5/S6 completion (2026-10-06)
+
+S5 is complete at a0dc7da9b; S6 is complete in the commit containing
+[S6-EXIT-AUDIT.md](S6-EXIT-AUDIT.md). Physical reservation/headroom, source waits,
+transactional accounting and owning ext4 device-full/idle cleanup now close the
+remaining S6 component criteria. Earlier checkpoint pending lists retain their
+source scope. S0 and S7–S13 remain open; the [next handoff](HANDOFF-S7-S13.md)
+records exact prerequisites, limits, evidence and preserved state. No push,
+release, deployment, CI qualification or legacy-root retirement is claimed.

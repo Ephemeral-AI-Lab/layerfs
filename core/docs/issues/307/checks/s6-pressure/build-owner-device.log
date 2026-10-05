@@ -1,0 +1,33 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '-p', 'layerfs-daemon', '-p', 'layerfs-workspace', '-p', 'layerfs-sdk', '--all-targets', '--no-run']
+TIMEOUT: 120s
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Finished `test` profile [optimized + debuginfo] target(s) in 7.71s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_daemon-7c8da4bc9c2f62c2)
+  Executable tests/device_capacity.rs (core/target/debug/deps/device_capacity-4a9b042db44a4be9)
+  Executable tests/owner.rs (core/target/debug/deps/owner-406c93a1462f09e2)
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_overlay-7af2ec524cfae021)
+  Executable tests/compound.rs (core/target/debug/deps/compound-f27037c54631a7cf)
+  Executable tests/device_capacity.rs (core/target/debug/deps/device_capacity-9fc393ba6f0e8794)
+  Executable tests/engine.rs (core/target/debug/deps/engine-b4fac0808988bc6c)
+  Executable tests/frontier.rs (core/target/debug/deps/frontier-0725703cc71f2a91)
+  Executable tests/lifetimes.rs (core/target/debug/deps/lifetimes-9bdeccb2fc8d6202)
+  Executable tests/orphans.rs (core/target/debug/deps/orphans-7a988e93ca86f715)
+  Executable tests/payload.rs (core/target/debug/deps/payload-68ae5eb9eeaeeafc)
+  Executable tests/payload_fragmentation.rs (core/target/debug/deps/payload_fragmentation-3cfdcf30996bed04)
+  Executable tests/resources.rs (core/target/debug/deps/resources-85eaf02848d9fc65)
+  Executable tests/source.rs (core/target/debug/deps/source-bbe134429b700afa)
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_sdk-a9ac2f7b76117cf8)
+  Executable tests/runtime.rs (core/target/debug/deps/runtime-0693fe70d77b0de3)
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_workspace-c06ba861b861d9ba)
+  Executable tests/base.rs (core/target/debug/deps/base-97c8a8cf9206582d)
+  Executable tests/namespace.rs (core/target/debug/deps/namespace-91a1b01a058faf32)
+  Executable tests/namespace_daemon.rs (core/target/debug/deps/namespace_daemon-0be34967c443f228)
+  Executable tests/namespace_profile.rs (core/target/debug/deps/namespace_profile-64dbb2874ac11305)
+  Executable tests/namespace_view.rs (core/target/debug/deps/namespace_view-2400757db4703c00)
+  Executable tests/nonfile.rs (core/target/debug/deps/nonfile-dd4e5ce33ffc6b19)
+  Executable tests/payload.rs (core/target/debug/deps/payload-fb6f82f595bd0d85)
+
+EXIT: 0; WALL: 7.778s

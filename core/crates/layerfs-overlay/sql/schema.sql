@@ -1,4 +1,4 @@
--- Disposable overlay schema v12. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v14. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -108,7 +108,7 @@ CREATE INDEX reclaim_ready ON reclaim(queue_key,ns);
 CREATE INDEX lease_resource ON lease(ns,kind,resource,owner);
 CREATE TABLE maintenance (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
-    kind INTEGER NOT NULL CHECK(kind IN(1,2,3,4,5,6,7)),
+    kind INTEGER NOT NULL CHECK(kind IN(1,2,3,4,5,6,7,8,9)),
     resource INTEGER NOT NULL CHECK(resource>=0),
     target INTEGER NOT NULL CHECK(target<>0),
     phase INTEGER NOT NULL DEFAULT 0 CHECK(phase>=0),
@@ -185,4 +185,10 @@ CREATE TABLE lookup_owner (
     serial INTEGER NOT NULL CHECK(serial>0),
     PRIMARY KEY(ns,owner), UNIQUE(ns,request)
 ) STRICT, WITHOUT ROWID;
-PRAGMA user_version=12;
+CREATE TABLE orphan_wait (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    gen INTEGER NOT NULL CHECK(gen>0),
+    serial INTEGER NOT NULL CHECK(serial>0),
+    PRIMARY KEY(ns,gen,serial)
+) STRICT, WITHOUT ROWID;
+PRAGMA user_version=14;

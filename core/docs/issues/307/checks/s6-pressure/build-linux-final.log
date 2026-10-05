@@ -1,0 +1,70 @@
+COMMAND: ['docker', 'run', '--rm', '--name', 'layerfs-307-s6-final-build', '--platform', 'linux/arm64', '-v', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work', '-w', '/work', '-e', 'CARGO_HOME=/work/core/target/cluster2-linux-cargo', '-e', 'CARGO_TARGET_DIR=/work/core/target/cluster2-linux', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', 'rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4', 'timeout', '--signal=KILL', '120', 'cargo', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '-p', 'layerfs-daemon', '-p', 'layerfs-workspace', '-p', 'layerfs-sdk', '--all-targets', '--no-run']
+TIMEOUT: 120s
+   Compiling getrandom v0.2.17
+   Compiling cpufeatures v0.2.17
+   Compiling cpufeatures v0.3.1
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+   Compiling sha2 v0.11.0
+   Compiling rand_core v0.6.4
+   Compiling crypto-common v0.1.7
+   Compiling universal-hash v0.5.1
+   Compiling cipher v0.4.4
+   Compiling digest v0.10.7
+   Compiling aead v0.5.2
+   Compiling polyval v0.6.2
+   Compiling poly1305 v0.8.0
+   Compiling aes v0.8.4
+   Compiling chacha20 v0.9.1
+   Compiling ctr v0.9.2
+   Compiling ghash v0.5.1
+   Compiling chacha20poly1305 v0.10.1
+   Compiling sha2 v0.10.9
+   Compiling blake2 v0.10.6
+   Compiling layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+   Compiling aes-gcm v0.10.3
+   Compiling snow v0.9.6
+   Compiling layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+warning: variant `Filesystem` is never constructed
+  --> crates/layerfs-persistence/src/backend/records.rs:81:5
+   |
+76 | pub(crate) enum BackendError {
+   |                 ------------ variant in this enum
+...
+81 |     Filesystem(std::io::ErrorKind),
+   |     ^^^^^^^^^^
+   |
+   = note: `BackendError` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` on by default
+
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+warning: `layerfs-persistence` (lib) generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 23.21s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-14707b6ca2c9a271)
+  Executable tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-23506cbbe50b7d30)
+  Executable tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-e99e9fc3bb067fe0)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_overlay-5dfea7f5c2eb3001)
+  Executable tests/compound.rs (core/target/cluster2-linux/debug/deps/compound-a00d0f6b629b0b25)
+  Executable tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-785ea92e537f2d9b)
+  Executable tests/engine.rs (core/target/cluster2-linux/debug/deps/engine-2fa85df857faac64)
+  Executable tests/frontier.rs (core/target/cluster2-linux/debug/deps/frontier-8ebd7811674db89f)
+  Executable tests/lifetimes.rs (core/target/cluster2-linux/debug/deps/lifetimes-7198dc9af91f2969)
+  Executable tests/orphans.rs (core/target/cluster2-linux/debug/deps/orphans-e68196a2ef4f9a30)
+  Executable tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-2e39ef49bedee8ea)
+  Executable tests/payload_fragmentation.rs (core/target/cluster2-linux/debug/deps/payload_fragmentation-4a4244b58577194b)
+  Executable tests/resources.rs (core/target/cluster2-linux/debug/deps/resources-e9afc396897a0447)
+  Executable tests/source.rs (core/target/cluster2-linux/debug/deps/source-e0890071018a2f0d)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_sdk-04569cca95583b09)
+  Executable tests/runtime.rs (core/target/cluster2-linux/debug/deps/runtime-2ea06079303783d8)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_workspace-ab012cb384fbf9c1)
+  Executable tests/base.rs (core/target/cluster2-linux/debug/deps/base-6414365735afbf27)
+  Executable tests/namespace.rs (core/target/cluster2-linux/debug/deps/namespace-d55d7646664a5b60)
+  Executable tests/namespace_daemon.rs (core/target/cluster2-linux/debug/deps/namespace_daemon-fd747f7efc71a0c3)
+  Executable tests/namespace_profile.rs (core/target/cluster2-linux/debug/deps/namespace_profile-1541b0183fc86d03)
+  Executable tests/namespace_view.rs (core/target/cluster2-linux/debug/deps/namespace_view-e8943b7f1cca099a)
+  Executable tests/nonfile.rs (core/target/cluster2-linux/debug/deps/nonfile-16d5c0357fe9f8f6)
+  Executable tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-0212b8a8086a0309)
+
+EXIT: 0; WALL: 23.677s

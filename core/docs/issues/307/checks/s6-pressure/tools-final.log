@@ -1,0 +1,9 @@
+COMMAND: ['python3', '-B', '-m', 'unittest', 'discover', '-s', 'core/tools', '-p', 'test_*.py']
+TIMEOUT: 120s
+..........................
+----------------------------------------------------------------------
+Ran 26 tests in 0.023s
+
+OK
+
+EXIT: 0; WALL: 0.262s

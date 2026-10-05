@@ -518,6 +518,7 @@ dependencies = [
 name = "layerfs-overlay"
 version = "0.1.6"
 dependencies = [
+ "nix",
  "rusqlite",
 ]
 

@@ -475,5 +475,6 @@ fn compound_statements_keep_point_work_as_the_namespace_grows() {
     );
     // Three inodes, one dropped name, one rebound name, one ticket, one state
     // row and the targeted unlinked-payload cleanup item introduced in S6.
-    assert_eq!(totals[0].2, 8);
+    // Dropped name, new cleanup item and ticket each update two counts.
+    assert_eq!(totals[0].2, 14);
 }

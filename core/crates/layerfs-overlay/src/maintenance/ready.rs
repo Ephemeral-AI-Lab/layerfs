@@ -2,6 +2,8 @@
 use crate::{db::integer, Overlay, OverlayError, OverlayResult, ReclaimStep, StatementKind};
 
 pub(crate) const FOLD: i64 = 1;
+pub(crate) const WAKE_ORPHAN: i64 = 8;
+pub(crate) const WAKE_GENERATION: i64 = 9;
 pub(crate) const ORPHAN: i64 = 2;
 pub(crate) const SERIAL_RETIRE: i64 = 7;
 pub(crate) const RETIRE: i64 = 3;
@@ -145,7 +147,7 @@ impl Overlay {
         if !self.maintenance_ready.get() {
             return Ok(None);
         }
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             let mut item = self
                 .query(
                     StatementKind::Reclaim,
@@ -180,6 +182,8 @@ impl Overlay {
                     FOLD => self.fold_namespace(&item)?,
                     RETIRE => self.retire_generation(&item)?,
                     ORPHAN => self.maintain_orphan(&item)?,
+                    WAKE_ORPHAN => self.wake_orphan_step(&item)?,
+                    WAKE_GENERATION => self.wake_generation_step(&item)?,
                     SERIAL_RETIRE => self.retire_serial(&item)?,
                     STALE | STEPS | SCRATCH => self.clean_live_item(&item)?,
                     _ => return Err(OverlayError::Invalid("maintenance kind")),
@@ -199,24 +203,32 @@ impl Overlay {
     /// Ready queue strategy and live physical/debt observations are separate:
     /// this returns the actual indexed queue plan without scanning its items.
     pub fn explain_maintenance(&self) -> OverlayResult<Vec<String>> {
-        self.query(
-            StatementKind::Explain,
-            &format!("EXPLAIN QUERY PLAN {READY}"),
-            &[&0_i64, &0_i64, &0_i64, &0_i64],
-            32,
-            |row| row.get(3),
-        )
+        let mut plans = Vec::new();
+        for statement in [READY, super::source_wait::GENERATION_WINDOW] {
+            plans.extend(self.query(
+                StatementKind::Explain,
+                &format!("EXPLAIN QUERY PLAN {statement}"),
+                &[&0_i64, &0_i64, &0_i64, &0_i64],
+                32,
+                |row| row.get::<_, String>(3),
+            )?);
+        }
+        Ok(plans)
     }
     pub(crate) fn wake_generation(&self, ns: i64, generation: u64) -> OverlayResult<()> {
-        let changed = self.execute(
-            StatementKind::Reclaim,
-            "UPDATE maintenance SET ready=1
-            WHERE ns=?1 AND target=?2 AND kind IN(1,3,7)",
-            &[&ns, &integer(generation)?],
-            16,
-        )?;
-        if changed != 0 {
+        let gen = integer(generation)?;
+        if gen != 0 && !self.generation_held(ns, gen)? {
+            // Only enqueue here: one last-owner release must not update the
+            // arbitrarily many serial-retirement targets for this generation.
+            self.execute(
+                StatementKind::Reclaim,
+                "INSERT INTO maintenance(ns,kind,resource,target) VALUES(?1,9,0,?2)
+                 ON CONFLICT(ns,kind,resource,target) DO UPDATE SET cursor=0,aux=-1,ready=1",
+                &[&ns, &gen],
+                16,
+            )?;
             self.maintenance_ready.set(true);
+            self.wake_orphan_sources(ns, gen)?;
         }
         Ok(())
     }

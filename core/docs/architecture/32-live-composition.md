@@ -63,3 +63,11 @@ cleanup headroom and actual device ENOSPC; comprehensive generation/owner/debt a
 EXPLAIN/runtime profiles. The current raw generic lease contract remains a trusted
 primitive. Integrated Commit, kernel references/output and transport cancellation
 remain later milestones. This initial slice must not tick S6's checkbox.
+
+S6 completion update after `be651a048`: schema14 now includes backed resource
+accounting and indexed source waits; physical reservation, cleanup headroom,
+bounded generation wakes and nonduplicating orphan migration are implemented.
+See [shared physical capacity](35-shared-physical-capacity.md) and the
+[S6 exit audit](../issues/307/S6-EXIT-AUDIT.md) for current scope/evidence. Earlier
+checkpoint limitations and numbers above retain their original source identity.
+Native/runtime/kernel and integrated qualification remain later milestones.

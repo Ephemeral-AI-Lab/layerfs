@@ -30,6 +30,10 @@ pub(crate) use maintenance::reclaim;
 pub use close::CleanupState;
 pub use compound::SourceRows;
 pub use contract::custody::{CapturedReader, FileRead, LookupOwner, OpenFile, OperationOwner};
+pub use database::accounting::{Resources, StoredCounts};
+pub use database::allocation::{
+    AllocationState, AllocationWork, CLEANUP_HEADROOM, MUTATION_GROWTH,
+};
 pub use db::Overlay;
 pub use error::{OverlayError, OverlayResult};
 pub use maintenance::{MaintenanceCursor, MaintenanceStep};

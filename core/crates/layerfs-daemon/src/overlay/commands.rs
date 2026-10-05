@@ -99,6 +99,9 @@ pub enum Command {
         reader: CapturedReader,
         after: Option<(u64, Vec<u8>)>,
     },
+    Resources {
+        global: bool,
+    },
     State,
     /// Connection-scoped work snapshot for operator diagnostics; includes the
     /// route validation seek, without scanning namespace rows or payloads.
@@ -203,6 +206,7 @@ pub enum Response {
     File(Option<OpenFile>),
     FileReader(Option<FileRead>),
     CapturedReader(Option<CapturedReader>),
+    Resources(Box<layerfs_overlay::Resources>),
     Opened(Route),
     State(WorkspaceState),
     DatabaseWork(Box<layerfs_overlay::DatabaseWork>),
@@ -269,7 +273,8 @@ impl Command {
             | Self::PendingPublications { .. }
             | Self::CapturedCell { .. }
             | Self::PayloadPlans(_)
-            | Self::LifetimePlans => ServiceClass::Read,
+            | Self::LifetimePlans
+            | Self::Resources { .. } => ServiceClass::Read,
             Self::SourceInode { .. }
             | Self::SourceDentry { .. }
             | Self::SourceNames { .. }
@@ -288,6 +293,7 @@ impl Command {
     pub(crate) fn charge(&self) -> Option<usize> {
         let base = std::mem::size_of::<Self>().checked_add(512)?;
         let (input, reply) = match self {
+            Self::Resources { .. } => (0, std::mem::size_of::<layerfs_overlay::Resources>()),
             Self::DatabaseWork => (0, std::mem::size_of::<layerfs_overlay::DatabaseWork>()),
             Self::PayloadPlans(_) | Self::LifetimePlans => (0, 8192),
             Self::Publish { name, cell, .. } => (
@@ -397,6 +403,11 @@ impl Command {
         let route = route.ok_or(layerfs_overlay::OverlayError::Invalid("missing route"))?;
         match self {
             Self::Open { .. } | Self::InstallPrepared { .. } | Self::Namespace(_) => unreachable!(),
+            Self::Resources { global } => {
+                db.state(route)?;
+                db.resources(if global { None } else { Some(route) })
+                    .map(|r| Response::Resources(Box::new(r)))
+            }
             Self::ReaderInodes { reader, after } => {
                 if reader.capture().route() != route {
                     return Err(layerfs_overlay::OverlayError::Stale);

@@ -1,0 +1,4 @@
+COMMAND: ['cargo', '+1.85.1', 'fmt', '--manifest-path', 'core/Cargo.toml', '--all', '--', '--check']
+TIMEOUT: 120s
+
+EXIT: 0; WALL: 1.444s

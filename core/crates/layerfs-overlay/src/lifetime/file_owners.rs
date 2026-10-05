@@ -184,7 +184,7 @@ impl Overlay {
     /// Exact close after this descriptor's native/request continuations finish.
     /// Read-processing windows keep their own independent references.
     pub fn close_file(&self, file: OpenFile) -> OverlayResult<()> {
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             self.check_file(file, false)?;
             self.execute(
                 StatementKind::Lease,
@@ -336,7 +336,7 @@ impl Overlay {
     }
     /// Releases only this read window after the last consumer/base demand is fenced.
     pub fn release_file_read(&self, read: FileRead) -> OverlayResult<()> {
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             self.check_file_read(read)?;
             let ns = read.source.route.ns;
             let owner = integer(read.source.owner)?;

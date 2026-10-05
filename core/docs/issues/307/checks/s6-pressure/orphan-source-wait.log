@@ -1,0 +1,21 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--test', 'orphans', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.03s
+     Running tests/orphans.rs (core/target/debug/deps/orphans-7a988e93ca86f715)
+
+running 7 tests
+test logical_close_refuses_new_captured_owners_and_keeps_existing_consumers ... ok
+test unowned_unlinked_payload_is_reclaimed_live_but_its_namespace_tombstone_remains ... ok
+test captured_reader_preserves_sealed_bytes_across_install_and_blocks_failed_fold ... ok
+test three_layer_orphan_composition_preserves_cutoffs_and_an_independent_pre_unlink_reader ... ok
+test operation_custody_never_reuses_an_exposed_owner_and_cleanup_cannot_delete_new_scratch ... ok
+S6_CUSTODY_PROFILE unrelated=128 open=(13, 448, 8) unlink=(25, 1339, 20) acquire_read=(16, 612, 12) read=(8, 200, 0) descriptor_append=(22, 840, 11) fullscan=0 sorts=0 autoindex=0 reprepare=0
+test independent_orphan_survives_many_installs_and_failures_and_last_read_owner ... ok
+S6_CUSTODY_PROFILE unrelated=1024 open=(13, 448, 8) unlink=(25, 1339, 20) acquire_read=(16, 612, 12) read=(8, 200, 0) descriptor_append=(22, 840, 11) fullscan=0 sorts=0 autoindex=0 reprepare=0
+S6_CUSTODY_PROFILE unrelated=4096 open=(13, 448, 8) unlink=(25, 1339, 20) acquire_read=(16, 612, 12) read=(8, 200, 0) descriptor_append=(22, 840, 11) fullscan=0 sorts=0 autoindex=0 reprepare=0
+test custody_and_orphan_jobs_keep_point_work_beside_unrelated_owners ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+
+EXIT: 0; WALL: 2.566s

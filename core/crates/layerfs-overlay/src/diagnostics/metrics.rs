@@ -44,15 +44,25 @@ pub struct DatabaseWork {
     pub statements: [StatementWork; 14],
 }
 
+pub(crate) struct Query<'a> {
+    pub sql: &'a str,
+    pub params: &'a [&'a dyn ToSql],
+    pub bound_bytes: u64,
+    pub cached: bool,
+}
 pub(crate) fn query<T>(
     connection: &Connection,
     work: &RefCell<DatabaseWork>,
     kind: StatementKind,
-    sql: &str,
-    params: &[&dyn ToSql],
-    bound_bytes: u64,
+    input: Query<'_>,
     mut decode: impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>,
 ) -> OverlayResult<Vec<T>> {
+    let Query {
+        sql,
+        params,
+        bound_bytes,
+        cached,
+    } = input;
     let start = Instant::now();
     let mut observed = StatementWork {
         attempts: 1,
@@ -60,7 +70,15 @@ pub(crate) fn query<T>(
         ..Default::default()
     };
     let result = (|| {
-        let mut statement = connection.prepare_cached(sql)?;
+        let mut plain;
+        let mut retained;
+        let statement = if cached {
+            retained = connection.prepare_cached(sql)?;
+            &mut *retained
+        } else {
+            plain = connection.prepare(sql)?;
+            &mut plain
+        };
         for counter in [
             StatementStatus::Run,
             StatementStatus::VmStep,

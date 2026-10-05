@@ -25,12 +25,25 @@ impl Overlay {
                 .first()
                 .copied();
             if let Some(lower) = lower {
+                let state = self.state(self.route_for_ns(ns)?)?;
+                if state.captured.is_some_and(|g| g.0 == lower.gen)
+                    || self.generation_held(ns, lower.gen)?
+                {
+                    self.execute(
+                        StatementKind::Lease,
+                        "INSERT INTO orphan_wait VALUES(?1,?2,?3) ON CONFLICT DO NOTHING",
+                        &[&ns, &lower.gen, &serial],
+                        24,
+                    )?;
+                    self.hold_item(item)?;
+                    return Ok((0, 0, false));
+                }
                 let upper = self.orphan_layer(ns, serial)?;
                 let cell=self.query(StatementKind::Reclaim,"SELECT cell_offset FROM payload
                     WHERE ns=?1 AND serial=?2 AND gen=?3 AND cell_offset>?4 ORDER BY cell_offset LIMIT 1",
                     &[&ns,&serial,&lower.gen,&if item.phase==lower.gen {item.aux}else{-1}],32,|r|r.get::<_,i64>(0))?.pop();
                 if let Some(cell) = cell {
-                    let bytes = self.compose_cell(ns, serial, &lower, &upper, cell)?;
+                    let bytes = self.move_orphan_cell(ns, serial, &lower, &upper, cell)?;
                     self.advance_item(item, lower.gen, 0, cell, &[])?;
                     return Ok((1, bytes, false));
                 }

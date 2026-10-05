@@ -19,6 +19,11 @@ pub enum OverlayError {
         cause: Box<OverlayError>,
         completion: Option<Box<OverlayError>>,
     },
+    Reservation {
+        required_bytes: u64,
+        allocated_bytes: u64,
+        cause: Box<OverlayError>,
+    },
     UnsupportedPlatform,
 }
 impl fmt::Display for OverlayError {

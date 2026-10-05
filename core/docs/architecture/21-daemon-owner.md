@@ -134,3 +134,11 @@ returning their original command and an attempted job's failure is returned as
 before their publication, so they never delay a capture. See
 [namespace operations](30-namespace-operations.md). Native deferred replies,
 per-request credit residency and source/reply job consolidation remain S7/S8.
+
+S6 completion update after `be651a048`: schema14 now includes backed resource
+accounting and indexed source waits; physical reservation, cleanup headroom,
+bounded generation wakes and nonduplicating orphan migration are implemented.
+See [shared physical capacity](35-shared-physical-capacity.md) and the
+[S6 exit audit](../issues/307/S6-EXIT-AUDIT.md) for current scope/evidence. Earlier
+checkpoint limitations and numbers above retain their original source identity.
+Native/runtime/kernel and integrated qualification remain later milestones.

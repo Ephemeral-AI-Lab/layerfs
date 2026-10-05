@@ -14,7 +14,7 @@ impl Overlay {
     /// Revokes new mutations/acquisitions and queues only eligible terminal work.
     /// Existing reply attempts/releases and exact captures retain their custody.
     pub fn close(&self, route: Route) -> OverlayResult<()> {
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             self.live(route)?;
             self.execute(
                 StatementKind::Workspace,
@@ -29,7 +29,7 @@ impl Overlay {
     /// construction/history work. Unknown disposition must keep the capture.
     /// This local release does not discard a history stage or infer publication.
     pub fn release_closed_capture(&self, capture: Capture) -> OverlayResult<()> {
-        self.atomic(|| {
+        self.atomic_cleanup(|| {
             let state = self.state(capture.route())?;
             self.checked_capture(capture)?;
             if !state.closed {
@@ -41,6 +41,7 @@ impl Overlay {
                 &[&capture.route().ns],
                 8,
             )?;
+            self.wake_orphan_sources(capture.route.ns, capture.generation.0)?;
             self.queue_closed(capture.route())
         })
     }

@@ -1,0 +1,30 @@
+COMMAND: ['cargo', '+1.85.1', 'test', '--manifest-path', 'core/Cargo.toml', '--locked', '-p', 'layerfs-overlay', '--', '--nocapture']
+TIMEOUT: 120s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_overlay-7af2ec524cfae021)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compound.rs (core/target/debug/deps/compound-f27037c54631a7cf)
+
+running 3 tests
+
+thread 'compound_statements_keep_point_work_as_the_namespace_grows' panicked at crates/layerfs-overlay/tests/compound.rs:366:9:
+put-name: vm-program opcodes=155 btree-cursors=4 btree-scan-opcodes=2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test compound_statements_keep_point_work_as_the_namespace_grows ... FAILED
+test compound_job_publishes_every_final_value_with_one_ticket_or_nothing ... ok
+test removed_names_keep_a_whiteout_only_where_a_lower_binding_exists ... ok
+
+failures:
+
+failures:
+    compound_statements_keep_point_work_as_the_namespace_grows
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-overlay --test compound`
+
+EXIT: 101; WALL: 2.979s

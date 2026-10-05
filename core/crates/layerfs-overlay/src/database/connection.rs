@@ -25,6 +25,7 @@ pub struct Overlay {
     pub(crate) maintenance_ready: Cell<bool>,
     pub(crate) closed_ready: Cell<bool>,
     profile: DatabaseProfile,
+    allocation: crate::database::allocation::Allocation,
 }
 impl Overlay {
     /// Creates fresh disposable state once. An existing path is refused.
@@ -41,7 +42,8 @@ impl Overlay {
             options.mode(0o600);
         }
         let file = options.open(path)?;
-        drop(file);
+        let allocation = crate::database::allocation::Allocation::new(file, path)?;
+        allocation.admit(false, 0)?;
         let connection = Connection::open_with_flags(
             path,
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -54,11 +56,16 @@ impl Overlay {
         while let Some(mut statement) = batch.next()? {
             statement.execute([])?;
         }
+        let mut accounting =
+            rusqlite::Batch::new(&connection, include_str!("../../sql/accounting.sql"));
+        while let Some(mut statement) = accounting.next()? {
+            statement.execute([])?;
+        }
         profile.schema_version =
             connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
         let application: i64 =
             connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
-        if profile.schema_version != 12 || application != 1279676210 {
+        if profile.schema_version != 14 || application != 1279676210 {
             return Err(OverlayError::Invalid("overlay schema readback"));
         }
         connection.set_prepared_statement_cache_capacity(48);
@@ -78,6 +85,7 @@ impl Overlay {
             maintenance_ready: Cell::new(false),
             closed_ready: Cell::new(false),
             profile,
+            allocation,
         })
     }
     /// Selected settings actually read back from this initialized connection.
@@ -91,12 +99,19 @@ impl Overlay {
     /// Physical page-count and freelist observations; not exclusive Workspace bytes.
     pub fn pages(&self) -> OverlayResult<(u64, u64)> {
         self.available()?;
-        let pages = self.query(StatementKind::Startup, "PRAGMA page_count", &[], 0, |r| {
-            unsigned(r, 0)
-        })?[0];
+        // Pagecount expires its own VM. Prepare it once for this observation
+        // rather than caching an expired statement and automatically repreparing.
+        let pages = self.query_using(
+            StatementKind::Startup,
+            "PRAGMA main.page_count",
+            &[],
+            0,
+            false,
+            |r| unsigned(r, 0),
+        )?[0];
         let free = self.query(
             StatementKind::Startup,
-            "PRAGMA freelist_count",
+            "PRAGMA main.freelist_count",
             &[],
             0,
             |r| unsigned(r, 0),
@@ -125,14 +140,28 @@ impl Overlay {
         bytes: u64,
         decode: impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>,
     ) -> OverlayResult<Vec<T>> {
+        self.query_using(kind, sql, params, bytes, true, decode)
+    }
+    fn query_using<T>(
+        &self,
+        kind: StatementKind,
+        sql: &str,
+        params: &[&dyn ToSql],
+        bytes: u64,
+        cached: bool,
+        decode: impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>,
+    ) -> OverlayResult<Vec<T>> {
         self.available()?;
         let result = metrics::query(
             &self.connection,
             &self.work,
             kind,
-            sql,
-            params,
-            bytes,
+            metrics::Query {
+                sql,
+                params,
+                bound_bytes: bytes,
+                cached,
+            },
             decode,
         );
         match result {
@@ -157,10 +186,64 @@ impl Overlay {
         Ok(self.connection.changes())
     }
     pub(crate) fn atomic<T>(&self, job: impl FnOnce() -> OverlayResult<T>) -> OverlayResult<T> {
+        self.transaction(false, job)
+    }
+    pub(crate) fn atomic_cleanup<T>(
+        &self,
+        job: impl FnOnce() -> OverlayResult<T>,
+    ) -> OverlayResult<T> {
+        self.transaction(true, job)
+    }
+    pub fn allocation(&self) -> OverlayResult<crate::AllocationState> {
         self.available()?;
+        self.allocation.state()
+    }
+    fn transaction<T>(
+        &self,
+        cleanup: bool,
+        job: impl FnOnce() -> OverlayResult<T>,
+    ) -> OverlayResult<T> {
+        self.available()?;
+        // page_count includes Expire in the supported SQLite VM. Keep it out
+        // of the hot admission path; committed dense descriptor length supplies
+        // the physical bound, and freelist_count reads one nonexpiring cookie.
+        let free = self.query(
+            StatementKind::Startup,
+            "PRAGMA main.freelist_count",
+            &[],
+            0,
+            |r| unsigned(r, 0),
+        )?[0];
+        let physical = self.allocation.state();
+        let admission = match physical {
+            Ok(state)
+                if state.logical_bytes != 0
+                    && state.logical_bytes % 4096 == 0
+                    && free <= state.logical_bytes / 4096 =>
+            {
+                self.allocation.admit(cleanup, free * 4096)
+            }
+            Ok(_) => Err(OverlayError::Invalid(
+                "committed database length/accounting",
+            )),
+            Err(error) => Err(error),
+        };
+        if let Err(cause) = admission {
+            if !matches!(
+                cause,
+                OverlayError::Reservation { .. } | OverlayError::UnsupportedPlatform
+            ) {
+                self.quarantined.set(true);
+                return Err(OverlayError::Uncertain {
+                    cause: Box::new(cause),
+                    completion: None,
+                });
+            }
+            return Err(cause);
+        }
         self.execute(StatementKind::Begin, "BEGIN IMMEDIATE", &[], 0)?;
         let result = job();
-        match result {
+        let finished = match result {
             Ok(value) => match self.execute(StatementKind::Commit, "COMMIT", &[], 0) {
                 Ok(_) => Ok(value),
                 Err(cause) => {
@@ -186,7 +269,18 @@ impl Overlay {
                 }
                 Err(cause)
             }
+        };
+        // Observe rollback truncation before another admission or resource
+        // report can credit discarded physical tail. An unknown identity or
+        // metadata result quarantines this connection with original custody.
+        if let Err(cause) = self.allocation.state() {
+            self.quarantined.set(true);
+            return Err(OverlayError::Uncertain {
+                cause: Box::new(cause),
+                completion: finished.err().map(Box::new),
+            });
         }
+        finished
     }
 }
 pub(crate) fn integer(value: u64) -> OverlayResult<i64> {

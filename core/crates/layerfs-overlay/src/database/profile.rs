@@ -37,6 +37,7 @@ pub struct DatabaseProfile {
     pub foreign_keys: i64,
     pub busy_timeout: i64,
     pub temp_store: i64,
+    pub auto_vacuum: i64,
 }
 pub(crate) fn initialize(c: &Connection, config: ProfileConfig) -> OverlayResult<DatabaseProfile> {
     let max_pages = config.max_pages.unwrap_or(u32::MAX - 1);
@@ -46,7 +47,7 @@ pub(crate) fn initialize(c: &Connection, config: ProfileConfig) -> OverlayResult
     c.busy_timeout(std::time::Duration::ZERO)?;
     c.set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)?;
     c.execute_batch(&format!(
-        "PRAGMA page_size=4096; PRAGMA journal_mode=MEMORY; PRAGMA synchronous=OFF;
+        "PRAGMA page_size=4096; PRAGMA auto_vacuum=NONE; PRAGMA journal_mode=MEMORY; PRAGMA synchronous=OFF;
          PRAGMA locking_mode=EXCLUSIVE; PRAGMA mmap_size=0; PRAGMA foreign_keys=ON;
          PRAGMA temp_store=FILE; PRAGMA cache_size=-{}; PRAGMA max_page_count={};",
         config.pager_kib, max_pages
@@ -71,7 +72,15 @@ pub(crate) fn initialize(c: &Connection, config: ProfileConfig) -> OverlayResult
         foreign_keys: integer("foreign_keys")?,
         busy_timeout: integer("busy_timeout")?,
         temp_store: integer("temp_store")?,
+        auto_vacuum: integer("auto_vacuum")?,
     };
+    // Physical growth derivation is pinned to these actual SQLite builds.
+    // A new system/bundled version requires source review and qualification.
+    if !matches!(p.sqlite_version.as_str(), "3.51.0" | "3.53.2") {
+        return Err(OverlayError::Invalid(
+            "unqualified SQLite physical growth profile",
+        ));
+    }
     if p.journal_mode != "memory"
         || p.locking_mode != "exclusive"
         || p.synchronous != 0
@@ -82,6 +91,7 @@ pub(crate) fn initialize(c: &Connection, config: ProfileConfig) -> OverlayResult
         || p.foreign_keys != 1
         || p.busy_timeout != 0
         || p.temp_store != 1
+        || p.auto_vacuum != 0
     {
         return Err(OverlayError::Invalid("profile readback differs"));
     }
