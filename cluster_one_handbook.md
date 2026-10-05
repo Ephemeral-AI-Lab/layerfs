@@ -25,6 +25,9 @@ mutable overlay, generation freezing, and reconciliation are outside this guide.
 The caller must nevertheless supply stable inputs and correct expected-state
 identities to the cluster one APIs.
 
+For the mechanism details and worked examples, read the companion
+[CAS, CDC, and Delta Encoding Handbook](cas_cdc_deltaencoding_handbook.md).
+
 ## 1. Architecture and ownership
 
 The active Core workspace contains six crates:
