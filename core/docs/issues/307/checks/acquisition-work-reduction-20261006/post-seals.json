@@ -1,0 +1,25 @@
+{
+  "source": "4a207cea15c651972b36d9dd3b3448a1903a2f22",
+  "source_tree": "b2b960bd7dac969917d021e249c35bfb8a06f6a9",
+  "dirty_after": [],
+  "binaries": {
+    "benchmark_init": {
+      "sha256": "a608d02a44af854dcb55065c1f09dbb008c82b87c3495c83ec0f2cd49bc15627",
+      "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/binaries/benchmark_init",
+      "source_path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/target/release/examples/benchmark_init"
+    },
+    "verify_namespace": {
+      "sha256": "6f28603b642be85010458102cb2bbf2f435bc2e9875a80770490d53cca468d09",
+      "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/binaries/verify_namespace",
+      "source_path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/target/release/examples/verify_namespace"
+    },
+    "durable_init_costs": {
+      "sha256": "ff452a38b358f5171fe469ed312e49b54f324c514be4783e0e83e572df0dcd5e",
+      "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/binaries/durable_init_costs",
+      "source_path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/target/release/examples/durable_init_costs"
+    }
+  },
+  "product_seal": "830593d5d4cd4f79b524345cc82236ce0dd050ca00a2b0a9a052fb35b0c53eb2",
+  "compilation_seal": "1c0c0783f30e3073484932725f75f43c7a9e872f90823b86ab1210cda530ed96",
+  "harness_seal": "3a0b65211bfdfb44f68a1bd632f2ec4d128f888fc2b91bdcf3d074f8c564ca12"
+}

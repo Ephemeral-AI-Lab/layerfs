@@ -228,3 +228,115 @@ unavailable after the retained observer timeout. Reference VFS submitted bytes
 and older Durable100 observations cannot establish a current 100000-file write
 ratio. No durability/profile/topology change or new speed/storage PASS follows
 from this review.
+
+## Implemented work reduction checkpoint: performance still unrecovered
+
+The owner selects the four reviewed work areas. Two subagents implement narrowed
+insertion and typed/projected owned reads; a third reviews compact representation
+and publication coordination. Root integrates bounded final disposal and validates
+the combined source. Product commit is `4a207cea15c651972b36d9dd3b3448a1903a2f22`.
+The compact-schema and publication-coordinator options remain the concrete
+[A1 proposals](A1-ACQUISITION-CONTRACT.md#owner-selected-work-reduction-and-lifecycle-review),
+with their compatibility/custody/index tradeoffs. They are not silently introduced
+as another importer, Store profile or measured layout.
+
+The source implements one reused insertion binding allocation, narrower inputs,
+no empty native INSERT, direct typed read mapping, projected directory bindings,
+owner-gated implicit read snapshots and final cleanup/release in one acknowledgment.
+Two-pass path windows retain their explicit snapshot. Original indexed dependency
+probes remain to preserve aliases and first refusal. Existing schemas/DDL, profiles,
+windows, constructors, canonical bytes and old adapter behavior remain compatible.
+
+One clean-source cold sample ran per new case, in the selected order, with the
+same qualified197d controls, prepared manifests, cache helper,30s command/build,
+19s proof and original speed/allocation gates. Every case is COMPLETE with
+namespace/sample-content proof, cold zero-residency and cleanup PASS. All final
+Stores have zero freelist and zero acquisition/operation rows. **Zero of eight
+speed gates, allocation gates or joint gates pass.** No unchanged arm was replayed.
+[Ledger](checks/acquisition-work-reduction-20261006/ledger.json),
+[original selection](checks/acquisition-work-reduction-20261006/selection.json),
+[independent closed copies](checks/acquisition-work-reduction-20261006/closed-copy-manifest.json).
+
+| Case | Cluster-one product ns | Current product ns | Control allocated B | Current allocated B | Speed/allocation |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Durable100 | 79,759,708 | 107,616,541 | 5,255,168 | 5,279,744 | FAIL / FAIL |
+| Durable1000 | 201,566,000 | 222,706,583 | 20,545,536 | 20,623,360 | FAIL / FAIL |
+| Durable10000 | 2,492,429,625 | 2,832,280,500 | 305,070,080 | 305,446,912 | FAIL / FAIL |
+| Durable100000 | 7,724,523,333 | 9,749,380,917 | 514,965,504 | 515,596,288 | FAIL / FAIL |
+| Disposable100 | 38,747,750 | 43,854,417 | 5,222,400 | 5,251,072 | FAIL / FAIL |
+| Disposable1000 | 129,258,375 | 157,947,084 | 20,537,344 | 20,590,592 | FAIL / FAIL |
+| Disposable10000 | 1,645,276,292 | 1,977,715,500 | 305,074,176 | 305,504,256 | FAIL / FAIL |
+| Disposable100000 | 5,558,569,958 | 7,301,489,875 | 514,940,928 | 515,633,152 | FAIL / FAIL |
+
+Durable100000 changes9.766s→9.749s versus the previous source, about0.175% lower,
+while remaining26.213% above cluster one. This does not establish meaningful time
+recovery. Durable100 changes84.883ms→107.617ms; its retained regions show bootstrap
+16.755ms→22.493ms and Init64.995ms→81.296ms. Bootstrap schema/settings are unchanged.
+These region observations locate the raw difference but do not isolate its cause.
+They neither permit selecting the old faster draw nor prove a code-induced slowdown.
+The new source remains unqualified against the frozen speed/storage contract.
+
+### Correlated work counts
+
+The separately selected15s instrumented/uncontrolled100000-file count invocation
+completes and passes independent proof. It is not another acceptance timing pair.
+
+| Counter | Previous dd43 source | Current4a207 source | Raw delta |
+| --- | ---: | ---: | ---: |
+| Whole Init SQL executions | 27,527 | 25,662 | −1,865 |
+| Whole Init VM steps | 61,067,367 | 60,231,985 | −835,382 |
+| Whole Init write acknowledgments | 546 | 542 | −4 |
+| Acquisition SQL executions | 17,850 | 15,966 | −1,884 |
+| Acquisition VM steps | 46,325,725 | 45,489,938 | −835,787 |
+| Acquisition write acknowledgments | 114 | 113 | −1 |
+| Owned implicit read snapshots | 0 | 598 | +598 |
+
+Acquisition executions fall10.5546%, VM steps1.8042%; whole Init VM steps fall
+1.3680%. Final disposal accounts for one fewer acquisition acknowledgment. Three
+fewer ordinary reservation calls account for the other whole-Init acknowledgment
+change; the shared adaptive Save scheduling is not a selected new reservation
+algorithm. Immutable publication remains297 calls, with13,718,287 VM steps versus
+13,717,761; small SQL-shape differences accompany batch arrival, so do not claim
+all raw whole-operation deltas as deterministic savings from the new mechanism.
+
+Insertion falls24,308,860→23,181,878 VM steps and9656→9623 SQL executions. Full
+entry/binding streams now use199 executions each instead of1592 for two full-entry
+passes. Their combined VM work rises3,108,762→3,202,628; file-root VM work also
+rises708,276→904,743 despite788→197 executions. Cleanup/release522+8 executions
+becomes473 disposal executions. This retains the observed tradeoffs and shows why
+fewer executions alone do not resolve the latency gap.
+
+The remaining useful-row lifecycle is unchanged:504003 base-row mutations for
+the fixture, plus index/pager/constraint work. The combined-row proposal addresses
+that larger cost, but its unchanged indexed-record count and non-covering native
+reads require their own prospective implementation/profile. No physical-write/
+sync reduction is claimed; matching complete current VFS totals remain unavailable.
+
+### Validation, custody and source size
+
+Locked Storage/Persistence/Project all-targets compilation precedes244 passing
+public test bodies in66.142s, under the explicit120s ceiling. Clippy `-D warnings`,
+formatting,661-file boundary,40 guard tests and14 owning harness tests pass.
+AppleSQLite3.51 full EXPLAIN/EQP covers15 changed input shapes, paired with real
+provider execution counts. All nine owned read plans check the owner PK before
+indexed payload seeks, preserve indexed ordering and contain no stored scan or
+temporary sort. Public proof covers valid-empty/stale/read-only owners, mixed
+payloads, alias/constraint order, charges, disposal and independent live custody.
+Unchanged constructor/history evidence is reused; Linux global persistence and
+integrated S7/S8/S9 remain unqualified. The initial plan wrapper failed because
+a profile-setting PRAGMA emitted extra JSON; the corrected observer preserves
+that failure and collects plans without a product or timing replay.
+
+Raw Stores and binaries are independently retained at
+`benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006`.
+Compact committed logs use lossless gzip; checksum/copy manifests preserve the
+original bytes, including test-output trailing blank lines. No other owner work,
+container, dependency or registry source is changed.
+
+`4a207cea1`: **Production LOC160073→160473 (delta+400)**; core94656→95056,
+reference65417 unchanged. Same counter SHA/scope, exact first-parent/staged/committed
+production subtrees, Rust-aware comment/inline-test exclusion and shipped SQL are
+in the commit message and [LOC receipt](checks/acquisition-work-reduction-20261006/production-loc.json).
+No relocation, duplicate product or legacy retirement is claimed. The additional
+source implements typed/owned read execution, compatibility and bounded cleanup;
+the count improvement is not presented as recovered performance.

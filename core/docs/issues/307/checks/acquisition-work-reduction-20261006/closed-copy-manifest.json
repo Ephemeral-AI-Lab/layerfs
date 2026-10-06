@@ -1,0 +1,114 @@
+[
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-init-100-work-reduction-v1-candidate/store.sqlite-wal",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-init-100-work-reduction-v1/store.sqlite-wal",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-init-100-work-reduction-v1-candidate/store.sqlite-shm",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-init-100-work-reduction-v1/store.sqlite-shm",
+    "bytes": 32768,
+    "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-init-100-work-reduction-v1-candidate/store.sqlite",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-init-100-work-reduction-v1/store.sqlite",
+    "bytes": 5246976,
+    "sha256": "373144607cfe563ca6bad84eff78111cd56a0861716331494e6009c6efc3a525",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-init-1000-work-reduction-v1-candidate/store.sqlite-wal",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-init-1000-work-reduction-v1/store.sqlite-wal",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-init-1000-work-reduction-v1-candidate/store.sqlite-shm",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-init-1000-work-reduction-v1/store.sqlite-shm",
+    "bytes": 32768,
+    "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-init-1000-work-reduction-v1-candidate/store.sqlite",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-init-1000-work-reduction-v1/store.sqlite",
+    "bytes": 20590592,
+    "sha256": "49ac1e9d869c3d36d96d60566ae00103835c773d9d3aaaae4194f9280a323a34",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-init-10000-work-reduction-v1-candidate/store.sqlite-wal",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-init-10000-work-reduction-v1/store.sqlite-wal",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-init-10000-work-reduction-v1-candidate/store.sqlite-shm",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-init-10000-work-reduction-v1/store.sqlite-shm",
+    "bytes": 32768,
+    "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-init-10000-work-reduction-v1-candidate/store.sqlite",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-init-10000-work-reduction-v1/store.sqlite",
+    "bytes": 305414144,
+    "sha256": "c8e1152ce62102dda3d86e689402458ef183015a0f9bbd9e6747ef744e23076c",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-init-100000-work-reduction-v1-candidate/store.sqlite-wal",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-init-100000-work-reduction-v1/store.sqlite-wal",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-init-100000-work-reduction-v1-candidate/store.sqlite-shm",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-init-100000-work-reduction-v1/store.sqlite-shm",
+    "bytes": 32768,
+    "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-init-100000-work-reduction-v1-candidate/store.sqlite",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-init-100000-work-reduction-v1/store.sqlite",
+    "bytes": 515563520,
+    "sha256": "5cd6c49ddfd1eda277842c529a6e24fc992c2739c0fe6141e199d7f904da17c1",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-disposable-init-100-work-reduction-v1-candidate/store.sqlite",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-disposable-init-100-work-reduction-v1/store.sqlite",
+    "bytes": 5251072,
+    "sha256": "ac35c7bbd1b0a4150314f759596fffe58b1c46b8690fd48886dba28cc76dadbe",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-disposable-init-1000-work-reduction-v1-candidate/store.sqlite",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-disposable-init-1000-work-reduction-v1/store.sqlite",
+    "bytes": 20590592,
+    "sha256": "2fab628f18ed57796ce78b34255f7d906ab3ba2227f0eb365d85e5d24e90bd31",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-disposable-init-10000-work-reduction-v1-candidate/store.sqlite",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-disposable-init-10000-work-reduction-v1/store.sqlite",
+    "bytes": 305504256,
+    "sha256": "6c34f864cb38f45f578d26dba01cc6a4730c4d5e082e106a40492332c3301a58",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-20261006-phase7-sqlite-disposable-init-100000-work-reduction-v1-candidate/store.sqlite",
+    "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/phase7-sqlite-disposable-init-100000-work-reduction-v1/store.sqlite",
+    "bytes": 515633152,
+    "sha256": "e3ff26463c68aa7782c099e06743249ed0989a7e847100d468205a03ebe5b6da",
+    "method": "independent writable byte copy; no reflink/cold claim"
+  }
+]

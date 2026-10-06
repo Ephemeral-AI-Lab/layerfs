@@ -1,0 +1,12 @@
+{
+  "parent_commit": "4a207cea15c651972b36d9dd3b3448a1903a2f22",
+  "method": "Docs/evidence-only comparison: exact first-parent and final staged core/crates and crates subtrees are identical; reuse exact4a207 production count with counter SHA c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb.",
+  "before": 160473,
+  "after": 160473,
+  "delta": 0,
+  "core_before": 95056,
+  "core_after": 95056,
+  "reference_before": 65417,
+  "reference_after": 65417,
+  "wrapper_logs": "Actual wrapper stem logs used the earlier space-scaling directory with distinct new work-reduction case filenames; copied losslessly here. Performance outputs and sample claims have their registered new identities. No replay or overwrite."
+}
