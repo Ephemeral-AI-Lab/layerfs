@@ -333,3 +333,19 @@ and [S9 receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecom
 record CHECKPOINT, with S7/S8/S9 unchecked. This receipt-only commit has unchanged
 core91262/reference65417/combined156679 production LOC, delta0, using its own
 exact parent/staged comparison and committed-tree confirmation.
+
+Native regular alias correction follows the wire checkpoint: the importer keeps
+one inode per native device/inode, constructs once, distinguishes equal-byte copies
+and derives in-root link count independently of outside links. Exact mode/ctime
+observations accompany identity/length/mtime. Host66 and Docker3 acquisition/scaling
+checks pass; existing resident native/input collections are still open. Architecture41
+and checks/s9-native-aliases retain source/binary/cache/failure identities. This does
+not complete S9 or create a new external fuser wait. Continue consumer/application
+custody and backed initial acquisition using public streamed directory/table APIs.
+
+Native regular alias checkpoint production LOC: core91262 ->91342(delta+80),
+reference65417 ->65417(delta0), combined156679 ->156759(delta+80). The exact
+first parent/final staged archives use unchanged tools/production_loc.py SHA256
+c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb, counting product/
+shipped SQL/excluded predecessors and excluding tests/docs/tools/manifests/third-party.
+No reference retirement, new resident alias map or algorithmic shrink is claimed.

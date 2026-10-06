@@ -1,0 +1,17 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running tests/complete_root.rs (core/target/cluster2-runtime-tests/debug/deps/complete_root-7bc313d53b4b8645)
+
+running 2 tests
+S9_COMPLETE_ROOT entries=25 work=NamespaceWork { unique_files: 8, regular_aliases: 1, entries: 25, entry_capacity_bytes: 4322, jobs: 9, job_capacity_bytes: 2575, frontier: 5, frontier_capacity_bytes: 1260, directory_children: 12, child_vector_bytes: 16896, serial_capacity_bytes: 256, inode_capacity_bytes: 2200, directory_bindings: 24, directory_capacity_bytes: 352, change_capacity_bytes: 2080 }
+test native_import_keeps_ignored_git_dependencies_outputs_and_exact_link_targets ... ok
+S9_COMPLETE_ROOT entries=25 work=NamespaceWork { unique_files: 8, regular_aliases: 1, entries: 25, entry_capacity_bytes: 4322, jobs: 9, job_capacity_bytes: 2575, frontier: 5, frontier_capacity_bytes: 1260, directory_children: 12, child_vector_bytes: 16896, serial_capacity_bytes: 256, inode_capacity_bytes: 2200, directory_bindings: 24, directory_capacity_bytes: 352, change_capacity_bytes: 2080 }
+S9_COMPLETE_ROOT entries=25 work=NamespaceWork { unique_files: 8, regular_aliases: 1, entries: 25, entry_capacity_bytes: 4322, jobs: 9, job_capacity_bytes: 2575, frontier: 5, frontier_capacity_bytes: 1260, directory_children: 12, child_vector_bytes: 16896, serial_capacity_bytes: 256, inode_capacity_bytes: 2200, directory_bindings: 24, directory_capacity_bytes: 352, change_capacity_bytes: 2080 }
+test real_host_profiles_acquire_and_reuse_the_exact_complete_root ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+

@@ -31,7 +31,7 @@ product mental model or campaign-specific benchmark procedures.
   predecessor is preserved in excluded `layerfs-sdk-legacy`; consumer/application integration,
   restart custody, control integration and full runtime acceptance remain
   unfinished. Project native import preserves opaque symlink targets and complete
-  path membership, but backed collections and hard-link identity remain open.
+  path membership and regular hard-link identity, but backed collections remain open.
   Bridge now builds pinned native KK channels, checked logical fragmentation,
   aggregate partial/result credits and explicit independent socket fences. Its old protocol source is excluded at
   `layerfs-bridge-legacy`; complete transport/runtime/restart and resource

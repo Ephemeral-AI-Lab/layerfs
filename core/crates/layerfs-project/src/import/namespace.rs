@@ -65,6 +65,8 @@ impl ImportProgress {
 
 /// Internal import row. Its parent index is not restricted by the old wire manifest.
 pub(crate) struct PreparedEntry {
+    /// Canonical first regular-file entry for a native hard-link alias.
+    pub alias: Option<usize>,
     pub parent: usize,
     pub name: Vec<u8>,
     pub kind: RecordKind,
@@ -89,22 +91,27 @@ pub(crate) fn build_namespace(
     timer: &TimingScope<'_, Active>,
 ) -> Result<ObjectId, Failure> {
     let count = u64::try_from(entries.len()).map_err(|_| Failure::Capacity)?;
-    let last = root_serial
+    root_serial
         .checked_add(count)
         .filter(|end| *end <= i64::MAX as u64)
         .ok_or(Failure::Capacity)?;
     progress.tick()?;
-    let serials: Vec<u64> = (root_serial..last).collect();
+    let serials: Vec<u64> = entries
+        .iter()
+        .enumerate()
+        .filter(|(_, entry)| entry.alias.is_none())
+        .map(|(index, _)| root_serial + index as u64)
+        .collect();
     let inodes = prerequisites(
         store,
         provider,
         entries,
-        &serials,
+        root_serial,
         files_just_imported,
         progress,
         timer,
     )?;
-    let directories = directory_updates(entries, &serials)?;
+    let directories = directory_updates(entries, root_serial)?;
     progress.work.serial_capacity_bytes = serials.capacity() * std::mem::size_of::<u64>();
     progress.work.inode_capacity_bytes = inodes.capacity() * std::mem::size_of::<InodeUpdate>();
     progress.work.directory_bindings = directories.iter().map(|d| d.changes.len()).sum();
@@ -169,7 +176,7 @@ fn prerequisites(
     store: &Storage,
     provider: &dyn AuthenticatedObjects,
     entries: &[PreparedEntry],
-    serials: &[u64],
+    root_serial: u64,
     files_just_imported: bool,
     progress: &mut ImportProgress,
     timer: &TimingScope<'_, Active>,
@@ -185,6 +192,9 @@ fn prerequisites(
             let mut previous_metadata = None;
             for (index, entry) in entries.iter().enumerate() {
                 progress.tick()?;
+                if entry.alias.is_some() {
+                    continue;
+                }
                 let kind = kind_of(entry.kind);
                 let value = PortableMetadata {
                     mode: entry.mode,
@@ -226,7 +236,7 @@ fn prerequisites(
                     RecordKind::Directory => metadata_root,
                 };
                 inodes.push(InodeUpdate {
-                    serial: serials[index],
+                    serial: root_serial + index as u64,
                     value: InodeValue {
                         kind,
                         namespace_ref_count: 0,
@@ -262,21 +272,24 @@ fn prerequisites(
 /// statement is also what gives the one-directory namespace its real empty page.
 fn directory_updates(
     entries: &[PreparedEntry],
-    serials: &[u64],
+    root_serial: u64,
 ) -> Result<Vec<DirectoryUpdate>, Failure> {
     let mut bindings = std::collections::BTreeMap::new();
-    for (entry, serial) in entries.iter().zip(serials) {
+    for (index, entry) in entries.iter().enumerate() {
         if entry.kind == RecordKind::Directory {
-            bindings.insert(*serial, Vec::new());
+            bindings.insert(root_serial + index as u64, Vec::new());
         }
     }
     for (index, entry) in entries.iter().enumerate().skip(1) {
         let name = PathName::from_bytes(&entry.name).map_err(content)?;
-        let parent = serials[entry.parent];
+        let parent = root_serial + entry.parent as u64;
         bindings
             .get_mut(&parent)
             .ok_or(Failure::InvalidInput)?
-            .push((name, Some(serials[index])));
+            .push((
+                name,
+                Some(root_serial + entry.alias.unwrap_or(index) as u64),
+            ));
     }
     let mut directories: Vec<DirectoryUpdate> = bindings
         .into_iter()

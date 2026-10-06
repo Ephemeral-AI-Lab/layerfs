@@ -128,3 +128,26 @@ full contextual authority/topology, consumer/application assembly and process-
 restart custody are still unfinished. S9 remains CHECKPOINT/unchecked; S10–S13 and
 P3/P6/P7/P13/P14 remain later Commit prerequisites. The accepted fuser correction
 and Docker verification are unchanged and do not require QEMU or a release wait.
+
+## Native regular identity checkpoint (2026-10-06)
+
+[Architecture41](../../architecture/41-native-regular-aliases.md) adds grouping of
+the existing native job vector by device/inode, borrowed unique-file construction,
+pre/post descriptor/path mode/ctime checks and shared logical inode bindings.
+Separate equal-byte files remain separate; links outside the root do not count
+inside it. Path-count inode reservations are consumed without recycling alias gaps.
+No custom alias map or per-group resident vector is introduced. Memory and both
+real host profiles qualify .git/index plus ignored/cache alias, outside-root link
+and equal-byte copy, followed by deletion of the native source before readback.
+
+Host66 functional bodies and Docker3 selected acquisition/scaling bodies pass.
+Host11 and Linux11 compiled executables have unchanged pre/post hashes;3 Linux
+executables were actually invoked. Both-platform Clippy, fmt and603-file boundary
+checks cover source.39 unchanged tool tests are reused at their original identity.
+All tests have explicit<=120s stops; Docker inner110s+1s fence. Original E0609 test
+field-name failure and diagnosis remain in checks/s9-native-aliases. No timeout or
+cold speed/RSS/rate proof. The original O(N) scan/input collections remain visible
+and require backing; new grouping isO(N log N)+actual unique payload bytes, not
+bounded complete-root acceptance. Greater-than4GiB native proof remains NOT_RUN.
+S9 remains unchecked; remaining application/consumer/restart/context and backing
+work is active, with P3/P6/P7/P13/P14 still S10 prerequisites.

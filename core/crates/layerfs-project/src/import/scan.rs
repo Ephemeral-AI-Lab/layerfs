@@ -28,6 +28,9 @@ struct Job {
     len: u64,
     mtime: i64,
     mtime_nsec: i64,
+    ctime: i64,
+    ctime_nsec: i64,
+    mode: u32,
 }
 
 pub(crate) fn scan_and_save(
@@ -91,6 +94,9 @@ pub(crate) fn scan_and_save(
                         len: metadata.len(),
                         mtime: metadata.mtime(),
                         mtime_nsec: metadata.mtime_nsec(),
+                        ctime: metadata.ctime(),
+                        ctime_nsec: metadata.ctime_nsec(),
+                        mode: metadata.mode(),
                     });
                 }
                 let index = entries.len();
@@ -104,6 +110,9 @@ pub(crate) fn scan_and_save(
                 }
             }
         }
+        let groups = prepare_aliases(&mut entries, &mut jobs)?;
+        progress.work.unique_files = groups;
+        progress.work.regular_aliases = jobs.len() - groups;
         progress.work.entries = entries.len();
         progress.work.entry_capacity_bytes = entries.capacity()
             * std::mem::size_of::<PreparedEntry>()
@@ -140,8 +149,10 @@ fn save_files(
     save: &Save<'_>,
     progress: &mut ImportProgress,
 ) -> Result<(), Failure> {
-    let remaining = jobs.len();
-    let queue = Mutex::new(VecDeque::from(jobs));
+    let remaining = progress.work.unique_files;
+    // The already retained job vector is sorted by native identity. Borrowed
+    // groups avoid an additional input-sized alias map or group collection.
+    let queue = Mutex::new(0usize);
     let policy = store.policy().construction();
     let capacities = policy.capacities();
     let deadline = progress.deadline();
@@ -150,13 +161,35 @@ fn save_files(
         for _ in 0..INIT_WORKERS {
             let sender = sender.clone();
             let queue = &queue;
+            let jobs = &jobs;
             workers.spawn(move || {
                 let mut producer = BatchProducer::new(&sender);
                 loop {
-                    let job = queue.lock().expect("import queue poisoned").pop_front();
-                    let Some(job) = job else { break };
+                    let (start, end) = {
+                        let mut next = queue.lock().expect("import queue poisoned");
+                        if *next == jobs.len() {
+                            break;
+                        }
+                        let start = *next;
+                        let first = &jobs[start];
+                        let end = start
+                            + jobs[start..].partition_point(|job| {
+                                job.dev == first.dev && job.ino == first.ino
+                            });
+                        *next = end;
+                        (start, end)
+                    };
+                    let job = &jobs[start];
                     let index = job.index;
-                    let result = construct_file(job, policy, &capacities, &mut producer, deadline);
+                    let result = construct_file(job, policy, &capacities, &mut producer, deadline)
+                        .and_then(|root| {
+                            for alias in &jobs[start..end] {
+                                if !matches_metadata(alias, &fs::symlink_metadata(&alias.path)?) {
+                                    return Err(Failure::InvalidInput);
+                                }
+                            }
+                            Ok(root)
+                        });
                     if producer.done(index, result).is_err() {
                         return;
                     }
@@ -191,7 +224,7 @@ fn save_files(
 }
 
 fn construct_file(
-    job: Job,
+    job: &Job,
     policy: layerfs_content::ConstructionPolicy,
     capacities: &layerfs_content::ConstructionCapacities,
     producer: &mut BatchProducer<'_>,
@@ -202,7 +235,7 @@ fn construct_file(
     }
     let mut file = File::open(&job.path)?;
     let opened = file.metadata()?;
-    if opened.dev() != job.dev || opened.ino() != job.ino {
+    if !matches_metadata(job, &opened) {
         return Err(Failure::InvalidInput);
     }
     let (result, _) = Timing::disabled("history.import_file", |scope| {
@@ -216,11 +249,7 @@ fn construct_file(
     });
     let built = result.map_err(content)?;
     let after = file.metadata()?;
-    if built.logical_len != job.len
-        || after.len() != job.len
-        || after.mtime() != job.mtime
-        || after.mtime_nsec() != job.mtime_nsec
-    {
+    if built.logical_len != job.len || !matches_metadata(job, &after) {
         return Err(Failure::InvalidInput);
     }
     if Instant::now() >= deadline {
@@ -253,6 +282,7 @@ fn entry(
         return Err(Failure::InvalidInput);
     }
     Ok(PreparedEntry {
+        alias: None,
         parent,
         name,
         kind,
@@ -262,4 +292,42 @@ fn entry(
         content,
         target: None,
     })
+}
+fn matches_metadata(job: &Job, metadata: &Metadata) -> bool {
+    metadata.is_file()
+        && !metadata.file_type().is_symlink()
+        && metadata.dev() == job.dev
+        && metadata.ino() == job.ino
+        && metadata.len() == job.len
+        && metadata.mode() == job.mode
+        && metadata.mtime() == job.mtime
+        && metadata.mtime_nsec() == job.mtime_nsec
+        && metadata.ctime() == job.ctime
+        && metadata.ctime_nsec() == job.ctime_nsec
+}
+fn prepare_aliases(entries: &mut [PreparedEntry], jobs: &mut [Job]) -> Result<usize, Failure> {
+    jobs.sort_unstable_by_key(|job| (job.dev, job.ino, job.index));
+    let mut first: Option<&Job> = None;
+    let mut groups = 0;
+    for job in jobs.iter() {
+        match first {
+            Some(original) if original.dev == job.dev && original.ino == job.ino => {
+                if original.len != job.len
+                    || original.mode != job.mode
+                    || original.mtime != job.mtime
+                    || original.mtime_nsec != job.mtime_nsec
+                    || original.ctime != job.ctime
+                    || original.ctime_nsec != job.ctime_nsec
+                {
+                    return Err(Failure::InvalidInput);
+                }
+                entries[job.index].alias = Some(original.index);
+            }
+            _ => {
+                first = Some(job);
+                groups += 1;
+            }
+        }
+    }
+    Ok(groups)
 }

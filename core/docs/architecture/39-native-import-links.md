@@ -56,3 +56,10 @@ Linux qualification also aligns the private global-provider filesystem-error
 variant/conversion with its macOS-only allocation owners. This removes unreachable
 Linux code without enabling a Linux global Store or changing macOS error behavior.
 The original warning-denying failure remains in the checkpoint failure ledger.
+
+[Regular native aliases](41-native-regular-aliases.md) now retain one logical inode
+per native device/inode, construct its payload once and distinguish separate files
+with equal bytes. Original path-count reservations are consumed without recycling.
+Pre/post descriptor and path observations include mode/ctime as well as identity/
+length/mtime. Existing resident scan/input collections still require backing; this
+identity correction does not establish full-root bounded acceptance.

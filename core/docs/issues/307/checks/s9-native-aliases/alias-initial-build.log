@@ -1,0 +1,41 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+error[E0609]: no field `identity` on type `Resolved`
+  --> crates/layerfs-project/tests/complete_root.rs:79:22
+   |
+79 |     assert_eq!(index.identity, alias.identity);
+   |                      ^^^^^^^^ unknown field
+   |
+   = note: available fields are: `serial`, `value`
+
+error[E0609]: no field `identity` on type `Resolved`
+  --> crates/layerfs-project/tests/complete_root.rs:79:38
+   |
+79 |     assert_eq!(index.identity, alias.identity);
+   |                                      ^^^^^^^^ unknown field
+   |
+   = note: available fields are: `serial`, `value`
+
+error[E0609]: no field `identity` on type `Resolved`
+  --> crates/layerfs-project/tests/complete_root.rs:80:22
+   |
+80 |     assert_ne!(index.identity, copied.identity);
+   |                      ^^^^^^^^ unknown field
+   |
+   = note: available fields are: `serial`, `value`
+
+error[E0609]: no field `identity` on type `Resolved`
+  --> crates/layerfs-project/tests/complete_root.rs:80:39
+   |
+80 |     assert_ne!(index.identity, copied.identity);
+   |                                       ^^^^^^^^ unknown field
+   |
+   = note: available fields are: `serial`, `value`
+
+For more information about this error, try `rustc --explain E0609`.
+error: could not compile `layerfs-project` (test "complete_root") due to 4 previous errors
+warning: build failed, waiting for other jobs to finish...

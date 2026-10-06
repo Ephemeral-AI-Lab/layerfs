@@ -22,7 +22,7 @@ use std::{
 use support::{memory_history::MemoryHistory, memory_metadata::MemoryMetadata, Fixture};
 
 fn acquire_and_verify(fixture: &Fixture, store: &Storage, history: &dyn HistoryCatalog) {
-    let files = BTreeMap::from([
+    let mut files = BTreeMap::from([
         (
             ".gitignore",
             b"node_modules/\n.cache/\noutput/\nignored.bin\n".to_vec(),
@@ -39,6 +39,21 @@ fn acquire_and_verify(fixture: &Fixture, store: &Storage, history: &dyn HistoryC
         fs::create_dir_all(native.parent().unwrap()).unwrap();
         fs::write(native, body).unwrap();
     }
+    // Native identity, rather than equal bytes, defines hard-link aliases.
+    fs::hard_link(
+        fixture.source.join(".git/index"),
+        fixture.source.join(".cache/index-alias"),
+    )
+    .unwrap();
+    fs::hard_link(
+        fixture.source.join(".git/index"),
+        fixture.path.join("outside-index"),
+    )
+    .unwrap();
+    let index_bytes = files[".git/index"].clone();
+    fs::write(fixture.source.join("output/index-copy"), &index_bytes).unwrap();
+    files.insert(".cache/index-alias", index_bytes.clone());
+    files.insert("output/index-copy", index_bytes);
     fs::create_dir(fixture.source.join("empty")).unwrap();
     let links = BTreeMap::from([
         ("dependency-link", b"node_modules/pkg".to_vec()),
@@ -56,6 +71,8 @@ fn acquire_and_verify(fixture: &Fixture, store: &Storage, history: &dyn HistoryC
         symlink(OsStr::from_bytes(target), fixture.source.join(name)).unwrap();
     }
     let initialized = fixture.run(store, history);
+    assert_eq!(initialized.namespace_work.regular_aliases, 1);
+    assert_eq!(initialized.namespace_work.unique_files, files.len() - 1);
     // All later reads use the published complete root, with no native fallback.
     fs::remove_dir_all(&fixture.source).unwrap();
     let reader = store.reader().unwrap();
@@ -64,6 +81,20 @@ fn acquire_and_verify(fixture: &Fixture, store: &Storage, history: &dyn HistoryC
         layerfs_content::filesystem::root::FilesystemRootId(initialized.root),
     )
     .unwrap();
+    let index = view
+        .resolve(&LogicalPath::new(".git/index").unwrap())
+        .unwrap();
+    let alias = view
+        .resolve(&LogicalPath::new(".cache/index-alias").unwrap())
+        .unwrap();
+    let copied = view
+        .resolve(&LogicalPath::new("output/index-copy").unwrap())
+        .unwrap();
+    assert_eq!(index.serial, alias.serial);
+    assert_ne!(index.serial, copied.serial);
+    assert_eq!(index.value.content_root, copied.value.content_root);
+    assert_eq!(index.value.namespace_ref_count, 2);
+    assert_eq!(copied.value.namespace_ref_count, 1);
     let mut pending = vec![String::new()];
     let mut seen_files = BTreeMap::new();
     let mut seen_links = BTreeMap::new();

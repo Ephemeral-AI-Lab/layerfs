@@ -3,6 +3,10 @@
 /// These fields do not establish a total importer memory bound.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NamespaceWork {
+    /// Distinct native regular-file identities constructed once.
+    pub unique_files: usize,
+    /// Additional native paths sharing those regular-file identities.
+    pub regular_aliases: usize,
     /// Prepared namespace entries retained after scan.
     pub entries: usize,
     /// Prepared-entry vector capacity bytes plus owned name/target capacities.

@@ -1,0 +1,18 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-project v0.1.6 (/work/core/crates/layerfs-project)
+    Finished `test` profile [optimized + debuginfo] target(s) in 8.67s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_project-21b6bef1262321bf)
+  Executable tests/complete_root.rs (core/target/cluster2-linux/debug/deps/complete_root-cf3c82a49ea1d8cf)
+  Executable tests/history_proof_memo.rs (core/target/cluster2-linux/debug/deps/history_proof_memo-319de1b77b0fe5b5)
+  Executable tests/init_memory.rs (core/target/cluster2-linux/debug/deps/init_memory-2378e72a99440190)
+  Executable tests/init_sqlite.rs (core/target/cluster2-linux/debug/deps/init_sqlite-660b519c20e1e860)
+  Executable tests/namespace_scaling.rs (core/target/cluster2-linux/debug/deps/namespace_scaling-354acd30e90eb5c9)
+  Executable unittests examples/benchmark_history.rs (core/target/cluster2-linux/debug/examples/benchmark_history-12e82155cf06ab73)
+  Executable unittests examples/benchmark_init.rs (core/target/cluster2-linux/debug/examples/benchmark_init-2d214626b2df75e7)
+  Executable unittests examples/cause_namespace.rs (core/target/cluster2-linux/debug/examples/cause_namespace-046af38789920c94)
+  Executable unittests examples/verify_history.rs (core/target/cluster2-linux/debug/examples/verify_history-991018db321e9076)
+  Executable unittests examples/verify_namespace.rs (core/target/cluster2-linux/debug/examples/verify_namespace-6bbc2e16a228fc93)
