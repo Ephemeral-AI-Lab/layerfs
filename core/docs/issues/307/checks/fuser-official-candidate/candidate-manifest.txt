@@ -1,0 +1,19 @@
+[package]
+name = "layerfs-cluster2-platform-proof"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[workspace]
+
+[dependencies]
+fuser = { git = "https://github.com/cberner/fuser.git", rev = "e48279fab0ddbe4a6e22aefad3cbfdf796d0b0b7", default-features = false }
+
+[[bin]]
+name = "timestamp-proof"
+path = "timestamp.rs"
+
+[[bin]]
+name = "request-time-proof"
+path = "request-time.rs"

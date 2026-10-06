@@ -1,0 +1,20 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling libc v0.2.190
+   Compiling memoffset v0.9.1
+   Compiling parking_lot_core v0.9.12
+   Compiling rustversion v1.0.23
+   Compiling zerocopy v0.8.59
+   Compiling ref-cast v1.0.27
+   Compiling nix v0.31.3
+   Compiling fuser v0.18.0 (https://github.com/cberner/fuser.git?rev=e48279fab0ddbe4a6e22aefad3cbfdf796d0b0b7#e48279fa)
+   Compiling syn v2.0.119
+   Compiling syn v3.0.6
+   Compiling page_size v0.6.0
+   Compiling parking_lot v0.12.5
+   Compiling ref-cast-impl v1.0.27
+   Compiling zerocopy-derive v0.8.59
+   Compiling num_enum_derive v0.7.6
+   Compiling num_enum v0.7.6
+   Compiling layerfs-cluster2-platform-proof v0.0.0 (/work/core/target/cluster2-307/fuser-official-e482-candidate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.89s

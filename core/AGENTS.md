@@ -205,3 +205,26 @@ Measurement work additionally follows the
 [agent measurement workflow](../docs/general/agent-measurement-policy.md) and
 [owning core harness guide](benchmark/fs-bench-pro/AGENTS.md). Frozen identities,
 cache states and budgets are evidence contracts, not product runtime limits.
+
+### Fuser provenance and no-patch checks
+
+Owner direction2026-10-06: fuser remains a crates.io dependency. Do not adopt an
+unreleased Git revision, local patch, fork, vendor/path dependency, Cargo
+patch/replace override or floating source. Re-downloading can restore corrupted
+packages; it does not repair a defect in a checksum-identical published package.
+Required timestamp capability still needs a corrected published release and owning
+qualification. Independent S7/S9 work continues while that gate remains.
+
+Before a native fuser build, run the focused provenance check:
+
+```sh
+python3 -B core/tools/check_fuser_integrity.py
+```
+
+For an installed registry source, also supply its archive, package directory and
+checksum taken from the owning Cargo.lock with `--archive`, `--package-directory`
+and `--locked-checksum`. This reads and verifies package files without modifying
+them. Run scoped self-tests when changing the check. It is not an aggregate
+pre-push/CI wrapper or a timestamp-capability proof. Current evidence and the
+rejected unmodified Git candidate are in
+[the fuser verification record](docs/issues/307/FUSER-OFFICIAL-CANDIDATE-20261006.md).

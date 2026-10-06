@@ -1,0 +1,36 @@
+{
+  "state": "isolated candidate; product dependency not adopted",
+  "upstream_url": "https://github.com/cberner/fuser.git",
+  "rev": "e48279fab0ddbe4a6e22aefad3cbfdf796d0b0b7",
+  "source_modified": false,
+  "inputs": {
+    "Cargo.toml": "51641cdc3577fc523d1e90a6bb3da74baceefcede73a0510172832aae93a6840",
+    "Cargo.lock": "fa1219df865283cd1e68e19e6262e8ffb6ef6d535484f790bb7766223feb302d",
+    "timestamp.rs": "1dbcf5323c1351a21d1fcf73454c6849e00b808cd33393ad0906641ae50d4653",
+    "build-locked.log": "bb9f189aa64c2b92ab679fd2661e9c1beaf478a0d36e6c6da71966a1da9208c6",
+    "core/target/cluster2-fuser-official-candidate/debug/timestamp-proof": "d43a1f9473f4e67709d51ab9f46ab7add911f58cc6f2d197669d7c2a88ac2f0a"
+  },
+  "dependency_differences": [
+    {
+      "name": "fuser",
+      "before": {
+        "version": "0.18.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index"
+      },
+      "candidate": {
+        "version": "0.18.0",
+        "source": "git+https://github.com/cberner/fuser.git?rev=e48279fab0ddbe4a6e22aefad3cbfdf796d0b0b7#e48279fab0ddbe4a6e22aefad3cbfdf796d0b0b7"
+      }
+    }
+  ],
+  "native_cases": [
+    "negative",
+    "minimum"
+  ],
+  "timeout_s": 8,
+  "cache": "correctness capability only; no speed/RSS claim",
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "flags": ".cargo/config.toml ARM64 profile; no overflow/profile bypass",
+  "production_pin": "registry =0.18.0 unchanged",
+  "qualification_build": "build-locked.log; build-initial.log is resolution/exploratory only"
+}

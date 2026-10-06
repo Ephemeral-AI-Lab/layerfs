@@ -1,0 +1,22 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-307-fuser-request-proof",
+    "--platform",
+    "linux/arm64",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-fuser-official-candidate/debug/request-time-proof:/usr/local/bin/request-time-proof:ro",
+    "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "timeout",
+    "8s",
+    "/usr/local/bin/request-time-proof"
+  ],
+  "wall_ns": 278702792,
+  "exit": 1,
+  "limit_s": 8,
+  "binary_sha256": "3d811cd082100f17a5094e5f88d7b6353d937ff313359236920bc28ca54796af",
+  "scope": "unchanged official public Session::from_fd parser/reply fixture; not kernel mount; no product workaround"
+}

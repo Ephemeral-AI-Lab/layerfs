@@ -1,0 +1,5 @@
+requested mtime=SystemTime { tv_sec: -9223372036854775808, tv_nsec: 0 }
+received mtime=SystemTime { tv_sec: -9223372036854775808, tv_nsec: 0 }
+set_times outcome=Ok(())
+observed mtime=Ok(SystemTime { tv_sec: -9223372036854775808, tv_nsec: 0 })
+native cleanup=Ok(())

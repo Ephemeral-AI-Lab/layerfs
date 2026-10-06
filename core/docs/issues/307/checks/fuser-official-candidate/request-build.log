@@ -1,0 +1,5 @@
+   Compiling rustversion v1.0.23
+   Compiling num_enum v0.7.6
+   Compiling fuser v0.18.0 (https://github.com/cberner/fuser.git?rev=e48279fab0ddbe4a6e22aefad3cbfdf796d0b0b7#e48279fa)
+   Compiling layerfs-cluster2-platform-proof v0.0.0 (/work/core/target/cluster2-307/fuser-official-e482-candidate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.96s

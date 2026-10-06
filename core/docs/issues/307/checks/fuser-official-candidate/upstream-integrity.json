@@ -1,0 +1,9 @@
+{
+  "official_repository": "https://github.com/cberner/fuser.git",
+  "revision": "e48279fab0ddbe4a6e22aefad3cbfdf796d0b0b7",
+  "tracked_status": "",
+  "source_modified": false,
+  "time_source_sha256": "a333dba1c186c022eb55b950ec8895fb767c63e8ca156150b605d31d6876287d",
+  "production_pins_adopted": false,
+  "approval": "pending exception to published-registry-only rule"
+}

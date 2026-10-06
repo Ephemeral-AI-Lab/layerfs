@@ -208,3 +208,14 @@ remaining S6 component criteria. Earlier checkpoint pending lists retain their
 source scope. S0 and S7–S13 remain open; the [next handoff](HANDOFF-S7-S13.md)
 records exact prerequisites, limits, evidence and preserved state. No push,
 release, deployment, CI qualification or legacy-root retirement is claimed.
+
+## Fuser no-patch ruling and fresh download (2026-10-06)
+
+The [fresh-download/candidate record](FUSER-OFFICIAL-CANDIDATE-20261006.md) verifies
+that both installed0.18.0 packages match all85 files of the official archive.
+The owner explicitly keeps crates.io releases only; the tested official Git fix
+is not adopted. A focused integrity/provenance check now rejects patch/replace/
+path/vendor and unapproved Git overrides and can verify all installed files.
+The extreme fractional native failure is retained separately from Linux VFS
+canonicalization and successful parser cases. No S0/S8/S12 item is advanced.
+Independent S7/S9 work remains authorized and ready; this ruling does not stop it.

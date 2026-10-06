@@ -1,0 +1,43 @@
+    Updating git repository `https://github.com/cberner/fuser.git`
+     Locking 1 package to latest compatible version
+      Adding fuser v0.18.0 (https://github.com/cberner/fuser.git?rev=e48279fab0ddbe4a6e22aefad3cbfdf796d0b0b7#e48279fa)
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling libc v0.2.190
+   Compiling winnow v1.0.4
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling autocfg v1.5.1
+   Compiling rustversion v1.0.23
+   Compiling parking_lot_core v0.9.12
+   Compiling cfg_aliases v0.2.2
+   Compiling cfg-if v1.0.5
+   Compiling memoffset v0.9.1
+   Compiling nix v0.31.3
+   Compiling scopeguard v1.2.0
+   Compiling indexmap v2.14.2
+   Compiling pkg-config v0.3.34
+   Compiling ref-cast v1.0.27
+   Compiling zerocopy v0.8.59
+   Compiling smallvec v1.16.2
+   Compiling fuser v0.18.0 (https://github.com/cberner/fuser.git?rev=e48279fab0ddbe4a6e22aefad3cbfdf796d0b0b7#e48279fa)
+   Compiling toml_parser v1.1.3+spec-1.1.0
+   Compiling syn v2.0.119
+   Compiling syn v3.0.6
+   Compiling lock_api v0.4.14
+   Compiling bitflags v2.13.2
+   Compiling memchr v2.8.3
+   Compiling toml_edit v0.25.15+spec-1.1.0
+   Compiling log v0.4.34
+   Compiling page_size v0.6.0
+   Compiling proc-macro-crate v3.5.0
+   Compiling parking_lot v0.12.5
+   Compiling ref-cast-impl v1.0.27
+   Compiling zerocopy-derive v0.8.59
+   Compiling num_enum_derive v0.7.6
+   Compiling num_enum v0.7.6
+   Compiling layerfs-cluster2-platform-proof v0.0.0 (/work/core/target/cluster2-307/fuser-official-e482-candidate)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.67s
+  Executable unittests timestamp.rs (core/target/cluster2-fuser-official-candidate/debug/deps/timestamp_proof-e63fd577d72b6945)

@@ -1,0 +1,30 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-307-fuser-minimum-whole",
+    "--platform",
+    "linux/arm64",
+    "--device",
+    "/dev/fuse",
+    "--cap-add",
+    "SYS_ADMIN",
+    "--security-opt",
+    "apparmor=unconfined",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-fuser-official-candidate/debug/timestamp-proof:/usr/local/bin/timestamp-proof:ro",
+    "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "timeout",
+    "8s",
+    "/usr/local/bin/timestamp-proof",
+    "/tmp/fuser-minimum-whole",
+    "minimum-whole"
+  ],
+  "wall_ns": 435198959,
+  "exit": 0,
+  "limit_s": 8,
+  "binary_sha256": "1721a67a055c687e91f19cd45f16c906fe2889ad186711cc363da72400526126",
+  "scope": "additional exact whole-second signed-minimum native case; fractional native failure remains unchanged"
+}
