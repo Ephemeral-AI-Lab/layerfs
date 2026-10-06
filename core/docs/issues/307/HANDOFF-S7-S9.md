@@ -323,3 +323,13 @@ New runtime adapters/framing are implementation growth; excluded predecessors an
 root reference are counted, with no retirement/relocation or shrink claim. The
 final prepared-tree receipt is in core/target/cluster2-307/loc and must match the
 committed tree before its post-commit evidence record is adopted.
+
+Verified implementation identity: commit1b2580f2ef5b6d29c577237a9757c7b86d3898fb,
+tree9d941a9c4bac9268f5a818452fbffb24f28c36d2, first parent
+f614e7d22d1764704132687abd17aaab74c33904. The committed tree and every production
+fingerprint match the exact staged/build receipts. Separate appended tracker
+[S7 receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6009305142)
+and [S9 receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6009317243)
+record CHECKPOINT, with S7/S8/S9 unchecked. This receipt-only commit has unchanged
+core91262/reference65417/combined156679 production LOC, delta0, using its own
+exact parent/staged comparison and committed-tree confirmation.

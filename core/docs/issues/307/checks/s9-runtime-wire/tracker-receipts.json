@@ -1,0 +1,15 @@
+{
+  "source": "1b2580f2ef5b6d29c577237a9757c7b86d3898fb",
+  "tree": "9d941a9c4bac9268f5a818452fbffb24f28c36d2",
+  "milestones": {
+    "S7": {
+      "state": "CHECKPOINT/unchecked",
+      "receipt": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6009305142"
+    },
+    "S9": {
+      "state": "CHECKPOINT/unchecked",
+      "receipt": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6009317243"
+    }
+  },
+  "authorization": "local commits and #307 evidence only; unpushed; active work continues"
+}
