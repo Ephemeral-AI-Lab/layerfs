@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-overlay",
+    "-p",
+    "layerfs-daemon",
+    "--test",
+    "indexed_scratch",
+    "--",
+    "--nocapture"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 2338181167,
+  "kind": "independently reviewed indexed Overlay and Daemon public full identity atomicity envelope custody cleanup SQL observations; functional only",
+  "workers": 1
+}

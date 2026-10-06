@@ -1,0 +1,16 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 9.63s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_workspace-aa1bf875dc76d5a4)
+  Executable tests/base.rs (core/target/cluster2-linux/debug/deps/base-6f19aeb96150d118)
+  Executable tests/namespace.rs (core/target/cluster2-linux/debug/deps/namespace-274bb5fb97e9cb45)
+  Executable tests/namespace_daemon.rs (core/target/cluster2-linux/debug/deps/namespace_daemon-70451fe8637ffc96)
+  Executable tests/namespace_profile.rs (core/target/cluster2-linux/debug/deps/namespace_profile-adfcc5a827eba1c4)
+  Executable tests/namespace_view.rs (core/target/cluster2-linux/debug/deps/namespace_view-45a37ddec13e6a9e)
+  Executable tests/nonfile.rs (core/target/cluster2-linux/debug/deps/nonfile-c8a4170c72e1e7dd)
+  Executable tests/operation_scope.rs (core/target/cluster2-linux/debug/deps/operation_scope-b362ca1c42fdbb38)
+  Executable tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-30931ce7b6eb5d36)

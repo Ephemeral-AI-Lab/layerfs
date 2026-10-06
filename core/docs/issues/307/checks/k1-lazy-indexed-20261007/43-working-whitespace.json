@@ -1,0 +1,13 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--check"
+  ],
+  "wall_timeout_s": 30,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 80329500,
+  "kind": "whitespace",
+  "workers": 1
+}

@@ -1,0 +1,17 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "-c",
+    "import json,sys;from pathlib import Path;root=Path(sys.argv[1]).resolve();sys.path.insert(0,str(root/\"core/benchmark/fs-bench-pro\"));from shared.evidence_jobs import validate;result=validate(Path(sys.argv[2]),root);print(json.dumps(result,indent=2));Path(sys.argv[3]).open(\"x\").write(json.dumps(result,indent=2)+\"\\n\");raise SystemExit(0 if result[\"observation_consistency\"]==\"PASS\" else 2)",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/k1-lazy-indexed-20261007/diagnostic/50b1c7c2873592a4ae069b25bbc6497b408fb5c4f86f9c65adc1e4071ffb3aba",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/k1-lazy-indexed-20261007/e01-consistency.json"
+  ],
+  "wall_timeout_s": 9,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 148156208,
+  "kind": "proof",
+  "workers": 1
+}

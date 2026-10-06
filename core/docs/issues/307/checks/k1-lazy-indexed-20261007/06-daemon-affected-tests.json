@@ -1,0 +1,26 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-daemon",
+    "--test",
+    "job_cost",
+    "--test",
+    "owner",
+    "--test",
+    "startup_cost",
+    "--test",
+    "upstream"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 101,
+  "timed_out": false,
+  "wall_ns": 1990790667,
+  "kind": "indexed Scratch admission response credits startup and operation-release affected Daemon owner/public upstream suites",
+  "workers": 1
+}

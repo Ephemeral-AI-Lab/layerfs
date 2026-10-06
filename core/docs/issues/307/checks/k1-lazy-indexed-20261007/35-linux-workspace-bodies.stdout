@@ -1,0 +1,81 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 7 tests
+test retained_old_plan_and_new_root_use_exact_immutable_cache_identities ... ok
+test full_root_binding_aliases_metadata_symlinks_and_eof_use_content_apis ... ok
+test logical_workspace_open_binds_real_root_without_schema_or_namespace_import ... ok
+test source_errors_and_unattempted_actor_install_preserve_exact_custody ... ok
+test known_install_advances_selected_base_and_preserves_retained_plans_and_later_rows ... ok
+test actual_provider_wait_allows_shared_progress_and_actor_install_pairs_the_selected_base ... ok
+test effective_alias_metadata_whiteouts_and_three_way_pages_advance_with_bounded_hidden_work ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 5 tests
+test unrepresentable_names_targets_and_reservations_are_refused_before_any_job ... ok
+test chmod_and_utimens_follow_the_portable_grammar_and_keep_one_mtime ... ok
+test create_mkdir_symlink_and_link_publish_parent_and_reference_effects_atomically ... ok
+test unlink_and_rmdir_remove_one_reference_and_keep_directory_counts_exact ... ok
+test rename_moves_replaces_and_refuses_cycles_without_descendant_rows ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 8 tests
+test closed_and_stopped_services_return_exact_outcomes_without_effect ... ok
+test a_blocked_base_fact_leaves_the_owner_free_and_publishes_after_a_capture ... ok
+test orphans::non_file_lookup_custody_survives_real_owner_installs_and_a_last_consumer ... ok
+test orphans::inherited_open_unlinked_log_keeps_bytes_through_owner_installs_failures_and_idle_cleanup ... ok
+test opposing_directory_moves_from_real_threads_never_form_a_cycle ... ok
+test concurrent_operations_through_real_owner_jobs_keep_counts_and_references_exact ... ok
+test concurrent_appenders_and_a_tail_reader_see_whole_records_through_real_owner_jobs ... ok
+test payload_complete_operations_have_indexed_work_through_the_real_owner ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.52s
+
+
+running 1 test
+test complete_operations_keep_point_work_as_names_and_inodes_grow ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s
+
+
+running 5 tests
+test opposing_directory_moves_cannot_form_a_cycle_between_owner_rounds ... ok
+test a_rebound_name_between_owner_rounds_is_resolved_before_the_one_attempt ... ok
+test known_install_folds_a_capture_and_keeps_later_namespace_changes ... ok
+test enumeration_returns_every_persistent_name_once_across_mutation_and_resume ... ok
+test name_and_inode_counts_have_no_cap_and_every_window_stays_bounded ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.93s
+
+
+running 3 tests
+test failed_name_composition_drops_only_whiteouts_over_proven_absent_base_names ... ok
+test non_file_lookup_and_processing_owners_preserve_removed_metadata_and_target ... ok
+test linked_symlink_targets_follow_effective_layers_through_repeated_failed_captures ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+
+running 4 tests
+test failed_operation_provider_does_not_poison_shared_cache_or_fresh_provider ... ok
+test fresh_clients_share_one_allowance_and_return_independent_bytes ... ok
+test checked_base_client_override_performs_no_acquisition_and_uses_new_lengths ... ok
+test scoped_views_share_original_install_serials_and_keep_original_provider ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 3 tests
+test writes_change_only_their_window_and_never_read_the_inherited_payload ... ok
+test truncate_and_regrow_never_resurrect_bytes_across_capture_and_known_install ... ok
+test fragmented_inherited_bytes_are_read_as_one_base_range ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+

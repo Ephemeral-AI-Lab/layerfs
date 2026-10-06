@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--target-dir",
+    "core/target/cluster2-307",
+    "-p",
+    "layerfs-daemon",
+    "--example",
+    "e2_startup"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 6356983000,
+  "kind": "build",
+  "workers": 1
+}

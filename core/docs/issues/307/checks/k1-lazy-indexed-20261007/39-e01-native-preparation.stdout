@@ -1,0 +1,18 @@
+{
+  "identity_input": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e01-native-preparation-20261007/identity-input.json",
+  "preparation": {
+    "path": "core/target/cluster2-307/e01-native-preparation-20261007/preparation.json",
+    "sha256": "8f6d945020692ecb55d1bb25d5842b839feaeee7ac9a877b40e8bbebcdaab1c7"
+  },
+  "driver_argv": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/debug/examples/e2_startup",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e01-native-database-20261007.sqlite",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/k1-lazy-indexed-20261007/diagnostic/50b1c7c2873592a4ae069b25bbc6497b408fb5c4f86f9c65adc1e4071ffb3aba",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e01-native-preparation-20261007/identity-input.json"
+  ],
+  "driver_shell": "LAYERFS_CONSTRUCTION_WORKERS=1 /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/debug/examples/e2_startup /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e01-native-database-20261007.sqlite /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/k1-lazy-indexed-20261007/diagnostic/50b1c7c2873592a4ae069b25bbc6497b408fb5c4f86f9c65adc1e4071ffb3aba /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e01-native-preparation-20261007/identity-input.json",
+  "validation_output": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/k1-lazy-indexed-20261007/diagnostic/50b1c7c2873592a4ae069b25bbc6497b408fb5c4f86f9c65adc1e4071ffb3aba",
+  "root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+  "qualification_status": "NOT_EVALUATED",
+  "admission_eligible": false
+}

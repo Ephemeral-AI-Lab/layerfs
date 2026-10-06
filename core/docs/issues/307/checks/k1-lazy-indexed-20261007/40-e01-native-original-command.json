@@ -1,0 +1,14 @@
+{
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/debug/examples/e2_startup",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e01-native-database-20261007.sqlite",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/k1-lazy-indexed-20261007/diagnostic/50b1c7c2873592a4ae069b25bbc6497b408fb5c4f86f9c65adc1e4071ffb3aba",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e01-native-preparation-20261007/identity-input.json"
+  ],
+  "wall_timeout_s": 15,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1108598167,
+  "kind": "diagnostic",
+  "workers": 1
+}

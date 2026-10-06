@@ -18,6 +18,7 @@ pub enum ServiceClass {
 /// One fixed SQL window, never a whole Exec or content-construction operation.
 #[derive(Debug)]
 pub enum Command {
+    IndexedScratch(Box<crate::IndexedScratchJob>),
     Open {
         incarnation: [u8; 32],
         base_root: [u8; 32],
@@ -201,6 +202,7 @@ pub enum Command {
 }
 #[derive(Debug)]
 pub enum Response {
+    IndexedScratch(crate::IndexedScratchReply),
     Lookup(Option<LookupOwner>),
     Operation(Option<OperationOwner>),
     File(Option<OpenFile>),
@@ -234,6 +236,7 @@ pub enum Response {
 impl Command {
     pub(crate) fn class(&self) -> ServiceClass {
         match self {
+            Self::IndexedScratch(_) => ServiceClass::Scratch,
             Self::AcquireLookup { .. }
             | Self::RetainedLookup { .. }
             | Self::ReleaseLookup(_)
@@ -295,6 +298,7 @@ impl Command {
             .checked_add(std::mem::size_of::<crate::JobWork>())?
             .checked_add(512)?;
         let (input, reply) = match self {
+            Self::IndexedScratch(job) => (job.charge()?, 0),
             Self::Resources { .. } => (0, std::mem::size_of::<layerfs_overlay::Resources>()),
             Self::DatabaseWork => (0, std::mem::size_of::<layerfs_overlay::DatabaseWork>()),
             Self::PayloadPlans(_) | Self::LifetimePlans => (0, 8192),
@@ -405,6 +409,7 @@ impl Command {
         let route = route.ok_or(layerfs_overlay::OverlayError::Invalid("missing route"))?;
         match self {
             Self::Open { .. } | Self::InstallPrepared { .. } | Self::Namespace(_) => unreachable!(),
+            Self::IndexedScratch(job) => job.perform(db, route).map(Response::IndexedScratch),
             Self::Resources { global } => {
                 db.state(route)?;
                 db.resources(if global { None } else { Some(route) })

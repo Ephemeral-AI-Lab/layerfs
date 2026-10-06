@@ -1,0 +1,14 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "-c",
+    "import ast,pathlib; paths=[pathlib.Path('core/benchmark/fs-bench-pro/shared/evidence_jobs.py'),pathlib.Path('core/benchmark/fs-bench-pro/tests/test_evidence_jobs.py')]; [ast.parse(p.read_text(),filename=str(p)) for p in paths]; print('PASS syntax',len(paths))"
+  ],
+  "wall_timeout_s": 30,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 76583417,
+  "kind": "syntax",
+  "workers": 1
+}

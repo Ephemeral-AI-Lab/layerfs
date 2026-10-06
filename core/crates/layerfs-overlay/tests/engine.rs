@@ -195,7 +195,7 @@ fn profile_namespace_binary_values_and_atomic_refusals() {
     let db = Overlay::create(&temp.db(), ProfileConfig::default()).unwrap();
     assert!(Overlay::create(&temp.db(), ProfileConfig::default()).is_err());
     let p = db.profile();
-    assert_eq!(p.schema_version, 14);
+    assert_eq!(p.schema_version, 15);
     assert_eq!(p.max_pages, i64::from(u32::MAX - 1));
     assert_eq!(p.explicit_page_quota, None);
     #[cfg(unix)]
@@ -677,7 +677,7 @@ fn real_sqlite_full_aborts_one_mutation_without_losing_previous_publication() {
         &temp.db(),
         ProfileConfig {
             pager_kib: 2048,
-            // Schema v14 itself exceeds the former 32-page fixture. This
+            // Schema v15 itself exceeds the former 32-page fixture. This
             // explicit quota still exercises one-attempt SQLITE_FULL below.
             max_pages: Some(64),
         },

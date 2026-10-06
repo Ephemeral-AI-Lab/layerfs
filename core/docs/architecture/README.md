@@ -376,3 +376,7 @@ and transport/bounded-import/resource gaps remain explicit in #307 audits.
 
 - [Immutable payload segments](45-immutable-payload-segments.md): withdrawn schema7/10
   experiment retained as historical source/design evidence; active provider schemas1–6.
+
+- [Indexed operation scratch](49-indexed-operation-scratch.md): bounded neutral
+  records, guarded atomic changes, credited Daemon jobs and last-owner cleanup
+  in the existing local database. Content-backed construction remains pending.

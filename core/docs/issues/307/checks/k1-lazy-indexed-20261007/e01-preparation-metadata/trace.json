@@ -1,0 +1,14 @@
+{
+  "schema": "e01-original-startup-planned-trace-v1",
+  "case": "E01-startup",
+  "startup_attempts": 1,
+  "after_ready_owner_diagnostics": [
+    "post-ready",
+    "pre-stop"
+  ],
+  "after_ready_stop_attempts": 1,
+  "sql_probe_commands": "UNRUN-route_unavailable",
+  "workspace_root_namespace": "NOT_IN_SCOPE",
+  "performance_samples": 0,
+  "actual_outcomes": "NOT_YET_COLLECTED"
+}

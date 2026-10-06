@@ -1,0 +1,55 @@
+{
+  "schema": "e01-source-scoped-observer-inventory-v1",
+  "sources": [
+    {
+      "path": "core/benchmark/fs-bench-pro/shared/evidence_jobs.py",
+      "sha256": "eea89a977bead9340abd4850a64c459f9e417eb08f0a4898542a41667349d974"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/examples/e2_startup/driver.rs",
+      "sha256": "375aa8e57649bc838a9b06e5da87657333d5975f5966477b4c8301a9db538f04"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/examples/e2_startup/json.rs",
+      "sha256": "535362ce9367855bc638c914c9b39c1da746707a2bdd1ae349c5ca56acc6511a"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/examples/e2_startup/records.rs",
+      "sha256": "c673200b75d9c76905d998284a35e945109e6eb0c529b180512bce8406a15113"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/examples/e2_startup/streams.rs",
+      "sha256": "b7ae42685f324eb8028828b7f571e946015380f8dd19025905fe469bf0d1397d"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/service/observations.rs",
+      "sha256": "90d4417d2b77cdd430cbbfd6b4b4b180dd59c5afca856ec3168c1263fe4d4d48"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/service/startup.rs",
+      "sha256": "0087f730f5244c53d3287a25613f3170374e871d4af62222e9d7b87341da6902"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/database/allocation.rs",
+      "sha256": "c81ab35bcb9aeaba1725747a4385c5faa56144dad75394e5750d60b646f54f7e"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/diagnostics/metrics.rs",
+      "sha256": "036c4b4886758f062e61cb476a0d6a0ae656d766ac43fa7a0d52d6d094cd0a46"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/diagnostics/payload.rs",
+      "sha256": "beb02852b27dea08e96a06aa178141970c8bb7284ece02c9ba2c4871bcfb6c54"
+    }
+  ],
+  "precision_calibration": "UNAVAILABLE",
+  "whole_operation_coverage": "INCOMPLETE",
+  "unavailable": [
+    "phase-residency",
+    "physical-io",
+    "whole-copies",
+    "statement-fingerprint-bind-correlation",
+    "eligible-debt",
+    "queue-only-peak"
+  ]
+}

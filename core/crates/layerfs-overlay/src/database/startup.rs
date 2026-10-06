@@ -81,7 +81,7 @@ pub(crate) fn create(path: &Path, config: ProfileConfig) -> Creation {
             super::profile::readback(&connection, &sql, "PRAGMA user_version", |row| row.get(0))?;
         let application: i64 =
             super::profile::readback(&connection, &sql, "PRAGMA application_id", |row| row.get(0))?;
-        if profile.schema_version != 14 || application != 1279676210 {
+        if profile.schema_version != 15 || application != 1279676210 {
             return Err(crate::OverlayError::Invalid("overlay schema readback"));
         }
         work.cache_configuration_calls = 1;

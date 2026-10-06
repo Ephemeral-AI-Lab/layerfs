@@ -1,0 +1,30 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--cached",
+    "--check"
+  ],
+  "exit_code": 2,
+  "wall_ns": null,
+  "wall_unavailable": "manual tool result did not retain wall nanoseconds",
+  "scope": "all staged artifacts, including immutable raw stdout",
+  "cause": "14 original Cargo stdout files end with new blank line at EOF; no authored source/documentation warning",
+  "disposition": "retain original bytes; run authored staged whitespace with raw .stdout/.stderr path exclusions; no product repair or receipt trimming",
+  "original_paths": [
+    "02-content-edit-tests.stdout",
+    "04-indexed-public-tests.stdout",
+    "05-overlay-affected-tests.stdout",
+    "06-daemon-affected-tests.stdout",
+    "08-daemon-schema-owner-test.stdout",
+    "09-daemon-unreached-tests.stdout",
+    "11-linux-content-edit-tests.stdout",
+    "15-linux-overlay-tests.stdout",
+    "17-linux-daemon-tests.stdout",
+    "21-host-e01-rust-tests.stdout",
+    "24-linux-e01-bodies.stdout",
+    "33-host-workspace-bodies.stdout",
+    "35-linux-workspace-bodies.stdout",
+    "38-real-host-linux-final-proof.stdout"
+  ]
+}

@@ -299,3 +299,18 @@ ownership gate follows. All27 E1 samples remain NOT_RUN; E2–E4 and later nativ
 dimensions remain open. S7 stays CHECKPOINT/unchecked.
 [Source/proofs/failures/LOC(+524)](R4-UPSTREAM-CACHE-20261007.md) retain the boundary;
 the full goal continues into owning backed edits.
+
+
+## Indexed scratch and original E01 continuation (2026-10-07)
+
+Overlay/Daemon now expose bounded full-key indexed operation records and exact
+guarded short jobs in the same local database. Lazy Content Plan processing and
+state relocation preserve canonical output while leaving growing state for the
+next backed adapter. Exact EQP/runtime count diagnostics retain actual VM/bytes,
+trigger changes and bounded release work with uncontrolled cache. The E01 external
+collector records original startup/diagnostics/Stop, without a Workspace route.
+Diagnostic consistency supplies no E1/E2 numerical gate. All27 E1 samples remain
+NOT_RUN/count0; physical I/O, residency, copies, queue/debt/rate and calibrated
+observers remain open. S7 remains CHECKPOINT/unchecked. The full goal continues.
+
+[Source, original diagnostics, failures and checks](K1-INDEXED-SCRATCH-E01-20261007.md).

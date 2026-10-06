@@ -1,0 +1,38 @@
+{
+  "schema": "e01-external-driver-sources-v1",
+  "sources": [
+    {
+      "path": "core/crates/layerfs-daemon/examples/e2_startup.rs",
+      "sha256": "ad3b4121bd3b7d7aeb340f649def3ddd5b0483012878d1f1cdda229858396ee9"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/examples/e2_startup/driver.rs",
+      "sha256": "375aa8e57649bc838a9b06e5da87657333d5975f5966477b4c8301a9db538f04"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/examples/e2_startup/json.rs",
+      "sha256": "535362ce9367855bc638c914c9b39c1da746707a2bdd1ae349c5ca56acc6511a"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/examples/e2_startup/records.rs",
+      "sha256": "c673200b75d9c76905d998284a35e945109e6eb0c529b180512bce8406a15113"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/examples/e2_startup/streams.rs",
+      "sha256": "b7ae42685f324eb8028828b7f571e946015380f8dd19025905fe469bf0d1397d"
+    },
+    {
+      "path": "core/benchmark/fs-bench-pro-storage-content/src/workload/digest.rs",
+      "sha256": "2dc5f726e4adf5d75174a76027d595005e7606a6edb329c370cf277700bdfb1c"
+    }
+  ],
+  "binary": {
+    "path": "core/target/cluster2-307/debug/examples/e2_startup",
+    "sha256": "b9c96c8329c83f5bd1704779c2805f04cdd3e9b4218f9f665ba08a71be657828"
+  },
+  "build_receipt": {
+    "path": "core/docs/issues/307/checks/k1-lazy-indexed-20261007/31-host-e01-dev-build.json",
+    "sha256": "541cee2e46181d719ebfbf0ea6f847066e496454eebcb40e88a14102e63e70b9"
+  },
+  "mode": "diagnostic"
+}

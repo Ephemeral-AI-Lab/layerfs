@@ -77,5 +77,23 @@ pub(crate) const FILE_REFS: &str =
 
 pub(crate) const OPERATION_CUSTODY: &str = "SELECT 1 FROM operation_owner WHERE ns=?1 AND owner=?2";
 
+pub(crate) const INDEXED_SCRATCH_CONTAINS: &str = "SELECT 1 FROM indexed_scratch
+    WHERE ns=?1 AND operation=?2 AND file_scope=?3 AND kind=?4 AND key=?5";
+pub(crate) const INDEXED_SCRATCH_GET: &str = "SELECT value FROM indexed_scratch
+    WHERE ns=?1 AND operation=?2 AND file_scope=?3 AND kind=?4 AND key=?5";
+pub(crate) const INDEXED_SCRATCH_PUT: &str = "INSERT INTO indexed_scratch VALUES(?1,?2,?3,?4,?5,?6)
+    ON CONFLICT(ns,operation,file_scope,kind,key) DO UPDATE SET value=excluded.value";
+pub(crate) const INDEXED_SCRATCH_DELETE: &str = "DELETE FROM indexed_scratch
+    WHERE ns=?1 AND operation=?2 AND file_scope=?3 AND kind=?4 AND key=?5";
+pub(crate) const INDEXED_SCRATCH_KEYS: &str = "SELECT key FROM indexed_scratch
+    WHERE ns=?1 AND operation=?2 AND file_scope=?3 AND kind=?4 AND key<>?5
+    ORDER BY key LIMIT 64";
+pub(crate) const INDEXED_SCRATCH_RECLAIM_OPERATION: &str =
+    "SELECT file_scope,kind,key,length(value)
+    FROM indexed_scratch WHERE ns=?1 AND operation=?2 ORDER BY file_scope,kind,key LIMIT 64";
+pub(crate) const INDEXED_SCRATCH_RECLAIM_NAMESPACE: &str =
+    "SELECT operation,file_scope,kind,key,length(value)
+    FROM indexed_scratch WHERE ns=?1 ORDER BY operation,file_scope,kind,key LIMIT 64";
+
 pub(crate) const GENERATION_HELD: &str = "SELECT 1 FROM lease INDEXED BY lease_resource
             WHERE ns=?1 AND kind IN(1,6) AND resource=?2 LIMIT 1";

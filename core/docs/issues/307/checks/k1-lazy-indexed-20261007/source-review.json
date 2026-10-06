@@ -1,0 +1,14 @@
+{
+  "scope": "source-only independent review plus exact byte comparison; no semantic/performance qualification",
+  "prior_pin": "4090cb9a2d5fa1cd899d63c7a44537ff3f23e3cd",
+  "tree_algorithm_body_byte_identical": true,
+  "algorithm_body_sha256": "4f389e3a274d93ad84c34bf046a39c3377cfaf4ed15055a613726e00bc97b5a0",
+  "content_state": "relocated from tree.rs to objects.rs; release visibility narrowed to pub(super); memory caps remain",
+  "indexed_review": "full key scopes, guarded unit atomicity, capacity admission, first-key windows and metadata-only last-owner cleanup; no blocker found; exact bytes exclude identities/pager/physical pages",
+  "e01_review_corrections": [
+    "pre-start IDs",
+    "original command binding/nested-field inventories/error equality",
+    "original trimmed byte copy predicate"
+  ],
+  "remaining": "Content backing codec/state/adapter, captured sparse normalization, streaming/topology qualification, native/runtime and E/Q acceptance"
+}

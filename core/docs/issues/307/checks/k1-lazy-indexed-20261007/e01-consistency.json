@@ -1,0 +1,22 @@
+{
+  "schema": "cluster-two-e2-observation-consistency-v1",
+  "case": "E01-startup",
+  "observation_consistency": "PASS",
+  "qualification_status": "NOT_EVALUATED",
+  "admission_eligible": false,
+  "e1_sample_status": "NOT_RUN",
+  "e1_sample_count": 0,
+  "unavailable": [
+    "route-dependent-resources-pages-freelist-probes",
+    "whole-operation-copies",
+    "statement-fingerprint-bind-correlation",
+    "indexed-visited-rows",
+    "exact-eligible-debt",
+    "queue-only-peak",
+    "isolated-resource-runnable-wait",
+    "host-linux-kernel-phase-residency",
+    "physical-io",
+    "cache-enforcement-calibration"
+  ],
+  "errors": []
+}

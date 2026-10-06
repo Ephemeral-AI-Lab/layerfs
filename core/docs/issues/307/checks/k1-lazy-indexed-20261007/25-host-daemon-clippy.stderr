@@ -1,0 +1,108 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking cfg-if v1.0.4
+   Compiling libc v0.2.189
+    Checking typenum v1.20.1
+   Compiling version_check v0.9.5
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.12
+    Checking subtle v2.6.1
+   Compiling pkg-config v0.3.34
+    Checking zeroize v1.9.0
+   Compiling semver v1.0.28
+   Compiling vcpkg v0.2.15
+    Checking arrayref v0.3.9
+    Checking constant_time_eq v0.4.2
+    Checking arrayvec v0.7.8
+    Checking opaque-debug v0.3.1
+    Checking foldhash v0.2.0
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry)
+   Compiling cfg_aliases v0.2.2
+    Checking const-oid v0.10.2
+   Compiling nix v0.31.3
+   Compiling rustc_version v0.4.1
+    Checking hashbrown v0.17.1
+    Checking bitflags v2.13.1
+    Checking smallvec v1.16.0
+    Checking fallible-streaming-iterator v0.1.9
+    Checking fallible-iterator v0.3.0
+   Compiling generic-array v0.14.7
+   Compiling curve25519-dalek v4.1.3
+   Compiling snow v0.9.6
+   Compiling libsqlite3-sys v0.38.2
+    Checking hashlink v0.12.2
+    Checking hybrid-array v0.4.15
+    Checking block-buffer v0.12.1
+    Checking crypto-common v0.2.2
+    Checking digest v0.11.3
+    Checking getrandom v0.2.17
+    Checking cpufeatures v0.2.17
+    Checking cpufeatures v0.3.1
+    Checking rand_core v0.6.4
+    Checking sha2 v0.11.0
+   Compiling jobserver v0.1.35
+   Compiling cc v1.4.5
+    Checking crypto-common v0.1.7
+    Checking inout v0.1.4
+    Checking block-buffer v0.10.4
+    Checking universal-hash v0.5.1
+    Checking aead v0.5.2
+    Checking cipher v0.4.4
+    Checking digest v0.10.7
+    Checking polyval v0.6.2
+    Checking poly1305 v0.8.0
+    Checking blake2 v0.10.6
+    Checking sha2 v0.10.9
+    Checking chacha20 v0.9.1
+    Checking ctr v0.9.2
+    Checking aes v0.8.4
+    Checking ghash v0.5.1
+    Checking chacha20poly1305 v0.10.1
+   Compiling blake3 v1.8.5
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+    Checking aes-gcm v0.10.3
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+    Checking rusqlite v0.40.2
+    Checking layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+    Checking layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+    Checking layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error: the loop variable `index` is used to index `work`
+   --> crates/layerfs-daemon/examples/../../../benchmark/fs-bench-pro-storage-content/src/workload/digest.rs:179:22
+    |
+179 |         for index in 0..8 {
+    |                      ^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_range_loop
+    = note: `-D clippy::needless-range-loop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_range_loop)]`
+help: consider using an iterator and enumerate()
+    |
+179 |         for (index, <item>) in work.iter().enumerate() {
+    |             ~~~~~~~~~~~~~~~    ~~~~~~~~~~~~~~~~~~~~~~~
+
+error: the loop variable `index` is used to index `work`
+   --> crates/layerfs-daemon/tests/../../../benchmark/fs-bench-pro-storage-content/src/workload/digest.rs:179:22
+    |
+179 |         for index in 0..8 {
+    |                      ^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_range_loop
+    = note: `-D clippy::needless-range-loop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_range_loop)]`
+help: consider using an iterator and enumerate()
+    |
+179 |         for (index, <item>) in work.iter().enumerate() {
+    |             ~~~~~~~~~~~~~~~    ~~~~~~~~~~~~~~~~~~~~~~~
+
+error: could not compile `layerfs-daemon` (example "e2_startup") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-daemon` (test "e2_startup_receipts") due to 1 previous error

@@ -1,0 +1,23 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/target/cluster2-307/prepare_e01_identity.py",
+    "--build-receipt",
+    "core/docs/issues/307/checks/k1-lazy-indexed-20261007/31-host-e01-dev-build.json",
+    "--prepare-dir",
+    "core/target/cluster2-307/e01-native-preparation-20261007",
+    "--database",
+    "core/target/cluster2-307/e01-native-database-20261007.sqlite",
+    "--output",
+    "core/docs/issues/307/checks/k1-lazy-indexed-20261007/diagnostic/50b1c7c2873592a4ae069b25bbc6497b408fb5c4f86f9c65adc1e4071ffb3aba",
+    "--receipt-id",
+    "50b1c7c2873592a4ae069b25bbc6497b408fb5c4f86f9c65adc1e4071ffb3aba"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 534759959,
+  "kind": "preparation",
+  "workers": 1
+}

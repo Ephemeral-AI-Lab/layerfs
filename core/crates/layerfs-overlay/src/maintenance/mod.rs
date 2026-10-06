@@ -6,4 +6,5 @@ pub(crate) mod reclaim;
 pub(crate) use ready::{Item, FOLD, ORPHAN, RETIRE, SCRATCH, SERIAL_RETIRE, STALE, STEPS};
 pub use ready::{MaintenanceCursor, MaintenanceStep};
 
+mod indexed_scratch;
 mod source_wait;

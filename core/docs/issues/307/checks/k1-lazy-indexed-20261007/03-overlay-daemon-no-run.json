@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-overlay",
+    "-p",
+    "layerfs-daemon",
+    "--all-targets",
+    "--no-run"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 15009561791,
+  "kind": "frozen indexed Overlay and Daemon all-target locked build; schema15 original operation custody",
+  "workers": 1
+}

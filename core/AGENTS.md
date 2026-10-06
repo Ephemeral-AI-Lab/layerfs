@@ -26,7 +26,12 @@ product mental model or campaign-specific benchmark procedures.
   excluded.
   Daemon now exposes the fair SQL owner library and an authority-bound SDK
   upstream with operation-owned Workspace providers and one shared immutable
-  cache. Its relocated predecessor remains excluded; native executable/control/
+  cache. Overlay/Daemon also expose bounded indexed operation-scratch records
+  in the same database, with guarded atomic changes and automatic last-owner
+  cleanup; Content's backed editor and Workspace's adapter are still pending.
+  The external E01 example records original startup work, diagnostics and Stop
+  without creating a Workspace route. It supplies diagnostic receipt consistency,
+  not E1/E2 performance admission. Its relocated predecessor remains excluded; native executable/control/
   Exec integration is unfinished.
   SDK now embeds host object/Save/history handlers, scoped sessions, bounded
   fair authenticated service and native logical codecs/client/input/output ownership. Its

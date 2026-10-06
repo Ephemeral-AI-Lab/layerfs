@@ -1,0 +1,22 @@
+{
+  "schema": "cluster-two-e2-topology-witness-v1",
+  "status": "OBSERVED",
+  "scope": "external-observed-execution-domain",
+  "execution_kind": "standalone-host",
+  "source": "Python stdlib os.uname on actual preparation host; same native-host invocation required",
+  "observed_utc": "2026-10-06T21:48:52.442051+00:00",
+  "os": "macos",
+  "architecture": "aarch64",
+  "kernel": "25.4.0",
+  "raw_uname": {
+    "system": "Darwin",
+    "node": "Yifans-MacBook-Pro-10.local",
+    "release": "25.4.0",
+    "version": "Darwin Kernel Version 25.4.0: Thu Mar 19 19:26:07 PDT 2026; root:xnu-12377.101.15~1/RELEASE_ARM64_T6031",
+    "machine": "arm64"
+  },
+  "helper": {
+    "path": "core/target/cluster2-307/prepare_e01_identity.py",
+    "sha256": "686e410e7d9ebdc60ef59b9cc2ec5c6d55d91270885f6aa045e922c95a049f92"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "clippy",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "-p",
+    "layerfs-overlay",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 4204608000,
+  "kind": "host warning-denying all-target Clippy frozen lazy Content and indexed Overlay; E01 Daemon repairs excluded",
+  "workers": 1
+}

@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-daemon",
+    "--test",
+    "owner",
+    "parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation",
+    "--",
+    "--exact"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1016219458,
+  "kind": "corrected exact schema15 owner case only; eight unchanged passing owner bodies reused",
+  "workers": 1
+}

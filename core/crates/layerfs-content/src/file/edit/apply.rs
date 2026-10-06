@@ -173,22 +173,18 @@ fn assemble_inner(
     scope: &TimingScope<'_, layerfs_telemetry::timer::Active>,
 ) -> ContentResult<u64> {
     let payload_start = out.len();
-    // The plan is read once, into the segment list the assembly walks: a chunked
-    // base then assembles through one cursor, so a mapping page two retained runs
-    // share is demanded once for the whole assembly instead of once per run.
+    // One plan yields each segment only when assembly reaches it. A chunked
+    // base keeps one cursor for all retained runs, so shared pages retain the
+    // same memo without holding an operation-sized segment list.
     let mut plan = Plan::new(stream);
-    let mut segments: Vec<Segment> = Vec::new();
-    while let Some(segment) = plan.advance()? {
-        segments.push(segment);
-    }
     let mut cursor = match view.file_state()? {
         Some(state) => Some(crate::file::mapping::RangeCursor::new(
             reader, state, pages, scope,
         )?),
         None => None,
     };
-    for segment in &segments {
-        match *segment {
+    while let Some(segment) = plan.advance()? {
+        match segment {
             Segment::Retain { base } => {
                 if base.1 > base.0 {
                     match &mut cursor {

@@ -4,6 +4,7 @@ pub(crate) mod metrics;
 pub(crate) mod source_plan;
 pub(crate) mod startup;
 
+mod indexed_scratch_plan;
 mod lifetime_plan;
 
 pub(crate) mod payload;

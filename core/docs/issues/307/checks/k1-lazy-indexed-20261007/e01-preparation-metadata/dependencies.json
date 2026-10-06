@@ -1,0 +1,62 @@
+{
+  "schema": "e01-declared-locked-dependencies-v1",
+  "scope": "actual lockfile and active member dependency declarations; no invented linker/reachable-operation inventory",
+  "cargo_lock": {
+    "path": "core/Cargo.lock",
+    "sha256": "7d9bff0e8d68626efb046cd4f3d4a572fe3c1e6f579f99b5a38cd41376066a7c"
+  },
+  "core_manifest": {
+    "path": "core/Cargo.toml",
+    "sha256": "7b9f341f9b091ec20e7f6634d60b9269c528c997de01cc5fb933def6cfd03461"
+  },
+  "member_manifests": [
+    {
+      "path": "core/crates/layerfs-content/Cargo.toml",
+      "sha256": "acc00095e78434ad474a129b261cd5388b498ed2b469fb26a3ea7bb259f5a1a7"
+    },
+    {
+      "path": "core/crates/layerfs-storage/Cargo.toml",
+      "sha256": "91375ae0b8f8049aa030acc39e5ecf63c975639ae11e18225018bdb852000239"
+    },
+    {
+      "path": "core/crates/layerfs-persistence/Cargo.toml",
+      "sha256": "8723c6fe6db05ae91cab8cde6d9f490869cbeff1f33e2f4c2f08154e5eee417c"
+    },
+    {
+      "path": "core/crates/layerfs-project/Cargo.toml",
+      "sha256": "2f56e952d790fc8ad94f78d3a5fbfd9acf86ebea7c21c0c907dbeae01890921a"
+    },
+    {
+      "path": "core/crates/layerfs-history/Cargo.toml",
+      "sha256": "6aa4be9e641a13bc3956b2fa1ec7f32d1453e059ffc655880723de01bbf36512"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/Cargo.toml",
+      "sha256": "1d7d988a4d660c8840ad0721dac40a601780c706a44772fe3589b458ce5bc376"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/Cargo.toml",
+      "sha256": "19cae3ad618c3c3e66c54b2944c52f756f5e4eb59f3cc3a1e6f62742296461ab"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/Cargo.toml",
+      "sha256": "df8f0d962f1217489d35b4d5eedd1a9b367553c884d2c6c416c82873e0fa0c90"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/Cargo.toml",
+      "sha256": "e5138fab9fef76cfd5e6bc1933fbf1d10b5c752c81c09df8f839bf3ff696fdaa"
+    },
+    {
+      "path": "core/crates/layerfs-api/sdk/Cargo.toml",
+      "sha256": "2c2fcec53b11a1a169ad0a6ec13de44f267b0b6d51a2689b503327256d892cf8"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/Cargo.toml",
+      "sha256": "e1d79978de0fda2a88e7d5b6e7d80563c912b4cca9f299cf9878dff628643da1"
+    }
+  ],
+  "standalone_build_receipt": {
+    "path": "core/docs/issues/307/checks/k1-lazy-indexed-20261007/31-host-e01-dev-build.json",
+    "sha256": "541cee2e46181d719ebfbf0ea6f847066e496454eebcb40e88a14102e63e70b9"
+  }
+}

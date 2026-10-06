@@ -1,0 +1,66 @@
+{
+  "base_commit": "d6d9ad5a3f3dcbc52559ef5ac37f8839d275161f",
+  "scope": "count-driven standalone public Overlay operator diagnostic, no campaign/performance arm",
+  "profile": "actual default local Overlay; global persistence N/A",
+  "mode": "debug executable, functional/counts only",
+  "workers": 1,
+  "population": 1024,
+  "cache": "uncontrolled; no speed/cold/residency eligibility",
+  "wall_bound_s": 10,
+  "artifact_db": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/k1-indexed-profile-20261007/overlay.db",
+  "binary": {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/indexed_scratch_profile",
+    "sha256": "1cf3fbc842f2d80112dc20a10f989ca97d084ec445d1635b9fb765fb3efff29f",
+    "bytes": 2081736
+  },
+  "inputs": [
+    {
+      "path": "core/crates/layerfs-overlay/src/contract/indexed_scratch.rs",
+      "sha256": "6cc88c967c8da9ddc1de78a17166a11ff6a0268931a8039e5d503f8e13df9b22"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/indexed_scratch.rs",
+      "sha256": "4313ce910c6efaf1928e64e42346422a6345a54d82b5e67c6f1224d23455fbde"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/maintenance/indexed_scratch.rs",
+      "sha256": "c6b869d90192cbfb656aa0c5ae1837327583b0bf515db1d4b989177364369e7e"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/diagnostics/indexed_scratch_plan.rs",
+      "sha256": "322f2f7a90b2e12775096b3a93c54b781947b835bb4da300c45e2c56cc533123"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/database/statements.rs",
+      "sha256": "6134ffdf90d5d766b6601ab54f60ad656728d675ccdf760569154f38952179ee"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/sql/schema.sql",
+      "sha256": "0ba87529dff11d327167b62bbe3f8c2d89814f7ea9e5b729f6fa0f99ee9ebf58"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/sql/accounting.sql",
+      "sha256": "d6220d6df9879ca1359a635aadeb13727ae65709e047426257184d6d382429be"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/examples/indexed_scratch_profile.rs",
+      "sha256": "eeac25a3488ea5d4358e73e467859daf19c9813ca121fa7c7c2606a7942c4d94"
+    },
+    {
+      "path": ".cargo/config.toml",
+      "sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+    },
+    {
+      "path": "core/Cargo.lock",
+      "sha256": "7d9bff0e8d68626efb046cd4f3d4a572fe3c1e6f579f99b5a38cd41376066a7c"
+    }
+  ],
+  "template": "benchmark_agent_report.md read immediately before invocation; route-aware component diagnostic only",
+  "unavailable": [
+    "indexed visited-row counter",
+    "device I/O",
+    "phase/system residency",
+    "queue/rate/latency qualification"
+  ],
+  "output_retention": "fresh append-only stdout/stderr/json plus retained owned database"
+}

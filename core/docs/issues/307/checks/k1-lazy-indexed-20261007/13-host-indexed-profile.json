@@ -1,0 +1,13 @@
+{
+  "command": [
+    "core/target/debug/examples/indexed_scratch_profile",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/k1-indexed-profile-20261007/overlay.db",
+    "1024"
+  ],
+  "wall_timeout_s": 10,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1334710333,
+  "kind": "single fresh public Overlay indexed scratch exact EXPLAIN plus correlated runtime count diagnostic; uncontrolled cache, no speed/residency claim",
+  "workers": 1
+}

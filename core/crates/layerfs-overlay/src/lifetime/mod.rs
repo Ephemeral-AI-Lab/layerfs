@@ -10,6 +10,7 @@ pub(crate) mod scratch;
 pub(crate) mod source;
 pub(crate) mod workspace;
 
+mod indexed_scratch;
 mod operation;
 
 mod lookup;

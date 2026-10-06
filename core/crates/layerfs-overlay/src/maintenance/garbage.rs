@@ -174,6 +174,13 @@ impl Overlay {
         Ok((count as u64, bytes, count == 0))
     }
     fn clean_scratch(&self, item: &Item) -> OverlayResult<(u64, u64, bool)> {
+        if item.target == 2 {
+            let (count, bytes) = self.delete_indexed_scratch(item.ns, Some(item.resource))?;
+            if count == 0 {
+                self.finish_item(item)?;
+            }
+            return Ok((count, bytes, count == 0));
+        }
         let table = if item.target == 1 {
             "owned_scratch"
         } else {

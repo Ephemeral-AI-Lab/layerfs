@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "clippy",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--target-dir",
+    "core/target/cluster2-307",
+    "-p",
+    "layerfs-daemon",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 101,
+  "timed_out": false,
+  "wall_ns": 12001737833,
+  "kind": "lint",
+  "workers": 1
+}

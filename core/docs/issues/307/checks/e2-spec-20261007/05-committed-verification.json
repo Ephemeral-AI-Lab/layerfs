@@ -1,0 +1,21 @@
+{
+  "commit": "d6d9ad5a3f3dcbc52559ef5ac37f8839d275161f",
+  "tree": "42149d3b4d5f3bb5b3e5b7e8ce9eafbe1db84c89",
+  "parent": "4090cb9a2d5fa1cd899d63c7a44537ff3f23e3cd",
+  "source_tree": "821aafb81824801e4f0744d24168744a0ab10533",
+  "root_reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+  "matched_final_staged_tree": true,
+  "counted_product_trees_equal": true,
+  "counts": {
+    "combined": 162906,
+    "core": 97489,
+    "reference": 65417
+  },
+  "comparison": {
+    "before": 162906,
+    "after": 162906,
+    "delta": 0
+  },
+  "method": "exact committed root/staged root equality plus both counted production subtree identities; reuse confirmed identical deterministic counter inputs",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb"
+}

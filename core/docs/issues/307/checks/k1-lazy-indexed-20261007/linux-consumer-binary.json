@@ -1,0 +1,11 @@
+{
+  "built_binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-linux/debug/examples/upstream_consumer",
+  "retained_binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/k1-binaries/36-final-consumer",
+  "sha256": "9ad2a594cc424c1d14fa2d5f50a08cdd73e1bfebf3e98f44ce13c812ac158a0a",
+  "bytes": 71081264,
+  "build_receipt": "36-linux-final-consumer-build.json",
+  "previous_binary_retained": "core/target/cluster2-307/r4-binaries/31-final-consumer",
+  "previous_receipts_immutable": true,
+  "profile": "Linux ARM64 dev; ARM cfgs from repository config; constructors1",
+  "scope": "actual changed Overlay schema15 startup/reclamation functional consumer; no performance arm"
+}

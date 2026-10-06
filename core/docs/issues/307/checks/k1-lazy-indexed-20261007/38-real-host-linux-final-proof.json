@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-daemon",
+    "--test",
+    "upstream_docker",
+    "--",
+    "--ignored",
+    "--nocapture"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 78525374041,
+  "kind": "functional",
+  "workers": 1
+}

@@ -1,4 +1,4 @@
--- Disposable overlay schema v14. All owner relations lead with Workspace ns.
+-- Disposable overlay schema v15. All owner relations lead with Workspace ns.
 CREATE TABLE workspace (
     ns INTEGER PRIMARY KEY AUTOINCREMENT,
     incarnation BLOB NOT NULL UNIQUE CHECK(length(incarnation)=32),
@@ -178,6 +178,15 @@ CREATE TABLE owned_scratch (
     value BLOB NOT NULL CHECK(length(value)<=65536),
     PRIMARY KEY(ns,operation,kind,key)
 ) STRICT, WITHOUT ROWID;
+CREATE TABLE indexed_scratch (
+    ns INTEGER NOT NULL REFERENCES workspace(ns),
+    operation INTEGER NOT NULL CHECK(operation>0),
+    file_scope BLOB NOT NULL CHECK(length(file_scope)=8),
+    kind INTEGER NOT NULL CHECK(kind BETWEEN 0 AND 4294967295),
+    key BLOB NOT NULL CHECK(length(key)=32),
+    value BLOB NOT NULL CHECK(length(value)<=65536),
+    PRIMARY KEY(ns,operation,file_scope,kind,key)
+) STRICT, WITHOUT ROWID;
 CREATE TABLE lookup_owner (
     ns INTEGER NOT NULL REFERENCES workspace(ns),
     request INTEGER NOT NULL CHECK(request>0),
@@ -191,4 +200,4 @@ CREATE TABLE orphan_wait (
     serial INTEGER NOT NULL CHECK(serial>0),
     PRIMARY KEY(ns,gen,serial)
 ) STRICT, WITHOUT ROWID;
-PRAGMA user_version=14;
+PRAGMA user_version=15;

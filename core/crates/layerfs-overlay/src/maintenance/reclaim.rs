@@ -8,7 +8,9 @@ const BYTES: u64 = 65536;
 const READY:&str="SELECT ns,cursor FROM reclaim INDEXED BY reclaim_ready WHERE queue_key=?1 AND ns>?2 ORDER BY ns LIMIT 1";
 const PAYLOAD:&str="SELECT rowid,length(data)+ifnull(length(validity),0) FROM payload INDEXED BY payload_namespace_row WHERE ns=?1 ORDER BY rowid LIMIT 14";
 
-/// One short physical cleanup step; bytes count declared BLOB/name data, not pages.
+/// One short physical cleanup step. Bytes count payload, names and raw scratch
+/// values, not structured identity keys or pages. SQL work records delivered
+/// key/value bytes separately; shared allocation remains a distinct observation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ReclaimStep {
     pub namespace: u64,
@@ -58,6 +60,7 @@ impl Overlay {
                 8 => self.delete_orphan_metadata(ns, "file_custody")?,
                 9 => self.delete_scratch(ns, "owned_scratch")?,
                 10 => self.delete_wait(ns)?,
+                11 => self.delete_indexed_scratch(ns, None)?,
                 _ => {
                     self.execute(
                         StatementKind::Reclaim,

@@ -1,0 +1,28 @@
+{
+  "status": "original failures retained; no timeout",
+  "failures": [
+    {
+      "receipt": "06-daemon-affected-tests.json",
+      "cause": "owner.rs schema assertion expected14; actual schema15",
+      "repair": "owner.rs assertion changed to15 only; affected body built and run once in07/08;8 unchanged owner bodies reused",
+      "unrun_after_failure": "3 startup and3 upstream bodies later selected once in09"
+    },
+    {
+      "receipt": "25-host-daemon-clippy.json",
+      "cause": "existing imported external harness scalar SHA256 needless_range_loop warning",
+      "repair": "scoped lint allowance at two external digest module imports only; unchanged harness;26/27 pass; no product warning suppression"
+    }
+  ],
+  "source_review_corrections": [
+    "preallocate receipt/attempt/owner IDs before startup",
+    "bind canonical original invocation binary/DB/output/identity argv",
+    "exact nested record fieldsets and original startup error equality",
+    "hash original input raw.strip() equals copied identity digest"
+  ],
+  "derived_diagnostic_correction": {
+    "original": "profile-counts.json",
+    "reviewed": "profile-counts-reviewed.json",
+    "scope": "correct explanatory note:1090 reported reclaimed scratch rows;1092 direct SQL changes include2 garbage control deletes; numeric values unchanged"
+  },
+  "performance": "no qualifying treatment; E1 NOT_RUN/count0; qualification NOT_EVALUATED"
+}

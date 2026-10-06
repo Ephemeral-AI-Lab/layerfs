@@ -362,7 +362,7 @@ file it was not prepared to hold.
 
 This component correction follows parent `a41d131f2`; earlier descriptions and
 measurement receipts keep their source pins. The stored-node route in
-[EditObjects::load_node](../../crates/layerfs-content/src/file/edit/tree.rs)
+[EditObjects::load_node](../../crates/layerfs-content/src/file/edit/objects.rs)
 now decodes a demanded canonical page and checks its actual level, logical bytes
 and extent count before retaining it. A malformed page, impossible non-root fill,
 wrong summary or original provider refusal returns once and does not populate
@@ -385,3 +385,34 @@ passing receipt. This repair covers the mapping memo only: the deferred draft,
 parent-reference, detached, resolved/emission collections and sparse localized
 editing remain K1 work. It establishes no whole-operation resident bound or
 integrated Commit/performance acceptance.
+
+### Lazy small-result assembly and edit ownership, 2026-10-07
+
+Following parent `4090cb9a2`, [small-result assembly](../../crates/layerfs-content/src/file/edit/apply.rs)
+consumes `Plan::advance` one segment at a time. It no longer builds a `Vec` of
+all segments before reading retained or replacement bytes. One `RangeCursor`
+and the same page memo remain alive across all ascending retained ranges. The
+Plan holds scalar cursor state and one pending replacement; final WholeFile
+bytes remain bounded by the selected construction cutoff. The validated,
+stable, replayable `EditSequence` contract and first-error propagation remain;
+there is no additional metadata prepass. WholeFile output is emitted only after
+the complete assembly succeeds. Earlier source reads can precede a later lazy
+input failure, and that failed operation is not replayed.
+
+The [external generated regressions](../../crates/layerfs-content/tests/edit_lazy_plan.rs)
+do not retain their input sequence in an edit vector. They observe the first
+assembly replacement read before later edit rows, exact bytes/root against an
+independent fresh construction, first-source-failure stopping before future
+rows/emission, and one mapping-root demand across thousands of deletions into a
+two-byte result. These are structural/public-behavior cases, without a timing or
+whole-process memory claim; source presence is not a passing test receipt.
+
+The owning source responsibilities are now explicit:
+[objects.rs](../../crates/layerfs-content/src/file/edit/objects.rs) owns drafts,
+reference/detached/resolved collections, loading, release and final emission;
+[tree.rs](../../crates/layerfs-content/src/file/edit/tree.rs) owns the existing
+split/concat/coalesce and root-partition algorithms. The public `EditObjects`,
+`EditCounters` and `EDIT_DEFERRED_LIMIT` exports are unchanged. This is source
+relocation, not a second tree algorithm or measured simplification. The memory
+profile's 8MiB-derived draft limit, growing identity collections, sparse
+replacement/comparison and owning indexed-backend requirements remain K1 work.

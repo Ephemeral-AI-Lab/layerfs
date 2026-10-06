@@ -1,0 +1,20 @@
+{
+  "schema": "e01-startup-planned-fixture-v1",
+  "case": "E01-startup",
+  "database": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e01-native-database-20261007.sqlite",
+  "database_initial_condition": "must-not-exist; actual create_new enforces original attempt",
+  "immutable_root": "NOT_IN_SCOPE",
+  "global_store": "NOT_IN_SCOPE",
+  "profile_config": {
+    "pager_kib": 2048,
+    "max_pages": null
+  },
+  "owner_config": {
+    "bytes": 8388608,
+    "lifecycle_reserve": 65536,
+    "namespaces": 16,
+    "jobs_per_namespace": 16,
+    "lifecycle_jobs_per_namespace": 2
+  },
+  "values_are_planned_inputs_not_observed_outcomes": true
+}

@@ -1,0 +1,22 @@
+{
+  "schema": "ignored-e01-native-preparation-v1",
+  "identity": {
+    "path": "core/target/cluster2-307/e01-native-preparation-20261007/identity-input.json",
+    "sha256": "d56633262a9e6c4a4d9fa0d8edc53cf792e8a1457deff0af337b25fbb656d12f"
+  },
+  "base_commit": "d6d9ad5a3f3dcbc52559ef5ac37f8839d275161f",
+  "base_tree": "42149d3b4d5f3bb5b3e5b7e8ce9eafbe1db84c89",
+  "source_sealed": false,
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/debug/examples/e2_startup",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e01-native-database-20261007.sqlite",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/k1-lazy-indexed-20261007/diagnostic/50b1c7c2873592a4ae069b25bbc6497b408fb5c4f86f9c65adc1e4071ffb3aba",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/e01-native-preparation-20261007/identity-input.json"
+  ],
+  "output_not_created": true,
+  "database_not_created": true,
+  "qualification_status": "NOT_EVALUATED",
+  "e1_sample_status": "NOT_RUN",
+  "e1_sample_count": 0,
+  "admission_eligible": false
+}

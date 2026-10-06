@@ -7,6 +7,7 @@ mod compare;
 mod concat;
 mod finish;
 mod input;
+mod objects;
 mod split;
 mod tree;
 
@@ -16,5 +17,5 @@ pub use concat::coalesce_adjacent;
 pub use finish::{emit_empty_representation, EmittedRoot};
 pub use input::{Edit, EditSequence, EditSource, ReplacementReader};
 pub use input::{Plan, Segment};
+pub use objects::{EditCounters, EditObjects, EDIT_DEFERRED_LIMIT};
 pub use split::slice_of;
-pub use tree::{EditCounters, EditObjects, EDIT_DEFERRED_LIMIT};

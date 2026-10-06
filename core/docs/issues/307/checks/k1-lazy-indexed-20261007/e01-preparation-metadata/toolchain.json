@@ -1,0 +1,43 @@
+{
+  "schema": "e01-native-toolchain-observation-v1",
+  "rustc": {
+    "argv": [
+      "rustup",
+      "run",
+      "1.85.1",
+      "rustc",
+      "--version",
+      "--verbose"
+    ],
+    "stdout": "rustc 1.85.1 (4eb161250 2025-03-15)\nbinary: rustc\ncommit-hash: 4eb161250e340c8f48f66e2b929ef4a5bed7c181\ncommit-date: 2025-03-15\nhost: aarch64-apple-darwin\nrelease: 1.85.1\nLLVM version: 19.1.7\n",
+    "stderr": ""
+  },
+  "cargo": {
+    "argv": [
+      "rustup",
+      "run",
+      "1.85.1",
+      "cargo",
+      "--version"
+    ],
+    "stdout": "cargo 1.85.1 (d73d2caf9 2024-12-31)\n",
+    "stderr": ""
+  },
+  "build_receipt": {
+    "path": "core/docs/issues/307/checks/k1-lazy-indexed-20261007/31-host-e01-dev-build.json",
+    "sha256": "541cee2e46181d719ebfbf0ea6f847066e496454eebcb40e88a14102e63e70b9"
+  },
+  "build_profile": "debug-functional-only",
+  "environment_observation": {
+    "RUSTFLAGS": null,
+    "CARGO_TARGET_DIR": null,
+    "LAYERFS_CONSTRUCTION_WORKERS": "1"
+  },
+  "environment_observation_scope": "preparation-process-only",
+  "original_build_environment": "UNAVAILABLE-not-recorded-by-wrapper",
+  "repository_arm64_input": {
+    "path": ".cargo/config.toml",
+    "sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+  },
+  "not_a_performance_build_seal": true
+}

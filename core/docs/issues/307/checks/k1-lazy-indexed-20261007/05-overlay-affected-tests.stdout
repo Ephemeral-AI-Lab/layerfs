@@ -1,0 +1,64 @@
+
+running 12 tests
+test terminal_cleanup_waits_for_exact_owners_and_reply_attempts ... ok
+test portable_time_range_and_directory_sticky_mode_are_preserved ... ok
+test closed_capture_retains_its_existing_rows_until_explicit_known_release ... ok
+test profile_namespace_binary_values_and_atomic_refusals ... ok
+test local_publication_survives_lost_reply_and_capture_does_not_copy_cells ... ok
+test real_sqlite_full_aborts_one_mutation_without_losing_previous_publication ... ok
+test backed_owner_and_scratch_pages_have_no_total_record_limit ... ok
+test known_install_advances_base_without_replaying_or_losing_later_active_rows ... ok
+test reclaim_pages_do_not_visit_a_large_held_namespace_or_copy_scratch_values ... ok
+test captured_name_keysets_use_fixed_generation_and_do_not_revisit_prefixes ... ok
+test fixed_capture_uses_generation_index_while_active_namespace_grows ... ok
+test payload_name_scratch_and_owner_access_keep_indexed_scope ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.23s
+
+
+running 3 tests
+test frozen_capture_and_tickets_reject_changed_identity_and_survive_close ... ok
+test equal_local_routing_keys_never_cross_engine_owners ... ok
+test exact_frontier_observations_visit_only_their_fixed_domain ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+
+running 3 tests
+test reader_custody_parks_composition_then_exact_release_enables_it ... ok
+test stale_cleanup_rechecks_epochs_and_never_deletes_regrown_new_bytes ... ok
+test definite_failures_compose_in_bounded_turns_without_growing_live_layers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+
+running 7 tests
+test logical_close_refuses_new_captured_owners_and_keeps_existing_consumers ... ok
+test unowned_unlinked_payload_is_reclaimed_live_but_its_namespace_tombstone_remains ... ok
+test captured_reader_preserves_sealed_bytes_across_install_and_blocks_failed_fold ... ok
+test three_layer_orphan_composition_preserves_cutoffs_and_an_independent_pre_unlink_reader ... ok
+test independent_orphan_survives_many_installs_and_failures_and_last_read_owner ... ok
+test operation_custody_never_reuses_an_exposed_owner_and_cleanup_cannot_delete_new_scratch ... ok
+test custody_and_orphan_jobs_keep_point_work_beside_unrelated_owners ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+
+
+running 6 tests
+test repeated_resource_snapshots_do_not_reprepare_expired_metadata_statements ... ok
+test lost_backing_path_quarantines_without_sql_or_releasing_published_capture ... ok
+test physical_reserve_counts_allocation_separately_from_logical_rows_and_reusable_pages ... ok
+test real_backing_corruption_retains_original_sql_cause_and_quarantines_custody ... ok
+test retained_snapshot_parks_orphan_migration_then_rows_move_without_payload_duplication ... ok
+test last_generation_release_is_fixed_work_and_wakes_retirements_in_bounded_pages ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.22s
+
+
+running 3 tests
+test existing_artifact_refusal_has_no_sql_or_allocation_replay ... ok
+test real_schema_full_failure_retains_original_error_work_and_artifact ... ok
+test startup_counts_profile_schema_accounting_and_entire_reservation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

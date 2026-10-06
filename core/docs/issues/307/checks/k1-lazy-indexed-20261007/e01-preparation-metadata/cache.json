@@ -1,0 +1,11 @@
+{
+  "schema": "e01-diagnostic-cache-applicability-v1",
+  "cache_state": "uncontrolled",
+  "admission_eligible": false,
+  "cold_attestation": "UNAVAILABLE",
+  "observer_precision_overhead": "UNAVAILABLE",
+  "local_overlay_pager_file_cache": "UNCONTROLLED",
+  "host_global_store": "NOT_IN_SCOPE",
+  "linux_kernel_cgroup": "NOT_IN_SCOPE",
+  "setup_warmth_credit": "NO_COLD_OR_PERFORMANCE_CLAIM"
+}

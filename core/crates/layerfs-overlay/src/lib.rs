@@ -30,6 +30,9 @@ pub(crate) use maintenance::reclaim;
 pub use close::CleanupState;
 pub use compound::SourceRows;
 pub use contract::custody::{CapturedReader, FileRead, LookupOwner, OpenFile, OperationOwner};
+pub use contract::indexed_scratch::{
+    indexed_changes_bytes, ExpectedValue, IndexedApply, IndexedChange, IndexedKey, IndexedScope,
+};
 pub use database::accounting::{Resources, StoredCounts};
 pub use database::allocation::{
     AllocationState, AllocationWork, CLEANUP_HEADROOM, MUTATION_GROWTH,

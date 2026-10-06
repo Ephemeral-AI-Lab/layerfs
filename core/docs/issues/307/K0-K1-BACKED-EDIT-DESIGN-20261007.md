@@ -153,3 +153,10 @@ page-cache miss eviction and validated-byte move, with public retained/evicted/
 invalid-page regressions. It leaves this source-pinned investigation intact.
 Lazy Plan, backed state, sparse/captured normalization and integrated Commit remain
 proposed/unfinished; the bounded page repair does not establish those capabilities.
+
+The later [indexed-scratch/lazy-Plan checkpoint](K1-INDEXED-SCRATCH-E01-20261007.md)
+implements lazy small-result Plan consumption and extracts the unchanged memory
+state from the tree algorithm. Overlay/Daemon now provide the neutral indexed
+records. Actual Content-backed state, its fallible Workspace adapter, sparse runs,
+captured normalization and Commit wiring remain unfinished. This later correction
+does not change the investigation's source pin or qualify its proposed limits.

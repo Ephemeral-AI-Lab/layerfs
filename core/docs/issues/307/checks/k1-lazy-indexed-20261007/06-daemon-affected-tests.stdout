@@ -1,0 +1,34 @@
+
+running 1 test
+test completion_cost_matches_exclusive_owner_aggregate_and_retained_credit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 9 tests
+test parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation ... FAILED
+test result_credits_and_reserved_lifecycle_capacity_survive_ordinary_saturation ... ok
+test lost_source_completion_retains_backed_owner_and_terminal_release_makes_cleanup_eligible ... ok
+test stopping_cancels_unattempted_capture_and_fences_future_admission ... ok
+test known_install_fences_later_sources_while_existing_reads_mutations_and_other_work_progress ... ok
+test lost_internal_completions_keep_exact_backed_custody_and_release_result_credits ... ok
+test idle_cleanup_runs_without_an_explicit_reclaim_or_status_job ... ok
+test failed_capture_waits_for_readers_while_later_writes_and_idle_composition_progress ... ok
+test last_release_starts_automatic_cleanup_during_idle_and_unrelated_live_work ... ok
+
+failures:
+
+---- parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation stdout ----
+
+thread 'parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation' panicked at crates/layerfs-daemon/tests/owner.rs:327:5:
+assertion `left == right` failed
+  left: 15
+ right: 14
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    parked_capture_allows_unrelated_progress_and_includes_earlier_queued_mutation
+
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+

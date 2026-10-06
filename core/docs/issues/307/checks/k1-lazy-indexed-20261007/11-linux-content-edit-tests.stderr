@@ -1,0 +1,16 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.11s
+     Running tests/edit_batch.rs (core/target/cluster2-linux/debug/deps/edit_batch-dcb9703373f6f6b9)
+     Running tests/edit_bounds.rs (core/target/cluster2-linux/debug/deps/edit_bounds-9ef8d0ee6dbdecf8)
+     Running tests/edit_lazy_plan.rs (core/target/cluster2-linux/debug/deps/edit_lazy_plan-10443d364d14f3ca)
+     Running tests/edit_localized.rs (core/target/cluster2-linux/debug/deps/edit_localized-328d0f32bbea6732)
+     Running tests/edit_model.rs (core/target/cluster2-linux/debug/deps/edit_model-1b5b69cb7a0a1cae)
+     Running tests/edit_noop.rs (core/target/cluster2-linux/debug/deps/edit_noop-aec87900a15abe15)
+     Running tests/edit_reference.rs (core/target/cluster2-linux/debug/deps/edit_reference-37182510813b5a64)
+     Running tests/edit_single.rs (core/target/cluster2-linux/debug/deps/edit_single-19a76ee4bf4bcca3)
+     Running tests/edit_timing.rs (core/target/cluster2-linux/debug/deps/edit_timing-83c8b073a045e4a5)
+     Running tests/edit_transitions.rs (core/target/cluster2-linux/debug/deps/edit_transitions-94ed959c3e668305)

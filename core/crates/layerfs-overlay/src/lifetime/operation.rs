@@ -143,6 +143,12 @@ impl Overlay {
                 integer(owner.owner)?,
                 1,
             )?;
+            self.enqueue(
+                owner.route.ns,
+                crate::maintenance::SCRATCH,
+                integer(owner.owner)?,
+                2,
+            )?;
             self.queue_closed(owner.route)
         })
     }

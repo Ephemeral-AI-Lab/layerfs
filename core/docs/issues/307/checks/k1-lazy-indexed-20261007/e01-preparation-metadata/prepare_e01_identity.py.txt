@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+"""One-off ignored E01 native-host preparation; never builds/runs the product.
+
+Run only after root's standalone example build. All generated paths are fresh,
+and all observations describe this diagnostic invocation, not a qualified arm.
+"""
+import argparse
+import datetime
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import subprocess
+import uuid
+
+ROOT = Path(__file__).resolve().parents[3]
+TARGET = ROOT / "core/target/cluster2-307"
+BINARY = TARGET / "debug/examples/e2_startup"
+DRIVER = ["core/crates/layerfs-daemon/examples/e2_startup.rs", *[
+    "core/crates/layerfs-daemon/examples/e2_startup/" + name + ".rs"
+    for name in ("driver", "json", "records", "streams")],
+    "core/benchmark/fs-bench-pro-storage-content/src/workload/digest.rs"]
+OBSERVER = ["core/benchmark/fs-bench-pro/shared/evidence_jobs.py",
+    "core/crates/layerfs-daemon/src/service/startup.rs",
+    "core/crates/layerfs-daemon/src/service/observations.rs",
+    "core/crates/layerfs-overlay/src/diagnostics/metrics.rs",
+    "core/crates/layerfs-overlay/src/diagnostics/payload.rs",
+    "core/crates/layerfs-overlay/src/database/allocation.rs", *DRIVER[1:5]]
+
+
+def require(condition, reason):
+    if not condition:
+        raise SystemExit(reason)
+
+
+def digest(path):
+    h = hashlib.sha256()
+    with Path(path).open("rb") as source:
+        for block in iter(lambda: source.read(8192), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def descriptor(path):
+    path = Path(path).resolve()
+    require(path.is_relative_to(ROOT) and path.is_file(), "artifact absent/outside repository: " + str(path))
+    return {"path": str(path.relative_to(ROOT)), "sha256": digest(path)}
+
+
+def observe(argv):
+    result = subprocess.run(argv, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            timeout=5, check=True, env=dict(os.environ, GIT_OPTIONAL_LOCKS="0"))
+    require(len(result.stdout) <= 1 << 20 and len(result.stderr) <= 65_536, "external read-only observation window")
+    return {"argv": argv, "stdout": result.stdout.decode(), "stderr": result.stderr.decode()}
+
+
+def fresh_target(path):
+    path = Path(path).absolute()
+    require(path.parent.is_dir(), "create owning parent first: " + str(path.parent))
+    path = path.parent.resolve() / path.name
+    require(path.is_relative_to(ROOT) and not path.exists() and not path.is_symlink(), "fresh owned repository path required: " + str(path))
+    return path
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--build-receipt", type=Path, required=True)
+    parser.add_argument("--prepare-dir", type=Path, required=True)
+    parser.add_argument("--database", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--receipt-id", default=None)
+    args = parser.parse_args()
+    require(BINARY.is_file(), "root must first build the standalone example at " + str(BINARY))
+    binary = BINARY.resolve()
+    receipt_path = args.build_receipt.resolve()
+    build = json.loads(receipt_path.read_bytes())
+    command = build.get("command", [])
+    require(build.get("exit_code") == 0 and build.get("timed_out") is False
+            and "build" in command and "test" not in command and "--locked" in command
+            and "+1.85.1" in command and "--example" in command
+            and command[command.index("--example") + 1] == "e2_startup"
+            and "--target-dir" in command
+            and (ROOT / command[command.index("--target-dir") + 1]).resolve() == TARGET.resolve()
+            and "--release" not in command, "successful exact standalone debug build receipt required; test harness is not the driver")
+    require("--manifest-path" in command and command[command.index("--manifest-path") + 1] == "core/Cargo.toml"
+            and "-p" in command and command[command.index("-p") + 1] == "layerfs-daemon",
+            "actual core Daemon example build receipt required")
+    native = os.uname()
+    require(native.sysname == "Darwin" and native.machine in ("arm64", "aarch64"), "this helper is scoped to the assigned native macOS ARM64 host")
+    prep = fresh_target(args.prepare_dir)
+    database = fresh_target(args.database)
+    output = fresh_target(args.output)
+    require(not database.is_relative_to(output) and not output.is_relative_to(prep), "separate owned DB/preparation/output paths required")
+    receipt_id = args.receipt_id or hashlib.sha256(uuid.uuid4().bytes).hexdigest()
+    require(re.fullmatch(r"[0-9a-f]{64}", receipt_id) and receipt_id != "0" * 64, "nonzero 64-hex diagnostic receipt ID required")
+    base_commit = observe(["git", "rev-parse", "HEAD"])["stdout"].strip()
+    base_tree = observe(["git", "rev-parse", "HEAD^{tree}"])["stdout"].strip()
+    source_status = observe(["git", "status", "--porcelain=v1", "--untracked-files=all", "--", "core/crates", ".cargo/config.toml", "core/Cargo.toml", "core/Cargo.lock"])
+    cargo_text = (ROOT / "core/Cargo.toml").read_text()
+    members_match = re.search(r"(?ms)^members\s*=\s*\[(.*?)\]", cargo_text)
+    require(members_match is not None, "active core workspace member declaration missing")
+    members = re.findall(r'"([^"\n]+)"', members_match[1])
+    scope = ["core/" + member for member in members]
+    files = observe(["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *scope])["stdout"].splitlines()
+    product_paths = sorted({path for path in files if ("/src/" in path and path.endswith(".rs"))
+        or ("/sql/" in path and path.endswith(".sql")) or path in {"core/" + member + "/Cargo.toml" for member in members}})
+    current_paths = sorted(set(product_paths + DRIVER + OBSERVER + [".cargo/config.toml", "core/Cargo.toml", "core/Cargo.lock"]))
+    require(0 < len(current_paths) <= 4096, "current-source inventory window")
+    current_inventory = [descriptor(ROOT / path) for path in current_paths]
+    rustc = observe(["rustup", "run", "1.85.1", "rustc", "--version", "--verbose"])
+    cargo = observe(["rustup", "run", "1.85.1", "cargo", "--version"])
+    require("release: 1.85.1" in rustc["stdout"] and "host: aarch64-apple-darwin" in rustc["stdout"], "exact native 1.85.1 toolchain observation mismatch")
+    prep.mkdir()
+    retained_sources = []
+    for item in current_inventory:
+        destination = prep / "source-copies" / item["path"]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with (ROOT / item["path"]).open("rb") as source, destination.open("xb") as sink:
+            for block in iter(lambda: source.read(8192), b""):
+                sink.write(block)
+        require(digest(destination) == item["sha256"], "source changed during original preparation; no automatic replay")
+        retained_sources.append({"original": item, "retained_copy": descriptor(destination)})
+
+    def write(name, value):
+        path = prep / name
+        raw = (json.dumps(value, indent=2, ensure_ascii=True) + "\n").encode()
+        require(len(raw) <= 1 << 20, "preparation artifact encoding window")
+        with path.open("xb") as sink:
+            sink.write(raw)
+        return descriptor(path)
+
+    retained_index = write("retained-source-copies.json", {"schema": "e01-retained-current-source-copies-v1", "sources": retained_sources})
+    product = write("current-source.json", {"schema": "cluster-two-e2-source-inventory-v1", "source_commit": base_commit,
+        "source_tree": base_tree, "source_sealed": False, "binding": "base-commit-plus-current-inventory",
+        "scope": "active core first-party src/runtime SQL plus actual E01 external driver/observer/build inputs",
+        "sources": current_inventory, "retained_source_inventory": retained_index, "git_status_observation": source_status})
+    toolchain = write("toolchain.json", {"schema": "e01-native-toolchain-observation-v1", "rustc": rustc, "cargo": cargo,
+        "build_receipt": descriptor(receipt_path), "build_profile": "debug-functional-only",
+        "environment_observation": {key: os.environ.get(key) for key in ("RUSTFLAGS", "CARGO_TARGET_DIR", "LAYERFS_CONSTRUCTION_WORKERS")},
+        "environment_observation_scope": "preparation-process-only", "original_build_environment": "UNAVAILABLE-not-recorded-by-wrapper",
+        "repository_arm64_input": descriptor(ROOT / ".cargo/config.toml"), "not_a_performance_build_seal": True})
+    dependencies = write("dependencies.json", {"schema": "e01-declared-locked-dependencies-v1",
+        "scope": "actual lockfile and active member dependency declarations; no invented linker/reachable-operation inventory",
+        "cargo_lock": descriptor(ROOT / "core/Cargo.lock"), "core_manifest": descriptor(ROOT / "core/Cargo.toml"),
+        "member_manifests": [descriptor(ROOT / "core" / member / "Cargo.toml") for member in members],
+        "standalone_build_receipt": descriptor(receipt_path)})
+    driver = write("driver-sources.json", {"schema": "e01-external-driver-sources-v1", "sources": [descriptor(ROOT / path) for path in DRIVER],
+        "binary": descriptor(binary), "build_receipt": descriptor(receipt_path), "mode": "diagnostic"})
+    observer = write("observer-sources.json", {"schema": "e01-source-scoped-observer-inventory-v1",
+        "sources": [descriptor(ROOT / path) for path in sorted(set(OBSERVER))],
+        "precision_calibration": "UNAVAILABLE", "whole_operation_coverage": "INCOMPLETE",
+        "unavailable": ["phase-residency", "physical-io", "whole-copies", "statement-fingerprint-bind-correlation", "eligible-debt", "queue-only-peak"]})
+    fixture = write("fixture.json", {"schema": "e01-startup-planned-fixture-v1", "case": "E01-startup", "database": str(database),
+        "database_initial_condition": "must-not-exist; actual create_new enforces original attempt", "immutable_root": "NOT_IN_SCOPE",
+        "global_store": "NOT_IN_SCOPE", "profile_config": {"pager_kib": 2048, "max_pages": None},
+        "owner_config": {"bytes": 8388608, "lifecycle_reserve": 65536, "namespaces": 16, "jobs_per_namespace": 16, "lifecycle_jobs_per_namespace": 2},
+        "values_are_planned_inputs_not_observed_outcomes": True})
+    trace = write("trace.json", {"schema": "e01-original-startup-planned-trace-v1", "case": "E01-startup",
+        "startup_attempts": 1, "after_ready_owner_diagnostics": ["post-ready", "pre-stop"], "after_ready_stop_attempts": 1,
+        "sql_probe_commands": "UNRUN-route_unavailable", "workspace_root_namespace": "NOT_IN_SCOPE",
+        "performance_samples": 0, "actual_outcomes": "NOT_YET_COLLECTED"})
+    cache = write("cache.json", {"schema": "e01-diagnostic-cache-applicability-v1", "cache_state": "uncontrolled",
+        "admission_eligible": False, "cold_attestation": "UNAVAILABLE", "observer_precision_overhead": "UNAVAILABLE",
+        "local_overlay_pager_file_cache": "UNCONTROLLED", "host_global_store": "NOT_IN_SCOPE", "linux_kernel_cgroup": "NOT_IN_SCOPE",
+        "setup_warmth_credit": "NO_COLD_OR_PERFORMANCE_CLAIM"})
+    topology = write("topology.json", {"schema": "cluster-two-e2-topology-witness-v1", "status": "OBSERVED",
+        "scope": "external-observed-execution-domain", "execution_kind": "standalone-host",
+        "source": "Python stdlib os.uname on actual preparation host; same native-host invocation required",
+        "observed_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(), "os": "macos", "architecture": "aarch64", "kernel": native.release,
+        "raw_uname": dict(zip(("system", "node", "release", "version", "machine"), native)), "helper": descriptor(Path(__file__))})
+    identity_path = prep / "identity-input.json"
+    argv = [str(binary), str(database), str(output), str(identity_path)]
+    cmd = write("command.json", {"schema": "cluster-two-e2-command-v1", "execution_kind": "standalone-host", "argv": argv,
+        "construction_environment": {"LAYERFS_CONSTRUCTION_WORKERS": "1"}, "global_persistence": "NOT_IN_SCOPE"})
+    identity = {"schema": "cluster-two-e2-identity-v1", "receipt_id": receipt_id, "source_commit": base_commit, "source_tree": base_tree,
+        "source_sealed": False, "source_arm": "diagnostic", "profile": "local-overlay-disposable", "cache_state": "uncontrolled",
+        "os": "macos", "architecture": "aarch64", "kernel": native.release, "execution_kind": "standalone-host",
+        "topology": {"status": "OBSERVED", "artifact": topology}, "command_artifact": cmd,
+        "image": {"status": "NOT_IN_SCOPE", "reason": "actual standalone macOS host; no Docker execution"},
+        "artifacts": {"product": product, "toolchain": toolchain, "cargo_config": descriptor(ROOT / ".cargo/config.toml"),
+            "cargo_lock": descriptor(ROOT / "core/Cargo.lock"), "dependencies": dependencies, "binary": descriptor(binary),
+            "driver": driver, "fixture": fixture, "trace": trace, "cache": cache, "observer": observer}}
+    require(len((json.dumps(identity, indent=2) + "\n").encode()) <= 16_384, "identity input window")
+    write("identity-input.json", identity)
+    preparation = write("preparation.json", {"schema": "ignored-e01-native-preparation-v1", "identity": descriptor(identity_path),
+        "base_commit": base_commit, "base_tree": base_tree, "source_sealed": False, "command": argv,
+        "output_not_created": True, "database_not_created": True, "qualification_status": "NOT_EVALUATED",
+        "e1_sample_status": "NOT_RUN", "e1_sample_count": 0, "admission_eligible": False})
+    print(json.dumps({"identity_input": str(identity_path), "preparation": preparation, "driver_argv": argv,
+        "driver_shell": "LAYERFS_CONSTRUCTION_WORKERS=1 " + shlex.join(argv), "validation_output": str(output),
+        "root": str(ROOT), "qualification_status": "NOT_EVALUATED", "admission_eligible": False}, indent=2))
+
+
+if __name__ == "__main__":
+    main()

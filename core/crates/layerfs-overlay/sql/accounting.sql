@@ -76,6 +76,14 @@ CREATE TRIGGER owned_scratch_account_delete AFTER DELETE ON owned_scratch BEGIN
     UPDATE accounting SET scratch_rows=scratch_rows-1,scratch_bytes=scratch_bytes-length(OLD.value) WHERE ns=0;
     UPDATE accounting SET scratch_rows=scratch_rows-1,scratch_bytes=scratch_bytes-length(OLD.value) WHERE ns=OLD.ns;
 END;
+CREATE TRIGGER indexed_scratch_account_insert AFTER INSERT ON indexed_scratch BEGIN
+    UPDATE accounting SET scratch_rows=scratch_rows+1,scratch_bytes=scratch_bytes+length(NEW.value) WHERE ns=0;
+    UPDATE accounting SET scratch_rows=scratch_rows+1,scratch_bytes=scratch_bytes+length(NEW.value) WHERE ns=NEW.ns;
+END;
+CREATE TRIGGER indexed_scratch_account_delete AFTER DELETE ON indexed_scratch BEGIN
+    UPDATE accounting SET scratch_rows=scratch_rows-1,scratch_bytes=scratch_bytes-length(OLD.value) WHERE ns=0;
+    UPDATE accounting SET scratch_rows=scratch_rows-1,scratch_bytes=scratch_bytes-length(OLD.value) WHERE ns=OLD.ns;
+END;
 CREATE TRIGGER orphan_account_insert AFTER INSERT ON orphan BEGIN
     UPDATE accounting SET orphan_rows=orphan_rows+1 WHERE ns=0;
     UPDATE accounting SET orphan_rows=orphan_rows+1 WHERE ns=NEW.ns;
@@ -175,6 +183,10 @@ END;
 CREATE TRIGGER owned_scratch_account_update AFTER UPDATE ON owned_scratch BEGIN
     UPDATE accounting SET scratch_bytes=scratch_bytes-(length(OLD.value))+(length(NEW.value)) WHERE ns=0;
     UPDATE accounting SET scratch_bytes=scratch_bytes-(length(OLD.value))+(length(NEW.value)) WHERE ns=NEW.ns;
+END;
+CREATE TRIGGER indexed_scratch_account_update AFTER UPDATE ON indexed_scratch BEGIN
+    UPDATE accounting SET scratch_bytes=scratch_bytes-length(OLD.value)+length(NEW.value) WHERE ns=0;
+    UPDATE accounting SET scratch_bytes=scratch_bytes-length(OLD.value)+length(NEW.value) WHERE ns=NEW.ns;
 END;
 CREATE TRIGGER maintenance_account_update AFTER UPDATE ON maintenance BEGIN
     UPDATE accounting SET ready_targets=ready_targets-(OLD.ready)+(NEW.ready) WHERE ns=0;

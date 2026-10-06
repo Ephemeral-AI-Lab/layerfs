@@ -490,3 +490,18 @@ release pass. This is R4/Q1 component readiness evidence; API-core/Sandbox/mount
 Exec/Commit, scale, complete R2 topology/provenance, crash/unknown recovery and E/Q
 qualification remain open. Init/history verdicts are unchanged. S9 stays
 CHECKPOINT/unchecked. [Source/check/LOC report](R4-UPSTREAM-CACHE-20261007.md).
+
+
+## Indexed record-provider and collector continuation (2026-10-07)
+
+The same daemon database now owns full-key indexed operation records with
+exact atomic preconditions, retained failure credits and automatic cleanup.
+This is a prerequisite for Content-backed construction, not its implementation.
+The E01 external example creates no Store/Root/Route and records only the actual
+local startup owner; global persistence remains NOT_IN_SCOPE. Runtime upstream
+proofs retain their exact small-fixture scope. Full topology/provenance,
+crash/unknown recovery, native application/Exec/Commit, scale and E/Q acceptance
+remain unfinished. S9 remains CHECKPOINT/unchecked; Init/history verdicts stay
+unchanged and the full goal continues.
+
+[Source, original diagnostics, failures and checks](K1-INDEXED-SCRATCH-E01-20261007.md).

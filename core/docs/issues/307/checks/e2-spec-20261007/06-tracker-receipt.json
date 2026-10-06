@@ -1,0 +1,15 @@
+{
+  "commit": "d6d9ad5a3f3dcbc52559ef5ac37f8839d275161f",
+  "source_tree": "821aafb81824801e4f0744d24168744a0ab10533",
+  "issue": 307,
+  "scope": "S7 E2 prospective specification only",
+  "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6025552580",
+  "body_sha256": "fd4d6e325df2cc06dfb823becaedde153ece7b8c351b5f995133496c765f0b39",
+  "attempts": 1,
+  "checklist": "not edited; S0/S7-S13 remain unchecked",
+  "production_LOC": {
+    "before": 162906,
+    "after": 162906,
+    "delta": 0
+  }
+}
