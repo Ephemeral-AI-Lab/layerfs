@@ -137,11 +137,11 @@ impl Fixture {
         }
         assert_eq!(seen, self.expected);
         assert_eq!(initialized.entries, self.expected.len() as u64 + 11);
-        assert!(!fs::read_dir(&self.path).unwrap().any(|entry| entry
-            .unwrap()
-            .file_name()
-            .to_string_lossy()
-            .starts_with("ordering-")));
+        assert!(!fs::read_dir(&self.path).unwrap().any(|entry| {
+            let name = entry.unwrap().file_name();
+            let name = name.to_string_lossy();
+            name.starts_with("ordering-") || name.starts_with("import-")
+        }));
     }
 }
 impl Drop for Fixture {

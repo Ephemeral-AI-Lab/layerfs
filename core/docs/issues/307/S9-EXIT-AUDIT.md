@@ -187,3 +187,45 @@ completion-fenced unknown-history resolver obligation, and public-API/real-Store
 qualification of interleaved Saves, fairness and repeated bound use. Greater-than
 4GiB native proof remains NOT_RUN. S9 remains CHECKPOINT/unchecked; S8 is a later
 batch; S10–S13 and P3/P6/P7/P13/P14 remain later Commit prerequisites.
+
+## Backed initial acquisition checkpoint (2026-10-06)
+
+[Architecture43](../../architecture/43-backed-initial-acquisition.md) moves every
+input-sized Project/import collection (scan entries, directory frontier, wide
+directory ordering, native identities, jobs, aliases, per-entry roots, inode rows
+and directory bindings) into operation-owned scratch and streams it into the public
+`build_directory`/`empty_directory`/`build_table` constructors. Initial acquisition
+no longer calls the resident whole-namespace `build_filesystem`. The selected
+backing is Content's existing public `OrderingBacking`/`FileBacking` ordering runs:
+append-only, written once then read, byte-charged, unsynchronized and released with
+a checked result before the tree Save finishes. A first SQLite-in-Project attempt
+was refused by the unchanged product boundary guard and withdrawn; no engine
+dependency, new dependency, public backing port or format change was introduced.
+Public `init`/`InitRequest`/`Initialized` are unchanged; `NamespaceWork` adds
+`sort_capacity_bytes` and `backing_bytes`. Order, serial reservation, alias binding,
+descriptor/path stability checks and one-attempt failure are preserved.
+
+Host: 12 Project bodies pass, including a public test requiring the published root
+to equal the `build_filesystem` root for a wide, nested, aliased tree, a 17 000-child
+directory ordered through merged runs, and a refused source that leaves no scratch
+or history. All-target Clippy with warnings denied, fmt, the 609-file boundary guard
+and 39 guard self-tests pass. Docker linux/arm64: build and Clippy pass; nine bodies
+pass; the unmodified, ungated `init_sqlite` test FAILED with `BackendUnavailable`
+from the macOS-only global Store before reaching Init, and the scaling body it
+blocked passed in one separate run. That failure and the withdrawn SQLite receipts
+are retained in [failures](checks/s9-backed-acquisition/FAILURES.md); the 894-input
+source cohort is in [identity](checks/s9-backed-acquisition/identity.json). Every
+test had an explicit <=120 s stop (Docker inner 110 s + 1 s); none was reached.
+Caches are uncontrolled. Init time and storage effect are NOT_RUN: no speed, RSS,
+page-cache or cold claim. Resident sorter state is fixed chunks and buffers plus run
+handles growing with the logarithm of the stream; Save-internal state is not bounded
+by this change.
+
+This closes the resident-collection defect of initial acquisition, not S9.
+Remaining S9 exits: owning application/daemon runtime assembly and supervision of
+the consumer ports, contextual authority/topology/provenance, exact disconnect/
+process-restart custody including the P10 completion-fenced unknown-history
+resolver obligation, and public-API/real-Store qualification of interleaved Saves,
+fairness and repeated bound use. Greater-than-4GiB native proof remains NOT_RUN.
+S9 remains CHECKPOINT/unchecked; S8 is a later batch; S10–S13 and
+P3/P6/P7/P13/P14 remain later Commit prerequisites.

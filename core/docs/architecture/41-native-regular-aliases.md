@@ -1,6 +1,7 @@
 # Native regular-file identity during initial acquisition
 
-> **Status:** Current general guide. S9 checkpoint; backed complete-root acceptance remains open.
+> **Status:** Current general guide. S9 checkpoint; identity rules are current. The resident grouping
+> mechanics below are superseded by [backed initial acquisition](43-backed-initial-acquisition.md).
 
 Project/import now groups its already retained regular-file job vector by native
 (device,inode,source index), using in-place unstable sorting. The first source

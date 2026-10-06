@@ -1,0 +1,14 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+    Finished `test` profile [optimized + debuginfo] target(s) in 6.77s
+  Executable unittests src/lib.rs (core/target/cluster2-runtime-tests/debug/deps/layerfs_project-cffae0e2b52819f6)
+  Executable tests/backed_acquisition.rs (core/target/cluster2-runtime-tests/debug/deps/backed_acquisition-56c879d1d2910153)
+  Executable tests/complete_root.rs (core/target/cluster2-runtime-tests/debug/deps/complete_root-7bc313d53b4b8645)
+  Executable tests/history_proof_memo.rs (core/target/cluster2-runtime-tests/debug/deps/history_proof_memo-63e0a379bb7f70d8)
+  Executable tests/init_memory.rs (core/target/cluster2-runtime-tests/debug/deps/init_memory-4dff77e098c7527d)
+  Executable tests/init_sqlite.rs (core/target/cluster2-runtime-tests/debug/deps/init_sqlite-a81263fb89d61840)
+  Executable tests/namespace_scaling.rs (core/target/cluster2-runtime-tests/debug/deps/namespace_scaling-9ba4bcc3e4bcccd6)

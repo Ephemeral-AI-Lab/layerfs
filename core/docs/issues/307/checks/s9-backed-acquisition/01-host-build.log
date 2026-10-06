@@ -1,0 +1,18 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+  Executable unittests src/lib.rs (core/target/cluster2-runtime-tests/debug/deps/layerfs_project-7d4c21b8c66cc64c)
+  Executable tests/backed_acquisition.rs (core/target/cluster2-runtime-tests/debug/deps/backed_acquisition-70fa28d510f41a52)
+  Executable tests/complete_root.rs (core/target/cluster2-runtime-tests/debug/deps/complete_root-543efb78e4be8ea7)
+  Executable tests/history_proof_memo.rs (core/target/cluster2-runtime-tests/debug/deps/history_proof_memo-546781d9752ea560)
+  Executable tests/init_memory.rs (core/target/cluster2-runtime-tests/debug/deps/init_memory-8618de25e1efaa36)
+  Executable tests/init_sqlite.rs (core/target/cluster2-runtime-tests/debug/deps/init_sqlite-17864c06a7d8d962)
+  Executable tests/namespace_scaling.rs (core/target/cluster2-runtime-tests/debug/deps/namespace_scaling-d7cbd8e8339eb94e)
+  Executable unittests examples/benchmark_history.rs (core/target/cluster2-runtime-tests/debug/examples/benchmark_history-2e734665f41f7a15)
+  Executable unittests examples/benchmark_init.rs (core/target/cluster2-runtime-tests/debug/examples/benchmark_init-8fdabd51a3482063)
+  Executable unittests examples/cause_namespace.rs (core/target/cluster2-runtime-tests/debug/examples/cause_namespace-b7547999867b8522)
+  Executable unittests examples/verify_history.rs (core/target/cluster2-runtime-tests/debug/examples/verify_history-aca5f07ee73d42bb)
+  Executable unittests examples/verify_namespace.rs (core/target/cluster2-runtime-tests/debug/examples/verify_namespace-7353531278a61e97)

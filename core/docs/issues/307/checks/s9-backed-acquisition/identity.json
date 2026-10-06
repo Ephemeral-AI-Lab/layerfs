@@ -1,0 +1,184 @@
+{
+  "state": "S9 CHECKPOINT; incomplete",
+  "parent": "90d7a2c5b063a8ece5bdd9a4f9261845f9584dfe",
+  "arrangement": "Content public OrderingBacking/OrderingRun with FileBacking; no engine dependency in the Project domain crate",
+  "source_map": {
+    "inputs": 894,
+    "cohort_sha256": "951255af1b33e941c7fcc1ddc0a288607094cf72c4f6bf80e555598ea9c1ff10",
+    "method": "SHA256 of sorted-key JSON map path->hex_sha256 over core/crates Rust/SQL/TOML inputs plus core/Cargo.lock and core/Cargo.toml (check runner); execution identity, not production LOC scope or a cache seal"
+  },
+  "final_identity_receipts": [
+    "03-host-build",
+    "04-host-tests",
+    "05-host-fmt",
+    "06-host-clippy",
+    "07-boundary-guard",
+    "08-guard-selftests",
+    "09-linux-build",
+    "10-linux-tests",
+    "11-linux-namespace-scaling",
+    "12-linux-clippy"
+  ],
+  "superseded_receipts": {
+    "01-host-build": "withdrawn SQLite-in-Project scratch; refused by the product boundary guard; retained, not evidence for the committed source",
+    "02-host-tests": "withdrawn SQLite-in-Project scratch; refused by the product boundary guard; retained, not evidence for the committed source"
+  },
+  "receipts": {
+    "01-host-build": {
+      "exit": 0,
+      "timeout_failed": false,
+      "wall_ns": 133843666,
+      "wall_timeout_s": 600,
+      "kind": "build",
+      "source_cohort_sha256": "df128acdd69ccd710cc6e398df16dcc668445313a0b2f64d0f3d7a264f5d3052",
+      "source_inputs": 894,
+      "log_sha256": "08675e9e59874cfa43707e7e3ba4d5ddebc00216a2d833d7be8ecd080cb054ec"
+    },
+    "02-host-tests": {
+      "exit": 0,
+      "timeout_failed": false,
+      "wall_ns": 13438144000,
+      "wall_timeout_s": 110,
+      "kind": "test",
+      "source_cohort_sha256": "df128acdd69ccd710cc6e398df16dcc668445313a0b2f64d0f3d7a264f5d3052",
+      "source_inputs": 894,
+      "log_sha256": "3ac20a623124c017e464a6f214a4b6aaa40e48eb44a87f207f35f6741e874cc6"
+    },
+    "03-host-build": {
+      "exit": 0,
+      "timeout_failed": false,
+      "wall_ns": 6819772042,
+      "wall_timeout_s": 600,
+      "kind": "build",
+      "source_cohort_sha256": "951255af1b33e941c7fcc1ddc0a288607094cf72c4f6bf80e555598ea9c1ff10",
+      "source_inputs": 894,
+      "log_sha256": "fa8831f848fd7c2bad947a8c2df5f64a6c9af7ef89bd7e2df7bc21ed5e2e8c4a"
+    },
+    "04-host-tests": {
+      "exit": 0,
+      "timeout_failed": false,
+      "wall_ns": 12889042500,
+      "wall_timeout_s": 120,
+      "kind": "test",
+      "source_cohort_sha256": "951255af1b33e941c7fcc1ddc0a288607094cf72c4f6bf80e555598ea9c1ff10",
+      "source_inputs": 894,
+      "log_sha256": "dbaa14ab04a0c5050fedb86357230676e7f84b8b5f1da2b48292725e9f8a73ad"
+    },
+    "05-host-fmt": {
+      "exit": 0,
+      "timeout_failed": false,
+      "wall_ns": 1338779542,
+      "wall_timeout_s": 120,
+      "kind": "check",
+      "source_cohort_sha256": "951255af1b33e941c7fcc1ddc0a288607094cf72c4f6bf80e555598ea9c1ff10",
+      "source_inputs": 894,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "06-host-clippy": {
+      "exit": 0,
+      "timeout_failed": false,
+      "wall_ns": 2623961167,
+      "wall_timeout_s": 600,
+      "kind": "build",
+      "source_cohort_sha256": "951255af1b33e941c7fcc1ddc0a288607094cf72c4f6bf80e555598ea9c1ff10",
+      "source_inputs": 894,
+      "log_sha256": "59cdf272a661a8ef8e5d3c939cf9172499ec488c563a455a187448f2a1920984"
+    },
+    "07-boundary-guard": {
+      "exit": 0,
+      "timeout_failed": false,
+      "wall_ns": 400218333,
+      "wall_timeout_s": 120,
+      "kind": "check",
+      "source_cohort_sha256": "951255af1b33e941c7fcc1ddc0a288607094cf72c4f6bf80e555598ea9c1ff10",
+      "source_inputs": 894,
+      "log_sha256": "fb8eb989aba67da23620c7c1b9def98483fbca608b91dfa8684a6c518d436441"
+    },
+    "08-guard-selftests": {
+      "exit": 0,
+      "timeout_failed": false,
+      "wall_ns": 289979500,
+      "wall_timeout_s": 120,
+      "kind": "test",
+      "source_cohort_sha256": "951255af1b33e941c7fcc1ddc0a288607094cf72c4f6bf80e555598ea9c1ff10",
+      "source_inputs": 894,
+      "log_sha256": "07dd9f0ee163f7d81ca2eba75087154093fb3730aca9916d9ca1ccb6c50636e0"
+    },
+    "09-linux-build": {
+      "exit": 0,
+      "timeout_failed": false,
+      "wall_ns": 10292098709,
+      "wall_timeout_s": 600,
+      "kind": "build",
+      "source_cohort_sha256": "951255af1b33e941c7fcc1ddc0a288607094cf72c4f6bf80e555598ea9c1ff10",
+      "source_inputs": 894,
+      "log_sha256": "05657373d768cd93bec9590a6bfc1a3844a8fb759f9df446f6fd9dde9610a04b"
+    },
+    "10-linux-tests": {
+      "exit": 101,
+      "timeout_failed": false,
+      "wall_ns": 2166428667,
+      "wall_timeout_s": 120,
+      "kind": "test",
+      "source_cohort_sha256": "951255af1b33e941c7fcc1ddc0a288607094cf72c4f6bf80e555598ea9c1ff10",
+      "source_inputs": 894,
+      "log_sha256": "89aefb3b9ab67a3a8f6142ae547e8c1456ad63cfec76b2fd4c57b537626a2f3a"
+    },
+    "11-linux-namespace-scaling": {
+      "exit": 0,
+      "timeout_failed": false,
+      "wall_ns": 1029408084,
+      "wall_timeout_s": 120,
+      "kind": "test",
+      "source_cohort_sha256": "951255af1b33e941c7fcc1ddc0a288607094cf72c4f6bf80e555598ea9c1ff10",
+      "source_inputs": 894,
+      "log_sha256": "6e860abea4b7c903709332d464e3649835c93a5967dc4c1696b986263465b3d2"
+    },
+    "12-linux-clippy": {
+      "exit": 0,
+      "timeout_failed": false,
+      "wall_ns": 2221075416,
+      "wall_timeout_s": 600,
+      "kind": "build",
+      "source_cohort_sha256": "951255af1b33e941c7fcc1ddc0a288607094cf72c4f6bf80e555598ea9c1ff10",
+      "source_inputs": 894,
+      "log_sha256": "9b478deb22569a93cc63bcdd4eb89df4c6d74cb058b81e2e466830f033ac8a2f"
+    }
+  },
+  "failed": {
+    "10-linux-tests": "exit 101: tests/init_sqlite.rs:25 Handles::create -> BackendUnavailable (global Store is macOS-only; test file unmodified and not cfg-gated). cargo stopped before tests/namespace_scaling.rs, which 11-linux-namespace-scaling then ran once. See FAILURES.md."
+  },
+  "not_run": [
+    "Init time/storage effect under a frozen measurement contract",
+    "greater-than-4GiB native proof",
+    "workspace-wide test sweep (no other crate depends on layerfs-project)"
+  ],
+  "cache": "uncontrolled; functional evidence only",
+  "project_production_sha256": {
+    "core/crates/layerfs-project/src/import/batch.rs": "ed8fe6e255295e75cde13005b35f107aa77eb20ee3388fc5be48b1819572c825",
+    "core/crates/layerfs-project/src/import/error.rs": "b8c60442a44c8e26dbbc31f132a2a93c2fc21c4603bc1d4cea717b7aeccfce6d",
+    "core/crates/layerfs-project/src/import/files.rs": "d087247fc3e99930bff97be06a695a571e854bf6053f20dc55b606f0b60a093e",
+    "core/crates/layerfs-project/src/import/init.rs": "d13e194cdab853daf63ed16d932c448f1726a01e16844e74c342665376163c81",
+    "core/crates/layerfs-project/src/import/metadata.rs": "f2eb6e30a4bb818223691acfc3a5b764780860dd7f8ed46df09eeb7a1d903057",
+    "core/crates/layerfs-project/src/import/mod.rs": "8a4602b4b143987ad0f04f2ef1280d12e96eeb7cffa214a5b0679f4e166feb6d",
+    "core/crates/layerfs-project/src/import/namespace.rs": "50a4b0583c3d0a2717300752dda5ed3401d0bb6ba1a067327aa25374fe49496e",
+    "core/crates/layerfs-project/src/import/runs.rs": "87183360e63c4002424284fbf1bdb9c0b0b9fdb5709684030093616f48c0189e",
+    "core/crates/layerfs-project/src/import/scan.rs": "e5fa6ddaaf36d1d95471792ea4db60205b18490b23924379ab484aab641b0642",
+    "core/crates/layerfs-project/src/import/scratch.rs": "d41487932e107e5f1614e6337e9e98a31245c7d69010e701c5b23d273d1cb606",
+    "core/crates/layerfs-project/src/import/source.rs": "c9d412c12950f304a49e275ae4a3fd351acc4921e49a9108657864594b440923",
+    "core/crates/layerfs-project/src/import/work.rs": "32867d1a73ecb3a3f4c8532dc74b689f5cb8d2bf180fb3fb6fe35679ff445883",
+    "core/crates/layerfs-project/src/lib.rs": "1d7efc6b941905fa9fd42339803a1bd181c10ffd30ef400f66cce3a0caf0b5e0"
+  },
+  "project_test_sha256": {
+    "core/crates/layerfs-project/tests/backed_acquisition.rs": "5468847e6f9821c4624c4e1ad166c0ee0894e193e7fdf986ea0e4d494e69c16c",
+    "core/crates/layerfs-project/tests/complete_root.rs": "16c24b3a204ff736aba1fc1a89ba3d937288af92a5381281696817fd4ad8569b",
+    "core/crates/layerfs-project/tests/history_proof_memo.rs": "e89f9b5044b1d061743268b32278e99718fab0cffbc0d88fa65b2c5817089575",
+    "core/crates/layerfs-project/tests/init_memory.rs": "6dab2be1b935bade97ea1f11a8cb09baafd820061df2e66012098365c76dd407",
+    "core/crates/layerfs-project/tests/init_sqlite.rs": "642df8ed712da27e1a1a13b7954183115b703084d638e6f6376e2b8906e9c2bc",
+    "core/crates/layerfs-project/tests/namespace_scaling.rs": "1974b1aefe9256e764555047f1eabd03e2f30b211d26cc14fa28c9387112a18b",
+    "core/crates/layerfs-project/tests/support/memory_history.rs": "5e878ebc862c377dce24e51735c6e66f4eda91172598fae5688777d3fd0227f5",
+    "core/crates/layerfs-project/tests/support/memory_objects.rs": "a4477a3d28267438708cadad2bc59043ba293a17d6557aa41c442b4e9220bae8",
+    "core/crates/layerfs-project/tests/support/mod.rs": "ca15ef69a56a274b4e51ed4e419a7785e673b61ddb32c2aabdb7aef4482e2b6f",
+    "core/crates/layerfs-project/tests/support/old_snapshot.rs": "2859253e7d9187b4c8ee5335a88f188cf8ce654577ef9f1dd7f59481bfd9a718"
+  }
+}

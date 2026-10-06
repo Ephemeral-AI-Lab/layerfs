@@ -1,0 +1,16 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s
+     Running tests/namespace_scaling.rs (core/target/cluster2-linux/debug/deps/namespace_scaling-354acd30e90eb5c9)
+
+running 1 test
+DIAGNOSTIC namespace-count-100 NamespaceWork { unique_files: 100, regular_aliases: 0, entries: 111, entry_capacity_bytes: 131072, jobs: 100, job_capacity_bytes: 118784, frontier: 10, frontier_capacity_bytes: 65536, directory_children: 10, child_vector_bytes: 1920, serial_capacity_bytes: 0, inode_capacity_bytes: 393216, directory_bindings: 110, directory_capacity_bytes: 0, change_capacity_bytes: 0, sort_capacity_bytes: 1179648, backing_bytes: 37760 }
+DIAGNOSTIC namespace-count-3000 NamespaceWork { unique_files: 3000, regular_aliases: 0, entries: 3011, entry_capacity_bytes: 131072, jobs: 3000, job_capacity_bytes: 118784, frontier: 10, frontier_capacity_bytes: 65536, directory_children: 300, child_vector_bytes: 61440, serial_capacity_bytes: 0, inode_capacity_bytes: 393216, directory_bindings: 3010, directory_capacity_bytes: 0, change_capacity_bytes: 0, sort_capacity_bytes: 1179648, backing_bytes: 1119460 }
+DIAGNOSTIC namespace-count-6000 NamespaceWork { unique_files: 6000, regular_aliases: 0, entries: 6011, entry_capacity_bytes: 131072, jobs: 6000, job_capacity_bytes: 118784, frontier: 10, frontier_capacity_bytes: 65536, directory_children: 600, child_vector_bytes: 61440, serial_capacity_bytes: 0, inode_capacity_bytes: 393216, directory_bindings: 6010, directory_capacity_bytes: 0, change_capacity_bytes: 0, sort_capacity_bytes: 1310720, backing_bytes: 2238460 }
+test backed_counts_grow_while_resident_buffers_stay_fixed ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+

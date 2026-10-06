@@ -1,36 +1,44 @@
-//! Count-driven namespace retention diagnostics; excludes opaque allocator/OS state.
-/// High-water retained collection counts and explicitly chargeable capacities.
-/// These fields do not establish a total importer memory bound.
+//! Count-driven acquisition diagnostics; excludes opaque allocator/OS state.
+/// Backed row counts and high-water resident buffer capacities.
+///
+/// Counts grow with the acquired root because they describe rows held in the
+/// operation's backed scratch. Capacity fields describe resident read buffers,
+/// queues and sort chunks. They exclude the owned names, targets and paths of
+/// rows being processed and do not establish a total importer memory bound.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NamespaceWork {
     /// Distinct native regular-file identities constructed once.
     pub unique_files: usize,
     /// Additional native paths sharing those regular-file identities.
     pub regular_aliases: usize,
-    /// Prepared namespace entries retained after scan.
+    /// Namespace entries placed in backing, including the root directory.
     pub entries: usize,
-    /// Prepared-entry vector capacity bytes plus owned name/target capacities.
+    /// Largest resident read-buffer capacity of the entry and alias streams.
     pub entry_capacity_bytes: usize,
-    /// File jobs retained before worker admission.
+    /// Native regular-file paths placed in backing before alias grouping.
     pub jobs: usize,
-    /// Job vector capacity bytes and owned path capacities.
+    /// Job stream read-buffer capacity plus the fixed worker queue's slot bytes.
     pub job_capacity_bytes: usize,
-    /// Maximum directory frontier length.
+    /// Maximum backed directory frontier length.
     pub frontier: usize,
-    /// Maximum frontier vector capacity plus owned path capacities.
+    /// Read-buffer capacity of the one frontier depth being scanned.
     pub frontier_capacity_bytes: usize,
-    /// Largest sorted directory-child collection.
+    /// Largest directory's child count; wide directories are ordered in backing.
     pub directory_children: usize,
-    /// Child vector capacity bytes; DirEntry's opaque internals are excluded.
+    /// Resident child buffer capacity bytes, at most one window of children.
     pub child_vector_bytes: usize,
-    /// Namespace serial vector capacity bytes.
+    /// Always zero: serials are derived from backed order, never collected.
     pub serial_capacity_bytes: usize,
-    /// Namespace inode vector capacity bytes, excluding opaque referenced values.
+    /// Read-buffer capacities of the streams merged into the inode table.
     pub inode_capacity_bytes: usize,
-    /// Directory binding rows retained before building the tree.
+    /// Directory binding rows streamed into the sorted constructors.
     pub directory_bindings: usize,
-    /// Directory update vector capacity bytes.
+    /// Always zero: no directory update collection is resident.
     pub directory_capacity_bytes: usize,
-    /// Directory change vector capacity bytes; owned PathName allocations excluded.
+    /// Always zero: bindings are streamed from backing, never collected.
     pub change_capacity_bytes: usize,
+    /// Largest resident sort chunk plus merge buffers of any backed ordering.
+    pub sort_capacity_bytes: usize,
+    /// Largest simultaneous scratch run bytes the operation owned.
+    pub backing_bytes: u64,
 }

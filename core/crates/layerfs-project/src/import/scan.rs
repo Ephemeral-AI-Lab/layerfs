@@ -1,333 +1,272 @@
-//! One operator-bound directory import into a single C2 save.
+//! One operator-bound directory scan into backed acquisition order.
+//!
+//! Positions are assigned breadth first with each directory's children in name
+//! byte order, so a parent's children are contiguous and ordered. Entries, the
+//! directory frontier and regular-file identities are written to scratch runs;
+//! one directory stream and one fixed child buffer are resident, and a directory
+//! wider than that buffer is ordered by the backed sorter.
+use crate::error::content;
 use crate::error::ProjectError as Failure;
-use crate::error::{content, storage};
-use crate::{
-    batch::{BatchProducer, Event, ImportBatch, QUEUE_SLOTS},
-    namespace::{ImportProgress, PreparedEntry},
+use crate::namespace::ImportProgress;
+use crate::runs::{Cursor, Run, Sorter, Writer};
+use crate::scratch::{
+    by_identity, by_name, by_position, decode_frontier, frontier_record, pair_record, Child, Job,
+    Scratch, Stamp, WINDOW_ROWS,
 };
-use layerfs_content::{construct_stream, ObjectId, PathName};
-use layerfs_history::RecordKind;
-use layerfs_storage::{Save, Storage};
-use layerfs_telemetry::timer::{Active, Timing, TimingScope};
+use layerfs_content::{inode_leaf::InodeKind, PathName};
 use std::{
-    collections::VecDeque,
-    fs::{self, File, Metadata},
-    os::unix::{ffi::OsStrExt, fs::MetadataExt},
-    path::{Path, PathBuf},
-    sync::{mpsc, Mutex},
-    time::{Duration, Instant},
+    ffi::OsStr,
+    fs::{self, Metadata},
+    os::unix::ffi::OsStrExt,
+    path::Path,
 };
 
-const INIT_WORKERS: usize = 4;
-
-struct Job {
-    index: usize,
-    path: PathBuf,
-    dev: u64,
-    ino: u64,
-    len: u64,
-    mtime: i64,
-    mtime_nsec: i64,
-    ctime: i64,
-    ctime_nsec: i64,
-    mode: u32,
+/// What one completed scan placed in backing.
+pub(crate) struct Scanned {
+    /// Entries, including the root directory.
+    pub entries: u64,
+    /// True when at least one directory bound no child.
+    pub childless: bool,
+    /// Every entry in position order.
+    pub entry_run: Run,
 }
 
-pub(crate) fn scan_and_save(
-    source: &Path,
-    store: &Storage,
-    progress: &mut ImportProgress,
-    timer: &TimingScope<'_, Active>,
-) -> Result<Vec<PreparedEntry>, Failure> {
-    let root_metadata = fs::symlink_metadata(source)?;
-    if !root_metadata.is_dir() || root_metadata.file_type().is_symlink() {
+/// Regular-file identities after later paths were bound to their first.
+pub(crate) struct Identities {
+    /// First path of every native identity, in identity order.
+    pub jobs: Run,
+    /// Every later path with its first position, in position order.
+    pub aliases: Run,
+    /// First position and later-path count of each shared identity, by position.
+    pub counts: Run,
+}
+
+/// Refuses a source that is not itself one real directory.
+pub(crate) fn check_root(source: &Path) -> Result<Metadata, Failure> {
+    let metadata = fs::symlink_metadata(source)?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
         return Err(Failure::InvalidInput);
     }
-    let save = store.begin_save().map_err(storage)?;
+    Ok(metadata)
+}
 
-    let scanned = timer.child("history.import_scan").run(|_| {
-        let mut entries = vec![entry(
-            0,
-            Vec::new(),
-            RecordKind::Directory,
-            &root_metadata,
-            None,
-        )?];
-        let mut jobs = Vec::new();
-        let mut pending = VecDeque::from([(source.to_path_buf(), 0usize)]);
-        while let Some((directory, parent)) = pending.pop_front() {
-            progress.work.frontier = progress.work.frontier.max(pending.len() + 1);
-            progress.work.frontier_capacity_bytes = progress.work.frontier_capacity_bytes.max(
-                pending.capacity() * std::mem::size_of::<(PathBuf, usize)>()
-                    + pending.iter().map(|(p, _)| p.capacity()).sum::<usize>()
-                    + directory.capacity(),
-            );
+/// Positions being assigned while one directory's children are placed.
+struct Placement {
+    next: u64,
+    frontier: usize,
+    files: usize,
+    entries: Writer,
+    natives: Sorter,
+}
+impl Placement {
+    fn place(
+        &mut self,
+        scratch: &mut Scratch,
+        level: &mut Writer,
+        parent: u64,
+        directory: &Path,
+        child: &Child,
+    ) -> Result<(), Failure> {
+        let id = self.next;
+        self.next = id.checked_add(1).ok_or(Failure::Capacity)?;
+        self.entries.push(&child.entry(id, parent)?)?;
+        let path = directory.join(OsStr::from_bytes(&child.name));
+        match child.kind {
+            InodeKind::Directory => {
+                self.frontier += 1;
+                level.push(&frontier_record(id, &path))
+            }
+            InodeKind::RegularFile => {
+                self.files += 1;
+                let job = Job {
+                    id,
+                    canonical: id,
+                    path,
+                    stamp: child.stamp,
+                };
+                self.natives.push(scratch.backing(), &job.native_record())
+            }
+            InodeKind::Symlink => Ok(()),
+        }
+    }
+}
+
+/// Returns the entries and the regular-file identities in identity order.
+pub(crate) fn scan(
+    source: &Path,
+    root: &Metadata,
+    scratch: &mut Scratch,
+    progress: &mut ImportProgress,
+) -> Result<(Scanned, Run), Failure> {
+    let root = Child {
+        name: Vec::new(),
+        kind: InodeKind::Directory,
+        target: None,
+        stamp: Stamp::of(root),
+    };
+    let mut placement = Placement {
+        next: 1,
+        frontier: 1,
+        files: 0,
+        entries: Writer::new(scratch.backing())?,
+        natives: Sorter::new(by_identity, progress.deadline()),
+    };
+    placement.entries.push(&root.entry(0, 0)?)?;
+    let mut level = Writer::new(scratch.backing())?;
+    level.push(&frontier_record(0, source))?;
+    let mut level = level.finish()?;
+    let mut wide = Sorter::new(by_name, progress.deadline());
+    let mut childless = false;
+    let mut buffer: Vec<Child> = Vec::new();
+    // One frontier run per depth: read to its end while the next is written.
+    while !level.is_empty() {
+        let mut deeper = Writer::new(scratch.backing())?;
+        let mut pending = Cursor::new(&level, decode_frontier);
+        while let Some((parent, directory)) = pending.next()? {
+            progress.work.frontier = progress.work.frontier.max(placement.frontier);
+            placement.frontier -= 1;
             progress.tick()?;
-            let mut children = fs::read_dir(&directory)?.collect::<Result<Vec<_>, _>>()?;
-            progress.work.directory_children = progress.work.directory_children.max(children.len());
+            let (mut count, mut spilled) = (0usize, false);
+            for child in fs::read_dir(&directory)? {
+                progress.tick()?;
+                let child = child?;
+                buffer.push(observe(&child.path(), child.file_name().as_bytes())?);
+                count += 1;
+                if buffer.len() == WINDOW_ROWS {
+                    // A wide directory is ordered in backing, not by a resident sort.
+                    for child in buffer.drain(..) {
+                        wide.push(scratch.backing(), &child.record()?)?;
+                    }
+                    spilled = true;
+                }
+            }
+            progress.work.directory_children = progress.work.directory_children.max(count);
             progress.work.child_vector_bytes = progress
                 .work
                 .child_vector_bytes
-                .max(children.capacity() * std::mem::size_of::<fs::DirEntry>());
-            children.sort_by(|a, b| a.file_name().as_bytes().cmp(b.file_name().as_bytes()));
-            for child in children {
-                progress.tick()?;
-                let path = child.path();
-                let name = child.file_name().as_bytes().to_vec();
-                PathName::from_bytes(&name).map_err(content)?;
-                let metadata = fs::symlink_metadata(&path)?;
-                let kind = if metadata.file_type().is_symlink() {
-                    RecordKind::Symlink
-                } else if metadata.is_dir() {
-                    RecordKind::Directory
-                } else if metadata.is_file() {
-                    RecordKind::RegularFile
-                } else {
-                    return Err(Failure::Unsupported);
-                };
-                if kind == RecordKind::RegularFile {
-                    jobs.push(Job {
-                        index: entries.len(),
-                        path: path.clone(),
-                        dev: metadata.dev(),
-                        ino: metadata.ino(),
-                        len: metadata.len(),
-                        mtime: metadata.mtime(),
-                        mtime_nsec: metadata.mtime_nsec(),
-                        ctime: metadata.ctime(),
-                        ctime_nsec: metadata.ctime_nsec(),
-                        mode: metadata.mode(),
-                    });
+                .max(buffer.capacity() * std::mem::size_of::<Child>());
+            childless |= count == 0;
+            if spilled {
+                for child in buffer.drain(..) {
+                    wide.push(scratch.backing(), &child.record()?)?;
                 }
-                let index = entries.len();
-                let mut prepared = entry(parent, name, kind, &metadata, None)?;
-                if kind == RecordKind::Symlink {
-                    prepared.target = Some(super::source::read_link(&path, &metadata)?);
+                let ordered = wide.finish(scratch.backing())?;
+                let mut children = Cursor::new(&ordered, Child::decode);
+                while let Some(child) = children.next()? {
+                    progress.tick()?;
+                    placement.place(scratch, &mut deeper, parent, &directory, &child)?;
                 }
-                entries.push(prepared);
-                if kind == RecordKind::Directory {
-                    pending.push_back((path, index));
+            } else {
+                buffer.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+                for child in buffer.drain(..) {
+                    placement.place(scratch, &mut deeper, parent, &directory, &child)?;
                 }
             }
         }
-        let groups = prepare_aliases(&mut entries, &mut jobs)?;
-        progress.work.unique_files = groups;
-        progress.work.regular_aliases = jobs.len() - groups;
-        progress.work.entries = entries.len();
-        progress.work.entry_capacity_bytes = entries.capacity()
-            * std::mem::size_of::<PreparedEntry>()
-            + entries
-                .iter()
-                .map(|e| e.name.capacity() + e.target.as_ref().map_or(0, Vec::capacity))
-                .sum::<usize>();
-        progress.work.jobs = jobs.len();
-        progress.work.job_capacity_bytes = jobs.capacity() * std::mem::size_of::<Job>()
-            + jobs.iter().map(|j| j.path.capacity()).sum::<usize>();
-        Ok((entries, jobs))
-    });
-    let scanned = scanned.and_then(|(mut entries, jobs)| {
-        timer
-            .child("history.import_files")
-            .run(|_| save_files(&mut entries, jobs, store, &save, progress))?;
-        Ok(entries)
-    });
-    let scanned = scanned.and_then(|entries| {
-        progress.tick()?;
-        Ok(entries)
-    });
-    let entries = scanned?;
-    timer
-        .child("history.import_finish_save")
-        .run(|_| save.finish().map_err(storage))?;
-    Ok(entries)
-}
-
-fn save_files(
-    entries: &mut [PreparedEntry],
-    jobs: Vec<Job>,
-    store: &Storage,
-    save: &Save<'_>,
-    progress: &mut ImportProgress,
-) -> Result<(), Failure> {
-    let remaining = progress.work.unique_files;
-    // The already retained job vector is sorted by native identity. Borrowed
-    // groups avoid an additional input-sized alias map or group collection.
-    let queue = Mutex::new(0usize);
-    let policy = store.policy().construction();
-    let capacities = policy.capacities();
-    let deadline = progress.deadline();
-    std::thread::scope(|workers| -> Result<(), Failure> {
-        let (sender, receiver) = mpsc::sync_channel::<ImportBatch>(QUEUE_SLOTS);
-        for _ in 0..INIT_WORKERS {
-            let sender = sender.clone();
-            let queue = &queue;
-            let jobs = &jobs;
-            workers.spawn(move || {
-                let mut producer = BatchProducer::new(&sender);
-                loop {
-                    let (start, end) = {
-                        let mut next = queue.lock().expect("import queue poisoned");
-                        if *next == jobs.len() {
-                            break;
-                        }
-                        let start = *next;
-                        let first = &jobs[start];
-                        let end = start
-                            + jobs[start..].partition_point(|job| {
-                                job.dev == first.dev && job.ino == first.ino
-                            });
-                        *next = end;
-                        (start, end)
-                    };
-                    let job = &jobs[start];
-                    let index = job.index;
-                    let result = construct_file(job, policy, &capacities, &mut producer, deadline)
-                        .and_then(|root| {
-                            for alias in &jobs[start..end] {
-                                if !matches_metadata(alias, &fs::symlink_metadata(&alias.path)?) {
-                                    return Err(Failure::InvalidInput);
-                                }
-                            }
-                            Ok(root)
-                        });
-                    if producer.done(index, result).is_err() {
-                        return;
-                    }
-                }
-                let _ = producer.flush();
-            });
-        }
-        drop(sender);
-        let mut finished = 0;
-        while finished < remaining {
-            progress.tick()?;
-            let batch = match receiver.recv_timeout(Duration::from_millis(500)) {
-                Ok(batch) => batch,
-                Err(mpsc::RecvTimeoutError::Timeout) => continue,
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    return Err(Failure::WorkerUnavailable)
-                }
-            };
-            for event in batch.events {
-                match event {
-                    Event::Object(object) => save.accept(object).map_err(storage)?,
-                    Event::Done(index, result) => {
-                        entries.get_mut(index).ok_or(Failure::InvalidInput)?.content =
-                            Some(result?);
-                        finished += 1;
-                    }
-                }
-            }
-        }
-        Ok(())
-    })
-}
-
-fn construct_file(
-    job: &Job,
-    policy: layerfs_content::ConstructionPolicy,
-    capacities: &layerfs_content::ConstructionCapacities,
-    producer: &mut BatchProducer<'_>,
-    deadline: Instant,
-) -> Result<ObjectId, Failure> {
-    if Instant::now() >= deadline {
-        return Err(Failure::Deadline);
+        progress.work.frontier_capacity_bytes = progress
+            .work
+            .frontier_capacity_bytes
+            .max(pending.resident_bytes());
+        drop(pending);
+        level = deeper.finish()?;
     }
-    let mut file = File::open(&job.path)?;
-    let opened = file.metadata()?;
-    if !matches_metadata(job, &opened) {
-        return Err(Failure::InvalidInput);
-    }
-    let (result, _) = Timing::disabled("history.import_file", |scope| {
-        construct_stream(
-            policy,
-            capacities,
-            &mut file,
-            producer,
-            scope.child("content.construct"),
-        )
-    });
-    let built = result.map_err(content)?;
-    let after = file.metadata()?;
-    if built.logical_len != job.len || !matches_metadata(job, &after) {
-        return Err(Failure::InvalidInput);
-    }
-    if Instant::now() >= deadline {
-        return Err(Failure::Deadline);
-    }
-    Ok(built.root)
-}
-
-fn entry(
-    parent: usize,
-    name: Vec<u8>,
-    kind: RecordKind,
-    metadata: &Metadata,
-    content: Option<ObjectId>,
-) -> Result<PreparedEntry, Failure> {
-    // The existing portable symlink grammar fixes mode0777, including on hosts
-    // whose lstat exposes umask-dependent link bits. Regular/directory bits stay
-    // exact; read_link still compares the native link's original metadata.
-    let mode = if kind == RecordKind::Symlink {
-        0o777
-    } else {
-        metadata.mode() & 0o7777
+    let work = &mut progress.work;
+    work.entries = usize::try_from(placement.next).map_err(|_| Failure::Capacity)?;
+    work.jobs = placement.files;
+    let natives = placement.natives.finish(scratch.backing())?;
+    work.sort_capacity_bytes = work
+        .sort_capacity_bytes
+        .max(wide.resident_bytes())
+        .max(placement.natives.resident_bytes());
+    let scanned = Scanned {
+        entries: placement.next,
+        childless,
+        entry_run: placement.entries.finish()?,
     };
-    let mask = if kind == RecordKind::Directory {
-        0o1777
+    Ok((scanned, natives))
+}
+
+/// Observes one child without following it; an unsupported kind is refused.
+fn observe(path: &Path, name: &[u8]) -> Result<Child, Failure> {
+    PathName::from_bytes(name).map_err(content)?;
+    let metadata = fs::symlink_metadata(path)?;
+    let (kind, target) = if metadata.file_type().is_symlink() {
+        let target = super::source::read_link(path, &metadata)?;
+        (InodeKind::Symlink, Some(target))
+    } else if metadata.is_dir() {
+        (InodeKind::Directory, None)
+    } else if metadata.is_file() {
+        (InodeKind::RegularFile, None)
     } else {
-        0o777
+        return Err(Failure::Unsupported);
     };
-    if mode & !mask != 0 || !(0..1_000_000_000).contains(&metadata.mtime_nsec()) {
-        return Err(Failure::InvalidInput);
-    }
-    Ok(PreparedEntry {
-        alias: None,
-        parent,
-        name,
+    Ok(Child {
+        name: name.to_vec(),
         kind,
-        mode,
-        mtime_seconds: metadata.mtime(),
-        mtime_nanoseconds: metadata.mtime_nsec() as u32,
-        content,
-        target: None,
+        target,
+        stamp: Stamp::of(&metadata),
     })
 }
-fn matches_metadata(job: &Job, metadata: &Metadata) -> bool {
-    metadata.is_file()
-        && !metadata.file_type().is_symlink()
-        && metadata.dev() == job.dev
-        && metadata.ino() == job.ino
-        && metadata.len() == job.len
-        && metadata.mode() == job.mode
-        && metadata.mtime() == job.mtime
-        && metadata.mtime_nsec() == job.mtime_nsec
-        && metadata.ctime() == job.ctime
-        && metadata.ctime_nsec() == job.ctime_nsec
-}
-fn prepare_aliases(entries: &mut [PreparedEntry], jobs: &mut [Job]) -> Result<usize, Failure> {
-    jobs.sort_unstable_by_key(|job| (job.dev, job.ino, job.index));
-    let mut first: Option<&Job> = None;
+
+/// Binds every later path of one native identity to its first entry, leaving
+/// one constructed regular file per `(dev, ino)`.
+pub(crate) fn group_aliases(
+    natives: Run,
+    scratch: &mut Scratch,
+    progress: &mut ImportProgress,
+) -> Result<Identities, Failure> {
+    let mut ordered = Cursor::new(&natives, Job::native);
+    let mut jobs = Writer::new(scratch.backing())?;
+    let mut aliases = Sorter::new(by_position, progress.deadline());
+    let mut counts = Sorter::new(by_position, progress.deadline());
+    // First position, its evidence and the later paths seen for it so far.
+    let mut first: Option<(u64, Stamp, u64)> = None;
     let mut groups = 0;
-    for job in jobs.iter() {
-        match first {
-            Some(original) if original.dev == job.dev && original.ino == job.ino => {
-                if original.len != job.len
-                    || original.mode != job.mode
-                    || original.mtime != job.mtime
-                    || original.mtime_nsec != job.mtime_nsec
-                    || original.ctime != job.ctime
-                    || original.ctime_nsec != job.ctime_nsec
-                {
+    loop {
+        let job = ordered.next()?;
+        progress.tick()?;
+        match (&mut first, &job) {
+            (Some((canonical, stamp, later)), Some(job))
+                if stamp.dev == job.stamp.dev && stamp.ino == job.stamp.ino =>
+            {
+                if *stamp != job.stamp {
                     return Err(Failure::InvalidInput);
                 }
-                entries[job.index].alias = Some(original.index);
+                let alias = Job {
+                    id: job.id,
+                    canonical: *canonical,
+                    path: job.path.clone(),
+                    stamp: job.stamp,
+                };
+                aliases.push(scratch.backing(), &alias.alias_record())?;
+                *later += 1;
+                continue;
             }
-            _ => {
-                first = Some(job);
-                groups += 1;
+            (Some((canonical, _, later)), _) if *later > 0 => {
+                counts.push(scratch.backing(), &pair_record(*canonical, *later))?;
             }
+            _ => (),
         }
+        let Some(job) = job else {
+            break;
+        };
+        jobs.push(&job.native_record())?;
+        first = Some((job.id, job.stamp, 0));
+        groups += 1;
     }
-    Ok(groups)
+    let work = &mut progress.work;
+    work.unique_files = groups;
+    work.regular_aliases = work.jobs - groups;
+    work.job_capacity_bytes = ordered.resident_bytes();
+    drop(ordered);
+    let identities = Identities {
+        jobs: jobs.finish()?,
+        aliases: aliases.finish(scratch.backing())?,
+        counts: counts.finish(scratch.backing())?,
+    };
+    work.sort_capacity_bytes = work
+        .sort_capacity_bytes
+        .max(aliases.resident_bytes())
+        .max(counts.resident_bytes());
+    Ok(identities)
 }

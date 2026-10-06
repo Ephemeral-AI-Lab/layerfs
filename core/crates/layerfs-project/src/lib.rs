@@ -6,13 +6,19 @@ pub use error::{ProjectError, ProjectResult};
 #[cfg(unix)]
 pub(crate) use import::batch;
 pub(crate) use import::error;
+#[cfg(unix)]
+pub(crate) use import::files;
 pub(crate) use import::init;
 #[cfg(unix)]
 pub(crate) use import::metadata;
 #[cfg(unix)]
 pub(crate) use import::namespace;
 #[cfg(unix)]
+pub(crate) use import::runs;
+#[cfg(unix)]
 pub(crate) use import::scan;
+#[cfg(unix)]
+pub(crate) use import::scratch;
 pub use init::{init, InitRequest, Initialized};
 
 pub(crate) use import::work as namespace_work;

@@ -61,5 +61,6 @@ The original warning-denying failure remains in the checkpoint failure ledger.
 per native device/inode, construct its payload once and distinguish separate files
 with equal bytes. Original path-count reservations are consumed without recycling.
 Pre/post descriptor and path observations include mode/ctime as well as identity/
-length/mtime. Existing resident scan/input collections still require backing; this
-identity correction does not establish full-root bounded acceptance.
+length/mtime. At that checkpoint resident scan/input collections still required
+backing; [backed initial acquisition](43-backed-initial-acquisition.md) now holds
+them in operation scratch. Neither change establishes full S9 acceptance.

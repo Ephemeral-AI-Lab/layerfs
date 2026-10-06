@@ -1,0 +1,67 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.18s
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_project-21b6bef1262321bf)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/backed_acquisition.rs (core/target/cluster2-linux/debug/deps/backed_acquisition-dfba30bfb87e91d8)
+
+running 3 tests
+test refused_source_removes_scratch_and_publishes_no_history ... ok
+S9_BACKED_ACQUISITION entries=1314 work=NamespaceWork { unique_files: 1302, regular_aliases: 2, entries: 1314, entry_capacity_bytes: 131072, jobs: 1304, job_capacity_bytes: 118784, frontier: 4, frontier_capacity_bytes: 65536, directory_children: 1302, child_vector_bytes: 61440, serial_capacity_bytes: 0, inode_capacity_bytes: 458752, directory_bindings: 1313, directory_capacity_bytes: 0, change_capacity_bytes: 0, sort_capacity_bytes: 1179648, backing_bytes: 495971 }
+test wide_nested_aliased_root_equals_the_whole_namespace_constructor ... ok
+S9_BACKED_ACQUISITION_WIDE work=NamespaceWork { unique_files: 0, regular_aliases: 0, entries: 17002, entry_capacity_bytes: 131072, jobs: 0, job_capacity_bytes: 118784, frontier: 1, frontier_capacity_bytes: 65536, directory_children: 17000, child_vector_bytes: 61440, serial_capacity_bytes: 0, inode_capacity_bytes: 393216, directory_bindings: 17001, directory_capacity_bytes: 0, change_capacity_bytes: 0, sort_capacity_bytes: 2228224, backing_bytes: 35303848 }
+test very_wide_directory_is_ordered_through_merged_runs ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.34s
+
+     Running tests/complete_root.rs (core/target/cluster2-linux/debug/deps/complete_root-cf3c82a49ea1d8cf)
+
+running 1 test
+S9_COMPLETE_ROOT entries=25 work=NamespaceWork { unique_files: 8, regular_aliases: 1, entries: 25, entry_capacity_bytes: 131072, jobs: 9, job_capacity_bytes: 118784, frontier: 5, frontier_capacity_bytes: 65536, directory_children: 12, child_vector_bytes: 1920, serial_capacity_bytes: 0, inode_capacity_bytes: 458752, directory_bindings: 24, directory_capacity_bytes: 0, change_capacity_bytes: 0, sort_capacity_bytes: 1179648, backing_bytes: 4850 }
+test native_import_keeps_ignored_git_dependencies_outputs_and_exact_link_targets ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/history_proof_memo.rs (core/target/cluster2-linux/debug/deps/history_proof_memo-319de1b77b0fe5b5)
+
+running 4 tests
+test mixed_hits_misses_duplicates_and_order_keep_exact_bytes ... ok
+test short_source_batch_is_refused_before_cache_admission ... ok
+test identity_and_missing_failures_are_not_cached ... ok
+test eviction_respects_both_fixed_bounds_and_fresh_invocation_starts_empty ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/init_memory.rs (core/target/cluster2-linux/debug/deps/init_memory-2378e72a99440190)
+
+running 1 test
+DIAGNOSTIC init-memory-100 Diagnostics { policy: 1, locate: 4, read_packs: 0, read_pack_selections: 1, whole_selected: 1, whole_due_density: 0, whole_due_singleton: 0, whole_due_small: 1, whole_due_reuse: 0, range_selected: 0, range_scan_bytes: 0, range_acquired_bytes: 0, range_materialized_bytes: 0, value_groups: 2, signatures: 1, reserve: 2, publish: 4, payload_reads: 1, payload_read_bytes: 377, pack_read_bytes: 0, pack_write_bytes: 18344, pooled_packs: 1, pooled_groups: 2, reserved_directory_bytes: 4096, ordinal_reservations: 1, locator_hits: 437, locator_misses: 137, locator_evictions: 0, locator_eviction_probes: 0, locator_second_chances: 0, locator_bookkeeping_live_peak_bytes: 48, pack_hits: 297, pack_misses: 1, pack_evictions: 0, pack_evicted_bytes: 0, directory_validations: 597, directory_unshared_walks: 597, directory_entry_bounds: 597, prefetch_group_decodes: 0, forced_seals: 0 }
+DIAGNOSTIC init-memory-1000 Diagnostics { policy: 1, locate: 7, read_packs: 0, read_pack_selections: 2, whole_selected: 2, whole_due_density: 0, whole_due_singleton: 0, whole_due_small: 2, whole_due_reuse: 0, range_selected: 0, range_scan_bytes: 0, range_acquired_bytes: 0, range_materialized_bytes: 0, value_groups: 2, signatures: 1, reserve: 4, publish: 6, payload_reads: 2, payload_read_bytes: 2891, pack_read_bytes: 0, pack_write_bytes: 125116, pooled_packs: 1, pooled_groups: 20, reserved_directory_bytes: 4096, ordinal_reservations: 3, locator_hits: 4105, locator_misses: 1158, locator_evictions: 0, locator_eviction_probes: 0, locator_second_chances: 0, locator_bookkeeping_live_peak_bytes: 56, pack_hits: 3169, pack_misses: 2, pack_evictions: 0, pack_evicted_bytes: 0, directory_validations: 6350, directory_unshared_walks: 6350, directory_entry_bounds: 6350, prefetch_group_decodes: 0, forced_seals: 0 }
+test init_100_and_1000_over_memory_ports_pass_the_full_namespace_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running tests/init_sqlite.rs (core/target/cluster2-linux/debug/deps/init_sqlite-660b519c20e1e860)
+
+running 1 test
+
+thread 'selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle' panicked at crates/layerfs-project/tests/init_sqlite.rs:25:14:
+called `Result::unwrap()` on an `Err` value: BackendUnavailable
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle ... FAILED
+
+failures:
+
+failures:
+    selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p layerfs-project --test init_sqlite`

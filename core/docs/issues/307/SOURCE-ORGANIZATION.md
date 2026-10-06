@@ -360,6 +360,11 @@ core/crates/layerfs-project/src/
 This move does not remove existing import limitations or qualify faithful bounded
 initial root acquisition. Those remain their owning implementation prerequisites.
 
+Later S9 checkpoints added `source.rs` (opaque link reads), `files.rs` (single-owner
+file construction), `runs.rs` (ordering-run writer/cursor/sorter) and `scratch.rs`
+(scratch lifecycle and record grammar) to the same `import/` directory. See
+[backed initial acquisition](../../architecture/43-backed-initial-acquisition.md).
+
 ## History
 
 The active History package owns portable semantic contracts, identities, requests,
