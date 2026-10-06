@@ -8,7 +8,30 @@ The [implementation plan](../303/07-implementation-validation.md) owns milestone
 dependencies and exits. S1–S6 are complete with their exit audits and covering evidence. S0 and S7–S13 remain
 unchecked until their complete implementation and required evidence exist.
 
-## Current checkpoint (2026-10-06, S7–S9 batch)
+## Current completion plan (2026-10-07)
+
+The [complete S7–S13 plan](IMPLEMENTATION-PLAN-S7-S13-20261007.md) now owns
+remaining-work ordering for a whole-cluster-two assignment, with its
+[performance criteria](PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md). It reconciles
+the completed Claude Code session **Codex progress and performance vs cluster one**
+at local `main` `f0e9bcfd119118d8dcbbededd7c74f394a8d34c7`. The product subtree
+`e67f06e72239363ffb8614ed5cecc08d1e906474` exactly matches `4a207cea1`.
+
+The [latest restoration report](INCUMBENT-RESTORATION-RESULTS-20261007.md) records
+six passing history comparisons and eight Init speed/allocation failures.
+History bypasses acquisition tables and does not qualify Project or runtime.
+A1–A4 remain delivered; R1–R4/E1–E4/Q1 and S7/S8/S9 remain incomplete. Native FUSE,
+API-core and Sandbox remain excluded until real replacements are implemented.
+Next ready: reconcile tracker/source, then R1 supervision and E1 registration.
+
+The plan schedules native tests during S8, real command workloads with S8/S9,
+complete LayerFS Commit/remount proof with S10, final qualification in S12 and
+reference retirement only in S13. It adds no product implementation, benchmark
+sample or milestone completion. Existing failed/ineligible/unrun evidence and
+the completed S5/S6 stopping record remain unchanged. The planning source/LOC
+receipt is recorded separately; no push/release/deployment is implied.
+
+## Historical checkpoint (2026-10-06, S7–S9 batch)
 
 The primary checkout and tracker reconcile to S6 product983c2ee6d, tree
 be2744223a450eaa01b9f31c4e3c850bbd141d72, receipt/handoff4ecea4198.

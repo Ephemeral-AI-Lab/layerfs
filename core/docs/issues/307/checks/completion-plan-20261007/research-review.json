@@ -1,0 +1,36 @@
+{
+  "kind": "documentation-research-and-review",
+  "date": "2026-10-07",
+  "source_commit": "f0e9bcfd119118d8dcbbededd7c74f394a8d34c7",
+  "source_tree": "71100d82ab71b665757be1875297f0116ad86abb",
+  "core_product_tree": "e67f06e72239363ffb8614ed5cecc08d1e906474",
+  "restored_core_product_tree": "e67f06e72239363ffb8614ed5cecc08d1e906474",
+  "completed_claude_session": {
+    "title": "Codex progress and performance vs cluster one",
+    "final_message_time_utc": "2026-10-06T18:25:09.477Z",
+    "evidence": "core/docs/issues/307/INCUMBENT-RESTORATION-RESULTS-20261007.md"
+  },
+  "subagent_reviews": [
+    {
+      "scope": "S8/FUSE/#305/optimizations",
+      "result": "Reviewed; explicit selected profile and disposable savepoint acknowledgement wording corrected"
+    },
+    {
+      "scope": "S9/S10/prerequisites/folder structure",
+      "result": "Reviewed; no blockers"
+    },
+    {
+      "scope": "S7/performance/S12",
+      "result": "Reviewed; complete F3 lifecycle readiness corrected to S10; component evidence reuse boundary clarified"
+    }
+  ],
+  "preserved_sha256": {
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027",
+    "core/docs/issues/307/SOURCE-ORGANIZATION-S7-S13.md": "c8275db530d1bd3a1d7ac27c80b3e8b4e5eeabf19b5483f8bd156ec2d6df6296",
+    "core/docs/issues/307/WORKSPACE-EFFICIENCY-ANALYSIS.md": "af7b7adac38f001bfe01fec9ff9f864a0901c3ebaafd0de79654706126a7561b"
+  },
+  "product_source_changed": false,
+  "tests_or_measurements_run": false,
+  "check_scope": "Documentation links/anchors, source/status/claim reconciliation, whitespace, preserved files and exact snapshot production LOC. Product tests are inapplicable."
+}

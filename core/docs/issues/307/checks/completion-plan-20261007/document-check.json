@@ -1,0 +1,21 @@
+{
+  "files": [
+    "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S13-20261007.md",
+    "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+    "core/docs/issues/307/PROGRESS.md",
+    "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+    "docs/README.md"
+  ],
+  "local_links_checked": 163,
+  "anchors_checked": 2,
+  "errors": [],
+  "preserved_files_match": true,
+  "document_sha256": {
+    "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S13-20261007.md": "3e2e1b2ae7d6a2e398d1defed6960a3bd44cc05e8cd4cdccd0c98c333663f883",
+    "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md": "a8e32051c06366d74c84fc9246c32b1fa12b07366a40ea8361c54f32e428bf6b",
+    "core/docs/issues/307/PROGRESS.md": "d6881842ff303adc1def26a0f38930107e3877f88b8a980c6ebeefefc044e72d",
+    "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md": "dd53e4b539800c0a298f7ed6dd7bc01435be00174972459cc9fb795915c47851",
+    "docs/README.md": "f5cf849cb19119aebbc7e5d0ebb2c05467372dc77d96a7a22d4f16845225620e"
+  },
+  "checks": "Scoped Markdown links/anchors, protected files and status/source/claim review; no Rust tests or measurements for documentation-only change"
+}

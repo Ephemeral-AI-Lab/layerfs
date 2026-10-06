@@ -4,6 +4,14 @@
 > Prepared 2026-10-06, Asia/Singapore. S7 and S9 remain incomplete; S8 is a later batch.
 > Current progress is reconciled against local source, retained receipts and #307.
 
+Routing update 2026-10-07: the [complete S7–S13 plan](IMPLEMENTATION-PLAN-S7-S13-20261007.md)
+reconciles the completed acquisition/restoration work and now supplies remaining
+whole-cluster-two ordering, optimization dispositions, expected source structure
+and [performance criteria](PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md).
+This dated plan preserves its detailed package contracts and append-only
+checkpoints. Its earlier A1–A4 next-work lists are historical; R1/E1 remain ready.
+The two separately owned resume/speed-plan documents remain unchanged.
+
 ## 1. Assignment and authority
 
 Complete the independent S7 engine cost/resource gate and S9 authenticated host

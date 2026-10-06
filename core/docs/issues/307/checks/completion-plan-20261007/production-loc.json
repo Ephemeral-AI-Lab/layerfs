@@ -1,0 +1,39 @@
+{
+  "parent_commit": "f0e9bcfd119118d8dcbbededd7c74f394a8d34c7",
+  "scope": "core/crates + crates, product Rust and shipped SQL, including excluded predecessors; tests/docs/harness/tools/third-party excluded",
+  "counter": "tools/production_loc.py",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "git archive exact commit/tree core/crates crates; python3 -B tools/production_loc.py --root <archive> --json",
+  "before": {
+    "combined": 160473,
+    "scopes": {
+      "core": {
+        "files": 661,
+        "lines": 95056
+      },
+      "reference": {
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "expected_after": {
+    "combined": 160473,
+    "scopes": {
+      "core": {
+        "files": 661,
+        "lines": 95056
+      },
+      "reference": {
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "expected_delta": {
+    "core": 0,
+    "reference": 0,
+    "combined": 0
+  },
+  "final_staged_and_committed_verification": "Recorded separately after final staging in benchmark-results/cluster2-completion-plan-20261007/; receipt added before staging and contributes no product source"
+}

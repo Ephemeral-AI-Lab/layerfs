@@ -45,7 +45,9 @@
 - [0.1.1 history](roadmap/0.1/0.1.1/README.md)
 - [0.1.3 completed checkpoint](roadmap/0.1/0.1.3/README.md)
 - [0.1.x development](roadmap/0.1/development.md)
-- [Current S7–S9 continuation prompt](../core/docs/issues/307/HANDOFF-S7-S9.md): primary local checkout, exact checkpoints, Docker FUSE qualification and remaining milestone work
+- [Complete cluster-two implementation plan](../core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S13-20261007.md): current S7–S13 ordering, iterative exits, optimization decisions, FUSE experiment readiness and expected source structure
+- [Cluster-two performance acceptance](../core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md): existing numerical gates, required work/resource bounds, prospective registration and retained failures
+- [Historical S7–S9 continuation prompt](../core/docs/issues/307/HANDOFF-S7-S9.md): retained source and stopping-boundary context; use the complete plan for current remaining-work ordering
 - [Core concepts](general/concepts.md)
 - [Sandbox cache design](general/sandbox-cache-design.md): cluster-two ownership, branch sharing, source structure and remaining qualification
 - [Workspace filesystem view](general/workspace-filesystem-view.md): global Store base, daemon overlay, lazy FUSE read path and ASCII diagrams
