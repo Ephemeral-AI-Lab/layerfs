@@ -1,0 +1,9 @@
+{
+  "source": "ae03d22e7675058e7cd062d66882ee3d7949f03e",
+  "tree": "2377fa37f4b6abb2ca6a6fec8f829087bc263314",
+  "S7": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6006772021",
+  "S8": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6006772841",
+  "S9": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6006773632",
+  "checklist_changes": [],
+  "states": {"S7": "CHECKPOINT/incomplete", "S8": "BLOCKED native capability/incomplete", "S9": "CHECKPOINT/incomplete"}
+}

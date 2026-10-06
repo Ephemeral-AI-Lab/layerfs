@@ -5,10 +5,30 @@
 Owner: [tracker #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307).
 Design baseline: `c9861bc878583822a468e78dbc0f3740eacbecbe` on local main.
 The [implementation plan](../303/07-implementation-validation.md) owns milestone
-dependencies and exits. S1–S5 are complete with their exit audits and covering evidence. S0 and S6–S13 remain
+dependencies and exits. S1–S6 are complete with their exit audits and covering evidence. S0 and S7–S13 remain
 unchecked until their complete implementation and required evidence exist.
 
-## Current checkpoint
+## Current checkpoint (2026-10-06, S7–S9 batch)
+
+The primary checkout and tracker reconcile to S6 product983c2ee6d, tree
+be2744223a450eaa01b9f31c4e3c850bbd141d72, receipt/handoff4ecea4198.
+The earlier completed S5/S6 chat and [handoff](HANDOFF-S7-S13.md) remain their
+stopping-boundary record. This fresh batch adds verified S7 cost observations and
+S9 local bound history handlers; it does not complete S7/S8/S9.
+
+| Milestone | Current state / owning audit |
+| --- | --- |
+| S7 | [CHECKPOINT](S7-EXIT-AUDIT.md): per-original-job SQL/payload/allocation/queue receipts, high-water and trigger accounting; full page/journal/residency/sustained-service gate remains |
+| S8 | [BLOCKED native capability](S8-EXIT-AUDIT.md): registry still ends at fuser0.18.0; native replacement/control/ordinary Bash lifecycle also remains unimplemented |
+| S9 | [CHECKPOINT](S9-EXIT-AUDIT.md): stage/transition/discard receipts tied to authenticated binding and successful SaveFinish; logical transport/fair delivery/disconnect fences/complete import remain |
+
+Product checkpoint ae03d22e7 and [batch handoff](HANDOFF-S7-S9-BLOCKED.md)
+record this stopping boundary. Separate [tracker receipts](checks/s7-s9-boundary/tracker-receipts.json)
+are posted. No checklist item is advanced. S0 stays open; S10–S13 and P3/P6/P7/P13/P14 remain
+outside the requested batch. Root reference, four unrelated containers and both
+307 side documents are preserved. No push/release/deployment occurs.
+
+## Earlier checkpoint history (before S6 completion)
 
 S5 completion after `f5558fc22`: bounded cells/tails/validity, atomic append and
 overwrite, cutoff truncate/regrow, composed reads and canonical zero-run reuse.
