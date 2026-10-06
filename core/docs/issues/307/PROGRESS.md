@@ -262,3 +262,12 @@ S5/S6 stopping handoff, two side-conversation documents, all retained assets and
 four unrelated containers remain preserved. No push/release/deployment or aggregate
 CI/pre-push wrapper is involved. [Current continuation](HANDOFF-S7-S9.md) owns
 next-ready work; older dated pending lists above retain their historical scope.
+
+
+Latest S7/S9 implementation identities:ec109e3969bb867281f8273940cbe9196a608750
+(tree6f6cab43bdb3e277cdeb70f35f99f36de52bc66c,+1173 production LOC) and
+7a12b3f3a453b7ef841a777ba0cb3c8c29e6c3d9
+(tree2a9235a7872ba9c375356915e09a67c04c7d6201,+26). Total core87578,
+reference65417, combined152995. Separate #307 source/follow-up receipts preserve
+S7/S9 CHECKPOINT states and unchanged unchecked boxes. Following receipt metadata
+changes add0 production LOC; exact per-commit comparisons and handoff remain linked.

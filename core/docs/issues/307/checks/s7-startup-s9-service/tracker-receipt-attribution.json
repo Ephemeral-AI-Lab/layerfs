@@ -1,0 +1,13 @@
+{
+  "source": "7a12b3f3a453b7ef841a777ba0cb3c8c29e6c3d9",
+  "tree": "2a9235a7872ba9c375356915e09a67c04c7d6201",
+  "s7_comment": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6008407230",
+  "s9_comment": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6008416169",
+  "checked_state_verified_unchanged": {
+    "S7": "- [ ] **S7 \u2014 Engine cost gate.** Consolidate actual EXPLAIN/profile and request/statement/VM/row/page/byte/copy/queue/debt evidence. Exit: worst-case, amortized and cumulative work justified; quadratic or worse amplification, hidden scans, input-sized residency and cap inflation rejected.",
+    "S8": "- [ ] **S8 \u2014 FUSE, daemon and explicit APIs.** Implement mount custody, deferred owned replies/fair dispatch, coherent cached profile, mmap/time compatibility, cheap FORGET and ordinary Bash/control lifecycle. Exit: actual mounted coherence/frontier tests, short/long Execs, multiple same-mount calls and visible aggregate buffers/threads/teardown costs.",
+    "S9": "- [ ] **S9 \u2014 Runtime adapters and complete roots.** Embed host libraries; implement bounded authenticated demand/policy/serial/Save/history calls, same-Save reads, semantic/authority admission and disconnect fences; correct faithful initial import. Exit: real Store plus interleaved Saves and full ignored/dependency/cache/output/symlink readiness, without per-call restoration."
+  },
+  "production_LOC": "core87552->87578(+26); reference65417->65417(+0); combined152969->152995(+26)",
+  "local_only": true
+}

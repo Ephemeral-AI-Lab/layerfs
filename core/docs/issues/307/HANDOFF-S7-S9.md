@@ -37,8 +37,10 @@ Completed/checkpoint identities:
   update is b9f3a8dc9ffcf78c9e625c86be8b4bb2f661ae6c, tree
   2a55aa86c2d0ca88c5a6b2059d8f506092dc7ab5. The new S7/S9 implementation
   checkpoint is ec109e3969bb867281f8273940cbe9196a608750, tree
-  6f6cab43bdb3e277cdeb70f35f99f36de52bc66c. The follow-up availability/submission
-  attribution correction follows it; see exact source/LOC/tracker receipts under
+  6f6cab43bdb3e277cdeb70f35f99f36de52bc66c. Availability/submission attribution
+  source is7a12b3f3a453b7ef841a777ba0cb3c8c29e6c3d9, tree
+  2a9235a7872ba9c375356915e09a67c04c7d6201. The final receipt commit follows
+  it without production changes; see exact source/LOC/tracker receipts under
   checks/s7-startup-s9-service and actual current HEAD.
 S1–S6 are checked. S0/S7/S8/S9 remain incomplete and unchecked. Never infer
 milestone completion from a prerequisite proof, source existence or this prompt.
@@ -265,3 +267,26 @@ combined152969 ->152995(delta+26). Same unchanged counter and exact first-parent
 final staged archives, verified again after staging documentation. This growth
 adds explicit receipt availability and fixed submission observations. The prior
 +1173 source checkpoint remains separately recorded; combined batch growth is+1199.
+
+
+## Exact latest implementation and remaining work
+
+Production source:7a12b3f3a453b7ef841a777ba0cb3c8c29e6c3d9, tree
+2a9235a7872ba9c375356915e09a67c04c7d6201. First implementation checkpoint:
+ec109e3969bb867281f8273940cbe9196a608750, tree
+6f6cab43bdb3e277cdeb70f35f99f36de52bc66c. Exact source/LOC/committed-tree verification
+is retained in [receipt directory](checks/s7-startup-s9-service/README.md).
+The following documents/receipt-only commit has core87578 ->87578(+0),
+reference65417 ->65417(+0), combined152995 ->152995(+0), prepared from exact
+first-parent/final staged snapshots and verified against the committed tree.
+No Rust check is repeated for that metadata-only change.
+
+Separate [S7 source receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6008261712)
+and [S9 source receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6008268044)
+are followed by availability/submission attribution receipts. Tracker S7/S8/S9
+checkboxes are verified unchanged/unchecked. Runtime context/transport/restart,
+backed import/hard-link identity and complete S7 resource acceptance remain open.
+These are unfinished implementation/qualification requirements; the accepted
+fuser correction is not an external wait. Greater-than4GiB native stream and all
+cold speed/RSS/sustained-rate selections remain NOT_RUN/ineligible as recorded.
+Keep S10–S13 and P3/P6/P7/P13/P14 outside this batch unless the owner changes scope.
