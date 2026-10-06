@@ -149,7 +149,6 @@ fn narrow_bindings_preserve_mixed_payloads_after_an_existing_alias_boundary() {
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].position, 1);
         assert_eq!(jobs[0].native_path, b"/source/f0001");
-        assert_eq!(jobs[0].aliases, 1);
         assert_eq!(
             port.file_roots(owner, None, Limits::MAXIMUM).unwrap()[0].aliases,
             1

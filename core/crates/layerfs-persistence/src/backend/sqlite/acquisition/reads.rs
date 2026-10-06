@@ -229,7 +229,6 @@ pub(crate) fn directory_path(
 fn job_row(row: &Row<'_>, start: usize) -> Result<Job, BackendError> {
     Ok(Job {
         position: number(get(row, start)?)?,
-        aliases: number(get(row, start + 5)?)?,
         native: native(
             super::super::rows::blob(row, start + 1)?,
             super::super::rows::blob(row, start + 2)?,

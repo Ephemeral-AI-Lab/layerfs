@@ -51,3 +51,22 @@ The instrumented 100000 diagnostic completed under15s with separate19s proof. Wh
 Ordinary Durable100000 frames fall100796→28248 and complete product time12.798→10.535s, but remain slower than incumbent9.749s. Completed high-water reaches512. One-job replenishment repeatedly allows queue-idle flushes; the final half-free refill treatment targets that source-supported mechanism. It adds no worker/schema/profile and leaves exact Unknown/alias/final-root boundaries intact. Exclusive wakeup/queue wall remains unavailable; mixed Save sealing/publication stays a separate cost.
 
 V2verification:81 Project all-target bodies, including5 streaming proofs, completed22.943s under120s; Clippy-Dwarnings/fmt/662-file guard/40 guardselftests/16 harness tests PASS. Unchanged Storage/Persistence and actual SQL plan evidence reused by exact source/hash. Production LOC160673→160743(+70), Core95256→95326, reference65417 unchanged. The final candidate has its own source/proofs/selection; no V2sample is rerun.
+
+## Retained admission-refill V3 results and disposition
+
+The third source is1d3b6d3ae9ecfce75c5ab955336d97e755d03290. All eight complete/proof/cache/cleanup checks PASS; all eight speed gates and all eight allocation gates FAIL, so no joint gate passes. Final freelist and acquisition rows are zero in every case. [V3ledger](checks/init-streaming-refill-20261007/ledger.json) and [independent closed copies](checks/init-streaming-refill-20261007/closed-copy-manifest.json) retain every outcome.
+
+| Profile / files | Control ns | V3 ns | Control B | V3 B | Speed | Allocation |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| durable / 100 | 79759708 | 89387125 | 5255168 | 5283840 | FAIL | FAIL |
+| durable / 1000 | 201566000 | 259499875 | 20545536 | 20619264 | FAIL | FAIL |
+| durable / 10000 | 2492429625 | 3015370875 | 305070080 | 305442816 | FAIL | FAIL |
+| durable / 100000 | 7724523333 | 10132066834 | 514965504 | 515710976 | FAIL | FAIL |
+| disposable / 100 | 38747750 | 50713250 | 5222400 | 5251072 | FAIL | FAIL |
+| disposable / 1000 | 129258375 | 163487791 | 20537344 | 20590592 | FAIL | FAIL |
+| disposable / 10000 | 1645276292 | 2163800125 | 305074176 | 305434624 | FAIL | FAIL |
+| disposable / 100000 | 5558569958 | 7659223459 | 514940928 | 515756032 | FAIL | FAIL |
+
+The instrumented 100000 diagnostic reports whole SQL 22268 executions / 53078483 VM steps / 537 write commits and acquisition 12544 / 38310695 / 88; it is not timing evidence. Ordinary Durable100000 is10.132066834s: faster than V1 12.798146625s and V2 10.535288833s, slower than the incumbent9.749380917s.
+
+Disposition, owner direction2026-10-07: the run was stopped and the ordinary product restored to the incumbent. No streaming source is selected; the candidate is retained on local branch `codex/init-streaming-candidate` and its24 case registrations refuse further sampling. The restoration and its separately registered Init and history regression rows are in the [restoration plan](INCUMBENT-RESTORATION-PLAN-20261007.md).

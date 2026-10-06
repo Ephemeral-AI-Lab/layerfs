@@ -64,27 +64,21 @@ unused and are never recycled.
    file is bound to its native identity in the same unit; a later path whose
    evidence differs from the first is `InvalidInput`. The prerequisite Save is
    finished after the scan.
-3. **Reserve and directories.** After prerequisite publication, C5 consumes one
-   serial reservation for every path. A later file failure cannot recycle it.
-   One assembly Save then accepts directory roots built from narrow bindings;
-   those roots are recorded in bounded working-row windows. Childless directories
-   use the shared canonical empty page.
-4. **Stream files and inodes.** Four Namespace Init constructors receive jobs
-   from the indexed identity stream. `Job` includes the alias count fixed by the
-   completed scan. At most512 identities are admitted across queued, running and
-   completed-but-unconsumed states. Only canonical inode consumption releases a
-   slot. While admission is full, the owner continues draining bounded object
-   frames into the same assembly Save. Each completion follows its file's objects
-   in that producer's stream and is exposed only after those objects are accepted.
-   The inode iterator pulls the next canonical file's root and alias count directly
-   from the bounded slots; Init writes no file-root completion and makes no
-   file-root read pass. Aliases share the first position and are skipped as inode
-   rows. Descriptor/path checks remain, and later paths are rechecked after all
-   constructors have drained. Only then is the filesystem root accepted as the
-   Save's final object. Fresh sorted constructors consume already constructed
-   dependency IDs without rereading unpublished children. Accepted objects may
-   enter ordinary reference-closed incremental publications; acceptance itself
-   is not durable completion.
+3. **Files.** The owning thread feeds the 512-slot queue from the identity stream
+   to the four Namespace Init constructors and alone accepts objects into the
+   Save. A constructor hands over its pending batch before it waits. Completed
+   roots are recorded against their identities in write windows. Descriptor checks
+   before and after reading and the path check of every first path are unchanged.
+   When the scan bound at least one later path, entries are streamed once and
+   each later path is rechecked against its identity's evidence; later paths of
+   one directory share one path read. A root with no later path makes no such pass.
+4. **Tree.** After `reserve_inodes`, entries stream by key: each parent's group
+   goes into `build_directory` and its root is recorded in write windows.
+   Directories that bound nothing share one `empty_directory` root. A second
+   entry stream, merged by position with the identity stream of constructed roots
+   and later-path counts, feeds `build_table`, then the filesystem root is
+   emitted. The entry stream is by key; the consumer counts rows and requires each
+   position to be the next one, and the totals to match the scan.
 5. **Cleanup before publication.** With the tree Save still unfinished, working
    rows are removed in budgeted disposal jobs until none remain. SQLite removes
    the empty operation record in its final job; an adapter that reports release
@@ -123,35 +117,19 @@ the same bounded ownership the ordinary save path has.
 
 For E entries, D directories, U native identities, A later paths and V children of
 wide directories, one Init makes about E + V row inserts, U + A identity binds,
-D directory-root updates, and E + U row removals, in write windows of at most4096
-rows and1 MiB charged payload. It reads E bindings and E inode rows (another E
-entry rows when A>0), U job rows, D directory rows and V unplaced rows through
-bounded keyset windows. The SQLite provider narrows native-path windows by their
-actual byte lengths. Alias validation adds indexed point evidence/path reads.
-Per-statement plans and engine work are in [acquisition backing](44-acquisition-backing.md).
-With N stored rows, indexed work remains O((E+U+A+D+V) log N), plus actual content
-bytes, path/name bytes and canonical construction. The fixed completion map has
-at most R=512 keys and O(log R) insert/update/removal; it is not a population mirror.
+U file-root and D directory-root updates, and E + U row removals, in write windows
+of at most 4096 rows and 1 MiB charged payload. It reads E rows twice (three times
+when A > 0), U rows twice, D rows once and V rows once, in windows of at most 512
+rows; windows whose rows may carry a native path are narrower in the SQLite
+provider. The provider's per-statement plans and engine work are in
+[acquisition backing](44-acquisition-backing.md).
 
-Resident state includes one read window per stream, a write window, the512-child
-buffer and at most512 admitted file identities. A slot retains final alias count
-and optional root; queued/active jobs retain their bounded paths/evidence. The
-four-slot output channel and four producer frames retain the existing byte/object
-limits and canonical oversized-singleton exception. Successful completions share bounded frames unless canonical demand requires a
-flush. Errors flush immediately. The owner publishes its next demand before a
-job offer/root wait and after consumption; workers poll at job/object/read
-boundaries and flush before idle or a known large file. One first-pending-Done
-scalar is sufficient because each worker's IDs increase. A worker-local RefCell
-shares producer access with the reader and releases each borrow before native
-reads. Demand can still require O(U) frames in the worst case; actual counts
-and allocation/queue cost remain explicit.
-Skew can stall new admission behind a slow earlier file and leave workers idle;
-the owner still drains the earlier file's output and memory does not grow with U.
-
-`NamespaceWork.file_admission_rows`, `file_completed_rows` and
-`file_output_batches` record high-water admission/completions and drained frames.
-Other window counts exclude owned in-flight names/paths, Save state, allocator and
-page-cache behavior. Logical cleanup charges are not pages, file growth or RSS.
+Resident state is one read window per open stream, one write window, the
+512-slot job queue and the child buffer. Owned names and paths of rows in flight,
+the Saves' own state and allocator or page-cache behaviour are outside these
+counters. `NamespaceWork` reports row, unit and window counts and the provider's
+exact logical charges removed by cleanup. It is count-driven diagnostics, not a
+whole-importer memory bound, and the charges are not pages, file growth or RSS.
 
 Directory construction reads the port's narrow `Binding` projection; inode and
 alias validation retain full `Entry` reads. Existing adapters can derive bounded
@@ -165,11 +143,8 @@ synchronized commit and every row is journaled; that cost did not exist with
 unsynchronized scratch files. The [first component measurement](../issues/307/NAMESPACE-INIT-ACQUISITION-RESULTS-20261006.md)
 records complete Init and inclusive COMMIT observations, with no physical page/
 synchronization-call attribution. The [window execution correction](44-acquisition-backing.md#window-execution-correction-2026-10-06)
-retains its original source identity. The new streaming flow changes Project orchestration
-and the Job projection; schema scripts, canonical constructors and persistence
-profiles remain unchanged. Its candidate and evidence are separately recorded in
-[the streaming V1selection](../issues/307/INIT-STREAMING-PLAN-20261007.md) and
-[bounded coalescing](../issues/307/INIT-STREAMING-BATCHED-PLAN-20261007.md).
+changes provider execution only; Project's flow, constructors and public port
+contract stay unchanged.
 
 ## Evidence and limits
 
@@ -198,8 +173,14 @@ failure and a real quarantined Session are not exercised through Init. Applicati
 or daemon assembly, context, restart custody and S9 qualification remain open.
 
 
-The current coordinator refills admission in bounded bursts after at least half
-of its512slots become free. `file_admission_units` records productive refills.
-This reduces single-job queue transitions while retaining canonical-only release;
-a slow head can leave up to255credits unused until the threshold. Source and
-qualification remain separate in the [final refill selection](../issues/307/INIT-STREAMING-REFILL-PLAN-20261007.md).
+## Streaming candidate disposition, 2026-10-07
+
+The ordinary source is restored to the incumbent product at4a207cea1. Bounded
+streaming Init was implemented and verified at5a9704610,890a144ff and1d3b6d3ae,
+but the final source regressed the incumbent's large-case time and missed the
+strict time/allocation gates. The single ordinary importer again records file
+roots in acquisition SQL before the separate tree Save. The reviewed candidate
+is retained on local branch `codex/init-streaming-candidate` in the attached
+measurement worktree; it is not selected by an error or benchmark switch.
+All source pins, proofs and failed receipts remain in
+[the results](../issues/307/INIT-STREAMING-RESULTS-20261007.md).

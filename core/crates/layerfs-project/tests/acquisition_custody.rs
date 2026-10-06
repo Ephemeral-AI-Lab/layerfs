@@ -227,7 +227,7 @@ fn an_unknown_outcome_leaves_the_operation_untouched() {
     let history = MemoryHistory::default();
     let acquisition = MemoryAcquisition::default();
     let unknown = AcquisitionError::Persistence(PersistenceError::Uncertain);
-    acquisition.fail("set_directory_roots", 1, unknown.clone());
+    acquisition.fail("complete_files", 1, unknown.clone());
     let outcome = attempt(&fixture, &acquisition, &history);
     let Err(ProjectError::Uncertain { cause, retained }) = outcome else {
         panic!("expected an unknown outcome, found {outcome:?}");
@@ -251,7 +251,7 @@ fn a_backing_read_failure_is_definite_and_is_cleaned_up() {
     let fixture = Fixture::new(40);
     let history = MemoryHistory::default();
     let acquisition = MemoryAcquisition::default();
-    acquisition.fail("jobs", 1, refused());
+    acquisition.fail("file_roots", 1, refused());
     let error = attempt(&fixture, &acquisition, &history).unwrap_err();
     assert!(
         matches!(&error, ProjectError::Acquisition(held) if *held == refused()),

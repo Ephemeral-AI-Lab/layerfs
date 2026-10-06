@@ -333,14 +333,14 @@ counts attribute essentially all extra VM work to acquisition, with immutable
 publication unchanged. Large-case latency and S7/S8/S9 acceptance remain open.
 
 
-## Streaming Init job projection, 2026-10-07
+## Streaming candidate disposition, 2026-10-07
 
-The selected Project streaming path consumes roots in a fixed completion window
-and no longer invokes `complete_files` or `file_roots`. Those public units remain
-available and retain their schema4–6 behavior; no schema migration is involved.
-`Job` now projects `aliases` from the existing native row in both range and point
-reads. A consumer starts jobs after placement ends to observe final counts.
-`job_sizes` includes the extra8-byte scalar, preserving the actual-length output
-budget. Device/inode/evidence/path decoding, owner fencing, one attempt and
-stale-versus-empty semantics remain unchanged. New plan/runtime evidence and
-qualified samples are governed by the [streaming selection](../issues/307/INIT-STREAMING-PLAN-20261007.md).
+The ordinary source is restored to the incumbent product at4a207cea1. Bounded
+streaming Init was implemented and verified at5a9704610,890a144ff and1d3b6d3ae,
+but the final source regressed the incumbent's large-case time and missed the
+strict time/allocation gates. The single ordinary importer again records file
+roots in acquisition SQL before the separate tree Save. The reviewed candidate
+is retained on local branch `codex/init-streaming-candidate` in the attached
+measurement worktree; it is not selected by an error or benchmark switch.
+All source pins, proofs and failed receipts remain in
+[the results](../issues/307/INIT-STREAMING-RESULTS-20261007.md).

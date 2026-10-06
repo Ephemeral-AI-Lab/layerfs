@@ -414,7 +414,6 @@ impl Acquisition for MemoryAcquisition {
             Ok(listed
                 .map(|(position, native)| Job {
                     position: *position,
-                    aliases: native.aliases,
                     native: native.identity,
                     native_path: native.path.clone(),
                 })
@@ -426,7 +425,6 @@ impl Acquisition for MemoryAcquisition {
         self.unit("job", owner, |operation| {
             Ok(operation.natives.get(&position).map(|native| Job {
                 position,
-                aliases: native.aliases,
                 native: native.identity,
                 native_path: native.path.clone(),
             }))

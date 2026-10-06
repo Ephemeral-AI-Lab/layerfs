@@ -1,0 +1,182 @@
+{
+  "campaign": "incumbent-restoration-20261007",
+  "owner_direction": "2026-10-07: stop the streaming run, restore the best 9.75 s version, then run namespace Init and history stride 10, 3, 1",
+  "parent_source": "1d3b6d3ae9ecfce75c5ab955336d97e755d03290",
+  "restored_product_equals": "4a207cea15c651972b36d9dd3b3448a1903a2f22",
+  "order": "Init durable 100/1000/10000/100000, Init disposable same; then history durable stride 10/3/1 and disposable stride 10/3/1, reference arm before candidate arm",
+  "init_gates": {
+    "speed": "10*candidate_ns<=11*cluster-one-end control at 197d2fb7d (reused, no reference execution)",
+    "allocation": "candidate-final-database-wal-shm<=same-profile-cluster-one-end-final-total-v1"
+  },
+  "history_gates": {
+    "speed": "10*candidate_ns<=11*matched reference arm at the same harness identity",
+    "allocation": "candidate allocated bytes <= approved ceiling"
+  },
+  "samples": "one per case per arm; no rerun of an unchanged arm",
+  "init_cases": [
+    {
+      "id": "phase7-sqlite-init-100-incumbent-restored-v1",
+      "status": "NOT_RUN",
+      "arm": "candidate",
+      "profile": "durable",
+      "fixture": "namespace-100-compact-v3",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-init-1000-incumbent-restored-v1",
+      "status": "NOT_RUN",
+      "arm": "candidate",
+      "profile": "durable",
+      "fixture": "namespace-1000-compact-v3",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-init-10000-incumbent-restored-v1",
+      "status": "NOT_RUN",
+      "arm": "candidate",
+      "profile": "durable",
+      "fixture": "namespace-10000",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-init-100000-incumbent-restored-v1",
+      "status": "NOT_RUN",
+      "arm": "candidate",
+      "profile": "durable",
+      "fixture": "namespace-100000",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-disposable-init-100-incumbent-restored-v1",
+      "status": "NOT_RUN",
+      "arm": "candidate",
+      "profile": "disposable",
+      "fixture": "namespace-100-compact-v3",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-disposable-init-1000-incumbent-restored-v1",
+      "status": "NOT_RUN",
+      "arm": "candidate",
+      "profile": "disposable",
+      "fixture": "namespace-1000-compact-v3",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-disposable-init-10000-incumbent-restored-v1",
+      "status": "NOT_RUN",
+      "arm": "candidate",
+      "profile": "disposable",
+      "fixture": "namespace-10000",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-disposable-init-100000-incumbent-restored-v1",
+      "status": "NOT_RUN",
+      "arm": "candidate",
+      "profile": "disposable",
+      "fixture": "namespace-100000",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    }
+  ],
+  "history_cases": [
+    {
+      "id": "phase7-sqlite-history-stride10-group-rows-indexed-v2",
+      "status": "NOT_RUN",
+      "arms": [
+        "baseline",
+        "candidate"
+      ],
+      "profile": "durable",
+      "states": 17,
+      "pack_layout": "group-rows-indexed",
+      "allocation_ceiling": 54278964,
+      "command_budget_ns": 120000000000,
+      "verification_budget_ns": 24000000000,
+      "proof_envelope": "owner-double-caps-20261005-v2"
+    },
+    {
+      "id": "phase7-sqlite-history-stride3-group-rows-indexed-v2",
+      "status": "NOT_RUN",
+      "arms": [
+        "baseline",
+        "candidate"
+      ],
+      "profile": "durable",
+      "states": 53,
+      "pack_layout": "group-rows-indexed",
+      "allocation_ceiling": 70427034,
+      "command_budget_ns": 340000000000,
+      "verification_budget_ns": 24000000000,
+      "proof_envelope": "owner-double-caps-20261005-v2"
+    },
+    {
+      "id": "phase7-sqlite-history-stride1-group-rows-indexed-v2",
+      "status": "NOT_RUN",
+      "arms": [
+        "baseline",
+        "candidate"
+      ],
+      "profile": "durable",
+      "states": 157,
+      "pack_layout": "group-rows-indexed",
+      "allocation_ceiling": 92342273,
+      "command_budget_ns": 600000000000,
+      "verification_budget_ns": 60000000000,
+      "proof_envelope": "owner-double-caps-20261005-v2"
+    },
+    {
+      "id": "phase7-sqlite-disposable-history-stride10-group-rows-indexed-v1",
+      "status": "NOT_RUN",
+      "arms": [
+        "baseline",
+        "candidate"
+      ],
+      "profile": "disposable",
+      "states": 17,
+      "pack_layout": "group-rows-indexed",
+      "allocation_ceiling": 54278964,
+      "command_budget_ns": 60000000000,
+      "verification_budget_ns": 12000000000,
+      "proof_envelope": "lite12-v1"
+    },
+    {
+      "id": "phase7-sqlite-disposable-history-stride3-group-rows-indexed-v1",
+      "status": "NOT_RUN",
+      "arms": [
+        "baseline",
+        "candidate"
+      ],
+      "profile": "disposable",
+      "states": 53,
+      "pack_layout": "group-rows-indexed",
+      "allocation_ceiling": 70427034,
+      "command_budget_ns": 170000000000,
+      "verification_budget_ns": 12000000000,
+      "proof_envelope": "lite12-v1"
+    },
+    {
+      "id": "phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1",
+      "status": "NOT_RUN",
+      "arms": [
+        "baseline",
+        "candidate"
+      ],
+      "profile": "disposable",
+      "states": 157,
+      "pack_layout": "group-rows-indexed",
+      "allocation_ceiling": 92342273,
+      "command_budget_ns": 300000000000,
+      "verification_budget_ns": 30000000000,
+      "proof_envelope": "owner-stride1-proof30-v3"
+    }
+  ]
+}

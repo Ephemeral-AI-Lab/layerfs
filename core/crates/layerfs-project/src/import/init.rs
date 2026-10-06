@@ -3,6 +3,7 @@
 use crate::{
     backing::Backing,
     error::{acquisition, storage},
+    files,
     namespace::{self, ImportProgress},
     scan,
 };
@@ -65,10 +66,6 @@ pub struct Initialized {
 /// published. A failure of that removal is [`ProjectError::Cleanup`]; an
 /// unknown Store, history or backing outcome is [`ProjectError::Uncertain`]
 /// and leaves the operation untouched for its owner.
-///
-/// Inode serials are consumed after the complete scan and before regular-file
-/// construction. A subsequent failure leaves that reservation consumed; the
-/// catalog never recycles those identities.
 #[cfg(unix)]
 pub fn init(
     store: &Storage,
@@ -106,8 +103,7 @@ pub fn init(
         Ok(value) => value,
         Err(error) => return Err(backing.settle(error, &mut progress.work)),
     };
-    // The final filesystem root stays pending until the working rows and their
-    // record are gone. Earlier reference-closed immutable batches may exist.
+    // Nothing final exists until the working rows and their record are gone.
     timer
         .child("history.discard_acquisition")
         .run(|_| backing.finish(&mut progress.work))
@@ -138,9 +134,8 @@ pub fn init(
     })
 }
 
-/// Finishes scan prerequisites, consumes serials, then streams each file's
-/// completion into the inode constructor through one assembly Save. A later
-/// failure cannot recycle the already consumed serial reservation.
+/// Scans with attributes, constructs each file once, consumes serials and
+/// builds the tree. The returned tree save is unfinished.
 #[cfg(unix)]
 fn acquire<'a>(
     store: &'a Storage,
@@ -169,6 +164,14 @@ fn acquire<'a>(
             .run(|_| save.finish().map_err(storage))?;
         scanned
     };
+    let save = store.begin_save().map_err(storage)?;
+    timer
+        .child("history.import_files")
+        .run(|_| files::save_files(backing, scanned.aliases, store, &save, progress))?;
+    progress.tick()?;
+    timer
+        .child("history.import_finish_save")
+        .run(|_| save.finish().map_err(storage))?;
     let scope = scope_for_seed(request.scope_seed);
     let reservation = timer.child("history.reserve_inodes").run(|_| {
         catalog
@@ -178,15 +181,13 @@ fn acquire<'a>(
             })
             .map_err(ProjectError::History)
     })?;
-    progress.tick()?;
-    let save = store.begin_save().map_err(storage)?;
     let provider = store.reader().map_err(storage)?;
-    let root = timer.child("history.import_tree").run(|_| {
+    let (root, save) = timer.child("history.import_tree").run(|_| {
         namespace::build_namespace(
             store,
-            &save,
             &provider,
-            (scope, reservation.start),
+            scope,
+            reservation.start,
             &scanned,
             backing,
             progress,

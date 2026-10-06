@@ -1,13 +1,13 @@
 //! Production namespace initialization from backed acquisition order.
 //!
 //! This module builds a real namespace through public C1 constructors and saves
-//! it through public C2 operations. Scan attributes and symlink targets are
-//! published prerequisites. Directory roots, regular-file objects and the
-//! inode table enter one assembly Save in dependency order; fresh sorted
-//! constructors do not reread those unpublished roots. A canonical regular
-//! inode pulls its completion from bounded worker state, and no completed-file
-//! root is written to acquisition backing. Earlier published reference-closed
-//! batches survive later failure under the ordinary Save custody contract.
+//! it through public C2 operations. Attribute trees and symlink targets were
+//! saved while the source was scanned and regular files after it, so the tree
+//! save here consumes only roots that are already published. Nothing assumes a
+//! combined unpublished reader/sink that could read an object this same
+//! operation is still producing. If the tree save fails, the earlier objects
+//! may become unreferenced; that is the same bounded ownership the ordinary
+//! save path has, and no cleanup is guessed.
 //!
 //! The backing supplies every directory's bindings contiguously in name order
 //! and every inode in serial order, so each directory and the inode table are
@@ -23,7 +23,6 @@
 use crate::backing::Backing;
 use crate::error::ProjectError as Failure;
 use crate::error::{content, malformed, storage};
-use crate::files::{self, FileCompletions};
 use crate::scan::Scanned;
 use layerfs_content::filesystem::directory::update::{build_directory, empty_directory};
 use layerfs_content::filesystem::inode::update::build_table;
@@ -58,51 +57,34 @@ impl ImportProgress {
     }
 }
 
-/// Builds one namespace through the caller's assembly Save. Its filesystem
-/// root is accepted last, after every file completion and alias check, so no
-/// later accept can publish that root before cleanup and Save::finish.
-pub(crate) fn build_namespace(
-    store: &Storage,
-    save: &Save<'_>,
+/// Builds one logical namespace and returns its root with the tree save still
+/// open, so the caller removes working state before anything is published.
+pub(crate) fn build_namespace<'a>(
+    store: &'a Storage,
     provider: &dyn AuthenticatedObjects,
-    allocation: (InodeScope, u64),
+    scope: InodeScope,
+    root_serial: u64,
     scanned: &Scanned,
     backing: &Backing<'_>,
     progress: &mut ImportProgress,
-) -> Result<ObjectId, Failure> {
-    let (scope, root_serial) = allocation;
+) -> Result<(ObjectId, Save<'a>), Failure> {
     root_serial
         .checked_add(scanned.entries)
         .filter(|end| *end <= i64::MAX as u64)
         .ok_or(Failure::Capacity)?;
     progress.tick()?;
+    let save = store.begin_save().map_err(storage)?;
     let built = {
         let mut sink = save.sink();
         let mut objects = FilesystemObjects::new(provider, &mut sink);
-        directories(&mut objects, root_serial, backing, progress).and_then(|()| {
-            let table = files::with_completions(
-                backing,
-                scanned.aliases,
-                store,
-                save,
-                progress,
-                |files, progress| {
-                    table(&mut objects, root_serial, scanned, backing, files, progress)
-                },
-            )?;
-            filesystem_root(&mut objects, scope, root_serial, table)
-        })
+        directories(&mut objects, root_serial, backing, progress)
+            .and_then(|()| table(&mut objects, scope, root_serial, scanned, backing, progress))
     };
-    let sink_failure = save.take_failure().map(storage);
-    let root = match (built, sink_failure) {
-        // A direct stream accept retains its original storage error outside
-        // SaveSink. A later sink refusal must not turn uncertainty into a
-        // definite Aborted result that would initiate acquisition cleanup.
-        (Err(error), _) if error.unknown_outcome() => Err(error),
-        (_, Some(error)) => Err(error),
-        (result, None) => result,
+    let root = match save.take_failure() {
+        Some(error) => Err(storage(error)),
+        None => built,
     }?;
-    Ok(root)
+    Ok((root, save))
 }
 
 /// Streams every directory's bindings into its constructor and records its root.
@@ -125,9 +107,6 @@ fn directories(
         let mut failure = None;
         let mut bound = 0usize;
         let bindings = std::iter::from_fn(|| {
-            if failure.is_some() {
-                return None;
-            }
             let mut next = || -> Result<Option<(Vec<u8>, u64)>, Failure> {
                 let same = |held: Option<u64>| held == Some(parent);
                 if entries.peek()?.is_none_or(|entry| !same(entry.key.parent)) {
@@ -150,9 +129,7 @@ fn directories(
                 }
                 Err(error) => {
                     failure = Some(error);
-                    // End construction at this exact row. Returning None
-                    // would finalize the successful prefix after a refusal.
-                    Some(Err(layerfs_content::ContentError::OutputRejected))
+                    None
                 }
             }
         });
@@ -169,14 +146,13 @@ fn directories(
     backing.set_directory_roots(&mut roots)
 }
 
-/// Streams every inode into its sorted table. A canonical regular entry waits
-/// only for its own admitted completion; later paths share its retained count.
+/// Streams every inode into the table, then emits the filesystem root.
 fn table(
     objects: &mut FilesystemObjects<'_>,
+    scope: InodeScope,
     root_serial: u64,
     scanned: &Scanned,
     backing: &Backing<'_>,
-    files: &mut FileCompletions<'_, '_, '_>,
     progress: &mut ImportProgress,
 ) -> Result<ObjectId, Failure> {
     // A directory that bound nothing has the one canonical empty page.
@@ -187,14 +163,12 @@ fn table(
     };
     progress.tick()?;
     let mut entries = backing.entries();
+    let mut files = backing.file_roots();
     let mut failure = None;
     // Entries stream by key; acquisition order makes that position order too.
     let mut expected = 0u64;
     let deadline = progress.deadline();
     let rows = std::iter::from_fn(|| {
-        if failure.is_some() {
-            return None;
-        }
         let mut next = || -> Result<Option<(u64, InodeValue)>, Failure> {
             loop {
                 let Some(entry) = entries.next()? else {
@@ -216,9 +190,10 @@ fn table(
                         if entry.canonical.ok_or_else(malformed)? != id {
                             continue;
                         }
-                        let (root, aliases) = files.root(id)?;
-                        count = count.checked_add(aliases).ok_or(Failure::Capacity)?;
-                        Some(root)
+                        let file = files.next()?.filter(|file| file.position == id);
+                        let file = file.ok_or_else(malformed)?;
+                        count += file.aliases;
+                        file.root
                     }
                 };
                 return Ok(Some((
@@ -236,7 +211,7 @@ fn table(
             Ok(row) => row.map(Ok),
             Err(error) => {
                 failure = Some(error);
-                Some(Err(layerfs_content::ContentError::OutputRejected))
+                None
             }
         }
     });
@@ -245,20 +220,9 @@ fn table(
         return Err(error);
     }
     let (table, _) = built.map_err(content)?;
-    if expected != scanned.entries {
+    if expected != scanned.entries || files.next()?.is_some() {
         return Err(malformed());
     }
-    Ok(table)
-}
-
-/// The last accepted object of the assembly Save. Worker draining and source
-/// alias validation have completed before this final reference is constructed.
-fn filesystem_root(
-    objects: &mut FilesystemObjects<'_>,
-    scope: InodeScope,
-    root_serial: u64,
-    table: ObjectId,
-) -> Result<ObjectId, Failure> {
     let root = FilesystemRoot::new(profile_id(), scope, root_serial, table).map_err(content)?;
     let object = FinalizedObject::new(ObjectRole::FilesystemRoot, root.encode().map_err(content)?)
         .map_err(content)?

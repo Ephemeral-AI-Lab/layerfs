@@ -143,9 +143,6 @@ pub struct Directory {
 pub struct Job {
     /// Canonical position, shared by every later path.
     pub position: u64,
-    /// Later in-root paths sharing this identity, as currently recorded.
-    /// A consumer starts construction after placement ends to obtain the final count.
-    pub aliases: u64,
     /// Identity and the evidence every path must keep matching.
     pub native: NativeIdentity,
     /// Native path of the first path.

@@ -536,55 +536,14 @@ syncs or allocation. The immediate selected source implements only the existing-
 representation insertion/read changes and bounded final disposal.
 
 
-## Owner-selected bounded streaming completion, 2026-10-07
+## Streaming candidate disposition, 2026-10-07
 
-The owner selects implementation with subagents of the reviewed streaming
-candidate. [The current Project flow](../../architecture/43-backed-initial-acquisition.md)
-supersedes section7/11's SQL completion and later root-read pass for ordinary Init.
-Scan/prerequisite publication precedes inode serial reservation, then one assembly
-Save accepts directories, regular files and the fresh sorted inode table. Serial
-reservation now precedes file construction; a later failure burns the consumed
-range without recycling. `Job.aliases` comes from the same indexed native-row read
-and reflects the completed placement. The schema/scripts and public complete_files
-and file_roots units remain available, without migration or durability changes.
-
-A fixed512-identity window covers every queued, running or completed-unconsumed
-file. Canonical consumption releases a slot. Admission fullness never stops object
-event draining. Each Done follows all of that file's accepted object events and
-flushes immediately, including errors. Bounded slots carry roots and counts until
-consumed; they do not claim durable intermediate acknowledgment. The restart
-contract still fences/disposes abandoned operations rather than resuming Init.
-
-Every file event is drained and every later alias rechecked before accepting the
-filesystem root as the assembly Save's last object. Cleanup/release still precede
-Save.finish/history, so no trailing worker accept can publish the final root early.
-Ordinary incremental reference-closed publications may precede later failure;
-exact known/Unknown custody remains, and no failed operation is replayed.
-
-The fixed admission bound trades skewed-worker utilization for bounded residence.
-Immediate Done flushing adds transport frames; mixed object roles can change pack
-boundaries, reuse and publication multiplicity. The removed7379243 VM steps/25
-completion commits in the prior100000 diagnostic are targets, not promised net
-savings. [Selection, limits and required proofs](INIT-STREAMING-PLAN-20261007.md)
-keep the existing cold/speed/allocation gates. Merged acquisition rows and a host
-operational owner remain distinct proposals and are not implemented here.
-
-
-### Bounded completion coalescing refinement
-
-The V1immediate-successful-Done flush above is superseded by the current
-[bounded coalescing selection](INIT-STREAMING-BATCHED-PLAN-20261007.md). Successes
-share the existing256KiB/512object/512completion frames; canonical demand forces
-pending required completions out. Errors, queue idle and a known>256KiB next file
-flush immediately. Demand is checked on each native read and object callback,
-preventing a pending required Done from waiting for an entire later file under
-ordinary read progress. Canonical demand is one atomic scalar; worker-local
-producer access does not add a growing index or helper. Final publication,
-ownership, durability and bounds remain. V1regressions and its separate counts
-are retained at5a9704610; V2must establish its own time/allocation/counter result.
-
-
-The final [admission refinement](INIT-STREAMING-REFILL-PLAN-20261007.md) refills
-512aggregate slots once at most256remain. It leaves the coalescing/error/demand
-and final-publication contracts intact. Productive refill counts are distinct
-from SQLread units; unused slack behind a slow canonical head is explicit.
+The ordinary source is restored to the incumbent product at4a207cea1. Bounded
+streaming Init was implemented and verified at5a9704610,890a144ff and1d3b6d3ae,
+but the final source regressed the incumbent's large-case time and missed the
+strict time/allocation gates. The single ordinary importer again records file
+roots in acquisition SQL before the separate tree Save. The reviewed candidate
+is retained on local branch `codex/init-streaming-candidate` in the attached
+measurement worktree; it is not selected by an error or benchmark switch.
+All source pins, proofs and failed receipts remain in
+[the results](INIT-STREAMING-RESULTS-20261007.md).
