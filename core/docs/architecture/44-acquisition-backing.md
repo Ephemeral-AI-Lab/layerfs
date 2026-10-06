@@ -143,7 +143,11 @@ records four 100/1000-file pairs at source45e2b09e8, before the execution change
 below. All functional/cold-content/cleanup checks pass; three relative-speed
 gates fail. Those receipts remain unchanged and do not qualify the revised source.
 
-Not established: revised-source performance, physical page writes, peak file/journal
+The [revised-source checkpoint](../issues/307/ACQUISITION-WINDOW-FIX-RESULTS-20261006.md)
+retains three speed FAILs and the unchanged Disposable100 PASS at4c03b41bf;
+complete speed acceptance remains open.
+
+Not established: physical page writes, peak file/journal
 growth or synchronization-call cost under either profile; row growth when positions and roots are filled
 after insertion; behaviour at capacity or under an uncertain engine outcome
 (neither was induced); and the frozen window values, which remain the
@@ -190,4 +194,5 @@ hidden: the32-root profile is5 statements/2176 VM steps/31 constant-input scan
 steps, with0 sorts/automatic-index rows/reprepares at both2000 and20000 native rows.
 The source-qualified plans, public atomicity/alias proofs and before/after unit
 diagnostics are retained under [execution-fix checks](../issues/307/checks/init-acquisition-fix-20261006/).
-Speed/storage acceptance requires the separately registered revised-source sample.
+The separately registered revised-source sample retains its actual partial result;
+no diagnostic timing is promoted into speed acceptance.

@@ -406,3 +406,14 @@ The S5/S6 stopping-boundary record remains unchanged.
 The acquisition provider’s execution overhead is corrected without changing Project’s algorithm, public ports, schema4–6, SQLite ownership, window maxima or transaction/persistence contracts. Real Store tests cover aliases, first invalid/missing/duplicate root refusal and full-unit rollback; host provider/Project/Storage/SDK checks and host/Linux Clippy pass. Changed-source speed qualification is prospectively selected with unchanged reference evidence reuse. S9 remains CHECKPOINT/unchecked; R1–R4/E1–E4/Q1/C1 and later Commit prerequisites remain open.
 
 [Source, diagnostics, checks and retained failures](checks/init-acquisition-fix-20261006/identity.json).
+
+
+## Execution-fix qualification checkpoint (2026-10-06)
+
+Source4c03b41bf has qualified changed-source component receipts, reusing exact
+unchanged reference evidence. All cold-content/functional/root/cleanup/absolute
+checks pass. Disposable100 remains the only joint PASS; Durable100/1000 and
+Disposable1000 retain relative-speed FAIL. Disposable1000 is145382875 ns versus
+152242291 ns before and124912209 ns reference. The full speed issue is not resolved.
+[Exact report, reuse, arithmetic, source LOC and next work](ACQUISITION-WINDOW-FIX-RESULTS-20261006.md).
+Milestones remain CHECKPOINT; no full-root/runtime/engine/resource acceptance is inferred.

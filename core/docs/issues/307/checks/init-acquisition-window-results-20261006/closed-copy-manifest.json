@@ -1,0 +1,226 @@
+{
+  "files": {
+    "commands/phase7-sqlite-disposable-init-100-acquisition-v2-candidate.json": {
+      "sha256": "4ae18c427e24983d76371fdd8a33e900594b2df15c7bd6b355d84d6ab45e4d25",
+      "bytes": 857
+    },
+    "commands/phase7-sqlite-disposable-init-100-acquisition-v2-candidate.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "commands/phase7-sqlite-disposable-init-100-acquisition-v2-candidate.stdout": {
+      "sha256": "2ff9e4ec5f5eb60096f979aa7d029140249c89ead579cc8bc551a905166539df",
+      "bytes": 175
+    },
+    "commands/phase7-sqlite-disposable-init-1000-acquisition-v2-candidate.json": {
+      "sha256": "4b3b9450243ad1aa66c6ba3d8fba27ca39ea256aa0304dc7dede165f41b4cf8f",
+      "bytes": 860
+    },
+    "commands/phase7-sqlite-disposable-init-1000-acquisition-v2-candidate.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "commands/phase7-sqlite-disposable-init-1000-acquisition-v2-candidate.stdout": {
+      "sha256": "c2bc943e530d740c74a053bea4039190ae411fe5b5e6f77d4aec60eb6541dd6e",
+      "bytes": 176
+    },
+    "commands/phase7-sqlite-init-100-acquisition-v2-candidate.json": {
+      "sha256": "56e45dcada5947de4b7761b0894930cfc312239ce97c2b14a4d6b23c735de114",
+      "bytes": 824
+    },
+    "commands/phase7-sqlite-init-100-acquisition-v2-candidate.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "commands/phase7-sqlite-init-100-acquisition-v2-candidate.stdout": {
+      "sha256": "590724479a4c049e0b03150e88f222ef269e7801855edee41d21918d0f341901",
+      "bytes": 164
+    },
+    "commands/phase7-sqlite-init-1000-acquisition-v2-candidate.json": {
+      "sha256": "d0b16869246ddc83fc03fe2181d9915e91726ff7180978d9b3acc8609681bdcf",
+      "bytes": 827
+    },
+    "commands/phase7-sqlite-init-1000-acquisition-v2-candidate.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "commands/phase7-sqlite-init-1000-acquisition-v2-candidate.stdout": {
+      "sha256": "c681bcefea5899a2b9bf448783d46761a3c87c6198b9a885ef947b12892ba9fd",
+      "bytes": 165
+    },
+    "ledger.json": {
+      "sha256": "c3a3631510cf5f6ddd902459f12a6e6cbd5a80807a1e200acdc2b03346353cd5",
+      "bytes": 15699
+    },
+    "raw/phase7-sqlite-disposable-init-100-acquisition-v2/build.stderr": {
+      "sha256": "d034e5a521612b7fee374fb81eadd39ad165aa2b465c5b18e809d395bfa0c857",
+      "bytes": 522
+    },
+    "raw/phase7-sqlite-disposable-init-100-acquisition-v2/build.stdout": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "raw/phase7-sqlite-disposable-init-100-acquisition-v2/cold.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "raw/phase7-sqlite-disposable-init-100-acquisition-v2/cold.stdout": {
+      "sha256": "88711822004d8806a98bcba3f815a66d0a41deb6bdfcbe452a498a6f6f7ad956",
+      "bytes": 336
+    },
+    "raw/phase7-sqlite-disposable-init-100-acquisition-v2/driver.stderr": {
+      "sha256": "1a88a053f6d2725297d07de91b952b2fc9f601af3e898f289ff54e1983b99ea5",
+      "bytes": 8677
+    },
+    "raw/phase7-sqlite-disposable-init-100-acquisition-v2/driver.stdout": {
+      "sha256": "bef8d770c9ce4529c7514f3290dedf2403cd7ff5937a4fa888a4e3c9a04caf9f",
+      "bytes": 276
+    },
+    "raw/phase7-sqlite-disposable-init-100-acquisition-v2/manifest.json": {
+      "sha256": "0fb8f0318422c96323fd60268ece2ce4fb58fe6199d78919340e9ff85ea5b7b8",
+      "bytes": 1394
+    },
+    "raw/phase7-sqlite-disposable-init-100-acquisition-v2/receipt.json": {
+      "sha256": "9cf0aa2de705e5ac3a6ded8c4fe61a6803453cff5c7af16c0979b14ce5e60adf",
+      "bytes": 13837
+    },
+    "raw/phase7-sqlite-disposable-init-100-acquisition-v2/verifier.stderr": {
+      "sha256": "d76aa0600bacac5be5dd103f3f51e98c13cad82e15cd068cb60eca2835ad6fa6",
+      "bytes": 120
+    },
+    "raw/phase7-sqlite-disposable-init-100-acquisition-v2/verifier.stdout": {
+      "sha256": "a32c8277e8abc04390ebba2847145307753df7d2bb376059fff0cc0f153b3763",
+      "bytes": 387
+    },
+    "raw/phase7-sqlite-disposable-init-1000-acquisition-v2/build.stderr": {
+      "sha256": "d034e5a521612b7fee374fb81eadd39ad165aa2b465c5b18e809d395bfa0c857",
+      "bytes": 522
+    },
+    "raw/phase7-sqlite-disposable-init-1000-acquisition-v2/build.stdout": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "raw/phase7-sqlite-disposable-init-1000-acquisition-v2/cold.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "raw/phase7-sqlite-disposable-init-1000-acquisition-v2/cold.stdout": {
+      "sha256": "39cdb85b1ea86ce46f05ff87cb24ad4ffd641635c08cffbfa1a2318d8d13f1f9",
+      "bytes": 351
+    },
+    "raw/phase7-sqlite-disposable-init-1000-acquisition-v2/driver.stderr": {
+      "sha256": "b970b332fe3b563b034065aa9aabb464399ab4f7ba4ee2e34658c3737bbcd02b",
+      "bytes": 8739
+    },
+    "raw/phase7-sqlite-disposable-init-1000-acquisition-v2/driver.stdout": {
+      "sha256": "586b23010bc92367f5e7371fc16be4bb9750a9e3e9a6d1f89c6bc013283be82c",
+      "bytes": 280
+    },
+    "raw/phase7-sqlite-disposable-init-1000-acquisition-v2/manifest.json": {
+      "sha256": "fd868937687baacc5ca92e24dc482fbe0a6e88742212b186f3316446a2f04f81",
+      "bytes": 1395
+    },
+    "raw/phase7-sqlite-disposable-init-1000-acquisition-v2/receipt.json": {
+      "sha256": "95aaf122ed8fbc8b47aecbbe4cb3d30621ba7b8c67eb167a8763ddfeeb39a264",
+      "bytes": 13899
+    },
+    "raw/phase7-sqlite-disposable-init-1000-acquisition-v2/verifier.stderr": {
+      "sha256": "a5d84a2491c400d84e9113a6a31366efcf23b1cb110c2056b3ee5f7d56b79add",
+      "bytes": 123
+    },
+    "raw/phase7-sqlite-disposable-init-1000-acquisition-v2/verifier.stdout": {
+      "sha256": "3e4cfe2f97847d03108054027d8db8a4260436c8e5d6844ea33e69b10a576c4d",
+      "bytes": 391
+    },
+    "raw/phase7-sqlite-init-100-acquisition-v2/build.stderr": {
+      "sha256": "29d51c511552f67a7b4b189533d7d6b2d166e36248314bc4318480e326ea7906",
+      "bytes": 1320
+    },
+    "raw/phase7-sqlite-init-100-acquisition-v2/build.stdout": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "raw/phase7-sqlite-init-100-acquisition-v2/cold.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "raw/phase7-sqlite-init-100-acquisition-v2/cold.stdout": {
+      "sha256": "221bae415495f59e908f66725d1000095419d94b1576268773f9772626a55474",
+      "bytes": 332
+    },
+    "raw/phase7-sqlite-init-100-acquisition-v2/driver.stderr": {
+      "sha256": "275c76fa985797d01ee0084b74e971e40a22e1e6e9e4d6d48182fbbe45d6d526",
+      "bytes": 8687
+    },
+    "raw/phase7-sqlite-init-100-acquisition-v2/driver.stdout": {
+      "sha256": "d1b7d64771beaf1d51d46fc256cc7cc9c2ce9ae2573e7a1fa8db77e74f2ff0cf",
+      "bytes": 278
+    },
+    "raw/phase7-sqlite-init-100-acquisition-v2/manifest.json": {
+      "sha256": "5ad43811ff008db03f00a40ac491acbaf5c31763f84a05c6f6e1749c1864d903",
+      "bytes": 1667
+    },
+    "raw/phase7-sqlite-init-100-acquisition-v2/receipt.json": {
+      "sha256": "224b272c240551476572a6700d249e489287898e6cfe8b463ca498f4e4158d8b",
+      "bytes": 14289
+    },
+    "raw/phase7-sqlite-init-100-acquisition-v2/verifier.stderr": {
+      "sha256": "d76aa0600bacac5be5dd103f3f51e98c13cad82e15cd068cb60eca2835ad6fa6",
+      "bytes": 120
+    },
+    "raw/phase7-sqlite-init-100-acquisition-v2/verifier.stdout": {
+      "sha256": "a32c8277e8abc04390ebba2847145307753df7d2bb376059fff0cc0f153b3763",
+      "bytes": 387
+    },
+    "raw/phase7-sqlite-init-1000-acquisition-v2/build.stderr": {
+      "sha256": "d034e5a521612b7fee374fb81eadd39ad165aa2b465c5b18e809d395bfa0c857",
+      "bytes": 522
+    },
+    "raw/phase7-sqlite-init-1000-acquisition-v2/build.stdout": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "raw/phase7-sqlite-init-1000-acquisition-v2/cold.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "raw/phase7-sqlite-init-1000-acquisition-v2/cold.stdout": {
+      "sha256": "af3068292c11f0991c141c94fa14872df50a90387bfccb57a0c404c44b6667cb",
+      "bytes": 344
+    },
+    "raw/phase7-sqlite-init-1000-acquisition-v2/driver.stderr": {
+      "sha256": "79593cde402b3649c3a65c6316b749c5b15272012706727ed885f8bf8ab69edd",
+      "bytes": 8758
+    },
+    "raw/phase7-sqlite-init-1000-acquisition-v2/driver.stdout": {
+      "sha256": "3156e3d90c39cdfc7f8ad705b68486386864837f4c138e9f991fd246a9ede9a3",
+      "bytes": 281
+    },
+    "raw/phase7-sqlite-init-1000-acquisition-v2/manifest.json": {
+      "sha256": "1b2d13eef46820f1c184e90c8f8c1de45bf1432a00a5f3c19cb2ffb484891f20",
+      "bytes": 1667
+    },
+    "raw/phase7-sqlite-init-1000-acquisition-v2/receipt.json": {
+      "sha256": "d51ec6c2f2d96171e8bf0eb1b6becada8fc750ac29142464aa38f3690904dd41",
+      "bytes": 14335
+    },
+    "raw/phase7-sqlite-init-1000-acquisition-v2/verifier.stderr": {
+      "sha256": "a5d84a2491c400d84e9113a6a31366efcf23b1cb110c2056b3ee5f7d56b79add",
+      "bytes": 123
+    },
+    "raw/phase7-sqlite-init-1000-acquisition-v2/verifier.stdout": {
+      "sha256": "3e4cfe2f97847d03108054027d8db8a4260436c8e5d6844ea33e69b10a576c4d",
+      "bytes": 391
+    },
+    "setup-reuse.json": {
+      "sha256": "d7cf245d66dd32f1322533c50e4d71af8a2273e75b275aa049b52956ea9b0083",
+      "bytes": 60918
+    },
+    "source-committed-loc.json": {
+      "sha256": "2e6fd1a2fe8165d229c43f49954eaa0792adfa45559c872a5959168cfdb86879",
+      "bytes": 3270
+    }
+  },
+  "full_raw_database_copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro",
+  "original_raw": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro"
+}

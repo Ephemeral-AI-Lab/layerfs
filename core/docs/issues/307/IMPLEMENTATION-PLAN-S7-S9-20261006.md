@@ -778,3 +778,14 @@ The S5/S6 stopping-boundary record remains unchanged.
 Owner-directed performance correction after A3: retain statement leases within entry/place units and batch file/directory roots through fixed32-row SQL inputs. Keep three acquisition tables, opt-in schema versions, public ports, row/byte windows and transaction profiles unchanged. Count/profile/atomicity evidence is captured in the execution-fix checks; changed-source candidate qualification is registered in docs/roadmap/0.1/0.1.7/namespace-init-acquisition-window-fix-20261006.md, reusing qualifying unchanged reference rows. No new R1–R4 implementation or S7/S9 completion is claimed.
 
 [Source, diagnostics, checks and retained failures](checks/init-acquisition-fix-20261006/identity.json).
+
+
+## Execution-fix qualification checkpoint (2026-10-06)
+
+Source4c03b41bf has qualified changed-source component receipts, reusing exact
+unchanged reference evidence. All cold-content/functional/root/cleanup/absolute
+checks pass. Disposable100 remains the only joint PASS; Durable100/1000 and
+Disposable1000 retain relative-speed FAIL. Disposable1000 is145382875 ns versus
+152242291 ns before and124912209 ns reference. The full speed issue is not resolved.
+[Exact report, reuse, arithmetic, source LOC and next work](ACQUISITION-WINDOW-FIX-RESULTS-20261006.md).
+Milestones remain CHECKPOINT; no full-root/runtime/engine/resource acceptance is inferred.

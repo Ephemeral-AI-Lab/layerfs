@@ -1,0 +1,323 @@
+{
+  "schema": "issue307-window-fix-results-20261006",
+  "source_commit": "4c03b41bf5fcc684df3a707d223ad2b9166396f8",
+  "source_tree": "6f8770c98ba9648b1af6a2e1e0bfafb5a57d2c8a",
+  "baseline_reuse": "qualified original reference receipts; no new reference sample",
+  "old_candidate_source": "45e2b09e8db73dff7303fa48948556b5821727bc",
+  "budget_ns": {
+    "build": 30000000000,
+    "outer_invocation": 120000000000,
+    "performance": 30000000000,
+    "verification": 19000000000
+  },
+  "cache_contract": "phase7-cold-content-fresh-database-complete-lifecycle-v1",
+  "pairs": [
+    {
+      "case": "phase7-sqlite-init-100-acquisition-v2",
+      "requested_profile": "durable",
+      "joint_gate": "FAIL",
+      "root_equal": true,
+      "reference_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-benchmark-20261006/raw/phase7-sqlite-init-100-acquisition-v2-baseline/receipt.json",
+      "old_candidate_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-benchmark-20261006/raw/phase7-sqlite-init-100-acquisition-v2-candidate/receipt.json",
+      "candidate_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-window-results-20261006/raw/phase7-sqlite-init-100-acquisition-v2/receipt.json",
+      "reference_product_ns": 41992917,
+      "old_candidate_product_ns": 97931000,
+      "candidate_product_ns": 94632292,
+      "candidate_reference_ratio": 2.253529851236579,
+      "candidate_old_delta_percent": -3.3684002001409157,
+      "reference_allocation_bytes": 7372800,
+      "candidate_allocation_bytes": 5304320,
+      "complete_performance_ns": 1056548167,
+      "proof_ns": 541847208,
+      "build_ns": 6900096375,
+      "driver_cpu_ns": 67954000,
+      "driver_lifetime_rss_bytes": 39731200,
+      "oracle": {
+        "directories": 2,
+        "discovered_files": 100,
+        "manifest_bytes": 5000000,
+        "manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+        "metadata_attribute_waves": 5,
+        "paths": 102,
+        "root": "ca1c20f806277e3fb0447ef526a5ca8d298753d01667f501e8b58b6350cd86f1",
+        "sample_policy": "stride64-size-log2-endpoints-v1",
+        "sampled_bytes": 3354003,
+        "sampled_files": 53,
+        "status": "PASS",
+        "workers": 4
+      },
+      "diagnostic": {
+        "statements": 468,
+        "vm_steps": 78371,
+        "fullscan_steps": 245,
+        "sorts": 16,
+        "autoindex_rows": 0,
+        "reprepares": 3,
+        "statement_ns": 65605312,
+        "commit_ns": 52648383,
+        "write_commits": 19,
+        "preallocation_calls": 2,
+        "preallocation_bytes": 6246400
+      },
+      "binary_identities": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/binary-archive/02a6da1519e10cbef868a194892687d3d482a1d42a503909a38c3dbb692bdfbe/benchmark_init",
+          "sha256": "02a6da1519e10cbef868a194892687d3d482a1d42a503909a38c3dbb692bdfbe"
+        },
+        "verify_namespace": {
+          "path": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/binary-archive/e0c711f0adb43710d166dfa9f549fc998c632abfd6f126c90d1ebacdc1a70072/verify_namespace",
+          "sha256": "e0c711f0adb43710d166dfa9f549fc998c632abfd6f126c90d1ebacdc1a70072"
+        }
+      },
+      "candidate_seals": {
+        "product_seal": "5b402f7c7899b946f53ae6444c5e3f77c524e88e2042ae1e7651e73acd69a788",
+        "compilation_seal": "6abb0501a965b489f311d220c0b5f89afcca76603c0ea3ad994872a266aca1ab",
+        "shipped_sql_seal": "2672b64f8351e043964ae2f266f32818535e392e2b66979c0354f0ebc787b1ff",
+        "dependency_seal": "04db4f6e7264765d6c069ab71fbb49099c19f83385839cc35c6991cb7158ebb9",
+        "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+      },
+      "harness_seal": "890afa94138e347672c9b0d5ed3ddc09c90718ba2b9f9d77b9058ccc092bd7f6"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-100-acquisition-v2",
+      "requested_profile": "disposable",
+      "joint_gate": "PASS",
+      "root_equal": true,
+      "reference_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-benchmark-20261006/raw/phase7-sqlite-disposable-init-100-acquisition-v2-baseline/receipt.json",
+      "old_candidate_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-benchmark-20261006/raw/phase7-sqlite-disposable-init-100-acquisition-v2-candidate/receipt.json",
+      "candidate_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-window-results-20261006/raw/phase7-sqlite-disposable-init-100-acquisition-v2/receipt.json",
+      "reference_product_ns": 39485000,
+      "old_candidate_product_ns": 40476833,
+      "candidate_product_ns": 41976291,
+      "candidate_reference_ratio": 1.0630946182094467,
+      "candidate_old_delta_percent": 3.704484488695052,
+      "reference_allocation_bytes": 7372800,
+      "candidate_allocation_bytes": 5275648,
+      "complete_performance_ns": 72078500,
+      "proof_ns": 17828083,
+      "build_ns": 83098250,
+      "driver_cpu_ns": 56214000,
+      "driver_lifetime_rss_bytes": 39780352,
+      "oracle": {
+        "directories": 2,
+        "discovered_files": 100,
+        "manifest_bytes": 5000000,
+        "manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+        "metadata_attribute_waves": 5,
+        "paths": 102,
+        "root": "ca1c20f806277e3fb0447ef526a5ca8d298753d01667f501e8b58b6350cd86f1",
+        "sample_policy": "stride64-size-log2-endpoints-v1",
+        "sampled_bytes": 3354003,
+        "sampled_files": 53,
+        "status": "PASS",
+        "workers": 4
+      },
+      "diagnostic": {
+        "statements": 465,
+        "vm_steps": 78539,
+        "fullscan_steps": 245,
+        "sorts": 16,
+        "autoindex_rows": 0,
+        "reprepares": 3,
+        "statement_ns": 15096758,
+        "commit_ns": 5557838,
+        "write_commits": 19,
+        "preallocation_calls": 3,
+        "preallocation_bytes": 7192576
+      },
+      "binary_identities": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/binary-archive/02a6da1519e10cbef868a194892687d3d482a1d42a503909a38c3dbb692bdfbe/benchmark_init",
+          "sha256": "02a6da1519e10cbef868a194892687d3d482a1d42a503909a38c3dbb692bdfbe"
+        },
+        "verify_namespace": {
+          "path": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/binary-archive/e0c711f0adb43710d166dfa9f549fc998c632abfd6f126c90d1ebacdc1a70072/verify_namespace",
+          "sha256": "e0c711f0adb43710d166dfa9f549fc998c632abfd6f126c90d1ebacdc1a70072"
+        }
+      },
+      "candidate_seals": {
+        "product_seal": "5b402f7c7899b946f53ae6444c5e3f77c524e88e2042ae1e7651e73acd69a788",
+        "compilation_seal": "6abb0501a965b489f311d220c0b5f89afcca76603c0ea3ad994872a266aca1ab",
+        "shipped_sql_seal": "2672b64f8351e043964ae2f266f32818535e392e2b66979c0354f0ebc787b1ff",
+        "dependency_seal": "04db4f6e7264765d6c069ab71fbb49099c19f83385839cc35c6991cb7158ebb9",
+        "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+      },
+      "harness_seal": "890afa94138e347672c9b0d5ed3ddc09c90718ba2b9f9d77b9058ccc092bd7f6"
+    },
+    {
+      "case": "phase7-sqlite-init-1000-acquisition-v2",
+      "requested_profile": "durable",
+      "joint_gate": "FAIL",
+      "root_equal": true,
+      "reference_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-benchmark-20261006/raw/phase7-sqlite-init-1000-acquisition-v2-baseline/receipt.json",
+      "old_candidate_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-benchmark-20261006/raw/phase7-sqlite-init-1000-acquisition-v2-candidate/receipt.json",
+      "candidate_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-window-results-20261006/raw/phase7-sqlite-init-1000-acquisition-v2/receipt.json",
+      "reference_product_ns": 119535750,
+      "old_candidate_product_ns": 225763292,
+      "candidate_product_ns": 239892625,
+      "candidate_reference_ratio": 2.006869283875326,
+      "candidate_old_delta_percent": 6.258472258634499,
+      "reference_allocation_bytes": 23101440,
+      "candidate_allocation_bytes": 20938752,
+      "complete_performance_ns": 327949958,
+      "proof_ns": 31534125,
+      "build_ns": 85130459,
+      "driver_cpu_ns": 262102000,
+      "driver_lifetime_rss_bytes": 55312384,
+      "oracle": {
+        "directories": 11,
+        "discovered_files": 1000,
+        "manifest_bytes": 20000000,
+        "manifest_sha256": "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c",
+        "metadata_attribute_waves": 5,
+        "paths": 1011,
+        "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+        "sample_policy": "stride64-size-log2-endpoints-v1",
+        "sampled_bytes": 6430827,
+        "sampled_files": 70,
+        "status": "PASS",
+        "workers": 4
+      },
+      "diagnostic": {
+        "statements": 2537,
+        "vm_steps": 598723,
+        "fullscan_steps": 1113,
+        "sorts": 16,
+        "autoindex_rows": 0,
+        "reprepares": 3,
+        "statement_ns": 147968414,
+        "commit_ns": 105016915,
+        "write_commits": 25,
+        "preallocation_calls": 5,
+        "preallocation_bytes": 14086144
+      },
+      "binary_identities": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/binary-archive/02a6da1519e10cbef868a194892687d3d482a1d42a503909a38c3dbb692bdfbe/benchmark_init",
+          "sha256": "02a6da1519e10cbef868a194892687d3d482a1d42a503909a38c3dbb692bdfbe"
+        },
+        "verify_namespace": {
+          "path": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/binary-archive/e0c711f0adb43710d166dfa9f549fc998c632abfd6f126c90d1ebacdc1a70072/verify_namespace",
+          "sha256": "e0c711f0adb43710d166dfa9f549fc998c632abfd6f126c90d1ebacdc1a70072"
+        }
+      },
+      "candidate_seals": {
+        "product_seal": "5b402f7c7899b946f53ae6444c5e3f77c524e88e2042ae1e7651e73acd69a788",
+        "compilation_seal": "6abb0501a965b489f311d220c0b5f89afcca76603c0ea3ad994872a266aca1ab",
+        "shipped_sql_seal": "2672b64f8351e043964ae2f266f32818535e392e2b66979c0354f0ebc787b1ff",
+        "dependency_seal": "04db4f6e7264765d6c069ab71fbb49099c19f83385839cc35c6991cb7158ebb9",
+        "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+      },
+      "harness_seal": "890afa94138e347672c9b0d5ed3ddc09c90718ba2b9f9d77b9058ccc092bd7f6"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-1000-acquisition-v2",
+      "requested_profile": "disposable",
+      "joint_gate": "FAIL",
+      "root_equal": true,
+      "reference_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-benchmark-20261006/raw/phase7-sqlite-disposable-init-1000-acquisition-v2-baseline/receipt.json",
+      "old_candidate_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-benchmark-20261006/raw/phase7-sqlite-disposable-init-1000-acquisition-v2-candidate/receipt.json",
+      "candidate_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-window-results-20261006/raw/phase7-sqlite-disposable-init-1000-acquisition-v2/receipt.json",
+      "reference_product_ns": 124912209,
+      "old_candidate_product_ns": 152242291,
+      "candidate_product_ns": 145382875,
+      "candidate_reference_ratio": 1.1638804258116995,
+      "candidate_old_delta_percent": -4.505591682143039,
+      "reference_allocation_bytes": 23101440,
+      "candidate_allocation_bytes": 20893696,
+      "complete_performance_ns": 246394625,
+      "proof_ns": 32028541,
+      "build_ns": 81697750,
+      "driver_cpu_ns": 215070000,
+      "driver_lifetime_rss_bytes": 54820864,
+      "oracle": {
+        "directories": 11,
+        "discovered_files": 1000,
+        "manifest_bytes": 20000000,
+        "manifest_sha256": "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c",
+        "metadata_attribute_waves": 5,
+        "paths": 1011,
+        "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+        "sample_policy": "stride64-size-log2-endpoints-v1",
+        "sampled_bytes": 6430827,
+        "sampled_files": 70,
+        "status": "PASS",
+        "workers": 4
+      },
+      "diagnostic": {
+        "statements": 2532,
+        "vm_steps": 598739,
+        "fullscan_steps": 1113,
+        "sorts": 16,
+        "autoindex_rows": 0,
+        "reprepares": 3,
+        "statement_ns": 63654236,
+        "commit_ns": 25800874,
+        "write_commits": 26,
+        "preallocation_calls": 7,
+        "preallocation_bytes": 16826368
+      },
+      "binary_identities": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/binary-archive/02a6da1519e10cbef868a194892687d3d482a1d42a503909a38c3dbb692bdfbe/benchmark_init",
+          "sha256": "02a6da1519e10cbef868a194892687d3d482a1d42a503909a38c3dbb692bdfbe"
+        },
+        "verify_namespace": {
+          "path": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/binary-archive/e0c711f0adb43710d166dfa9f549fc998c632abfd6f126c90d1ebacdc1a70072/verify_namespace",
+          "sha256": "e0c711f0adb43710d166dfa9f549fc998c632abfd6f126c90d1ebacdc1a70072"
+        }
+      },
+      "candidate_seals": {
+        "product_seal": "5b402f7c7899b946f53ae6444c5e3f77c524e88e2042ae1e7651e73acd69a788",
+        "compilation_seal": "6abb0501a965b489f311d220c0b5f89afcca76603c0ea3ad994872a266aca1ab",
+        "shipped_sql_seal": "2672b64f8351e043964ae2f266f32818535e392e2b66979c0354f0ebc787b1ff",
+        "dependency_seal": "04db4f6e7264765d6c069ab71fbb49099c19f83385839cc35c6991cb7158ebb9",
+        "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+      },
+      "harness_seal": "890afa94138e347672c9b0d5ed3ddc09c90718ba2b9f9d77b9058ccc092bd7f6"
+    }
+  ],
+  "unrun": [
+    {
+      "arms": [
+        "baseline",
+        "candidate"
+      ],
+      "case": "phase7-sqlite-init-10000-acquisition-v2",
+      "reason": "outside prospectively selected initial 100/1000 tiers",
+      "sample_count": 0,
+      "status": "NOT_RUN"
+    },
+    {
+      "arms": [
+        "baseline",
+        "candidate"
+      ],
+      "case": "phase7-sqlite-init-100000-acquisition-v2",
+      "reason": "outside prospectively selected initial 100/1000 tiers",
+      "sample_count": 0,
+      "status": "NOT_RUN"
+    },
+    {
+      "arms": [
+        "baseline",
+        "candidate"
+      ],
+      "case": "phase7-sqlite-disposable-init-10000-acquisition-v2",
+      "reason": "outside prospectively selected initial 100/1000 tiers",
+      "sample_count": 0,
+      "status": "NOT_RUN"
+    },
+    {
+      "arms": [
+        "baseline",
+        "candidate"
+      ],
+      "case": "phase7-sqlite-disposable-init-100000-acquisition-v2",
+      "reason": "outside prospectively selected initial 100/1000 tiers",
+      "sample_count": 0,
+      "status": "NOT_RUN"
+    }
+  ],
+  "no_replay": true
+}

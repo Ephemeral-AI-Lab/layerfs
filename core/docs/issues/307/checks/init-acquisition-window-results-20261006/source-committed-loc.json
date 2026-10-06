@@ -1,0 +1,101 @@
+{
+  "counter": "tools/production_loc.py",
+  "sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "parent": "7362f05a689aa361ee715c389b51ca5c600bc135",
+  "staged_tree": "6f8770c98ba9648b1af6a2e1e0bfafb5a57d2c8a",
+  "scope": "exact parent/staged archives; product src/shipped SQL including excluded source; tests/inline tests/docs/tools/examples/harnesses/manifests/builds excluded",
+  "before": {
+    "combined": 159408,
+    "root": "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-exact-loc-5z3742n9",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 5433,
+          "layerfs-bridge": 1258,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 14093,
+          "layerfs-daemon": 1831,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 817,
+          "layerfs-overlay": 6567,
+          "layerfs-persistence": 5691,
+          "layerfs-project": 1550,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9298,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 2317,
+          "layerfs-workspace-legacy": 26835
+        },
+        "files": 646,
+        "lines": 93991
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "after": {
+    "combined": 159602,
+    "root": "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-exact-loc-o06gzx_o",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 5433,
+          "layerfs-bridge": 1258,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 14093,
+          "layerfs-daemon": 1831,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 817,
+          "layerfs-overlay": 6567,
+          "layerfs-persistence": 5885,
+          "layerfs-project": 1550,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9298,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 2317,
+          "layerfs-workspace-legacy": 26835
+        },
+        "files": 648,
+        "lines": 94185
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "commit": "4c03b41bf5fcc684df3a707d223ad2b9166396f8",
+  "committed_tree_verified": true
+}
