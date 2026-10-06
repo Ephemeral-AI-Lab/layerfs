@@ -667,3 +667,24 @@ First parent: `ff221cd8f3d3bc92a7cc1d2c3901b2dd27b07261`, tree
 reference 65417 and combined 158097 production LOC, delta +0 in each scope.
 Its final staged/committed comparison uses the unchanged counter and scope in
 section 7; the exact receipt is retained under `core/target/cluster2-307/loc/`.
+
+## 10. A4 delivered and A1 written (2026-10-06)
+
+A4 source: `8bd03d76243987c365a06453d83c45015f72d4a5`, tree
+`c0f5436141425f1a7873aff843dfc6e8e7a7b0e3`, first parent
+`ee4a647223ed859022f00260689e13e8f2857b5c`. Production LOC core 92680 → 92797
+(+117), reference 65417 → 65417 (+0), combined 158097 → 158214 (+117), verified
+against the staged tree; [receipt](checks/s9-acquisition-custody/committed-loc.json).
+Findings 2, 3 and 4 of section 2 are corrected with public-API regressions, and
+the ungated macOS Store fixture is platform-gated with a refusal proof. Checks,
+the one retained test failure and limits are in the
+[custody receipts](checks/s9-acquisition-custody/identity.json). Finding 1 is
+A1–A3 and is not corrected by this commit.
+
+A1 is written as [the acquisition contract](A1-ACQUISITION-CONTRACT.md). It
+places the port in Storage and the SQL in Persistence, adds a third `Handles`
+field, defines the three tables with the entry key `(operation, parent position,
+name)`, selects new schema versions 4–6 rather than changing 1–3, and keeps
+working-row cleanup before publication. Its section 9 holds two owner decisions
+that gate A2. The current baseline is core 92797 + reference 65417 = combined
+158214. A2, A3, R1–R4, E1–E4, Q1 and C1 remain open; S7/S9 remain incomplete.

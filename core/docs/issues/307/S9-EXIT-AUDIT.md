@@ -260,3 +260,37 @@ remain open. S9 is incomplete/unchecked; S8 and later Commit prerequisites stay
 deferred. [S9 tracker receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6010923803) now records both previously unposted
 checkpoints, their exact production LOC and these corrections. The plan/guard
 change itself has core92680/reference65417/combined158097 unchanged, delta0.
+
+## Acquisition custody corrections and A1 design (2026-10-06)
+
+Source `8bd03d76243987c365a06453d83c45015f72d4a5`, tree
+`c0f5436141425f1a7873aff843dfc6e8e7a7b0e3`, first parent `ee4a64722`, delivers plan
+package A4. Production LOC core 92680 → 92797 (+117: Content +82, Project +35),
+reference 65417 → 65417 (+0), combined 158097 → 158214 (+117);
+[committed LOC receipt](checks/s9-acquisition-custody/committed-loc.json).
+
+- A failed partial `FileBacking` append keeps the bytes that reached the file
+  charged; a path returns only its own listed bytes; a failed checked release
+  records its host cause and is not replayed by a destructor.
+- A scratch parent that is the source or inside it is refused as
+  `ScratchInsideSource` before anything is created. The review probe expected
+  success with the scratch excluded; refusal was chosen because creating the
+  scratch there changes the source directory.
+- `ProjectError::Cleanup` carries the deciding host error and the retained
+  directory, run count and bytes.
+- The macOS-only Store oracle is platform-gated; other platforms prove the
+  `BackendUnavailable` refusal. The Linux Project all-target command, FAILED at
+  the previous checkpoint, passes at this source. The earlier failure stays FAILED.
+
+Host: Content 289 and Project bodies pass; whole-workspace build and Clippy pass.
+Docker Linux: Content 289 bodies and the Project all-target command pass, Clippy
+passes. One new-test defect failed once and is retained in the
+[failure ledger](checks/s9-acquisition-custody/FAILURES.md) with the evidence
+limits: the failed-release Project case is an induced race and prints a skip
+under uid 0 in Docker; binaries carry a post-run seal only. Caches uncontrolled;
+no speed, RSS or cold claim. [Identity](checks/s9-acquisition-custody/identity.json).
+
+[A1](A1-ACQUISITION-CONTRACT.md) is the written acquisition capability, table,
+compatibility and cleanup design. It is a proposal: no port, table or provider
+exists. Two Store-format decisions in its section 9 are the owner's and gate A2.
+A2, A3, R1–R4, E1–E4 and Q1 are not started. S9 remains CHECKPOINT/unchecked.
