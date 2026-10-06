@@ -115,6 +115,18 @@ class SqliteStep10(unittest.TestCase):
         self.assertIn('HistoryName::new(&args[3])',text)
         self.assertIn('args.get(4)',text)
         self.assertNotIn('scratch',text)
+    def test_work_reduction_is_new_identity_with_unchanged_frozen_inputs_and_gates(self):
+        self.assertEqual(len(f.WORK_REDUCTION_CASES),8)
+        self.assertEqual(len(set(f.WORK_REDUCTION_CASES)),8)
+        for old,new in zip(f.SPACE_SCALING_CASES,f.WORK_REDUCTION_CASES):
+            self.assertEqual(new,old.replace('-space-scaling-v2','-work-reduction-v1'))
+            before,after=f.CASES[old],f.CASES[new]
+            self.assertEqual((before.fixture,before.command_budget_ns,before.verification_budget_ns,
+                              before.profile,before.proof_policy,before.pack_layout,before.proof_envelope),
+                             (after.fixture,after.command_budget_ns,after.verification_budget_ns,
+                              after.profile,after.proof_policy,after.pack_layout,after.proof_envelope))
+            self.assertEqual((after.command_budget_ns,after.verification_budget_ns),
+                             (30_000_000_000,19_000_000_000))
     def test_margin_is_integer_total_bound_and_joint_gate_cannot_waive_missing_proof(self):
         self.assertEqual(c.gate(self.row(110),self.row(100),100),'PASS')
         self.assertEqual(c.gate(self.row(111),self.row(100),100),'FAIL')

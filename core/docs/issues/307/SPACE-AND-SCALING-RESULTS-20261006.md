@@ -50,7 +50,7 @@ A new owned isolated checkout runs the actual cluster-one public `layerfs_projec
 
 Current acquisition alone adds46,325,725 VM steps and114 acknowledged write commits. The total VM difference is46,325,816; all but91 of those extra steps are attributed to acquisition units. Immutable publication is effectively unchanged at13.72million VM steps. The remaining gap is the additional mutable acquisition work, rather than a changed committed payload. This count attribution is much stronger than inferring a cause from noisy wall ratios.
 
-The reference retains input-sized entry/job/serial/inode/directory vectors and uses ordering scratch only in namespace construction. The current source replaces those growing containers with indexed Store rows and bounded windows. Restoring the old acquisition path would restore the old resource behavior; it is not selected. Native scratch syscall bytes/time and some reference SQL counters are unavailable, explicitly null.
+The reference retains input-sized entry/job/serial/inode/directory vectors. It supplies FileBacking to its generic filesystem constructor, but the successful fresh `base=None` branch uses a resident per-serial count array and final-row vector to avoid external reference-ordering runs. Supplying the backing and creating/removing its directory do not establish bulk run writes. The current source replaces the growing acquisition containers with indexed Store rows and bounded windows, then feeds the sorted directory/inode constructors directly. Restoring the old acquisition path would restore the old resource behavior; it is not selected. Native scratch syscall bytes/time and some reference SQL counters are unavailable, explicitly null. This explanation was corrected by the source review below; measurement receipts and verdicts are unchanged.
 
 The phase timers report reference scan2.245s/files6.759s and current scan2.865s/files7.596s/tree0.511s/acquisition cleanup0.596s in their instrumented windows. Reference namespace construction and scratch cleanup lack their own public timer regions; do not assign its unaccounted root time to one mechanism. SQL, COMMIT, transaction, Save stages and phase clocks overlap and are never added or subtracted to manufacture an exclusive latency model. These diagnostic clocks do not establish isolated causal speed deltas.
 
@@ -77,3 +77,154 @@ activity and are not an isolated causal speed pair. The enabled current VFS
 observation exceeded15s while publishing file objects; it wraps every SQLite/VFS
 call and emits per-port records. It was killed and retained without increasing
 the cap; this separate instrumentation failure is not a qualified product timeout.
+
+## Parallel source and cost review, 2026-10-06
+
+The owner requests subagent analysis of time complexity, roundtrips, and why
+cluster one used fewer steps, commits and writes. Three read-only reviews cover
+current complexity, current SQL/transaction accounting, and the complete relevant
+historical public Project Init path. Reference is 197d2fb7d0a141d7a9350852022febeec3255bf2;
+current product is dd43af598440847834d86fd10bbb7589e0e2cd62. This is source analysis
+and arithmetic on retained diagnostics, not a new performance treatment or
+qualification. No product change, build, test or timing invocation is included.
+[Review ledger and pinned historical excerpts](checks/space-scaling-20261006/parallel-cost-review.json).
+
+### Why the reference avoids acquisition SQL
+
+Historical `core/crates/layerfs-project/src/scan.rs` retains every prepared entry
+and construction job, collects and sorts each directory's full child list, and
+keeps a BFS directory frontier. Workers consume the resident job queue; the Save
+owner writes each completed content root directly into `entries[index].content`.
+Historical `namespace.rs` then creates full serial/inode/directory collections.
+The generic filesystem builder additionally uses fresh-build count/value arrays
+and topology maps. These ordinary process-memory updates and drops have no SQL
+VM, write-acknowledgment or SQL deletion cost. They still pay allocations, copies,
+native enumeration/stat calls, sorting, validation and canonical construction.
+The pinned excerpts include exact historical paths, blob identities and line numbers.
+
+Both versions use four file constructors and one Save owner, with bounded object
+publication and acknowledged allocation. The inspected Save tree differs only
+in the corrected pack-ID bound; publication and the sorted directory/inode
+constructor entry points are shared. A Save lifetime is not one SQLite transaction.
+The reference's global Store still uses WAL/FULL/fullfsync. Its lower commit count
+does not come from weaker immutable Store durability.
+
+The reference native importer rejects symlinks and assigns separate serials per
+regular path without native hard-link deduplication. Current Init preserves opaque
+symlink targets and native hard-link identity, and rechecks the final pathname
+in addition to descriptor observations. The measured unique regular-file fixture
+remains comparable, but the reference is not a replacement for those capabilities.
+
+### Local calls, SQL executions and acknowledgments
+
+Current acquisition makes 913 local port invocations: 799 read and 114 write Session
+transactions. These are in-process calls, not network RPCs. Each successful unit
+uses explicit BEGIN/COMMIT, giving 1,826 SQL executions for transaction framing.
+Read COMMITs do not imply journal writes or synchronization.
+
+| Acquisition unit | Port/transaction calls | SQL executions | VM steps | Write acknowledgments |
+| --- | ---: | ---: | ---: | ---: |
+| Begin | 1 | 4 | 157 | 1 |
+| Insert entries/native identities | 35 | 9,656 | 24,308,860 | 35 |
+| Place wide-directory children | 1 | 1,004 | 93,105 | 1 |
+| Complete file roots | 25 | 3,225 | 6,474,500 | 25 |
+| Record directory roots | 1 | 36 | 79,203 | 1 |
+| Read directory frontier | 4 | 19 | 21,254 | 0 |
+| Read construction jobs | 197 | 984 | 1,611,805 | 0 |
+| Read entries | 398 | 1,592 | 3,108,762 | 0 |
+| Read file roots/alias counts | 197 | 788 | 708,276 | 0 |
+| Read unplaced children | 3 | 12 | 9,131 | 0 |
+| Discard working rows | 50 | 522 | 9,910,474 | 50 |
+| Release | 1 | 8 | 198 | 1 |
+| **Total** | **913** | **17,850** | **46,325,725** | **114** |
+
+The total Init difference is +17,832 executions, +46,325,816 VM steps, +117 write
+acknowledgments. Subtracting acquisition leaves -18 executions, +91 VM steps, +3
+write acknowledgments. The three remaining writes are one publication and two
+allocation reservations; the two history writes are unchanged. Diagnostic unit
+aggregation includes a `storage.policy` observation during `Storage::new` before
+the complete-Init snapshot, so summing all public-unit rows is not the definition
+of that snapshot. This does not change writable-unit reconciliation.
+
+Insertion's 9,656 executions decompose into 35 units times 4 framing/owner/charge
+statements, plus 3,172 inputs times 3 statements: dependency preflight, native INSERT,
+namespace INSERT. The unique fixture uses no per-entry fallback. Completion's 3,225
+executions are 25 units times 4 framing/owner/charge statements plus 3,125 fixed 32-row
+UPDATE inputs. Required owner checks distinguish stale handles from valid empty
+windows; they cannot simply be deleted.
+
+The retained 32-fresh-file provider diagnostic changed 68 executions/5,353 VM steps
+to 7 executions/7,828 VM steps: batching removes 89.7% of executions but adds 46.2%
+of VM work because preflight repeats indexed checks before insertion. The result
+holds at 2,000 and 20,000 stored rows. This is an earlier source-qualified diagnostic,
+not a new current timing result. Larger inputs alone do not establish an improvement.
+[Retained profile/plans](checks/init-entry-window-20261006/06-persistence-covering.log).
+
+### Complexity and cumulative work
+
+Let E be entries, U unique native regular identities, A additional alias paths,
+D directories, D' nonempty directory roots, V children of wide directories,
+B processed unique content bytes, P materialized/copied/bound name/path bytes,
+and N the shared indexed population including other live/abandoned operations.
+Read/write/internal SQL windows remain 512/4096/32 rows and their existing byte
+bounds. An operation prefix bounds useful rows; index height still depends on N.
+
+Current metadata/index work is principally O((E+U+V+A) log N), with multiple
+linear passes, fixed-window overhead and actual payload/pager work. Native path
+processing requires P; an E/B-only bound would conceal deep-path bytes. Small
+directory sorts are locally bounded; wide ordering uses indexed backing.
+Cleanup's OFFSET is at most 4,095 within each soon-to-be-deleted prefix, so total
+endpoint visits are O(E+U). No growing enumeration OFFSET or repeated global
+scan establishes quadratic work in the reviewed ordinary acquisition path.
+Physical pager/reclamation cost remains separately unqualified.
+
+Logical working-row mutations are E+2U+A+V+D' before cleanup and
+2E+3U+A+V+D' including cleanup, excluding operation accounting and index/page work.
+For this fixture E=101001, U=100000, A=0, V=1000, D'=1001: 504,003 logical mutations,
+including deletion of 201,001 working rows. These are not physical writes.
+
+Two entry passes give 398 calls:2*(ceil(101001/512)+1 terminal read). The job and
+file-root streams each give 197 calls:ceil(100000/512)+1. Cleanup needs 50 jobs:
+ceil(201001/4096). The completion fullscan counter 96,875 equals 3125*31 advances
+of fixed VALUES inputs; directory completion similarly reports 32*31=992. Those
+counters do not indicate growing scans of the stored population.
+
+Three additional shapes deserve separate count cases: an existing-identity
+boundary can repeatedly rebuild a 32-row lookahead, bounded O(32 A log N);
+4096-byte paths can make a 512-length sizing lookahead feed only about 62 useful
+jobs, causing bounded repeated scalar visits; and one alias can enable a whole
+extra E-entry validation pass even when A is small. They are absent from or
+minor in the unique short-path fixture and cannot be credited from its timing.
+
+Current Init directly streams indexed rows into the sorted directory and inode
+constructors, with no FileBacking, generic reference reducer or whole-namespace
+serial/count/value arrays. Fresh construction uses bounded page/right-spine state
+and no base-tree traversal. Historical fresh construction used the same lower-level
+sorted engine. The owner services SQL and Save output on the thread that feeds
+the 512-job queue and accepts the four-slot result channel: SQL service can
+backpressure constructors, but worker starvation/queue-wait time is not measured.
+
+### Optimization candidates and what each can change
+
+| Candidate | Work addressed | Limits and proof |
+| --- | --- | --- |
+| Reuse independent-prefix bindings; use minimal statement projections; skip provably empty native INSERTs | Rust allocation/rebinding and fixed SQL input work | Provider-local; preserve indexed dependency checks, error order, aliases and bounds. Exact EXPLAIN/profile needed; does not remove write commits. |
+| Redesign duplicated preflight/insertion checks | Potentially substantial insertion VM work | Replace the evidence, rather than remove uniqueness/identity checks. Preserve first-error order and atomic outcomes; failed INSERT then replay remains forbidden. |
+| Direct typed row decoding and a narrow directory-binding stream | Copied columns, row mapping and allocation in entry passes | Current first pass does not need all seven entry columns. A new projection is a port extension; SQL joins can add indexed probes instead of saving work. |
+| Pass validated owner data to live discard/release helpers | 51 duplicate SELECTs | Small effect. Abandoned-operation entry points still need their own validation. |
+| Single-statement owned read snapshots | Up to 1,794 framing/owner executions across 598 single-payload read units | Requires deliberate Session/port semantics and stale-versus-empty encoding. The 201 two-pass path units still require a consistent snapshot. No write syncs removed. |
+| Compact the acquisition representation/lifecycle | E/U-shaped row/index insertion, root growth and deletion, potentially cleanup unit count | Larger schema/compatibility design; keep ordering, native identity/evidence, aliases, exact charges, custody and cleanup-before-publication. Benefit is unmeasured. |
+| Coordinate compatible bounded atomic jobs | Commit/synchronization overhead | Owning API/transaction change; no transaction across source I/O/construction, no whole-Init transaction, no relaxed durability or increased frozen caps. |
+
+For the observed fixture, insertion/root-recording/removal dominate. Alias-only
+streams, alias lookahead and bulk wide-child placement are legitimate separate
+capability targets, but they do not explain the measured main gap. The current
+direct streamed constructors should remain. The report recommends concrete
+mechanisms, not a forecast of parity or a new accepted candidate.
+
+SQL executions, VM steps, row mutations, dirty pages, VFS write/sync calls and
+device writes are distinct. The complete matching current VFS totals are still
+unavailable after the retained observer timeout. Reference VFS submitted bytes
+and older Durable100 observations cannot establish a current 100000-file write
+ratio. No durability/profile/topology change or new speed/storage PASS follows
+from this review.

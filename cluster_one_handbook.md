@@ -416,7 +416,7 @@ Source: [history requests/outcomes](core/crates/layerfs-history/src/contract/rec
          -> file construction + file Save.finish()
          -> reserve scope-wide inode serials
          -> build namespace (tree Save left open)
-         -> discard working rows + release operation
+         -> bounded disposal + release operation (same final SQLite acknowledgment)
          -> tree Save.finish()
          -> initialize_layerstack(genesis root)
          -> Initialized { stack, root, entries, diagnostics, namespace_work, ... }
@@ -434,6 +434,17 @@ workers; it is not a rollback boundary. Checkpoint is a separate handle lifecycl
 operation, not a substitute for either Save finish.
 
 Source: [Init API](core/crates/layerfs-project/src/import/init.rs).
+
+Directory construction uses bounded `Acquisition::bindings` windows containing
+name, position and canonical identity; inode and alias validation retain full
+entries. SQLite decodes typed windows directly. Single-statement reads use one
+owner-gated implicit snapshot; two-pass path reads keep their explicit transaction.
+`dispose` can remove the empty operation record in its final bounded cleanup job.
+Existing adapters derive bindings from entries and report whether explicit release
+remains. The schema, Durable guarantees and cleanup-before-publication rule remain.
+The [work reduction selection](core/docs/issues/307/SPACE-AND-SCALING-PLAN-20261006.md#owner-selected-work-reduction-checkpoint)
+and [lifecycle review](core/docs/issues/307/A1-ACQUISITION-CONTRACT.md#owner-selected-work-reduction-and-lifecycle-review)
+distinguish implemented access changes from compact-schema/publication proposals.
 
 ## 5. Streaming workflow and large-load behavior
 

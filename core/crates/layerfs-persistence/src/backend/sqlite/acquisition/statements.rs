@@ -41,6 +41,8 @@ statement!(COMPLETE_FILE, "complete_file");
 statement!(FILE_ROOTS, "file_roots");
 statement!(ENTRIES_FIRST, "entries_first");
 statement!(ENTRIES_NEXT, "entries_next");
+statement!(BINDINGS_FIRST, "bindings_first");
+statement!(BINDINGS_NEXT, "bindings_next");
 statement!(SET_DIRECTORY_ROOT, "set_directory_root");
 statement!(DISCARD_ENTRIES, "discard_entries");
 statement!(DISCARD_NATIVE, "discard_native");
@@ -52,7 +54,7 @@ statement!(ABANDONED, "abandoned");
 statement!(RELEASE_ABANDONED, "release_abandoned");
 
 /// Every shipped statement by name, in a fixed order, for plan inspection.
-pub(crate) const ALL: [(&str, &str); 34] = [
+pub(crate) const ALL: [(&str, &str); 36] = [
     ("begin", BEGIN),
     ("claim_epoch", CLAIM_EPOCH),
     ("owner", OWNER),
@@ -78,6 +80,8 @@ pub(crate) const ALL: [(&str, &str); 34] = [
     ("file_roots", FILE_ROOTS),
     ("entries_first", ENTRIES_FIRST),
     ("entries_next", ENTRIES_NEXT),
+    ("bindings_first", BINDINGS_FIRST),
+    ("bindings_next", BINDINGS_NEXT),
     ("set_directory_root", SET_DIRECTORY_ROOT),
     ("discard_entries", DISCARD_ENTRIES),
     ("discard_native", DISCARD_NATIVE),

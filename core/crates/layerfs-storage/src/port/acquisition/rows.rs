@@ -160,6 +160,17 @@ pub struct FileRoot {
     pub root: Option<ObjectId>,
 }
 
+/// One name binding needed to construct a directory, in acquisition order.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Binding {
+    /// Stable key.
+    pub key: EntryKey,
+    /// Final position.
+    pub position: u64,
+    /// Canonical position of a regular file, including a later native path.
+    pub canonical: Option<u64>,
+}
+
 /// One entry in acquisition order.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Entry {

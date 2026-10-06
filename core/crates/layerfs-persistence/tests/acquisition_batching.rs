@@ -70,6 +70,185 @@ fn file(position: u64, identity: u64) -> NewEntry {
     }
 }
 
+fn symlink(position: u64) -> NewEntry {
+    NewEntry {
+        key: EntryKey {
+            parent: Some(0),
+            name: format!("s{position:04}").into_bytes(),
+        },
+        position: Some(position),
+        kind: InodeKind::Symlink,
+        metadata_root: object(b"link-metadata"),
+        target_root: Some(object(b"opaque-link-target")),
+        native_path: None,
+        native: None,
+    }
+}
+
+#[test]
+fn non_native_windows_skip_the_native_insert_without_losing_targets_or_charges() {
+    let temp = Temp::new("acquisition-non-native-window");
+    let handles = create(&temp, SqlitePersistenceProfile::Disposable);
+    let port = &handles.acquisition;
+    let owner = begin(&handles);
+    port.put_entries(owner, &[directory(None, b"", 0)]).unwrap();
+    let links: Vec<_> = (1..=32).map(symlink).collect();
+    let before = handles.diagnostics().unwrap();
+    assert!(port.put_entries(owner, &links).unwrap().is_empty());
+    let after = handles.diagnostics().unwrap();
+    // Framing, owner, dependency check, entry insertion and accounting are the
+    // complete unit. No empty native-file INSERT is executed for this window.
+    assert_eq!(after.statements - before.statements, 6);
+    let rows = port.entries(owner, None, Limits::MAXIMUM).unwrap();
+    assert_eq!(rows.len(), 33);
+    for row in rows.iter().skip(1) {
+        assert_eq!(row.kind, InodeKind::Symlink);
+        assert_eq!(row.metadata_root, object(b"link-metadata"));
+        assert_eq!(row.content_root, Some(object(b"opaque-link-target")));
+        assert_eq!(row.canonical, None);
+    }
+    assert!(port.jobs(owner, None, Limits::MAXIMUM).unwrap().is_empty());
+    let held = port.work(owner).unwrap();
+    let removed = port.discard(owner, 4096).unwrap();
+    assert_eq!(
+        (removed.rows, removed.bytes),
+        (held.held_rows, held.held_bytes)
+    );
+    assert_eq!(port.work(owner).unwrap().held_bytes, 0);
+    port.release(owner).unwrap();
+}
+
+#[test]
+fn narrow_bindings_preserve_mixed_payloads_after_an_existing_alias_boundary() {
+    for profile in [
+        SqlitePersistenceProfile::Durable,
+        SqlitePersistenceProfile::Disposable,
+    ] {
+        let temp = Temp::new("acquisition-mixed-window-prefix");
+        let handles = create(&temp, profile);
+        let port = &handles.acquisition;
+        let owner = begin(&handles);
+        port.put_entries(owner, &[directory(None, b"", 0), file(1, 1)])
+            .unwrap();
+        let mut entries: Vec<_> = (2..=16).map(symlink).collect();
+        entries.push(file(17, 1));
+        let mut child_directory = directory(Some(0), b"d0018", 18);
+        let directory_path = b"/source/\xffdirectory".to_vec();
+        child_directory.native_path = Some(directory_path.clone());
+        entries.push(child_directory);
+        let mut unplaced = file(19, 19);
+        unplaced.position = None;
+        let native = unplaced.native.unwrap();
+        let native_path = unplaced.native_path.clone().unwrap();
+        entries.push(unplaced);
+        entries.push(symlink(20));
+        // The existing alias truncates the independent prefix in the middle
+        // of one SQL input; directory/native detail fields then share a suffix.
+        assert_eq!(port.put_entries(owner, &entries).unwrap(), vec![1]);
+        let jobs = port.jobs(owner, None, Limits::MAXIMUM).unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].position, 1);
+        assert_eq!(jobs[0].native_path, b"/source/f0001");
+        assert_eq!(
+            port.file_roots(owner, None, Limits::MAXIMUM).unwrap()[0].aliases,
+            1
+        );
+        let directories = port.directories(owner, None, Limits::MAXIMUM).unwrap();
+        assert_eq!(directories.len(), 2);
+        assert_eq!(directories[1].native_path, directory_path);
+        let children = port
+            .unplaced_children(owner, 0, None, Limits::MAXIMUM)
+            .unwrap();
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0].name, b"f0019");
+        assert_eq!(children[0].native, Some(native));
+        let held = port.work(owner).unwrap();
+        assert_eq!(held.held_rows, 22);
+        assert_eq!(
+            port.place_children(
+                owner,
+                0,
+                &[Placed {
+                    name: children[0].name.clone(),
+                    position: 19,
+                    native: Some((native, native_path.clone())),
+                }]
+            )
+            .unwrap(),
+            vec![19]
+        );
+        let rows = port.entries(owner, None, Limits::MAXIMUM).unwrap();
+        assert_eq!(rows.len(), 21);
+        let regular = rows.iter().find(|row| row.key.name == b"f0019").unwrap();
+        assert_eq!((regular.position, regular.canonical), (19, Some(19)));
+        for row in rows.iter().filter(|row| row.kind == InodeKind::Symlink) {
+            assert_eq!(row.metadata_root, object(b"link-metadata"));
+            assert_eq!(row.content_root, Some(object(b"opaque-link-target")));
+        }
+        let after_placement = port.work(owner).unwrap();
+        assert_eq!(after_placement.held_rows, held.held_rows + 1);
+        assert_eq!(
+            after_placement.held_bytes,
+            held.held_bytes + native_path.len() as u64
+        );
+        let removed = port.discard(owner, 4096).unwrap();
+        assert_eq!(
+            (removed.rows, removed.bytes),
+            (after_placement.held_rows, after_placement.held_bytes)
+        );
+        assert_eq!(port.work(owner).unwrap().held_bytes, 0);
+        port.release(owner).unwrap();
+    }
+}
+
+#[test]
+fn directory_uniqueness_and_native_evidence_keep_the_first_refusal_after_a_prefix() {
+    use layerfs_storage::port::PersistenceError;
+    let temp = Temp::new("acquisition-mixed-refusal-order");
+    let handles = create(&temp, SqlitePersistenceProfile::Disposable);
+    let port = &handles.acquisition;
+    let owner = begin(&handles);
+    port.put_entries(
+        owner,
+        &[
+            directory(None, b"", 0),
+            directory(Some(0), b"d0001", 1),
+            file(2, 2),
+        ],
+    )
+    .unwrap();
+    let before = port.work(owner).unwrap();
+    let mut changed = file(19, 2);
+    changed.native.as_mut().unwrap().evidence[0] ^= 1;
+    let duplicate = directory(Some(0), b"another-name", 1);
+    let malformed = AcquisitionError::Persistence(PersistenceError::Malformed);
+    for (tail, expected) in [
+        (vec![duplicate.clone(), changed.clone()], malformed.clone()),
+        (
+            vec![changed.clone(), duplicate],
+            AcquisitionError::Changed { position: 19 },
+        ),
+        (
+            vec![
+                directory(Some(0), b"first", 30),
+                directory(Some(0), b"second", 30),
+                changed,
+            ],
+            malformed,
+        ),
+    ] {
+        let mut entries: Vec<_> = (3..=18).map(symlink).collect();
+        entries.extend(tail);
+        assert_eq!(port.put_entries(owner, &entries), Err(expected));
+        assert_eq!(port.work(owner).unwrap(), before);
+        assert_eq!(port.entries(owner, None, Limits::MAXIMUM).unwrap().len(), 3);
+        assert_eq!(
+            port.file_roots(owner, None, Limits::MAXIMUM).unwrap()[0].aliases,
+            0
+        );
+    }
+}
+
 #[test]
 fn windows_amortize_execution_without_losing_aliases_or_atomic_completion() {
     for profile in [
@@ -294,7 +473,7 @@ fn independent_entries_share_executions_and_population_work_stays_indexed() {
             after.autoindex_rows - before.autoindex_rows,
             after.reprepares - before.reprepares,
         ];
-        println!("ENTRY_WINDOW_PROFILE population={population} [statements,vm_steps,fullscan,sorts,autoindex,reprepares]={delta:?}");
+        println!("ENTRY_WINDOW_PROFILE population={population} [statements,vm_steps,fullscan,sorts,autoindex,reprepares]={delta:?} bound_bytes={}", after.bound_bytes - before.bound_bytes);
         assert!(
             delta[0] <= 8,
             "independent entries execute per row: {delta:?}"

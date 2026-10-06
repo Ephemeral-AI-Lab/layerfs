@@ -3,6 +3,12 @@
 > **Status:** Current general guide. S9 acquisition checkpoint; S9 remains open.
 > Component measurements and their limits are linked below.
 
+The latest owner-selected work reduction narrows insertion inputs, maps reads
+directly into typed windows, adds a narrow directory-binding stream and combines
+final disposal with operation release. The selected schema, Store durability,
+window maxima and single Project importer remain. Its prospective source-qualified
+measurement is [the work reduction checkpoint](../issues/307/SPACE-AND-SCALING-PLAN-20261006.md#owner-selected-work-reduction-checkpoint).
+
 The global Store can hold the working state of an initial root acquisition in
 three operation-scoped tables, reached through one backend-neutral port. This
 is the capability [A1](../issues/307/A1-ACQUISITION-CONTRACT.md) designed.
@@ -65,10 +71,13 @@ ranges of the shared tables.
 
 ## Units
 
-Each unit is one `Session::run` attempt: one short transaction, no wait and no
-retry. The owner `(operation, epoch)` is matched against its stored row before
-the unit's body, so a released, foreign or earlier-session owner is `Stale`
-before any row is read or written. Failures are `AcquisitionError`: the
+Each unit is one attempt: one short transaction or owned single-statement read
+snapshot, no wait and no retry. Writes and two-pass path reads use `Session::run`
+and match the owner `(operation, epoch)` before the body. Single-statement reads
+drive an indexed payload LEFT JOIN from that owner match in the same SQLite
+snapshot. A valid empty window has an ownership-only NULL sentinel; a stale
+owner returns no row and cannot enter the payload seek. A released, foreign or
+earlier-session owner is `Stale` before working rows are accessed. Failures are `AcquisitionError`: the
 provider's `PersistenceError`, `Stale`, `Bounds` for a window above the port
 maxima or a malformed row, and `Changed { position }` when evidence differs or
 an addressed row is not in the required state. A failed unit changes nothing.
@@ -87,8 +96,11 @@ an addressed row is not in the required state. A failed unit changes nothing.
   re-prepared the statement on every execution and let its plan follow the
   value. The expression keeps the one generic plan that `explain` reports.
 - **Lifecycle:** `begin`, `advance`, `discard` (a budgeted job deleting the
-  operation's lowest remaining keys, entries first), `release` (refused while
-  rows remain), `work`.
+  operation's lowest remaining keys, entries first), `dispose` (the same bounded
+  removal with atomic operation release once empty), `release` (refused while
+  rows remain), `work`. Existing adapters default `dispose` to one `discard`
+  and explicitly report that release remains; Project then releases only after
+  successful empty cleanup. SQLite includes the final release in its acknowledgment.
 
 The session's epoch is the identity of the first operation it began. Operations
 of other epochs are **abandoned**: nothing adopts or removes them. `abandoned`
@@ -104,6 +116,34 @@ charge when placement clears an identity or a root is recorded; `discard`
 reads the removed rows' payload from the engine and moves it to the removed
 totals. These are logical charges of one operation. They are not pages, file
 growth, journal bytes or RSS.
+
+Single-statement owned reads have separate `SqlWork.read_snapshots` and
+`read_snapshot_ns` observations. Explicit transactions/commits keep their own
+counters; no read COMMIT or synchronization is fabricated. Successful SQL
+snapshots can return a typed stale-owner refusal after finding no owner row.
+Snapshot wall includes preparation, execution, mapping and lease release and
+overlaps statement wall. It is not additive CPU attribution.
+
+## Work reduction proof checkpoint
+
+The insertion input binds161/97/225 parameters for dependency/native/entry SQL,
+instead of257 for each. It retains a fixed32-row classified input, one binding
+allocation and original dependency/refusal boundaries. Native inserts are omitted
+when no positioned regular file exists. No uniqueness/evidence check is removed.
+The same32 independent regular files use7 statements/7476 VM steps at2000 and
+20000 stored files, compared with the retained7/7828 profile. A512-row full-entry
+read uses1 statement/10277 VM steps at both populations, compared with4/9271:
+fewer execution boundaries do not imply fewer VM steps. Direct typed mapping and
+the narrow binding projection address copying separately.
+
+Public proof covers truncated prefixes, directory conflicts, native evidence and
+first-failure ordering, valid-empty/stale/foreign/read-only owner distinctions,
+ordered/bounded windows and unsigned native identities. Bounded final disposal
+checks exact charges, one write acknowledgment, stale-owner refusal after release
+and another live operation's unchanged rows/roots. Existing mode0 compatibility,
+schema fingerprints and constructor/root oracles remain covered. No new latency,
+physical-write or allocation PASS follows from these count proofs. Raw checks are
+under [work reduction checks](../issues/307/checks/acquisition-work-reduction-20261006/).
 
 ## Evidence and limits
 

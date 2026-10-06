@@ -27,3 +27,12 @@ pub struct Discarded {
     /// Working rows the operation still holds.
     pub remaining_rows: u64,
 }
+
+/// Acknowledged bounded cleanup, including whether the owner was released.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Disposal {
+    /// Working rows and bytes removed by this job.
+    pub discarded: Discarded,
+    /// The empty operation record was removed in this same acknowledgment.
+    pub released: bool,
+}

@@ -80,8 +80,9 @@ unused and are never recycled.
    emitted. The entry stream is by key; the consumer counts rows and requires each
    position to be the next one, and the totals to match the scan.
 5. **Cleanup before publication.** With the tree Save still unfinished, working
-   rows are removed in budgeted jobs until none remain, then the operation record
-   is released. Only then is the tree Save finished and the stack initialized, so
+   rows are removed in budgeted disposal jobs until none remain. SQLite removes
+   the empty operation record in its final job; an adapter that reports release
+   remaining is explicitly released after successful cleanup. Only then is the tree Save finished and the stack initialized, so
    every backing failure precedes anything final and a successful Init leaves no
    row and no record.
 
@@ -129,6 +130,13 @@ the Saves' own state and allocator or page-cache behaviour are outside these
 counters. `NamespaceWork` reports row, unit and window counts and the provider's
 exact logical charges removed by cleanup. It is count-driven diagnostics, not a
 whole-importer memory bound, and the charges are not pages, file growth or RSS.
+
+Directory construction reads the port's narrow `Binding` projection; inode and
+alias validation retain full `Entry` reads. Existing adapters can derive bounded
+bindings from their entry windows without a second importer. The SQLite provider
+decodes typed results directly and serves single-statement windows through an
+owner-gated implicit snapshot; length/payload path windows retain one explicit
+transaction. These are provider access changes, not a changed canonical format.
 
 The backing is the selected Store. Under a Durable Store every write unit is a
 synchronized commit and every row is journaled; that cost did not exist with

@@ -89,3 +89,45 @@ debt and empty acquisition tables in all final Stores. Three of eight latency
 screens pass; zero strict allocation/joint screens pass. Matched public-reference
 counts attribute essentially all extra VM work to acquisition, with immutable
 publication unchanged. Large-case latency and S7/S8/S9 acceptance remain open.
+
+## Owner-selected work reduction checkpoint
+
+The owner now selects subagent implementation/review of duplicated insertion,
+acquisition representation, typed/projected reads and compatible bounded
+acknowledgments. The implementation keeps the existing schema4–6 representation,
+Store profile, canonical formats, window maxima and construction ownership.
+
+- Insertion reuses one binding allocation and narrows each32-row SQL template to
+  fields it consumes. It skips native INSERT for a prefix with no positioned
+  regular files. Indexed dependency classification remains until a replacement
+  can preserve aliases, original first refusal and one attempted mutation.
+- Entries, bindings, file roots, unplaced children and point reads use one
+  owner-gated read-only SQLite snapshot. All typed results decode directly;
+  jobs/directories retain their two-pass explicit snapshot. Directory construction
+  uses the narrow binding projection; inode/alias checks retain full entries.
+- Live cleanup uses its already-validated owner. `dispose` combines final row
+  deletion, exact credit and operation release in one acknowledgment and at most
+  one512-page reclamation job. The existing discard/release methods and default
+  adapter continuation remain compatible. No cleanup moves beyond publication.
+- The compact-row schema and publication/completion coordination are concrete
+  reviewed proposals, not selected implementations. Their access/index/resource
+  tradeoffs are recorded in [A1](A1-ACQUISITION-CONTRACT.md).
+
+New prospective cases, in order, are Durable100/1000/10000/100000 then the same
+Disposable tiers, named `phase7-sqlite-init-{n}-work-reduction-v1` and
+`phase7-sqlite-disposable-init-{n}-work-reduction-v1`. One fresh cold sample per
+case at one sealed implementation identity. Same-profile qualified controls at
+197d2fb7d, prepared manifests/seed1, four Init constructors, environment workers1,
+Monolithic layout,30s complete-command/build and19s independent-proof limits,
+1.10x speed and strict final-allocation gates are unchanged. Reclamation remains
+inside the complete product clock. Every old receipt/verdict remains retained.
+
+The diagnostic selection is one current100000-file per-port count invocation
+with15s command/19s independent proof, uncontrolled cache and no acceptance time
+claim. No complete current VFS observation is selected here. Exact AppleSQLite
+EXPLAIN/EQP shapes and public population/ownership/atomicity proofs cover changed
+SQL, while final cold samples decide speed/storage separately. Earlier unaffected
+immutable-content/history qualification is reused by unchanged mechanism identity.
+Fresh append-only outputs, local locks/targets and exact source/binary seals apply.
+The ledger is `checks/acquisition-work-reduction-20261006/`; no PASS is established
+by this prospective section.

@@ -27,6 +27,8 @@ struct Work {
     sorts: u64,
     reprepares: u64,
     write_commits: u64,
+    read_snapshots: u64,
+    read_snapshot_ns: u64,
     statement_ns: u64,
     commit_ns: u64,
     unit_ns: u64,
@@ -41,17 +43,19 @@ impl Work {
         self.sorts += after.sorts - before.sorts;
         self.reprepares += after.reprepares - before.reprepares;
         self.write_commits += after.write_commits - before.write_commits;
+        self.read_snapshots += after.read_snapshots - before.read_snapshots;
+        self.read_snapshot_ns += after.read_snapshot_ns - before.read_snapshot_ns;
         self.statement_ns += after.statement_ns - before.statement_ns;
         self.commit_ns += after.commit_ns - before.commit_ns;
         self.unit_ns += wall;
     }
     fn print(&self, name: &str) {
-        println!("{{\"unit\":\"{name}\",\"calls\":{},\"statements\":{},\"vm_steps\":{},\"returned_rows\":{},\"fullscan_steps\":{},\"sorts\":{},\"reprepares\":{},\"write_commits\":{},\"statement_ns\":{},\"commit_ns\":{},\"unit_ns\":{}}}", self.calls, self.statements, self.vm_steps, self.rows, self.fullscan, self.sorts, self.reprepares, self.write_commits, self.statement_ns, self.commit_ns, self.unit_ns);
+        println!("{{\"unit\":\"{name}\",\"calls\":{},\"statements\":{},\"vm_steps\":{},\"returned_rows\":{},\"fullscan_steps\":{},\"sorts\":{},\"reprepares\":{},\"write_commits\":{},\"read_snapshots\":{},\"read_snapshot_ns\":{},\"statement_ns\":{},\"commit_ns\":{},\"unit_ns\":{}}}", self.calls, self.statements, self.vm_steps, self.rows, self.fullscan, self.sorts, self.reprepares, self.write_commits, self.read_snapshots, self.read_snapshot_ns, self.statement_ns, self.commit_ns, self.unit_ns);
     }
 }
 struct Observed<'a> {
     handles: &'a Handles,
-    // Fixed method-name set: at most 18 entries, independent of input size.
+    // Fixed method-name set: at most 20 entries, independent of input size.
     units: Mutex<BTreeMap<&'static str, Work>>,
 }
 impl Observed<'_> {
@@ -98,9 +102,11 @@ impl Acquisition for Observed<'_> {
     forward!(complete_files(owner:Owner, roots:&[(u64,ObjectId)]) -> ());
     forward!(file_roots(owner:Owner, after:Option<u64>, limits:Limits) -> Vec<FileRoot>);
     forward!(entries(owner:Owner, after:Option<&EntryKey>, limits:Limits) -> Vec<Entry>);
+    forward!(bindings(owner:Owner, after:Option<&EntryKey>, limits:Limits) -> Vec<Binding>);
     forward!(set_directory_roots(owner:Owner, roots:&[(u64,ObjectId)]) -> ());
     forward!(advance(owner:Owner, phase:Phase) -> ());
     forward!(discard(owner:Owner, rows:usize) -> Discarded);
+    forward!(dispose(owner:Owner, rows:usize) -> Disposal);
     forward!(release(owner:Owner) -> ());
     forward!(work(owner:Owner) -> AcquisitionWork);
     forward!(abandoned(after:Option<u64>, limit:usize) -> Vec<Abandoned>);

@@ -1,9 +1,9 @@
 //! The bounded units one acquisition is made of, and their failure classes.
 use super::rows::{
-    Abandoned, Begin, Directory, Entry, EntryKey, FileRoot, Job, NewEntry, Owner, Phase, Placed,
-    Unplaced,
+    Abandoned, Begin, Binding, Directory, Entry, EntryKey, FileRoot, Job, NewEntry, Owner, Phase,
+    Placed, Unplaced,
 };
-use super::work::{AcquisitionWork, Discarded};
+use super::work::{AcquisitionWork, Discarded, Disposal};
 use crate::port::PersistenceError;
 use layerfs_content::ObjectId;
 use std::{fmt, path::PathBuf};
@@ -76,9 +76,11 @@ pub type AcquisitionResult<T> = Result<T, AcquisitionError>;
 
 /// Provider-owned working state of initial acquisitions.
 ///
-/// Every method is one attempt and one short provider transaction. A read
-/// window is resumed from the last key it returned. Entry order is acquisition
-/// order: breadth first, each directory's children by name bytes.
+/// Every method is one attempt and one short provider transaction. A provider
+/// may use one implicit read snapshot for a single owner-gated statement;
+/// multi-statement reads share an explicit snapshot. A read window is resumed
+/// from the last key it returned. Entry order is acquisition order: breadth
+/// first, each directory's children by name bytes.
 pub trait Acquisition: Send + Sync {
     /// Starts one operation and returns its owner.
     fn begin(&self, facts: &Begin) -> AcquisitionResult<Owner>;
@@ -134,6 +136,25 @@ pub trait Acquisition: Send + Sync {
         after: Option<&EntryKey>,
         limits: Limits,
     ) -> AcquisitionResult<Vec<Entry>>;
+    /// Directory name bindings after one key, without inode metadata/content.
+    /// The default preserves existing adapters' ordering and read bounds.
+    fn bindings(
+        &self,
+        owner: Owner,
+        after: Option<&EntryKey>,
+        limits: Limits,
+    ) -> AcquisitionResult<Vec<Binding>> {
+        self.entries(owner, after, limits).map(|entries| {
+            entries
+                .into_iter()
+                .map(|entry| Binding {
+                    key: entry.key,
+                    position: entry.position,
+                    canonical: entry.canonical,
+                })
+                .collect()
+        })
+    }
     /// Records directory content roots by directory position, each exactly once.
     fn set_directory_roots(&self, owner: Owner, roots: &[(u64, ObjectId)])
         -> AcquisitionResult<()>;
@@ -141,6 +162,17 @@ pub trait Acquisition: Send + Sync {
     fn advance(&self, owner: Owner, phase: Phase) -> AcquisitionResult<()>;
     /// Removes at most `rows` working rows of this operation.
     fn discard(&self, owner: Owner, rows: usize) -> AcquisitionResult<Discarded>;
+    /// Removes at most `rows` working rows. A provider may also release the
+    /// now-empty operation record in this same atomic acknowledgment.
+    /// `released` implies zero remaining rows. Otherwise the caller continues
+    /// cleanup or explicitly releases the empty owner through `release`.
+    /// The default keeps existing adapters' one attempted discard unit.
+    fn dispose(&self, owner: Owner, rows: usize) -> AcquisitionResult<Disposal> {
+        self.discard(owner, rows).map(|discarded| Disposal {
+            discarded,
+            released: false,
+        })
+    }
     /// Removes the operation record. Refused while working rows remain.
     fn release(&self, owner: Owner) -> AcquisitionResult<()>;
     /// Exact logical charges of this operation.

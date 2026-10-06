@@ -9,7 +9,9 @@ use super::statements::{
     DISCARD_NATIVE, DISCARD_NATIVE_KEYS, DISCARD_NATIVE_TAIL, RELEASE, RELEASE_ABANDONED,
 };
 use crate::backend::{records::BackendError, Transaction};
-use layerfs_storage::port::acquisition::{Abandoned, Discarded, Owner, Phase};
+use layerfs_storage::port::acquisition::{
+    Abandoned, AcquisitionWork, Discarded, Disposal, Owner, Phase,
+};
 
 /// Removes at most `budget` rows through one statement; returns rows and bytes.
 fn remove(
@@ -75,25 +77,12 @@ fn remove_native(tx: &Transaction<'_>, operation: i64, budget: i64) -> Result<(i
     }
 }
 
-pub(crate) fn discard(
-    tx: &Transaction<'_>,
-    target: Owner,
-    budget: i64,
-) -> Result<Discarded, Failure> {
-    // Stale before any row is touched: the keys below carry no epoch.
-    owner(tx, target)?;
+fn discard_rows(tx: &Transaction<'_>, target: Owner, budget: i64) -> Result<Discarded, Failure> {
     let operation = signed(target.operation)?;
     let (entry_rows, entry_bytes) = remove_entries(tx, operation, budget)?;
     let (native_rows, native_bytes) = remove_native(tx, operation, budget - entry_rows)?;
     let (rows, bytes) = (entry_rows + native_rows, entry_bytes + native_bytes);
     let remaining_rows = credit(tx, target, rows, bytes)?;
-    if rows != 0 && tx.reclamation_enabled() {
-        super::super::reclamation::job_when(
-            tx,
-            crate::RECLAMATION_PAGE_LIMIT,
-            u64::from(crate::RECLAMATION_PAGE_LIMIT),
-        )?;
-    }
     Ok(Discarded {
         rows: unsigned(rows)?,
         bytes: unsigned(bytes)?,
@@ -101,23 +90,83 @@ pub(crate) fn discard(
     })
 }
 
-pub(crate) fn release(tx: &Transaction<'_>, target: Owner) -> Result<(), Failure> {
-    let (_, work) = owner(tx, target)?;
-    if work.held_rows != 0 {
-        return Err(Failure::Held);
-    }
+/// The provider has already matched this owner in the same transaction.
+pub(crate) fn discard_validated(
+    tx: &Transaction<'_>,
+    target: Owner,
+    budget: i64,
+) -> Result<Discarded, Failure> {
+    let discarded = discard_rows(tx, target, budget)?;
+    maintain(tx, discarded.rows != 0, false)?;
+    Ok(discarded)
+}
+
+fn release_record(tx: &Transaction<'_>, target: Owner, sql: &str) -> Result<(), Failure> {
     let released = tx.borrowed(
-        RELEASE,
+        sql,
         &[&signed(target.operation)?, &signed(target.epoch)?],
         16,
     )?;
     if released.is_empty() {
         return Err(Failure::Stale);
     }
+    Ok(())
+}
+
+/// The charge snapshot was read with owner validation in this transaction.
+pub(crate) fn release_validated(
+    tx: &Transaction<'_>,
+    target: Owner,
+    work: AcquisitionWork,
+) -> Result<(), Failure> {
+    if work.held_rows != 0 {
+        return Err(Failure::Held);
+    }
+    release_record(tx, target, RELEASE)?;
+    maintain(tx, false, true)
+}
+
+/// One page-removal job per acknowledgment, including a combined final job.
+fn maintain(tx: &Transaction<'_>, removed: bool, released: bool) -> Result<(), Failure> {
     if tx.reclamation_enabled() {
-        super::super::reclamation::job(tx, crate::RECLAMATION_PAGE_LIMIT)?;
+        if released {
+            super::super::reclamation::job(tx, crate::RECLAMATION_PAGE_LIMIT)?;
+        } else if removed {
+            super::super::reclamation::job_when(
+                tx,
+                crate::RECLAMATION_PAGE_LIMIT,
+                u64::from(crate::RECLAMATION_PAGE_LIMIT),
+            )?;
+        }
     }
     Ok(())
+}
+
+fn dispose(
+    tx: &Transaction<'_>,
+    target: Owner,
+    budget: i64,
+    release_sql: &str,
+) -> Result<Disposal, Failure> {
+    let discarded = discard_rows(tx, target, budget)?;
+    let released = discarded.remaining_rows == 0;
+    if released {
+        release_record(tx, target, release_sql)?;
+    }
+    maintain(tx, discarded.rows != 0, released)?;
+    Ok(Disposal {
+        discarded,
+        released,
+    })
+}
+
+/// The provider has matched the live owner; deletion and release are atomic.
+pub(crate) fn dispose_validated(
+    tx: &Transaction<'_>,
+    target: Owner,
+    budget: i64,
+) -> Result<Disposal, Failure> {
+    dispose(tx, target, budget, RELEASE)
 }
 
 pub(crate) fn abandoned(
@@ -160,19 +209,7 @@ pub(crate) fn discard_abandoned(
     target: Owner,
     budget: i64,
 ) -> Result<Discarded, Failure> {
-    let discarded = discard(tx, target, budget)?;
-    if discarded.remaining_rows == 0 {
-        let released = tx.borrowed(
-            RELEASE_ABANDONED,
-            &[&signed(target.operation)?, &signed(target.epoch)?],
-            16,
-        )?;
-        if released.is_empty() {
-            return Err(Failure::Stale);
-        }
-        if tx.reclamation_enabled() {
-            super::super::reclamation::job(tx, crate::RECLAMATION_PAGE_LIMIT)?;
-        }
-    }
-    Ok(discarded)
+    // Abandoned disposal does not enter the provider's live-owner wrapper.
+    owner(tx, target)?;
+    Ok(dispose(tx, target, budget, RELEASE_ABANDONED)?.discarded)
 }

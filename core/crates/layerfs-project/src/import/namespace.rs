@@ -94,7 +94,7 @@ fn directories(
     backing: &Backing<'_>,
     progress: &mut ImportProgress,
 ) -> Result<(), Failure> {
-    let mut entries = backing.entries();
+    let mut entries = backing.bindings();
     let mut roots: Vec<(u64, ObjectId)> = Vec::new();
     // Entry zero is the root; every later entry is one binding of its parent.
     let root = entries.next()?.ok_or_else(malformed)?;

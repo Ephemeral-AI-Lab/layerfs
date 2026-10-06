@@ -1,8 +1,8 @@
 //! The acquisition port over the Store's one session.
 //!
-//! Each unit is one transaction attempt on the session the storage and history
-//! handles share. No unit opens, attaches or creates anything, and none waits:
-//! contention is the session's existing one-attempt refusal.
+//! Each unit is one transaction or single-statement read snapshot on the
+//! session storage and history share. No unit opens, attaches or creates
+//! anything, and contention is the existing one-attempt refusal.
 use crate::backend::{
     records::BackendError,
     sqlite::acquisition::{accounting, cleanup, reads, statements::Failure, writes},
@@ -11,9 +11,9 @@ use crate::backend::{
 use crate::SqliteAcquisitionSchema;
 use layerfs_content::ObjectId;
 use layerfs_storage::port::acquisition::{
-    Abandoned, Acquisition, AcquisitionResult, AcquisitionWork, Begin, Directory, Discarded, Entry,
-    EntryKey, FileRoot, Job, Limits, NewEntry, Owner, Phase, Placed, Unplaced, READ_WINDOW_ROWS,
-    WRITE_ROW_BYTES, WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
+    Abandoned, Acquisition, AcquisitionResult, AcquisitionWork, Begin, Binding, Directory,
+    Discarded, Disposal, Entry, EntryKey, FileRoot, Job, Limits, NewEntry, Owner, Phase, Placed,
+    Unplaced, READ_WINDOW_ROWS, WRITE_ROW_BYTES, WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
 };
 use std::{
     path::PathBuf,
@@ -56,14 +56,38 @@ impl AcquisitionProvider {
         writable: bool,
         body: impl FnOnce(&Transaction<'_>) -> Result<T, Failure>,
     ) -> AcquisitionResult<T> {
+        self.unit_work(owner, writable, |tx, _| body(tx))
+    }
+
+    fn unit_work<T>(
+        &self,
+        owner: Owner,
+        writable: bool,
+        body: impl FnOnce(&Transaction<'_>, AcquisitionWork) -> Result<T, Failure>,
+    ) -> AcquisitionResult<T> {
+        self.live(owner)?;
+        Ok(self.session.run(writable, |tx| {
+            let (_, work) = accounting::owner(tx, owner)?;
+            body(tx, work)
+        })?)
+    }
+
+    /// Session identity before a statement whose SQL validates the live owner.
+    fn read<T>(
+        &self,
+        owner: Owner,
+        body: impl FnOnce(&Session) -> Result<T, Failure>,
+    ) -> AcquisitionResult<T> {
+        self.live(owner)?;
+        Ok(body(&self.session)?)
+    }
+
+    fn live(&self, owner: Owner) -> Result<(), Failure> {
         self.available()?;
         if owner.epoch == 0 || owner.epoch != self.epoch()? {
-            return Err(Failure::Stale.into());
+            return Err(Failure::Stale);
         }
-        Ok(self.session.run(writable, |tx| {
-            accounting::owner(tx, owner)?;
-            body(tx)
-        })?)
+        Ok(())
     }
 
     /// Refuses every unit on a Store created without the acquisition tables.
@@ -123,8 +147,8 @@ impl Acquisition for AcquisitionProvider {
         after: Option<&[u8]>,
         limits: Limits,
     ) -> AcquisitionResult<Vec<Unplaced>> {
-        self.unit(owner, false, |tx| {
-            reads::unplaced_children(tx, owner, parent, after, limits)
+        self.read(owner, |session| {
+            reads::unplaced_children(session, owner, parent, after, limits)
         })
     }
 
@@ -157,8 +181,8 @@ impl Acquisition for AcquisitionProvider {
     }
 
     fn directory_path(&self, owner: Owner, position: u64) -> AcquisitionResult<Option<Vec<u8>>> {
-        self.unit(owner, false, |tx| {
-            reads::directory_path(tx, owner, position)
+        self.read(owner, |session| {
+            reads::directory_path(session, owner, position)
         })
     }
 
@@ -172,7 +196,7 @@ impl Acquisition for AcquisitionProvider {
     }
 
     fn job(&self, owner: Owner, position: u64) -> AcquisitionResult<Option<Job>> {
-        self.unit(owner, false, |tx| reads::job(tx, owner, position))
+        self.read(owner, |session| reads::job(session, owner, position))
     }
 
     fn complete_files(&self, owner: Owner, roots: &[(u64, ObjectId)]) -> AcquisitionResult<()> {
@@ -186,8 +210,8 @@ impl Acquisition for AcquisitionProvider {
         after: Option<u64>,
         limits: Limits,
     ) -> AcquisitionResult<Vec<FileRoot>> {
-        self.unit(owner, false, |tx| {
-            reads::file_roots(tx, owner, after, limits)
+        self.read(owner, |session| {
+            reads::file_roots(session, owner, after, limits)
         })
     }
 
@@ -197,7 +221,20 @@ impl Acquisition for AcquisitionProvider {
         after: Option<&EntryKey>,
         limits: Limits,
     ) -> AcquisitionResult<Vec<Entry>> {
-        self.unit(owner, false, |tx| reads::entries(tx, owner, after, limits))
+        self.read(owner, |session| {
+            reads::entries(session, owner, after, limits)
+        })
+    }
+
+    fn bindings(
+        &self,
+        owner: Owner,
+        after: Option<&EntryKey>,
+        limits: Limits,
+    ) -> AcquisitionResult<Vec<Binding>> {
+        self.read(owner, |session| {
+            reads::bindings(session, owner, after, limits)
+        })
     }
 
     fn set_directory_roots(
@@ -216,17 +253,25 @@ impl Acquisition for AcquisitionProvider {
     }
 
     fn discard(&self, owner: Owner, rows: usize) -> AcquisitionResult<Discarded> {
-        self.unit(owner, true, |tx| cleanup::discard(tx, owner, budget(rows)))
+        self.unit(owner, true, |tx| {
+            cleanup::discard_validated(tx, owner, budget(rows))
+        })
+    }
+
+    fn dispose(&self, owner: Owner, rows: usize) -> AcquisitionResult<Disposal> {
+        self.unit_work(owner, true, |tx, _| {
+            cleanup::dispose_validated(tx, owner, budget(rows))
+        })
     }
 
     fn release(&self, owner: Owner) -> AcquisitionResult<()> {
-        self.unit(owner, true, |tx| cleanup::release(tx, owner))
+        self.unit_work(owner, true, |tx, work| {
+            cleanup::release_validated(tx, owner, work)
+        })
     }
 
     fn work(&self, owner: Owner) -> AcquisitionResult<AcquisitionWork> {
-        self.unit(owner, false, |tx| {
-            accounting::owner(tx, owner).map(|(_, work)| work)
-        })
+        self.unit_work(owner, false, |_, work| Ok(work))
     }
 
     fn abandoned(&self, after: Option<u64>, limit: usize) -> AcquisitionResult<Vec<Abandoned>> {

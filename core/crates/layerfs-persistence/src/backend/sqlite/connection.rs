@@ -97,10 +97,16 @@ pub struct SqlWork {
     pub write_commits: u64,
     /// Acknowledged commits, including read transactions.
     pub commits: u64,
+    /// Successfully completed single-statement implicit read snapshots. These
+    /// have no explicit BEGIN/COMMIT and are excluded from those counters.
+    pub read_snapshots: u64,
     /// Definite rollbacks.
     pub rollbacks: u64,
     /// Complete attempted transaction wall including lock/commit work.
     pub transaction_ns: u64,
+    /// Complete attempted single-statement read wall, including session lock,
+    /// prepare, execution, typed mapping and cursor/lease release.
+    pub read_snapshot_ns: u64,
     /// Attempted final body INSERTs, including units later rolled back.
     pub sealed_inserts: u64,
     /// Body bytes submitted by those attempted final INSERTs.

@@ -8,9 +8,9 @@ use crate::error::{acquisition, malformed, ProjectError as Failure};
 use crate::{NamespaceWork, RetainedAcquisition};
 use layerfs_content::ObjectId;
 use layerfs_storage::port::acquisition::{
-    Acquisition, AcquisitionError, AcquisitionResult, Directory, Entry, EntryKey, FileRoot, Job,
-    Limits, NativeIdentity, NewEntry, Owner, Phase, Placed, Unplaced, EVIDENCE_BYTES,
-    WRITE_ROW_BYTES, WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
+    Acquisition, AcquisitionError, AcquisitionResult, Binding, Directory, Entry, EntryKey,
+    FileRoot, Job, Limits, NativeIdentity, NewEntry, Owner, Phase, Placed, Unplaced,
+    EVIDENCE_BYTES, WRITE_ROW_BYTES, WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
 };
 use layerfs_storage::port::PersistenceError;
 use std::{cell::Cell, collections::VecDeque, fs::Metadata, os::unix::fs::MetadataExt};
@@ -155,6 +155,17 @@ impl<'a> Backing<'a> {
             |entry| entry.key.clone(),
         )
     }
+    /// Name bindings without the inode fields directory construction does not use.
+    pub(crate) fn bindings(&self) -> Stream<'_, 'a, Binding, EntryKey> {
+        Stream::new(
+            self,
+            |backing, after| {
+                let port = backing.port;
+                backing.read(port.bindings(backing.owner, after, Limits::MAXIMUM))
+            },
+            |binding| binding.key.clone(),
+        )
+    }
     /// Every directory in position order, including ones placed after a window.
     pub(crate) fn directories(&self) -> Stream<'_, 'a, Directory, u64> {
         Stream::new(
@@ -259,21 +270,23 @@ impl<'a> Backing<'a> {
     /// The first unit that fails decides; nothing after it is attempted.
     pub(crate) fn finish(&self, work: &mut NamespaceWork) -> Result<(), RetainedCleanup> {
         self.counters(work);
-        let removed = self
-            .discard(work)
-            .and_then(|()| self.port.release(self.owner));
+        let removed = self.discard(work).and_then(|released| match released {
+            true => Ok(()),
+            false => self.port.release(self.owner),
+        });
         removed.map_err(|error| self.retained(error))
     }
-    fn discard(&self, work: &mut NamespaceWork) -> AcquisitionResult<()> {
+    fn discard(&self, work: &mut NamespaceWork) -> AcquisitionResult<bool> {
         loop {
-            let removed = self.port.discard(self.owner, WRITE_WINDOW_ROWS)?;
+            let disposed = self.port.dispose(self.owner, WRITE_WINDOW_ROWS)?;
+            let removed = disposed.discarded;
             work.backing_rows += removed.rows;
             work.backing_bytes += removed.bytes;
             work.discard_units += 1;
             if removed.remaining_rows == 0 {
-                return Ok(());
+                return Ok(disposed.released);
             }
-            if removed.rows == 0 {
+            if disposed.released || removed.rows == 0 {
                 // Rows remain that no job removes: the charge and the tables disagree.
                 return Err(PersistenceError::Malformed.into());
             }

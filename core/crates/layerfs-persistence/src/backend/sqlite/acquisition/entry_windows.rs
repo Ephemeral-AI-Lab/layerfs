@@ -57,19 +57,6 @@ impl<'a> Input<'a> {
             native: entry.native.map(packed),
         })
     }
-    fn values<'b>(&'b self, values: &mut Vec<&'b dyn rusqlite::ToSql>) {
-        values.extend([
-            &self.parent as &dyn rusqlite::ToSql,
-            &self.name,
-            &self.position,
-            &self.kind,
-            &self.metadata,
-            &self.target,
-            &self.path,
-        ]);
-        // rusqlite binds slices as BLOBs; the packed native value stays borrowed.
-        // The optional slice itself is supplied separately by the caller.
-    }
 }
 
 pub(crate) fn append(
@@ -117,13 +104,34 @@ pub(crate) fn append(
         if count != 0 {
             let packed: [_; INPUT_ROWS] =
                 std::array::from_fn(|i| input[i].native.as_ref().map(|n| n.as_slice()));
-            let mut values: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(1 + 8 * INPUT_ROWS);
+            let identities: [_; INPUT_ROWS] = std::array::from_fn(|i| {
+                packed[i]
+                    .filter(|_| input[i].position.is_some())
+                    .map(|n| &n[..16])
+            });
+            let details: [_; INPUT_ROWS] = std::array::from_fn(|i| {
+                if input[i].kind == Some(i64::from(InodeKind::Directory.code())) {
+                    input[i].path
+                } else {
+                    packed[i].filter(|_| input[i].position.is_none())
+                }
+            });
+            // One binding allocation and one packed-native view survive the
+            // dependency check. Writes bind only the accepted prefix, without
+            // clearing/rebuilding the independently classified input rows.
+            let absent: Option<&[u8]> = None;
+            let mut values: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(1 + 7 * INPUT_ROWS);
             values.push(&operation);
             for i in 0..INPUT_ROWS {
-                input[i].values(&mut values);
-                values.push(&packed[i]);
+                values.extend([
+                    &input[i].parent as &dyn rusqlite::ToSql,
+                    &input[i].name,
+                    &input[i].position,
+                    &input[i].kind,
+                    &identities[i],
+                ]);
             }
-            let bound_bytes = binding_bytes(&entries[offset..offset + count]);
+            let bound_bytes = dependency_bytes(&entries[offset..offset + count]);
             let first = dependencies.mapped(&values, bound_bytes, 1, |row| {
                 row.get::<_, Option<i64>>(0).map_err(rows::error)
             })?;
@@ -136,21 +144,47 @@ pub(crate) fn append(
             // The indexed check and both writes share this transaction. No
             // concurrent owner can invalidate the proven independent prefix.
             if count != 0 {
-                drop(values);
-                for slot in &mut input[count..] {
-                    *slot = Input::default();
+                if input[..count]
+                    .iter()
+                    .any(|row| row.native.is_some() && row.position.is_some())
+                {
+                    values.clear();
+                    values.push(&operation);
+                    for i in 0..count {
+                        let row = &input[i];
+                        if row.native.is_some() && row.position.is_some() {
+                            values.extend([
+                                &row.position as &dyn rusqlite::ToSql,
+                                &packed[i],
+                                &row.path,
+                            ]);
+                        }
+                    }
+                    values.resize(1 + 3 * INPUT_ROWS, &absent);
+                    natives.borrowed(
+                        &values,
+                        native_binding_bytes(&entries[offset..offset + count]),
+                    )?;
                 }
-                let packed: [_; INPUT_ROWS] =
-                    std::array::from_fn(|i| input[i].native.as_ref().map(|n| n.as_slice()));
-                let mut values: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(1 + 8 * INPUT_ROWS);
+                values.clear();
                 values.push(&operation);
-                for i in 0..INPUT_ROWS {
-                    input[i].values(&mut values);
-                    values.push(&packed[i]);
+                for i in 0..count {
+                    let row = &input[i];
+                    values.extend([
+                        &row.parent as &dyn rusqlite::ToSql,
+                        &row.name,
+                        &row.position,
+                        &row.kind,
+                        &row.metadata,
+                        &row.target,
+                        &details[i],
+                    ]);
                 }
-                let bound_bytes = binding_bytes(&entries[offset..offset + count]);
-                natives.borrowed(&values, bound_bytes)?;
-                append.borrowed(&values, bound_bytes)?;
+                values.resize(1 + 7 * INPUT_ROWS, &absent);
+                append.borrowed(
+                    &values,
+                    entry_binding_bytes(&entries[offset..offset + count]),
+                )?;
                 for entry in &entries[offset..offset + count] {
                     rows += 1;
                     bytes += entry_bytes(entry);
@@ -181,16 +215,43 @@ pub(crate) fn append(
 }
 
 /// Actual scalar/BLOB bytes bound, excluding NULL padding and literal slots.
-fn binding_bytes(entries: &[NewEntry]) -> u64 {
+fn dependency_bytes(entries: &[NewEntry]) -> u64 {
     8 + entries
         .iter()
         .map(|e| {
             16 + e.position.map_or(0, |_| 8)
                 + e.key.name.len() as u64
-                + 32
+                + if e.native.is_some() && e.position.is_some() {
+                    16
+                } else {
+                    0
+                }
+        })
+        .sum::<u64>()
+}
+
+fn native_binding_bytes(entries: &[NewEntry]) -> u64 {
+    8 + entries
+        .iter()
+        .filter(|e| e.native.is_some() && e.position.is_some())
+        .map(|e| 68 + e.native_path.as_ref().map_or(0, |p| p.len() as u64))
+        .sum::<u64>()
+}
+
+fn entry_binding_bytes(entries: &[NewEntry]) -> u64 {
+    8 + entries
+        .iter()
+        .map(|e| {
+            48 + e.position.map_or(0, |_| 8)
+                + e.key.name.len() as u64
                 + e.target_root.map_or(0, |_| 32)
-                + e.native_path.as_ref().map_or(0, |p| p.len() as u64)
-                + e.native.map_or(0, |_| 60)
+                + if e.kind == InodeKind::Directory {
+                    e.native_path.as_ref().map_or(0, |p| p.len() as u64)
+                } else if e.native.is_some() && e.position.is_none() {
+                    60
+                } else {
+                    0
+                }
         })
         .sum::<u64>()
 }

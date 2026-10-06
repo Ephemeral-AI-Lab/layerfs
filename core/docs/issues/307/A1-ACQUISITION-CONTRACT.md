@@ -443,3 +443,94 @@ actual-length path windows and endpoint/range removal preserve the existing
 port, row/byte bounds, owner fencing, charge and one-attempt outcome contracts.
 No acquisition relocation, extra database, canonical format or durability
 relaxation is selected. Qualification retains strict speed/allocation gates.
+
+## Owner-selected work reduction and lifecycle review
+
+The owner selects implementation of narrow insertion bindings, typed/projected
+reads and compatible bounded cleanup, with subagent review of larger lifecycle
+and acknowledgment changes. [Selection and limits](SPACE-AND-SCALING-PLAN-20261006.md)
+govern new measurements. Existing schema scripts/version fingerprints remain;
+this is not a compact-schema migration or acquisition relocation.
+
+Single-statement reads use an implicit owned SQLite snapshot: the operation's
+PK/epoch match drives an indexed payload LEFT JOIN. A valid empty window has an
+owner-only NULL payload sentinel; no owner produces no rows. The internal Session
+helper leases one read-only statement, retains try-lock/quarantine/autocommit
+checks, and releases its cursor before returning. Path-length/payload pairs retain
+their explicit transaction. `Binding` projects name/position/canonical facts for
+directory construction, with a default derived from full entries for existing
+adapters. Full entries remain for inode and alias validation.
+
+`dispose(owner, budget)` adds a compatible bounded semantic unit. Its result
+contains removed row/byte/remaining charges and `released`. SQLite removes the
+empty operation record in the same acknowledgment; the default adapter performs
+one existing discard and reports `released=false`. Project then explicitly releases
+only after a successful zero-remaining result. A refusal stops immediately; an
+uncertain result preserves exact owner custody and quarantine, without a replay.
+Deletion, charge credit and final release roll back together on definite failure.
+Each SQLite disposal, including abandoned cleanup, runs at most one512-page
+maintenance job. The operation-record deletion is one documented constant beyond
+the working-row budget. Existing `discard` and `release` remain available.
+
+### Compact representation: reviewed proposal, not implemented
+
+A creation-only compact candidate would retain `init_operation` and merge first
+native facts into `init_entry`, whose PK stays `(operation,parent,name)`. Proposed
+columns are position/kind/canonical, metadata/content roots, native path,
+device/inode/evidence and aliases. A partial unique identity index covers first
+regular paths; a partial unique `(operation,kind,position)` index covers directories
+and canonical regular paths. Exact CHECK constraints must distinguish directories,
+symlinks, unplaced regular children, first regular paths and later aliases.
+
+Wide regular children initially retain their60-byte identity without a path.
+Canonical placement adds first-path custody; alias placement clears temporary
+identity and updates the first row's count only on equal44-byte evidence. Every
+unit keeps original first-error/native-before-entry semantics and exact variable
+byte charges. Root completion remains exactly once. No growing resident index,
+second importer, weakened persistence or failed-operation fallback is proposed.
+
+For E=101001,U=100000,V=1000,D=1001, the proposal reduces base rows201001→101001,
+working-row mutations504003→304003 and4096-row cleanup jobs50→25. However, total
+B-tree records remain302002: the new position index replaces the old native PK.
+Job/root access becomes non-covering position-index→entry-PK retrieval and can add
+O(K log E) fetches. A covering index would duplicate payload; completion rewrites
+a larger row. These tradeoffs require whole-lifecycle plans/runtime/page/speed/
+allocation evidence before selecting the layout. Row-count savings are not a
+physical-write or time forecast.
+
+New schema identities must be allocated after reviewing withdrawn experimental
+identities, never reused. Opening old versions follows their exact schema scripts;
+there is no implicit conversion. This proposal keeps schema1–3 refusal and
+schema4–6 custody/read/write compatibility, canonical bytes, shared Session,
+restart fencing and cleanup before final publication.
+
+### Publication/completion coordination: reviewed proposal, not implemented
+
+A separate backend-neutral coordinator could acknowledge one immutable bounded
+publication and a pending root prefix through the same Session transaction.
+`PackPersistence` remains immutable. Save would expose a real publication-committer
+hook; Project holds bounded pending-root custody and only credits completion after
+that combined acknowledgment. Calling two existing port methods would retain two
+commits and is not this proposal.
+
+Combined row/byte budgets must include completion inputs and accounting; an
+already-full publication or permitted large singleton has no hidden sidecar
+allowance. If no suitable publication is available, a planned standalone completion
+unit drains the bounded prefix before continuing; errors never select another
+route. Remaining roots must be acknowledged before the file Save returns and
+namespace construction reads them. No transaction spans source I/O, construction,
+queue waits or another callback.
+
+Definite combined failure acknowledges neither part and preserves ordinary abort/
+cleanup semantics. Unknown commit retains both submitted outcomes/inputs in exact
+custody and quarantines the Session; no resend or completion-only replay occurs.
+A success carries the normal immutable first-wins outcome plus acknowledged root
+positions. Existing lost-locator verification and reference closure remain.
+
+The100000-file fixture has at most25 standalone completion commits to remove,
+subject to actual ordering/headroom. Compact cleanup, combined final disposal and
+perfect piggyback give a conditional lower bound546−25−1−25=495 writes if other
+multiplicities stay fixed, still above the reference429. More, smaller sidecars can
+increase owner/accounting work. This arithmetic does not qualify future latency,
+syncs or allocation. The immediate selected source implements only the existing-
+representation insertion/read changes and bounded final disposal.

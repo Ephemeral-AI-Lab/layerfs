@@ -1,0 +1,8 @@
+{
+  "reason": "Lossless compressed Git evidence preserves raw test output including trailing blank lines; original remains retained independently.",
+  "raw_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/acquisition-work-reduction-retained-20261006/checks/covering-runtime.stdout",
+  "raw_sha256": "1e50bc7d23e15bc76b02552a5816bf5d8e0a420b674ba99327371a40ccb47b5f",
+  "raw_bytes": 44494,
+  "compressed_path": "core/docs/issues/307/checks/acquisition-work-reduction-20261006/covering-runtime.stdout.gz",
+  "compressed_sha256": "3d067c380d1c793f65fff5e9b2f96905e3849d99a53d37ed8e5f91dce7927fed"
+}

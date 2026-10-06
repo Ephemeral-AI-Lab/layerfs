@@ -1,1 +1,5 @@
-SELECT canonical_position,aliases,file_root FROM init_native_file WHERE operation_id=?1 AND canonical_position>?2 ORDER BY canonical_position LIMIT ?3+0
+SELECT owner.phase,native.canonical_position,native.aliases,native.file_root
+FROM init_operation AS owner LEFT JOIN init_native_file AS native
+ON native.operation_id=owner.operation_id AND native.canonical_position>?3
+WHERE owner.operation_id=?1 AND owner.owner_epoch=?2
+ORDER BY native.canonical_position LIMIT ?4+0

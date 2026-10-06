@@ -1,0 +1,7 @@
+{
+  "scope": "read-only prospective EXPLAIN wrapper; no mutation or timing sample",
+  "status": "FAIL",
+  "reason": "CLI mmap_size assignment emitted an extra JSON result; parser rejected Extra data before collecting complete plan artifact",
+  "correction": "Redirect profile-setting output before parsing each EXPLAIN result",
+  "corrected_artifact": "prospective-sql-plans.json"
+}

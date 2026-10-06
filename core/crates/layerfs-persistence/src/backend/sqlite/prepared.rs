@@ -1,13 +1,13 @@
 //! A scoped cached statement lease with per-execution work and exact errors.
 use super::{connection::SqlWork, rows, statement_work};
-use crate::backend::records::{BackendError, Record};
+use crate::backend::records::{BackendError, OutcomeError, Record};
 use rusqlite::{CachedStatement, Connection, StatementStatus};
 use std::{
     cell::{Cell, RefCell},
     time::Instant,
 };
 
-/// Held only inside one short Session transaction, never across caller I/O.
+/// Held only inside one short Session transaction or read snapshot.
 pub(crate) struct Prepared<'a> {
     statement: Option<CachedStatement<'a>>,
     work: &'a RefCell<SqlWork>,
@@ -57,8 +57,41 @@ impl<'a> Prepared<'a> {
         values: &[&dyn rusqlite::ToSql],
         bytes: u64,
         capacity: usize,
-        mut decode: impl FnMut(&rusqlite::Row<'_>) -> Result<T, BackendError>,
+        decode: impl FnMut(&rusqlite::Row<'_>) -> Result<T, BackendError>,
     ) -> Result<Vec<T>, BackendError> {
+        self.mapped_result(values, bytes, capacity, decode)
+    }
+
+    /// SQLite classifies the statement as read-only. The owning read helper
+    /// separately requires autocommit before and after the closed SELECT.
+    pub(crate) fn readonly(&self) -> bool {
+        self.statement
+            .as_ref()
+            .expect("live statement lease")
+            .readonly()
+    }
+
+    /// Typed decoding may report the caller's definite refusal without losing
+    /// the same SQL error classification, cursor release and work observations.
+    pub(crate) fn mapped_result<T, E: From<BackendError> + OutcomeError>(
+        &mut self,
+        values: &[&dyn rusqlite::ToSql],
+        bytes: u64,
+        capacity: usize,
+        mut decode: impl FnMut(&rusqlite::Row<'_>) -> Result<T, E>,
+    ) -> Result<Vec<T>, E> {
+        self.mapped_filter(values, bytes, capacity, |row| decode(row).map(Some))
+    }
+
+    /// Decode directly into the result window, omitting an ownership-only
+    /// empty sentinel without constructing an intermediate row container.
+    pub(crate) fn mapped_filter<T, E: From<BackendError> + OutcomeError>(
+        &mut self,
+        values: &[&dyn rusqlite::ToSql],
+        bytes: u64,
+        capacity: usize,
+        mut decode: impl FnMut(&rusqlite::Row<'_>) -> Result<Option<T>, E>,
+    ) -> Result<Vec<T>, E> {
         let start = Instant::now();
         let work = self.work;
         let commit = self.commit;
@@ -67,7 +100,10 @@ impl<'a> Prepared<'a> {
         let result = (|| {
             let mut cursor = {
                 let _phase = statement_work::phase(work, 1, commit);
-                statement.query(values).map_err(rows::error)?
+                statement
+                    .query(values)
+                    .map_err(rows::error)
+                    .map_err(E::from)?
             };
             let result = (|| {
                 let mut result = Vec::with_capacity(capacity);
@@ -76,9 +112,13 @@ impl<'a> Prepared<'a> {
                         let _phase = statement_work::phase(work, 2, commit);
                         cursor.next().map_err(rows::error)
                     };
-                    let Some(row) = next? else { break };
+                    let Some(row) = next.map_err(E::from)? else {
+                        break;
+                    };
                     let _phase = statement_work::phase(work, 3, commit);
-                    result.push(decode(row)?);
+                    if let Some(value) = decode(row)? {
+                        result.push(value);
+                    }
                     returned += 1;
                 }
                 Ok(result)
@@ -116,7 +156,7 @@ impl<'a> Prepared<'a> {
             work.bound_bytes += bytes;
         }
         Self::elapsed(work, commit, start);
-        if result.as_ref().err() == Some(&BackendError::Unknown) {
+        if result.as_ref().err().is_some_and(OutcomeError::uncertain) {
             if let Some(uncertain) = self.uncertain {
                 uncertain.set(true);
             }

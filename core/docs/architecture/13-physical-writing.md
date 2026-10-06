@@ -580,3 +580,13 @@ maintenance. This reduces repeated SQLite statement expiration/repreparation;
 its source and runtime counters determine the actual effect. The v1 campaign
 is retained, including all gate failures. The prospective final source uses
 space-scaling-v2 cases with identical inputs, cold state,30/19s caps and gates.
+
+The subsequent owner-selected work reduction adds bounded final `dispose`: working
+row deletion, exact charge credit and empty operation release share one write
+acknowledgment. Normal and abandoned disposal run at most one512-page maintenance
+job in that unit, using the tail threshold when release completes. Existing discard,
+release, mode0 compatibility and explicit residual maintenance remain. No payload
+layout or Store durability change is selected. Typed owner-gated read snapshots
+and narrow insertion bindings are described in
+[acquisition backing](44-acquisition-backing.md); physical write/sync benefits need
+their own observations and are not inferred from SQL execution counts.

@@ -151,6 +151,56 @@ impl Transaction<'_> {
     }
 }
 impl Session {
+    /// One read-only statement in its own implicit SQLite snapshot. Its SQL
+    /// must carry every authority predicate needed for the returned payload.
+    /// No facade for arbitrary unframed multi-statement work is exposed.
+    pub(crate) fn read_mapped<T, E: From<BackendError> + OutcomeError>(
+        &self,
+        sql: &str,
+        values: &[&dyn rusqlite::ToSql],
+        bytes: u64,
+        capacity: usize,
+        decode: impl FnMut(&rusqlite::Row<'_>) -> Result<Option<T>, E>,
+    ) -> Result<Vec<T>, E> {
+        let start = Instant::now();
+        let mut state = match self.state.try_lock() {
+            Ok(state) => state,
+            Err(TryLockError::WouldBlock) => return Err(BackendError::Busy.into()),
+            Err(TryLockError::Poisoned(_)) => return Err(BackendError::Unknown.into()),
+        };
+        if state.quarantined {
+            return Err(BackendError::Unknown.into());
+        }
+        // An earlier uncertain transaction may still exist. It cannot be
+        // inherited by an independently owned snapshot or guessed complete.
+        if !state.connection.is_autocommit() {
+            state.quarantined = true;
+            return Err(BackendError::Unknown.into());
+        }
+        let result = (|| {
+            let mut statement =
+                super::prepared::Prepared::new(&state.connection, sql, &state.work, None)
+                    .map_err(E::from)?;
+            if !statement.readonly() {
+                return Err(BackendError::Integrity.into());
+            }
+            statement.mapped_filter(values, bytes, capacity, decode)
+        })();
+        state.work.borrow_mut().read_snapshot_ns += start.elapsed().as_nanos() as u64;
+        // The statement/cursor have been dropped. A read leaves autocommit
+        // intact; failed I/O or an unexpected transaction retains quarantine.
+        if !state.connection.is_autocommit()
+            || result.as_ref().err().is_some_and(OutcomeError::uncertain)
+        {
+            state.quarantined = true;
+            return Err(BackendError::Unknown.into());
+        }
+        if result.is_ok() {
+            state.work.borrow_mut().read_snapshots += 1;
+        }
+        result
+    }
+
     pub(crate) fn run<T, E: From<BackendError> + OutcomeError>(
         &self,
         writable: bool,
