@@ -231,8 +231,9 @@ python3 -B core/tools/check_fuser_integrity.py
 ```
 
 For an installed registry source, also supply its archive, package directory and
-checksum taken from the owning Cargo.lock with `--archive`, `--package-directory`
-and `--locked-checksum`. This reads and verifies package files without modifying
+checksum taken from its original registry lock or the pinned base-archive record
+with `--archive`, `--package-directory` and `--locked-checksum`. This reads and
+verifies package files without modifying
 them. Run scoped self-tests when changing the check. It is not an aggregate
 pre-push/CI wrapper or a timestamp-capability proof. Current evidence and the
 historically rejected unmodified Git candidate are in

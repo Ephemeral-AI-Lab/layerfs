@@ -1,6 +1,6 @@
 # fuser 0.18.0 signed-timestamp patch
 
-> **Status:** Owner-authorized dependency correction, 2026-10-06.
+> **Status:** Current general guide.
 
 The owner explicitly requested: "use fuser 0.18.0 from crates io and apply patch".
 This supersedes the earlier no-patch/registry-only ruling for this correction.

@@ -140,3 +140,6 @@ root reference and containers. No push, release or deployment occurs.
 This checkpoint's third-party correction, tools and harness do not change
 first-party production LOC. Exact first-parent/staged-tree counts and committed
 source correspondence are recorded in the separate commit/handoff receipt.
+
+The [exact source/tracker/stopping handoff](HANDOFF-FUSER-PATCH-S7-S9.md) records
+the committed correction, all milestone states and concrete independent next work.

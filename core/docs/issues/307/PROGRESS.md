@@ -32,6 +32,8 @@ The subsequent fuser patch checkpoint is recorded separately in
 [its qualification and handoff](FUSER-REGISTRY-PATCH-20261006.md). It supersedes
 the earlier wait-for-published-release ruling for this dependency correction.
 No S0/S7/S8/S9 checklist item advances solely from the patch.
+The [latest exact stopping handoff](HANDOFF-FUSER-PATCH-S7-S9.md) records the
+committed correction, remaining Linux boundary failure and independently ready work.
 
 ## Earlier checkpoint history (before S6 completion)
 

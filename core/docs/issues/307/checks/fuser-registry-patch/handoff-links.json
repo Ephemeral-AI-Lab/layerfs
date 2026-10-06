@@ -1,0 +1,12 @@
+{
+  "checked_local_links": 79,
+  "errors": [],
+  "scope": [
+    "core/AGENTS.md",
+    "core/patches/fuser-0.18.0/README.md",
+    "core/docs/issues/307/FUSER-REGISTRY-PATCH-20261006.md",
+    "core/docs/issues/307/PROGRESS.md",
+    "core/docs/issues/307/HANDOFF-FUSER-PATCH-S7-S9.md"
+  ],
+  "checks": "Documentation receipt only; source/build/proof identities are unchanged, so no test repetition is required."
+}

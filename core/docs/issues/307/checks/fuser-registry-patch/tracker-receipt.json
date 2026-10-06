@@ -1,0 +1,13 @@
+{
+  "source_commit": "b8d87019f93e897476f24bd3e7572933da18900f",
+  "source_tree": "3cd19d2e96348731cab8681f6de02877da926a0d",
+  "tracker_receipt": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6007398673",
+  "checklist_changes": [],
+  "states": {
+    "S0": "OPEN native platform/prerequisites",
+    "S7": "CHECKPOINT/incomplete",
+    "S8": "CHECKPOINT library correction; BLOCKED full native timestamp boundary/incomplete",
+    "S9": "CHECKPOINT/incomplete"
+  },
+  "comment_attempts": 1
+}

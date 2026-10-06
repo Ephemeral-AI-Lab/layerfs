@@ -1,0 +1,25 @@
+{
+  "containers": [
+    "9cf2fe345496 layerfs-experiment-305-dev",
+    "ce75ac504df9 layerfs-4c8cde9ee1cf49f8049298b3377d4927",
+    "d2433851ea59 layerfs-dbd59ea75fdc62de0a1f6d9d099609ab",
+    "d2550144998b layerfs-76b116dc9d984679f5802e2ec9c0798d"
+  ],
+  "unrelated_status": [
+    " M docs/README.md",
+    "?? core/docs/issues/301/",
+    "?? core/docs/issues/307/SOURCE-ORGANIZATION-S7-S13.md",
+    "?? core/docs/issues/307/WORKSPACE-EFFICIENCY-ANALYSIS.md",
+    "?? docs/general/sandbox-cache-design.md",
+    "?? docs/general/workspace-filesystem-view.md",
+    "?? docs/general/workspace-queue-scheduling.md",
+    "?? docs/research/extent-normalization-analysis-2026-10-02.md",
+    "?? output/"
+  ],
+  "root_reference_present": true,
+  "original_S5_S6_handoff_changed": false,
+  "side_conversation_documents_preserved_untracked": [
+    "core/docs/issues/307/SOURCE-ORGANIZATION-S7-S13.md",
+    "core/docs/issues/307/WORKSPACE-EFFICIENCY-ANALYSIS.md"
+  ]
+}

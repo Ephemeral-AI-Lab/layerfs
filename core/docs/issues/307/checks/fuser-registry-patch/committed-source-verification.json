@@ -1,0 +1,12 @@
+{
+  "commit": "b8d87019f93e897476f24bd3e7572933da18900f",
+  "tree": "3cd19d2e96348731cab8681f6de02877da926a0d",
+  "compiled_source_file_hashes_match_committed_tree": true,
+  "patch_inventory_files": 85,
+  "production_LOC": {
+    "core": 86379,
+    "reference": 65417,
+    "combined": 151796,
+    "delta": 0
+  }
+}
