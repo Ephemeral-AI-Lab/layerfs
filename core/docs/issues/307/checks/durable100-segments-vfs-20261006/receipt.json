@@ -1,0 +1,4643 @@
+{
+  "admission_eligible": false,
+  "binary_pre_post": {
+    "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/458ae5f2787da43c5cfda7b044e5ad0453da4c12b3b5b2f9f91a279e302c4fe2/durable_init_costs": "458ae5f2787da43c5cfda7b044e5ad0453da4c12b3b5b2f9f91a279e302c4fe2",
+    "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/580d2cb5551479cb9581e2b5cc65fa6d5c3f5f3f4e91d509507a5774e8054e8c/verify_namespace": "580d2cb5551479cb9581e2b5cc65fa6d5c3f5f3f4e91d509507a5774e8054e8c",
+    "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/7f80d6d308eed57a0376accdd61644063033d2e28d4bf4e86b4af1860ab16072/durable100-init-vfs.dylib": "7f80d6d308eed57a0376accdd61644063033d2e28d4bf4e86b4af1860ab16072"
+  },
+  "budgets_s": {
+    "build": 30,
+    "diagnostic": 15,
+    "proof": 9.5
+  },
+  "build": {
+    "budget_ns": 30000000000,
+    "child": null,
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "build",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--release",
+      "--locked",
+      "-p",
+      "layerfs-project",
+      "--example",
+      "durable_init_costs",
+      "--example",
+      "verify_namespace"
+    ],
+    "cpu_ns": 1886563000,
+    "exit_code": 0,
+    "peak_rss_bytes": 162988032,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "timed_out": false,
+    "wall_ns": 1054150833
+  },
+  "cache": "uncontrolled/instrumented; no numerical speed/RSS/rate admission",
+  "case": "namespace-100-compact-v3",
+  "cleanup": "PASS",
+  "competing_work": [
+    "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+  ],
+  "diagnostic_environment": {
+    "CARGO_TARGET_DIR": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/target",
+    "DYLD_INSERT_LIBRARIES": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/7f80d6d308eed57a0376accdd61644063033d2e28d4bf4e86b4af1860ab16072/durable100-init-vfs.dylib",
+    "LAYERFS_CAUSE_VFS_LOG": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-segments-vfs-count-20261006/vfs.json",
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_INIT_VFS_EVENTS": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-segments-vfs-count-20261006/events.json"
+  },
+  "direct_units": [
+    {
+      "calls": 1,
+      "commit_ns": 17402666,
+      "fullscan_steps": 155,
+      "reprepares": 3,
+      "returned_rows": 1317,
+      "segment_directory_syncs": 3,
+      "segment_file_syncs": 3,
+      "segment_sync_ns": 13871960,
+      "segment_write_bytes": 4921726,
+      "sorts": 1,
+      "statement_ns": 24358615,
+      "statements": 211,
+      "unit": "complete_init",
+      "unit_ns": 0,
+      "vm_steps": 89103,
+      "write_commits": 17
+    },
+    {
+      "calls": 1,
+      "commit_ns": 1335499,
+      "fullscan_steps": 0,
+      "reprepares": 1,
+      "returned_rows": 2,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 1492585,
+      "statements": 4,
+      "unit": "begin",
+      "unit_ns": 1511708,
+      "vm_steps": 157,
+      "write_commits": 1
+    },
+    {
+      "calls": 1,
+      "commit_ns": 870458,
+      "fullscan_steps": 124,
+      "reprepares": 0,
+      "returned_rows": 102,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 1323126,
+      "statements": 8,
+      "unit": "complete_files",
+      "unit_ns": 1335250,
+      "vm_steps": 6905,
+      "write_commits": 1
+    },
+    {
+      "calls": 3,
+      "commit_ns": 7584,
+      "fullscan_steps": 0,
+      "reprepares": 0,
+      "returned_rows": 5,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 64249,
+      "statements": 12,
+      "unit": "directories",
+      "unit_ns": 83875,
+      "vm_steps": 152,
+      "write_commits": 0
+    },
+    {
+      "calls": 1,
+      "commit_ns": 972000,
+      "fullscan_steps": 0,
+      "reprepares": 0,
+      "returned_rows": 205,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 1446125,
+      "statements": 7,
+      "unit": "discard",
+      "unit_ns": 1452750,
+      "vm_steps": 12025,
+      "write_commits": 1
+    },
+    {
+      "calls": 4,
+      "commit_ns": 10041,
+      "fullscan_steps": 0,
+      "reprepares": 0,
+      "returned_rows": 208,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 232913,
+      "statements": 16,
+      "unit": "entries",
+      "unit_ns": 270333,
+      "vm_steps": 2436,
+      "write_commits": 0
+    },
+    {
+      "calls": 2,
+      "commit_ns": 4625,
+      "fullscan_steps": 0,
+      "reprepares": 0,
+      "returned_rows": 102,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 85458,
+      "statements": 8,
+      "unit": "file_roots",
+      "unit_ns": 101459,
+      "vm_steps": 786,
+      "write_commits": 0
+    },
+    {
+      "calls": 3,
+      "commit_ns": 15915,
+      "fullscan_steps": 0,
+      "reprepares": 0,
+      "returned_rows": 103,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 344208,
+      "statements": 12,
+      "unit": "jobs",
+      "unit_ns": 377333,
+      "vm_steps": 1028,
+      "write_commits": 0
+    },
+    {
+      "calls": 3,
+      "commit_ns": 3178375,
+      "fullscan_steps": 0,
+      "reprepares": 0,
+      "returned_rows": 12,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 4225413,
+      "statements": 30,
+      "unit": "put_entries",
+      "unit_ns": 4274500,
+      "vm_steps": 28763,
+      "write_commits": 3
+    },
+    {
+      "calls": 1,
+      "commit_ns": 862208,
+      "fullscan_steps": 0,
+      "reprepares": 0,
+      "returned_rows": 3,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 900999,
+      "statements": 5,
+      "unit": "release",
+      "unit_ns": 902667,
+      "vm_steps": 97,
+      "write_commits": 1
+    },
+    {
+      "calls": 1,
+      "commit_ns": 1001416,
+      "fullscan_steps": 31,
+      "reprepares": 0,
+      "returned_rows": 4,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 1175372,
+      "statements": 5,
+      "unit": "set_directory_roots",
+      "unit_ns": 1178791,
+      "vm_steps": 614,
+      "write_commits": 1
+    },
+    {
+      "calls": 5,
+      "commit_ns": 18290,
+      "fullscan_steps": 0,
+      "reprepares": 0,
+      "returned_rows": 216,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 751873,
+      "statements": 15,
+      "unit": "storage.locate",
+      "unit_ns": 883041,
+      "vm_steps": 6872,
+      "write_commits": 0
+    },
+    {
+      "calls": 1,
+      "commit_ns": 3126,
+      "fullscan_steps": 0,
+      "reprepares": 0,
+      "returned_rows": 1,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 23291,
+      "statements": 3,
+      "unit": "storage.policy",
+      "unit_ns": 79625,
+      "vm_steps": 21,
+      "write_commits": 0
+    },
+    {
+      "calls": 5,
+      "commit_ns": 5612838,
+      "fullscan_steps": 0,
+      "reprepares": 0,
+      "returned_rows": 346,
+      "segment_directory_syncs": 3,
+      "segment_file_syncs": 3,
+      "segment_sync_ns": 13871960,
+      "segment_write_bytes": 4921726,
+      "sorts": 0,
+      "statement_ns": 8406751,
+      "statements": 58,
+      "unit": "storage.publish",
+      "unit_ns": 27201792,
+      "vm_steps": 28674,
+      "write_commits": 5
+    },
+    {
+      "calls": 2,
+      "commit_ns": 1675499,
+      "fullscan_steps": 0,
+      "reprepares": 0,
+      "returned_rows": 2,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 1731750,
+      "statements": 8,
+      "unit": "storage.reserve",
+      "unit_ns": 1735500,
+      "vm_steps": 108,
+      "write_commits": 2
+    },
+    {
+      "calls": 1,
+      "commit_ns": 3125,
+      "fullscan_steps": 0,
+      "reprepares": 0,
+      "returned_rows": 0,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 1,
+      "statement_ns": 32166,
+      "statements": 3,
+      "unit": "storage.signatures",
+      "unit_ns": 77750,
+      "vm_steps": 17,
+      "write_commits": 0
+    },
+    {
+      "calls": 2,
+      "commit_ns": 5250,
+      "fullscan_steps": 0,
+      "reprepares": 2,
+      "returned_rows": 2,
+      "segment_directory_syncs": 0,
+      "segment_file_syncs": 0,
+      "segment_sync_ns": 0,
+      "segment_write_bytes": 0,
+      "sorts": 0,
+      "statement_ns": 52542,
+      "statements": 8,
+      "unit": "storage.value_groups",
+      "unit_ns": 55792,
+      "vm_steps": 50,
+      "write_commits": 0
+    }
+  ],
+  "driver": {
+    "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/458ae5f2787da43c5cfda7b044e5ad0453da4c12b3b5b2f9f91a279e302c4fe2/durable_init_costs",
+    "sha256": "458ae5f2787da43c5cfda7b044e5ad0453da4c12b3b5b2f9f91a279e302c4fe2"
+  },
+  "events": {
+    "event_limit": 128,
+    "events": [
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            45,
+            181312,
+            972835,
+            2,
+            9301792
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "INSERT INTO history_meta(id,catalog_id,catalog_incarnation,binding_key,identity_format,schema_version,schema_source,schema_definition,next_stage_token) VALUES(1,?1,?2,?3,1,10,?4,?5,1)",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 10336542,
+        "unit": "bootstrap",
+        "unit_id": 1
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT type,name,sql FROM sqlite_schema WHERE substr(name,1,7)!='sqlite_' ORDER BY type,name",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 2333,
+        "unit": "bootstrap",
+        "unit_id": 1
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT format_profile,small_file_threshold_bytes,whole_file_delta_max_depth,chunk_delta_max_depth,metadata_delta_max_depth,schema_version FROM store_policy WHERE id=1",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1583,
+        "unit": "storage.policy",
+        "unit_id": 2
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            2,
+            8240,
+            24542,
+            1,
+            1299459
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "UPDATE init_operation SET owner_epoch=operation_id WHERE operation_id=?1 RETURNING owner_epoch",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1333125,
+        "unit": "begin",
+        "unit_id": 3
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT slot,stamp,object_id,signature FROM content_signature ORDER BY stamp LIMIT 8193",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1417,
+        "unit": "storage.signatures",
+        "unit_id": 4
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            3,
+            12360,
+            31832,
+            1,
+            945917
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "UPDATE init_operation SET held_rows=held_rows+?3,held_bytes=held_bytes+?4,peak_rows=max(peak_rows,held_rows+?3),peak_bytes=max(peak_bytes,held_bytes+?4) WHERE operation_id=?1 AND owner_epoch=?2 RETUR",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 983583,
+        "unit": "put_entries",
+        "unit_id": 5
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT position,native_path FROM init_entry WHERE operation_id=?1 AND kind=2 AND position>?2 ORDER BY position LIMIT ?3+0",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1334,
+        "unit": "directories",
+        "unit_id": 6
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            3,
+            12360,
+            161000,
+            1,
+            846542
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "UPDATE init_operation SET held_rows=held_rows+?3,held_bytes=held_bytes+?4,peak_rows=max(peak_rows,held_rows+?3),peak_bytes=max(peak_bytes,held_bytes+?4) WHERE operation_id=?1 AND owner_epoch=?2 RETUR",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1012167,
+        "unit": "put_entries",
+        "unit_id": 7
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT position,native_path FROM init_entry WHERE operation_id=?1 AND kind=2 AND position>?2 ORDER BY position LIMIT ?3+0",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 959,
+        "unit": "directories",
+        "unit_id": 8
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            14,
+            57680,
+            117583,
+            1,
+            1041959
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "UPDATE init_operation SET held_rows=held_rows+?3,held_bytes=held_bytes+?4,peak_rows=max(peak_rows,held_rows+?3),peak_bytes=max(peak_bytes,held_bytes+?4) WHERE operation_id=?1 AND owner_epoch=?2 RETUR",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1175166,
+        "unit": "put_entries",
+        "unit_id": 9
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT position,native_path FROM init_entry WHERE operation_id=?1 AND kind=2 AND position>?2 ORDER BY position LIMIT ?3+0",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1416,
+        "unit": "directories",
+        "unit_id": 10
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN(?,?,?,?",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1917,
+        "unit": "storage.locate",
+        "unit_id": 11
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            4120,
+            13125,
+            1,
+            816375
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "UPDATE store_policy SET next_pack_id=?1,next_ordinal=?2 WHERE id=1",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 833583,
+        "unit": "storage.reserve",
+        "unit_id": 12
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            2,
+            8240,
+            19000,
+            1,
+            935916
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "INSERT INTO object_location(object_id,role,canonical_length,pack_id,group_number,record_number) VALUES (?,?,?,?,?,?) ON CONFLICT(object_id) DO NOTHING RETURNING object_id",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 960250,
+        "unit": "storage.publish",
+        "unit_id": 13
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT canonical_position,device,inode,evidence,native_path FROM init_native_file WHERE operation_id=?1 AND canonical_position>?2 ORDER BY canonical_position LIMIT ?3+0",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1625,
+        "unit": "jobs",
+        "unit_id": 14
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT canonical_position,device,inode,evidence,native_path FROM init_native_file WHERE operation_id=?1 AND canonical_position>?2 ORDER BY canonical_position LIMIT ?3+0",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1416,
+        "unit": "jobs",
+        "unit_id": 15
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT canonical_position,device,inode,evidence,native_path FROM init_native_file WHERE operation_id=?1 AND canonical_position>?2 ORDER BY canonical_position LIMIT ?3+0",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 6375,
+        "unit": "jobs",
+        "unit_id": 16
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN(?,?,?,?",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 2459,
+        "unit": "storage.locate",
+        "unit_id": 17
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            22,
+            90640,
+            221583,
+            1,
+            1047833
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "INSERT INTO content_signature(slot,stamp,object_id,signature) VALUES (?,?,?,?),(?,?,?,?),(?,?,?,?),(?,?,?,?),(?,?,?,?),(?,?,?,?),(?,?,?,?),(?,?,?,?),(?,?,?,?),(?,?,?,?),(?,?,?,?),(?,?,?,?),(?,?,?,?),",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1300500,
+        "unit": "storage.publish",
+        "unit_id": 18
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            9,
+            37080,
+            62502,
+            1,
+            794083
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "UPDATE init_operation SET held_rows=held_rows+?3,held_bytes=held_bytes+?4,peak_rows=max(peak_rows,held_rows+?3),peak_bytes=max(peak_bytes,held_bytes+?4) WHERE operation_id=?1 AND owner_epoch=?2 RETUR",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 867875,
+        "unit": "complete_files",
+        "unit_id": 19
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN(?,?,?,?",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1583,
+        "unit": "storage.locate",
+        "unit_id": 20
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            7,
+            28840,
+            58916,
+            1,
+            1092208
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "INSERT INTO object_location(object_id,role,canonical_length,pack_id,group_number,record_number) VALUES (?,?,?,?,?,?),(?,?,?,?,?,?) ON CONFLICT(object_id) DO NOTHING RETURNING object_id",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1162958,
+        "unit": "storage.publish",
+        "unit_id": 21
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN(?,?,?,?",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 2708,
+        "unit": "storage.locate",
+        "unit_id": 22
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            23,
+            94760,
+            247208,
+            1,
+            942125
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "INSERT INTO content_signature(slot,stamp,object_id,signature) VALUES (?,?,?,?) ON CONFLICT(slot) DO UPDATE SET stamp=excluded.stamp,object_id=excluded.object_id,signature=excluded.signature WHERE exc",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1216917,
+        "unit": "storage.publish",
+        "unit_id": 23
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            4120,
+            87334,
+            1,
+            757333
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "UPDATE scope_allocator SET highwater = $1 WHERE scope_id = $2 AND highwater = $3 RETURNING 1;",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 851000,
+        "unit": "",
+        "unit_id": 0
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT parent_position,name,position,kind,canonical_position,metadata_root,content_root FROM init_entry WHERE operation_id=?1 ORDER BY parent_position,name LIMIT ?2+0",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1583,
+        "unit": "entries",
+        "unit_id": 24
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT parent_position,name,position,kind,canonical_position,metadata_root,content_root FROM init_entry WHERE operation_id=?1 AND (parent_position,name)>(?2,?3) ORDER BY parent_position,name LIMIT ?4",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1291,
+        "unit": "entries",
+        "unit_id": 25
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            2,
+            8240,
+            19750,
+            1,
+            973833
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "UPDATE init_operation SET held_rows=held_rows+?3,held_bytes=held_bytes+?4,peak_rows=max(peak_rows,held_rows+?3),peak_bytes=max(peak_bytes,held_bytes+?4) WHERE operation_id=?1 AND owner_epoch=?2 RETUR",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 998875,
+        "unit": "set_directory_roots",
+        "unit_id": 26
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT parent_position,name,position,kind,canonical_position,metadata_root,content_root FROM init_entry WHERE operation_id=?1 ORDER BY parent_position,name LIMIT ?2+0",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1167,
+        "unit": "entries",
+        "unit_id": 27
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT canonical_position,aliases,file_root FROM init_native_file WHERE operation_id=?1 AND canonical_position>?2 ORDER BY canonical_position LIMIT ?3+0",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1292,
+        "unit": "file_roots",
+        "unit_id": 28
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT parent_position,name,position,kind,canonical_position,metadata_root,content_root FROM init_entry WHERE operation_id=?1 AND (parent_position,name)>(?2,?3) ORDER BY parent_position,name LIMIT ?4",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 958,
+        "unit": "entries",
+        "unit_id": 29
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT canonical_position,aliases,file_root FROM init_native_file WHERE operation_id=?1 AND canonical_position>?2 ORDER BY canonical_position LIMIT ?3+0",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1000,
+        "unit": "file_roots",
+        "unit_id": 30
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            14,
+            57680,
+            83040,
+            1,
+            873500
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "UPDATE init_operation SET held_rows=held_rows-?3,held_bytes=held_bytes-?4,removed_rows=removed_rows+?3,removed_bytes=removed_bytes+?4 WHERE operation_id=?1 AND owner_epoch=?2 RETURNING held_rows",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 969208,
+        "unit": "discard",
+        "unit_id": 31
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            4120,
+            15916,
+            1,
+            839666
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "DELETE FROM init_operation WHERE operation_id=?1 AND owner_epoch=?2 AND held_rows=0 RETURNING operation_id",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 860042,
+        "unit": "release",
+        "unit_id": 32
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN(?,?,?,?",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1125,
+        "unit": "storage.locate",
+        "unit_id": 33
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT first_ordinal,count,pack_id,group_number,digest FROM metadata_value_group WHERE first_ordinal>=?1 ORDER BY first_ordinal LIMIT ?2",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1209,
+        "unit": "storage.value_groups",
+        "unit_id": 34
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT first_ordinal,count,pack_id,group_number,digest FROM metadata_value_group WHERE first_ordinal>=?1 ORDER BY first_ordinal LIMIT ?2",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 1208,
+        "unit": "storage.value_groups",
+        "unit_id": 35
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            4120,
+            48833,
+            1,
+            757750
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "UPDATE store_policy SET next_pack_id=?1,next_ordinal=?2 WHERE id=1",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 813458,
+        "unit": "storage.reserve",
+        "unit_id": 36
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            13,
+            53560,
+            79749,
+            1,
+            850208
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "UPDATE store_policy SET metadata_window_start=CASE WHEN metadata_window_values+?1>131072 THEN ?2 ELSE metadata_window_start END,metadata_window_values=CASE WHEN metadata_window_values+?1>131072 THEN ",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 943917,
+        "unit": "storage.publish",
+        "unit_id": 37
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            5,
+            20600,
+            159333,
+            1,
+            805208
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT layer_stack_id, name, scope_id, profile_id, head_layer_id FROM layer_stack WHERE layer_stack_id = $1;",
+        "result": 101,
+        "scope": 1,
+        "step_ns": 973834,
+        "unit": "",
+        "unit_id": 0
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            84,
+            344064,
+            375463,
+            1,
+            615875
+          ],
+          [
+            84,
+            344064,
+            113917,
+            0,
+            0,
+            0,
+            1,
+            567583
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT layer_stack_id, name, scope_id, profile_id, head_layer_id FROM layer_stack WHERE layer_stack_id = $1;",
+        "result": 100,
+        "scope": 2,
+        "step_ns": 2197250,
+        "unit": "checkpoint",
+        "unit_id": 38
+      },
+      {
+        "classes": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "previous_sql": "SELECT layer_stack_id, name, scope_id, profile_id, head_layer_id FROM layer_stack WHERE layer_stack_id = $1;",
+        "result": 101,
+        "scope": 2,
+        "step_ns": 917,
+        "unit": "checkpoint",
+        "unit_id": 38
+      }
+    ],
+    "events_attempted": 42,
+    "kind": "init-vfs-port-and-step-diagnostic",
+    "native_stmt_status_reset": false,
+    "omitted": 0
+  },
+  "fixture": {
+    "case": "namespace-100-compact-v3",
+    "directories": 2,
+    "files": 100,
+    "logical_bytes": 5000000,
+    "manifest": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/manifest.tsv",
+    "manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+    "preparation_wall_ns": 3432833,
+    "profile": "core-sdk-init-fixture-v2",
+    "reused": true,
+    "route": "host-direct-sdk-v2",
+    "seed": 1,
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/payload"
+  },
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "04db4f6e7264765d6c069ab71fbb49099c19f83385839cc35c6991cb7158ebb9",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "c977ea8c5f9ce808db77f390ceb531a5f6b92e47cde3eb968c88266ee914eb08",
+    "product_seal": "2b12553d98d6686de2d3528dcc64eacc2c9324a4404c99edabf9d30b5a98fc97",
+    "source_commit": "fb7f3f47734eb8cd4d68b8e965a24929c8332785",
+    "source_dirty": false,
+    "source_tree": "e8b651ec323c61857207c2ab623142f185ea286b"
+  },
+  "kind": "Durable100 payload-segment per-port VFS and native I/O cause diagnostic",
+  "library": {
+    "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/7f80d6d308eed57a0376accdd61644063033d2e28d4bf4e86b4af1860ab16072/durable100-init-vfs.dylib",
+    "sha256": "7f80d6d308eed57a0376accdd61644063033d2e28d4bf4e86b4af1860ab16072"
+  },
+  "observer_build": {
+    "budget_ns": 30000000000,
+    "child": null,
+    "command": [
+      "clang",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-dynamiclib",
+      "core/benchmark/fs-bench-pro/diagnostics/sqlite_init_vfs_observer.c",
+      "-lsqlite3",
+      "-o",
+      "core/target/durable100-init-vfs.dylib"
+    ],
+    "cpu_ns": 220342000,
+    "exit_code": 0,
+    "peak_rss_bytes": 52133888,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "timed_out": false,
+    "wall_ns": 176659250
+  },
+  "observer_status": "PASS",
+  "orchestrator_sha256": "ce0731743cd9dec49ad4da3616ca463041ef88a99b7d3687b2e262b42fd9e06f",
+  "performance_samples": 0,
+  "producer_before_proof": {
+    "store.sqlite": "6825dcb3c3378a72c5400a0fede140a857853f1d3a926d7b57f3f158edea1ca7",
+    "store.sqlite-shm": "b17329835d0a0621b152a6345ccc2dd62f4d8283546668aceae896201450e145",
+    "store.sqlite-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "store.sqlite.payload/0000000000000003.segment": "9a6c7cac4a6648d086b01561451c19756dd76d075d47da0e8b733acecf16a6df",
+    "store.sqlite.payload/0000000000000016.segment": "a639eceb523d9f0588b5a1448f2a73c68e30c3e123099390a13594240ffd58c5",
+    "store.sqlite.payload/000000000000001b.segment": "a3cecbe378d895e087e8715b2c153aadb62f780165bef0beda4917969e01c6ae"
+  },
+  "product_seal": "960bee387bc2afca15e800f3bcdd306327f53d41ad2fc6bae34ee7be10241fa8",
+  "proof": {
+    "budget_ns": 9500000000,
+    "child": {
+      "directories": 2,
+      "discovered_files": 100,
+      "manifest_bytes": 5000000,
+      "manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+      "metadata_attribute_waves": 5,
+      "paths": 102,
+      "root": "ca1c20f806277e3fb0447ef526a5ca8d298753d01667f501e8b58b6350cd86f1",
+      "sample_policy": "stride64-size-log2-endpoints-v1",
+      "sampled_bytes": 3354003,
+      "sampled_files": 53,
+      "status": "PASS",
+      "workers": 4
+    },
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/580d2cb5551479cb9581e2b5cc65fa6d5c3f5f3f4e91d509507a5774e8054e8c/verify_namespace",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-segments-vfs-count-20261006/store.sqlite",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-segments-vfs-count-20261006/store.sqlite",
+      "ca1c20f806277e3fb0447ef526a5ca8d298753d01667f501e8b58b6350cd86f1",
+      "41414141414141414141414141414141",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/manifest.tsv",
+      "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+      "durable"
+    ],
+    "cpu_ns": 27642000,
+    "exit_code": 0,
+    "peak_rss_bytes": 23625728,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "timed_out": false,
+    "wall_ns": 18634750
+  },
+  "root_match": true,
+  "run": {
+    "budget_ns": 15000000000,
+    "child": null,
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/458ae5f2787da43c5cfda7b044e5ad0453da4c12b3b5b2f9f91a279e302c4fe2/durable_init_costs",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/payload",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-segments-vfs-count-20261006/store.sqlite",
+      "durable",
+      "--vfs",
+      "payload-segments"
+    ],
+    "cpu_ns": 68377000,
+    "exit_code": 0,
+    "peak_rss_bytes": 37126144,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "timed_out": false,
+    "wall_ns": 1657139500
+  },
+  "sample_count": 1,
+  "source_dirty_after": false,
+  "source_receipt": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-segments-20261006-phase7-sqlite-init-100-acquisition-payload-segments-v1-candidate/receipt.json",
+  "source_receipt_sha256": "d837a85f38cde1681aedeef389a3e7dd54fc083bd3c9656c6f60a8d54fe8d07f",
+  "status": "DIAGNOSTIC_COMPLETE",
+  "units": [
+    {
+      "classes": [
+        [
+          4,
+          4228,
+          13666,
+          1,
+          4096,
+          26125,
+          1,
+          55708
+        ],
+        [
+          0,
+          0,
+          0,
+          45,
+          181312,
+          972835,
+          2,
+          9301792
+        ],
+        [
+          1,
+          8,
+          1167,
+          2,
+          524,
+          70500,
+          1,
+          102875
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "bootstrap",
+      "unit_id": 1
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.policy",
+      "unit_id": 2
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          2,
+          8240,
+          24542,
+          1,
+          1299459
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "begin",
+      "unit_id": 3
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.signatures",
+      "unit_id": 4
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          3,
+          12360,
+          31832,
+          1,
+          945917
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "put_entries",
+      "unit_id": 5
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "directories",
+      "unit_id": 6
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          3,
+          12360,
+          161000,
+          1,
+          846542
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "put_entries",
+      "unit_id": 7
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "directories",
+      "unit_id": 8
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          14,
+          57680,
+          117583,
+          1,
+          1041959
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "put_entries",
+      "unit_id": 9
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "directories",
+      "unit_id": 10
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.locate",
+      "unit_id": 11
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          1,
+          4120,
+          13125,
+          1,
+          816375
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.reserve",
+      "unit_id": 12
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          2,
+          8240,
+          19000,
+          1,
+          935916
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.publish",
+      "unit_id": 13
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "jobs",
+      "unit_id": 14
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "jobs",
+      "unit_id": 15
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "jobs",
+      "unit_id": 16
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.locate",
+      "unit_id": 17
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          22,
+          90640,
+          221583,
+          1,
+          1047833
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.publish",
+      "unit_id": 18
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          9,
+          37080,
+          62502,
+          1,
+          794083
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "complete_files",
+      "unit_id": 19
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.locate",
+      "unit_id": 20
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          7,
+          28840,
+          58916,
+          1,
+          1092208
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.publish",
+      "unit_id": 21
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.locate",
+      "unit_id": 22
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          23,
+          94760,
+          247208,
+          1,
+          942125
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.publish",
+      "unit_id": 23
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "entries",
+      "unit_id": 24
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "entries",
+      "unit_id": 25
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          2,
+          8240,
+          19750,
+          1,
+          973833
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "set_directory_roots",
+      "unit_id": 26
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "entries",
+      "unit_id": 27
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "file_roots",
+      "unit_id": 28
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "entries",
+      "unit_id": 29
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "file_roots",
+      "unit_id": 30
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          14,
+          57680,
+          83040,
+          1,
+          873500
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "discard",
+      "unit_id": 31
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          1,
+          4120,
+          15916,
+          1,
+          839666
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "release",
+      "unit_id": 32
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.locate",
+      "unit_id": 33
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.value_groups",
+      "unit_id": 34
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.value_groups",
+      "unit_id": 35
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          1,
+          4120,
+          48833,
+          1,
+          757750
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.reserve",
+      "unit_id": 36
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          13,
+          53560,
+          79749,
+          1,
+          850208
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "storage.publish",
+      "unit_id": 37
+    },
+    {
+      "classes": [
+        [
+          0,
+          0,
+          0,
+          84,
+          344064,
+          375463,
+          1,
+          615875
+        ],
+        [
+          84,
+          344064,
+          113917,
+          0,
+          0,
+          0,
+          1,
+          567583
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "unit": "checkpoint",
+      "unit_id": 38
+    }
+  ],
+  "verification_status": "PASS",
+  "verifier": {
+    "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/580d2cb5551479cb9581e2b5cc65fa6d5c3f5f3f4e91d509507a5774e8054e8c/verify_namespace",
+    "sha256": "580d2cb5551479cb9581e2b5cc65fa6d5c3f5f3f4e91d509507a5774e8054e8c"
+  },
+  "vfs": {
+    "call_scopes": [
+      {
+        "class": "main",
+        "errors": 0,
+        "scope": "other",
+        "size_hint_bytes": 4096,
+        "size_hint_ns": 458,
+        "size_hints": 1,
+        "sync_ns": 55708,
+        "syncs": 1,
+        "truncate_ns": 0,
+        "truncates": 0,
+        "write_ns": 26125,
+        "write_submitted_bytes": 4096,
+        "writes": 1
+      },
+      {
+        "class": "wal",
+        "errors": 0,
+        "scope": "other",
+        "size_hint_bytes": 0,
+        "size_hint_ns": 0,
+        "size_hints": 0,
+        "sync_ns": 0,
+        "syncs": 0,
+        "truncate_ns": 0,
+        "truncates": 0,
+        "write_ns": 0,
+        "write_submitted_bytes": 0,
+        "writes": 0
+      },
+      {
+        "class": "journal",
+        "errors": 0,
+        "scope": "other",
+        "size_hint_bytes": 0,
+        "size_hint_ns": 0,
+        "size_hints": 0,
+        "sync_ns": 102875,
+        "syncs": 1,
+        "truncate_ns": 0,
+        "truncates": 0,
+        "write_ns": 70500,
+        "write_submitted_bytes": 524,
+        "writes": 2
+      },
+      {
+        "class": "other",
+        "errors": 0,
+        "scope": "other",
+        "size_hint_bytes": 0,
+        "size_hint_ns": 0,
+        "size_hints": 0,
+        "sync_ns": 0,
+        "syncs": 0,
+        "truncate_ns": 0,
+        "truncates": 0,
+        "write_ns": 0,
+        "write_submitted_bytes": 0,
+        "writes": 0
+      },
+      {
+        "class": "main",
+        "errors": 0,
+        "scope": "commit_step",
+        "size_hint_bytes": 0,
+        "size_hint_ns": 0,
+        "size_hints": 0,
+        "sync_ns": 0,
+        "syncs": 0,
+        "truncate_ns": 0,
+        "truncates": 0,
+        "write_ns": 0,
+        "write_submitted_bytes": 0,
+        "writes": 0
+      },
+      {
+        "class": "wal",
+        "errors": 0,
+        "scope": "commit_step",
+        "size_hint_bytes": 0,
+        "size_hint_ns": 0,
+        "size_hints": 0,
+        "sync_ns": 24921707,
+        "syncs": 19,
+        "truncate_ns": 0,
+        "truncates": 0,
+        "write_ns": 2424081,
+        "write_submitted_bytes": 688072,
+        "writes": 168
+      },
+      {
+        "class": "journal",
+        "errors": 0,
+        "scope": "commit_step",
+        "size_hint_bytes": 0,
+        "size_hint_ns": 0,
+        "size_hints": 0,
+        "sync_ns": 0,
+        "syncs": 0,
+        "truncate_ns": 0,
+        "truncates": 0,
+        "write_ns": 0,
+        "write_submitted_bytes": 0,
+        "writes": 0
+      },
+      {
+        "class": "other",
+        "errors": 0,
+        "scope": "commit_step",
+        "size_hint_bytes": 0,
+        "size_hint_ns": 0,
+        "size_hints": 0,
+        "sync_ns": 0,
+        "syncs": 0,
+        "truncate_ns": 0,
+        "truncates": 0,
+        "write_ns": 0,
+        "write_submitted_bytes": 0,
+        "writes": 0
+      },
+      {
+        "class": "main",
+        "errors": 0,
+        "scope": "checkpoint_step",
+        "size_hint_bytes": 344064,
+        "size_hint_ns": 625,
+        "size_hints": 1,
+        "sync_ns": 615875,
+        "syncs": 1,
+        "truncate_ns": 26125,
+        "truncates": 1,
+        "write_ns": 375463,
+        "write_submitted_bytes": 344064,
+        "writes": 84
+      },
+      {
+        "class": "wal",
+        "errors": 0,
+        "scope": "checkpoint_step",
+        "size_hint_bytes": 0,
+        "size_hint_ns": 0,
+        "size_hints": 0,
+        "sync_ns": 567583,
+        "syncs": 1,
+        "truncate_ns": 464542,
+        "truncates": 1,
+        "write_ns": 0,
+        "write_submitted_bytes": 0,
+        "writes": 0
+      },
+      {
+        "class": "journal",
+        "errors": 0,
+        "scope": "checkpoint_step",
+        "size_hint_bytes": 0,
+        "size_hint_ns": 0,
+        "size_hints": 0,
+        "sync_ns": 0,
+        "syncs": 0,
+        "truncate_ns": 0,
+        "truncates": 0,
+        "write_ns": 0,
+        "write_submitted_bytes": 0,
+        "writes": 0
+      },
+      {
+        "class": "other",
+        "errors": 0,
+        "scope": "checkpoint_step",
+        "size_hint_bytes": 0,
+        "size_hint_ns": 0,
+        "size_hints": 0,
+        "sync_ns": 0,
+        "syncs": 0,
+        "truncate_ns": 0,
+        "truncates": 0,
+        "write_ns": 0,
+        "write_submitted_bytes": 0,
+        "writes": 0
+      }
+    ],
+    "close_errors": 0,
+    "files": [
+      {
+        "class": "main",
+        "close_ns": 5625,
+        "closes": 1,
+        "opens": 1,
+        "read_ns": 13666,
+        "read_requested_bytes": 4228,
+        "reads": 4,
+        "sync_ns": 671583,
+        "syncs": 2,
+        "write_ns": 401588,
+        "write_submitted_bytes": 348160,
+        "writes": 85
+      },
+      {
+        "class": "wal",
+        "close_ns": 4083,
+        "closes": 1,
+        "opens": 1,
+        "read_ns": 113917,
+        "read_requested_bytes": 344064,
+        "reads": 84,
+        "sync_ns": 25489290,
+        "syncs": 20,
+        "write_ns": 2424081,
+        "write_submitted_bytes": 688072,
+        "writes": 168
+      },
+      {
+        "class": "journal",
+        "close_ns": 6375,
+        "closes": 1,
+        "opens": 1,
+        "read_ns": 1167,
+        "read_requested_bytes": 8,
+        "reads": 1,
+        "sync_ns": 102875,
+        "syncs": 1,
+        "write_ns": 70500,
+        "write_submitted_bytes": 524,
+        "writes": 2
+      },
+      {
+        "class": "other",
+        "close_ns": 0,
+        "closes": 0,
+        "opens": 0,
+        "read_ns": 0,
+        "read_requested_bytes": 0,
+        "reads": 0,
+        "sync_ns": 0,
+        "syncs": 0,
+        "write_ns": 0,
+        "write_submitted_bytes": 0,
+        "writes": 0
+      }
+    ],
+    "kind": "delegated-vfs-observer",
+    "live_files": 0,
+    "observer_file_header_bytes": 176,
+    "sync_flags": [
+      0,
+      0,
+      2,
+      21,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "underlying_os_file_bytes": 192,
+    "underlying_vfs": "unix",
+    "unknown_sync_flags": 0,
+    "version": "3.51.0",
+    "vfs_version": 3
+  }
+}

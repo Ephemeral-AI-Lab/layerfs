@@ -1,0 +1,6 @@
+{
+  "status": "FAILED_BEFORE_ATTEMPT",
+  "sample_count": 0,
+  "cause": "outer command recorder missing parent output directory; runner, build and product were never launched",
+  "fix": "create prospective result parent, then invoke runner once"
+}

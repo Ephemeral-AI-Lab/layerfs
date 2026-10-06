@@ -1,0 +1,9 @@
+{
+  "read_only": "immutable URI, EXPLAIN only; no SQL mutation or writable SHM open",
+  "main_database_sha256_before_after": "6825dcb3c3378a72c5400a0fede140a857853f1d3a926d7b57f3f158edea1ca7",
+  "main_sha256_matches_original_manifest": true,
+  "tool_source_sha256": "f55df53bdc29d09d194c4223a9ac131ad92d5ac55031b3a111378c371027a9cb",
+  "binary_sha256": "603312cb059fd4335ce6721381e6d43991c7740b04aa29ec27644e307bb202ee",
+  "source_parent": "fb7f3f47734eb8cd4d68b8e965a24929c8332785",
+  "gate": "ineligible diagnostic clocks; exact SQL plans paired with per-publication native profiling"
+}
