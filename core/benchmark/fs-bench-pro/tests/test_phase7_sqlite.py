@@ -79,18 +79,35 @@ class SqliteStep10(unittest.TestCase):
     def test_acquisition_vehicle_is_a_new_identity_and_run_backed_init_is_retired(self):
         self.assertEqual(len(f.RETIRED_RUN_BACKED_INIT),32)
         self.assertTrue(all(f.CASES[name].fixture for name in f.RETIRED_RUN_BACKED_INIT))
-        for profile,names in f.ACQUISITION_CASES_BY_PROFILE.items():
+        for profile,names in f.ACQUISITION_V1_CASES_BY_PROFILE.items():
             cases=[f.CASES[name] for name in names];self.assertEqual(len(cases),4)
             self.assertEqual([f.init.CASES[x.fixture].files for x in cases],[100,1000,10000,100000])
             self.assertTrue(all(x.profile==profile and x.states is None and x.storage_ceiling is None for x in cases))
             self.assertTrue(all((x.command_budget_ns,x.verification_budget_ns)==(15_000_000_000,9_500_000_000) for x in cases))
             self.assertTrue(all(name.endswith('-acquisition-v1') and name not in f.RETIRED_RUN_BACKED_INIT for name in names))
-        self.assertEqual(len(set(sum(f.ACQUISITION_CASES_BY_PROFILE.values(),[]))),8)
+        self.assertEqual(len(set(sum(f.ACQUISITION_V1_CASES_BY_PROFILE.values(),[]))),8)
         self.assertNotIn('scratch',f.ACQUISITION_VEHICLE)
         for old in f.RETIRED_RUN_BACKED_INIT:
             for arm in ('candidate','baseline'):
                 with self.assertRaisesRegex(ValueError,'retired'):
                     f.run(old,None,arm,None,None)
+
+    def test_acquisition_cap_lift_preserves_v1_and_all_other_gates(self):
+        self.assertEqual(len(set(sum(f.ACQUISITION_CASES_BY_PROFILE.values(),[]))),8)
+        for profile,old_names in f.ACQUISITION_V1_CASES_BY_PROFILE.items():
+            new_names=f.ACQUISITION_CASES_BY_PROFILE[profile]
+            for old,new in zip(old_names,new_names):
+                before,after=f.CASES[old],f.CASES[new]
+                self.assertEqual(new,old.rsplit('-v',1)[0]+'-v2')
+                self.assertEqual((before.command_budget_ns,before.verification_budget_ns),
+                                 (15_000_000_000,9_500_000_000))
+                self.assertEqual((after.command_budget_ns,after.verification_budget_ns),
+                                 (30_000_000_000,19_000_000_000))
+                self.assertEqual((before.fixture,before.states,before.storage_ceiling,
+                                  before.profile,before.proof_policy,before.pack_layout),
+                                 (after.fixture,after.states,after.storage_ceiling,
+                                  after.profile,after.proof_policy,after.pack_layout))
+                self.assertEqual(after.proof_envelope,'owner-init-caps-30-19-20261006-v2')
     def test_candidate_driver_takes_no_scratch_and_creates_the_acquisition_schema(self):
         text=(Path(__file__).resolve().parents[3]/'crates/layerfs-project/examples/benchmark_init.rs').read_text()
         self.assertIn('with_sqlite_acquisition(SqliteAcquisitionSchema::Tables)',text)

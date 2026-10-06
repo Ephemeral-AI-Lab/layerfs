@@ -1,0 +1,18 @@
+test_300_seconds_is_prospective_symmetric_and_preserves_190_seconds (test_phase7_sqlite.SqliteStep10.test_300_seconds_is_prospective_symmetric_and_preserves_190_seconds) ... ok
+test_acquisition_cap_lift_preserves_v1_and_all_other_gates (test_phase7_sqlite.SqliteStep10.test_acquisition_cap_lift_preserves_v1_and_all_other_gates) ... ok
+test_acquisition_vehicle_is_a_new_identity_and_run_backed_init_is_retired (test_phase7_sqlite.SqliteStep10.test_acquisition_vehicle_is_a_new_identity_and_run_backed_init_is_retired) ... ok
+test_candidate_driver_takes_no_scratch_and_creates_the_acquisition_schema (test_phase7_sqlite.SqliteStep10.test_candidate_driver_takes_no_scratch_and_creates_the_acquisition_schema) ... ok
+test_lite_scope_is_new_and_symmetric_with_old_proofs_preserved (test_phase7_sqlite.SqliteStep10.test_lite_scope_is_new_and_symmetric_with_old_proofs_preserved) ... ok
+test_margin_is_integer_total_bound_and_joint_gate_cannot_waive_missing_proof (test_phase7_sqlite.SqliteStep10.test_margin_is_integer_total_bound_and_joint_gate_cannot_waive_missing_proof) ... ok
+test_owner_closure_caps_are_exact_doubles_and_history_is_preserved (test_phase7_sqlite.SqliteStep10.test_owner_closure_caps_are_exact_doubles_and_history_is_preserved) ... ok
+test_rejected_wal_reservation_cannot_be_replayed_after_withdrawal (test_phase7_sqlite.SqliteStep10.test_rejected_wal_reservation_cannot_be_replayed_after_withdrawal) ... ok
+test_seven_required_selections_and_original_history_gates (test_phase7_sqlite.SqliteStep10.test_seven_required_selections_and_original_history_gates) ... ok
+test_stride1_increase_is_prospective_and_does_not_change_proof_or_old_cases (test_phase7_sqlite.SqliteStep10.test_stride1_increase_is_prospective_and_does_not_change_proof_or_old_cases) ... ok
+test_unresolved_contract_refuses_before_build_setup_or_sample (test_phase7_sqlite.SqliteStep10.test_unresolved_contract_refuses_before_build_setup_or_sample) ... ok
+test_wait4_is_per_child_and_watchdog_keeps_failed_output (test_phase7_sqlite.SqliteStep10.test_wait4_is_per_child_and_watchdog_keeps_failed_output) ... ok
+test_watchdog_terminates_descendant_observers (test_phase7_sqlite.SqliteStep10.test_watchdog_terminates_descendant_observers) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.536s
+
+OK

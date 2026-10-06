@@ -154,6 +154,20 @@ for profile in ACQUISITION_CASES_BY_PROFILE:
         CASES[new]=Case(new,fixture.id,None,None,15_000_000_000,9_500_000_000,profile)
         ACQUISITION_CASES_BY_PROFILE[profile].append(new)
 
+# Owner2026-10-06: lift the new Init caps prospectively to the earlier
+# 30s/19s allowance. v1 is unsampled and retained at its original limits.
+# Vehicle, fixture, oracle, profiles, relative speed and allocation gates stay
+# unchanged; new case identities apply symmetrically to both arms.
+ACQUISITION_V1_CASES_BY_PROFILE=ACQUISITION_CASES_BY_PROFILE
+ACQUISITION_CASES_BY_PROFILE={'durable':[], 'disposable':[]}
+for profile,names in ACQUISITION_V1_CASES_BY_PROFILE.items():
+    for old in names:
+        c=CASES[old];new=old.rsplit('-v',1)[0]+'-v2'
+        CASES[new]=Case(new,c.fixture,c.states,c.storage_ceiling,
+                       30_000_000_000,19_000_000_000,c.profile,
+                       c.proof_policy,c.pack_layout,'owner-init-caps-30-19-20261006-v2')
+        ACQUISITION_CASES_BY_PROFILE[profile].append(new)
+
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"
