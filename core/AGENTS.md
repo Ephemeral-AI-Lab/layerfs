@@ -69,6 +69,15 @@ Stable capture/input, Store-derived policy, backpressure, Save completion and
 conditional history publication are separate obligations. Immutable objects do
 not replace authority, reference closure, mutable history or safe GC.
 
+Engine-independent Project logic may consume SQLite-backed acquisition through
+an owning backend-neutral port. Concrete SQL and database ownership belong in
+Persistence/application composition along the permitted dependency direction.
+A guard refusal of Project's direct engine dependency identifies wrong placement;
+resolve that boundary before proceeding. It does not require replacing indexed
+backing with a custom sorter. The new acquisition capability and Store/open
+compatibility are implementation work, not existing APIs or permission to weaken
+the boundary guard. See the [S7/S9 remaining plan](docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md).
+
 ## Optimization and performance debugging
 
 Before changing a performance-sensitive path or diagnosing a performance finding,

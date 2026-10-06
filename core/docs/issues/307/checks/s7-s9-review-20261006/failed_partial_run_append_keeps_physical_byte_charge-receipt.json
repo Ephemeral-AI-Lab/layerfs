@@ -1,0 +1,19 @@
+{
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-s9-review/debug/deps/review-bbc1a02a7f1363d1",
+    "failed_partial_run_append_keeps_physical_byte_charge",
+    "--exact",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit": 101,
+  "wall_timeout_s": 30,
+  "timeout_failed": false,
+  "wall_ns": 8466583,
+  "head": "b2b979f91aadc23a7858d618a438a39a4e6a3edd",
+  "binary_sha256": "657808a191d06d16bfd8630541e5d867113886f627c21254fb4737f5d9d32276",
+  "harness_sha256": "532497dab471ac9ee7b81cb55899655173a2316a11ae0e01a06c442228ea51ee",
+  "harness_lock_sha256": "eda9e1bdff7126f0e98f6bd9bf2dc662f4bdf66e23b1586c7a121a1abafbb44a",
+  "cache": "uncontrolled; public API regression reproduction, not speed/RSS/qualification",
+  "rlimit_fsize": 4096
+}

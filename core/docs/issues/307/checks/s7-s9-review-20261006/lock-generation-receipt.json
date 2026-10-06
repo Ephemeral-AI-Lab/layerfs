@@ -1,0 +1,12 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "generate-lockfile",
+    "--offline",
+    "--manifest-path",
+    "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-s9-review-20261006-vqg0q1t6/Cargo.toml"
+  ],
+  "exit": 0,
+  "kind": "isolated review harness; existing pinned package sources, not product lock mutation"
+}

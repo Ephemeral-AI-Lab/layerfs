@@ -1,0 +1,19 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--check"
+  ],
+  "kind": "documentation/tooling whitespace",
+  "wall_timeout_s": 30,
+  "timeout_failed": false,
+  "exit": 0,
+  "wall_ns": 66632083,
+  "parent": "b2b979f91aadc23a7858d618a438a39a4e6a3edd",
+  "source_sha256": {
+    "core/tools/check_product_boundary.py": "914f2e8d58392b30278446e801b7cc8678bdcfd4d6c977132246b6cb0d5f0270",
+    "core/tools/test_check_product_boundary.py": "2a290a64b15377260ccf5456b16b769399885b604a925c9f11699d7b41215915",
+    "core/AGENTS.md": "95eb322c0a2210c8ec077f7e133029401e603c6d84491919f41cb9d09d012cb5",
+    "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md": "ed2a42e191a7d943b2cd8729ce40540f76bcee6289dace7b90b2bc75d3668f36"
+  }
+}

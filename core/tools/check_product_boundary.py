@@ -73,7 +73,14 @@ def dependency_violations(source):
         for alias, specification in section.items():
             dependency = specification.get("package", alias) if isinstance(specification, dict) else alias
             if name in DOMAIN_CRATES and dependency in {"rusqlite", "postgres", "tokio-postgres", "native-tls", "reqwest"}:
-                found.append((1,f"engine dependency in domain {name} -> {dependency}"))
+                guidance = ""
+                if name == "layerfs-project" and dependency == "rusqlite":
+                    guidance = (
+                        "; keep concrete SQLite in layerfs-persistence and expose "
+                        "an owning backend-neutral port; SQLite-backed Project "
+                        "acquisition is allowed through that boundary"
+                    )
+                found.append((1,f"engine dependency in domain {name} -> {dependency}{guidance}"))
             if dependency.startswith("layerfs-") and dependency not in ALLOWED_DEPENDENCIES[name]:
                 found.append((1, f"forbidden production dependency {name} -> {dependency}"))
     return found

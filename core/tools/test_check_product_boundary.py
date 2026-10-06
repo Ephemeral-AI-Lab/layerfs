@@ -41,6 +41,28 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(dependency_violations('[package]\nname="layerfs-persistence"\n[dependencies]\nlayerfs-history={path="../layerfs-history"}\n'))
         self.assertTrue(dependency_violations('[package]\nname="layerfs-persistence"\n[dependencies]\nlayerfs-workspace={path="../layerfs-workspace"}\n'))
 
+    def test_project_sqlite_backing_uses_the_owning_provider_boundary(self):
+        project = '[package]\nname="layerfs-project"\n[dependencies]\n'
+        self.assertFalse(dependency_violations(
+            project + 'layerfs-storage={path="../layerfs-storage"}\n'))
+        provider = '[package]\nname="layerfs-persistence"\n[dependencies]\n'
+        self.assertFalse(dependency_violations(
+            provider + 'layerfs-storage={path="../layerfs-storage"}\n'
+            + 'rusqlite={version="=0.40.2"}\n'))
+        for table in ("dependencies", "build-dependencies",
+                      "target.'cfg(target_os = \"linux\")'.dependencies"):
+            with self.subTest(table=table):
+                source = ('[package]\nname="layerfs-project"\n'
+                          f'[{table}]\n'
+                          'database={package="rusqlite",version="=0.40.2"}\n')
+                findings = dependency_violations(source)
+                self.assertEqual(len(findings), 1)
+                self.assertIn("engine dependency in domain layerfs-project -> rusqlite",
+                              findings[0][1])
+                self.assertIn("SQLite-backed Project acquisition is allowed",
+                              findings[0][1])
+                self.assertIn("layerfs-persistence", findings[0][1])
+
     def test_domain_source_component_names(self):
         for folder in ("layerfs-storage", "layerfs-history", "layerfs-project", "layerfs-content"):
             path = Path("core/crates") / folder / "src" / "implementation.rs"

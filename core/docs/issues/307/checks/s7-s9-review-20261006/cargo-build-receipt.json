@@ -1,0 +1,18 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-s9-review-20261006-vqg0q1t6/Cargo.toml",
+    "--locked",
+    "--offline",
+    "--no-run"
+  ],
+  "exit": 0,
+  "wall_timeout_s": 240,
+  "head": "b2b979f91aadc23a7858d618a438a39a4e6a3edd",
+  "manifest_sha256": "aef66bb4d6be7d9dc63c9ff9185dd21c669371e31b109a1511143b0773e02734",
+  "harness_sha256": "532497dab471ac9ee7b81cb55899655173a2316a11ae0e01a06c442228ea51ee",
+  "kind": "--no-run compilation only"
+}

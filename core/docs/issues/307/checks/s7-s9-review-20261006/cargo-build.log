@@ -1,0 +1,28 @@
+   Compiling libc v0.2.190
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling typenum v1.20.1
+   Compiling cfg-if v1.0.5
+   Compiling pkg-config v0.3.34
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayref v0.3.9
+   Compiling arrayvec v0.7.8
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry)
+   Compiling const-oid v0.10.2
+   Compiling hybrid-array v0.4.15
+   Compiling block-buffer v0.12.1
+   Compiling crypto-common v0.2.2
+   Compiling digest v0.11.3
+   Compiling cpufeatures v0.3.1
+   Compiling sha2 v0.11.0
+   Compiling jobserver v0.1.35
+   Compiling cc v1.6.0
+   Compiling blake3 v1.8.5
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+   Compiling layerfs-s9-review v0.0.0 (/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-s9-review-20261006-vqg0q1t6)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.36s
+  Executable review.rs (core/target/cluster2-s9-review/debug/deps/review-bbc1a02a7f1363d1)

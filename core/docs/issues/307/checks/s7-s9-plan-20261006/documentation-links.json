@@ -1,0 +1,155 @@
+{
+  "status": "PASS",
+  "links": [
+    {
+      "label": "root AGENTS",
+      "target": "../../../../AGENTS.md",
+      "exists": true
+    },
+    {
+      "label": "core AGENTS",
+      "target": "../../../AGENTS.md",
+      "exists": true
+    },
+    {
+      "label": "cluster one",
+      "target": "../../../../cluster_one_handbook.md",
+      "exists": true
+    },
+    {
+      "label": "CAS/CDC/delta",
+      "target": "../../../../cas_cdc_deltaencoding_handbook.md",
+      "exists": true
+    },
+    {
+      "label": "303 index",
+      "target": "../303/README.md",
+      "exists": true
+    },
+    {
+      "label": "engine",
+      "target": "../303/daemon-sqlite.md",
+      "exists": true
+    },
+    {
+      "label": "FUSE",
+      "target": "../303/fuse.md",
+      "exists": true
+    },
+    {
+      "label": "runtime",
+      "target": "../303/06-cluster-one-integration.md",
+      "exists": true
+    },
+    {
+      "label": "validation",
+      "target": "../303/07-implementation-validation.md",
+      "exists": true
+    },
+    {
+      "label": "source organization",
+      "target": "SOURCE-ORGANIZATION-S7-S13.md",
+      "exists": true
+    },
+    {
+      "label": "the original organization",
+      "target": "SOURCE-ORGANIZATION.md",
+      "exists": true
+    },
+    {
+      "label": "S5/S6 stopping record",
+      "target": "HANDOFF-S7-S13.md",
+      "exists": true
+    },
+    {
+      "label": "resume note",
+      "target": "HANDOFF-S7-S9-RESUME-20261006.md",
+      "exists": true
+    },
+    {
+      "label": "speed-plan draft",
+      "target": "S7-S9-SPEED-TEST-PLAN.md",
+      "exists": true
+    },
+    {
+      "label": "Workspace analysis",
+      "target": "WORKSPACE-EFFICIENCY-ANALYSIS.md",
+      "exists": true
+    },
+    {
+      "label": "consumer LOC receipt",
+      "target": "checks/s9-consumer-ports/committed-loc.json",
+      "exists": true
+    },
+    {
+      "label": "acquisition LOC receipt",
+      "target": "checks/s9-backed-acquisition/committed-loc.json",
+      "exists": true
+    },
+    {
+      "label": "S7 audit",
+      "target": "S7-EXIT-AUDIT.md",
+      "exists": true
+    },
+    {
+      "label": "operation observations",
+      "target": "../../architecture/36-operation-cost-observations.md",
+      "exists": true
+    },
+    {
+      "label": "identity",
+      "target": "checks/s9-consumer-ports/identity.json",
+      "exists": true
+    },
+    {
+      "label": "failures",
+      "target": "checks/s9-backed-acquisition/FAILURES.md",
+      "exists": true
+    },
+    {
+      "label": "identity",
+      "target": "checks/s9-backed-acquisition/identity.json",
+      "exists": true
+    },
+    {
+      "label": "core Cargo",
+      "target": "../../../Cargo.toml",
+      "exists": true
+    },
+    {
+      "label": "review receipts",
+      "target": "checks/s7-s9-review-20261006/review.json",
+      "exists": true
+    },
+    {
+      "label": "optimization policy",
+      "target": "../../../../docs/general/optimization-guide.md",
+      "exists": true
+    },
+    {
+      "label": "measurement workflow",
+      "target": "../../../../docs/general/agent-measurement-policy.md",
+      "exists": true
+    },
+    {
+      "label": "benchmark rules",
+      "target": "../../../../docs/general/benchmark_rules.md",
+      "exists": true
+    },
+    {
+      "label": "report template",
+      "target": "../../../../benchmark_agent_report.md",
+      "exists": true
+    },
+    {
+      "label": "core harness routing",
+      "target": "../../../benchmark/fs-bench-pro/AGENTS.md",
+      "exists": true
+    },
+    {
+      "label": "Fuser provenance",
+      "target": "FUSER-REGISTRY-PATCH-20261006.md",
+      "exists": true
+    }
+  ]
+}

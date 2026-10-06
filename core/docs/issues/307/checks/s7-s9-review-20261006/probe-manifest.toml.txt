@@ -1,0 +1,14 @@
+[package]
+name="layerfs-s9-review"
+version="0.0.0"
+edition="2021"
+[workspace]
+[[test]]
+name="review"
+path="review.rs"
+[dependencies]
+layerfs-content = { path="/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content", default-features=false }
+layerfs-history = { path="/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history", default-features=false }
+layerfs-project = { path="/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project", default-features=false }
+layerfs-storage = { path="/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage", default-features=false }
+layerfs-telemetry = { path="/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry", default-features=false }

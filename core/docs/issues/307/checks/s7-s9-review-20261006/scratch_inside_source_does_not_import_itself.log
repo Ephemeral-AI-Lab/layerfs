@@ -1,0 +1,16 @@
+
+running 1 test
+test scratch_inside_source_does_not_import_itself ... empty source, scratch inside source: Err(Io(Os { code: 2, kind: NotFound, message: "No such file or directory" }))
+
+thread 'scratch_inside_source_does_not_import_itself' panicked at review.rs:18:20:
+called `Result::unwrap()` on an `Err` value: Io(Os { code: 2, kind: NotFound, message: "No such file or directory" })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    scratch_inside_source_does_not_import_itself
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.02s
+

@@ -1,0 +1,35 @@
+#[path = "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/mod.rs"]
+mod support;
+use layerfs_history::{HistoryName,LayerStackId};
+use layerfs_project::{init,InitRequest};
+use layerfs_telemetry::timer::Timing;
+use std::{fs,sync::Arc,time::{Duration,Instant}};
+#[test]
+fn scratch_inside_source_does_not_import_itself() {
+ let fixture=support::Fixture::new(0);
+ let store=support::storage(Arc::new(support::memory_metadata::MemoryMetadata::default()));
+ let history=support::memory_history::MemoryHistory::default();
+ let result=Timing::disabled("review.init", |timer| init(&store,&history,InitRequest {
+  source:&fixture.source,scratch_parent:&fixture.source,
+  stack:LayerStackId::from_authority([19;16]),name:HistoryName::new("main").unwrap(),
+  scope_seed:[29;32],deadline:Instant::now()+Duration::from_secs(5)
+ },timer)).0;
+ println!("empty source, scratch inside source: {result:?}");
+ assert_eq!(result.unwrap().entries,1);
+}
+#[test]
+fn failed_partial_run_append_keeps_physical_byte_charge() {
+ use layerfs_content::filesystem::references::{FileBacking,OrderingBacking};
+ assert_eq!(std::env::var("REVIEW_FSIZE").unwrap(),"4096");
+ let fixture=support::Fixture::new(0);
+ let mut backing=FileBacking::with_capacity(&fixture.path,u64::MAX);
+ let mut run=backing.create_run().unwrap();
+ let result=run.append(&vec![42;65536]);
+ assert!(result.is_err());
+ let bytes=fs::read_dir(&fixture.path).unwrap().map(|p|p.unwrap().path())
+  .filter(|p|p.extension().is_some_and(|ext|ext=="run"))
+  .map(|p|fs::metadata(p).unwrap().len()).sum::<u64>();
+ println!("append={result:?}, actual run bytes={bytes}, held={}, peak={}, logical len={}",backing.held_bytes(),backing.peak_bytes(),run.len());
+ assert_eq!(bytes,4096);
+ assert_eq!(backing.held_bytes(),bytes);
+}

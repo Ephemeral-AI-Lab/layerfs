@@ -1,0 +1,214 @@
+error[E0053]: method `locate` has an incompatible type for trait
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/../../../layerfs-storage/tests/support/memory_metadata.rs:57:14
+   |
+57 |         ids: &[ObjectId],
+   |              ^^^^^^^^^^^ expected `ObjectId`, found a different `ObjectId`
+   |
+   = note: expected signature `fn(&MemoryMetadata, &[layerfs_content::object::id::ObjectId], &mut Vec<_>) -> Result<_, _>`
+              found signature `fn(&MemoryMetadata, &[ObjectId], &mut Vec<_>) -> Result<_, _>`
+help: change the parameter type to match the trait
+   |
+57 |         ids: &[layerfs_content::object::id::ObjectId],
+   |              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error[E0308]: mismatched types
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/memory_history.rs:43:30
+   |
+43 |         let high = map.entry(r.scope).or_default();
+   |                        ----- ^^^^^^^ expected `ObjectId`, found a different `ObjectId`
+   |                        |
+   |                        arguments to this method are incorrect
+   |
+note: two different versions of crate `layerfs_content` are being used; two types coming from two different versions of the same crate are different types even if they look the same
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/object/id.rs:20:1
+   |
+20 | pub struct ObjectId([u8; DIGEST_BYTES]);
+   | ^^^^^^^^^^^^^^^^^^^
+   | |
+   | this is the expected type `ObjectId`
+   | this is the found type `layerfs_content::object::id::ObjectId`
+   |
+  ::: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/mod.rs:2:5
+   |
+2  | use layerfs_content::{
+   |     --------------- one version of crate `layerfs_content` used here, as a direct dependency of the current crate
+...
+6  | use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId};
+   |     --------------- one version of crate `layerfs_content` used here, as a dependency of crate `layerfs_history`
+   = help: you can use `cargo tree` to explore your dependency tree
+help: the return type of this call is `layerfs_content::object::id::ObjectId` due to the type of the argument passed
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/memory_history.rs:43:20
+   |
+43 |         let high = map.entry(r.scope).or_default();
+   |                    ^^^^^^^^^^-------^
+   |                              |
+   |                              this argument influences the return type of `entry`
+note: method defined here
+  --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/collections/btree/map.rs:1316:12
+
+error[E0308]: mismatched types
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/../../../layerfs-storage/tests/support/memory_metadata.rs:229:38
+    |
+229 |             match next.objects.entry(row.object_id) {
+    |                                ----- ^^^^^^^^^^^^^ expected `ObjectId`, found a different `ObjectId`
+    |                                |
+    |                                arguments to this method are incorrect
+    |
+note: two different versions of crate `layerfs_content` are being used; two types coming from two different versions of the same crate are different types even if they look the same
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/object/id.rs:20:1
+    |
+20  | pub struct ObjectId([u8; DIGEST_BYTES]);
+    | ^^^^^^^^^^^^^^^^^^^
+    | |
+    | this is the expected type `ObjectId`
+    | this is the found type `layerfs_content::object::id::ObjectId`
+    |
+   ::: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/mod.rs:2:5
+    |
+2   | use layerfs_content::{
+    |     --------------- one version of crate `layerfs_content` used here, as a direct dependency of the current crate
+...
+6   | use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId};
+    |     --------------- one version of crate `layerfs_content` used here, as a dependency of crate `layerfs_history`
+    = help: you can use `cargo tree` to explore your dependency tree
+help: the return type of this call is `layerfs_content::object::id::ObjectId` due to the type of the argument passed
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/../../../layerfs-storage/tests/support/memory_metadata.rs:229:19
+    |
+229 |             match next.objects.entry(row.object_id) {
+    |                   ^^^^^^^^^^^^^^^^^^^-------------^
+    |                                      |
+    |                                      this argument influences the return type of `entry`
+note: method defined here
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/collections/btree/map.rs:1316:12
+
+error[E0277]: the trait bound `Reader<'_>: AuthenticatedObjects` is not satisfied
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/mod.rs:89:13
+   |
+89 |             &reader,
+   |             ^^^^^^^ the trait `AuthenticatedObjects` is not implemented for `Reader<'_>`
+   |
+note: there are multiple different versions of crate `layerfs_content` in the dependency graph
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/object/access.rs:33:1
+   |
+33 | pub trait AuthenticatedObjects {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this is the required trait
+   |
+  ::: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/mod.rs:2:5
+   |
+2  | use layerfs_content::{
+   |     --------------- one version of crate `layerfs_content` used here, as a direct dependency of the current crate
+...
+6  | use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId};
+   |     --------------- one version of crate `layerfs_content` used here, as a dependency of crate `layerfs_history`
+   |
+  ::: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage/src/read/provider.rs:9:1
+   |
+9  | pub struct Reader<'a> {
+   | --------------------- this type doesn't implement the required trait
+   |
+  ::: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/file/edit/input.rs:93:1
+   |
+93 | pub trait EditSequence {
+   | ---------------------- this is the found trait
+   = help: you can use `cargo tree` to explore your dependency tree
+   = note: required for the cast from `&Reader<'_>` to `&dyn AuthenticatedObjects`
+
+error[E0308]: mismatched types
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/mod.rs:90:65
+   |
+90 |             layerfs_content::filesystem::root::FilesystemRootId(root),
+   |             --------------------------------------------------- ^^^^ expected `ObjectId`, found a different `ObjectId`
+   |             |
+   |             arguments to this struct are incorrect
+   |
+note: two different versions of crate `layerfs_content` are being used; two types coming from two different versions of the same crate are different types even if they look the same
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/object/id.rs:20:1
+   |
+20 | pub struct ObjectId([u8; DIGEST_BYTES]);
+   | ^^^^^^^^^^^^^^^^^^^
+   | |
+   | this is the expected type `ObjectId`
+   | this is the found type `layerfs_content::object::id::ObjectId`
+   |
+  ::: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/mod.rs:2:5
+   |
+2  | use layerfs_content::{
+   |     --------------- one version of crate `layerfs_content` used here, as a direct dependency of the current crate
+...
+6  | use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId};
+   |     --------------- one version of crate `layerfs_content` used here, as a dependency of crate `layerfs_history`
+   = help: you can use `cargo tree` to explore your dependency tree
+note: tuple struct defined here
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/filesystem/root.rs:37:12
+   |
+37 | pub struct FilesystemRootId(pub ObjectId);
+   |            ^^^^^^^^^^^^^^^^
+
+error[E0277]: the trait bound `Reader<'_>: AuthenticatedObjects` is not satisfied
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/mod.rs:99:17
+   |
+99 |                 &reader,
+   |                 ^^^^^^^ the trait `AuthenticatedObjects` is not implemented for `Reader<'_>`
+   |
+note: there are multiple different versions of crate `layerfs_content` in the dependency graph
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/object/access.rs:33:1
+   |
+33 | pub trait AuthenticatedObjects {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this is the required trait
+   |
+  ::: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/mod.rs:2:5
+   |
+2  | use layerfs_content::{
+   |     --------------- one version of crate `layerfs_content` used here, as a direct dependency of the current crate
+...
+6  | use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId};
+   |     --------------- one version of crate `layerfs_content` used here, as a dependency of crate `layerfs_history`
+   |
+  ::: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage/src/read/provider.rs:9:1
+   |
+9  | pub struct Reader<'a> {
+   | --------------------- this type doesn't implement the required trait
+   |
+  ::: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/file/edit/input.rs:93:1
+   |
+93 | pub trait EditSequence {
+   | ---------------------- this is the found trait
+   = help: you can use `cargo tree` to explore your dependency tree
+   = note: required for the cast from `&Reader<'_>` to `&dyn AuthenticatedObjects`
+
+error[E0277]: the trait bound `Reader<'_>: AuthenticatedObjects` is not satisfied
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/mod.rs:130:30
+    |
+130 |                     read_all(&reader, inode.content_root, &mut body, scope.child("file"))
+    |                              ^^^^^^^ the trait `AuthenticatedObjects` is not implemented for `Reader<'_>`
+    |
+note: there are multiple different versions of crate `layerfs_content` in the dependency graph
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/object/access.rs:33:1
+    |
+33  | pub trait AuthenticatedObjects {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this is the required trait
+    |
+   ::: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project/tests/support/mod.rs:2:5
+    |
+2   | use layerfs_content::{
+    |     --------------- one version of crate `layerfs_content` used here, as a direct dependency of the current crate
+...
+6   | use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId};
+    |     --------------- one version of crate `layerfs_content` used here, as a dependency of crate `layerfs_history`
+    |
+   ::: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage/src/read/provider.rs:9:1
+    |
+9   | pub struct Reader<'a> {
+    | --------------------- this type doesn't implement the required trait
+    |
+   ::: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/file/edit/input.rs:93:1
+    |
+93  | pub trait EditSequence {
+    | ---------------------- this is the found trait
+    = help: you can use `cargo tree` to explore your dependency tree
+    = note: required for the cast from `&Reader<'_>` to `&dyn AuthenticatedObjects`
+
+error: aborting due to 7 previous errors
+
+Some errors have detailed explanations: E0053, E0277, E0308.
+For more information about an error, try `rustc --explain E0053`.
