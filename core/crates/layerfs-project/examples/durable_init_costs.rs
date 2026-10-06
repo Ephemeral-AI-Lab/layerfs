@@ -1,5 +1,7 @@
 //! Count attribution through the ordinary public Init/acquisition ports.
 //! Diagnostic instrumentation and uncontrolled cache; not a performance arm.
+#[path = "durable_init_costs/vfs.rs"]
+mod vfs;
 use layerfs_content::ObjectId;
 use layerfs_history::{HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_persistence::{
@@ -59,10 +61,12 @@ impl Observed<'_> {
         f: impl FnOnce() -> AcquisitionResult<T>,
     ) -> AcquisitionResult<T> {
         let before = self.handles.diagnostics().expect("before-unit counters");
+        let io = vfs::span(name);
         let start = Instant::now();
         let result = f();
         let wall = start.elapsed().as_nanos() as u64;
         let after = self.handles.diagnostics().expect("after-unit counters");
+        io.finish();
         self.units
             .lock()
             .unwrap()
@@ -104,15 +108,17 @@ impl Acquisition for Observed<'_> {
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
-    if args.len() != 4 {
-        return Err("source fresh-database durable|disposable required".into());
+    if !matches!(args.len(), 4 | 5) || args.get(4).is_some_and(|flag| flag != "--vfs") {
+        return Err("source fresh-database durable|disposable [--vfs] required".into());
     }
+    vfs::initialize(args.len() == 5)?;
     let selected = match args[3].as_str() {
         "durable" => SqlitePersistenceProfile::Durable,
         "disposable" => SqlitePersistenceProfile::Disposable,
         _ => return Err("explicit profile required".into()),
     };
     let creation = Instant::now();
+    let io = vfs::span("bootstrap");
     let handles = Arc::new(Handles::create(
         PersistenceConfig::sqlite(&args[2])
             .with_sqlite_profile(selected)
@@ -126,6 +132,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?);
     let creation_ns = creation.elapsed().as_nanos();
     let creation_work = handles.diagnostics()?;
+    io.finish();
     eprintln!("CREATE_DIAGNOSTIC wall_ns={creation_ns} sql={creation_work:?}");
     let observed = Observed {
         handles: &handles,
@@ -165,7 +172,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (name, work) in pack.units.lock().unwrap().iter() {
         work.print(name);
     }
+    let io = vfs::span("checkpoint");
     let checkpoint = handles.checkpoint()?;
+    io.finish();
     if checkpoint.busy {
         return Err("checkpoint busy".into());
     }
@@ -193,10 +202,12 @@ impl PackObserved {
         body: impl FnOnce() -> Result<T, layerfs_storage::port::PersistenceError>,
     ) -> Result<T, layerfs_storage::port::PersistenceError> {
         let before = self.handles.diagnostics()?;
+        let io = vfs::span(name);
         let start = Instant::now();
         let result = body();
         let wall = start.elapsed().as_nanos() as u64;
         let after = self.handles.diagnostics()?;
+        io.finish();
         self.units
             .lock()
             .unwrap()

@@ -1,0 +1,7 @@
+{
+  "core/benchmark/fs-bench-pro/diagnostics/sqlite_init_vfs_observer.c": "cd90f413aafc58a09188c5561322cfc291c9bb8ef4878a4a993055c7bc5ef802",
+  "core/benchmark/fs-bench-pro/diagnostics/sqlite_init_vfs_probe.c": "9a38e58e5f502502d92fbc4deff34517b912443132769c6409cd6382ee5e9b67",
+  "core/benchmark/fs-bench-pro/diagnostics/sqlite_vfs_observer.c": "0cd6594f9b7b4311fcdaa15f8092a4b5b32fe31e0daedc10f4439fe3cfa99c0d",
+  "core/target/cluster2-runtime-tests/durable100-init-vfs.dylib": "31b4fc3b9745b7e8e897e4d31411c83203ae0ce9f62c56383bc1e7ad5a4a4bea",
+  "core/target/cluster2-runtime-tests/durable100-init-vfs-probe": "9235b31790fca672136f4e4c0fd06507a599212f5e110e9ae9e82facabbd96e2"
+}

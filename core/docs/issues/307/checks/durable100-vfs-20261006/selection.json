@@ -1,0 +1,31 @@
+{
+  "kind": "prospective per-port/per-COMMIT VFS count diagnostic; no admission timing",
+  "product_restoration": "ee387232b37ac7b5a8e94c61b1c635a4201e70a0",
+  "product_seal": "44f07dd216a13d3103440b15b6d295a026ee80878f6e572e468855f27e2e74c5",
+  "case": "namespace-100-compact-v3",
+  "fixture_manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+  "profile": "Durable WAL/FULL/fullfsync/checkpoint-fullfsync; auto-checkpoint1000; Monolithic acquisition schema4",
+  "operation": "public Project Init in extended public cost observer, same root/authority/seed; one fresh Store",
+  "scope": [
+    "SQLite VFS request/submitted bytes and write/sync wall, not physical device bytes/syscalls",
+    "per-port deltas and COMMIT/checkpoint steps, never add nested timer levels",
+    "acquisition placement review reads current A1/provider/daemon contracts"
+  ],
+  "sample_count": 1,
+  "performance_samples": 0,
+  "budgets_s": {
+    "build": 30,
+    "count_command": 15,
+    "capability": 5,
+    "independent_proof": 9.5
+  },
+  "cache": "uncontrolled and instrumented, no speed/RSS/rate admission; root/sampled content proof separate",
+  "delegation": "existing first-party public VFS wrapper; default diagnostic name changes, original unix operations/versions/optional methods/args/returns preserved",
+  "native_sql_counters": "no SQL trace hook or stmt-status reset; native status remains observed independently",
+  "event_bound": 128,
+  "overflow": "omitted events invalidate observation, no product operation/admission cap",
+  "construction_workers_env": 1,
+  "namespace_constructors": 4,
+  "lock": "normal owned measurement-worktree phase7-sqlite nonblocking lock",
+  "observer_qualification": "build -Werror then fresh bounded SQLite capability probe, required exact readback42, no missing events/livefiles/close/errors/unknown flags; underlyingVFSversions captured"
+}

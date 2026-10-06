@@ -1,0 +1,20 @@
+{
+  "command": [
+    "clang",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "core/benchmark/fs-bench-pro/diagnostics/sqlite_init_vfs_probe.c",
+    "-lsqlite3",
+    "-o",
+    "core/target/cluster2-runtime-tests/durable100-init-vfs-probe"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+  "env_target": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-runtime-tests",
+  "wall_timeout_s": 30.0,
+  "wall_ns": 128516709,
+  "exit_code": 0,
+  "timeout": false,
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe"
+}
