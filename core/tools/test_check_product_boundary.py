@@ -20,6 +20,20 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(dependency_violations(prefix + 'layerfs-persistence={path="../../layerfs-persistence"}'))
         self.assertTrue(dependency_violations(prefix + 'layerfs-server={path="../../layerfs-server"}'))
 
+    def test_daemon_upstream_uses_existing_public_consumers_without_reverse_edge(self):
+        prefix = '[package]\nname="layerfs-daemon"\n[dependencies]\n'
+        path = Path("core/crates/layerfs-daemon/src/upstream/types.rs")
+        for dependency in ("layerfs-sdk", "layerfs-bridge", "layerfs-content",
+                           "layerfs-storage", "layerfs-history", "layerfs-persistence"):
+            with self.subTest(dependency=dependency):
+                self.assertFalse(dependency_violations(prefix + f'{dependency}={{path="../{dependency}"}}'))
+                self.assertFalse(violations(path, f'use {dependency.replace("-", "_")}::PublicType;'))
+        self.assertTrue(dependency_violations(prefix + 'layerfs-server={path="../layerfs-server"}'))
+        sdk = '[package]\nname="layerfs-sdk"\n[dependencies]\n'
+        self.assertTrue(dependency_violations(sdk + 'layerfs-daemon={path="../../layerfs-daemon"}'))
+        self.assertTrue(violations(Path("core/crates/layerfs-api/sdk/src/runtime/owner.rs"),
+                                   'use layerfs_daemon::Owner;'))
+
     def test_workspace_composition_edges_preserve_domain_and_reverse_boundaries(self):
         for package in ("layerfs-sdk", "layerfs-daemon"):
             source=f'[package]\nname="{package}"\n[dependencies]\nlayerfs-workspace={{path="../layerfs-workspace"}}\n'

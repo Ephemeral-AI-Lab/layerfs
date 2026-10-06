@@ -1,0 +1,37 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "metadata",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--offline",
+    "--format-version",
+    "1"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 318315625,
+  "same_all_package_source_version_checksum_identities": true,
+  "changed_packages": [
+    {
+      "name": "layerfs-daemon",
+      "before_dependencies": [
+        "layerfs-overlay",
+        "layerfs-workspace"
+      ],
+      "after_dependencies": [
+        "layerfs-bridge",
+        "layerfs-content",
+        "layerfs-history",
+        "layerfs-overlay",
+        "layerfs-persistence",
+        "layerfs-sdk",
+        "layerfs-storage",
+        "layerfs-workspace"
+      ]
+    }
+  ],
+  "kind": "explicit first-party dependency edge update before locked R4 checks; no package upgrade"
+}

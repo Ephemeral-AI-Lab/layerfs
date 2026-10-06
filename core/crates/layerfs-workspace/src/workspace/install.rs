@@ -77,7 +77,11 @@ impl Workspace {
         }
         // No fallible work follows known SQL success; old immutable plans own
         // their separate client/root and do not observe this pointer change.
-        *base = prepared.next;
+        // A scoped preparer may carry an operation-local provider and its
+        // retained failure state. Install shares the checked metadata/root,
+        // while the original binding retains its original provider owner.
+        let original_client = base.client();
+        *base = prepared.next.with_client(original_client);
         Ok(())
     }
 }

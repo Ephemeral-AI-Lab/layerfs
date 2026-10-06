@@ -1,0 +1,7 @@
+{
+  "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-linux/debug/examples/upstream_consumer",
+  "sha256": "a16b9e6c6b2642b12ee3ca624c7105d80b8e27b587b444ceebe0548511386dc5",
+  "bytes": 70645584,
+  "kind": "post-auth NODELAY dev consumer; metadata oracle uses existing symlink0777 contract; no performance claim",
+  "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6"
+}

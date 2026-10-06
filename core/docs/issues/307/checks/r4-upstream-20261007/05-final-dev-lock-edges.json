@@ -1,0 +1,45 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "metadata",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--offline",
+    "--format-version",
+    "1"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": 0,
+  "wall_ns": 108221583,
+  "same_all_package_source_version_checksum_identities": true,
+  "changed_packages": [
+    {
+      "name": "layerfs-daemon",
+      "before": [
+        "layerfs-bridge",
+        "layerfs-content",
+        "layerfs-history",
+        "layerfs-overlay",
+        "layerfs-persistence",
+        "layerfs-sdk",
+        "layerfs-storage",
+        "layerfs-workspace"
+      ],
+      "after": [
+        "layerfs-bridge",
+        "layerfs-content",
+        "layerfs-history",
+        "layerfs-overlay",
+        "layerfs-persistence",
+        "layerfs-project",
+        "layerfs-sdk",
+        "layerfs-storage",
+        "layerfs-telemetry",
+        "layerfs-workspace"
+      ]
+    }
+  ],
+  "stderr": "warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.\nCheck that the patched package version and available features are compatible\nwith the dependency requirements. If the patch has a different version from\nwhat is locked in the Cargo.lock file, run `cargo update` to use the new\nversion. This may also occur with an optional dependency that is not enabled.\n",
+  "kind": "affected first-party dev edges only; no version/source/checksum change"
+}

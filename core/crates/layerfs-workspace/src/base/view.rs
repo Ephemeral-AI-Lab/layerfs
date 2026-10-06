@@ -57,6 +57,19 @@ impl BaseView {
     pub const fn root(&self) -> FilesystemRoot {
         self.root
     }
+    /// Retains the already checked root metadata with an operation's provider.
+    /// No acquisition, namespace traversal or materialization occurs here.
+    /// The caller must authorize the provider for this binding's context.
+    pub fn with_client(&self, client: Arc<CanonicalClient>) -> Self {
+        Self {
+            client,
+            identity: self.identity,
+            root: self.root,
+        }
+    }
+    pub(crate) fn client(&self) -> Arc<CanonicalClient> {
+        self.client.clone()
+    }
     pub(crate) fn rebind(&self, identity: FilesystemRootId) -> ContentResult<Self> {
         Self::open(self.client.clone(), identity, self.root.scope())
     }

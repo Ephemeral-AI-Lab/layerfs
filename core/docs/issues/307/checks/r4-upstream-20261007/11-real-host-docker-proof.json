@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-daemon",
+    "--test",
+    "upstream_docker",
+    "--",
+    "--ignored",
+    "--nocapture"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 101,
+  "timed_out": false,
+  "wall_ns": 706339375,
+  "kind": "explicit small-fixture real macOS Store/Project/Runtime/Supervisor to Linux consumer proof; both profiles; source removed beforebind; no mount/Commit/performance qualification",
+  "workers": 1
+}

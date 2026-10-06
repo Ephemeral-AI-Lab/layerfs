@@ -1,0 +1,11 @@
+
+running 1 test
+test real_host_store_and_supervisor_serve_source_removed_root_under_both_profiles ... FAILED
+
+failures:
+
+failures:
+    real_host_store_and_supervisor_serve_source_removed_root_under_both_profiles
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 38.64s
+

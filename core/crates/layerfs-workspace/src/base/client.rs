@@ -1,7 +1,7 @@
 //! Authenticated canonical acquisition and exact immutable cache keys.
-use crate::cache::Cache;
+use crate::cache::CanonicalCache;
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 const DEMAND_IDS: usize = 4096;
 const DEMAND_BYTES: usize = 32 * 1024 * 1024;
@@ -18,29 +18,18 @@ pub struct ClientWork {
     pub charged_cache_bytes: usize,
     pub cached_objects: usize,
 }
-struct State {
-    cache: Cache,
-    work: ClientWork,
-}
 /// A runtime-backed authenticated object provider with bounded immutable caching.
 /// Upstream implements its public demand-window/authority contract; allocation
 /// before upstream returns remains that provider's responsibility.
 pub struct CanonicalClient {
     source: Arc<dyn AuthenticatedObjects + Send + Sync>,
-    state: Mutex<State>,
+    cache: Arc<CanonicalCache>,
     lengths: Option<Arc<dyn crate::FileLengths + Send + Sync>>,
 }
 impl CanonicalClient {
     /// Selects a cache allowance. A large object can bypass cache without refusal.
     pub fn new(source: Arc<dyn AuthenticatedObjects + Send + Sync>, cache_bytes: usize) -> Self {
-        Self {
-            source,
-            lengths: None,
-            state: Mutex::new(State {
-                cache: Cache::new(cache_bytes),
-                work: ClientWork::default(),
-            }),
-        }
+        Self::with_cache(source, None, Arc::new(CanonicalCache::new(cache_bytes)))
     }
     /// Adds the owning trusted Store-length port without payload classification.
     /// Missing capability fails explicitly; no FileView/stat fallback is used.
@@ -49,9 +38,28 @@ impl CanonicalClient {
         lengths: Arc<dyn crate::FileLengths + Send + Sync>,
         cache_bytes: usize,
     ) -> Self {
-        let mut client = Self::new(source, cache_bytes);
-        client.lengths = Some(lengths);
-        client
+        Self::with_cache(
+            source,
+            Some(lengths),
+            Arc::new(CanonicalCache::new(cache_bytes)),
+        )
+    }
+    /// Uses one existing cache allowance with this operation's owning providers.
+    ///
+    /// Provider failure/partial-result custody remains on the supplied source;
+    /// it is never placed in the shared cache. The caller must authorize the
+    /// operation and restrict cache sharing to its declared authorization context.
+    /// Cached immutable identity alone supplies no authority or revocation fence.
+    pub fn with_cache(
+        source: Arc<dyn AuthenticatedObjects + Send + Sync>,
+        lengths: Option<Arc<dyn crate::FileLengths + Send + Sync>>,
+        cache: Arc<CanonicalCache>,
+    ) -> Self {
+        Self {
+            source,
+            cache,
+            lengths,
+        }
     }
     pub(crate) fn file_length(&self, id: ObjectId) -> crate::WorkspaceResult<u64> {
         self.lengths
@@ -61,16 +69,7 @@ impl CanonicalClient {
     }
     /// Bounded cumulative acquisition counters and logical cache charge.
     pub fn diagnostics(&self) -> ContentResult<ClientWork> {
-        let state = self
-            .state
-            .lock()
-            .map_err(|_| ContentError::ProviderFailure {
-                what: "base cache owner",
-            })?;
-        let mut work = state.work;
-        work.charged_cache_bytes = state.cache.charged();
-        work.cached_objects = state.cache.entries();
-        Ok(work)
+        self.cache.diagnostics()
     }
 }
 impl AuthenticatedObjects for CanonicalClient {
@@ -87,6 +86,7 @@ impl AuthenticatedObjects for CanonicalClient {
         let mut cached_bytes = 0;
         {
             let mut state = self
+                .cache
                 .state
                 .lock()
                 .map_err(|_| ContentError::ProviderFailure {
@@ -149,6 +149,7 @@ impl AuthenticatedObjects for CanonicalClient {
             result.push(value);
         }
         let mut state = self
+            .cache
             .state
             .lock()
             .map_err(|_| ContentError::ProviderFailure {

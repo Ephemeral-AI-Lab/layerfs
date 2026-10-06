@@ -1,0 +1,31 @@
+{
+  "commit": "86f766750029ab7f4224b587e0f20a7779813e89",
+  "tree": "292575da6840cc7d286f82ad42338327d139657a",
+  "status": "read-only K0/K1 investigation; later cache correction has a separate source identity",
+  "artifacts": [
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/tree.rs",
+      "sha256": "fa998240699d4d7a1ff5e42ad8425d15f8391df761122033f0b56ea367c3804a"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/apply.rs",
+      "sha256": "0404cdafb2321c13e5b1de50326617caaf548fb3d0b8c53ab49a6ab3ed7347d5"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/compare.rs",
+      "sha256": "b56ab1eb2d528a9804a92bdb9f82cf4abdf76687d5afb64625af10775f3591e2"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/input.rs",
+      "sha256": "c6daf80f9486cee87c44e65fcbdd7d93d37562d99c7f05b7b49aa620937c7ea8"
+    },
+    {
+      "path": "core/crates/layerfs-overlay/src/lifetime/operation.rs",
+      "sha256": "8ec09ffb2763616be7399529e02232fa9f7c7665d5f77d6f5d8887c021017b84"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/workspace/install.rs",
+      "sha256": "a2c9aef11dad89276871eec86cbcbe74931eadb1bb2e368e3d8bd6bb6903334e"
+    }
+  ]
+}

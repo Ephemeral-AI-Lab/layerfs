@@ -1,0 +1,145 @@
+{
+  "base_commit": "86f766750029ab7f4224b587e0f20a7779813e89",
+  "source_tree": "821aafb81824801e4f0744d24168744a0ab10533",
+  "kind": "functional source identity; uncommitted checkpoint, no sealed measurement arm",
+  "toolchain": "1.85.1",
+  "workers": 1,
+  "RUSTFLAGS": "not overridden; root ARM64 config",
+  "docker_image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "linux_binary": {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-linux/debug/examples/upstream_consumer",
+    "retained_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/r4-binaries/31-final-consumer",
+    "sha256": "3da9f50eb6d902df434b5ad06056431d440d118350bab0ed2de2a84f79bc16e2",
+    "bytes": 70645584,
+    "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+    "kind": "final dev executable after external fixture lint corrections; functional proof, no performance sample"
+  },
+  "artifacts": [
+    {
+      "path": ".cargo/config.toml",
+      "sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+    },
+    {
+      "path": "core/Cargo.lock",
+      "sha256": "7d9bff0e8d68626efb046cd4f3d4a572fe3c1e6f579f99b5a38cd41376066a7c"
+    },
+    {
+      "path": "core/Cargo.toml",
+      "sha256": "7b9f341f9b091ec20e7f6634d60b9269c528c997de01cc5fb933def6cfd03461"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/native/channel.rs",
+      "sha256": "e9a124ac77cd208e5c6107bd46d5943618bdb3ea445c345257756ed7ab15b846"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/tests/native.rs",
+      "sha256": "471dcc6d5632f6045ff857a04803f6899a059a9c5a6920993a4c4e3b5921a4fe"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/tree.rs",
+      "sha256": "1675fee1fffe232725a69127cfbff3dd0509f97804df255d302f23bc57301fd8"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/edit_cache.rs",
+      "sha256": "91635e1b2396cab312185ba8a09b2d21024d63358d0fb0a9e5adee20f41f647b"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/Cargo.toml",
+      "sha256": "e5138fab9fef76cfd5e6bc1933fbf1d10b5c752c81c09df8f839bf3ff696fdaa"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/examples/upstream_consumer.rs",
+      "sha256": "f523dfea77cba404919f327bd54c80d93efaea8b741332497ec326dc0327d5e5"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/examples/upstream_consumer/assignment.rs",
+      "sha256": "796ed44262b41afa1036a27dc624ef731e6d18a1089a92c4108fc38b9cd78a79"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/examples/upstream_consumer/exercise.rs",
+      "sha256": "f6d4f9087d3e809c76c48c388b4691da1c4f5c7a2069baae3cad4b0403debe32"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/lib.rs",
+      "sha256": "3a0b6c3102b424ea012fd31a91d4ed981216e69bb50eaea46f35b62e1abaebdb"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/upstream/binding.rs",
+      "sha256": "7e82d3e2ad65070c7e8f89913f516958d0160b2362507db2a70a2f7c61378d44"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/upstream/mod.rs",
+      "sha256": "374b7f059cfb1b40701b97cfb1ed071fa7f5765c47ddfb24d2851e2766f2fa0a"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/upstream/operation.rs",
+      "sha256": "38ea54332793117d640ca8bca17e78533ead0de40898e87038ec97c666c3b3bf"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/upstream/owner.rs",
+      "sha256": "0137ee851b82cb1c21e088c0413097903032f6f07bf289b0207610b729152e63"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/upstream/types.rs",
+      "sha256": "7b086dca5596637031d63f35989494aa5975126619af97b730c38b6448b12962"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/tests/support/upstream_host.rs",
+      "sha256": "205edfcb0846f54042ab94dcf546e56adabc7b88a880c02a778525ce57a3ff2e"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/tests/support/upstream_payload.rs",
+      "sha256": "6080437f8054d3a4a2df40dab3d277a4bf35b12e864f91b2a2bde2ebf8b7b27c"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/tests/upstream.rs",
+      "sha256": "a5876eb8186e47b407156e06d4189a504a4f120416d1029be2fc4fdb025115e6"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/tests/upstream_docker.rs",
+      "sha256": "cbf1866b0e1ccbe19b7d996269d8dd0fa8110f5e0e6aa999b7068ed90969d2db"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/base/cache.rs",
+      "sha256": "43c3260e7e2410620f7ce7fab8ab2a4f607fb3d8e1b176e069f57b0bcb62bfe5"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/base/client.rs",
+      "sha256": "a324790f34e6dd284b74635189fa672813a235fea0a9a9c0e30350d42e8705b3"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/base/view.rs",
+      "sha256": "e5c9f2ba9e027bf2f3e829d2d0aa6513e416bb8cb45d392cb2cef1f4b6d970bf"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/lib.rs",
+      "sha256": "1a1d064c52154d908a5e1fbb723af08d611990fab5df4f35461cf0d0c3794293"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/workspace/install.rs",
+      "sha256": "161022b88d73b0571377f105850d5f701bdd85e56159e4b0dd415f9f305113ec"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/workspace/state.rs",
+      "sha256": "e9877ed129c778d34742b1d5c746e13fca8f3e6ce4a2a7a644286825d1930be6"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/tests/operation_scope.rs",
+      "sha256": "0d41e5203533c8cd13e15ed689b3563b367259dbd6a5f2a7f6f548e7c50fcd23"
+    },
+    {
+      "path": "core/tools/check_product_boundary.py",
+      "sha256": "ddc102b5ba0f8a4d031a0541b3942575478127c1de92bd0acfcb9a8c48c3dc9f"
+    },
+    {
+      "path": "core/tools/test_check_product_boundary.py",
+      "sha256": "6300e70cf6318a2e75a3b096e0f6c3950ed1001b67a445f01b885e40f104f1ae"
+    },
+    {
+      "path": "tools/production_loc.py",
+      "sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb"
+    }
+  ],
+  "pre_format_inventory": "final-source.json",
+  "format_correction": "only operation_scope.rs whitespace; semantic functional evidence unchanged"
+}

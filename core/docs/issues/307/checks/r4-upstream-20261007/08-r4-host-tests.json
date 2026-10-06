@@ -1,0 +1,21 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-workspace",
+    "-p",
+    "layerfs-daemon",
+    "--all-targets"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 19576491541,
+  "kind": "frozen Workspace/Daemon public all-target functional tests; explicit real-host Docker proof remains ignored pending pinned Linux binary",
+  "workers": 1
+}

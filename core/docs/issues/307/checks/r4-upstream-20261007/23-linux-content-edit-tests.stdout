@@ -1,0 +1,43 @@
+
+running 5 tests
+test cached_pages_still_check_each_requested_summary_without_another_demand ... ok
+test provider_refusal_and_absence_end_the_original_demand_once ... ok
+test rehashed_malformed_or_short_nonroot_pages_are_never_retained ... ok
+test a_full_cache_survives_a_rejected_new_summary_without_retaining_the_page ... ok
+test more_than_two_cache_windows_evict_and_retained_pages_move_without_a_copy ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 8 tests
+test a_page_two_passes_reach_is_demanded_once_for_the_operation ... ok
+test an_overwrite_still_demands_the_predecessor_path ... ok
+test a_pure_deletion_never_walks_the_rightmost_path ... ok
+test many_localized_edits_keep_each_edit_on_its_own_path ... ok
+test an_append_at_end_of_file_touches_only_the_right_boundary ... ok
+test a_mid_extent_overwrite_reads_only_the_straddling_extents ... ok
+test localized_work_is_independent_of_file_size ... ok
+test an_extent_aligned_overwrite_reads_only_its_path_and_the_replaced_extents ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+
+running 7 tests
+test a_length_changing_edit_is_never_treated_as_a_no_op ... ok
+test a_shifted_equal_replacement_is_compared_in_current_coordinates ... ok
+test an_empty_stream_returns_the_base_root_untouched ... ok
+test an_equal_replacement_preserves_the_base_root ... ok
+test an_out_of_range_replacement_length_is_an_error ... ok
+test several_equal_replacements_are_all_recognised ... ok
+test a_long_equal_prefix_then_a_mismatch_stops_the_comparison_early ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 3 tests
+test the_oracle_fixtures_are_the_sealed_reference_revision ... ok
+test an_interior_join_reads_its_boundary_child_once ... ok
+test the_candidate_reproduces_the_reference_root_and_partition ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+

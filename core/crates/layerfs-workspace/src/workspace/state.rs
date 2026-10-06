@@ -12,8 +12,9 @@ use std::{
 
 pub struct Workspace {
     route: Route,
-    pub(crate) base: RwLock<BaseView>,
-    pub(crate) serials: Mutex<Serials>,
+    pub(crate) base: Arc<RwLock<BaseView>>,
+    pub(crate) serials: Arc<Mutex<Serials>>,
+    operation_client: Option<Arc<CanonicalClient>>,
 }
 #[derive(Debug)]
 pub enum WorkspaceError {
@@ -73,19 +74,41 @@ impl Workspace {
     pub fn bind(route: Route, base: BaseView) -> Self {
         Self {
             route,
-            base: RwLock::new(base),
-            serials: Mutex::new(Serials::default()),
+            base: Arc::new(RwLock::new(base)),
+            serials: Arc::new(Mutex::new(Serials::default())),
+            operation_client: None,
         }
     }
     pub const fn route(&self) -> Route {
         self.route
     }
+    /// One operation's provider over the original binding and serial owner.
+    /// No new namespace, root acquisition or serial range is created. Every
+    /// later base() observes the original cell's current checked root, while
+    /// existing source/read plans retain their own immutable binding/client.
+    /// The caller must authorize this client for the same Workspace context.
+    pub fn scoped(&self, client: Arc<CanonicalClient>) -> WorkspaceResult<Self> {
+        // Preserve the original poisoned-binding refusal before returning a
+        // new view. This fixed metadata clone does not perform provider I/O.
+        let _ = self.base()?;
+        Ok(Self {
+            route: self.route,
+            base: self.base.clone(),
+            serials: self.serials.clone(),
+            operation_client: Some(client),
+        })
+    }
     /// Retains the selected immutable binding with no lock across content IO.
     pub fn base(&self) -> WorkspaceResult<BaseView> {
-        self.base
+        let base = self
+            .base
             .read()
             .map(|base| base.clone())
-            .map_err(|_| WorkspaceError::BindingPoisoned)
+            .map_err(|_| WorkspaceError::BindingPoisoned)?;
+        Ok(match &self.operation_client {
+            Some(client) => base.with_client(client.clone()),
+            None => base,
+        })
     }
 }
 

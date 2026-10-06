@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-daemon",
+    "--test",
+    "upstream_docker",
+    "--",
+    "--ignored",
+    "--nocapture"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 78936098333,
+  "kind": "final affected real-host/Linux functional proof after external fixture lint corrections; production/workload/budgets unchanged, no performance sample",
+  "workers": 1
+}

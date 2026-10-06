@@ -1,0 +1,46 @@
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace/tests/operation_scope.rs:31:
+ }
+ impl AuthenticatedObjects for OperationSource {
+     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+-        if self.failed.load(Ordering::Relaxed)
+-            || self.fail.is_some_and(|id| ids.contains(&id))
+-        {
++        if self.failed.load(Ordering::Relaxed) || self.fail.is_some_and(|id| ids.contains(&id)) {
+             self.failed.store(true, Ordering::Relaxed);
+             return Err(ContentError::ProviderFailure {
+                 what: "retained operation source failure",
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace/tests/operation_scope.rs:101:
+     );
+     assert!(source.failed.load(Ordering::Relaxed));
+     let replacement_source = Arc::new(OperationSource::new(store.clone(), None));
+-    let replacement =
+-        CanonicalClient::with_cache(replacement_source.clone(), None, cache.clone());
++    let replacement = CanonicalClient::with_cache(replacement_source.clone(), None, cache.clone());
+     let before = store.demand.load(Ordering::Relaxed);
+     assert_eq!(replacement.read_canonical(cached).unwrap(), expected);
+     assert_eq!(store.demand.load(Ordering::Relaxed), before);
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace/tests/operation_scope.rs:130:
+     assert_eq!(scoped.identity(), original.identity());
+     assert_eq!(scoped.root(), original.root());
+     assert_eq!(scoped.stat(2).unwrap(), original.stat(2).unwrap());
+-    let without_lengths = original.with_client(Arc::new(CanonicalClient::new(
+-        Arc::new(f.store.clone()),
+-        0,
+-    )));
++    let without_lengths =
++        original.with_client(Arc::new(CanonicalClient::new(Arc::new(f.store.clone()), 0)));
+     assert!(matches!(
+         without_lengths.stat(2),
+         Err(layerfs_workspace::WorkspaceError::MissingLengthProvider)
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace/tests/operation_scope.rs:215:
+     operation_client.read_canonical(fail_id).unwrap_err();
+     assert!(source.failed.load(Ordering::Relaxed));
+     scoped.install_prepared_base(&b.overlay, prepared).unwrap();
+-    assert_eq!(b.overlay.state(b.route()).unwrap().base_root, next.0.to_bytes());
++    assert_eq!(
++        b.overlay.state(b.route()).unwrap().base_root,
++        next.0.to_bytes()
++    );
+     for workspace in [&b.workspace, &other] {
+         assert_eq!(workspace.base().unwrap().identity(), next);
+         let mut output = Vec::new();

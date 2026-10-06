@@ -1,0 +1,21 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-bridge",
+    "-p",
+    "layerfs-sdk",
+    "--all-targets"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 8228334375,
+  "kind": "affected post-auth NODELAY actual socket-state/public native tests and all SDK integration regressions",
+  "workers": 1
+}

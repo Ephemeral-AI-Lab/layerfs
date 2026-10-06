@@ -1,0 +1,34 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.32s
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_bridge-7578cad8abc469c6)
+     Running tests/logical_frames.rs (core/target/cluster2-linux/debug/deps/logical_frames-2dd12783f7698f5b)
+     Running tests/native.rs (core/target/cluster2-linux/debug/deps/native-855a46c73a380a7a)
+     Running tests/native_framing.rs (core/target/cluster2-linux/debug/deps/native_framing-0c62ce8c68043889)
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-bb7203d7b7f2abda)
+     Running tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-7ef52d08bf399851)
+     Running tests/job_cost.rs (core/target/cluster2-linux/debug/deps/job_cost-9e5e0d5b60e23c8e)
+     Running tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-00e2738abbdf74df)
+     Running tests/startup_cost.rs (core/target/cluster2-linux/debug/deps/startup_cost-162818a62e9b3f0a)
+     Running tests/upstream.rs (core/target/cluster2-linux/debug/deps/upstream-bb46ce3560aa9066)
+     Running tests/upstream_docker.rs (core/target/cluster2-linux/debug/deps/upstream_docker-e2ce8b3ab011fdaf)
+     Running unittests examples/upstream_consumer.rs (core/target/cluster2-linux/debug/examples/upstream_consumer-9a847f222d6d9b08)
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_sdk-04569cca95583b09)
+     Running tests/attachment.rs (core/target/cluster2-linux/debug/deps/attachment-6150b4ce9ebbee40)
+     Running tests/custody.rs (core/target/cluster2-linux/debug/deps/custody-5158bf958b0131ac)
+     Running tests/runtime.rs (core/target/cluster2-linux/debug/deps/runtime-2ea06079303783d8)
+     Running tests/runtime_binding.rs (core/target/cluster2-linux/debug/deps/runtime_binding-dd90b3e5650076e0)
+     Running tests/supervisor.rs (core/target/cluster2-linux/debug/deps/supervisor-f3ab80dd5ed8afd7)
+     Running tests/wire.rs (core/target/cluster2-linux/debug/deps/wire-9d2d1e92d334f131)
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_workspace-aa1bf875dc76d5a4)
+     Running tests/base.rs (core/target/cluster2-linux/debug/deps/base-6f19aeb96150d118)
+     Running tests/namespace.rs (core/target/cluster2-linux/debug/deps/namespace-274bb5fb97e9cb45)
+     Running tests/namespace_daemon.rs (core/target/cluster2-linux/debug/deps/namespace_daemon-70451fe8637ffc96)
+     Running tests/namespace_profile.rs (core/target/cluster2-linux/debug/deps/namespace_profile-adfcc5a827eba1c4)
+     Running tests/namespace_view.rs (core/target/cluster2-linux/debug/deps/namespace_view-45a37ddec13e6a9e)
+     Running tests/nonfile.rs (core/target/cluster2-linux/debug/deps/nonfile-c8a4170c72e1e7dd)
+     Running tests/operation_scope.rs (core/target/cluster2-linux/debug/deps/operation_scope-b362ca1c42fdbb38)
+     Running tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-30931ce7b6eb5d36)

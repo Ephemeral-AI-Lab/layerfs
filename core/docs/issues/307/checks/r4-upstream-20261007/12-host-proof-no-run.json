@@ -1,0 +1,21 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-daemon",
+    "--test",
+    "upstream_docker",
+    "--no-run"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1296835916,
+  "kind": "affected real host proof build after explicit blocking accepted socket and immutable output preservation",
+  "workers": 1
+}

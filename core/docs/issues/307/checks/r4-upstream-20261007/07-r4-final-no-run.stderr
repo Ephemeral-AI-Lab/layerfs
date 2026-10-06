@@ -1,0 +1,45 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+warning: function `hex` is never used
+  --> crates/layerfs-daemon/examples/upstream_consumer/assignment.rs:11:4
+   |
+11 | fn hex(bytes: &[u8]) -> String {
+   |    ^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: function `profile_name` is never used
+  --> crates/layerfs-daemon/examples/upstream_consumer/assignment.rs:31:4
+   |
+31 | fn profile_name(value: SqlitePersistenceProfile) -> &'static str {
+   |    ^^^^^^^^^^^^
+
+warning: function `write` is never used
+  --> crates/layerfs-daemon/examples/upstream_consumer/assignment.rs:37:8
+   |
+37 | pub fn write(
+   |        ^^^^^
+
+warning: `layerfs-daemon` (example "upstream_consumer" test) generated 3 warnings
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.36s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_daemon-915e34da691c0e92)
+  Executable tests/device_capacity.rs (core/target/debug/deps/device_capacity-9a562182fce135b4)
+  Executable tests/job_cost.rs (core/target/debug/deps/job_cost-823dc893f9b59a95)
+  Executable tests/owner.rs (core/target/debug/deps/owner-8c032b71f8dbb691)
+  Executable tests/startup_cost.rs (core/target/debug/deps/startup_cost-aec3958a7026f220)
+  Executable tests/upstream.rs (core/target/debug/deps/upstream-e97965d3bcf6eeaa)
+  Executable tests/upstream_docker.rs (core/target/debug/deps/upstream_docker-a4518acbd567b7c2)
+  Executable unittests examples/upstream_consumer.rs (core/target/debug/examples/upstream_consumer-cfc00fefb9657301)
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_workspace-543118105529d651)
+  Executable tests/base.rs (core/target/debug/deps/base-06b165bd3f508347)
+  Executable tests/namespace.rs (core/target/debug/deps/namespace-1e0379d125d16d0a)
+  Executable tests/namespace_daemon.rs (core/target/debug/deps/namespace_daemon-93217fc8145bcb7f)
+  Executable tests/namespace_profile.rs (core/target/debug/deps/namespace_profile-8dc3127204c2ecbc)
+  Executable tests/namespace_view.rs (core/target/debug/deps/namespace_view-8672aa45f387ac0b)
+  Executable tests/nonfile.rs (core/target/debug/deps/nonfile-a9c8d84b2527dd8d)
+  Executable tests/operation_scope.rs (core/target/debug/deps/operation_scope-483af2493893291e)
+  Executable tests/payload.rs (core/target/debug/deps/payload-51c450a0541d6a82)

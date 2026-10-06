@@ -1,0 +1,10 @@
+{
+  "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-linux/debug/examples/upstream_consumer",
+  "sha256": "328d0c0831b6fcb000892f36d367cfc7af5e7efdac7135913530c0eeb62fbe4d",
+  "bytes": 70644712,
+  "kind": "Linux ARM64 actual external functional consumer, dev build; no release/performance claim",
+  "source_commit_base": "86f766750029ab7f4224b587e0f20a7779813e89",
+  "configuration_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "lock_sha256": "7d9bff0e8d68626efb046cd4f3d4a572fe3c1e6f579f99b5a38cd41376066a7c",
+  "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6"
+}

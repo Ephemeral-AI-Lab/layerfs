@@ -357,3 +357,31 @@ published and the largest frontier it held.
 the unbounded convenience wrapper. A caller that must bound its work uses the
 former, which fails closed with `BoundedCapacityExceeded` rather than reading a
 file it was not prepared to hold.
+
+### Known-edit memo enforcement correction, 2026-10-07
+
+This component correction follows parent `a41d131f2`; earlier descriptions and
+measurement receipts keep their source pins. The stored-node route in
+[EditObjects::load_node](../../crates/layerfs-content/src/file/edit/tree.rs)
+now decodes a demanded canonical page and checks its actual level, logical bytes
+and extent count before retaining it. A malformed page, impossible non-root fill,
+wrong summary or original provider refusal returns once and does not populate
+or evict the memo. A cached hit still checks the requested summary and actual
+root/non-root decode context without another provider demand.
+
+On a successful stored miss, `load_node` calls the existing
+`PageCache::make_room_for(1)` before insertion and moves the returned canonical
+allocation into the cache. The former route inserted without invoking that
+caller-owned eviction and cloned the canonical allocation. The default allowance
+remains 64 pages, and wholesale eviction remains the existing cache policy;
+an evicted page is acquired again when subsequently needed. Canonical framing,
+split/concat algorithms and returned roots are unchanged by this repair.
+
+The external [edit_cache tests](../../crates/layerfs-content/tests/edit_cache.rs)
+exercise more than two default windows of distinct valid non-root pages, exact
+decoded summaries, retained hits/evicted demands, visible cache membership,
+allocation transfer and malformed/refused inputs. Test source alone is not a
+passing receipt. This repair covers the mapping memo only: the deferred draft,
+parent-reference, detached, resolved/emission collections and sparse localized
+editing remain K1 work. It establishes no whole-operation resident bound or
+integrated Commit/performance acceptance.

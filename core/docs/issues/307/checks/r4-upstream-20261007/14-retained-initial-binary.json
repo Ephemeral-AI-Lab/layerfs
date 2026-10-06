@@ -1,0 +1,6 @@
+{
+  "original": "core/target/cluster2-linux/debug/examples/upstream_consumer",
+  "retained": "core/target/cluster2-307/r4-binaries/10-consumer-before-nodelay",
+  "sha256": "328d0c0831b6fcb000892f36d367cfc7af5e7efdac7135913530c0eeb62fbe4d",
+  "kind": "original dev consumer retained before changed-source rebuild; functional failed proofs11/13 remain immutable"
+}

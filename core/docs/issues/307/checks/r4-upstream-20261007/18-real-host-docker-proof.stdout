@@ -1,0 +1,23 @@
+
+running 1 test
+profile=Durable source_removed=true real_host_deliveries=131
+R4_ORIGINAL_PORT_FAILURE RemoteRefusal(Envelope { message: 8, correlation: 4, kind: Reply, class: Demand, total_bytes: 68 })
+R4_FULL_ROOT_ORACLE_PASS files=7 native_metadata=13 cache=ClientWork { cache_hits: 426, cache_misses: 114, upstream_batches: 114, authenticated_bytes: 10794, evictions: 91, charged_cache_bytes: 8100, cached_objects: 21 }
+R4_AUTOMATIC_MAINTENANCE_IDLE observed=true
+R4_AUTOMATIC_TERMINAL_CLEANUP gone=true
+R4_CONSUMER_FENCED receive=ReassemblyWork { admitted: 262, allocation_attempts: 262, requested_body_bytes: 18592, refused: 0, fragments: 262, copied_bytes: 18592, live_messages: 0, credited_bytes: 0, peak_credited_bytes: 1324 }
+R4_REAL_HOST_CONSUMER_PASS files=7 source_removed=true
+
+test real_host_store_and_supervisor_serve_source_removed_root_under_both_profiles has been running for over 60 seconds
+profile=Disposable source_removed=true real_host_deliveries=131
+R4_ORIGINAL_PORT_FAILURE RemoteRefusal(Envelope { message: 8, correlation: 4, kind: Reply, class: Demand, total_bytes: 68 })
+R4_FULL_ROOT_ORACLE_PASS files=7 native_metadata=13 cache=ClientWork { cache_hits: 426, cache_misses: 114, upstream_batches: 114, authenticated_bytes: 10794, evictions: 91, charged_cache_bytes: 8100, cached_objects: 21 }
+R4_AUTOMATIC_MAINTENANCE_IDLE observed=true
+R4_AUTOMATIC_TERMINAL_CLEANUP gone=true
+R4_CONSUMER_FENCED receive=ReassemblyWork { admitted: 262, allocation_attempts: 262, requested_body_bytes: 18592, refused: 0, fragments: 262, copied_bytes: 18592, live_messages: 0, credited_bytes: 0, peak_credited_bytes: 1324 }
+R4_REAL_HOST_CONSUMER_PASS files=7 source_removed=true
+
+test real_host_store_and_supervisor_serve_source_removed_root_under_both_profiles ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 77.99s
+

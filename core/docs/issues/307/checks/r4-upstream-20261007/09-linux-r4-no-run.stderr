@@ -1,0 +1,31 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+   Compiling layerfs-history v0.1.6 (/work/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/work/core/crates/layerfs-project)
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 19.32s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-bb7203d7b7f2abda)
+  Executable tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-7ef52d08bf399851)
+  Executable tests/job_cost.rs (core/target/cluster2-linux/debug/deps/job_cost-9e5e0d5b60e23c8e)
+  Executable tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-00e2738abbdf74df)
+  Executable tests/startup_cost.rs (core/target/cluster2-linux/debug/deps/startup_cost-162818a62e9b3f0a)
+  Executable tests/upstream.rs (core/target/cluster2-linux/debug/deps/upstream-bb46ce3560aa9066)
+  Executable tests/upstream_docker.rs (core/target/cluster2-linux/debug/deps/upstream_docker-e2ce8b3ab011fdaf)
+  Executable unittests examples/upstream_consumer.rs (core/target/cluster2-linux/debug/examples/upstream_consumer-9a847f222d6d9b08)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_workspace-aa1bf875dc76d5a4)
+  Executable tests/base.rs (core/target/cluster2-linux/debug/deps/base-6f19aeb96150d118)
+  Executable tests/namespace.rs (core/target/cluster2-linux/debug/deps/namespace-274bb5fb97e9cb45)
+  Executable tests/namespace_daemon.rs (core/target/cluster2-linux/debug/deps/namespace_daemon-70451fe8637ffc96)
+  Executable tests/namespace_profile.rs (core/target/cluster2-linux/debug/deps/namespace_profile-adfcc5a827eba1c4)
+  Executable tests/namespace_view.rs (core/target/cluster2-linux/debug/deps/namespace_view-45a37ddec13e6a9e)
+  Executable tests/nonfile.rs (core/target/cluster2-linux/debug/deps/nonfile-c8a4170c72e1e7dd)
+  Executable tests/operation_scope.rs (core/target/cluster2-linux/debug/deps/operation_scope-b362ca1c42fdbb38)
+  Executable tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-30931ce7b6eb5d36)

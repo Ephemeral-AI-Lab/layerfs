@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-daemon",
+    "--test",
+    "upstream",
+    "--test",
+    "upstream_docker",
+    "--no-run"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 950833959,
+  "kind": "affected host scripted upstream and real-host fixtures no-run after lint corrections",
+  "workers": 1
+}

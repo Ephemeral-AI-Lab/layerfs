@@ -30,6 +30,7 @@ pub(crate) use workspace::view;
 pub(crate) use operations::file::write;
 
 pub use base::{BaseRead, BaseStat, BaseView};
+pub use cache::CanonicalCache;
 pub use client::{CanonicalClient, ClientWork};
 pub use facts::{BaseFacts, Need};
 pub use install::PreparedBase;

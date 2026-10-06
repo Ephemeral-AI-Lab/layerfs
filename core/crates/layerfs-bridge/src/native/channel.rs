@@ -60,6 +60,7 @@ impl Connection {
         peer: VerifiedPeer,
         handshake_work: ChannelWork,
     ) -> ChannelResult<Self> {
+        stream.set_nodelay(true)?;
         let sending = stream.try_clone()?;
         let shared = Arc::new(Shared {
             noise,

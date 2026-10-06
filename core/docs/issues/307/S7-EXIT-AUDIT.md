@@ -286,3 +286,16 @@ R1 source supplies actual initialized host/socket composition and legitimate inp
 ## E1 registration continuation (2026-10-07)
 
 E1 now supplies27 prospective rows, fail-closed registration and retained numeric evaluation.43 scoped tests pass; every sample remains NOT_RUN and qualification remains NOT_EVALUATED. Missing executable drivers/physical observers/constants/schedules/Q05 budget remain exact gaps. This closes no E1/S7 exit. See [component/check receipts](CONTEXT-CUSTODY-E1-20261007.md).
+
+## Provisioned upstream and cache continuation (2026-10-07)
+
+Daemon upstream and fresh operation-owned Workspace providers now run against the
+initialized real macOS host and Linux consumer. Shared cache/page-miss corrections
+retain exact allowance/copy scope, original failed-operation custody and public
+native socket-option verification. The complete small fixture is served after
+source removal under both profiles, with logical cleanup and consumer receive
+credit release. No phase residency/physical I/O/service rate/queue/debt or kernel
+ownership gate follows. All27 E1 samples remain NOT_RUN; E2–E4 and later native
+dimensions remain open. S7 stays CHECKPOINT/unchecked.
+[Source/proofs/failures/LOC(+524)](R4-UPSTREAM-CACHE-20261007.md) retain the boundary;
+the full goal continues into owning backed edits.

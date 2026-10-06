@@ -1,12 +1,14 @@
 //! Daemon service ownership. SQL stays in the independently usable overlay crate.
 //!
 //! Initial service runs bounded typed jobs fairly and retains queue/reply credits.
-//! Native FUSE, process/control and authenticated upstream assembly remain later
-//! integration slices.
+//! Provisioned authenticated upstreams compose the existing consumer/Workspace
+//! ports. Native FUSE and process/control remain separate integration slices.
 #![forbid(unsafe_code)]
 
 mod overlay;
 mod service;
+/// Authenticated provisioned host binding and fresh operation consumers.
+pub mod upstream;
 pub(crate) use overlay::commands;
 pub(crate) use overlay::credits;
 pub(crate) use overlay::owner;

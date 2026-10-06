@@ -1,0 +1,48 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error[E0308]: mismatched types
+   --> crates/layerfs-daemon/examples/upstream_consumer/exercise.rs:163:81
+    |
+163 |             stat = view.lookup(operation.overlay(), stat.serial, &PathName::new(component.as_bytes().to_vec())?)?;
+    |                                                                   ------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `&str`, found `Vec<u8>`
+    |                                                                   |
+    |                                                                   arguments to this function are incorrect
+    |
+    = note: expected reference `&str`
+                  found struct `Vec<u8>`
+note: associated function defined here
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/filesystem/path.rs:22:12
+    |
+22  |     pub fn new(value: &str) -> ContentResult<Self> {
+    |            ^^^
+
+error[E0308]: mismatched types
+   --> crates/layerfs-daemon/examples/upstream_consumer/exercise.rs:286:80
+    |
+286 |     let created = proof.mutate(Operation::Create { parent, name: PathName::new(b"local.bin".to_vec())?, mode: 0o600 })?;
+    |                                                                  ------------- ^^^^^^^^^^^^^^^^^^^^^ expected `&str`, found `Vec<u8>`
+    |                                                                  |
+    |                                                                  arguments to this function are incorrect
+    |
+    = note: expected reference `&str`
+                  found struct `Vec<u8>`
+note: associated function defined here
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/filesystem/path.rs:22:12
+    |
+22  |     pub fn new(value: &str) -> ContentResult<Self> {
+    |            ^^^
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `layerfs-daemon` (example "upstream_consumer" test) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

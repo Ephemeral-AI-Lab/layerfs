@@ -47,7 +47,10 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-project": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-telemetry"},
     "layerfs-overlay": set(),
     "layerfs-workspace": {"layerfs-content", "layerfs-overlay", "layerfs-telemetry"},
-    "layerfs-daemon": {"layerfs-overlay", "layerfs-workspace"},
+    # Upstream composes public authenticated consumers and owning types. The
+    # Persistence edge carries only host-provisioned completion-profile facts;
+    # no global provider/SQL implementation moves into Daemon.
+    "layerfs-daemon": {"layerfs-overlay", "layerfs-workspace", "layerfs-sdk", "layerfs-bridge", "layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence"},
     "layerfs-sdk": {"layerfs-content", "layerfs-storage", "layerfs-history", "layerfs-persistence", "layerfs-telemetry", "layerfs-bridge", "layerfs-workspace"},
     "layerfs-bridge": set(),
 }

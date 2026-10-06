@@ -31,9 +31,36 @@ and freed before channel readiness.
 
 Large flows use arbitrarily many bounded records with checked native nonces; no
 total byte/flow/command time cap exists. Nonce exhaustion is the physical protocol
-limit. No command-specific bootstrap or Bash deadline exists. Socket options,
-readiness/admission and service workers are caller-owned; native proof socket
+limit. No command-specific bootstrap or Bash deadline exists. Successful native
+channel creation explicitly selects TCP_NODELAY; other socket options,
+readiness/admission and service workers remain caller-owned. Native proof socket
 deadlines are external verification fences.
+
+The 2026-10-07 native profile correction sets TCP_NODELAY once in
+`Connection::new`, after successful KK authentication and before the direction
+clone or record-buffer allocations. The option applies to the original socket
+and its sender/receiver clones. An option failure returns the original typed I/O
+error through the existing channel result; it does not retry, reconnect, create
+direction buffers or reinterpret the completed handshake. Failed authentication
+does not enter this channel-construction step.
+
+This adds one socket-option syscall attempt per post-authentication channel
+construction. It is separate from `ChannelWork` wire read/write attempts/calls
+and byte counts; those diagnostics do not count socket configuration. The record
+grammar still sends its two-byte length prefix and sealed body in separate
+writes, including their positive partial progress. Canonical/wire bytes,
+nonces, buffer capacities and bounded owners remain unchanged. Handshake also
+uses this two-write grammar, but this selected correction configures the
+successful channel rather than changing the earlier handshake phase.
+
+The external [native test](../../crates/layerfs-bridge/tests/native.rs) retains
+caller socket clones, explicitly starts both endpoints with NODELAY disabled,
+creates actual public KK channels and reads back NODELAY on both authenticated
+sockets. Duplex records and record/wire counters are checked without a latency
+ratio or clock threshold. The fixture's socket/readiness deadlines bound its
+waits; product timeouts and reconnect behavior are unchanged. Test source is
+not a passing receipt, and selecting this option does not establish numerical
+latency, resource or complete S7/S9 qualification.
 
 [I/O](../../crates/layerfs-bridge/src/native/io.rs) completes positive partial byte
 progress and returns every error, including Interrupted, without retry or busy

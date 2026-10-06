@@ -1,6 +1,46 @@
 //! Bounded immutable-object cache. Eviction never changes authoritative state.
 use layerfs_content::{ContentError, ContentResult, ObjectId};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Mutex};
+
+pub(crate) struct State {
+    pub(crate) cache: Cache,
+    pub(crate) work: crate::ClientWork,
+}
+
+/// One bounded immutable cache allowance shared by operation-scoped providers.
+///
+/// This owner contains authenticated bytes and cumulative observations, not
+/// authority or provider errors. Its caller must restrict every sharing client
+/// to one declared authorization context; an object ID does not grant access.
+pub struct CanonicalCache {
+    pub(crate) state: Mutex<State>,
+}
+impl CanonicalCache {
+    /// Selects one allowance, shared across all clients retaining this owner.
+    /// Oversized objects bypass retention instead of refusing valid demand.
+    pub fn new(bytes: usize) -> Self {
+        Self {
+            state: Mutex::new(State {
+                cache: Cache::new(bytes),
+                work: crate::ClientWork::default(),
+            }),
+        }
+    }
+    /// Cumulative shared-owner counters and current logical cache charge.
+    /// Charges and counters are not a measured allocation or residency bound.
+    pub fn diagnostics(&self) -> ContentResult<crate::ClientWork> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| ContentError::ProviderFailure {
+                what: "base cache owner",
+            })?;
+        let mut work = state.work;
+        work.charged_cache_bytes = state.cache.charged();
+        work.cached_objects = state.cache.entries();
+        Ok(work)
+    }
+}
 
 pub(crate) struct Cache {
     objects: BTreeMap<ObjectId, (Vec<u8>, u64)>,

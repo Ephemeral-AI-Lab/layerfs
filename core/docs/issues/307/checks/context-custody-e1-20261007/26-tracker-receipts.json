@@ -1,0 +1,17 @@
+{
+  "commit": "86f766750029ab7f4224b587e0f20a7779813e89",
+  "tree": "292575da6840cc7d286f82ad42338327d139657a",
+  "checklist_items_changed": false,
+  "comments": [
+    {
+      "milestone": "s7",
+      "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6024292639",
+      "body_sha256": "0ce9003b0a566f10069306028f1292fd9dbe595fe2b4b3ecd03f23b9b436ed6d"
+    },
+    {
+      "milestone": "s9",
+      "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6024302836",
+      "body_sha256": "d3ece1e2c19d99c75ea55cd9a6c7d1b3b7c708827e52714b572512bfb0f80a6f"
+    }
+  ]
+}

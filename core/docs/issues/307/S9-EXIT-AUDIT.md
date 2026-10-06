@@ -476,3 +476,17 @@ Direct-child/contextual topology admission, R3 restart/terminal custody, R4 macO
 ## Direct context and local custody continuation (2026-10-07)
 
 Content direct-child checks now precede original same-Save acceptance; candidate staging validates captured serial and actual root context. Explicit Sessions fence returns original fixed-slot custody after service release.53 host SDK bodies pass; Linux12 portable bodies do not execute the macOS Store targets. Full contextual topology/provenance, crash/unknown recovery qualification and integrated consumers remain incomplete. See [component/check receipts](CONTEXT-CUSTODY-E1-20261007.md).
+
+## Real host and provisioned upstream continuation (2026-10-07)
+
+Production Upstream verifies oriented assignment, complete BranchSnapshot, actual
+trusted persistence and policy before one known local Open. Fresh providers share
+original install/serial owners and one authority-context cache. Failed demand
+retains its first result without resend; healthy independent operations progress.
+Actual macOS Store/Project/Runtime/Supervisor serves a source-removed complete small
+fixture to Linux under Durable/Disposable. Bytes/names/portable metadata/hardlink/
+symlink oracle, local publication, logical cleanup and consumer receive credit
+release pass. This is R4/Q1 component readiness evidence; API-core/Sandbox/mount/
+Exec/Commit, scale, complete R2 topology/provenance, crash/unknown recovery and E/Q
+qualification remain open. Init/history verdicts are unchanged. S9 stays
+CHECKPOINT/unchecked. [Source/check/LOC report](R4-UPSTREAM-CACHE-20261007.md).

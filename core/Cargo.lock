@@ -502,7 +502,15 @@ dependencies = [
 name = "layerfs-daemon"
 version = "0.1.6"
 dependencies = [
+ "layerfs-bridge",
+ "layerfs-content",
+ "layerfs-history",
  "layerfs-overlay",
+ "layerfs-persistence",
+ "layerfs-project",
+ "layerfs-sdk",
+ "layerfs-storage",
+ "layerfs-telemetry",
  "layerfs-workspace",
 ]
 

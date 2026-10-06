@@ -1,0 +1,13 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/tools/check_product_boundary.py"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 492400500,
+  "kind": "focused product-boundary source guard",
+  "workers": 1
+}

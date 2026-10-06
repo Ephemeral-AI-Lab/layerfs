@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-workspace",
+    "-p",
+    "layerfs-daemon",
+    "--all-targets",
+    "--no-run"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 429495250,
+  "kind": "frozen R4 Workspace/Daemon all-target build including consumer example and explicit host/Docker proof",
+  "workers": 1
+}

@@ -1,6 +1,6 @@
 # Direct context, local custody and E1 registration checkpoint
 
-> Status: implemented component checkpoint, awaiting local commit. S0/S7–S13 remain incomplete.
+> Status: component checkpoint committed at `86f766750029ab7f4224b587e0f20a7779813e89`. S0/S7–S13 remain incomplete.
 > Parent: `a41d131f262c926015798d05096ebeaa01c70cdc`. No performance sample.
 
 This continuation adds Content direct child-context validation, wires it before SDK
@@ -111,3 +111,13 @@ Next ready work is real daemon upstream/application assembly, independent physic
 service observers and K0/K1/K2 owning backed construction corrections. Native FUSE
 INTERRUPT remains an exact pinned public-API gap; the authorized timestamp patch
 exception is not extended. S0 and S7–S13 remain unchecked and the active goal continues.
+
+## Post-commit verification
+
+The [committed-tree check](checks/context-custody-e1-20261007/25-committed-verification.json)
+confirms the exact first parent, staged root/source trees and recomputed committed
+production totals. Separate [S7 evidence](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6024292639)
+and [S9 evidence](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6024302836)
+are posted, with [body hashes and unchanged checklist](checks/context-custody-e1-20261007/26-tracker-receipts.json).
+These later receipts will be retained by the following checkpoint; they do not
+alter the source/check identities of this commit.

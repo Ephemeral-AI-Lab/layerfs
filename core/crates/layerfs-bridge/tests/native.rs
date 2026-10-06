@@ -40,21 +40,54 @@ fn accepted(listener: TcpListener) -> TcpStream {
     }
 }
 fn pair() -> (Connection, Connection, TcpStream) {
+    let (client, server, raw, _server_raw) = pair_with_retained_sockets();
+    (client, server, raw)
+}
+fn pair_with_retained_sockets() -> (Connection, Connection, TcpStream, TcpStream) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let client_private = [1; 32];
     let server_private = [2; 32];
     let client_public = public_key(&client_private).unwrap();
     let server_public = public_key(&server_private).unwrap();
-    let worker =
-        thread::spawn(move || accept(accepted(listener), &server_private, client_public).unwrap());
-    let stream = socket(TcpStream::connect(address).unwrap());
+    let worker = thread::spawn(move || {
+        let stream = accepted(listener);
+        stream.set_nodelay(false).unwrap();
+        let raw = stream.try_clone().unwrap();
+        assert!(!raw.nodelay().unwrap());
+        let channel = accept(stream, &server_private, client_public).unwrap();
+        (channel, raw)
+    });
+    let stream = socket(TcpStream::connect_timeout(&address, Duration::from_secs(2)).unwrap());
+    stream.set_nodelay(false).unwrap();
     let raw = stream.try_clone().unwrap();
+    assert!(!raw.nodelay().unwrap());
     let client = initiate(stream, &client_private, server_public).unwrap();
-    let server = worker.join().unwrap();
+    let (server, server_raw) = worker.join().unwrap();
     assert_eq!(client.peer.public_key(), server_public);
     assert_eq!(server.peer.public_key(), client_public);
-    (client, server, raw)
+    (client, server, raw, server_raw)
+}
+
+#[test]
+fn successful_native_channels_enable_nodelay_on_both_authenticated_sockets() {
+    let (mut client, mut server, client_raw, server_raw) = pair_with_retained_sockets();
+    assert!(client_raw.nodelay().unwrap());
+    assert!(server_raw.nodelay().unwrap());
+    for channel in [&client, &server] {
+        assert_eq!(channel.handshake_work.record_io_attempts, 2);
+        assert_eq!(channel.send.work().io_attempts, 0);
+        assert_eq!(channel.receive.work().io_attempts, 0);
+    }
+    client.send.send(b"request").unwrap();
+    assert_eq!(server.receive.receive().unwrap(), b"request");
+    server.send.send(b"reply").unwrap();
+    assert_eq!(client.receive.receive().unwrap(), b"reply");
+    for (channel, bytes) in [(&client, 7), (&server, 5)] {
+        assert_eq!(channel.send.work().records, 1);
+        assert_eq!(channel.send.work().record_io_attempts, 1);
+        assert_eq!(channel.send.work().wire_bytes, bytes + 18);
+    }
 }
 
 #[test]

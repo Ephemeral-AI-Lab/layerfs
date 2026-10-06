@@ -1,0 +1,8 @@
+
+running 3 tests
+test policy_mismatch_retains_both_original_replies_and_does_not_open_overlay ... ok
+test original_owner_failure_and_failed_object_operation_keep_custody_without_poisoning_independent_operation ... ok
+test mismatched_host_profile_and_same_root_history_context_refuse_before_local_open ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

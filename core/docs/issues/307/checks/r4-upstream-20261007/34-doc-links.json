@@ -1,0 +1,13 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/target/cluster2-307/check_r4_docs.py"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 74763000,
+  "kind": "changed guide architecture and checkpoint local links and anchors",
+  "workers": 1
+}

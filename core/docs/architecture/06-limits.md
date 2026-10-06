@@ -22,6 +22,19 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 The base-less build-count correction in this page describes product commit
 `64ea3ea8aa213edb8991e958829aeb87c6bfd16d`; older sections retain their
 own source pin.
+
+Known-edit memo correction, 2026-10-07, following parent `a41d131f2`:
+[EditObjects::load_node](../../crates/layerfs-content/src/file/edit/tree.rs) now
+checks a fetched node's grammar/context and actual summary before retaining it,
+uses the existing `PageCache::make_room_for(1)` eviction and moves the canonical
+allocation into the memo. The default limit is unchanged at 64 pages of at most
+8,192 canonical bytes: at most 524,288 canonical bytes retained in that memo.
+A miss additionally holds its candidate page and decoded node until validation
+and insertion finish. Hash-map allocations, recursive decoded pages, deferred
+edit state, provider/Save windows, SQL and OS caches remain separate domains.
+This is a correction of this caller's missing enforcement, not a whole resident
+bound or removal of K1's deferred-state refusal. See
+[the source and public regression scope](03-files.md#known-edit-memo-enforcement-correction-2026-10-07).
 The Service/Bridge file-save limits below describe the #252 source in the same
 commit as this note; older flow diagrams retain their historical source pins.
 The keyed namespace-tree subsection of §9 describes the #256 source of phase

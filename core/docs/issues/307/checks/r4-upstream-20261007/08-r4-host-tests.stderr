@@ -1,0 +1,24 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.29s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_daemon-915e34da691c0e92)
+     Running tests/device_capacity.rs (core/target/debug/deps/device_capacity-9a562182fce135b4)
+     Running tests/job_cost.rs (core/target/debug/deps/job_cost-823dc893f9b59a95)
+     Running tests/owner.rs (core/target/debug/deps/owner-8c032b71f8dbb691)
+     Running tests/startup_cost.rs (core/target/debug/deps/startup_cost-aec3958a7026f220)
+     Running tests/upstream.rs (core/target/debug/deps/upstream-e97965d3bcf6eeaa)
+     Running tests/upstream_docker.rs (core/target/debug/deps/upstream_docker-a4518acbd567b7c2)
+     Running unittests examples/upstream_consumer.rs (core/target/debug/examples/upstream_consumer-cfc00fefb9657301)
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_workspace-543118105529d651)
+     Running tests/base.rs (core/target/debug/deps/base-06b165bd3f508347)
+     Running tests/namespace.rs (core/target/debug/deps/namespace-1e0379d125d16d0a)
+     Running tests/namespace_daemon.rs (core/target/debug/deps/namespace_daemon-93217fc8145bcb7f)
+     Running tests/namespace_profile.rs (core/target/debug/deps/namespace_profile-8dc3127204c2ecbc)
+     Running tests/namespace_view.rs (core/target/debug/deps/namespace_view-8672aa45f387ac0b)
+     Running tests/nonfile.rs (core/target/debug/deps/nonfile-a9c8d84b2527dd8d)
+     Running tests/operation_scope.rs (core/target/debug/deps/operation_scope-483af2493893291e)
+     Running tests/payload.rs (core/target/debug/deps/payload-51c450a0541d6a82)

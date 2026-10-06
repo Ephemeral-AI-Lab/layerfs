@@ -1,0 +1,18 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--cached",
+    "--check",
+    "--",
+    ".",
+    ":(exclude)*.stdout",
+    ":(exclude)*.stderr"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 45249125,
+  "kind": "staged source docs tooling whitespace excluding immutable raw stdout/stderr",
+  "workers": 1
+}

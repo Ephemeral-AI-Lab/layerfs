@@ -1,0 +1,18 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "fmt",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--all",
+    "--",
+    "--check"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": 1,
+  "timed_out": false,
+  "wall_ns": 1670731708,
+  "kind": "core workspace Rust formatting check at final source",
+  "workers": 1
+}

@@ -172,13 +172,15 @@ impl<'a> EditObjects<'a> {
             return Ok(node);
         }
         self.counters.nodes_read = self.counters.nodes_read.saturating_add(1);
-        let node = match self.drafts.get(&summary.id) {
-            Some(Draft::Node(node)) => node.clone(),
-            Some(Draft::Page(object)) => decode_node_with_context(object.canonical(), root)?,
+        let (node, canonical) = match self.drafts.get(&summary.id) {
+            Some(Draft::Node(node)) => (node.clone(), None),
+            Some(Draft::Page(object)) => {
+                (decode_node_with_context(object.canonical(), root)?, None)
+            }
             None => {
                 let canonical = self.reader.read_canonical(summary.id)?;
-                self.pages.insert(summary.id, root, canonical.clone());
-                decode_node_with_context(&canonical, root)?
+                let node = decode_node_with_context(&canonical, root)?;
+                (node, Some(canonical))
             }
         };
         if node.level() != summary.level
@@ -186,6 +188,10 @@ impl<'a> EditObjects<'a> {
             || node.extent_count() != summary.extents
         {
             return Err(ContentError::InvalidRecord("extent summary"));
+        }
+        if let Some(canonical) = canonical {
+            self.pages.make_room_for(1);
+            self.pages.insert(summary.id, root, canonical);
         }
         Ok(node)
     }
