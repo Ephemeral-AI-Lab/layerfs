@@ -201,6 +201,73 @@ Expected relations/access paths, refined in that design:
 | Metadata, symlink and directory roots | Point/window reads by operation/position; opaque targets preserved without traversal |
 | Reclamation | Operation-owned bounded deletion cursor; retained/uncertain owners prevent premature disposal |
 
+### Proposed three-table working schema
+
+The proposed minimum is three ordinary shared tables in the existing global
+SQLite Store: `init_operation`, `init_entry` and `init_native_file`. They are
+**planned tables, not current Store schema**. Their concrete columns, constraints,
+indexes and supported schema/open compatibility are A1's design deliverable;
+creation and provider implementation belong to A2. They are created through
+explicit compatible Store initialization and retained for later operations.
+Do not use per-Init databases, create/drop the schema on every Init, or put an
+input-sized acquisition into the current MEMORY-backed TEMP schema.
+
+| Proposed table | Working facts | Expected keys/indexes |
+| --- | --- | --- |
+| `init_operation` | Operation identity, owner epoch, source/binding facts, phase, position/serial-allocation facts, progress and capacity charges, original outcome/custody and bounded cleanup cursor | Exact operation identity; eligible phase/cleanup access that does not scan unrelated operations |
+| `init_entry` | Stable scanned-entry identity, parent identity, binary name, kind, portable attributes, native path/stability evidence, opaque symlink target, finalized BFS position, native-file identity reference and constructed metadata/target/directory object IDs | Primary operation/entry identity; unique operation/parent/binary name; ordered operation/position; directory scan-state/position selection |
+| `init_native_file` | One distinct native device/inode, checked source evidence, canonical entry/position, in-root alias count, construction state and canonical file object ID | Unique operation/device/inode; ready-job state/canonical-position access; completed-root access in acquisition order |
+
+All access paths are scoped by operation identity. A stable scanned-entry key is
+distinct from its finalized BFS position: a directory's native enumeration may
+arrive unsorted, and its name-ordered children receive final positions through
+indexed traversal. Canonical hard-link identity is selected by the first finalized
+acquisition position, not whichever native directory entry happened to arrive
+first. Preserve exact unsigned native identity fields through an explicit encoding;
+do not silently truncate them to SQLite's signed integer range.
+
+The directory frontier and file-job queue are indexed states in these rows, not
+additional permanent queue tables or resident whole-root collections. Several
+`init_entry` rows can refer to one `init_native_file`; that is the hard-link alias
+relation. The in-root count excludes native aliases outside the acquired source.
+Constructed roots are object IDs in the relevant rows. Actual file payloads use
+canonical construction and global Save; these working tables do not duplicate
+payload bytes. Exact row/window bytes, index maintenance, page allocation and
+transaction costs remain part of A2/E2/E3 qualification.
+
+### Successful Init cleanup and table lifetime
+
+**Successful Init removes its operation's temporary working rows, not the shared
+tables or indexes.** Another Init may be using those tables concurrently. The
+tables remain part of the compatible Store schema and their free space can be
+reused; SQL deletion does not imply that the database file shrinks.
+
+The intended successful path is:
+
+1. Complete acquisition and canonical-root construction while retaining the
+   original Save/operation owners; consume all required working facts.
+2. Fence outstanding row consumers and file jobs. Only state with no remaining
+   consumer, capture or uncertain attempt is eligible for disposal.
+3. Delete that operation's `init_entry` and `init_native_file` rows through
+   bounded indexed jobs. Retain and advance the original cleanup cursor, include
+   its work in Init's accounting, and preserve any deciding failure.
+4. Complete the selected Save/history publication steps and report their exact
+   original outcome. Finish the successful operation's working-row cleanup before
+   reporting Init success; cleanup placement relative to the final Save/history
+   steps must be explicit in A1 and preserve the current publication contract.
+5. Retain only the small `init_operation` outcome/custody record when an original
+   reply, fence or explicit owner still requires it. Release that record when its
+   last owner permits; do not accumulate it forever or discard it on an arbitrary
+   timeout. The saved objects and LayerStack/history remain in their global tables.
+
+On refusal, conflict, disconnect or uncertainty, preserve the deciding phase,
+original errors and still-owned state. A lost reply or process exit alone does
+not authorize deletion of unresolved work. Report retained rows/bytes and eligible
+cleanup debt; do not mark them gone or retry a failed cleanup implicitly. Global
+Store durability remains its selected profile even for temporary working rows.
+No `DROP TABLE`, per-operation VACUUM, provider reopen or global-object/history
+deletion is part of successful Init cleanup.
+
 Use prepared SQL, bounded row **and byte** windows and explicit output backpressure.
 An index's existence does not establish a bounded query: retain exact EXPLAIN and
 correlated execution profiles, including table fetches, triggers and caller loops.
@@ -257,7 +324,9 @@ core/crates/
     │   ├── accounting.rs                 actual rows/bytes/pages/allocation/debt
     │   └── cleanup.rs                    bounded indexed deletion, exact failures
     ├── src/store/                        existing explicit composition/open checks
-    ├── sql/sqlite/acquisition/            add shipped schema/queries if selected
+    ├── sql/sqlite/acquisition/            add shipped schema/queries after A1
+    │   ├── schema.sql                    proposed three shared working tables
+    │   └── queries/                      indexed operation-scoped units/cleanup
     └── tests/                            real Store, compatibility and plan/profile
 ```
 
@@ -353,8 +422,8 @@ batch stopping boundary while useful independent packages remain.
 | ID | Owner / work | Depends on | Concrete acceptance |
 | --- | --- | --- | --- |
 | T0 | Reconcile HEAD, source maps, ownership, tracker and retained failures; publish missing dated checkpoint receipts with current limitations | Current pin | Separate S7/S9 status accurate; S8/later unchecked; preserved side documents/containers |
-| A1 | Design acquisition capability, placement, schema/open compatibility, cleanup/capacity and caller wiring | T0 | Written typed ownership/access contract against real public inputs; no forbidden edge, per-operation DB, TEMP-memory whole-root or silent migration |
-| A2 | Implement provider-owned indexed acquisition and real owner composition | A1 | Initialized database reused; bounded row/byte keyset jobs; original errors/uncertainty; all relevant queries have EXPLAIN + execution profiles |
+| A1 | Design acquisition capability, placement, proposed three-table schema/open compatibility, cleanup/capacity and caller wiring | T0 | Written typed ownership/access contract against real public inputs; distinguish stable entry identity from BFS position; successful working-row cleanup and retained outcome ownership explicit; no forbidden edge, per-operation DB, TEMP-memory whole-root or silent migration |
+| A2 | Implement provider-owned indexed acquisition and real owner composition | A1 | Initialized database and shared working tables reused; bounded row/byte keyset jobs and operation-row cleanup; no per-Init table drop; original errors/uncertainty; all relevant queries have EXPLAIN + execution profiles |
 | A3 | Port Project scan/jobs/aliases/roots to that capability; retain streamed canonical construction; remove run machinery | A2 | Root-equivalence, full membership, stable native identity, consumed serial gaps and no input-sized resident collections on the ordinary path |
 | A4 | Correct source/backing overlap, partial-write charges and exact cleanup custody; fix surviving FileBacking callers | T0; overlap design informs A1–A3 | Both review regressions covered through public APIs; physical partial bytes charged; deciding cleanup causes/owners retained; no replay |
 | R1 | Implement host service supervisor and consumer attachment owner | T0, existing SDK/Bridge | Real initialized owners and sockets assembled; I/O outside provider owner; original result/partial credits returned at explicit fences; no whole-Save lock |
@@ -581,3 +650,20 @@ T0's missing tracker receipts are now recorded separately:
 This append does not change the initial inspection's historical tracker state.
 S7/S8/S9 remain unchecked. T0 reporting is delivered; A1/A4/R1/E1 are the next
 ready implementation packages. None of A2–Q1 is completed by this plan.
+
+## 9. Init working-table clarification (2026-10-06)
+
+Owner-requested documentation update: specify the proposed `init_operation`,
+`init_entry` and `init_native_file` tables in the existing global SQLite Store,
+their indexed roles and retained schema lifetime. Successful Init deletes its
+eligible operation-scoped working rows through bounded jobs; shared tables/indexes
+remain. Exact outcome/uncertain custody and global saved objects/history remain
+owned under their existing contracts. A1/A2 acceptance and the expected SQL folder
+structure now include these requirements. No tables or acquisition APIs have been
+implemented by this documentation change; S7/S9 remain incomplete.
+
+First parent: `ff221cd8f3d3bc92a7cc1d2c3901b2dd27b07261`, tree
+`a4e53bd1f9e9a68d7dd8d2a8632f6e197f898334`. This update retains core 92680,
+reference 65417 and combined 158097 production LOC, delta +0 in each scope.
+Its final staged/committed comparison uses the unchanged counter and scope in
+section 7; the exact receipt is retained under `core/target/cluster2-307/loc/`.
