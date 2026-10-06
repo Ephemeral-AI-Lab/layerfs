@@ -1,0 +1,51 @@
+{
+  "name": "project.init",
+  "elapsed_ns": 136088417,
+  "children": [
+    {
+      "name": "history.import_scan",
+      "elapsed_ns": 15436667,
+      "children": []
+    },
+    {
+      "name": "history.finish_prerequisite_save",
+      "elapsed_ns": 681167,
+      "children": []
+    },
+    {
+      "name": "history.import_files",
+      "elapsed_ns": 99319750,
+      "children": []
+    },
+    {
+      "name": "history.import_finish_save",
+      "elapsed_ns": 10341709,
+      "children": []
+    },
+    {
+      "name": "history.reserve_inodes",
+      "elapsed_ns": 105125,
+      "children": []
+    },
+    {
+      "name": "history.import_tree",
+      "elapsed_ns": 2645584,
+      "children": []
+    },
+    {
+      "name": "history.discard_acquisition",
+      "elapsed_ns": 3379292,
+      "children": []
+    },
+    {
+      "name": "history.finish_tree_save",
+      "elapsed_ns": 2235416,
+      "children": []
+    },
+    {
+      "name": "history.initialize_layerstack",
+      "elapsed_ns": 217625,
+      "children": []
+    }
+  ]
+}

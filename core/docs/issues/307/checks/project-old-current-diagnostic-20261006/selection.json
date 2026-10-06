@@ -1,0 +1,26 @@
+{
+  "purpose": "Owner-selected older Project versus current diagnosis; new observer is enabled public timing tree plus Init SQL deltas, existing current unit evidence reused. No performance-arm replay or new speed admission",
+  "old_source": "abdb322f42befdbaca9e4fc6d4592f3b39fecbc7",
+  "current_source": "4c03b41bf5fcc684df3a707d223ad2b9166396f8",
+  "source_difference": "last corrected run-backed Project versus SQLite-backed Project with window execution fix; content/history/productStorage unchanged except acquisition port declarations",
+  "case": "namespace-1000-compact-v3",
+  "fixture_manifest_sha256": "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c",
+  "selection_order": [
+    "old-durable",
+    "current-durable",
+    "old-disposable",
+    "current-disposable"
+  ],
+  "profiles": "both arms Monolithic acquisition schema4, same declared Durable or Disposable settings; old leaves acquisition tables unused",
+  "cache": "uncontrolled; diagnostic clocks ineligible, no numeric speed claims",
+  "workers_env": 1,
+  "namespace_constructors": 4,
+  "run_timeout_s": 15,
+  "build_timeout_s": 60,
+  "verification": "known root equality and source correctness; separate full verification not selected for diagnostic",
+  "setup": "ordinary byte copies of closed compiled inputs/prepared master; source/metadata seals validated; no cloned or mutated sample stores",
+  "drivers": {
+    "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/core/crates/layerfs-project/examples/project_init_stages.rs": "44c0a4173b2919acbc1ec1d7053a018ec7d240d850b0cde01442aa02d6f9dc18",
+    "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/core/crates/layerfs-project/examples/project_init_stages.rs": "48a43e2a70a3f9bd166c6e390bf0847ad712efd9a3adefd5ff805876da0a0e48"
+  }
+}

@@ -1,0 +1,194 @@
+[
+  {
+    "source": "/tmp/layerfs-stage-build.py",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/commands/diagnostic-build.py",
+    "bytes": 1252,
+    "sha256": "5097974456588dfc9284285ac975805ab29393cb7e1c8e613091ae4e427c917c"
+  },
+  {
+    "source": "/tmp/layerfs-stage-run.py",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/commands/diagnostic-run.py",
+    "bytes": 2785,
+    "sha256": "dc9ce6c4d1b2ecded8b26c01ccf0453852391d889a88c7b1179bb81d479fddbd"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/core/crates/layerfs-project/examples/project_init_stages.rs",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/drivers/old.rs",
+    "bytes": 6394,
+    "sha256": "44c0a4173b2919acbc1ec1d7053a018ec7d240d850b0cde01442aa02d6f9dc18"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/core/target/stage-diagnostic/release/examples/project_init_stages",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/old/project_init_stages",
+    "bytes": 2671024,
+    "sha256": "6ccbdfe36f4e7493fa2d7d1946f5909bbc0ddfd86547c58e05efe7afb678f86f"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/core/target/stage-diagnostic/release/.fingerprint/layerfs-project-b4fd59f07fb7020d/example-project_init_stages.json",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/old-cargo-fingerprint.json",
+    "bytes": 946,
+    "sha256": "a79a1d728a296e74ebfac4f33da6cab4ee6143278359cab9c089e1b3cc73eae8"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/old-durable/init-timing.json",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/old-durable/init-timing.json",
+    "bytes": 727,
+    "sha256": "3956ab682698e277bde71f8ec984e1510bec1f0e27a5e2838e20f86aef59239a"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/old-durable/store.sqlite",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/old-durable/store.sqlite",
+    "bytes": 20553728,
+    "sha256": "2b3c686a910a9500e0a7bc723f7307e3a01bc9ded29e0d0edce5c286cef18de3"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/old-durable/store.sqlite-shm",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/old-durable/store.sqlite-shm",
+    "bytes": 32768,
+    "sha256": "b19bb89aa5565609e308c129c6b8ed72667bfd0d55c3403681e17137a774a8de"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/old-durable/store.sqlite-wal",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/old-durable/store.sqlite-wal",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/old-durable.stdout",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/receipts/old-durable.stdout",
+    "bytes": 280,
+    "sha256": "24034916e28ff6b2ee856de1a6fbe99e11e99ab24492ae8e6de56808c77b5ea2"
+  },
+  {
+    "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/old-durable.stderr",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/receipts/old-durable.stderr",
+    "bytes": 9103,
+    "sha256": "21e13633b3924ec4a7a6f31e9e6998982b32f337cee2d80ff962705bfe9fd8ea"
+  },
+  {
+    "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/old-durable.json",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/receipts/old-durable.json",
+    "bytes": 2380,
+    "sha256": "5fc24ca5e66955fa53e5fe5d1019f71e36f5c220c18364c0976c5612fd5dbeee"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/old-disposable/init-timing.json",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/old-disposable/init-timing.json",
+    "bytes": 723,
+    "sha256": "40a3634b80e7d776886325acdefc6e209cf3b3a675a236ed8ad18ed11a98eaed"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/old-disposable/store.sqlite",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/old-disposable/store.sqlite",
+    "bytes": 20557824,
+    "sha256": "0e5b6dee39be45e990d72e1cce79e6e74cc23d70470ea3cc1eeba73d06f00e7a"
+  },
+  {
+    "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/old-disposable.stdout",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/receipts/old-disposable.stdout",
+    "bytes": 279,
+    "sha256": "9ce010fa9c092a565f7f436f14cd1d2afeab1681974c2ca5e63e27a7e84696d1"
+  },
+  {
+    "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/old-disposable.stderr",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/receipts/old-disposable.stderr",
+    "bytes": 9085,
+    "sha256": "c038d98c6e0d1cdcc233a22794b57e79a47113bdf180b396b7aa06acae14fbfb"
+  },
+  {
+    "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/old-disposable.json",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/receipts/old-disposable.json",
+    "bytes": 2384,
+    "sha256": "b8edeb6a738f629082c71fde033a604516b15e771c8f747645ff42c597fa98dc"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/core/crates/layerfs-project/examples/project_init_stages.rs",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/drivers/current.rs",
+    "bytes": 6367,
+    "sha256": "48a43e2a70a3f9bd166c6e390bf0847ad712efd9a3adefd5ff805876da0a0e48"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/core/target/release/examples/project_init_stages",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/current/project_init_stages",
+    "bytes": 2704416,
+    "sha256": "93874d96c79b9033a73c2cbf5f5193aba8ad65d765166bfb8f27e6270445bc42"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/core/target/release/.fingerprint/layerfs-project-b4fd59f07fb7020d/example-project_init_stages.json",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/current-cargo-fingerprint.json",
+    "bytes": 946,
+    "sha256": "a79a1d728a296e74ebfac4f33da6cab4ee6143278359cab9c089e1b3cc73eae8"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/current-durable/init-timing.json",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/current-durable/init-timing.json",
+    "bytes": 809,
+    "sha256": "3f19c20f2ec0d44af2a82ad15b00d7c9fe99c85f809a431fd44153bf8ccf6594"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/current-durable/store.sqlite",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/current-durable/store.sqlite",
+    "bytes": 20914176,
+    "sha256": "e9e2af42400c52fd1686068d0187823a2c8b187979b18d8ae12b07d1ad42043a"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/current-durable/store.sqlite-shm",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/current-durable/store.sqlite-shm",
+    "bytes": 32768,
+    "sha256": "f7604dcc4150c67418c77047ab1c8699480cbb4acb5e82a5988caab0ed2d3dcf"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/current-durable/store.sqlite-wal",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/current-durable/store.sqlite-wal",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/current-durable.stdout",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/receipts/current-durable.stdout",
+    "bytes": 281,
+    "sha256": "cc1e8a4a65b080bbaa20bcc296f1d9c72b789e9775060ddebd2760466a4025c1"
+  },
+  {
+    "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/current-durable.stderr",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/receipts/current-durable.stderr",
+    "bytes": 9057,
+    "sha256": "17fefe5ca0572188288c5ad59fd5b79ee26066ac0b7d9626feb35e12a88d6707"
+  },
+  {
+    "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/current-durable.json",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/receipts/current-durable.json",
+    "bytes": 2276,
+    "sha256": "a8dc01d416cd822efd20bf0a2a6320eab2239a7e96dd66939aedfc2c8568afbc"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/current-disposable/init-timing.json",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/current-disposable/init-timing.json",
+    "bytes": 807,
+    "sha256": "b94e97aa4e5e31aa3de3554816f5f29787493a90eb27fd5f6517c6c7cc698e70"
+  },
+  {
+    "source": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/current-disposable/store.sqlite",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/current-disposable/store.sqlite",
+    "bytes": 20905984,
+    "sha256": "c9048456fea6f5bde73b5abee2730c0e7b930fb2a0d76ef5ac7d32b517330bc5"
+  },
+  {
+    "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/current-disposable.stdout",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/receipts/current-disposable.stdout",
+    "bytes": 280,
+    "sha256": "6d8e8726bb54c4171e911f3829ad5b07df3ccce5ceed78864f869752c2c2e9b6"
+  },
+  {
+    "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/current-disposable.stderr",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/receipts/current-disposable.stderr",
+    "bytes": 9039,
+    "sha256": "06402224efe28520122a6056449f0dd1fbb20f70d2df246a2e549bbb0d327aa5"
+  },
+  {
+    "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/project-old-current-diagnostic-20261006/current-disposable.json",
+    "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/project-old-current-diagnostic-retained-20261006/receipts/current-disposable.json",
+    "bytes": 2279,
+    "sha256": "27dfa14195ab42f65699ccb495b03b4393d99980bd15364ca5dddd17f25c4be3"
+  }
+]

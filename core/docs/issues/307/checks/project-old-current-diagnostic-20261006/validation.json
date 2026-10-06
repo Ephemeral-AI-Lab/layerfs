@@ -1,0 +1,23 @@
+{
+  "status": "PASS",
+  "local_links_checked": 111,
+  "raw_copies_checked": 32,
+  "roots": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+  "protected_files": {
+    "core/docs/issues/307/SOURCE-ORGANIZATION-S7-S13.md": "c8275db530d1bd3a1d7ac27c80b3e8b4e5eeabf19b5483f8bd156ec2d6df6296",
+    "core/docs/issues/307/WORKSPACE-EFFICIENCY-ANALYSIS.md": "af7b7adac38f001bfe01fec9ff9f864a0901c3ebaafd0de79654706126a7561b",
+    "core/docs/issues/307/HANDOFF-S7-S13.md": "b5ce451aad71549c3cce03c45773fef0c00901d7cc3fd302dc01df410e8eaf40",
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027",
+    "tools/production_loc.py": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb"
+  },
+  "containers_observed_running": [
+    "9cf2fe345496b45d79ff272e6c698552948f1e92ea106926826a770592623b24 layerfs-experiment-305-dev",
+    "ce75ac504df9d0e58cedcdd0df93fe7ef39c3b66ef3c13b0bb6b580def64516c layerfs-4c8cde9ee1cf49f8049298b3377d4927",
+    "d2433851ea5990e273b0673fdbd5c180917f1216f3c81bdfb4517da0207e2c2a layerfs-dbd59ea75fdc62de0a1f6d9d099609ab",
+    "d2550144998b4b71de98cb9ecf6448f87c7b99a3c2f69ea778a29413fffa5ffb layerfs-76b116dc9d984679f5802e2ec9c0798d"
+  ],
+  "rust_runtime_checks": "not selected; diagnostic evidence/docs only; no active product/manifest/harness change; source qualification reused",
+  "new_tests": "none",
+  "speed_admission": "INELIGIBLE; uncontrolled diagnostics; historical gates unchanged"
+}

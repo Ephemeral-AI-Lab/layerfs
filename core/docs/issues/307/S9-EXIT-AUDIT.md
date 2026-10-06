@@ -417,3 +417,19 @@ Disposable1000 retain relative-speed FAIL. Disposable1000 is145382875 ns versus
 152242291 ns before and124912209 ns reference. The full speed issue is not resolved.
 [Exact report, reuse, arithmetic, source LOC and next work](ACQUISITION-WINDOW-FIX-RESULTS-20261006.md).
 Milestones remain CHECKPOINT; no full-root/runtime/engine/resource acceptance is inferred.
+
+
+## Older/current Project acquisition diagnostic (2026-10-06)
+
+The owner-selected old/current public Init comparison completes once per
+Durable/Disposable arm with matching compact1000-file roots and checked cleanup.
+Current SQLite ownership/ports/profile/bounds remain implemented; no custom
+sorter is restored. Per-entry identity/entry execution and returned-row discard
+are concrete remaining correction candidates, requiring preserved aliases/native
+evidence/first refusal/atomicity/charges and stale/uncertain fences. Exact old
+scratch work and different scan/Save order remain visible. New independent full
+verification was NOT_RUN; uncontrolled diagnostic clocks do not replace the
+qualified speed FAILs or establish full-root/runtime/resource acceptance.
+R1–R4/E1–E4/Q1/C1 remain open. S9 stays CHECKPOINT/unchecked, with R1/E1 next ready.
+
+[Exact comparison, identities, source proof reuse and next work](PROJECT-OLD-CURRENT-DIAGNOSTIC-20261006.md).

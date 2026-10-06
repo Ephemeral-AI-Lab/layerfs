@@ -1,0 +1,1036 @@
+{
+  "status": "DIAGNOSTIC COMPLETE; numerical performance admission INELIGIBLE; separate new full verifier NOT_RUN",
+  "selection": "selection.json",
+  "identities": {
+    "old": {
+      "worktree": "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs",
+      "head": "abdb322f42befdbaca9e4fc6d4592f3b39fecbc7",
+      "tree": "49630a9bfd509281cf60e0ac479e56ff4c16f95d",
+      "status_after_run": "?? core/crates/layerfs-project/examples/project_init_stages.rs\n",
+      "driver_sha256": "44c0a4173b2919acbc1ec1d7053a018ec7d240d850b0cde01442aa02d6f9dc18",
+      "binary_sha256": "6ccbdfe36f4e7493fa2d7d1946f5909bbc0ddfd86547c58e05efe7afb678f86f",
+      "cargo_fingerprint": {
+        "rustc": 4723136837156968084,
+        "features": "[]",
+        "declared_features": "[]",
+        "target": 11573525844428608679,
+        "profile": 2040997289075261528,
+        "path": 4308353026261101986,
+        "deps": [
+          [
+            1506738961238495452,
+            "layerfs_telemetry",
+            false,
+            18063329348519415686
+          ],
+          [
+            4091053499939819895,
+            "sha2",
+            false,
+            16681717459612572302
+          ],
+          [
+            4488025806562367435,
+            "layerfs_storage",
+            false,
+            18336115596000956133
+          ],
+          [
+            11533730040776082853,
+            "layerfs_persistence",
+            false,
+            11663738122647997232
+          ],
+          [
+            13376978230487136638,
+            "layerfs_project",
+            false,
+            11740379790864198482
+          ],
+          [
+            16790018923084067846,
+            "layerfs_history",
+            false,
+            12633751582299175440
+          ],
+          [
+            17123513968982540338,
+            "layerfs_content",
+            false,
+            14770355913157919650
+          ]
+        ],
+        "local": [
+          {
+            "CheckDepInfo": {
+              "dep_info": "release/.fingerprint/layerfs-project-b4fd59f07fb7020d/dep-example-project_init_stages",
+              "checksum": false
+            }
+          }
+        ],
+        "rustflags": [
+          "--cfg",
+          "aes_armv8",
+          "--cfg",
+          "polyval_armv8",
+          "--cfg",
+          "chacha20_force_neon",
+          "-C",
+          "target-feature=+aes,+sha2"
+        ],
+        "config": 2069994364910194474,
+        "compile_kind": 0
+      },
+      "input_sha256": {
+        "core/Cargo.lock": "04db4f6e7264765d6c069ab71fbb49099c19f83385839cc35c6991cb7158ebb9",
+        "core/Cargo.toml": "7b9f341f9b091ec20e7f6634d60b9269c528c997de01cc5fb933def6cfd03461",
+        ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+        "benchmark_agent_report.md": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe"
+      },
+      "crate_tree": {
+        "layerfs-project": "af370e37759454ce733f87009c44fbbe370f351f",
+        "layerfs-persistence": "ad58f17ac6e471579946b14eb03d25a01f98d01a",
+        "layerfs-storage": "9026e7a093e8f53e48326603b8192a7df775d719",
+        "layerfs-content": "88ec893d7e0275b6b236bd1657a5dd25c63cd28c",
+        "layerfs-history": "48d312138e0be090bd49fb7fe2d4c02f14fe8f16",
+        "layerfs-telemetry": "2ba42c6b9ecffb95df4a2ac10e21f29c846ca880"
+      }
+    },
+    "current": {
+      "worktree": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs",
+      "head": "4c03b41bf5fcc684df3a707d223ad2b9166396f8",
+      "tree": "6f8770c98ba9648b1af6a2e1e0bfafb5a57d2c8a",
+      "status_after_run": "?? core/crates/layerfs-project/examples/project_init_stages.rs\n",
+      "driver_sha256": "48a43e2a70a3f9bd166c6e390bf0847ad712efd9a3adefd5ff805876da0a0e48",
+      "binary_sha256": "93874d96c79b9033a73c2cbf5f5193aba8ad65d765166bfb8f27e6270445bc42",
+      "cargo_fingerprint": {
+        "rustc": 4723136837156968084,
+        "features": "[]",
+        "declared_features": "[]",
+        "target": 11573525844428608679,
+        "profile": 2040997289075261528,
+        "path": 4308353026261101986,
+        "deps": [
+          [
+            1506738961238495452,
+            "layerfs_telemetry",
+            false,
+            18063329348519415686
+          ],
+          [
+            4091053499939819895,
+            "sha2",
+            false,
+            16681717459612572302
+          ],
+          [
+            4488025806562367435,
+            "layerfs_storage",
+            false,
+            18336115596000956133
+          ],
+          [
+            11533730040776082853,
+            "layerfs_persistence",
+            false,
+            11663738122647997232
+          ],
+          [
+            13376978230487136638,
+            "layerfs_project",
+            false,
+            11740379790864198482
+          ],
+          [
+            16790018923084067846,
+            "layerfs_history",
+            false,
+            12633751582299175440
+          ],
+          [
+            17123513968982540338,
+            "layerfs_content",
+            false,
+            14770355913157919650
+          ]
+        ],
+        "local": [
+          {
+            "CheckDepInfo": {
+              "dep_info": "release/.fingerprint/layerfs-project-b4fd59f07fb7020d/dep-example-project_init_stages",
+              "checksum": false
+            }
+          }
+        ],
+        "rustflags": [
+          "--cfg",
+          "aes_armv8",
+          "--cfg",
+          "polyval_armv8",
+          "--cfg",
+          "chacha20_force_neon",
+          "-C",
+          "target-feature=+aes,+sha2"
+        ],
+        "config": 2069994364910194474,
+        "compile_kind": 0
+      },
+      "input_sha256": {
+        "core/Cargo.lock": "04db4f6e7264765d6c069ab71fbb49099c19f83385839cc35c6991cb7158ebb9",
+        "core/Cargo.toml": "7b9f341f9b091ec20e7f6634d60b9269c528c997de01cc5fb933def6cfd03461",
+        ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+        "benchmark_agent_report.md": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe"
+      },
+      "crate_tree": {
+        "layerfs-project": "bff34f9add64f8f5a1672f6f06938c65473efe92",
+        "layerfs-persistence": "a5a4bb59b00d9787b78e60d472370957d175acdd",
+        "layerfs-storage": "155366cdde99d1050fbc3ac145b6346f4166c6f4",
+        "layerfs-content": "88ec893d7e0275b6b236bd1657a5dd25c63cd28c",
+        "layerfs-history": "48d312138e0be090bd49fb7fe2d4c02f14fe8f16",
+        "layerfs-telemetry": "2ba42c6b9ecffb95df4a2ac10e21f29c846ca880"
+      }
+    }
+  },
+  "unchanged_core_components": "content/history/product Storage implementation unchanged; only Storage acquisition port declarations differ",
+  "unchanged_component_diff": [
+    "core/crates/layerfs-storage/src/port/acquisition/contract.rs",
+    "core/crates/layerfs-storage/src/port/acquisition/mod.rs"
+  ],
+  "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+  "observations": {
+    "old-durable": {
+      "status": "COMPLETE",
+      "operation_ns": 201684583,
+      "bootstrap_ns": 9222041,
+      "init_ns": 187216125,
+      "checkpoint_ns": 4825875,
+      "close_ns": 372125,
+      "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+      "stack": "41414141414141414141414141414141",
+      "root_serial": 1,
+      "entries": 1011,
+      "init_sql": {
+        "statements": 267,
+        "vm_steps": 202332,
+        "fullscan_steps": 0,
+        "sorts": 1,
+        "autoindex_rows": 0,
+        "reprepares": 3,
+        "returned_rows": 2908,
+        "bound_bytes": 20447743,
+        "write_commits": 16,
+        "statement_ns": 105112667,
+        "commit_ns": 86520373
+      },
+      "effective_profile": {
+        "identity": "sqlite-wal-full-macos-fullfsync-v1",
+        "journal_mode": "wal",
+        "synchronous": 2,
+        "foreign_keys": 1,
+        "fullfsync": 1,
+        "checkpoint_fullfsync": 1,
+        "page_size": 4096,
+        "cache_size": -2048,
+        "mmap_size": 0,
+        "temp_store": 2,
+        "wal_checkpoint_performed": true
+      },
+      "namespace_work": {
+        "unique_files": 1000,
+        "regular_aliases": 0,
+        "entries": 1011,
+        "entry_capacity_bytes": 131072,
+        "jobs": 1000,
+        "job_capacity_bytes": 118784,
+        "frontier": 10,
+        "frontier_capacity_bytes": 65536,
+        "directory_children": 100,
+        "child_vector_bytes": 15360,
+        "serial_capacity_bytes": 0,
+        "inode_capacity_bytes": 393216,
+        "directory_bindings": 1010,
+        "directory_capacity_bytes": 0,
+        "change_capacity_bytes": 0,
+        "sort_capacity_bytes": 1179648,
+        "backing_bytes": 621490
+      },
+      "allocation": {
+        "allocation_before_checkpoint": 26247168,
+        "allocation_after_close": 20586496
+      },
+      "run_wall_ns": 1362081750,
+      "stages": {
+        "name": "project.init",
+        "elapsed_ns": 187199958,
+        "children": [
+          {
+            "name": "history.import_scan",
+            "elapsed_ns": 7643041,
+            "children": []
+          },
+          {
+            "name": "history.import_files",
+            "elapsed_ns": 146466500,
+            "children": []
+          },
+          {
+            "name": "history.import_finish_save",
+            "elapsed_ns": 15049625,
+            "children": []
+          },
+          {
+            "name": "history.reserve_inodes",
+            "elapsed_ns": 1105708,
+            "children": []
+          },
+          {
+            "name": "history.prerequisites",
+            "elapsed_ns": 876500,
+            "children": []
+          },
+          {
+            "name": "history.finish_prerequisite_save",
+            "elapsed_ns": 1553958,
+            "children": []
+          },
+          {
+            "name": "history.finish_tree_save",
+            "elapsed_ns": 7690500,
+            "children": []
+          },
+          {
+            "name": "history.initialize_layerstack",
+            "elapsed_ns": 1531083,
+            "children": []
+          }
+        ]
+      }
+    },
+    "old-disposable": {
+      "status": "COMPLETE",
+      "operation_ns": 135887041,
+      "bootstrap_ns": 4730333,
+      "init_ns": 130419208,
+      "checkpoint_ns": 307125,
+      "close_ns": 401167,
+      "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+      "stack": "41414141414141414141414141414141",
+      "root_serial": 1,
+      "entries": 1011,
+      "init_sql": {
+        "statements": 271,
+        "vm_steps": 202237,
+        "fullscan_steps": 0,
+        "sorts": 1,
+        "autoindex_rows": 0,
+        "reprepares": 3,
+        "returned_rows": 2905,
+        "bound_bytes": 20447790,
+        "write_commits": 16,
+        "statement_ns": 41256540,
+        "commit_ns": 23405330
+      },
+      "effective_profile": {
+        "identity": "sqlite-memory-off-macos-v1",
+        "journal_mode": "memory",
+        "synchronous": 0,
+        "foreign_keys": 1,
+        "fullfsync": 0,
+        "checkpoint_fullfsync": 1,
+        "page_size": 4096,
+        "cache_size": -2048,
+        "mmap_size": 0,
+        "temp_store": 2,
+        "wal_checkpoint_performed": false
+      },
+      "namespace_work": {
+        "unique_files": 1000,
+        "regular_aliases": 0,
+        "entries": 1011,
+        "entry_capacity_bytes": 131072,
+        "jobs": 1000,
+        "job_capacity_bytes": 118784,
+        "frontier": 10,
+        "frontier_capacity_bytes": 65536,
+        "directory_children": 100,
+        "child_vector_bytes": 15360,
+        "serial_capacity_bytes": 0,
+        "inode_capacity_bytes": 393216,
+        "directory_bindings": 1010,
+        "directory_capacity_bytes": 0,
+        "change_capacity_bytes": 0,
+        "sort_capacity_bytes": 1179648,
+        "backing_bytes": 621490
+      },
+      "allocation": {
+        "allocation_before_checkpoint": 23068672,
+        "allocation_after_close": 20557824
+      },
+      "run_wall_ns": 182375333,
+      "stages": {
+        "name": "project.init",
+        "elapsed_ns": 130415459,
+        "children": [
+          {
+            "name": "history.import_scan",
+            "elapsed_ns": 7490375,
+            "children": []
+          },
+          {
+            "name": "history.import_files",
+            "elapsed_ns": 93815167,
+            "children": []
+          },
+          {
+            "name": "history.import_finish_save",
+            "elapsed_ns": 19667875,
+            "children": []
+          },
+          {
+            "name": "history.reserve_inodes",
+            "elapsed_ns": 147666,
+            "children": []
+          },
+          {
+            "name": "history.prerequisites",
+            "elapsed_ns": 753750,
+            "children": []
+          },
+          {
+            "name": "history.finish_prerequisite_save",
+            "elapsed_ns": 460708,
+            "children": []
+          },
+          {
+            "name": "history.finish_tree_save",
+            "elapsed_ns": 2562583,
+            "children": []
+          },
+          {
+            "name": "history.initialize_layerstack",
+            "elapsed_ns": 226917,
+            "children": []
+          }
+        ]
+      }
+    },
+    "current-durable": {
+      "status": "COMPLETE",
+      "operation_ns": 259698792,
+      "bootstrap_ns": 11140459,
+      "init_ns": 243530917,
+      "checkpoint_ns": 4656125,
+      "close_ns": 318333,
+      "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+      "stack": "41414141414141414141414141414141",
+      "root_serial": 1,
+      "entries": 1011,
+      "init_sql": {
+        "statements": 2468,
+        "vm_steps": 596223,
+        "fullscan_steps": 1023,
+        "sorts": 1,
+        "autoindex_rows": 0,
+        "reprepares": 3,
+        "returned_rows": 11022,
+        "bound_bytes": 20819312,
+        "write_commits": 25,
+        "statement_ns": 132066807,
+        "commit_ns": 93649414
+      },
+      "effective_profile": {
+        "identity": "sqlite-wal-full-macos-fullfsync-v1",
+        "journal_mode": "wal",
+        "synchronous": 2,
+        "foreign_keys": 1,
+        "fullfsync": 1,
+        "checkpoint_fullfsync": 1,
+        "page_size": 4096,
+        "cache_size": -2048,
+        "mmap_size": 0,
+        "temp_store": 2,
+        "wal_checkpoint_performed": true
+      },
+      "namespace_work": {
+        "unique_files": 1000,
+        "regular_aliases": 0,
+        "entries": 1011,
+        "jobs": 1000,
+        "frontier": 10,
+        "directory_children": 100,
+        "wide_directories": 0,
+        "child_window_rows": 100,
+        "directory_bindings": 1010,
+        "read_units": 30,
+        "write_units": 5,
+        "read_window_rows": 512,
+        "write_window_rows": 1000,
+        "write_window_bytes": 340000,
+        "discard_units": 1,
+        "backing_rows": 2011,
+        "backing_bytes": 306563
+      },
+      "allocation": {
+        "allocation_before_checkpoint": 25198592,
+        "allocation_after_close": 20946944
+      },
+      "run_wall_ns": 2646929541,
+      "stages": {
+        "name": "project.init",
+        "elapsed_ns": 243480083,
+        "children": [
+          {
+            "name": "history.import_scan",
+            "elapsed_ns": 37758708,
+            "children": []
+          },
+          {
+            "name": "history.finish_prerequisite_save",
+            "elapsed_ns": 3877583,
+            "children": []
+          },
+          {
+            "name": "history.import_files",
+            "elapsed_ns": 166519334,
+            "children": []
+          },
+          {
+            "name": "history.import_finish_save",
+            "elapsed_ns": 15604083,
+            "children": []
+          },
+          {
+            "name": "history.reserve_inodes",
+            "elapsed_ns": 921875,
+            "children": []
+          },
+          {
+            "name": "history.import_tree",
+            "elapsed_ns": 3651291,
+            "children": []
+          },
+          {
+            "name": "history.discard_acquisition",
+            "elapsed_ns": 5223166,
+            "children": []
+          },
+          {
+            "name": "history.finish_tree_save",
+            "elapsed_ns": 5198666,
+            "children": []
+          },
+          {
+            "name": "history.initialize_layerstack",
+            "elapsed_ns": 993125,
+            "children": []
+          }
+        ]
+      }
+    },
+    "current-disposable": {
+      "status": "COMPLETE",
+      "operation_ns": 149143916,
+      "bootstrap_ns": 3984625,
+      "init_ns": 136092084,
+      "checkpoint_ns": 221417,
+      "close_ns": 8787709,
+      "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+      "stack": "41414141414141414141414141414141",
+      "root_serial": 1,
+      "entries": 1011,
+      "init_sql": {
+        "statements": 2465,
+        "vm_steps": 595297,
+        "fullscan_steps": 1023,
+        "sorts": 1,
+        "autoindex_rows": 0,
+        "reprepares": 3,
+        "returned_rows": 10977,
+        "bound_bytes": 20818544,
+        "write_commits": 25,
+        "statement_ns": 60793855,
+        "commit_ns": 25462916
+      },
+      "effective_profile": {
+        "identity": "sqlite-memory-off-macos-v1",
+        "journal_mode": "memory",
+        "synchronous": 0,
+        "foreign_keys": 1,
+        "fullfsync": 0,
+        "checkpoint_fullfsync": 1,
+        "page_size": 4096,
+        "cache_size": -2048,
+        "mmap_size": 0,
+        "temp_store": 2,
+        "wal_checkpoint_performed": false
+      },
+      "namespace_work": {
+        "unique_files": 1000,
+        "regular_aliases": 0,
+        "entries": 1011,
+        "jobs": 1000,
+        "frontier": 10,
+        "directory_children": 100,
+        "wide_directories": 0,
+        "child_window_rows": 100,
+        "directory_bindings": 1010,
+        "read_units": 30,
+        "write_units": 5,
+        "read_window_rows": 512,
+        "write_window_rows": 1000,
+        "write_window_bytes": 340000,
+        "discard_units": 1,
+        "backing_rows": 2011,
+        "backing_bytes": 306563
+      },
+      "allocation": {
+        "allocation_before_checkpoint": 23068672,
+        "allocation_after_close": 20905984
+      },
+      "run_wall_ns": 184708875,
+      "stages": {
+        "name": "project.init",
+        "elapsed_ns": 136088417,
+        "children": [
+          {
+            "name": "history.import_scan",
+            "elapsed_ns": 15436667,
+            "children": []
+          },
+          {
+            "name": "history.finish_prerequisite_save",
+            "elapsed_ns": 681167,
+            "children": []
+          },
+          {
+            "name": "history.import_files",
+            "elapsed_ns": 99319750,
+            "children": []
+          },
+          {
+            "name": "history.import_finish_save",
+            "elapsed_ns": 10341709,
+            "children": []
+          },
+          {
+            "name": "history.reserve_inodes",
+            "elapsed_ns": 105125,
+            "children": []
+          },
+          {
+            "name": "history.import_tree",
+            "elapsed_ns": 2645584,
+            "children": []
+          },
+          {
+            "name": "history.discard_acquisition",
+            "elapsed_ns": 3379292,
+            "children": []
+          },
+          {
+            "name": "history.finish_tree_save",
+            "elapsed_ns": 2235416,
+            "children": []
+          },
+          {
+            "name": "history.initialize_layerstack",
+            "elapsed_ns": 217625,
+            "children": []
+          }
+        ]
+      }
+    }
+  },
+  "pairs": {
+    "durable": {
+      "init_sql_delta": {
+        "statements": 2201,
+        "vm_steps": 393891,
+        "fullscan_steps": 1023,
+        "sorts": 0,
+        "autoindex_rows": 0,
+        "reprepares": 0,
+        "returned_rows": 8114,
+        "bound_bytes": 371569,
+        "write_commits": 9,
+        "statement_ns": 26954140,
+        "commit_ns": 7129041
+      },
+      "observed_product_ns_delta": 58014209,
+      "observed_init_ns_delta": 56314792,
+      "timing_admission": "INELIGIBLE uncontrolled cache; diagnostic clocks only"
+    },
+    "disposable": {
+      "init_sql_delta": {
+        "statements": 2194,
+        "vm_steps": 393060,
+        "fullscan_steps": 1023,
+        "sorts": 0,
+        "autoindex_rows": 0,
+        "reprepares": 0,
+        "returned_rows": 8072,
+        "bound_bytes": 370754,
+        "write_commits": 9,
+        "statement_ns": 19537315,
+        "commit_ns": 2057586
+      },
+      "observed_product_ns_delta": 13256875,
+      "observed_init_ns_delta": 5672876,
+      "timing_admission": "INELIGIBLE uncontrolled cache; diagnostic clocks only"
+    }
+  },
+  "reused_units": {
+    "artifact": "../init-acquisition-fix-20261006/count-attribution.json",
+    "sha256": "6fb7707a93ff495f8d8b108dc2b9fb141e34873282c870ab6860fba23e7ddec3",
+    "after-durable": {
+      "complete_init": {
+        "unit": "complete_init",
+        "calls": 1,
+        "statements": 2469,
+        "vm_steps": 596469,
+        "returned_rows": 11027,
+        "fullscan_steps": 1023,
+        "sorts": 1,
+        "reprepares": 3,
+        "write_commits": 25,
+        "statement_ns": 127238138,
+        "commit_ns": 88951127,
+        "unit_ns": 0
+      },
+      "units": [
+        {
+          "unit": "begin",
+          "calls": 1,
+          "statements": 4,
+          "vm_steps": 157,
+          "returned_rows": 2,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 1,
+          "write_commits": 1,
+          "statement_ns": 2927581,
+          "commit_ns": 2755666,
+          "unit_ns": 2958167
+        },
+        {
+          "unit": "complete_files",
+          "calls": 1,
+          "statements": 36,
+          "vm_steps": 65105,
+          "returned_rows": 1002,
+          "fullscan_steps": 992,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 1,
+          "statement_ns": 3891462,
+          "commit_ns": 1231499,
+          "unit_ns": 3947125
+        },
+        {
+          "unit": "directories",
+          "calls": 3,
+          "statements": 12,
+          "vm_steps": 242,
+          "returned_rows": 14,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 0,
+          "statement_ns": 120666,
+          "commit_ns": 10290,
+          "unit_ns": 131084
+        },
+        {
+          "unit": "discard",
+          "calls": 1,
+          "statements": 7,
+          "vm_steps": 117946,
+          "returned_rows": 2014,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 1,
+          "statement_ns": 4378794,
+          "commit_ns": 1091460,
+          "unit_ns": 4417500
+        },
+        {
+          "unit": "entries",
+          "calls": 6,
+          "statements": 24,
+          "vm_steps": 27130,
+          "returned_rows": 2028,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 0,
+          "statement_ns": 933001,
+          "commit_ns": 14501,
+          "unit_ns": 1145083
+        },
+        {
+          "unit": "file_roots",
+          "calls": 3,
+          "statements": 12,
+          "vm_steps": 7128,
+          "returned_rows": 1003,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 0,
+          "statement_ns": 481127,
+          "commit_ns": 6543,
+          "unit_ns": 578542
+        },
+        {
+          "unit": "jobs",
+          "calls": 18,
+          "statements": 72,
+          "vm_steps": 9758,
+          "returned_rows": 1018,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 0,
+          "statement_ns": 1076172,
+          "commit_ns": 69959,
+          "unit_ns": 1307625
+        },
+        {
+          "unit": "put_entries",
+          "calls": 3,
+          "statements": 2023,
+          "vm_steps": 165261,
+          "returned_rows": 1006,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 3,
+          "statement_ns": 17647036,
+          "commit_ns": 6529208,
+          "unit_ns": 17801584
+        },
+        {
+          "unit": "release",
+          "calls": 1,
+          "statements": 5,
+          "vm_steps": 97,
+          "returned_rows": 3,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 1,
+          "statement_ns": 871583,
+          "commit_ns": 763500,
+          "unit_ns": 878583
+        },
+        {
+          "unit": "set_directory_roots",
+          "calls": 1,
+          "statements": 5,
+          "vm_steps": 1217,
+          "returned_rows": 13,
+          "fullscan_steps": 31,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 1,
+          "statement_ns": 1052666,
+          "commit_ns": 843958,
+          "unit_ns": 1061000
+        }
+      ],
+      "acquisition_sum": {
+        "statements": 2200,
+        "vm_steps": 394041,
+        "write_commits": 8,
+        "fullscan_steps": 1023,
+        "statement_ns": 33380088,
+        "commit_ns": 13316584,
+        "unit_ns": 34226293
+      }
+    },
+    "after-disposable": {
+      "complete_init": {
+        "unit": "complete_init",
+        "calls": 1,
+        "statements": 2465,
+        "vm_steps": 596298,
+        "returned_rows": 11021,
+        "fullscan_steps": 1023,
+        "sorts": 1,
+        "reprepares": 3,
+        "write_commits": 25,
+        "statement_ns": 62583378,
+        "commit_ns": 25159334,
+        "unit_ns": 0
+      },
+      "units": [
+        {
+          "unit": "begin",
+          "calls": 1,
+          "statements": 4,
+          "vm_steps": 157,
+          "returned_rows": 2,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 1,
+          "write_commits": 1,
+          "statement_ns": 110461,
+          "commit_ns": 13210,
+          "unit_ns": 114167
+        },
+        {
+          "unit": "complete_files",
+          "calls": 1,
+          "statements": 36,
+          "vm_steps": 65105,
+          "returned_rows": 1002,
+          "fullscan_steps": 992,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 1,
+          "statement_ns": 2908914,
+          "commit_ns": 233708,
+          "unit_ns": 2959208
+        },
+        {
+          "unit": "directories",
+          "calls": 3,
+          "statements": 12,
+          "vm_steps": 242,
+          "returned_rows": 14,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 0,
+          "statement_ns": 89456,
+          "commit_ns": 6540,
+          "unit_ns": 95792
+        },
+        {
+          "unit": "discard",
+          "calls": 1,
+          "statements": 7,
+          "vm_steps": 117946,
+          "returned_rows": 2014,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 1,
+          "statement_ns": 3249376,
+          "commit_ns": 195292,
+          "unit_ns": 3286250
+        },
+        {
+          "unit": "entries",
+          "calls": 6,
+          "statements": 24,
+          "vm_steps": 27130,
+          "returned_rows": 2028,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 0,
+          "statement_ns": 927998,
+          "commit_ns": 12874,
+          "unit_ns": 1145374
+        },
+        {
+          "unit": "file_roots",
+          "calls": 3,
+          "statements": 12,
+          "vm_steps": 7128,
+          "returned_rows": 1003,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 0,
+          "statement_ns": 449998,
+          "commit_ns": 5791,
+          "unit_ns": 548417
+        },
+        {
+          "unit": "jobs",
+          "calls": 18,
+          "statements": 72,
+          "vm_steps": 9758,
+          "returned_rows": 1018,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 0,
+          "statement_ns": 1206993,
+          "commit_ns": 79666,
+          "unit_ns": 1427624
+        },
+        {
+          "unit": "put_entries",
+          "calls": 3,
+          "statements": 2023,
+          "vm_steps": 165261,
+          "returned_rows": 1006,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 3,
+          "statement_ns": 11463818,
+          "commit_ns": 594541,
+          "unit_ns": 11610750
+        },
+        {
+          "unit": "release",
+          "calls": 1,
+          "statements": 5,
+          "vm_steps": 97,
+          "returned_rows": 3,
+          "fullscan_steps": 0,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 1,
+          "statement_ns": 52417,
+          "commit_ns": 11292,
+          "unit_ns": 53625
+        },
+        {
+          "unit": "set_directory_roots",
+          "calls": 1,
+          "statements": 5,
+          "vm_steps": 1217,
+          "returned_rows": 13,
+          "fullscan_steps": 31,
+          "sorts": 0,
+          "reprepares": 0,
+          "write_commits": 1,
+          "statement_ns": 197875,
+          "commit_ns": 15917,
+          "unit_ns": 201083
+        }
+      ],
+      "acquisition_sum": {
+        "statements": 2200,
+        "vm_steps": 394041,
+        "write_commits": 8,
+        "fullscan_steps": 1023,
+        "statement_ns": 20657306,
+        "commit_ns": 1168831,
+        "unit_ns": 21442290
+      }
+    }
+  },
+  "proof_reuse": "same product source4c03b41bf; final affected acquisition tests/plans in18-final-acquisition-tests.log; no new product changes; old/new driver root identity only, no new full payload proof",
+  "limits": {
+    "run_wall_s": 15,
+    "build_wall_s": 60,
+    "workers_env": "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "namespace_constructors": 4
+  },
+  "gaps": [
+    "cache uncontrolled",
+    "phase/system RSS unobserved",
+    "scratch cumulative read/write bytes and syscalls unobserved",
+    "SQLite VFS/device bytes and synchronization syscalls unobserved",
+    "10000/100000 diagnostics not selected",
+    "S7/S8/S9 remain incomplete"
+  ],
+  "raw_copy_manifest": "closed-copy-manifest.json"
+}

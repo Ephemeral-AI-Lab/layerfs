@@ -228,3 +228,21 @@ Disposable1000 retain relative-speed FAIL. Disposable1000 is145382875 ns versus
 152242291 ns before and124912209 ns reference. The full speed issue is not resolved.
 [Exact report, reuse, arithmetic, source LOC and next work](ACQUISITION-WINDOW-FIX-RESULTS-20261006.md).
 Milestones remain CHECKPOINT; no full-root/runtime/engine/resource acceptance is inferred.
+
+
+## Older/current Project cost diagnostic (2026-10-06)
+
+The owner-selected older run-backed Project comparison has four successful
+diagnostic operations, equal roots and retained stores/binaries/driver identities.
+Matched Monolithic schema/profile observations isolate about2200 additional SQL
+statements/393000 VM in the current Init, consistent with the reused acquisition
+unit counts and indexed plans. Entry insertion and discard own71.9% of acquisition
+VM work. The old scratch stream/sort capacity and backing costs are explicitly
+retained; no lower old SQL count is treated as free work. Cache and timing are
+diagnostic/ineligible. Phase/system RSS, cumulative scratch I/O and SQLite
+VFS/device/sync observations are unavailable. Existing speed FAILs and larger
+NOT_RUN rows are unchanged. Complete daemon accounting, reservation/high-water/
+freelist/range-allocation, queue/debt and sustained acceptance remain open.
+S7 stays CHECKPOINT/unchecked; E1–E4 remain open.
+
+[Exact comparison and next correction candidates](PROJECT-OLD-CURRENT-DIAGNOSTIC-20261006.md).

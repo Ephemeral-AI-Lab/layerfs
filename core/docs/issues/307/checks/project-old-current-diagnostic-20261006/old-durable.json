@@ -1,0 +1,69 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/core/target/stage-diagnostic/release/examples/project_init_stages",
+    "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9/payload",
+    "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/old-durable/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs/benchmark-results/fs-bench-pro/project-stage-diagnostic-20261006/old-durable/scratch",
+    "stage-diagnostic",
+    "durable",
+    "15"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/project-init-run-backed-diagnostic/layerfs",
+  "timeout_s": 15,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1362081750,
+  "scope": "DIAGNOSTIC_ONLY; uncontrolled cache; no performance admission",
+  "head": "abdb322f42befdbaca9e4fc6d4592f3b39fecbc7",
+  "production_diff": "",
+  "binary_sha256": "6ccbdfe36f4e7493fa2d7d1946f5909bbc0ddfd86547c58e05efe7afb678f86f",
+  "driver_sha256": "44c0a4173b2919acbc1ec1d7053a018ec7d240d850b0cde01442aa02d6f9dc18",
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe",
+  "scratch_remaining": [],
+  "timing": {
+    "name": "project.init",
+    "elapsed_ns": 187199958,
+    "children": [
+      {
+        "name": "history.import_scan",
+        "elapsed_ns": 7643041,
+        "children": []
+      },
+      {
+        "name": "history.import_files",
+        "elapsed_ns": 146466500,
+        "children": []
+      },
+      {
+        "name": "history.import_finish_save",
+        "elapsed_ns": 15049625,
+        "children": []
+      },
+      {
+        "name": "history.reserve_inodes",
+        "elapsed_ns": 1105708,
+        "children": []
+      },
+      {
+        "name": "history.prerequisites",
+        "elapsed_ns": 876500,
+        "children": []
+      },
+      {
+        "name": "history.finish_prerequisite_save",
+        "elapsed_ns": 1553958,
+        "children": []
+      },
+      {
+        "name": "history.finish_tree_save",
+        "elapsed_ns": 7690500,
+        "children": []
+      },
+      {
+        "name": "history.initialize_layerstack",
+        "elapsed_ns": 1531083,
+        "children": []
+      }
+    ]
+  }
+}

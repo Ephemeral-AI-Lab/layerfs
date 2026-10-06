@@ -789,3 +789,27 @@ Disposable1000 retain relative-speed FAIL. Disposable1000 is145382875 ns versus
 152242291 ns before and124912209 ns reference. The full speed issue is not resolved.
 [Exact report, reuse, arithmetic, source LOC and next work](ACQUISITION-WINDOW-FIX-RESULTS-20261006.md).
 Milestones remain CHECKPOINT; no full-root/runtime/engine/resource acceptance is inferred.
+
+
+## Owner-selected older/current Project diagnosis (2026-10-06)
+
+The last corrected run-backed Project atabdb322f42 and the current fixed-source
+SQLite-backed Project at4c03b41bf were driven once per Durable/Disposable profile
+with enabled public stage/SQL diagnostics, the same compact1000-file input and
+same Monolithic schema4. All roots match; both tracked product trees are unchanged.
+Cache is uncontrolled, so these clocks are ineligible and replace no performance
+receipt. The current path adds roughly2200 statements/393000 VM, correlating with
+the reused acquisition2200-statement/394041-VM/eight-write-commit profile.
+Entry insertion is92.0% of acquisition statement executions; discard is29.9% of
+its VM work. The old path instead pays bounded scratch streams/sorts and checked
+file cleanup. Lower old SQL counts do not establish zero I/O or lower RSS.
+
+Next correction candidates are ordered bounded entry/identity batching and a
+budget-safe final discard path, with exact native evidence, first failure,
+row/byte credit, atomicity and stale/uncertain custody retained. Publication/
+reservation/COMMIT/page/copy attribution remains necessary before changing that
+path. No new algorithm/profile/cap is selected by this diagnostic and the three
+qualified relative-speed FAILs remain open. R1 and E1 remain independently ready;
+R1–R4/E1–E4/Q1/C1, S7/S8/S9 and later Commit prerequisites stay open.
+
+[Comparison, source identities, raw receipts, resource limits and next work](PROJECT-OLD-CURRENT-DIAGNOSTIC-20261006.md).

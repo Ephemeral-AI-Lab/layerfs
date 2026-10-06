@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--release",
+    "--locked",
+    "--target-dir",
+    "core/target",
+    "-p",
+    "layerfs-project",
+    "--example",
+    "project_init_stages"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs",
+  "timeout_s": 60,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1047606417
+}
