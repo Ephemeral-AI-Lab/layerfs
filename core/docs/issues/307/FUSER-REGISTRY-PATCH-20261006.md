@@ -2,6 +2,14 @@
 
 > **Status:** Dated planning checkpoint; not release evidence or a product contract.
 
+**Subsequent acceptance:** the owner stated "docker verification is enough".
+The native Docker results in this record are sufficient verification of the
+fuser correction. The endpoint FAIL remains a documented Linux platform
+limitation; the earlier custom-kernel/external-gate next step below is superseded
+for verifying this dependency fix. No result is relabeled, and S8's remaining
+product implementation/qualification remains open. See
+[the current continuation prompt](HANDOFF-S7-S9.md).
+
 The owner requested "use fuser 0.18.0 from crates io and apply patch". This
 supersedes the earlier no-patch and corrected-published-release-only prerequisite
 for this one correction. The [prior decision and official Git investigation](FUSER-OFFICIAL-CANDIDATE-20261006.md)

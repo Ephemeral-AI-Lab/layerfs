@@ -2,6 +2,14 @@
 
 > **Status:** Dated planning checkpoint; not release evidence or a product contract.
 
+**Latest owner acceptance:** "docker verification is enough". The native Docker
+proofs already performed are accepted verification of the fuser correction.
+The remaining endpoint result below is a documented Linux platform limitation;
+it does not require a QEMU/custom-kernel campaign to verify that dependency fix.
+Its recorded FAIL remains unchanged. S8's unfinished product implementation and
+mounted product qualification remain required; this acceptance advances no checkbox.
+The earlier source/build investigation below remains historical evidence.
+
 The owner asked what the remaining failure was, requested a fix, and selected
 Docker for FUSE verification. The [S7–S9 continuation prompt](HANDOFF-S7-S9.md)
 records that direction. All previously qualified mounted FUSE checks already ran

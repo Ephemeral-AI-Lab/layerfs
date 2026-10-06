@@ -15,6 +15,13 @@ use Docker for FUSE verification. The current
 routing and untracked/unstaged custody description. The exact source/proof
 identities and earlier preserved-state receipt below remain historical evidence.
 
+Latest owner acceptance: **"docker verification is enough"**. Existing native
+Docker proofs qualify the fuser correction; the earlier kernel-case gate below
+is retained as historical disposition, with the native FAIL now documented as
+a Linux platform limitation. No QEMU/custom-kernel campaign is required for this
+accepted dependency fix. The current continuation prompt owns remaining S7–S9
+work, and no S8 implementation checkbox is advanced by this acceptance.
+
 ## Exact source and receipt identities
 
 - S5 completion `a0dc7da9b`; S6 completion

@@ -224,6 +224,13 @@ provenance record authenticates its modified bytes. See
 [the authorized patch record](docs/issues/307/FUSER-REGISTRY-PATCH-20261006.md).
 Native qualification and the complete S8 contract remain separate requirements.
 
+Subsequent owner direction2026-10-06: "docker verification is enough". Existing
+native Docker proofs are accepted for verifying this fuser correction. Retain
+Linux's fractional signed-minimum endpoint outcome as a platform limitation;
+do not require QEMU or a custom-kernel campaign to verify the dependency fix.
+This acceptance does not complete S8's product implementation or turn that
+individual native FAIL into PASS. Continue the remaining S7–S9 work using Docker.
+
 Before a native fuser build, run the focused provenance check:
 
 ```sh

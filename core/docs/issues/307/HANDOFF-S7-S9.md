@@ -31,8 +31,10 @@ Completed/checkpoint identities:
   b8d87019f93e897476f24bd3e7572933da18900f, tree
   3cd19d2e96348731cab8681f6de02877da926a0d.
 - Following receipt/handoff: 5cde942fc6b84abbfa6c12a11db83fc6689a2ad9, tree
-  344d992a8a31c89b25f76fce713bab8b148a1a29. This prompt and the all-state
-  documents/assets commit follow that receipt; use actual current HEAD.
+  344d992a8a31c89b25f76fce713bab8b148a1a29.
+- All-state documents/assets checkpoint: ba9304e4960a229de908f9ff3f19edcbc6285db2,
+  tree5e3e271a3ace6c42e0f1392e9c1d4a9a67186278. The subsequent Docker acceptance
+  update follows that snapshot; use actual current HEAD.
 S1–S6 are checked. S0/S7/S8/S9 remain incomplete and unchecked. Never infer
 milestone completion from a prerequisite proof, source existence or this prompt.
 
@@ -82,6 +84,10 @@ Use the pinned Rust image, an owned fresh container, /dev/fuse, CAP_SYS_ADMIN
 and the documented mount permissions; record the actual backend kernel and all
 source/binary/image identities. Do not introduce a QEMU verification workflow.
 The existing mounted timestamp and lifecycle proofs already ran through Docker.
+The owner's latest acceptance is "docker verification is enough". Those existing
+Docker proofs are sufficient for verifying the fuser correction. No QEMU or
+custom-kernel campaign is a prerequisite for this dependency fix or for continuing
+the batch. S8 product implementation and mounted product acceptance remain required.
 
 Fuser is already corrected by the explicitly authorized local patch:
 The owner's latest instruction was "use fuser 0.18.0 from crates io and apply patch".
@@ -105,19 +111,22 @@ Rust1.85.1 ARM64 Linux6.12.76. Those library defects are fixed. The required mou
 boundary before setattr; public Session preserves the exact fraction when supplied.
 Retain the failed case, original published-package failures/forced-abort137 and
 historically rejected Git candidate receipts. No complete native timestamp PASS,
-smaller contract or raw-wire product replacement is authorized. Keep the hard
-owning-platform boundary gate explicit and do not mark S8 complete while unresolved.
+or raw-wire product replacement is claimed. The owner's Docker-verification
+acceptance records the endpoint case as a known Linux platform limitation, without
+changing its FAIL verdict or claiming the exact fraction survived a native syscall.
+Do not describe the fuser correction as still blocked by that kernel case. S8 is
+incomplete because its remaining implementation and product qualification are open.
 Continue useful independent S7/S8/S9 implementation; the old wait-for-fuser-release
 ruling must not stop the entire batch or cause repeated unchanged timestamp probes.
-The owner subsequently asked to fix the remaining issue and selected Docker.
-Treat the remaining failure as an exact native platform requirement: a Docker
+The owner selected Docker and accepted its existing verification as sufficient.
+Retain the exact remaining platform outcome: a Docker
 container shares its backend's kernel, and rebuilding an image does not change
 the VFS rule before the FUSE callback. Preserve the four unrelated containers and
 the shared backend. No Linux correction or alternative backend was installed in
 this checkpoint. A kernel-source/build-tools investigation ran no new native
-test and its failed Docker tool-image build is retained. Any actual resolution
-must preserve the requested timestamp and be qualified through Docker; do not
-guess the removed fraction, reduce the contract or relabel the existing FAIL.
+test and its failed Docker tool-image build is retained. Do not restart that kernel
+campaign as a prerequisite for the accepted fuser fix. Any future platform work
+needs its own scope/evidence; do not guess the removed fraction or relabel the FAIL.
 
 S9 — complete authenticated host adapters and full roots:
 The active SDK has local authenticated binding, object/policy/serial/Save boundaries
@@ -175,8 +184,9 @@ Maintain separate milestone audits and tracker receipts, with blockers and gaps
 explicit. Persist through useful independent batch work. Stop after S7–S9 is
 complete, or report precisely a hard required external gate that remains, the
 independent work completed and remaining implementation, concrete next-ready work
-and exact source/receipt/tree/LOC handoff. Never mark S8 complete solely because
-the dependency patch or prerequisite smoke proofs pass.
+and exact source/receipt/tree/LOC handoff. Do not stop on the accepted fuser
+dependency verification or demand another verification platform. Never mark S8
+complete solely because the dependency patch or prerequisite smoke proofs pass.
 ```
 
 ## Current evidence and preserved history

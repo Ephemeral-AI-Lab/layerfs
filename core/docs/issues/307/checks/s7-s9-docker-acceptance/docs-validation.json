@@ -1,0 +1,15 @@
+{
+  "files": [
+    "core/AGENTS.md",
+    "core/docs/issues/307/FUSER-REGISTRY-PATCH-20261006.md",
+    "core/docs/issues/307/HANDOFF-FUSER-PATCH-S7-S9.md",
+    "core/docs/issues/307/HANDOFF-S7-S9.md",
+    "core/docs/issues/307/LINUX-TIMESTAMP-DOCKER-20261006.md",
+    "core/docs/issues/307/PROGRESS.md",
+    "core/docs/issues/307/S8-EXIT-AUDIT.md"
+  ],
+  "local_links": 102,
+  "errors": [],
+  "table_rows_preserved": true,
+  "verification": "Docs/owner receipt only; unchanged native source/build/workload receipts reused without rerunning tests."
+}

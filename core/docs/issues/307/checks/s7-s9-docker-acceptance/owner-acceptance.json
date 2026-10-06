@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-06",
+  "owner_statement": "docker verification is enough",
+  "scope": "Existing native Docker proofs accepted for verifying the fuser0.18.0 timestamp correction. No additional QEMU/custom-kernel campaign required for that dependency fix.",
+  "base_commit": "ba9304e4960a229de908f9ff3f19edcbc6285db2",
+  "qualified_source": "b8d87019f93e897476f24bd3e7572933da18900f",
+  "evidence": "core/docs/issues/307/checks/fuser-registry-patch/proof-receipts.json",
+  "retained_failed_case": "native-minimum-fractional; known Linux endpoint normalization, raw verdict unchanged",
+  "milestone_changes": [],
+  "remaining": "S7 cost gate, S8 native product/control/Bash/coherence qualification, S9 authenticated transport/fences/full-root adapters remain incomplete",
+  "native_test_resampling": false,
+  "kernel_correction_claimed": false
+}

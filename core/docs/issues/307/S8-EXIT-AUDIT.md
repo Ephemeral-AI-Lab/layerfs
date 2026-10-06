@@ -1,7 +1,19 @@
 # S8 native filesystem and daemon audit
 
 > **Status:** Dated planning checkpoint; not release evidence or a product contract.
-> Milestone state: BLOCKED for required native timestamp capability; incomplete.
+> Milestone state: INCOMPLETE product implementation/qualification; fuser correction accepted through Docker.
+
+## Latest Docker verification acceptance
+
+The owner subsequently stated **"docker verification is enough"**. The existing
+native Docker results are sufficient verification of the fuser correction;
+additional QEMU/custom-kernel qualification is not a prerequisite for that fix.
+The fractional signed-minimum result remains a retained Linux platform limitation,
+with its actual FAIL verdict unchanged. This supersedes the earlier kernel-case
+blocking disposition for the dependency correction, not the raw evidence.
+S8 remains unchecked because native FUSE, daemon/control/Bash lifecycle and complete
+product acceptance remain unfinished. Continue independent S7/S8/S9 work through
+Docker. [Boundary and scope](LINUX-TIMESTAMP-DOCKER-20261006.md).
 
 ## Subsequent authorized dependency correction
 

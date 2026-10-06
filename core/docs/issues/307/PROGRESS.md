@@ -19,8 +19,14 @@ S9 local bound history handlers; it does not complete S7/S8/S9.
 | Milestone | Current state / owning audit |
 | --- | --- |
 | S7 | [CHECKPOINT](S7-EXIT-AUDIT.md): per-original-job SQL/payload/allocation/queue receipts, high-water and trigger accounting; full page/journal/residency/sustained-service gate remains |
-| S8 | [Incomplete native milestone](S8-EXIT-AUDIT.md): owner now authorizes the [crates.io0.18.0 timestamp patch](FUSER-REGISTRY-PATCH-20261006.md); full native timestamp/platform gate and replacement/control/ordinary Bash lifecycle remain |
+| S8 | [Incomplete native milestone](S8-EXIT-AUDIT.md): [fuser correction](FUSER-REGISTRY-PATCH-20261006.md) accepted through Docker; endpoint platform limitation retained; replacement/control/ordinary Bash lifecycle and product qualification remain |
 | S9 | [CHECKPOINT](S9-EXIT-AUDIT.md): stage/transition/discard receipts tied to authenticated binding and successful SaveFinish; logical transport/fair delivery/disconnect fences/complete import remain |
+
+Latest owner acceptance: **"docker verification is enough"**. Existing Docker
+proofs are sufficient verification of the fuser correction. The endpoint case
+remains a retained Linux platform limitation; QEMU/custom-kernel verification is
+not a prerequisite for that fix. S8 is still incomplete because its product
+implementation and qualification remain. See [the updated audit](S8-EXIT-AUDIT.md).
 
 Product checkpoint ae03d22e7 and [batch handoff](HANDOFF-S7-S9-BLOCKED.md)
 record this stopping boundary. Separate [tracker receipts](checks/s7-s9-boundary/tracker-receipts.json)
