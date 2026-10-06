@@ -1,0 +1,16 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+error[E0689]: can't call method `to_be_bytes` on ambiguous numeric type `{integer}`
+  --> crates/layerfs-persistence/tests/acquisition_batching.rs:46:56
+   |
+46 |         let roots:Vec<_>=(1..=100).map(|n|(n,object(&n.to_be_bytes()))).collect();
+   |                                         -              ^^^^^^^^^^^
+   |                                         |
+   |                                         you must specify a type for this binding, like `i32`
+
+For more information about this error, try `rustc --explain E0689`.
+error: could not compile `layerfs-persistence` (test "acquisition_batching") due to 1 previous error

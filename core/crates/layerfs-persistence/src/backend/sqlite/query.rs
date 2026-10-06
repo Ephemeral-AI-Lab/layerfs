@@ -138,79 +138,10 @@ pub(crate) fn mapped<T>(
     bytes: u64,
     capacity: usize,
     work: &RefCell<SqlWork>,
-    mut decode: impl FnMut(&rusqlite::Row<'_>) -> Result<T, BackendError>,
+    decode: impl FnMut(&rusqlite::Row<'_>) -> Result<T, BackendError>,
 ) -> Result<Vec<T>, BackendError> {
-    let start = Instant::now();
-    let commit = sql == "COMMIT";
-    let result = (|| {
-        let mut statement = {
-            let _phase = super::statement_work::phase(work, 0, commit);
-            connection.prepare_cached(sql).map_err(rows::error)?
-        };
-        let mut returned = 0_u64;
-        let result = (|| {
-            let mut cursor = {
-                let _phase = super::statement_work::phase(work, 1, commit);
-                statement.query(values).map_err(rows::error)?
-            };
-            let result = (|| {
-                let mut result = Vec::with_capacity(capacity);
-                loop {
-                    let next = {
-                        let _phase = super::statement_work::phase(work, 2, commit);
-                        cursor.next().map_err(rows::error)
-                    };
-                    let Some(row) = next? else { break };
-                    let _phase = super::statement_work::phase(work, 3, commit);
-                    result.push(decode(row)?);
-                    returned += 1;
-                }
-                Ok(result)
-            })();
-            {
-                let _phase = super::statement_work::phase(work, 4, commit);
-                drop(cursor);
-            }
-            result
-        })();
-        let counters = {
-            let _phase = super::statement_work::phase(work, 5, commit);
-            [
-                StatementStatus::VmStep,
-                StatementStatus::FullscanStep,
-                StatementStatus::Sort,
-                StatementStatus::AutoIndex,
-                StatementStatus::RePrepare,
-            ]
-            .map(|kind| {
-                let count = statement.get_status(kind).max(0) as u64;
-                statement.reset_status(kind);
-                count
-            })
-        };
-        {
-            let mut w = work.borrow_mut();
-            w.statements += 1;
-            w.vm_steps += counters[0];
-            w.fullscan_steps += counters[1];
-            w.sorts += counters[2];
-            w.autoindex_rows += counters[3];
-            w.reprepares += counters[4];
-            w.returned_rows += returned;
-            w.bound_bytes += bytes;
-        }
-        {
-            let _phase = super::statement_work::phase(work, 6, commit);
-            drop(statement);
-        }
-        result
-    })();
-    let elapsed = start.elapsed().as_nanos() as u64;
-    work.borrow_mut().statement_ns += elapsed;
-    if sql == "COMMIT" {
-        work.borrow_mut().commit_ns += elapsed;
-    }
-    result
+    super::prepared::Prepared::new(connection, sql, work, None)?
+        .mapped(values, bytes, capacity, decode)
 }
 
 pub(crate) fn batch(

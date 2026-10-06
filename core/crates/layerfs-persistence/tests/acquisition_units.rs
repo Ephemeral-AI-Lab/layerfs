@@ -605,8 +605,20 @@ fn every_statement_is_an_indexed_search_and_window_work_ignores_population() {
     let port = &handles.acquisition;
     for (name, plan) in handles.explain_acquisition().unwrap() {
         println!("ACQUISITION_PLAN {name}: {plan:?}");
+        let root_window = matches!(name, "complete_file" | "set_directory_root");
+        if root_window {
+            assert!(
+                plan.iter().any(|line| line.starts_with("SEARCH target ")),
+                "{name} must search its indexed target: {plan:?}"
+            );
+        }
         for line in &plan {
-            assert!(!line.starts_with("SCAN"), "{name} scans: {line}");
+            let constant_input =
+                root_window && matches!(line.as_str(), "SCAN 32 CONSTANT ROWS" | "SCAN roots");
+            assert!(
+                !line.starts_with("SCAN") || constant_input,
+                "{name} scans stored state: {line}"
+            );
             assert!(!line.contains("TEMP B-TREE"), "{name} sorts: {line}");
             assert!(
                 !line.contains("AUTOMATIC"),

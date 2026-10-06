@@ -1,0 +1,19 @@
+{
+  "scope": "Prospective count attribution diagnostic through public Project Init, one fresh Store per profile; not a performance-arm rerun or admission proof",
+  "product_head": "7362f05a689aa361ee715c389b51ca5c600bc135",
+  "source": "benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9/payload",
+  "manifest_sha256": "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c",
+  "selected_order": [
+    "before-durable",
+    "before-disposable"
+  ],
+  "cache": "uncontrolled; elapsed observations diagnostic only",
+  "run_cap_s": 15,
+  "build_cap_s": 60,
+  "verification": "SKIPPED; actual source correctness unchanged, retained A3 proofs and earlier candidate result; new optimization needs final owning proof",
+  "workers_env": 1,
+  "init_constructors": 4,
+  "diagnostic_source_sha256": "14ea131dda48ea2126826125f68858884a63870c623e20d60d33a18ce6688c8d",
+  "binary_sha256": "0a5466b927d268404f6985bf87dfe6df2e15649592c56d1a91c0fadbb4131deb",
+  "product_changes": "none yet; new external diagnostic example only"
+}

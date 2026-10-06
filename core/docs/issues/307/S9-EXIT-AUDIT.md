@@ -399,3 +399,10 @@ A3’s provider-backed public Project Init has now run one measured arm per sele
 Exact identities, commands, raw receipts, gates and next-work custody are in the
 [immutable component report](NAMESPACE-INIT-ACQUISITION-RESULTS-20261006.md).
 The S5/S6 stopping-boundary record remains unchanged.
+
+
+## Acquisition window execution checkpoint (2026-10-06)
+
+The acquisition provider’s execution overhead is corrected without changing Project’s algorithm, public ports, schema4–6, SQLite ownership, window maxima or transaction/persistence contracts. Real Store tests cover aliases, first invalid/missing/duplicate root refusal and full-unit rollback; host provider/Project/Storage/SDK checks and host/Linux Clippy pass. Changed-source speed qualification is prospectively selected with unchanged reference evidence reuse. S9 remains CHECKPOINT/unchecked; R1–R4/E1–E4/Q1/C1 and later Commit prerequisites remain open.
+
+[Source, diagnostics, checks and retained failures](checks/init-acquisition-fix-20261006/identity.json).

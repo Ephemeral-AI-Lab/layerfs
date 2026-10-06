@@ -1,0 +1,11 @@
+{"unit":"complete_init","calls":1,"statements":2469,"vm_steps":596469,"returned_rows":11027,"fullscan_steps":1023,"sorts":1,"reprepares":3,"write_commits":25,"statement_ns":127238138,"commit_ns":88951127,"unit_ns":0}
+{"unit":"begin","calls":1,"statements":4,"vm_steps":157,"returned_rows":2,"fullscan_steps":0,"sorts":0,"reprepares":1,"write_commits":1,"statement_ns":2927581,"commit_ns":2755666,"unit_ns":2958167}
+{"unit":"complete_files","calls":1,"statements":36,"vm_steps":65105,"returned_rows":1002,"fullscan_steps":992,"sorts":0,"reprepares":0,"write_commits":1,"statement_ns":3891462,"commit_ns":1231499,"unit_ns":3947125}
+{"unit":"directories","calls":3,"statements":12,"vm_steps":242,"returned_rows":14,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":120666,"commit_ns":10290,"unit_ns":131084}
+{"unit":"discard","calls":1,"statements":7,"vm_steps":117946,"returned_rows":2014,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":1,"statement_ns":4378794,"commit_ns":1091460,"unit_ns":4417500}
+{"unit":"entries","calls":6,"statements":24,"vm_steps":27130,"returned_rows":2028,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":933001,"commit_ns":14501,"unit_ns":1145083}
+{"unit":"file_roots","calls":3,"statements":12,"vm_steps":7128,"returned_rows":1003,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":481127,"commit_ns":6543,"unit_ns":578542}
+{"unit":"jobs","calls":18,"statements":72,"vm_steps":9758,"returned_rows":1018,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":1076172,"commit_ns":69959,"unit_ns":1307625}
+{"unit":"put_entries","calls":3,"statements":2023,"vm_steps":165261,"returned_rows":1006,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":3,"statement_ns":17647036,"commit_ns":6529208,"unit_ns":17801584}
+{"unit":"release","calls":1,"statements":5,"vm_steps":97,"returned_rows":3,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":1,"statement_ns":871583,"commit_ns":763500,"unit_ns":878583}
+{"unit":"set_directory_roots","calls":1,"statements":5,"vm_steps":1217,"returned_rows":13,"fullscan_steps":31,"sorts":0,"reprepares":0,"write_commits":1,"statement_ns":1052666,"commit_ns":843958,"unit_ns":1061000}

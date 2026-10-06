@@ -106,6 +106,15 @@ impl Transaction<'_> {
         }
         r
     }
+    /// Leases one statement for repeated executions inside this transaction.
+    pub(crate) fn prepare(&self, sql: &str) -> Result<super::prepared::Prepared<'_>, BackendError> {
+        let result =
+            super::prepared::Prepared::new(self.connection, sql, self.work, Some(&self.uncertain));
+        if result.as_ref().err() == Some(&BackendError::Unknown) {
+            self.uncertain.set(true);
+        }
+        result
+    }
     pub(crate) fn mapped<T>(
         &self,
         sql: &str,

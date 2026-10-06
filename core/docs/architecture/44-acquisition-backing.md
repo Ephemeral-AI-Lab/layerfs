@@ -1,7 +1,7 @@
 # Provider-owned acquisition backing
 
-> **Status:** Current general guide. S9/A3 checkpoint; S9 remains open, and no
-> speed, RSS, page or cold-cache claim is made.
+> **Status:** Current general guide. S9 acquisition checkpoint; S9 remains open.
+> Component measurements and their limits are linked below.
 
 The global Store can hold the working state of an initial root acquisition in
 three operation-scoped tables, reached through one backend-neutral port. This
@@ -113,8 +113,11 @@ through name windows, charges equal to the engine's own sums, budgeted cleanup
 to zero, owner fencing and abandoned operations. The tree case runs under both
 the Durable and the Disposable profile; the others under Disposable only.
 `Handles::explain_acquisition` returns the product build's plan of every shipped
-statement: all 25 are primary-key or index searches with no scan, temporary
-B-tree or automatic index. The two removal statements build a subquery list and
+statement. The original 25-statement point/window plans and the revised root
+window plans are retained at their own source identities. Stored-state reads
+and updates use the operation-prefixed primary keys or directory index. Root
+updates additionally materialize and scan a fixed 32-row SQL input; that is
+bounded statement scratch, not a scan of the stored population. The two removal statements build a subquery list and
 Bloom filter bounded by their row budget. The same 512-row read window cost 4
 statements and 9267 VM steps, and the same 512-row removal job 6 statements and
 33434 VM steps, with 2000 and with 20000 stored entries; full-scan steps, sorts
@@ -135,10 +138,56 @@ executed about 3160 more statements and 391 000 more VM steps than the
 run-backed import did on the same source. Receipts are under
 [A3 checks](../issues/307/checks/s9-acquisition-port/identity.json).
 
-Not established: time, page writes, file growth, journal or synchronization
-cost under either profile; row growth when positions and roots are filled
+The [first component measurement](../issues/307/NAMESPACE-INIT-ACQUISITION-RESULTS-20261006.md)
+records four 100/1000-file pairs at source45e2b09e8, before the execution changes
+below. All functional/cold-content/cleanup checks pass; three relative-speed
+gates fail. Those receipts remain unchanged and do not qualify the revised source.
+
+Not established: revised-source performance, physical page writes, peak file/journal
+growth or synchronization-call cost under either profile; row growth when positions and roots are filled
 after insertion; behaviour at capacity or under an uncertain engine outcome
 (neither was induced); and the frozen window values, which remain the
 proposed ones. The unit multiplicity above is one small shape, not a
 qualification workload. The Store is macOS-only, so these tests execute no body
 on Linux.
+
+
+## Window execution correction (2026-10-06)
+
+Public port methods, table/version selection, ownership, window maxima and
+transaction boundaries are unchanged. `put_entries` and `place_children` lease
+their two cached statements once per unit and keep their original ordered
+per-row executions. Native aliases, evidence mismatch and first-failure order
+therefore retain the same semantics. No statement/transaction is retained across
+construction, caller I/O or a later unit.
+
+`complete_files` and `set_directory_roots` now feed fixed 32-slot `VALUES` inputs
+into indexed `UPDATE ... FROM` statements. NULL positions pad unused slots.
+The file target is searched by `(operation_id,canonical_position)`; the directory
+target by its partial `(operation_id,position)` index with `kind=2`. No schema,
+index, database, per-operation TEMP table or extra writer is introduced. The
+existing 4096-row/1-MiB public write window is processed completely through as
+many bounded SQL inputs as it needs; 32 is an internal execution window, not a
+new total-operation limit.
+
+RETURNING order is unspecified, so the consumer sorts the at-most32 returned
+positions and checks every requested position. A repeated position ends the
+current distinct input; its next execution then sees the filled row and refuses
+as before. An earlier missing row wins over a later duplicate. Any refusal rolls
+back the entire existing unit, including previous SQL inputs; uncertain execution
+sets the same quarantine fence. Logical root charges are applied only after all
+inputs succeed. Inputs and returned-identity checks are O(32) resident and
+O(32 log32) work per SQL input; target updates are O(K logN) for K supplied roots
+and N operation-scoped stored rows, plus bounded input/engine scratch. Over a
+complete acquisition the existing O(E+U) removals and backing ownership still apply.
+No N-sized scan or N-by-K join is used.
+
+The shared `prepared.rs` executor records statement/VM/row/error counters on
+every execution and prepare/drop phases on actual lease acquisition/release.
+COMMIT remains a subset of statement/transaction wall; component times overlap
+and are never additive. Fixed-input fullscan steps are reported rather than
+hidden: the32-root profile is5 statements/2176 VM steps/31 constant-input scan
+steps, with0 sorts/automatic-index rows/reprepares at both2000 and20000 native rows.
+The source-qualified plans, public atomicity/alias proofs and before/after unit
+diagnostics are retained under [execution-fix checks](../issues/307/checks/init-acquisition-fix-20261006/).
+Speed/storage acceptance requires the separately registered revised-source sample.

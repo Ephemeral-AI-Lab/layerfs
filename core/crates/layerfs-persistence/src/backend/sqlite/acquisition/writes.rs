@@ -1,9 +1,10 @@
 //! Bounded write units: begin, append, place, record roots and advance.
-use super::accounting::{charge, entry_bytes, native_bytes, NATIVE_BYTES, ROOT_BYTES};
+use super::accounting::{charge, entry_bytes, native_bytes, NATIVE_BYTES};
 use super::statements::{
     signed, unsigned, Failure, ADVANCE, BEGIN, BIND_NATIVE, CLAIM_EPOCH, COMPLETE_FILE,
     PLACE_ENTRY, PUT_ENTRY, SET_DIRECTORY_ROOT,
 };
+use crate::backend::sqlite::prepared::Prepared;
 use crate::backend::{records::BackendError, Transaction};
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_storage::port::acquisition::{Begin, NativeIdentity, NewEntry, Owner, Phase, Placed};
@@ -50,7 +51,7 @@ pub(crate) fn begin(tx: &Transaction<'_>, epoch: u64, facts: &Begin) -> Result<O
 /// Binds one positioned path to its native identity and returns the canonical
 /// position with whether this path created the identity's row.
 fn bind(
-    tx: &Transaction<'_>,
+    statement: &mut Prepared<'_>,
     operation: i64,
     position: u64,
     native: &NativeIdentity,
@@ -58,8 +59,7 @@ fn bind(
 ) -> Result<(i64, bool), Failure> {
     let own = signed(position)?;
     let (device, inode) = (native.device.to_be_bytes(), native.inode.to_be_bytes());
-    let bound = tx.borrowed(
-        BIND_NATIVE,
+    let bound = statement.borrowed(
         &[
             &operation,
             &own,
@@ -87,6 +87,8 @@ pub(crate) fn put_entries(
     let operation = signed(owner.operation)?;
     let (mut rows, mut bytes) = (0_i64, 0_i64);
     let mut canonical = Vec::new();
+    let mut native_statement = tx.prepare(BIND_NATIVE)?;
+    let mut entry_statement = tx.prepare(PUT_ENTRY)?;
     for entry in entries {
         let parent = match entry.key.parent {
             Some(parent) => signed(parent)?,
@@ -107,7 +109,7 @@ pub(crate) fn put_entries(
         }
         let mut first = None;
         if let (Some(own), Some(native), Some(path)) = (entry.position, &entry.native, path) {
-            let (bound, created) = bind(tx, operation, own, native, path)?;
+            let (bound, created) = bind(&mut native_statement, operation, own, native, path)?;
             first = Some(bound);
             canonical.push(unsigned(bound)?);
             if created {
@@ -119,8 +121,7 @@ pub(crate) fn put_entries(
         let stored_path = path.filter(|_| entry.kind == InodeKind::Directory);
         let unplaced = entry.native.filter(|_| entry.position.is_none());
         let unplaced = unplaced.map(packed);
-        tx.borrowed(
-            PUT_ENTRY,
+        entry_statement.borrowed(
             &[
                 &operation,
                 &parent,
@@ -164,11 +165,19 @@ pub(crate) fn place_children(
     let (operation, parent) = (signed(owner.operation)?, signed(parent)?);
     let (mut rows, mut bytes) = (0_i64, 0_i64);
     let mut canonical = Vec::new();
+    let mut native_statement = tx.prepare(BIND_NATIVE)?;
+    let mut placed_statement = tx.prepare(PLACE_ENTRY)?;
     for child in placed {
         let position = signed(child.position)?;
         let mut first = None;
         if let Some((native, path)) = &child.native {
-            let (bound, created) = bind(tx, operation, child.position, native, path)?;
+            let (bound, created) = bind(
+                &mut native_statement,
+                operation,
+                child.position,
+                native,
+                path,
+            )?;
             first = Some(bound);
             canonical.push(unsigned(bound)?);
             if created {
@@ -177,8 +186,7 @@ pub(crate) fn place_children(
             }
             bytes -= NATIVE_BYTES;
         }
-        let updated = tx.borrowed(
-            PLACE_ENTRY,
+        let updated = placed_statement.borrowed(
             &[
                 &operation,
                 &parent,
@@ -202,34 +210,12 @@ pub(crate) fn place_children(
     Ok(canonical)
 }
 
-/// Records each `(position, root)` through `statement`, exactly once per row.
-fn record_roots(
-    tx: &Transaction<'_>,
-    owner: Owner,
-    statement: &str,
-    roots: &[(u64, ObjectId)],
-) -> Result<(), Failure> {
-    let operation = signed(owner.operation)?;
-    for (position, root) in roots {
-        let recorded = tx.borrowed(
-            statement,
-            &[&operation, &signed(*position)?, &root.as_bytes().as_slice()],
-            48,
-        )?;
-        if recorded.is_empty() {
-            return Err(Failure::Changed(*position));
-        }
-    }
-    charge(tx, owner, 0, roots.len() as i64 * ROOT_BYTES)?;
-    Ok(())
-}
-
 pub(crate) fn complete_files(
     tx: &Transaction<'_>,
     owner: Owner,
     roots: &[(u64, ObjectId)],
 ) -> Result<(), Failure> {
-    record_roots(tx, owner, COMPLETE_FILE, roots)
+    super::root_windows::record(tx, owner, COMPLETE_FILE, roots)
 }
 
 pub(crate) fn set_directory_roots(
@@ -237,7 +223,7 @@ pub(crate) fn set_directory_roots(
     owner: Owner,
     roots: &[(u64, ObjectId)],
 ) -> Result<(), Failure> {
-    record_roots(tx, owner, SET_DIRECTORY_ROOT, roots)
+    super::root_windows::record(tx, owner, SET_DIRECTORY_ROOT, roots)
 }
 
 pub(crate) fn advance(tx: &Transaction<'_>, owner: Owner, phase: Phase) -> Result<(), Failure> {

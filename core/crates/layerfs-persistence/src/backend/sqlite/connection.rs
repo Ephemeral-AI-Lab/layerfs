@@ -75,7 +75,9 @@ pub struct SqlWork {
     pub returned_rows: u64,
     /// Input binding bytes; integer scalars count eight.
     pub bound_bytes: u64,
-    /// Inclusive statement execution wall.
+    /// Accumulated prepare, execution/counter and lease-return wall. Shared
+    /// leases pay prepare/return once per window; transaction and operation
+    /// clocks retain surrounding work.
     pub statement_ns: u64,
     /// Prepare/cache checkout, bind/query creation, next (step plus DONE reset),
     /// row mapping, explicit cursor drop, status counters, cached statement drop.

@@ -1,6 +1,7 @@
 # Backed initial root acquisition
 
-> **Status:** Current general guide. S9 checkpoint (plan package A3); S9 remains open and no speed, RSS, page, synchronization or cold-cache claim is made.
+> **Status:** Current general guide. S9 acquisition checkpoint; S9 remains open.
+> Component measurements have their own pinned identities and limits.
 
 Project/import retains no scan, job, frontier, child, inode, serial or
 directory-update collection proportional to the acquired root. Every input-sized
@@ -129,9 +130,13 @@ counters. `NamespaceWork` reports row, unit and window counts and the provider's
 exact logical charges removed by cleanup. It is count-driven diagnostics, not a
 whole-importer memory bound, and the charges are not pages, file growth or RSS.
 
-The backing is the measured Store. Under a Durable Store every write unit is a
+The backing is the selected Store. Under a Durable Store every write unit is a
 synchronized commit and every row is journaled; that cost did not exist with
-unsynchronized scratch files and is not yet measured.
+unsynchronized scratch files. The [first component measurement](../issues/307/NAMESPACE-INIT-ACQUISITION-RESULTS-20261006.md)
+records complete Init and inclusive COMMIT observations, with no physical page/
+synchronization-call attribution. The [window execution correction](44-acquisition-backing.md#window-execution-correction-2026-10-06)
+changes provider execution only; Project's flow, constructors and public port
+contract stay unchanged.
 
 ## Evidence and limits
 
@@ -152,8 +157,9 @@ Receipts, retained failures and source identity are under
 [A3 checks](../issues/307/checks/s9-acquisition-port/identity.json). Earlier
 run-backed receipts remain under their own directories as superseded evidence.
 
-Init time, storage effect, pages, journal and synchronization cost are NOT_RUN.
-The Init vehicle has new prospective identities in the SQLite comparison family;
-none has been sampled. Greater-than-4 GiB native proof remains NOT_RUN. Capacity
+The first100/1000 component Init speed/storage selection at45e2b09e8 is retained
+with three speed failures and all larger tiers NOT_RUN. Revised-source acceptance
+is separate. Physical pages, peak journal, synchronization-call cost and phase
+residency remain unqualified. Greater-than-4 GiB native proof remains NOT_RUN. Capacity
 failure and a real quarantined Session are not exercised through Init. Application
 or daemon assembly, context, restart custody and S9 qualification remain open.

@@ -5,5 +5,6 @@
 pub(crate) mod accounting;
 pub(crate) mod cleanup;
 pub(crate) mod reads;
+mod root_windows;
 pub(crate) mod statements;
 pub(crate) mod writes;

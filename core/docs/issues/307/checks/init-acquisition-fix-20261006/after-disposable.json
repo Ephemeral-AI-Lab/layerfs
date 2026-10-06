@@ -1,0 +1,17 @@
+{
+  "scope": "DIAGNOSTIC_ONLY; uncontrolled cache; no speed gate",
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-runtime-tests/release/examples/acquisition_profile",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9/payload",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/after-disposable/store.sqlite",
+    "disposable"
+  ],
+  "timeout_s": 15,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 188394125,
+  "head": "7362f05a689aa361ee715c389b51ca5c600bc135",
+  "diagnostic_sha256": "9447b73aaf5c3f5d5466907311f897503a42f69b9c743bd0e2668bd033e948aa",
+  "binary_sha256": "6dc4dc0aa8f7fe9f9f115297b1bbddc50335c3f60e5dda7606d4c698f73b3c5d",
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe"
+}

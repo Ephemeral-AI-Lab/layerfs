@@ -210,3 +210,10 @@ The owner-directed acquisition-v2 first selection now has complete component Ini
 Exact identities, commands, raw receipts, gates and next-work custody are in the
 [immutable component report](NAMESPACE-INIT-ACQUISITION-RESULTS-20261006.md).
 The S5/S6 stopping-boundary record remains unchanged.
+
+
+## Acquisition window execution checkpoint (2026-10-06)
+
+Provider entry/place windows now lease their ordered statements once, and root completion uses fixed32-row indexed UPDATE FROM inputs. The count diagnostic attributes acquisition3178→2200 statements for1000 files, with390830→394041 VM steps and1023 added constant-input scan steps; eight acquisition write commits remain unchanged. Paired plans/population profiles, exact first-failure atomicity and broader provider proofs are recorded. This is component cost attribution only: complete daemon reservation/page/copy/queue/residency/debt and sustained acceptance remain E2–E4 gaps. S7 remains CHECKPOINT/unchecked.
+
+[Source, diagnostics, checks and retained failures](checks/init-acquisition-fix-20261006/identity.json).

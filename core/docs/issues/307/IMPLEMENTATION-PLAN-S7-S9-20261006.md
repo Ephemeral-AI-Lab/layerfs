@@ -771,3 +771,10 @@ The owner directed a prospective budget lift for the fresh namespace benchmark. 
 Exact identities, commands, raw receipts, gates and next-work custody are in the
 [immutable component report](NAMESPACE-INIT-ACQUISITION-RESULTS-20261006.md).
 The S5/S6 stopping-boundary record remains unchanged.
+
+
+## Acquisition window execution checkpoint (2026-10-06)
+
+Owner-directed performance correction after A3: retain statement leases within entry/place units and batch file/directory roots through fixed32-row SQL inputs. Keep three acquisition tables, opt-in schema versions, public ports, row/byte windows and transaction profiles unchanged. Count/profile/atomicity evidence is captured in the execution-fix checks; changed-source candidate qualification is registered in docs/roadmap/0.1/0.1.7/namespace-init-acquisition-window-fix-20261006.md, reusing qualifying unchanged reference rows. No new R1–R4 implementation or S7/S9 completion is claimed.
+
+[Source, diagnostics, checks and retained failures](checks/init-acquisition-fix-20261006/identity.json).

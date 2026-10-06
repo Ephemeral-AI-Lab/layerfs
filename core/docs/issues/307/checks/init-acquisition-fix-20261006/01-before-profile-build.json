@@ -1,0 +1,21 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "--release",
+    "--target-dir",
+    "core/target/cluster2-runtime-tests",
+    "-p",
+    "layerfs-project",
+    "--example",
+    "acquisition_profile"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1102635042
+}
