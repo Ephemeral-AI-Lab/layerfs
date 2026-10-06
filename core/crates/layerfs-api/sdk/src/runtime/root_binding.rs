@@ -1,5 +1,5 @@
 //! Authorized demand validation of a bound root's actual directory inode.
-use super::{Authorization, RuntimeError, RuntimeResult};
+use super::{authorized_objects::AuthorizedObjects, Authorization, Binding, RuntimeResult};
 use layerfs_content::filesystem::{
     attributes::{read_portable, AttributeReadWork},
     directory::decode_directory_page,
@@ -9,44 +9,6 @@ use layerfs_content::filesystem::{
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
 use layerfs_history::{BranchSnapshot, WorkspaceId};
 use layerfs_storage::Reader;
-use std::cell::RefCell;
-
-/// Every demanded descendant is authorized before its provider read. The first
-/// exact adapter failure survives Content's narrower provider error boundary.
-struct RootReader<'a, 's> {
-    reader: Reader<'s>,
-    authority: &'a dyn Authorization,
-    peer: [u8; 32],
-    workspace: WorkspaceId,
-    snapshot: &'a BranchSnapshot,
-    failure: RefCell<Option<RuntimeError>>,
-}
-impl AuthenticatedObjects for RootReader<'_, '_> {
-    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
-        if self.failure.borrow().is_some() {
-            return Err(ContentError::ProviderFailure {
-                what: "root binding demand already failed",
-            });
-        }
-        let result = self
-            .authority
-            .workspace(self.peer, self.workspace, self.snapshot.branch.id)
-            .and_then(|()| {
-                self.authority
-                    .objects(self.peer, self.workspace, self.snapshot.branch.id, ids)
-            })
-            .and_then(|()| self.reader.read_objects(ids).map_err(Into::into));
-        match result {
-            Ok(values) => Ok(values),
-            Err(error) => {
-                *self.failure.borrow_mut() = Some(error);
-                Err(ContentError::ProviderFailure {
-                    what: "authorized root binding demand",
-                })
-            }
-        }
-    }
-}
 
 pub(super) fn validate(
     reader: Reader<'_>,
@@ -55,29 +17,53 @@ pub(super) fn validate(
     workspace: WorkspaceId,
     snapshot: &BranchSnapshot,
 ) -> RuntimeResult<FilesystemRoot> {
-    let reader = RootReader {
-        reader,
-        authority,
-        peer,
-        workspace,
-        snapshot,
-        failure: RefCell::new(None),
-    };
-    let result = validate_root(&reader);
-    if let Some(error) = reader.failure.into_inner() {
-        return Err(error);
-    }
-    result.map_err(Into::into)
+    let provider = AuthorizedObjects::new(authority, peer, workspace, snapshot.branch.id, |ids| {
+        reader.read_objects(ids)
+    });
+    let result = validate_root(&provider, snapshot.effective_root, snapshot, None);
+    provider.runtime(result)
 }
 
-fn validate_root(reader: &RootReader<'_, '_>) -> ContentResult<FilesystemRoot> {
-    let root = FilesystemRoot::decode(&reader.read_canonical(reader.snapshot.effective_root)?)?;
-    if root.scope().object() != reader.snapshot.scope || root.profile() != reader.snapshot.profile {
+pub(super) fn validate_candidate(
+    reader: Reader<'_>,
+    authority: &dyn Authorization,
+    binding: &Binding,
+    candidate: ObjectId,
+) -> RuntimeResult<FilesystemRoot> {
+    let provider = AuthorizedObjects::new(
+        authority,
+        binding.peer,
+        binding.workspace,
+        binding.snapshot.branch.id,
+        |ids| reader.read_objects(ids),
+    );
+    let result = validate_root(
+        &provider,
+        candidate,
+        &binding.snapshot,
+        Some(binding.root_serial),
+    );
+    provider.runtime(result)
+}
+
+fn validate_root(
+    reader: &dyn AuthenticatedObjects,
+    candidate: ObjectId,
+    snapshot: &BranchSnapshot,
+    expected_serial: Option<u64>,
+) -> ContentResult<FilesystemRoot> {
+    let root = FilesystemRoot::decode(&reader.read_canonical(candidate)?)?;
+    if root.scope().object() != snapshot.scope || root.profile() != snapshot.profile {
         return Err(ContentError::ScopeMismatch {
             what: "Branch root scope/profile",
         });
     }
     let serial = root.root_inode().serial();
+    if expected_serial.is_some_and(|expected| serial != expected) {
+        return Err(ContentError::ScopeMismatch {
+            what: "candidate root serial",
+        });
+    }
     let value = lookup(
         reader,
         InodeTable {

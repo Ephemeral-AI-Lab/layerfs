@@ -1,0 +1,16 @@
+...................E....................
+======================================================================
+ERROR: test_oracle_command_must_invoke_its_sealed_binary (test_cluster_two_registration.Registration.test_oracle_command_must_invoke_its_sealed_binary)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_cluster_two_registration.py", line 338, in test_oracle_command_must_invoke_its_sealed_binary
+    _oracle(binding, case, self.root)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/shared/evidence_registration.py", line 163, in _oracle
+    raise ValueError("oracle command does not use sealed binary")
+ValueError: oracle command does not use sealed binary
+
+----------------------------------------------------------------------
+Ran 40 tests in 0.264s
+
+FAILED (errors=1)

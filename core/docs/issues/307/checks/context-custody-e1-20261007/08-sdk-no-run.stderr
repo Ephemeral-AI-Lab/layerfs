@@ -1,0 +1,32 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+error[E0061]: this function takes 2 arguments but 0 arguments were supplied
+   --> crates/layerfs-api/sdk/tests/custody.rs:291:22
+    |
+291 |         let timing = Timing::disabled();
+    |                      ^^^^^^^^^^^^^^^^-- two arguments are missing
+    |
+note: associated function defined here
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry/src/timer/scope.rs:206:12
+    |
+206 |     pub fn disabled<T, E, F>(
+    |            ^^^^^^^^
+help: provide the arguments
+    |
+291 |         let timing = Timing::disabled(/* name */, /* operation */);
+    |                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error[E0599]: no method named `scope` found for tuple `(Result<_, _>, TimingReport)` in the current scope
+   --> crates/layerfs-api/sdk/tests/custody.rs:318:28
+    |
+318 |                     timing.scope(),
+    |                            ^^^^^ method not found in `(Result<_, _>, TimingReport)`
+
+Some errors have detailed explanations: E0061, E0599.
+For more information about an error, try `rustc --explain E0061`.
+error: could not compile `layerfs-sdk` (test "custody") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

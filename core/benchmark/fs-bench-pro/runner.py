@@ -29,6 +29,7 @@ from families import workspace_commit_native as native  # noqa: E402
 from families import workspace_namespace as namespace  # noqa: E402
 from families import workspace_mutations as mutations  # noqa: E402
 from families import workspace_shell_package as package  # noqa: E402
+from families import cluster_two_evidence as cluster_two  # noqa: E402
 
 CONTRACT_COMMIT = "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2"
 BUILD_PROFILE = "release"
@@ -381,6 +382,13 @@ def main():
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("list")
+    register_parser = commands.add_parser("register", help="read-only prospective registration admission; no build/sample")
+    register_parser.add_argument("--family", choices=["cluster-two-evidence"], required=True)
+    register_source = register_parser.add_mutually_exclusive_group(required=True)
+    register_source.add_argument("--manifest")
+    register_source.add_argument("--template", action="store_true")
+    register_parser.add_argument("--case", action="append")
+    register_parser.add_argument("--observations", help="re-derive gates from retained observations; never execute")
     run_parser = commands.add_parser("run")
     selector = run_parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--case")
@@ -400,10 +408,28 @@ def main():
     for name in ("verify", "report"):
         commands.add_parser(name).add_argument("--run", required=True)
     args = parser.parse_args()
+    if args.command == "register":
+        if args.template:
+            if args.observations:
+                parser.error("template creation does not evaluate observations")
+            print(json.dumps(cluster_two.template(args.case), sort_keys=True, indent=2))
+            return
+        if args.case:
+            parser.error("selected order belongs in the sealed registration manifest")
+        frozen = json.loads(Path(args.manifest).read_text())
+        result = (cluster_two.retained_gates(frozen, json.loads(Path(args.observations).read_text()), ROOT)
+                  if args.observations else cluster_two.admission(frozen, ROOT))
+        print(json.dumps(result, sort_keys=True, indent=2))
+        checked_status = result["retained_numeric_status"] if args.observations else result["status"]
+        if checked_status != "PASS":
+            raise SystemExit(2)
+        return
     if args.command=="reprove-reference":
         from diagnostics.reprove_reference import reprove
         print(reprove(args.run,args.case,args.out));return
     if args.command == "list":
+        for case_id, route, budget in cluster_two.list_rows():
+            print(f"{case_id}\tE1 registration-only; NOT_RUN; route {route}; complete budget {budget if budget is not None else 'INCOMPLETE'} ns")
         for case in sqlite_phase7.CASES.values():
             print(f"{case.id}\tSQLite-only; candidate<=1.10*matched Phase4.5; prospective contract/proof pending")
         for case in causes.CASES:

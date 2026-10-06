@@ -48,6 +48,9 @@ impl Authorization for Authority {
 }
 impl Fixture {
     pub fn new(payload_bytes: usize) -> Self {
+        Self::new_with_incarnation(payload_bytes, [7; 32])
+    }
+    pub fn new_with_incarnation(payload_bytes: usize, incarnation: [u8; 32]) -> Self {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../../target/runtime-supervisor-tests")
@@ -168,7 +171,7 @@ impl Fixture {
         let runtime = Runtime::new(
             handles,
             Config {
-                incarnation: [7; 32],
+                incarnation,
                 save_slots: 4,
             },
             Box::new(Authority(denied.clone())),

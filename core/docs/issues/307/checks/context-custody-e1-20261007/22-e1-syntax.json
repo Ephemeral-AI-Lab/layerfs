@@ -1,0 +1,14 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "-c",
+    "from pathlib import Path; files = [Path(\"core/benchmark/fs-bench-pro/runner.py\"), Path(\"core/benchmark/fs-bench-pro/families/cluster_two_evidence.py\"), *Path(\"core/benchmark/fs-bench-pro/shared\").glob(\"evidence_*.py\"), Path(\"core/benchmark/fs-bench-pro/tests/test_cluster_two_registration.py\")]; [compile(path.read_text(), str(path), \"exec\") for path in files]; print(\"PASS:\", len(files), \"Python files\")"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 91612666,
+  "kind": "Python syntax compile of exact registration source; no execution or bytecode artifact",
+  "workers": 1
+}

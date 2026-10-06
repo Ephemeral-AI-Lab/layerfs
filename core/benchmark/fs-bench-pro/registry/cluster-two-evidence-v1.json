@@ -1,0 +1,5235 @@
+{
+  "case_order": [
+    "E01-startup",
+    "E02-bind-1",
+    "E03-bind-64",
+    "E04-write-16m",
+    "E05-write-1g",
+    "E06-read-mixed",
+    "E07-reclaim",
+    "R01-connect",
+    "R02-objects-1",
+    "R03-objects-1000",
+    "R04-cache-trace",
+    "R05-length-batch",
+    "R06-length-consumer",
+    "R07-serial-consumer",
+    "R08-save-waves",
+    "R09-shared-call",
+    "R10-separate-calls",
+    "R11-history",
+    "Q01-mixed-load",
+    "Q02-root-1000",
+    "Q03-root-10000",
+    "Q04-root-100000",
+    "Q05-root-1000000",
+    "Q06-native-file-5g",
+    "P01-slow-peer",
+    "P02-disconnect",
+    "P03-local-full"
+  ],
+  "cases": [
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "returned ready Owner or original startup error",
+        "operation_start": "first create_observed/start_observed call",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-reservation-accounted",
+          "metric": "reported_daemon_reservation_bytes",
+          "operator": "eq",
+          "value": 268435456
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-cleanup-headroom",
+          "metric": "reported_cleanup_headroom_bytes",
+          "operator": "eq",
+          "value": 134217728
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "engine",
+      "id": "E01-startup",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [
+        "host_resident_bytes"
+      ],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "linux-residency",
+        "physical-io"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "old_root",
+          "expected_bytes",
+          "namespace_isolation"
+        ]
+      },
+      "original_attempt_count": 1,
+      "profiles": [
+        "overlay-memory-off"
+      ],
+      "proposal_id": "E01-startup",
+      "resident_domains": [
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "E01-startup"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "Overlay::create_observed -> Owner::start_observed",
+        "id": "cluster-two-E01-startup-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-daemon/src/overlay/owner.rs",
+            "sha256": "7e990870b4c8aa2825c147cf19f40df373bec0afd90cfa0c3ba51ff9e71e426c"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "fresh",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "databases": 1,
+        "owners": 1
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "usable BaseView, original Open completion and bound Workspace",
+        "operation_start": "BaseView::open call",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-reservation-accounted",
+          "metric": "reported_daemon_reservation_bytes",
+          "operator": "eq",
+          "value": 268435456
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-cleanup-headroom",
+          "metric": "reported_cleanup_headroom_bytes",
+          "operator": "eq",
+          "value": 134217728
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G01-new-databases",
+          "metric": "new_overlay_databases",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G01-schemas",
+          "metric": "schema_initializations",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G01-root-scans",
+          "metric": "whole_root_scans",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G01-materialization",
+          "metric": "materialized_root_bytes",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G01-restoration",
+          "metric": "dependency_restorations",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "bind-count",
+          "metric": "completed_bindings",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "engine",
+      "id": "E02-bind-1",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "canonical-client"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "old_root",
+          "expected_bytes",
+          "namespace_isolation"
+        ]
+      },
+      "original_attempt_count": 1,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "E02-bind-1",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "E02-bind-1"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "BaseView::open -> OwnerClient::try_submit(Command::Open) -> Workspace::bind",
+        "id": "cluster-two-E02-bind-1-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-daemon/src/overlay/owner.rs",
+            "sha256": "7e990870b4c8aa2825c147cf19f40df373bec0afd90cfa0c3ba51ff9e71e426c"
+          },
+          {
+            "path": "core/crates/layerfs-daemon/src/overlay/commands.rs",
+            "sha256": "b843aeaa3f35d6baebbac0f3788c78b8899dbc50a1175dc7ac005a8abb006b74"
+          },
+          {
+            "path": "core/crates/layerfs-workspace/src/workspace/state.rs",
+            "sha256": "73e8afc62b3f3956d1ddc2ccc18add6a9c438b4723633acb8a92b7acdbef859f"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "binds": 1,
+        "initialized_owners": 1,
+        "workspaces": 1
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "64 distinct usable bindings and original Open completions",
+        "operation_start": "first BaseView::open call",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "charged-trace",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-reservation-accounted",
+          "metric": "reported_daemon_reservation_bytes",
+          "operator": "eq",
+          "value": 268435456
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-cleanup-headroom",
+          "metric": "reported_cleanup_headroom_bytes",
+          "operator": "eq",
+          "value": 134217728
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G01-new-databases",
+          "metric": "new_overlay_databases",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G01-schemas",
+          "metric": "schema_initializations",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G01-root-scans",
+          "metric": "whole_root_scans",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G01-materialization",
+          "metric": "materialized_root_bytes",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G01-restoration",
+          "metric": "dependency_restorations",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "bind-count",
+          "metric": "completed_bindings",
+          "operator": "eq",
+          "value": 64
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "engine",
+      "id": "E03-bind-64",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "canonical-client"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "old_root",
+          "expected_bytes",
+          "namespace_isolation"
+        ]
+      },
+      "original_attempt_count": 64,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "E03-bind-64",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "E03-bind-64"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "BaseView::open -> OwnerClient::try_submit(Command::Open) -> Workspace::bind",
+        "id": "cluster-two-E03-bind-64-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-daemon/src/overlay/owner.rs",
+            "sha256": "7e990870b4c8aa2825c147cf19f40df373bec0afd90cfa0c3ba51ff9e71e426c"
+          },
+          {
+            "path": "core/crates/layerfs-daemon/src/overlay/commands.rs",
+            "sha256": "b843aeaa3f35d6baebbac0f3788c78b8899dbc50a1175dc7ac005a8abb006b74"
+          },
+          {
+            "path": "core/crates/layerfs-workspace/src/workspace/state.rs",
+            "sha256": "73e8afc62b3f3956d1ddc2ccc18add6a9c438b4723633acb8a92b7acdbef859f"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "binds": 64,
+        "initialized_owners": 1,
+        "reuse": "first acquisition and later reuse inside trace",
+        "workspaces": 64
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "1000 original local publication outcomes and reply-attempt accounting",
+        "operation_start": "first public mutate call",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-reservation-accounted",
+          "metric": "reported_daemon_reservation_bytes",
+          "operator": "eq",
+          "value": 268435456
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-cleanup-headroom",
+          "metric": "reported_cleanup_headroom_bytes",
+          "operator": "eq",
+          "value": 134217728
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "write-count",
+          "metric": "completed_writes",
+          "operator": "eq",
+          "value": 1000
+        },
+        {
+          "authority": "core/crates/layerfs-overlay/src/diagnostics/payload.rs",
+          "id": "write-input",
+          "metric": "payload_write_input_bytes",
+          "operator": "eq",
+          "value": 4096000
+        },
+        {
+          "authority": "core/crates/layerfs-overlay/src/payload/cells.rs",
+          "id": "G03-aligned-cells",
+          "metric": "payload_write_cells",
+          "operator": "le",
+          "value": 1000
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G02-base-copy",
+          "metric": "base_payload_demand_bytes",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G02-global-save",
+          "metric": "global_save_operations",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G02-global-history",
+          "metric": "global_history_operations",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "engine",
+      "id": "E04-write-16m",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "old_root",
+          "expected_bytes",
+          "namespace_isolation"
+        ]
+      },
+      "original_attempt_count": 1000,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "E04-write-16m",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "E04-write-16m",
+          "E05-write-1g"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "Workspace::mutate(Operation::Write) -> OwnerClient::try_submit(Command::Namespace)",
+        "id": "cluster-two-E04-write-16m-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-workspace/src/mutation/driver.rs",
+            "sha256": "dbc8780e05c87a72df77fc1e5da6da06d2fae0782ae4c4431edc69ce55da1673"
+          },
+          {
+            "path": "core/crates/layerfs-daemon/src/overlay/commands.rs",
+            "sha256": "b843aeaa3f35d6baebbac0f3788c78b8899dbc50a1175dc7ac005a8abb006b74"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "dense_base_bytes": 16777216,
+        "offset_formula": "4096*((104729*i) mod (B/4096)); i=0..999",
+        "offset_multiplier": 104729,
+        "write_bytes": 4096,
+        "writes": 1000
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "1000 original local publication outcomes and reply-attempt accounting",
+        "operation_start": "first public mutate call",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-reservation-accounted",
+          "metric": "reported_daemon_reservation_bytes",
+          "operator": "eq",
+          "value": 268435456
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-cleanup-headroom",
+          "metric": "reported_cleanup_headroom_bytes",
+          "operator": "eq",
+          "value": 134217728
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "write-count",
+          "metric": "completed_writes",
+          "operator": "eq",
+          "value": 1000
+        },
+        {
+          "authority": "core/crates/layerfs-overlay/src/diagnostics/payload.rs",
+          "id": "write-input",
+          "metric": "payload_write_input_bytes",
+          "operator": "eq",
+          "value": 4096000
+        },
+        {
+          "authority": "core/crates/layerfs-overlay/src/payload/cells.rs",
+          "id": "G03-aligned-cells",
+          "metric": "payload_write_cells",
+          "operator": "le",
+          "value": 1000
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G02-base-copy",
+          "metric": "base_payload_demand_bytes",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G02-global-save",
+          "metric": "global_save_operations",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G02-global-history",
+          "metric": "global_history_operations",
+          "operator": "eq",
+          "value": 0
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "engine",
+      "id": "E05-write-1g",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "old_root",
+          "expected_bytes",
+          "namespace_isolation"
+        ]
+      },
+      "original_attempt_count": 1000,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "E05-write-1g",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "E04-write-16m",
+          "E05-write-1g"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "Workspace::mutate(Operation::Write) -> OwnerClient::try_submit(Command::Namespace)",
+        "id": "cluster-two-E05-write-1g-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-workspace/src/mutation/driver.rs",
+            "sha256": "dbc8780e05c87a72df77fc1e5da6da06d2fae0782ae4c4431edc69ce55da1673"
+          },
+          {
+            "path": "core/crates/layerfs-daemon/src/overlay/commands.rs",
+            "sha256": "b843aeaa3f35d6baebbac0f3788c78b8899dbc50a1175dc7ac005a8abb006b74"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "dense_base_bytes": 1073741824,
+        "offset_formula": "4096*((104729*i) mod (B/4096)); i=0..999",
+        "offset_multiplier": 104729,
+        "write_bytes": 4096,
+        "writes": 1000
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "64 checked complete read results including all required demand",
+        "operation_start": "first public read call; per-read spans also retained",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-reservation-accounted",
+          "metric": "reported_daemon_reservation_bytes",
+          "operator": "eq",
+          "value": 268435456
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-cleanup-headroom",
+          "metric": "reported_cleanup_headroom_bytes",
+          "operator": "eq",
+          "value": 134217728
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "engine",
+      "id": "E06-read-mixed",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "canonical-client"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "old_root",
+          "expected_bytes",
+          "namespace_isolation"
+        ]
+      },
+      "original_attempt_count": 64,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "E06-read-mixed",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "E06-read-mixed"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "Workspace::read -> OwnerClient source jobs + CanonicalClient authenticated demands",
+        "id": "cluster-two-E06-read-mixed-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-workspace/src/operations/file/read.rs",
+            "sha256": "bd1baad8975e5d43f35a598fb1fe3d524b3cea0f9634b4fcf39c2b62ed7e5d3a"
+          },
+          {
+            "path": "core/crates/layerfs-daemon/src/overlay/commands.rs",
+            "sha256": "b843aeaa3f35d6baebbac0f3788c78b8899dbc50a1175dc7ac005a8abb006b74"
+          },
+          {
+            "path": "core/crates/layerfs-workspace/src/base/client.rs",
+            "sha256": "de77fe2f475e726d92460402272f0b5a089091943586bf4c22038b447fca4dfb"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "dense_base_bytes": 1073741824,
+        "overwrite_bytes": 4096,
+        "overwrite_offsets": null,
+        "prepared_overwrites": 16,
+        "read_bytes": 65536,
+        "read_offsets": null,
+        "reads": 64,
+        "regrow_length": null,
+        "truncate_cutoff": null
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "exact release completions; debt drain is separately gated after logical close",
+        "operation_start": "first selected last-owner release",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-reservation-accounted",
+          "metric": "reported_daemon_reservation_bytes",
+          "operator": "eq",
+          "value": 268435456
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "G15-cleanup-headroom",
+          "metric": "reported_cleanup_headroom_bytes",
+          "operator": "eq",
+          "value": 134217728
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "engine",
+      "id": "E07-reclaim",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "old_root",
+          "expected_bytes",
+          "namespace_isolation"
+        ]
+      },
+      "original_attempt_count": null,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "E07-reclaim",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "E07-reclaim"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "OwnerClient::try_submit(Command::Close/Release*) -> automatic owner maintenance",
+        "id": "cluster-two-E07-reclaim-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-daemon/src/overlay/owner.rs",
+            "sha256": "7e990870b4c8aa2825c147cf19f40df373bec0afd90cfa0c3ba51ff9e71e426c"
+          },
+          {
+            "path": "core/crates/layerfs-daemon/src/overlay/commands.rs",
+            "sha256": "b843aeaa3f35d6baebbac0f3788c78b8899dbc50a1175dc7ac005a8abb006b74"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "last_owner_order": null,
+        "range_bytes": 4096,
+        "ranges": 1000,
+        "workspaces": 4
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "original checked Binding after actual authenticated attachment",
+        "operation_start": "first native connection/handshake attempt",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "runtime",
+      "id": "R01-connect",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": 1,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "R01-connect",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "R01-connect"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "layerfs_bridge::native::initiate_observed + authenticated SDK attachment + Calls::call(Binding)",
+        "id": "cluster-two-R01-connect-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-bridge/src/native/handshake.rs",
+            "sha256": "7d5b581cad9c59fb9e6189284f1d91a0693d28245b260c1018fb9b8a6e5c6fea"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+            "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "bindings": 1,
+        "connections": 1,
+        "handshakes": 1
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "checked credited canonical result in exact demand order",
+        "operation_start": "Calls::call entry",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "logical-rpc-count",
+          "metric": "logical_rpc_calls",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "runtime",
+      "id": "R02-objects-1",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": 1,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "R02-objects-1",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "R02-objects-1"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "Calls::call(ClientRequest::objects) -> ReplyView::Objects",
+        "id": "cluster-two-R02-objects-1-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+            "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/ports.rs",
+            "sha256": "7ba8290ad8386f9ca89d157a0a62391c38e05a8e9f5297ba16024fa2eb1f39c1"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "logical_rpc": 1,
+        "objects": 1,
+        "payload_bytes_per_object": 1024
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "checked credited 1000-object result in exact demand order",
+        "operation_start": "Calls::call entry",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "logical-rpc-count",
+          "metric": "logical_rpc_calls",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "runtime",
+      "id": "R03-objects-1000",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": 1,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "R03-objects-1000",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "R03-objects-1000"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "Calls::call(ClientRequest::objects) -> ReplyView::Objects",
+        "id": "cluster-two-R03-objects-1000-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+            "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/ports.rs",
+            "sha256": "7ba8290ad8386f9ca89d157a0a62391c38e05a8e9f5297ba16024fa2eb1f39c1"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "logical_rpc": 1,
+        "objects": 1000,
+        "payload_bytes_per_object": 1024
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "all ten checked results; first fetch charged inside trace",
+        "operation_start": "first CanonicalClient call from empty cache",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "charged-trace",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/crates/layerfs-workspace/src/base/client.rs",
+          "id": "cache-initial-misses",
+          "metric": "cache_misses",
+          "operator": "eq",
+          "value": 1000
+        },
+        {
+          "authority": "core/crates/layerfs-workspace/src/base/client.rs",
+          "id": "cache-subsequent-hits",
+          "metric": "cache_hits",
+          "operator": "eq",
+          "value": 9000
+        },
+        {
+          "authority": "core/crates/layerfs-workspace/src/base/client.rs",
+          "id": "cache-demand-batches",
+          "metric": "upstream_batches",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "core/crates/layerfs-workspace/src/base/client.rs",
+          "id": "cache-capacity",
+          "metric": "charged_cache_bytes",
+          "operator": "le",
+          "value": 8388608
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "runtime",
+      "id": "R04-cache-trace",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql",
+        "canonical-client"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": 10,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "R04-cache-trace",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "R04-cache-trace"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "CanonicalClient::read_canonical_batch(RemoteObjects)",
+        "id": "cluster-two-R04-cache-trace-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-workspace/src/base/client.rs",
+            "sha256": "de77fe2f475e726d92460402272f0b5a089091943586bf4c22038b447fca4dfb"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/ports.rs",
+            "sha256": "7ba8290ad8386f9ca89d157a0a62391c38e05a8e9f5297ba16024fa2eb1f39c1"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+            "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "cache_bytes": 8388608,
+        "calls": 10,
+        "initial_cached_objects": 0,
+        "objects": 1000,
+        "payload_bytes_per_object": 1024
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "checked credited lengths in exact request order",
+        "operation_start": "Calls::call entry",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "logical-rpc-count",
+          "metric": "logical_rpc_calls",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "runtime",
+      "id": "R05-length-batch",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": 1,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "R05-length-batch",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "R05-length-batch"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "Calls::call(ClientRequest::lengths) -> ReplyView::Lengths",
+        "id": "cluster-two-R05-length-batch-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+            "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/ports.rs",
+            "sha256": "7ba8290ad8386f9ca89d157a0a62391c38e05a8e9f5297ba16024fa2eb1f39c1"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "logical_rpc": 1,
+        "roots": 1000
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "1000 checked original length results",
+        "operation_start": "first file_length call",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "logical-rpc-count",
+          "metric": "logical_rpc_calls",
+          "operator": "eq",
+          "value": 1000
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "runtime",
+      "id": "R06-length-consumer",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": 1000,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "R06-length-consumer",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "R06-length-consumer"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "RemoteLengths::file_length -> Calls::call(ClientRequest::lengths)",
+        "id": "cluster-two-R06-length-consumer-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/ports.rs",
+            "sha256": "7ba8290ad8386f9ca89d157a0a62391c38e05a8e9f5297ba16024fa2eb1f39c1"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+            "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "calls": 1000,
+        "logical_rpc": 1000,
+        "roots": 1000
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "1000 checked original local create outcomes; serial reservation charged",
+        "operation_start": "first public create call",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/crates/layerfs-api/sdk/src/client/ports.rs",
+          "id": "serial-reservations",
+          "metric": "serial_reservation_calls",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "core/crates/layerfs-api/sdk/src/client/ports.rs",
+          "id": "serial-range",
+          "metric": "reserved_serials",
+          "operator": "eq",
+          "value": 1024
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "create-count",
+          "metric": "completed_creates",
+          "operator": "eq",
+          "value": 1000
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "runtime",
+      "id": "R07-serial-consumer",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": 1000,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "R07-serial-consumer",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "R07-serial-consumer"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "Workspace::mutate(Operation::Create) -> RemoteSerials::reserve",
+        "id": "cluster-two-R07-serial-consumer-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-workspace/src/mutation/driver.rs",
+            "sha256": "dbc8780e05c87a72df77fc1e5da6da06d2fae0782ae4c4431edc69ce55da1673"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/ports.rs",
+            "sha256": "7ba8290ad8386f9ca89d157a0a62391c38e05a8e9f5297ba16024fa2eb1f39c1"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "concurrent_refills": 0,
+        "creates": 1000,
+        "initial_unused_serials": 0,
+        "serial_window": 1024
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "original checked Finish receipt; no history publication implied",
+        "operation_start": "Begin call entry",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "logical-rpc-count",
+          "metric": "logical_rpc_calls",
+          "operator": "eq",
+          "value": 18
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "runtime",
+      "id": "R08-save-waves",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": 18,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "R08-save-waves",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "R08-save-waves"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "Calls::call(Begin/ClientRequest::accept/Finish)",
+        "id": "cluster-two-R08-save-waves-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+            "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/ports.rs",
+            "sha256": "7ba8290ad8386f9ca89d157a0a62391c38e05a8e9f5297ba16024fa2eb1f39c1"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "accept": 16,
+        "begin": 1,
+        "finish": 1,
+        "logical_rpc": 18,
+        "payload_bytes_per_object": 65536
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "all 128 original checked results; serialized connection queue charged",
+        "operation_start": "first fixed-schedule admission",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "logical-rpc-count",
+          "metric": "logical_rpc_calls",
+          "operator": "eq",
+          "value": 128
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "runtime",
+      "id": "R09-shared-call",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": 128,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "R09-shared-call",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "R09-shared-call"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "four caller lanes -> one shared Calls::call(ClientRequest::objects)",
+        "id": "cluster-two-R09-shared-call-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+            "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/ports.rs",
+            "sha256": "7ba8290ad8386f9ca89d157a0a62391c38e05a8e9f5297ba16024fa2eb1f39c1"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "callers": 4,
+        "connections": 1,
+        "logical_rpc": 128,
+        "objects_per_request": 1,
+        "payload_bytes_per_object": 1024,
+        "requests_per_caller": 32,
+        "schedule_required": true
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "all 128 checked results; no R09 speedup pairing",
+        "operation_start": "first fixed-schedule admission",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "independent topology control; do not pair against R09",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "logical-rpc-count",
+          "metric": "logical_rpc_calls",
+          "operator": "eq",
+          "value": 128
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "runtime",
+      "id": "R10-separate-calls",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": 128,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "R10-separate-calls",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "R10-separate-calls"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "four connections/bindings -> Calls::call(ClientRequest::objects)",
+        "id": "cluster-two-R10-separate-calls-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+            "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/ports.rs",
+            "sha256": "7ba8290ad8386f9ca89d157a0a62391c38e05a8e9f5297ba16024fa2eb1f39c1"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "callers": 4,
+        "connections": 4,
+        "logical_rpc": 128,
+        "objects_per_request": 1,
+        "payload_bytes_per_object": 1024,
+        "requests_per_caller": 32,
+        "schedule_required": true,
+        "workspaces": 4
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "exact original winner/conflict/token receipts; cleanup remains separate",
+        "operation_start": "first Stage call with already finished Saves",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "runtime",
+      "id": "R11-history",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": 4,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "R11-history",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "R11-history"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "Calls::call(ClientRequest::stage/Operation::Commit)",
+        "id": "cluster-two-R11-history-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+            "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/ports.rs",
+            "sha256": "7ba8290ad8386f9ca89d157a0a62391c38e05a8e9f5297ba16024fa2eb1f39c1"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "fixed_transition_order": [
+          0,
+          1
+        ],
+        "independent_saves": 2,
+        "same_original_branch_expectation": true,
+        "stages": 2,
+        "transitions": 2,
+        "valid_candidate_roots": 2
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "all originally offered units have exact delivered/refused/cancelled/retained outcomes and drain fence",
+        "operation_start": "start of frozen 10-second offered trace",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "charged-trace",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "runtime",
+      "id": "Q01-mixed-load",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": null,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "Q01-mixed-load",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "Q01-mixed-load"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "authenticated Service + Calls: Demand/Accept/Finish/Release finite admission trace",
+        "id": "cluster-two-Q01-mixed-load-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+            "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/runtime/service/input.rs",
+            "sha256": "3a57143dfd2c02d86a72cca4237358e6ab0427a3ea7e585ce269627cf0963d83"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/runtime/service/output.rs",
+            "sha256": "cfa8e639118aec8f7b2806955a32500e5a7f0591253050510a988c05c3048c86"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "classes": [
+          "Demand",
+          "Accept",
+          "Finish",
+          "Release"
+        ],
+        "connections": 4,
+        "offered_horizon_ns": 10000000000,
+        "schedule_required": true,
+        "workspaces": 8
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "returned Initialized with finished Save and known genesis; runtime proof separate",
+        "operation_start": "public init call",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache",
+          "native-source-pages"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 4,
+        "environment_workers": 1,
+        "id": "project-native-init-four-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "core/crates/layerfs-project/src/import/files.rs",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 4
+        },
+        {
+          "authority": "core/crates/layerfs-project/src/import/files.rs",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "eq",
+          "value": 4
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "acquisition",
+      "id": "Q02-root-1000",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "all_paths",
+          "all_supported_metadata",
+          "all_payload_bytes",
+          "symlink_raw_targets",
+          "hardlink_aliases",
+          "source_removed",
+          "remote_reads"
+        ]
+      },
+      "original_attempt_count": 1,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "Q02-root-1000",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "Q02-root-1000",
+          "Q03-root-10000",
+          "Q04-root-100000",
+          "Q05-root-1000000"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "layerfs_project::init with provider-owned acquisition port -> authenticated root consumer",
+        "id": "cluster-two-Q02-root-1000-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-project/src/import/init.rs",
+            "sha256": "ef3b8be1d19c40a198ea29522b9cacfbdc7ab8a4bd09761ad6b8ab223fafadcc"
+          },
+          {
+            "path": "core/crates/layerfs-project/src/import/files.rs",
+            "sha256": "446baca2bf7cbc669253f7770ba35b7a321da40a548510bcac2dfe09e75e6ca8"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "fresh",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "aliases": null,
+        "directories": null,
+        "entries": 1000,
+        "max_depth": null,
+        "max_fanout": null,
+        "payload_bytes": null,
+        "regular_files": null,
+        "seed": 1,
+        "symlinks": null
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "returned Initialized with finished Save and known genesis; runtime proof separate",
+        "operation_start": "public init call",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache",
+          "native-source-pages"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 4,
+        "environment_workers": 1,
+        "id": "project-native-init-four-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "core/crates/layerfs-project/src/import/files.rs",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 4
+        },
+        {
+          "authority": "core/crates/layerfs-project/src/import/files.rs",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "eq",
+          "value": 4
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "acquisition",
+      "id": "Q03-root-10000",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "all_paths",
+          "all_supported_metadata",
+          "all_payload_bytes",
+          "symlink_raw_targets",
+          "hardlink_aliases",
+          "source_removed",
+          "remote_reads"
+        ]
+      },
+      "original_attempt_count": 1,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "Q03-root-10000",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "Q02-root-1000",
+          "Q03-root-10000",
+          "Q04-root-100000",
+          "Q05-root-1000000"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "layerfs_project::init with provider-owned acquisition port -> authenticated root consumer",
+        "id": "cluster-two-Q03-root-10000-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-project/src/import/init.rs",
+            "sha256": "ef3b8be1d19c40a198ea29522b9cacfbdc7ab8a4bd09761ad6b8ab223fafadcc"
+          },
+          {
+            "path": "core/crates/layerfs-project/src/import/files.rs",
+            "sha256": "446baca2bf7cbc669253f7770ba35b7a321da40a548510bcac2dfe09e75e6ca8"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "fresh",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "aliases": null,
+        "directories": null,
+        "entries": 10000,
+        "max_depth": null,
+        "max_fanout": null,
+        "payload_bytes": null,
+        "regular_files": null,
+        "seed": 1,
+        "symlinks": null
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "returned Initialized with finished Save and known genesis; runtime proof separate",
+        "operation_start": "public init call",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 25000000000,
+        "exception": true,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache",
+          "native-source-pages"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 4,
+        "environment_workers": 1,
+        "id": "project-native-init-four-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 25000000000
+        },
+        {
+          "authority": "core/crates/layerfs-project/src/import/files.rs",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 4
+        },
+        {
+          "authority": "core/crates/layerfs-project/src/import/files.rs",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "eq",
+          "value": 4
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "acquisition",
+      "id": "Q04-root-100000",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "all_paths",
+          "all_supported_metadata",
+          "all_payload_bytes",
+          "symlink_raw_targets",
+          "hardlink_aliases",
+          "source_removed",
+          "remote_reads"
+        ]
+      },
+      "original_attempt_count": 1,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "Q04-root-100000",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "Q02-root-1000",
+          "Q03-root-10000",
+          "Q04-root-100000",
+          "Q05-root-1000000"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "layerfs_project::init with provider-owned acquisition port -> authenticated root consumer",
+        "id": "cluster-two-Q04-root-100000-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-project/src/import/init.rs",
+            "sha256": "ef3b8be1d19c40a198ea29522b9cacfbdc7ab8a4bd09761ad6b8ab223fafadcc"
+          },
+          {
+            "path": "core/crates/layerfs-project/src/import/files.rs",
+            "sha256": "446baca2bf7cbc669253f7770ba35b7a321da40a548510bcac2dfe09e75e6ca8"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "fresh",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "aliases": null,
+        "directories": null,
+        "entries": 100000,
+        "max_depth": null,
+        "max_fanout": null,
+        "payload_bytes": null,
+        "regular_files": null,
+        "seed": 1,
+        "symlinks": null
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "returned Initialized with finished Save and known genesis; runtime proof separate",
+        "operation_start": "public init call",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": null,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache",
+          "native-source-pages"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 4,
+        "environment_workers": 1,
+        "id": "project-native-init-four-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": null
+        },
+        {
+          "authority": "core/crates/layerfs-project/src/import/files.rs",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 4
+        },
+        {
+          "authority": "core/crates/layerfs-project/src/import/files.rs",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "eq",
+          "value": 4
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "acquisition",
+      "id": "Q05-root-1000000",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "all_paths",
+          "all_supported_metadata",
+          "all_payload_bytes",
+          "symlink_raw_targets",
+          "hardlink_aliases",
+          "source_removed",
+          "remote_reads"
+        ]
+      },
+      "original_attempt_count": 1,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "Q05-root-1000000",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "Q02-root-1000",
+          "Q03-root-10000",
+          "Q04-root-100000",
+          "Q05-root-1000000"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "layerfs_project::init with provider-owned acquisition port -> authenticated root consumer",
+        "id": "cluster-two-Q05-root-1000000-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-project/src/import/init.rs",
+            "sha256": "ef3b8be1d19c40a198ea29522b9cacfbdc7ab8a4bd09761ad6b8ab223fafadcc"
+          },
+          {
+            "path": "core/crates/layerfs-project/src/import/files.rs",
+            "sha256": "446baca2bf7cbc669253f7770ba35b7a321da40a548510bcac2dfe09e75e6ca8"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "fresh",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "aliases": null,
+        "directories": null,
+        "entries": 1000000,
+        "max_depth": null,
+        "max_fanout": null,
+        "payload_bytes": null,
+        "regular_files": null,
+        "seed": 1,
+        "symlinks": null
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "returned Initialized after actual 5 GiB read/save; byte oracle after source removal",
+        "operation_start": "public init call before source traversal/read",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 25000000000,
+        "exception": true,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache",
+          "native-source-pages"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 4,
+        "environment_workers": 1,
+        "id": "project-native-init-four-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 25000000000
+        },
+        {
+          "authority": "core/crates/layerfs-project/src/import/files.rs",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 4
+        },
+        {
+          "authority": "core/crates/layerfs-project/src/import/files.rs",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "eq",
+          "value": 4
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "acquisition",
+      "id": "Q06-native-file-5g",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "all_paths",
+          "all_supported_metadata",
+          "all_payload_bytes",
+          "symlink_raw_targets",
+          "hardlink_aliases",
+          "source_removed",
+          "remote_reads"
+        ]
+      },
+      "original_attempt_count": 1,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "Q06-native-file-5g",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "Q06-native-file-5g"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "layerfs_project::init dense native source -> saved root -> authenticated consumer",
+        "id": "cluster-two-Q06-native-file-5g-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-project/src/import/init.rs",
+            "sha256": "ef3b8be1d19c40a198ea29522b9cacfbdc7ab8a4bd09761ad6b8ab223fafadcc"
+          },
+          {
+            "path": "core/crates/layerfs-project/src/import/files.rs",
+            "sha256": "446baca2bf7cbc669253f7770ba35b7a321da40a548510bcac2dfe09e75e6ca8"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "fresh",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "dense_payload_bytes": 5368709120,
+        "regular_files": 1,
+        "seed": 1,
+        "sparse_substitute": false
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "unrelated Demand/control completion and exact held-output release fence",
+        "operation_start": "fixed original output-hold checkpoint",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "custody",
+      "id": "P01-slow-peer",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": null,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "P01-slow-peer",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "P01-slow-peer"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "NativeOutput credited stall + independent Calls Demand/control",
+        "id": "cluster-two-P01-slow-peer-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-api/sdk/src/runtime/service/output.rs",
+            "sha256": "cfa8e639118aec8f7b2806955a32500e5a7f0591253050510a988c05c3048c86"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/runtime/service/input.rs",
+            "sha256": "3a57143dfd2c02d86a72cca4237358e6ab0427a3ea7e585ce269627cf0963d83"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+            "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "hold_checkpoint": null,
+        "independent_peers": 1,
+        "schedule_required": true,
+        "slow_peers": 1
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "input/output/operation completion fences and retained original outcome",
+        "operation_start": "original call at each fixed disconnect checkpoint",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "custody",
+      "id": "P02-disconnect",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": 3,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "P02-disconnect",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "P02-disconnect"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "NativeInput/NativeOutput fences + original Calls failure ownership",
+        "id": "cluster-two-P02-disconnect-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-api/sdk/src/runtime/service/input.rs",
+            "sha256": "3a57143dfd2c02d86a72cca4237358e6ab0427a3ea7e585ce269627cf0963d83"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/runtime/service/output.rs",
+            "sha256": "cfa8e639118aec8f7b2806955a32500e5a7f0591253050510a988c05c3048c86"
+          },
+          {
+            "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+            "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "attempts_per_checkpoint": 1,
+        "body_disconnect_byte": null,
+        "checkpoints": [
+          "header",
+          "partial-body",
+          "returned-operation"
+        ]
+      }
+    },
+    {
+      "boundaries": {
+        "complete_command": "launch through owning lifecycle, result drain and logical close/cleanup fence",
+        "operation_end": "original capacity refusal/publication outcome; global Store unaffected",
+        "operation_start": "one attempted public local mutation",
+        "queue": "admission through original dispatch and retained delivery; spans inclusive",
+        "reclamation": "last-owner release through automatic live/idle debt drain; held owners charged; no status/maintenance pump",
+        "setup": "prepared inputs/initialized owners outside operation except startup; initialization/acquisition paid by selected route",
+        "verification": "separate compiled independent public reader/oracle; verifier cleanup included"
+      },
+      "budgets": {
+        "complete_command_ns": 15000000000,
+        "exception": false,
+        "functional_ns": 120000000000,
+        "verification_ns": 9500000000
+      },
+      "cache": {
+        "domains": [
+          "overlay-backing-pages",
+          "linux-file-cache",
+          "kernel-state",
+          "host-store-pages",
+          "host-pack-payload",
+          "host-file-cache",
+          "canonical-cache"
+        ],
+        "mode": "cold",
+        "own_write_credit": false,
+        "setup_credit": false
+      },
+      "comparison": "only exact equivalent operation/profile/fixture/cache/acknowledgement controls",
+      "construction_profile": {
+        "constructor_worker_limit": 1,
+        "environment_workers": 1,
+        "id": "ordinary-construction-single-v1",
+        "save_producer_limit": 1
+      },
+      "earliest_scope": "pre-S8 independent component; native FUSE ownership remains S8; integrated Commit remains S10",
+      "gates": [
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "numeric-host_resident_bytes",
+          "limit": "host_resident_bytes",
+          "metric": "host_phase_peak_bytes",
+          "operator": "le"
+        },
+        {
+          "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+          "id": "complete-command-budget",
+          "metric": "complete_command_ns",
+          "operator": "le",
+          "value": 15000000000
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "constructor-worker-limit",
+          "metric": "constructor_worker_limit",
+          "operator": "eq",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "actual-constructor-workers",
+          "metric": "constructor_workers_started",
+          "operator": "le",
+          "value": 1
+        },
+        {
+          "authority": "docs/general/agent-measurement-policy.md",
+          "id": "save-producer-limit",
+          "metric": "save_producer_limit",
+          "operator": "eq",
+          "value": 1
+        }
+      ],
+      "group": "custody",
+      "id": "P03-local-full",
+      "missing_registration": [
+        "compiled route driver and identity-matched route proof",
+        "sealed source/build/binary/image/fixture/schedule/cache identities",
+        "deployment latency/service/residency/physical/I/O/copy numeric limits",
+        "whole-operation observer capability and phase precision/overhead proofs"
+      ],
+      "not_applicable_limits": [],
+      "observers": [
+        "overlay-sql",
+        "overlay-payload",
+        "overlay-allocation",
+        "owner-queue-debt",
+        "host-residency",
+        "linux-residency",
+        "physical-io",
+        "native-runtime",
+        "global-sql"
+      ],
+      "oracle": {
+        "method": "predeclared source generator/manifest + separate public readers; expected state never derived from candidate output",
+        "required_coverage": [
+          "original_outcomes",
+          "exact_custody",
+          "cleanup",
+          "global_history_retained",
+          "canonical_identity",
+          "authority",
+          "reference_closure"
+        ]
+      },
+      "original_attempt_count": 1,
+      "profiles": [
+        "durable",
+        "disposable"
+      ],
+      "proposal_id": "P03-local-full",
+      "resident_domains": [
+        "host",
+        "linux"
+      ],
+      "resident_spread_contract": {
+        "domains": [
+          "host",
+          "linux"
+        ],
+        "formula": "max(sum(owner_phase_peak_bytes)) - min(sum(owner_phase_peak_bytes))",
+        "id": "matched-cohort-aggregate-phase-peak-range-v1",
+        "interpretation": "range of sums of separately observed owner phase peaks; sampled values stay sampled; no simultaneous aggregate-peak claim",
+        "metric": "phase_resident_spread_bytes",
+        "operands": [
+          "P03-local-full"
+        ],
+        "singleton_scope": "single-operand range; no cross-size inference",
+        "unit": "bytes"
+      },
+      "route": {
+        "driver": null,
+        "driver_status": "INCOMPLETE",
+        "entrypoint": "Workspace::mutate through Owner on actual owned limited backing device",
+        "id": "cluster-two-P03-local-full-v1",
+        "mutation_executor": "owning public production APIs",
+        "orchestration_executor": "core compiled public-API driver; macOS host + Linux Docker",
+        "projection": "complete root; no ignore filtering; pre-S8 component route",
+        "sources": [
+          {
+            "path": "core/crates/layerfs-workspace/src/mutation/driver.rs",
+            "sha256": "dbc8780e05c87a72df77fc1e5da6da06d2fae0782ae4c4431edc69ce55da1673"
+          },
+          {
+            "path": "core/crates/layerfs-daemon/src/overlay/owner.rs",
+            "sha256": "7e990870b4c8aa2825c147cf19f40df373bec0afd90cfa0c3ba51ff9e71e426c"
+          }
+        ]
+      },
+      "sample_count": 0,
+      "setup": "clone of closed independent writable prepared inputs where owning route supports clone; no reopen disposable Overlay",
+      "status": "NOT_RUN",
+      "version": 1,
+      "workload": {
+        "attempts": 1,
+        "device_capacity_bytes": null,
+        "initial_allocated_bytes": null,
+        "mutation_bytes": null
+      }
+    }
+  ],
+  "common_gates": [
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "G13-no-retry",
+      "metric": "retry_attempts",
+      "operator": "eq",
+      "value": 0
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "G13-no-refresh",
+      "metric": "branch_refreshes",
+      "operator": "eq",
+      "value": 0
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "G13-no-resend",
+      "metric": "resends",
+      "operator": "eq",
+      "value": 0
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "G13-no-restage",
+      "metric": "restages",
+      "operator": "eq",
+      "value": 0
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "authentic-no-fallback",
+      "metric": "legacy_fallbacks",
+      "operator": "eq",
+      "value": 0
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "authentic-no-forbidden-route",
+      "metric": "forbidden_routes",
+      "operator": "eq",
+      "value": 0
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-operation_ns",
+      "limit": "operation_ns",
+      "metric": "operation_ns",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-request_ns",
+      "limit": "request_ns",
+      "metric": "request_max_ns",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-queue_wait_ns",
+      "limit": "queue_wait_ns",
+      "metric": "queue_wait_max_ns",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-service_ns",
+      "limit": "service_ns",
+      "metric": "service_max_ns",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-resource_wait_ns",
+      "limit": "resource_wait_ns",
+      "metric": "resource_wait_max_ns",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-runnable_wait_ns",
+      "limit": "runnable_wait_ns",
+      "metric": "runnable_wait_max_ns",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-drain_ns",
+      "limit": "drain_ns",
+      "metric": "automatic_drain_ns",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-linux_resident_bytes",
+      "limit": "linux_resident_bytes",
+      "metric": "linux_phase_peak_bytes",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-resident_spread_bytes",
+      "limit": "resident_spread_bytes",
+      "metric": "phase_resident_spread_bytes",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-allocated_peak_bytes",
+      "limit": "allocated_peak_bytes",
+      "metric": "allocated_peak_bytes",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-allocated_final_bytes",
+      "limit": "allocated_final_bytes",
+      "metric": "allocated_final_bytes",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-eligible_debt_bytes",
+      "limit": "eligible_debt_bytes",
+      "metric": "eligible_debt_peak_bytes",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-sql_vm_steps",
+      "limit": "sql_vm_steps",
+      "metric": "sql_vm_steps",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-sql_statement_attempts",
+      "limit": "sql_statement_attempts",
+      "metric": "sql_statement_attempts",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-physical_read_bytes",
+      "limit": "physical_read_bytes",
+      "metric": "physical_read_bytes",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-physical_write_bytes",
+      "limit": "physical_write_bytes",
+      "metric": "physical_write_bytes",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-copy_bytes",
+      "limit": "copy_bytes",
+      "metric": "whole_operation_copy_bytes",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-queue_jobs",
+      "limit": "queue_jobs",
+      "metric": "queue_peak_jobs",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-queue_bytes",
+      "limit": "queue_bytes",
+      "metric": "queue_peak_bytes",
+      "operator": "le"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "numeric-protected-headroom",
+      "limit": "headroom_bytes",
+      "metric": "protected_headroom_bytes",
+      "operator": "ge"
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "independent-proof-budget",
+      "metric": "verification_ns",
+      "operator": "le",
+      "value": 9500000000
+    },
+    {
+      "authority": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+      "id": "one-source-arm-sample",
+      "metric": "sample_count",
+      "operator": "eq",
+      "value": 1
+    },
+    {
+      "authority": "docs/general/agent-measurement-policy.md",
+      "id": "construction-environment",
+      "metric": "construction_environment_workers",
+      "operator": "eq",
+      "value": 1
+    }
+  ],
+  "construction_environment": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1"
+  },
+  "family_id": "cluster-two-evidence",
+  "issue": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307",
+  "new_runner": false,
+  "observers": {
+    "canonical-client": {
+      "capability": "ClientWork cache hits/misses/upstream batches/charged bytes; operation-local snapshots",
+      "gaps": [
+        "not whole-system residency"
+      ],
+      "schema": "canonical-client-work-v1",
+      "sources": [
+        {
+          "path": "core/crates/layerfs-workspace/src/base/client.rs",
+          "sha256": "de77fe2f475e726d92460402272f0b5a089091943586bf4c22038b447fca4dfb"
+        }
+      ]
+    },
+    "global-sql": {
+      "capability": "actual global SqlWork and transaction/BLOB observations",
+      "gaps": [
+        "global pager/internal/physical I/O requires E3 companion"
+      ],
+      "schema": "global-sql-work-v1",
+      "sources": [
+        {
+          "path": "core/crates/layerfs-persistence/src/backend/sqlite/connection.rs",
+          "sha256": "e69e2255d1639ff7bede62402230a284d3158c10c884d0c42ec1601d21c9d6a5"
+        }
+      ]
+    },
+    "host-residency": {
+      "capability": "retained LFT1 boundary checks only; exact external host footprint/phase observer not assembled",
+      "gaps": [
+        "baseline/peak/final aggregate host runtime/Store/OS footprint",
+        "precision and overhead calibration"
+      ],
+      "schema": "host-phase-residency-v1",
+      "sources": [
+        {
+          "path": "core/benchmark/fs-bench-pro/shared/telemetry.py",
+          "sha256": "072e7491fd70006326ea28edb19a02127c604237483699ea61c24cea265320d2"
+        }
+      ]
+    },
+    "linux-residency": {
+      "capability": null,
+      "gaps": [
+        "external phase-reset/sample cgroup anon/file/socket/kernel trace",
+        "phase boundary precision and overhead calibration"
+      ],
+      "schema": "linux-phase-residency-v1",
+      "sources": []
+    },
+    "native-runtime": {
+      "capability": "actual framed calls/grants/fragments/copies/credits/fences; original result custody",
+      "gaps": [
+        "supervised whole-route attribution/observer assembly incomplete"
+      ],
+      "schema": "native-original-call-work-v1",
+      "sources": [
+        {
+          "path": "core/crates/layerfs-api/sdk/src/client/call.rs",
+          "sha256": "8ff0f0b8a8cc55be197c638096c9505746c8b9912cb7425be9dc6f70062eb55e"
+        },
+        {
+          "path": "core/crates/layerfs-api/sdk/src/runtime/service/input.rs",
+          "sha256": "3a57143dfd2c02d86a72cca4237358e6ab0427a3ea7e585ce269627cf0963d83"
+        },
+        {
+          "path": "core/crates/layerfs-api/sdk/src/runtime/service/output.rs",
+          "sha256": "cfa8e639118aec8f7b2806955a32500e5a7f0591253050510a988c05c3048c86"
+        }
+      ]
+    },
+    "overlay-allocation": {
+      "capability": "AllocationState physical allocated/high-water/headroom; AllocationWork every range/identity/freelist call",
+      "gaps": [
+        "high-water is startup-lifetime allocation, not phase residency",
+        "requested range volume is not new disk consumption"
+      ],
+      "schema": "overlay-allocation-work-v1",
+      "sources": [
+        {
+          "path": "core/crates/layerfs-overlay/src/database/allocation.rs",
+          "sha256": "c81ab35bcb9aeaba1725747a4385c5faa56144dad75394e5750d60b646f54f7e"
+        }
+      ]
+    },
+    "overlay-payload": {
+      "capability": "PayloadWork actual input/cell/copy/zero windows",
+      "gaps": [
+        "driver/native/kernel/SQLite internal copies"
+      ],
+      "schema": "overlay-payload-work-v1",
+      "sources": [
+        {
+          "path": "core/crates/layerfs-overlay/src/diagnostics/payload.rs",
+          "sha256": "beb02852b27dea08e96a06aa178141970c8bb7284ece02c9ba2c4871bcfb6c54"
+        }
+      ]
+    },
+    "overlay-sql": {
+      "capability": "StatementWork/JobWork actual attempts, VM, triggers, binds, returned rows/bytes; inclusive spans",
+      "gaps": [
+        "pager/dirty/index/overflow/journal internals",
+        "SQLite internal copy attribution"
+      ],
+      "schema": "overlay-original-job-sql-v1",
+      "sources": [
+        {
+          "path": "core/crates/layerfs-overlay/src/diagnostics/metrics.rs",
+          "sha256": "036c4b4886758f062e61cb476a0d6a0ae656d766ac43fa7a0d52d6d094cd0a46"
+        },
+        {
+          "path": "core/crates/layerfs-daemon/src/service/observations.rs",
+          "sha256": "90d4417d2b77cdd430cbbfd6b4b4b180dd59c5afca856ec3168c1263fe4d4d48"
+        }
+      ]
+    },
+    "owner-queue-debt": {
+      "capability": "original job queue/service/parked spans and read-only debt snapshots; automatic maintenance",
+      "gaps": [
+        "whole finite offered/admitted/delivered/retained class trace still needs E2/E4 assembly"
+      ],
+      "schema": "original-owner-service-debt-v1",
+      "sources": [
+        {
+          "path": "core/crates/layerfs-daemon/src/overlay/owner.rs",
+          "sha256": "7e990870b4c8aa2825c147cf19f40df373bec0afd90cfa0c3ba51ff9e71e426c"
+        },
+        {
+          "path": "core/crates/layerfs-daemon/src/service/observations.rs",
+          "sha256": "90d4417d2b77cdd430cbbfd6b4b4b180dd59c5afca856ec3168c1263fe4d4d48"
+        }
+      ]
+    },
+    "physical-io": {
+      "capability": null,
+      "gaps": [
+        "aggregate actual VFS/device read/write/page/journal work across owning host/Linux domains"
+      ],
+      "schema": "host-linux-device-io-v1",
+      "sources": []
+    }
+  },
+  "one_sample_per_case_arm": true,
+  "owning_specification": "core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md",
+  "preserved_verdicts": {
+    "history": {
+      "candidate": "6af972dc0",
+      "reference": "7edddbdb8",
+      "scope": "bypasses acquisition; no Init/runtime/Commit qualification",
+      "speed_allocation": "6 pairs PASS"
+    },
+    "init": {
+      "control": "197d2fb7d0a141d7a9350852022febeec3255bf2",
+      "receipt": "core/docs/issues/307/INCUMBENT-RESTORATION-RESULTS-20261007.md",
+      "speed": "8 FAIL",
+      "strict_allocation": "8 FAIL"
+    },
+    "service_init": {
+      "control": "7edddbdb8",
+      "scope": "older Service; distinct from cluster-one-end Project"
+    }
+  },
+  "schema": "cluster-two-evidence-registry-v1",
+  "source_pin_revision": 1,
+  "source_pin_updates": [
+    {
+      "change": "Explicitly add Project import/files.rs INIT_WORKERS=4 source pin for native acquisition constructor profiles; existing route/observer pins are retained and enforced, never refreshed automatically.",
+      "date": "2026-10-07",
+      "revision": 1
+    }
+  ],
+  "version": 1
+}

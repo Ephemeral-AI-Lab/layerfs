@@ -144,3 +144,10 @@ and AttachmentFence credits, and independent consumer shutdown during a blocked 
 R1's scoped validation receipts own actual check outcomes. Full contextual/root
 acceptance, process restart, macOS-host/Docker integration and S7/E/Q qualification
 remain open; those milestones are not completed by this source or these small cases.
+
+The following [R3 local custody checkpoint](46-runtime-custody.md) adds explicit
+consuming Sessions completion after service ownership is released. It moves original
+slot bindings/capabilities/receipts into application custody, distinguishing known
+terminal results, retained cleanup failure and exact unknown outcomes. It supplies
+no process-crash recovery or automatic resolver and does not replace the native
+attachment fence/join described here.

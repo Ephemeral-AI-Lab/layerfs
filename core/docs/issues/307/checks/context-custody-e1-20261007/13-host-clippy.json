@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "clippy",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "-p",
+    "layerfs-sdk",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 4330771125,
+  "kind": "warning-denying Content and SDK all-target Clippy, exact changed product scope",
+  "workers": 1
+}

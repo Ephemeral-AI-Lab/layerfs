@@ -1,0 +1,17 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--cached",
+    "--check",
+    "--",
+    ".",
+    ":(glob,exclude)core/docs/issues/307/checks/context-custody-e1-20261007/*.stdout",
+    ":(glob,exclude)core/docs/issues/307/checks/context-custody-e1-20261007/*.stderr"
+  ],
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "",
+  "exclusion": "only original raw command stdout/stderr; preserved byte-for-byte",
+  "status": "PASS"
+}

@@ -41,6 +41,7 @@ object::codec             canonical envelope encode/decode with checked lengths
 object::AuthenticatedObjects  narrow provider: read_canonical_batch, read_canonical
 object::FinalizedObject   identity + role + owned canonical bytes + direct references
 FinalizedObject::admit    untrusted ID/role/bytes -> authenticated role-derived refs
+FinalizedObject::validate_context  direct children + expected scope/root serial
 object::FinalizedConsumer bounded sink; DiscardingConsumer is the non-persisting one
 object::inode_leaf        checked compact inode value/leaf grammar and pooled layout
 file::construct_bytes     known-length complete-file construction
@@ -82,8 +83,14 @@ enabled or disabled changes no product work and no result.
   ID, decodes the supplied role and derives all direct references (including
   inode content/metadata). The canonical allocation moves without a payload
   copy. Generic `new` remains a trusted-constructor envelope check. Admission
-  alone supplies neither peer authority nor saved dependency closure/contextual
-  tree validation; adapters must establish those before root use.
+  alone supplies neither peer authority nor saved dependency closure. Adapters
+  call `validate_context` with the selected policy, expected scope/root serial
+  and authenticated provider for direct child grammar, fill, level, keys,
+  summaries, content kinds and portable metadata. The provider must be the
+  same Save when dependencies are still pending. Context keeps one-ID demands
+  and page-bounded decoded state, without another canonical hash or a whole-root
+  walk. Serial membership, reverse bindings, aliases, cycles and complete
+  descendant topology remain caller obligations before root use.
 - A range read navigates the tree with one-ID batches and batches only payload
   acquisition; grouped node acquisition is a later change, not a silent default.
 

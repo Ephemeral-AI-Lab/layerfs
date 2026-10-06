@@ -472,3 +472,7 @@ The continuation starts at `da331dfb607f5939b3e150c82480faabf6fb258c`, with rest
 R1 adds initialized provider/service plus authenticated independent socket composition, bounded consumer attachments, pre-dispatch reply reservations and exact joined local custody. The focused R2 binding slice checks actual root-inode/portable-metadata context with authority before demanded children, without a namespace scan/provider reopen. Independent review and public checks cover 43 host SDK bodies and 11 Linux portable bodies; macOS Store targets execute 0 bodies on Linux. All original failures/corrections and LOC95056->96169 core,65417 unchanged reference,160473->161586 combined(+1113) are retained in [the checkpoint](R1-ROOT-BINDING-20261007.md).
 
 Direct-child/contextual topology admission, R3 restart/terminal custody, R4 macOS-host/Docker assembly, full-root/huge/dense>4GiB oracles and E/Q numerical/resource exits remain open. S9 remains CHECKPOINT/unchecked; the full goal continues.
+
+## Direct context and local custody continuation (2026-10-07)
+
+Content direct-child checks now precede original same-Save acceptance; candidate staging validates captured serial and actual root context. Explicit Sessions fence returns original fixed-slot custody after service release.53 host SDK bodies pass; Linux12 portable bodies do not execute the macOS Store targets. Full contextual topology/provenance, crash/unknown recovery qualification and integrated consumers remain incomplete. See [component/check receipts](CONTEXT-CUSTODY-E1-20261007.md).

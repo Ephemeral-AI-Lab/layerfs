@@ -5,7 +5,10 @@
 #[allow(dead_code)]
 mod native;
 use layerfs_content::filesystem::{
-    attributes::{build_attribute_tree, emit_value, AttributeEntry, AttributeKey},
+    attributes::{
+        build_attribute_tree, emit_value, encode_attribute_page, AttributeEntry, AttributeKey,
+        AttributePage,
+    },
     directory::{encode_directory_page, DirectoryPage},
     inode::{encode_inode_page, InodePage},
     profile_id, scope_for_seed, FilesystemRoot,
@@ -19,7 +22,11 @@ use layerfs_history::{
 use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_sdk::{Authorization, Config, Runtime, RuntimeError, RuntimeResult};
 use layerfs_storage::{Storage, StoragePolicy};
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    path::PathBuf,
+    rc::Rc,
+};
 
 #[derive(Clone, Copy)]
 enum Shape {
@@ -41,7 +48,7 @@ enum Shape {
     DeniedChild,
 }
 struct Authority {
-    denied: Option<ObjectId>,
+    denied: Rc<Cell<Option<ObjectId>>>,
     demands: Rc<RefCell<Vec<ObjectId>>>,
 }
 impl Authorization for Authority {
@@ -56,7 +63,7 @@ impl Authorization for Authority {
         ids: &[ObjectId],
     ) -> RuntimeResult<()> {
         self.demands.borrow_mut().extend_from_slice(ids);
-        if self.denied.is_some_and(|id| ids.contains(&id)) {
+        if self.denied.get().is_some_and(|id| ids.contains(&id)) {
             Err(RuntimeError::Denied)
         } else {
             Ok(())
@@ -70,6 +77,10 @@ struct Fixture {
     table: ObjectId,
     child: Option<ObjectId>,
     demands: Rc<RefCell<Vec<ObjectId>>>,
+    storage: Storage,
+    directory: ObjectId,
+    metadata: ObjectId,
+    denied: Rc<Cell<Option<ObjectId>>>,
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
@@ -303,6 +314,15 @@ impl Fixture {
             })
             .unwrap();
         let demands = Rc::new(RefCell::new(Vec::new()));
+        let denied = Rc::new(Cell::new(if deny_table {
+            Some(table)
+        } else if matches!(shape, Shape::DeniedMode) {
+            Some(mode)
+        } else if matches!(shape, Shape::DeniedChild) {
+            child
+        } else {
+            None
+        }));
         let runtime = Runtime::new(
             handles,
             Config {
@@ -310,15 +330,7 @@ impl Fixture {
                 save_slots: 1,
             },
             Box::new(Authority {
-                denied: if deny_table {
-                    Some(table)
-                } else if matches!(shape, Shape::DeniedMode) {
-                    Some(mode)
-                } else if matches!(shape, Shape::DeniedChild) {
-                    child
-                } else {
-                    None
-                },
+                denied: denied.clone(),
                 demands: demands.clone(),
             }),
         )
@@ -330,6 +342,10 @@ impl Fixture {
             table,
             child,
             demands,
+            storage,
+            directory: dir,
+            metadata: meta,
+            denied,
         }
     }
     fn bind(&mut self) -> RuntimeResult<layerfs_sdk::Binding> {
@@ -456,4 +472,338 @@ fn multi_level_root_demand_authorizes_the_selected_child_and_checks_its_summary(
     );
     assert!(matches!(denied.bind(), Err(RuntimeError::Denied)));
     assert_eq!(denied.demands.borrow().last().copied(), denied.child);
+}
+
+#[derive(Clone, Copy)]
+enum CandidateShape {
+    ChangedSerial,
+    RegularRoot,
+    LinkedRoot,
+    WrongContent,
+    WrongMetadata,
+    EmptyMetadata,
+    InvalidMode,
+    Branched,
+    WrongChildSummary,
+    MissingTable,
+}
+struct Candidate {
+    root: ObjectId,
+    table: ObjectId,
+    child: Option<ObjectId>,
+}
+fn save_candidate(
+    storage: &Storage,
+    directory: ObjectId,
+    metadata: ObjectId,
+    shape: CandidateShape,
+) -> Candidate {
+    let save = storage.begin_save().unwrap();
+    let metadata = if matches!(shape, CandidateShape::EmptyMetadata) {
+        let bytes = encode_attribute_page(&AttributePage::Leaf {
+            subtree_bytes: 0,
+            entries: vec![],
+        })
+        .unwrap();
+        let id = ObjectId::for_bytes(&bytes);
+        save.accept(FinalizedObject::new(ObjectRole::AttributeLeaf, bytes).unwrap())
+            .unwrap();
+        id
+    } else if matches!(shape, CandidateShape::InvalidMode) {
+        let mut sink = save.sink();
+        let mut objects = layerfs_content::FilesystemObjects::new(&save, &mut sink);
+        let mode = emit_value(&mut objects, &0o10000_u32.to_be_bytes()).unwrap();
+        let mtime = emit_value(&mut objects, &[0; 12]).unwrap();
+        build_attribute_tree(
+            &mut objects,
+            [
+                AttributeEntry {
+                    key: AttributeKey::new("portable".into(), b"mode".to_vec()).unwrap(),
+                    value_root: mode,
+                },
+                AttributeEntry {
+                    key: AttributeKey::new("portable".into(), b"mtime".to_vec()).unwrap(),
+                    value_root: mtime,
+                },
+            ]
+            .into_iter()
+            .map(Ok),
+        )
+        .unwrap()
+        .0
+    } else {
+        metadata
+    };
+    let serial = if matches!(shape, CandidateShape::ChangedSerial) {
+        2
+    } else {
+        1
+    };
+    let value = InodeValue {
+        kind: if matches!(shape, CandidateShape::RegularRoot) {
+            InodeKind::RegularFile
+        } else {
+            InodeKind::Directory
+        },
+        namespace_ref_count: u64::from(matches!(
+            shape,
+            CandidateShape::RegularRoot | CandidateShape::LinkedRoot
+        )),
+        content_root: if matches!(shape, CandidateShape::WrongContent) {
+            metadata
+        } else {
+            directory
+        },
+        metadata_root: if matches!(shape, CandidateShape::WrongMetadata) {
+            directory
+        } else {
+            metadata
+        },
+    };
+    let branched = matches!(
+        shape,
+        CandidateShape::Branched | CandidateShape::WrongChildSummary
+    );
+    let file = if branched {
+        let bytes = layerfs_content::encode_whole_file_payload(b"candidate sibling").unwrap();
+        let id = ObjectId::for_bytes(&bytes);
+        save.accept(FinalizedObject::new(ObjectRole::WholeFile, bytes).unwrap())
+            .unwrap();
+        Some(id)
+    } else {
+        None
+    };
+    let sibling = InodeValue {
+        kind: InodeKind::RegularFile,
+        namespace_ref_count: 1,
+        content_root: file.unwrap_or(directory),
+        metadata_root: metadata,
+    };
+    let mut entries = vec![(serial, value)];
+    if branched {
+        entries.extend((2..=50).map(|serial| (serial, sibling)));
+    }
+    let bytes = encode_inode_page(&InodePage::Leaf { entries }).unwrap();
+    let mut table = ObjectId::for_bytes(&bytes);
+    save.accept(
+        FinalizedObject::new(ObjectRole::InodeLeaf, bytes)
+            .unwrap()
+            .with_references(if let Some(file) = file {
+                vec![directory, metadata, file]
+            } else {
+                vec![directory, metadata]
+            }),
+    )
+    .unwrap();
+    let child = if branched {
+        let lower = table;
+        let bytes = encode_inode_page(&InodePage::Leaf {
+            entries: (51..=100).map(|serial| (serial, sibling)).collect(),
+        })
+        .unwrap();
+        let upper = ObjectId::for_bytes(&bytes);
+        save.accept(
+            FinalizedObject::new(ObjectRole::InodeLeaf, bytes)
+                .unwrap()
+                .with_references(vec![file.unwrap(), metadata]),
+        )
+        .unwrap();
+        let bytes = encode_inode_page(&InodePage::Branch {
+            level: 1,
+            subtree_count: 100,
+            children: vec![
+                (
+                    if matches!(shape, CandidateShape::WrongChildSummary) {
+                        51
+                    } else {
+                        50
+                    },
+                    lower,
+                ),
+                (100, upper),
+            ],
+        })
+        .unwrap();
+        table = ObjectId::for_bytes(&bytes);
+        save.accept(
+            FinalizedObject::new(ObjectRole::InodeBranch, bytes)
+                .unwrap()
+                .with_references(vec![lower, upper]),
+        )
+        .unwrap();
+        Some(lower)
+    } else {
+        None
+    };
+    if matches!(shape, CandidateShape::MissingTable) {
+        table = ObjectId::for_bytes(b"absent saved candidate inode table");
+    }
+    let bytes = FilesystemRoot::new(profile_id(), scope_for_seed([3; 32]), serial, table)
+        .unwrap()
+        .encode()
+        .unwrap();
+    let root = ObjectId::for_bytes(&bytes);
+    // The existing public trusted wrapper can seed a saved malformed root for
+    // negative contextual-reader tests. MissingTable intentionally omits its
+    // declared reference, as the initial-bind missing-table fixture does above.
+    save.accept(
+        FinalizedObject::new(ObjectRole::FilesystemRoot, bytes)
+            .unwrap()
+            .with_references(if matches!(shape, CandidateShape::MissingTable) {
+                vec![]
+            } else {
+                vec![table]
+            }),
+    )
+    .unwrap();
+    save.finish().unwrap();
+    Candidate { root, table, child }
+}
+
+#[test]
+fn stage_saved_candidate_cannot_change_the_captured_root_inode_serial() {
+    for profile in [
+        SqlitePersistenceProfile::Durable,
+        SqlitePersistenceProfile::Disposable,
+    ] {
+        let mut fixture = Fixture::new(Shape::Valid, false, profile);
+        let binding = fixture.bind().unwrap();
+        assert_eq!(binding.root_serial(), 1);
+        let candidate = save_candidate(
+            &fixture.storage,
+            fixture.directory,
+            fixture.metadata,
+            CandidateShape::ChangedSerial,
+        );
+        let mut sessions = fixture.runtime.sessions();
+        let save = sessions.begin(&binding).unwrap();
+        assert!(sessions.finish(&binding, save).unwrap().outcome().is_ok());
+        assert!(matches!(
+            sessions
+                .stage_saved(&binding, save, candidate.root, 1)
+                .unwrap(),
+            Err(RuntimeError::Content(_))
+        ));
+        assert!(matches!(
+            sessions.stage_saved(&binding, save, candidate.root, 1),
+            Err(RuntimeError::AlreadyAttempted)
+        ));
+        let history = sessions.history_receipts(&binding, save).unwrap();
+        assert!(matches!(
+            history.stage().unwrap(),
+            Err(RuntimeError::Content(_))
+        ));
+        assert!(history.commit().is_none());
+        assert!(history.discard().is_none());
+        assert!(!history.terminal_unknown());
+    }
+}
+
+#[test]
+fn stage_saved_candidate_validates_actual_root_inode_metadata_and_descended_summary() {
+    for profile in [
+        SqlitePersistenceProfile::Durable,
+        SqlitePersistenceProfile::Disposable,
+    ] {
+        let mut fixture = Fixture::new(Shape::Valid, false, profile);
+        let binding = fixture.bind().unwrap();
+        for shape in [
+            CandidateShape::RegularRoot,
+            CandidateShape::LinkedRoot,
+            CandidateShape::WrongContent,
+            CandidateShape::WrongMetadata,
+            CandidateShape::EmptyMetadata,
+            CandidateShape::InvalidMode,
+            CandidateShape::WrongChildSummary,
+        ] {
+            let candidate =
+                save_candidate(&fixture.storage, fixture.directory, fixture.metadata, shape);
+            let mut sessions = fixture.runtime.sessions();
+            let save = sessions.begin(&binding).unwrap();
+            assert!(sessions.finish(&binding, save).unwrap().outcome().is_ok());
+            assert!(matches!(
+                sessions
+                    .stage_saved(&binding, save, candidate.root, 1)
+                    .unwrap(),
+                Err(RuntimeError::Content(_))
+            ));
+            assert!(matches!(
+                sessions.stage_saved(&binding, save, candidate.root, 1),
+                Err(RuntimeError::AlreadyAttempted)
+            ));
+            let history = sessions.history_receipts(&binding, save).unwrap();
+            assert!(matches!(
+                history.stage().unwrap(),
+                Err(RuntimeError::Content(_))
+            ));
+            assert!(history.commit().is_none());
+            assert!(!history.terminal_unknown());
+        }
+    }
+}
+
+#[test]
+fn stage_saved_candidate_retains_original_denied_and_absent_descendant_failures() {
+    for profile in [
+        SqlitePersistenceProfile::Durable,
+        SqlitePersistenceProfile::Disposable,
+    ] {
+        let mut fixture = Fixture::new(Shape::Valid, false, profile);
+        let binding = fixture.bind().unwrap();
+        let candidate = save_candidate(
+            &fixture.storage,
+            fixture.directory,
+            fixture.metadata,
+            CandidateShape::Branched,
+        );
+        fixture.denied.set(candidate.child);
+        fixture.demands.borrow_mut().clear();
+        let mut sessions = fixture.runtime.sessions();
+        let save = sessions.begin(&binding).unwrap();
+        assert!(sessions.finish(&binding, save).unwrap().outcome().is_ok());
+        assert!(matches!(
+            sessions
+                .stage_saved(&binding, save, candidate.root, 1)
+                .unwrap(),
+            Err(RuntimeError::Denied)
+        ));
+        assert_eq!(fixture.demands.borrow().last().copied(), candidate.child);
+        assert!(matches!(
+            sessions.stage_saved(&binding, save, candidate.root, 1),
+            Err(RuntimeError::AlreadyAttempted)
+        ));
+        assert!(matches!(
+            sessions
+                .history_receipts(&binding, save)
+                .unwrap()
+                .stage()
+                .unwrap(),
+            Err(RuntimeError::Denied)
+        ));
+        drop(sessions);
+        fixture.denied.set(None);
+        let candidate = save_candidate(
+            &fixture.storage,
+            fixture.directory,
+            fixture.metadata,
+            CandidateShape::MissingTable,
+        );
+        let mut sessions = fixture.runtime.sessions();
+        let save = sessions.begin(&binding).unwrap();
+        assert!(sessions.finish(&binding, save).unwrap().outcome().is_ok());
+        assert!(
+            matches!(sessions.stage_saved(&binding, save, candidate.root, 1).unwrap(), Err(RuntimeError::Storage(error)) if matches!(error.as_ref(), layerfs_storage::StorageError::ObjectMissing(id) if *id == candidate.table))
+        );
+        assert!(matches!(
+            sessions.stage_saved(&binding, save, candidate.root, 1),
+            Err(RuntimeError::AlreadyAttempted)
+        ));
+        let history = sessions.history_receipts(&binding, save).unwrap();
+        assert!(
+            matches!(history.stage().unwrap(), Err(RuntimeError::Storage(error)) if matches!(error.as_ref(), layerfs_storage::StorageError::ObjectMissing(id) if *id == candidate.table))
+        );
+        assert!(history.commit().is_none());
+        assert!(history.discard().is_none());
+        assert!(!history.terminal_unknown());
+    }
 }

@@ -1,0 +1,20 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-sdk",
+    "--all-targets",
+    "--no-run"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 101,
+  "timed_out": false,
+  "wall_ns": 4794770000,
+  "kind": "SDK contextual admission, stage and custody final target build; macOS real Store",
+  "workers": 1
+}

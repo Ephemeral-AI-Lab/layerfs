@@ -142,3 +142,30 @@ root-inode context, wrong content/metadata roles, scope disagreement, malformed
 or absent portable fields and exact descendant authorization refusal. Full
 contextual Save child meanings, saved closure and incremental alias/cycle evidence
 remain R2/K2 work. This source change does not complete S9 or qualify native mount.
+
+## Direct child-context admission continuation
+
+The continuation after `a41d131f262c926015798d05096ebeaa01c70cdc` adds
+[`FinalizedObject::validate_context`](../../crates/layerfs-content/src/object/output.rs)
+before the original Save accepts an SDK object. Local admission re-derives exact
+references; fresh authority checks cover every further child demand through the
+[authorized object adapter](../../crates/layerfs-api/sdk/src/runtime/authorized_objects.rs).
+The adapter calls that same Save's read method, so pending children are visible
+without creating another provider or reopening a Store. Each Content demand uses
+a one-ID window, with actual chunk slice, child fill/level/summary, inode placement,
+kind-specific content and portable metadata checks. See [object context limits](02-objects.md).
+
+The first authority refusal is returned exactly and does not end the producer.
+An actual same-Save Storage read failure is terminal under its owning contract;
+the returned error and retained Accept completion share the original Storage Arc.
+A Content context refusal records its original Accept phase and prevents later
+Accept/Finish. No prohibited parent is accepted after either terminal failure.
+There is no retry, graph-sized buffer or namespace mirror. Validation pays real
+canonical reads, copies and existing Storage cache work; bounded windows alone
+are no speed or aggregate residency qualification.
+
+Saved stage candidates now use the same bounded root validation and must retain
+the captured root inode serial before history effects. Local serving-scope
+completion returns original slot custody through [the explicit fence](46-runtime-custody.md).
+Full saved closure/topology, incremental reverse bindings and provenance remain
+R2/K2 obligations; process-crash receipt recovery remains R3/application work.

@@ -1,0 +1,100 @@
+{
+  "parent": "a41d131f262c926015798d05096ebeaa01c70cdc",
+  "staged_source_tree": "7c156e385b45e9ec80698325ff64e446bf1871b5",
+  "method": "git archive exact trees crates core/crates; unchanged tools/production_loc.py --root ARCHIVE --json; excludes tests/inline tests/docs/tools/third-party; includes runtime SQL and excluded predecessor product source",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "counts": {
+    "parent": {
+      "combined": 161586,
+      "root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/tmpptj4wz0i",
+      "scopes": {
+        "core": {
+          "crates": {
+            "layerfs-api": 6546,
+            "layerfs-bridge": 1258,
+            "layerfs-bridge-legacy": 6834,
+            "layerfs-content": 14093,
+            "layerfs-daemon": 1831,
+            "layerfs-daemon-legacy": 2151,
+            "layerfs-fuse": 1447,
+            "layerfs-history": 817,
+            "layerfs-overlay": 6567,
+            "layerfs-persistence": 6706,
+            "layerfs-project": 1562,
+            "layerfs-sandbox": 1106,
+            "layerfs-sdk-legacy": 505,
+            "layerfs-server": 3996,
+            "layerfs-storage": 9336,
+            "layerfs-telemetry": 2262,
+            "layerfs-workspace": 2317,
+            "layerfs-workspace-legacy": 26835
+          },
+          "files": 669,
+          "lines": 96169
+        },
+        "reference": {
+          "crates": {
+            "layerfs-cli": 1142,
+            "layerfs-content": 15701,
+            "layerfs-daemon": 3233,
+            "layerfs-fuse": 10986,
+            "layerfs-layerstack-store": 18376,
+            "layerfs-materialization": 358,
+            "layerfs-monitor": 414,
+            "layerfs-sdk": 979,
+            "layerfs-workspace": 11776,
+            "layerfs-workspace-core": 2452
+          },
+          "files": 193,
+          "lines": 65417
+        }
+      }
+    },
+    "staged": {
+      "combined": 162382,
+      "root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/tmpyp47be81",
+      "scopes": {
+        "core": {
+          "crates": {
+            "layerfs-api": 6880,
+            "layerfs-bridge": 1258,
+            "layerfs-bridge-legacy": 6834,
+            "layerfs-content": 14555,
+            "layerfs-daemon": 1831,
+            "layerfs-daemon-legacy": 2151,
+            "layerfs-fuse": 1447,
+            "layerfs-history": 817,
+            "layerfs-overlay": 6567,
+            "layerfs-persistence": 6706,
+            "layerfs-project": 1562,
+            "layerfs-sandbox": 1106,
+            "layerfs-sdk-legacy": 505,
+            "layerfs-server": 3996,
+            "layerfs-storage": 9336,
+            "layerfs-telemetry": 2262,
+            "layerfs-workspace": 2317,
+            "layerfs-workspace-legacy": 26835
+          },
+          "files": 680,
+          "lines": 96965
+        },
+        "reference": {
+          "crates": {
+            "layerfs-cli": 1142,
+            "layerfs-content": 15701,
+            "layerfs-daemon": 3233,
+            "layerfs-fuse": 10986,
+            "layerfs-layerstack-store": 18376,
+            "layerfs-materialization": 358,
+            "layerfs-monitor": 414,
+            "layerfs-sdk": 979,
+            "layerfs-workspace": 11776,
+            "layerfs-workspace-core": 2452
+          },
+          "files": 193,
+          "lines": 65417
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-sdk",
+    "--test",
+    "runtime",
+    "--test",
+    "runtime_binding",
+    "--test",
+    "supervisor",
+    "--test",
+    "wire",
+    "--no-run"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 2173454625,
+  "kind": "affected runtime and unreached SDK targets build after portable fixture shape correction",
+  "workers": 1
+}

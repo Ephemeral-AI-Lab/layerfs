@@ -1,0 +1,64 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test wrong_budget_kind_refuses_attachment_before_native_request ... ok
+test consumer_fence_wakes_blocked_call_and_retains_original_failure ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 5 tests
+test typed_unknown_and_known_cleanup_failures_have_distinct_knowledge ... ok
+test host::held_cancelled_and_dispatched_completions_refuse_fence_before_any_slot_effect ... ok
+test host::one_consuming_scope_fence_moves_fixed_slots_active_producer_and_known_stage ... ok
+test host::fresh_runtime_epoch_refuses_old_binding_and_save_with_equal_captured_context ... ok
+test host::ending_active_producer_preserves_an_already_acknowledged_publication_wave ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+
+running 21 tests
+test missing_dependency_context_is_retained_as_the_original_storage_error ... ok
+test refused_admission_retains_the_exact_phase_without_replay ... ok
+test history_up_to_date_retains_exact_stage_and_transition_without_replay ... ok
+test contextual_authority_refusal_precedes_missing_descendant_and_keeps_the_producer ... FAILED
+test disconnect_retains_completed_save_and_reconnect_reads_without_finish_replay ... ok
+test queued_history_retains_exact_stage_transition_and_explicit_release_ownership ... ok
+test disconnect_cancels_only_unattempted_and_promotes_another_connection_save_head ... ok
+test fair_service_rotates_workspace_and_class_and_retains_result_credit ... ok
+test capability_scope_authority_and_read_window_are_checked_before_service ... ok
+test history_candidate_authority_and_grammar_refusals_preserve_save_and_stage_custody ... ok
+test independent_saves_pending_reads_retained_finish_and_slot_reuse ... ok
+test history_conflict_retains_deciding_stage_and_only_exact_discard_releases_it ... ok
+test same_save_child_context_checks_actual_chunk_bounds_before_parent_acceptance ... ok
+test workspace_serials_come_from_the_owning_scope_allocator_under_authority ... ok
+test service_save_jobs_leave_first_demand_and_control_slots_and_finished_headers_refuse_early ... ok
+test service_revalidates_queued_authority_and_fences_retained_results_across_rewrap ... ok
+test service_orders_one_save_across_classes_and_protects_retained_receipts ... ok
+test workspace_stat_uses_authenticated_scoped_owning_lengths_without_payload_or_fallback ... ok
+test native_consumer_ports_serve_real_saved_objects_lengths_and_serials_without_replay ... ok
+test wire_receipts_preserve_deciding_stage_conflict_and_distinct_inspection_denial ... ok
+test authenticated_native_runtime_delivers_binding_policy_serial_save_and_history_once ... ok
+
+failures:
+
+---- contextual_authority_refusal_precedes_missing_descendant_and_keeps_the_producer stdout ----
+
+thread 'contextual_authority_refusal_precedes_missing_descendant_and_keeps_the_producer' panicked at crates/layerfs-api/sdk/tests/runtime.rs:639:5:
+assertion failed: matches!(Timing::disabled("denied descendant", |scope|
+    {
+        sessions.accept(&binding, save, parent, ObjectRole::InodeLeaf,
+        canonical, scope.child("accept"),)
+    }).0, Err(RuntimeError::Denied))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    contextual_authority_refusal_precedes_missing_descendant_and_keeps_the_producer
+
+test result: FAILED. 20 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+

@@ -1,0 +1,34 @@
+
+running 13 tests
+test attribute_values_require_extent_roots_and_refuse_oversized_lengths_before_mapping_demand ... ok
+test extent_payload_kind_slice_and_file_state_actual_summaries_are_checked ... ok
+test local_reference_and_identity_context_refusals_precede_all_demands ... ok
+test directory_branches_check_fill_level_maximum_and_exact_counts_and_bytes ... ok
+test inode_placement_content_kind_and_portable_metadata_are_contextual ... ok
+test filesystem_root_requires_the_expected_zero_count_directory_record ... ok
+test failures_and_cardinality_end_the_original_demand_without_retry ... ok
+test extent_branches_check_nonroot_fill_level_and_exact_cumulative_summaries ... ok
+test regular_roots_obey_whole_file_capacity_and_retain_small_file_states ... ok
+test inode_branches_check_fill_level_maximum_count_and_leaf_ranges ... ok
+test attribute_branches_check_fill_level_maximum_and_exact_counts_and_bytes ... ok
+test all_thirteen_roles_validate_with_direct_children_and_scoped_one_id_demands ... ok
+test a_hundred_large_inode_roots_do_not_form_one_oversized_provider_batch ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 11 tests
+test identity_of_a_damaged_canonical_object_changes ... ok
+test identity_has_no_variable_width_or_text_shortcuts ... ok
+test chunk_fixture_bytes_and_identity_are_frozen ... ok
+test malformed_envelopes_are_rejected_exactly ... ok
+test identity_is_domain_separated_and_not_a_raw_digest ... ok
+test moving_an_objects_pieces_keeps_its_advisory_predecessors ... ok
+test small_fixture_bytes_and_identity_are_frozen ... ok
+test mapping_profile_and_empty_form_identities_are_frozen ... ok
+test writing_to_a_sink_matches_the_single_allocation_encoder ... ok
+test the_field_ceiling_is_the_frozen_eight_mib_not_the_envelope ... ok
+test the_envelope_ceiling_is_enforced_at_plus_or_minus_one ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

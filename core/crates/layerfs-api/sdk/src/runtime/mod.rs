@@ -1,5 +1,8 @@
 //! Scoped host object/Save service; transport and Workspace control are separate.
+mod authorized_objects;
 mod binding;
+/// Original application-owned custody after explicit local serving-scope completion.
+pub mod custody;
 mod handlers;
 pub use handlers::history::HistoryReceipts;
 pub use handlers::reply::{encode_grant, encode_refusal, encode_reply, WireReply};

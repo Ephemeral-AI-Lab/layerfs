@@ -1,0 +1,66 @@
+
+running 21 tests
+test refused_admission_retains_the_exact_phase_without_replay ... ok
+test missing_dependency_context_is_retained_as_the_original_storage_error ... ok
+test contextual_authority_refusal_precedes_missing_descendant_and_keeps_the_producer ... ok
+test history_up_to_date_retains_exact_stage_and_transition_without_replay ... ok
+test disconnect_retains_completed_save_and_reconnect_reads_without_finish_replay ... ok
+test disconnect_cancels_only_unattempted_and_promotes_another_connection_save_head ... ok
+test queued_history_retains_exact_stage_transition_and_explicit_release_ownership ... ok
+test fair_service_rotates_workspace_and_class_and_retains_result_credit ... ok
+test capability_scope_authority_and_read_window_are_checked_before_service ... ok
+test history_candidate_authority_and_grammar_refusals_preserve_save_and_stage_custody ... ok
+test independent_saves_pending_reads_retained_finish_and_slot_reuse ... ok
+test history_conflict_retains_deciding_stage_and_only_exact_discard_releases_it ... ok
+test same_save_child_context_checks_actual_chunk_bounds_before_parent_acceptance ... ok
+test service_revalidates_queued_authority_and_fences_retained_results_across_rewrap ... ok
+test workspace_serials_come_from_the_owning_scope_allocator_under_authority ... ok
+test service_orders_one_save_across_classes_and_protects_retained_receipts ... ok
+test service_save_jobs_leave_first_demand_and_control_slots_and_finished_headers_refuse_early ... ok
+test workspace_stat_uses_authenticated_scoped_owning_lengths_without_payload_or_fallback ... ok
+test native_consumer_ports_serve_real_saved_objects_lengths_and_serials_without_replay ... ok
+test wire_receipts_preserve_deciding_stage_conflict_and_distinct_inspection_denial ... ok
+test authenticated_native_runtime_delivers_binding_policy_serial_save_and_history_once ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+
+running 10 tests
+test denied_missing_table_is_refused_before_provider_absence ... ok
+test denial_of_root_metadata_value_keeps_the_exact_failure ... ok
+test root_missing_from_inode_table_is_a_context_error ... ok
+test authorized_missing_table_retains_original_storage_identity ... ok
+test denied_descendant_keeps_exact_authority_failure_and_stops_the_demand_path ... ok
+test multi_level_root_demand_authorizes_the_selected_child_and_checks_its_summary ... ok
+test stage_saved_candidate_cannot_change_the_captured_root_inode_serial ... ok
+test stage_saved_candidate_retains_original_denied_and_absent_descendant_failures ... ok
+test stage_saved_candidate_validates_actual_root_inode_metadata_and_descended_summary ... ok
+test binding_checks_actual_root_directory_and_child_roles_under_both_store_profiles ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+
+running 6 tests
+test pre_body_denial_delivers_original_refusal_then_returns_joined_custody_without_dispatch ... ok
+test fence_before_service_admission_returns_original_decoded_unattempted_input ... ok
+test idle_peer_does_not_hold_unrelated_service_and_held_delivery_keeps_both_credits ... ok
+test peer_blocked_after_grant_cannot_hold_unrelated_policy_and_partial_input_returns_at_fence ... ok
+test slow_output_does_not_hold_provider_service_and_fence_returns_dispatched_result ... ok
+test real_supervisor_delivers_binding_same_save_objects_history_and_consumer_ports ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+
+running 9 tests
+test fixed_headers_validate_every_operation_and_refuse_wrong_envelope_before_allocation ... ok
+test typed_refusal_preserves_nested_unknown_original_cleanup_and_opaque_io ... ok
+test consumer_close_fences_a_blocked_call_without_waiting_for_its_mutex_or_replay ... ok
+test consumer_wrong_result_retains_original_body_and_stops_before_another_call ... ok
+test output_permit_refuses_large_capacity_even_when_wire_length_fits ... ok
+test output_permit_charges_retained_capacity_and_refuses_terminal_second_transfer ... ok
+test output_rotates_ready_classes_and_caller_receipts_hold_real_shared_credit ... ok
+test refused_native_header_never_allocates_or_copies_declared_canonical_body ... ok
+test actual_grant_streams_canonical_input_and_disconnect_returns_partial_original ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

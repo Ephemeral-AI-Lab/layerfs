@@ -1,0 +1,99 @@
+
+running 12 tests
+test generic_domains_are_accepted_without_platform_dispatch ... ok
+test a_reader_boundary_is_not_a_store_and_writes_are_rejected_once ... ok
+test a_missing_or_foreign_attribute_tree_fails_explicitly ... ok
+test attribute_pages_reject_malformed_rows_and_reserved_fields ... ok
+test portable_fields_round_trip_and_are_checked ... ok
+test values_are_extent_only_at_every_size ... ok
+test opaque_values_survive_patches_without_being_decoded ... ok
+test the_patch_route_and_a_from_scratch_build_agree_on_the_same_final_set ... ok
+test exact_sizing_partitions_match_the_encoder_and_the_tail_rebalances ... ok
+test reference_attribute_trees_are_reproduced_exactly ... ok
+test every_attribute_descent_rejects_same_or_skipped_child_levels ... ok
+test an_inode_attribute_tree_is_read_through_a_path ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 9 tests
+test attribute_pages_match_the_reference_bytes ... ok
+test roles_and_identity_are_not_interchangeable ... ok
+test roots_and_symlinks_match_the_reference_bytes ... ok
+test malformed_and_reserved_input_is_rejected_once ... ok
+test inode_pages_match_the_reference_bytes ... ok
+test every_tree_role_checks_its_role_byte_and_its_flags ... ok
+test directory_pages_match_the_reference_bytes ... ok
+test both_inode_leaf_routes_are_one_grammar ... ok
+test a_directory_leaf_never_exceeds_the_page_ceiling ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+test a_serial_the_table_lacks_is_not_provider_absence ... ok
+test a_symlink_reads_back_its_exact_stored_target ... ok
+test an_unbound_name_is_not_provider_absence ... ok
+test resolve_stat_and_list_agree_on_the_same_tree ... ok
+test repeated_and_shared_demands_keep_order_and_cardinality ... ok
+test listing_is_bounded_by_bytes_as_well_as_count ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 7 tests
+test an_inode_value_round_trips_and_rejects_a_foreign_kind ... ok
+test a_pooled_value_object_is_exactly_ninety_four_canonical_bytes ... ok
+test a_pooled_body_keeps_the_prefix_and_the_serials ... ok
+test a_leaf_round_trips_with_its_exact_layout ... ok
+test a_pooled_body_rejects_a_zero_ordinal_and_a_wrong_width ... ok
+test checked_pooling_leaf_reuses_decode_and_retains_all_ordinal_checks ... ok
+test malformed_leaves_are_rejected ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+test all_thirteen_roles_derive_exact_references_and_move_the_canonical_allocation ... ok
+test rehashed_impossible_counts_summaries_flags_and_values_are_refused ... ok
+test role_confusion_truncation_and_generic_envelopes_are_refused ... ok
+test domain_identity_scope_and_selected_store_policy_are_required ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 13 tests
+test local_reference_and_identity_context_refusals_precede_all_demands ... ok
+test failures_and_cardinality_end_the_original_demand_without_retry ... ok
+test extent_branches_check_nonroot_fill_level_and_exact_cumulative_summaries ... ok
+test extent_payload_kind_slice_and_file_state_actual_summaries_are_checked ... ok
+test attribute_values_require_extent_roots_and_refuse_oversized_lengths_before_mapping_demand ... ok
+test inode_branches_check_fill_level_maximum_count_and_leaf_ranges ... ok
+test filesystem_root_requires_the_expected_zero_count_directory_record ... ok
+test inode_placement_content_kind_and_portable_metadata_are_contextual ... ok
+test directory_branches_check_fill_level_maximum_and_exact_counts_and_bytes ... FAILED
+test attribute_branches_check_fill_level_maximum_and_exact_counts_and_bytes ... FAILED
+test regular_roots_obey_whole_file_capacity_and_retain_small_file_states ... ok
+test all_thirteen_roles_validate_with_direct_children_and_scoped_one_id_demands ... ok
+test a_hundred_large_inode_roots_do_not_form_one_oversized_provider_batch ... ok
+
+failures:
+
+---- directory_branches_check_fill_level_maximum_and_exact_counts_and_bytes stdout ----
+
+thread 'directory_branches_check_fill_level_maximum_and_exact_counts_and_bytes' panicked at crates/layerfs-content/tests/object_context.rs:686:14:
+called `Result::unwrap()` on an `Err` value: NonCanonicalOrdering
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- attribute_branches_check_fill_level_maximum_and_exact_counts_and_bytes stdout ----
+
+thread 'attribute_branches_check_fill_level_maximum_and_exact_counts_and_bytes' panicked at crates/layerfs-content/tests/object_context.rs:795:18:
+called `Result::unwrap()` on an `Err` value: NonCanonicalOrdering
+
+
+failures:
+    attribute_branches_check_fill_level_maximum_and_exact_counts_and_bytes
+    directory_branches_check_fill_level_maximum_and_exact_counts_and_bytes
+
+test result: FAILED. 11 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

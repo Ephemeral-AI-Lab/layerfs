@@ -1,6 +1,6 @@
 //! Exact bound history attempts; no transport disconnect implies publication.
 use crate::runtime::{Binding, CompletionPhase, RuntimeError, RuntimeResult, SaveId, Sessions};
-use layerfs_content::{FilesystemRoot, ObjectId};
+use layerfs_content::ObjectId;
 use layerfs_history::error::StageDisposition;
 use layerfs_history::{
     CommitStagedOutcome, CommitStagedRequest, DiscardOutcome, DiscardRequest, HistoryCatalog,
@@ -16,6 +16,11 @@ pub struct HistoryReceipts {
     discard: Option<RuntimeResult<DiscardOutcome>>,
 }
 impl HistoryReceipts {
+    /// Exact recorded history uncertainty, independent of Save completion/cleanup.
+    /// Reading this predicate neither fences a process nor resolves publication.
+    pub fn terminal_unknown(&self) -> bool {
+        unknown(&self.stage) || unknown(&self.commit) || unknown(&self.discard)
+    }
     /// Stage admission/provider result, absent until an attempt starts.
     pub fn stage(&self) -> Option<&RuntimeResult<StageRecord>> {
         self.stage.as_ref()
@@ -29,10 +34,7 @@ impl HistoryReceipts {
         self.discard.as_ref()
     }
     pub(crate) fn retains_custody(&self) -> bool {
-        fn unknown<T>(attempt: &Option<RuntimeResult<T>>) -> bool {
-            matches!(attempt, Some(Err(RuntimeError::History(error))) if error.unknown())
-        }
-        if unknown(&self.stage) || unknown(&self.commit) || unknown(&self.discard) {
+        if self.terminal_unknown() {
             return true;
         }
         if self.commit.as_ref().is_some_and(Result::is_ok)
@@ -50,6 +52,9 @@ impl HistoryReceipts {
         self.stage.as_ref().is_some_and(Result::is_ok)
     }
 }
+fn unknown<T>(attempt: &Option<RuntimeResult<T>>) -> bool {
+    matches!(attempt, Some(Err(RuntimeError::History(error))) if error.unknown())
+}
 impl Sessions<'_> {
     /// Reads the exact retained history results under fresh authority validation.
     /// An absent receipt is not an unfenced provider/history absence claim.
@@ -64,7 +69,7 @@ impl Sessions<'_> {
     /// One saved candidate admission and stage attempt. All authority/expectation
     /// fields come from the bound snapshot; callers supply only root/generation.
     /// SaveFinish must already have succeeded. This checks the saved root's
-    /// grammar/scope/profile; full contextual topology validation remains the
+    /// scope/profile/root serial and demanded root inode/metadata; full topology remains the
     /// owning content construction obligation.
     pub fn stage_saved(
         &mut self,
@@ -115,21 +120,12 @@ impl Sessions<'_> {
         if generation > i64::MAX as u64 {
             return Err(RuntimeError::Invalid("history generation"));
         }
-        struct RootReply(Option<FilesystemRoot>);
-        impl crate::ObjectReply for RootReply {
-            fn object(&mut self, _: ObjectId, canonical: &[u8]) -> RuntimeResult<()> {
-                self.0 = Some(FilesystemRoot::decode(canonical)?);
-                Ok(())
-            }
-        }
-        let mut reply = RootReply(None);
-        self.read_objects(binding, None, &[candidate_root], &mut reply)?;
-        let root = reply.0.ok_or(RuntimeError::Invalid("candidate demand"))?;
-        if root.scope().object() != binding.snapshot.scope
-            || root.profile() != binding.snapshot.profile
-        {
-            return Err(RuntimeError::Invalid("candidate scope/profile"));
-        }
+        super::super::root_binding::validate_candidate(
+            self.demand.reader()?,
+            self.authority,
+            binding,
+            candidate_root,
+        )?;
         let snapshot = &binding.snapshot;
         Ok(self.history.stage_changes(&StageRequest {
             workspace: binding.workspace,

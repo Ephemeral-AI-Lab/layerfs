@@ -72,6 +72,7 @@ impl Authorization for Allow {
 struct Fixture {
     _temp: Temp,
     runtime: Runtime,
+    storage: Storage,
     branch: BranchId,
     revoked: Rc<Cell<bool>>,
     deny: Rc<Cell<Option<ObjectId>>>,
@@ -208,6 +209,7 @@ impl Fixture {
         Self {
             _temp: temp,
             runtime,
+            storage,
             branch,
             revoked,
             deny,
@@ -437,7 +439,7 @@ fn refused_admission_retains_the_exact_phase_without_replay() {
 }
 
 #[test]
-fn missing_dependency_finish_is_retained_as_the_original_storage_error() {
+fn missing_dependency_context_is_retained_as_the_original_storage_error() {
     let mut f = Fixture::new();
     let branch = f.branch;
     let mut s = f.runtime.sessions();
@@ -457,7 +459,7 @@ fn missing_dependency_finish_is_retained_as_the_original_storage_error() {
     })
     .unwrap();
     let object = ObjectId::for_bytes(&canonical);
-    Timing::disabled("accept", |scope| {
+    let error = Timing::disabled("accept", |scope| {
         s.accept(
             &a,
             id,
@@ -468,16 +470,205 @@ fn missing_dependency_finish_is_retained_as_the_original_storage_error() {
         )
     })
     .0
-    .unwrap();
-    let receipt = s.finish(&a, id).unwrap();
+    .unwrap_err();
+    let original = match error {
+        RuntimeError::Storage(error) => error,
+        other => panic!("original missing-child read failure: {other}"),
+    };
+    assert!(matches!(original.as_ref(), StorageError::ObjectMissing(id) if *id == missing));
+    let receipt = s.completion(&a, id).unwrap();
+    assert_eq!(receipt.phase(), CompletionPhase::Accept);
     assert!(
-        matches!(receipt.outcome(),Err(RuntimeError::Storage(error)) if matches!(error.as_ref(),StorageError::MissingDependency { object: parent,reference } if *parent==object && *reference==missing))
+        matches!(receipt.outcome(),Err(RuntimeError::Storage(error)) if std::sync::Arc::ptr_eq(error, &original))
     );
     assert!(matches!(
         s.finish(&a, id),
         Err(RuntimeError::AlreadyAttempted)
     ));
     s.release(&a, id).unwrap();
+}
+
+#[test]
+fn same_save_child_context_checks_actual_chunk_bounds_before_parent_acceptance() {
+    use layerfs_content::file::mapping::{
+        encode_chunk_object, encode_node, ExtentNode, ExtentSlice,
+    };
+    let mut fixture = Fixture::new();
+    let branch = fixture.branch;
+    let mut sessions = fixture.runtime.sessions();
+    let binding = binding(&sessions, branch, 31, 1);
+    let save = sessions.begin(&binding).unwrap();
+    let chunk = encode_chunk_object(b"abcdefgh").unwrap();
+    let child = ObjectId::for_bytes(&chunk);
+    Timing::disabled("context child", |scope| {
+        sessions.accept(
+            &binding,
+            save,
+            child,
+            ObjectRole::Chunk,
+            chunk,
+            scope.child("accept"),
+        )
+    })
+    .0
+    .unwrap();
+    let leaf = |start, length| {
+        encode_node(
+            &ExtentNode::Leaf {
+                subtree_logical_bytes: u64::from(length),
+                extents: vec![ExtentSlice::new(child, start, length).unwrap()],
+            },
+            true,
+        )
+        .unwrap()
+    };
+    let valid = leaf(2, 4);
+    let valid_id = ObjectId::for_bytes(&valid);
+    Timing::disabled("valid parent", |scope| {
+        sessions.accept(
+            &binding,
+            save,
+            valid_id,
+            ObjectRole::ExtentLeaf,
+            valid,
+            scope.child("accept"),
+        )
+    })
+    .0
+    .unwrap();
+    let malformed = leaf(7, 4);
+    let malformed_id = ObjectId::for_bytes(&malformed);
+    assert!(matches!(
+        Timing::disabled("invalid parent", |scope| {
+            sessions.accept(
+                &binding,
+                save,
+                malformed_id,
+                ObjectRole::ExtentLeaf,
+                malformed,
+                scope.child("accept"),
+            )
+        })
+        .0,
+        Err(RuntimeError::Content(
+            layerfs_content::ContentError::InvalidRecord("extent payload slice")
+        ))
+    ));
+    assert_eq!(
+        sessions.completion(&binding, save).unwrap().phase(),
+        CompletionPhase::Accept
+    );
+    assert!(matches!(
+        sessions.finish(&binding, save),
+        Err(RuntimeError::AlreadyAttempted)
+    ));
+    let mut reply = Reply::default();
+    assert!(
+        matches!(sessions.read_objects(&binding, None, &[malformed_id], &mut reply), Err(RuntimeError::Storage(error)) if matches!(error.as_ref(), StorageError::ObjectMissing(id) if *id == malformed_id))
+    );
+    sessions.release(&binding, save).unwrap();
+}
+
+#[test]
+fn contextual_authority_refusal_precedes_missing_descendant_and_keeps_the_producer() {
+    use layerfs_content::filesystem::attributes::{
+        codec::{row_bytes, LEAF_ROW_OVERHEAD},
+        encode_attribute_page, AttributeEntry, AttributeKey, AttributePage,
+    };
+    let mut fixture = Fixture::new();
+    let branch = fixture.branch;
+    let deny = fixture.deny.clone();
+    let missing = ObjectId::from_bytes(&[29; 32]).unwrap();
+    let entries = [b"mode".as_slice(), b"mtime".as_slice()]
+        .into_iter()
+        .map(|name| AttributeEntry {
+            key: AttributeKey::new("portable".into(), name.to_vec()).unwrap(),
+            value_root: missing,
+        })
+        .collect::<Vec<_>>();
+    let canonical = encode_attribute_page(&AttributePage::Leaf {
+        subtree_bytes: entries
+            .iter()
+            .map(|entry| row_bytes(&entry.key, LEAF_ROW_OVERHEAD) as u64)
+            .sum(),
+        entries,
+    })
+    .unwrap();
+    let metadata = ObjectId::for_bytes(&canonical);
+    // The public raw consumer can retain a locally valid page whose caller omits
+    // its missing reference. SDK context must still derive and authorize the
+    // actual descendant; this fixture does not inject a provider failure.
+    let raw_save = fixture.storage.begin_save().unwrap();
+    raw_save
+        .accept(
+            layerfs_content::FinalizedObject::new(ObjectRole::AttributeLeaf, canonical).unwrap(),
+        )
+        .unwrap();
+    raw_save.finish().unwrap();
+    let mut sessions = fixture.runtime.sessions();
+    let binding = binding(&sessions, branch, 32, 1);
+    let save = sessions.begin(&binding).unwrap();
+    let mut reply = Reply::default();
+    sessions
+        .read_objects(
+            &binding,
+            None,
+            &[binding.snapshot().effective_root],
+            &mut reply,
+        )
+        .unwrap();
+    let root = FilesystemRoot::decode(&reply.0[0].1).unwrap();
+    reply.0.clear();
+    sessions
+        .read_objects(&binding, None, &[root.inode_table()], &mut reply)
+        .unwrap();
+    let InodePage::Leaf { entries } =
+        layerfs_content::filesystem::inode::decode_inode_page(&reply.0[0].1).unwrap()
+    else {
+        panic!("fixture leaf")
+    };
+    let directory = entries[0].1.content_root;
+    let canonical = encode_inode_page(&InodePage::Leaf {
+        entries: vec![(
+            2,
+            InodeValue {
+                kind: InodeKind::Directory,
+                namespace_ref_count: 1,
+                content_root: directory,
+                metadata_root: metadata,
+            },
+        )],
+    })
+    .unwrap();
+    let parent = ObjectId::for_bytes(&canonical);
+    deny.set(Some(missing));
+    assert!(matches!(
+        Timing::disabled("denied descendant", |scope| {
+            sessions.accept(
+                &binding,
+                save,
+                parent,
+                ObjectRole::InodeLeaf,
+                canonical,
+                scope.child("accept"),
+            )
+        })
+        .0,
+        Err(RuntimeError::Denied)
+    ));
+    assert!(matches!(
+        sessions.completion(&binding, save),
+        Err(RuntimeError::Invalid("Save not completed"))
+    ));
+    deny.set(None);
+    accept(
+        &mut sessions,
+        &binding,
+        save,
+        b"independent authorized input",
+    );
+    assert!(sessions.finish(&binding, save).unwrap().outcome().is_ok());
+    sessions.release(&binding, save).unwrap();
 }
 
 type EmittedObject = (ObjectId, ObjectRole, Vec<u8>);

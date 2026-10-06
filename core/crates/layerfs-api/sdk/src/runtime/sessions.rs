@@ -26,8 +26,8 @@ pub struct Sessions<'a> {
     owners: &'a [Storage],
     pub(super) demand: &'a Storage,
     pub(super) history: &'a HistoryProvider,
-    authority: &'a dyn Authorization,
-    owner: [u8; 32],
+    pub(super) authority: &'a dyn Authorization,
+    pub(super) owner: [u8; 32],
     next_serial: &'a mut u64,
     pub(super) slots: Vec<Slot<'a>>,
     pub(super) service_owners: std::rc::Rc<std::cell::Cell<usize>>,
@@ -171,7 +171,9 @@ impl<'a> Sessions<'a> {
         })
     }
 
-    /// One semantically admitted object; no total Save/file/edit counter limit.
+    /// One semantically admitted object with bounded authorized child context.
+    /// No total Save/file/edit counter limit. Same-Save read failure retains its
+    /// original storage cause; authority refusal alone leaves the producer intact.
     pub fn accept(
         &mut self,
         binding: &Binding,
@@ -186,45 +188,88 @@ impl<'a> Sessions<'a> {
         if self.slots[id.slot].completion.is_some() {
             return Err(RuntimeError::AlreadyAttempted);
         }
-        let object = match FinalizedObject::admit(
-            claimed,
-            role,
-            canonical,
-            self.owners[id.slot].policy().construction(),
-            InodeScope::from_object(binding.snapshot.scope),
-            timing,
-        ) {
-            Ok(object) => object,
-            Err(error) => {
+        let policy = self.owners[id.slot].policy().construction();
+        let inode_scope = InodeScope::from_object(binding.snapshot.scope);
+        timing.run(|scope| {
+            let object = match FinalizedObject::admit(
+                claimed,
+                role,
+                canonical,
+                policy,
+                inode_scope,
+                scope.child("runtime.accept.local"),
+            ) {
+                Ok(object) => object,
+                Err(error) => {
+                    self.slots[id.slot].completion = Some(Completion {
+                        phase: CompletionPhase::Accept,
+                        outcome: Err(RuntimeError::Content(error.clone())),
+                    });
+                    return Err(error.into());
+                }
+            };
+            let mut refs = Vec::with_capacity(1 + object.references().len());
+            refs.push(claimed);
+            refs.extend_from_slice(object.references());
+            self.authority.objects(
+                binding.peer,
+                binding.workspace,
+                binding.snapshot.branch.id,
+                &refs,
+            )?;
+            let checked = {
+                let save = self.slots[id.slot]
+                    .save
+                    .as_ref()
+                    .ok_or(RuntimeError::AlreadyAttempted)?;
+                let reader = super::authorized_objects::AuthorizedObjects::new(
+                    self.authority,
+                    binding.peer,
+                    binding.workspace,
+                    binding.snapshot.branch.id,
+                    |ids| save.read_objects(ids),
+                );
+                let result = object.validate_context(
+                    &reader,
+                    policy,
+                    inode_scope,
+                    binding.root_serial,
+                    scope.child("runtime.accept.context"),
+                );
+                reader.finish(result)
+            };
+            match checked {
+                Ok(()) => (),
+                Err(super::authorized_objects::ReadFailure::Authority(error)) => return Err(error),
+                Err(super::authorized_objects::ReadFailure::Storage(error)) => {
+                    self.slots[id.slot].completion = Some(Completion {
+                        phase: CompletionPhase::Accept,
+                        outcome: Err(RuntimeError::Storage(error.clone())),
+                    });
+                    return Err(RuntimeError::Storage(error));
+                }
+                Err(super::authorized_objects::ReadFailure::Content(error)) => {
+                    self.slots[id.slot].completion = Some(Completion {
+                        phase: CompletionPhase::Accept,
+                        outcome: Err(RuntimeError::Content(error.clone())),
+                    });
+                    return Err(RuntimeError::Content(error));
+                }
+            }
+            let save = self.slots[id.slot]
+                .save
+                .as_ref()
+                .ok_or(RuntimeError::AlreadyAttempted)?;
+            if let Err(error) = save.accept(object) {
+                let error = std::sync::Arc::new(error);
                 self.slots[id.slot].completion = Some(Completion {
                     phase: CompletionPhase::Accept,
-                    outcome: Err(RuntimeError::Content(error.clone())),
+                    outcome: Err(RuntimeError::Storage(error.clone())),
                 });
-                return Err(error.into());
+                return Err(RuntimeError::Storage(error));
             }
-        };
-        let mut refs = Vec::with_capacity(1 + object.references().len());
-        refs.push(claimed);
-        refs.extend_from_slice(object.references());
-        self.authority.objects(
-            binding.peer,
-            binding.workspace,
-            binding.snapshot.branch.id,
-            &refs,
-        )?;
-        let save = self.slots[id.slot]
-            .save
-            .as_ref()
-            .ok_or(RuntimeError::AlreadyAttempted)?;
-        if let Err(error) = save.accept(object) {
-            let error = std::sync::Arc::new(error);
-            self.slots[id.slot].completion = Some(Completion {
-                phase: CompletionPhase::Accept,
-                outcome: Err(RuntimeError::Storage(error.clone())),
-            });
-            return Err(RuntimeError::Storage(error));
-        }
-        Ok(claimed)
+            Ok(claimed)
+        })
     }
 
     /// One bounded saved or same-Save demand, streamed to a borrowed reply sink.

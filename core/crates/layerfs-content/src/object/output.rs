@@ -137,6 +137,32 @@ impl FinalizedObject {
         })
     }
 
+    /// Validates direct child meanings in the expected filesystem context.
+    ///
+    /// Uses owning canonical decoders, the selected Store policy and an
+    /// authenticated provider. A Save caller supplies that same Save's provider
+    /// so earlier accepted children are visible. Local references are derived
+    /// again and compared with the retained list; identity needs no second hash
+    /// because this type's canonical allocation and ID cannot be mutated.
+    ///
+    /// Child demands use one-ID windows. Checks cover child grammar, fill,
+    /// level, keys and summaries, inode content kinds and portable metadata,
+    /// and the expected filesystem-root scope and serial. A provider failure
+    /// ends validation once, with its original error. This does not establish
+    /// peer authority, saved closure, serial membership, reverse bindings,
+    /// aliases, cycles or complete descendant topology. Those remain caller
+    /// obligations before root use.
+    pub fn validate_context(
+        &self,
+        provider: &dyn crate::object::AuthenticatedObjects,
+        policy: crate::policy::ConstructionPolicy,
+        inode_scope: crate::filesystem::InodeScope,
+        root_serial: u64,
+        timing: layerfs_telemetry::timer::TimingScope<'_>,
+    ) -> ContentResult<()> {
+        super::context::validate(self, provider, policy, inode_scope, root_serial, timing)
+    }
+
     /// Attaches the direct logical references this object was built from.
     pub fn with_references(mut self, references: Vec<ObjectId>) -> Self {
         self.references = references;

@@ -36,7 +36,7 @@ pub(super) fn references(
     })
 }
 
-fn decode_references(
+pub(super) fn decode_references(
     role: ObjectRole,
     canonical: &[u8],
     policy: ConstructionPolicy,

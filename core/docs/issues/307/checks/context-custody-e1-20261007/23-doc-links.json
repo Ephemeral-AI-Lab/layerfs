@@ -1,0 +1,21 @@
+{
+  "files": [
+    "core/crates/layerfs-content/README.md",
+    "core/docs/architecture/02-objects.md",
+    "core/docs/architecture/22-sdk-runtime.md",
+    "core/docs/architecture/37-runtime-history-receipts.md",
+    "core/docs/architecture/45-runtime-supervision.md",
+    "core/docs/architecture/46-runtime-custody.md",
+    "core/docs/issues/307/CONTEXT-CUSTODY-E1-20261007.md",
+    "core/docs/issues/307/E1-REGISTRATION-20261007.md",
+    "core/docs/issues/307/PROGRESS.md",
+    "core/docs/issues/307/S7-EXIT-AUDIT.md",
+    "core/docs/issues/307/S9-EXIT-AUDIT.md",
+    "core/docs/issues/307/checks/context-custody-e1-20261007/FAILURES.md",
+    "docs/roadmap/0.1/0.1.7/cluster-two-e1-registration-v1.md"
+  ],
+  "local_links_checked": 176,
+  "anchors_checked": 1,
+  "errors": [],
+  "status": "PASS"
+}

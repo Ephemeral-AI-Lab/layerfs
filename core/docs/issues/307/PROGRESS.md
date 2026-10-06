@@ -22,7 +22,9 @@ six passing history comparisons and eight Init speed/allocation failures.
 History bypasses acquisition tables and does not qualify Project or runtime.
 A1–A4 remain delivered; R1–R4/E1–E4/Q1 and S7/S8/S9 remain incomplete. Native FUSE,
 API-core and Sandbox remain excluded until real replacements are implemented.
-Next ready: reconcile tracker/source, then R1 supervision and E1 registration.
+R1/root binding is committed at `a41d131f2`; direct context/local custody and E1
+registration have passed scoped checks below. Next ready: real upstream/application
+assembly, independent observers and owning backed construction corrections.
 
 The plan schedules native tests during S8, real command workloads with S8/S9,
 complete LayerFS Commit/remount proof with S10, final qualification in S12 and
@@ -58,6 +60,24 @@ LOC. E1 tooling is independently authored and receiving evidence-review repairs;
 all 27 proposed samples remain NOT_RUN. R3 custody, Content direct-child admission,
 E2–E4/R4/Q1, S8 and backed S10 construction remain useful next work. S0 and S7–S13
 remain unchecked; the active goal continues.
+
+## Active continuation: direct context, local custody and E1 (2026-10-07)
+
+The [component checkpoint](CONTEXT-CUSTODY-E1-20261007.md) adds direct child context
+through the original SDK Save, bounded saved-candidate root admission, explicit
+serving-scope custody transfer and E1's27 prospective registration rows.53 unique
+host SDK and62 focused Content bodies pass; Linux covers62 Content and12 portable
+SDK bodies, with macOS Store-only targets explicitly executing zero there.
+All-target host/Linux Clippy, core format,680-file guard,40 tooling tests and43 E1
+registration/numeric tests pass. Original failures and source diagnoses remain in
+[append-only receipts](checks/context-custody-e1-20261007/).
+
+R2 full closure/topology/provenance and R3 actual process-crash/unknown qualification
+remain incomplete. E1 supplies registration and numeric evaluation only, with
+qualification NOT_EVALUATED; all27 samples remain NOT_RUN. It implements no driver
+or physical observer and closes no E1/S7/S9 exit. Actual consumer assembly, E2–E4/
+Q1/native lifecycle and backed Content K1/K2 remain ready independent work. No
+checklist item advances; retained Init failures and history results remain unchanged.
 
 ## Historical checkpoint (2026-10-06, S7–S9 batch)
 

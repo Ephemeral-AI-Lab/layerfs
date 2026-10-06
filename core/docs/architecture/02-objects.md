@@ -152,3 +152,68 @@ missing inode dependency at Save completion. Public tests cover all roles,
 cross-role confusion, rehashed malformed input, allocation ownership, policy/
 scope and real macOS Store reconstruction/closure. These small proofs do not
 complete P1 or qualify the authenticated runtime.
+
+### 2.6 Direct child context — #307 R2 component checkpoint
+
+The additive public [FinalizedObject::validate_context](../../crates/layerfs-content/src/object/output.rs)
+uses the owning canonical decoders with an authenticated provider, the persisted
+Store construction policy, expected inode scope/root serial and a timing scope.
+The [context modules](../../crates/layerfs-content/src/object/context/mod.rs) own
+these checks. This describes component source; authenticated runtime assembly,
+R2 completion and integrated qualification have separate evidence obligations.
+
+Validation first checks policy and root-serial representability, then re-derives
+local references and requires exact agreement with the object's retained list.
+It does not rehash canonical bytes: `new`/`admit` establish identity, private
+canonical/ID fields have no mutation API, and `with_references` changes only the
+list checked here. Providers authenticate demanded child bytes. The object is
+borrowed, so validation neither copies nor transfers its canonical allocation.
+
+| Role context | Owning checks |
+| --- | --- |
+| Extent leaf | Actual Chunk grammar and every slice end within that Chunk's decoded payload |
+| Extent branch | Child non-root fill, level and exact cumulative byte/extent summaries |
+| FileState | Actual mapping root under root fill rules; exact level/logical-byte/extent totals |
+| Inode leaf | Every serial representable in the expected scope; root placement from `serial == root_serial`; kind-specific content root and required portable mode/mtime |
+| Inode branch | Child fill/level/maximum key and exact summed subtree count; local child serial representability and visible sibling key ordering |
+| Directory | Local serial representability and no root binding; branch child fill/level/maximum key and exact count/encoded-row-byte sums |
+| Attribute | Nonempty bounded extent-only value roots with exact mapping-root summaries; branch child fill/level/maximum key and exact count/encoded-row-byte sums |
+| Filesystem root | Supported profile, expected scope/serial and demand lookup of its required zero-count Directory root inode, content kind and portable metadata |
+
+Regular-file WholeFile capacity follows the selected policy. A valid FileState
+below the fresh-construction cutoff remains accepted: a no-op localized edit can
+retain that representation. Generic attribute values use extent-only roots;
+portable metadata is read through the existing fixed mode/mtime key and value
+interfaces and validated against the owning inode kind.
+
+The contextual [provider adapter](../../crates/layerfs-content/src/object/context/read.rs)
+splits every underlying demand into one-ID windows, checks exact cardinality and
+forwards the actual provider work under `content.context.read`. Direct roots are
+released before the next inode/content demand; an inode leaf's one hundred roots
+never become a single request exceeding the Reader's 32 MiB window. Existing
+portable reads retain only their fixed key/path/value windows. A failed read
+returns its exact Content error once. A runtime that uses a Save must recover its
+original typed storage failure through the owning Save adapter; this API supplies
+no retry, refresh, replay or failed-Save continuation.
+
+Let B be the local canonical bytes inspected, C the total demanded canonical
+bytes and D the actual bounded canonical tree depth. Direct branch/leaf work is
+O(B+C+R), with R bounded by the page grammar. An inode leaf has at most 100 rows;
+its required portable fields and a filesystem root's single inode demand add
+O(I*D) path work plus C, where I is the local inode count. Decode/reference state
+is page-bounded; one content root is held at a time and portable values have
+fixed 4/12-byte logical widths. Equal child IDs can be demanded again; there is
+no cross-object memo or claimed amortized cache saving. Across accepted objects,
+cost is the sum of these actual demands and provider authentication/Save work.
+No file-, Save- or Workspace-sized graph is collected and no whole-root scan
+is moved into binding.
+
+These are direct context checks. A branch child's first summary key is not the
+minimum of every descendant, so visible sibling ordering does not establish
+complete descendant range order. Serial membership, exact reverse bindings,
+alias counts, cycles, predecessor provenance, authority and complete saved
+closure remain their owning caller/K2 obligations. The external
+[object_context tests](../../crates/layerfs-content/tests/object_context.rs) cover
+all thirteen roles, malformed direct contexts, early refusals, one-ID demand
+windows and exact original read failures; their source presence is not a passing
+test receipt or complete R2 acceptance.

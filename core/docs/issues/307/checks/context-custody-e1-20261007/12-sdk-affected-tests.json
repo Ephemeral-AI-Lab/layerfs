@@ -1,0 +1,26 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-sdk",
+    "--test",
+    "runtime",
+    "--test",
+    "runtime_binding",
+    "--test",
+    "supervisor",
+    "--test",
+    "wire"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 3635535917,
+  "kind": "affected runtime and previously unreached root-binding/supervisor/wire targets; unchanged attachment/custody evidence reused",
+  "workers": 1
+}

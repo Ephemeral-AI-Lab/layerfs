@@ -49,3 +49,16 @@ acquisition or an unknown-history resolver. The subsequent
 dispatch and local attachment/result fences. The remaining obligations are
 [S9 prerequisites](../issues/307/S9-EXIT-AUDIT.md); S10 Commit/install integration
 and P3/P6/P7/P13/P14 are outside this batch.
+
+## Bounded candidate context continuation
+
+The continuation after `a41d131f262c926015798d05096ebeaa01c70cdc` replaces the
+root-envelope-only admission described above with the same authorized root reader
+used at bind. Before `HistoryCatalog::stage_changes`, the candidate must match
+the captured scope, profile and root serial, and its actual root inode must be a
+zero-reference Directory with a valid directory root page and portable mode/mtime.
+Root serial mismatch is rejected before inode-table demand. Authority precedes
+each canonical acquisition and the first original provider/authority error is
+retained in the one stage attempt. There is no whole-root traversal or implicit
+re-stage. Exact saved reference closure and full topology/provenance are separate
+R2/K2 obligations; this bounded check does not assert them.

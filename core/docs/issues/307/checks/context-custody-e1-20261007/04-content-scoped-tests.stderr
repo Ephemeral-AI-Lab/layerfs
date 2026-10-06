@@ -1,0 +1,14 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.94s
+     Running tests/filesystem_attributes.rs (core/target/debug/deps/filesystem_attributes-c3beface54fc1aee)
+     Running tests/filesystem_codec.rs (core/target/debug/deps/filesystem_codec-b8b91e275abd598c)
+     Running tests/filesystem_read.rs (core/target/debug/deps/filesystem_read-74b9ee6c7d86651a)
+     Running tests/inode_leaf.rs (core/target/debug/deps/inode_leaf-21e5d147d56215b9)
+     Running tests/object_admission.rs (core/target/debug/deps/object_admission-e13c0d130e69f13b)
+     Running tests/object_context.rs (core/target/debug/deps/object_context-546585297a15e2b8)
+error: test failed, to rerun pass `-p layerfs-content --test object_context`

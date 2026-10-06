@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "object_context",
+    "--test",
+    "object_identity"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1477050417,
+  "kind": "affected context and previously unreached identity public regressions; prior unchanged passed targets reused",
+  "workers": 1
+}
