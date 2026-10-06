@@ -1,0 +1,40 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running tests/backing_custody.rs (core/target/cluster2-runtime-tests/debug/deps/backing_custody-e934de26c45f0045)
+
+running 3 tests
+test a_released_run_takes_no_further_rows ... ok
+test a_failed_release_is_final_and_keeps_its_cause_and_bytes ... ok
+
+running 1 test
+test a_failed_partial_append_keeps_its_physical_bytes_charged ... BACKING_PARTIAL_APPEND on_disk=8192 requested=65536
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+test a_failed_partial_append_keeps_its_physical_bytes_charged ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/acquisition_custody.rs (core/target/cluster2-runtime-tests/debug/deps/acquisition_custody-de71bfa684e1c05f)
+
+running 2 tests
+test scratch_inside_source_is_refused_before_the_source_changes ... ok
+
+thread 'failed_scratch_release_reports_its_cause_and_retained_runs' panicked at crates/layerfs-project/tests/acquisition_custody.rs:169:9:
+expected a cleanup failure, found Err(Content(ResourceUnavailable { what: "ordering run file" }))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test failed_scratch_release_reports_its_cause_and_retained_runs ... FAILED
+
+failures:
+
+failures:
+    failed_scratch_release_reports_its_cause_and_retained_runs
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+error: test failed, to rerun pass `-p layerfs-project --test acquisition_custody`

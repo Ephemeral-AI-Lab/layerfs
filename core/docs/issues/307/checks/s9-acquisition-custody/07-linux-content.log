@@ -1,0 +1,769 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 23.88s
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_content-2930c097802b3b2f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/backing_custody.rs (core/target/cluster2-linux/debug/deps/backing_custody-3ac24d66e86358ef)
+
+running 3 tests
+test a_failed_release_is_final_and_keeps_its_cause_and_bytes ... ok
+test a_released_run_takes_no_further_rows ... ok
+
+running 1 test
+test a_failed_partial_append_keeps_its_physical_bytes_charged ... BACKING_PARTIAL_APPEND on_disk=4096 requested=65536
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+test a_failed_partial_append_keeps_its_physical_bytes_charged ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/chunk_predecessor.rs (core/target/cluster2-linux/debug/deps/chunk_predecessor-42ae08aad9c627bc)
+
+running 7 tests
+test a_whole_file_base_offers_nothing ... ok
+test an_identical_version_is_offered_its_own_chunks ... ok
+test a_base_the_provider_cannot_serve_is_a_refusal ... ok
+test a_base_less_build_is_unchanged ... ok
+test the_correspondence_reads_mapping_pages_and_no_payload ... ok
+test every_chunk_is_offered_the_base_extent_covering_its_own_range ... ok
+test a_branched_base_mapping_is_walked_and_a_grown_result_stops_at_its_end ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/edit_batch.rs (core/target/cluster2-linux/debug/deps/edit_batch-dcb9703373f6f6b9)
+
+running 7 tests
+test an_overlapping_stream_is_rejected_before_any_work ... ok
+test delete_only_streams_are_monotonic_in_result_coordinates ... ok
+test adjacent_edits_stay_separate_segments ... ok
+test repeated_length_changes_accumulate ... ok
+test several_separated_edits_apply_in_order ... ok
+test many_small_edits_are_applied_in_one_pass ... ok
+test every_object_the_edit_emits_is_reachable_from_its_root ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/edit_bounds.rs (core/target/cluster2-linux/debug/deps/edit_bounds-9ef8d0ee6dbdecf8)
+
+running 12 tests
+test a_missing_base_root_is_reported_as_missing ... ok
+test a_bounded_sink_that_fills_during_emission_fails_the_edit_once ... ok
+test a_consumer_that_rejects_stops_the_edit_once ... ok
+test a_source_that_ends_early_fails_without_emitting_a_root ... ok
+test many_files_and_many_edits_stay_bounded ... ok
+MEASURED frontier peaks (bytes), 1/2/4/8/16 edits: [2208, 2288, 2448, 2768, 3408]
+test the_retained_frontier_does_not_grow_with_the_edit_count ... ok
+MEASURED ceiling-run counters: EditCounters { nodes_read: 17708, nodes_created: 21, payloads_created: 1024, payload_bytes: 25600, peak_deferred_bytes: 89712 }
+test a_thousand_separated_edits_keep_bounded_state ... ok
+test a_join_of_two_full_pages_stays_canonical ... ok
+test the_frontier_does_not_grow_with_repeated_in_place_edits ... ok
+test streaming_flush_boundaries_and_height_growth ... ok
+test join_occupancy_at_every_boundary ... ok
+MEASURED deferred shape: EditCounters { nodes_read: 90971, nodes_created: 122, payloads_created: 4096, payload_bytes: 102400, peak_deferred_bytes: 384112 }
+DERIVED ceiling floor: 3148 B/draft measured (bound 8320), 1009 live pages, 64512 extents, 427819008 base bytes
+test the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+
+     Running tests/edit_localized.rs (core/target/cluster2-linux/debug/deps/edit_localized-328d0f32bbea6732)
+
+running 8 tests
+test a_pure_deletion_never_walks_the_rightmost_path ... ok
+test an_overwrite_still_demands_the_predecessor_path ... ok
+test a_page_two_passes_reach_is_demanded_once_for_the_operation ... ok
+test many_localized_edits_keep_each_edit_on_its_own_path ... ok
+test a_mid_extent_overwrite_reads_only_the_straddling_extents ... ok
+test an_append_at_end_of_file_touches_only_the_right_boundary ... ok
+test localized_work_is_independent_of_file_size ... ok
+test an_extent_aligned_overwrite_reads_only_its_path_and_the_replaced_extents ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/edit_model.rs (core/target/cluster2-linux/debug/deps/edit_model-1b5b69cb7a0a1cae)
+
+running 6 tests
+test a_small_file_matches_the_model_and_a_fresh_construction ... ok
+test the_model_and_the_candidate_agree_on_degenerate_streams ... ok
+test a_deletion_that_merges_two_slices_stays_canonical ... ok
+test an_append_at_end_of_file_matches_the_model ... ok
+test conversions_match_the_model_and_their_fresh_construction ... ok
+test a_chunked_update_matches_the_model ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/edit_noop.rs (core/target/cluster2-linux/debug/deps/edit_noop-aec87900a15abe15)
+
+running 7 tests
+test a_length_changing_edit_is_never_treated_as_a_no_op ... ok
+test an_empty_stream_returns_the_base_root_untouched ... ok
+test a_shifted_equal_replacement_is_compared_in_current_coordinates ... ok
+test an_equal_replacement_preserves_the_base_root ... ok
+test an_out_of_range_replacement_length_is_an_error ... ok
+test several_equal_replacements_are_all_recognised ... ok
+test a_long_equal_prefix_then_a_mismatch_stops_the_comparison_early ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/edit_reference.rs (core/target/cluster2-linux/debug/deps/edit_reference-37182510813b5a64)
+
+running 3 tests
+test the_oracle_fixtures_are_the_sealed_reference_revision ... ok
+=== join-80-100
+  base_partition: 2/99305740 89/37df5774 90/3a98cf7d
+  base_root: 42670567953f6fec19b076d8ce181b1362cda277cee7526dffe34f18f977e58b
+  candidate_survivors: 
+  edited_root: 333d54974516c788dc731ee2e7c7522d0ff56a6982889b66e3caef5d469c310b
+  length: 3556500 / 3556500
+  oracle_base_partition: 2/99305740 89/37df5774 90/3a98cf7d
+  oracle_base_root: 42670567953f6fec19b076d8ce181b1362cda277cee7526dffe34f18f977e58b
+  oracle_partition: 2/94f0c9bd 96/8940b161 97/414e45e5
+  oracle_root: 333d54974516c788dc731ee2e7c7522d0ff56a6982889b66e3caef5d469c310b
+  oracle_survivors: 
+  partition: 2/94f0c9bd 96/8940b161 97/414e45e5
+=== repartition-80-100
+  base_partition: 2/99305740 89/37df5774 90/3a98cf7d
+  base_root: 42670567953f6fec19b076d8ce181b1362cda277cee7526dffe34f18f977e58b
+  candidate_survivors: 3a98cf7d
+  edited_root: d70a88deb900a35951ddc84d394573b50782735f11ff321ec1cc0e1e7e94e9d2
+  length: 3356500 / 3356500
+  oracle_base_partition: 2/99305740 89/37df5774 90/3a98cf7d
+  oracle_base_root: 42670567953f6fec19b076d8ce181b1362cda277cee7526dffe34f18f977e58b
+  oracle_partition: 2/a1ff5278 90/73c20991 90/3a98cf7d
+  oracle_root: d70a88deb900a35951ddc84d394573b50782735f11ff321ec1cc0e1e7e94e9d2
+  oracle_survivors: 3a98cf7d
+  partition: 2/a1ff5278 90/73c20991 90/3a98cf7d
+=== half-partition-90-90
+  base_partition: 2/07b4ea68 90/6f8bcba4 90/a131fce5
+  base_root: 5e36f13772d549a49898d61c3304f9d06e2063f9c9f7e42ad092bbcccb438bbe
+  candidate_survivors: 
+  edited_root: 3b39c8676fbc98269be448e482b7598c780f4442fa6e1266fdec7a62cf6a732e
+  length: 3432068 / 3432068
+  oracle_base_partition: 2/07b4ea68 90/6f8bcba4 90/a131fce5
+  oracle_base_root: 5e36f13772d549a49898d61c3304f9d06e2063f9c9f7e42ad092bbcccb438bbe
+  oracle_partition: 2/93b2713d 90/927e853a 90/0ba12165
+  oracle_root: 3b39c8676fbc98269be448e482b7598c780f4442fa6e1266fdec7a62cf6a732e
+  oracle_survivors: 
+  partition: 2/93b2713d 90/927e853a 90/0ba12165
+=== unequal-height-join
+  base_partition: 2/66075b79 70/b2b26905 70/25ce99de
+  base_root: f26a228d28775eef492c4150b60acb338f737b93caf05c28e59725783f1fb2e2
+  candidate_survivors: b2b26905 25ce99de
+  edited_root: 7f9403bae1dff98c178b4ae392859c65862b8aca2ebabbc83b87fc593be1d280
+  length: 5151523 / 5151523
+  oracle_base_partition: 2/66075b79 70/b2b26905 70/25ce99de
+  oracle_base_root: f26a228d28775eef492c4150b60acb338f737b93caf05c28e59725783f1fb2e2
+  oracle_partition: 4/35f7d396 70/b2b26905 70/25ce99de 66/195e3b84 67/c5c03ada
+  oracle_root: 7f9403bae1dff98c178b4ae392859c65862b8aca2ebabbc83b87fc593be1d280
+  oracle_survivors: b2b26905 25ce99de
+  partition: 4/35f7d396 70/b2b26905 70/25ce99de 66/195e3b84 67/c5c03ada
+=== untouched-sibling
+  base_partition: 3/f3bb6234 128/fc8b3286 86/a7884b79 86/c5a59b6c
+  base_root: 43851dcb5272f804972c10d917f72d2a902168c0165ad4bbb48a1c0a52fa2458
+  candidate_survivors: c5a59b6c
+  edited_root: c60cf6588b3662ac6c2ef3ff18a240d6504a7f41270b46d6a8da033f0fd336b7
+  length: 5803494 / 5803494
+  oracle_base_partition: 3/f3bb6234 128/fc8b3286 86/a7884b79 86/c5a59b6c
+  oracle_base_root: 43851dcb5272f804972c10d917f72d2a902168c0165ad4bbb48a1c0a52fa2458
+  oracle_partition: 4/b9fbdfcc 73/4878e4e0 74/59ba6c20 69/1b68d681 86/c5a59b6c
+  oracle_root: c60cf6588b3662ac6c2ef3ff18a240d6504a7f41270b46d6a8da033f0fd336b7
+  oracle_survivors: c5a59b6c
+  partition: 4/b9fbdfcc 73/4878e4e0 74/59ba6c20 69/1b68d681 86/c5a59b6c
+test an_interior_join_reads_its_boundary_child_once ... ok
+=== interior-multi-level
+  base_partition: 4/24fd6728 128/fc8b3286 128/71672c0c 72/b090cf82 72/eece3708
+  base_root: b3b633149de68cfc55cd070fb929a7c44c92bbdb00f5dc574583ff19aac5162f
+  candidate_survivors: 
+  edited_root: 57e0a51cc3291c890ba1616d3e1669e19554c38ecaad34d89af5a0f6a25493f0
+  length: 7746133 / 7746133
+  oracle_base_partition: 4/24fd6728 128/fc8b3286 128/71672c0c 72/b090cf82 72/eece3708
+  oracle_base_root: b3b633149de68cfc55cd070fb929a7c44c92bbdb00f5dc574583ff19aac5162f
+  oracle_partition: 4/809b593d 102/425b01bf 103/eba4dae2 98/bef0eb1d 99/c9f09eab
+  oracle_root: 57e0a51cc3291c890ba1616d3e1669e19554c38ecaad34d89af5a0f6a25493f0
+  oracle_survivors: 
+  partition: 4/809b593d 102/425b01bf 103/eba4dae2 98/bef0eb1d 99/c9f09eab
+=== height-growth
+  base_partition: 2/8c423679 128/fc8b3286 72/e35519fe
+  base_root: d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9
+  candidate_survivors: fc8b3286 e35519fe
+  edited_root: ae823b681cb44d0531aa736257a31c2319ad610655effad8433fb524a09e894d
+  length: 6835286 / 6835286
+  oracle_base_partition: 2/8c423679 128/fc8b3286 72/e35519fe
+  oracle_base_root: d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9
+  oracle_partition: 4/ee7f3b17 128/fc8b3286 72/e35519fe 78/07c9a4d0 79/82cea9e1
+  oracle_root: ae823b681cb44d0531aa736257a31c2319ad610655effad8433fb524a09e894d
+  oracle_survivors: fc8b3286 e35519fe
+  partition: 4/ee7f3b17 128/fc8b3286 72/e35519fe 78/07c9a4d0 79/82cea9e1
+=== root-collapse
+  base_partition: 2/8c423679 128/fc8b3286 72/e35519fe
+  base_root: d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9
+  candidate_survivors: 
+  edited_root: ba1ba75742ba31f7dd4a33ffbb804a9c2bbfae19c5aee90b51974398e911520f
+  length: 400000 / 400000
+  oracle_base_partition: 2/8c423679 128/fc8b3286 72/e35519fe
+  oracle_base_root: d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9
+  oracle_partition: 21/00aab7eb
+  oracle_root: ba1ba75742ba31f7dd4a33ffbb804a9c2bbfae19c5aee90b51974398e911520f
+  oracle_survivors: 
+  partition: 21/00aab7eb
+=== batch-normalized
+  base_partition: 46/463bf292
+  base_root: d3106fca1384cd08cc4d6f73c2e8062fdb4804a0ac0924c96b6020650c8ae366
+  candidate_survivors: 
+  edited_root: 793895c55937b0ae4ab576cef28ccf7da79acce180c122640d5d56d0f127fcb1
+  length: 1495700 / 1495700
+  oracle_base_partition: 46/463bf292
+  oracle_base_root: d3106fca1384cd08cc4d6f73c2e8062fdb4804a0ac0924c96b6020650c8ae366
+  oracle_partition: 51/fd110d5b
+  oracle_root: 793895c55937b0ae4ab576cef28ccf7da79acce180c122640d5d56d0f127fcb1
+  oracle_survivors: 
+  partition: 51/fd110d5b
+test the_candidate_reproduces_the_reference_root_and_partition ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests/edit_single.rs (core/target/cluster2-linux/debug/deps/edit_single-19a76ee4bf4bcca3)
+
+running 11 tests
+test a_declared_length_that_does_not_match_its_bytes_fails ... ok
+test an_edit_reads_and_decodes_the_base_root_once ... ok
+test an_inapplicable_range_is_rejected_before_any_work ... ok
+test append_at_end_of_file ... ok
+test complete_deletion_returns_the_empty_representation ... ok
+test insert_and_delete_change_the_length_exactly ... ok
+test overwrite_in_the_middle ... ok
+test overwrite_at_the_head_and_the_tail ... ok
+test the_base_objects_are_never_rewritten ... ok
+test an_edit_over_a_chunked_base_reads_and_decodes_the_base_root_once ... ok
+test a_chunked_base_reads_and_edits_without_a_full_pass ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/edit_timing.rs (core/target/cluster2-linux/debug/deps/edit_timing-83c8b073a045e4a5)
+
+running 4 tests
+test an_equal_replacement_reports_the_comparison_scope ... ok
+test a_failing_edit_returns_its_original_error_and_an_error_outcome ... ok
+test a_real_edit_reports_its_scopes_without_a_database ... ok
+test recording_enabled_and_disabled_produce_the_same_result ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/edit_transitions.rs (core/target/cluster2-linux/debug/deps/edit_transitions-94ed959c3e668305)
+
+running 10 tests
+MEASURED read-amplification case=small-to-large-131072 base_payload_bytes=65559 acquired_bytes=65559 acquired_payload_bytes=65559 acquired_node_bytes=0 acquired_objects=1 exclusive_discarded=0 final_bytes=196608 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=333
+test known_and_streamed_complete_lengths_agree ... ok
+test compressible_and_incompressible_inputs_agree_with_their_source ... ok
+test unsupported_cutoffs_are_rejected_and_the_accepted_ones_are_not ... ok
+test a_whole_file_result_reports_no_counters_and_that_is_recorded ... ok
+test whole_file_edit_emits_the_reference_bytes ... ok
+MEASURED read-amplification case=large-to-small-131072 base_payload_bytes=524897 acquired_bytes=76879 acquired_payload_bytes=75569 acquired_node_bytes=1310 acquired_objects=7 exclusive_discarded=24 final_bytes=65536 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=1173
+MEASURED read-amplification case=to-empty-131072 base_payload_bytes=524897 acquired_bytes=106 acquired_payload_bytes=0 acquired_node_bytes=106 acquired_objects=1 exclusive_discarded=29 final_bytes=0 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=null
+MEASURED read-amplification case=in-place-131072 base_payload_bytes=524897 acquired_bytes=19164 acquired_payload_bytes=17854 acquired_node_bytes=1310 acquired_objects=3 exclusive_discarded=0 final_bytes=524288 nodes_read=6 nodes_created=1 payloads_created=1 peak_deferred_bytes=1768 amplification_milli=36
+MEASURED read-amplification case=small-to-large-262144 base_payload_bytes=131095 acquired_bytes=131095 acquired_payload_bytes=131095 acquired_node_bytes=0 acquired_objects=1 exclusive_discarded=0 final_bytes=393216 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=333
+test exact_boundaries_at_every_accepted_cutoff ... ok
+test retained_segments_share_one_descent ... ok
+test straddling_payload_demanded_once_across_segments ... ok
+MEASURED read-amplification case=large-to-small-262144 base_payload_bytes=1049794 acquired_bytes=151987 acquired_payload_bytes=149517 acquired_node_bytes=2470 acquired_objects=11 exclusive_discarded=49 final_bytes=131072 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=1159
+MEASURED read-amplification case=to-empty-262144 base_payload_bytes=1049794 acquired_bytes=106 acquired_payload_bytes=0 acquired_node_bytes=106 acquired_objects=1 exclusive_discarded=58 final_bytes=0 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=null
+MEASURED read-amplification case=in-place-262144 base_payload_bytes=1049794 acquired_bytes=27518 acquired_payload_bytes=25048 acquired_node_bytes=2470 acquired_objects=3 exclusive_discarded=0 final_bytes=1048576 nodes_read=6 nodes_created=1 payloads_created=1 peak_deferred_bytes=2928 amplification_milli=26
+test every_conversion_direction_reaches_the_fresh_construction_root ... ok
+MEASURED read-amplification case=small-to-large-1048576 base_payload_bytes=524311 acquired_bytes=524311 acquired_payload_bytes=524311 acquired_node_bytes=0 acquired_objects=1 exclusive_discarded=0 final_bytes=1572864 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=333
+MEASURED read-amplification case=large-to-small-1048576 base_payload_bytes=4198882 acquired_bytes=556606 acquired_payload_bytes=547552 acquired_node_bytes=9054 acquired_objects=34 exclusive_discarded=188 final_bytes=524288 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=1061
+MEASURED read-amplification case=to-empty-1048576 base_payload_bytes=4198882 acquired_bytes=106 acquired_payload_bytes=0 acquired_node_bytes=106 acquired_objects=1 exclusive_discarded=218 final_bytes=0 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=null
+MEASURED read-amplification case=in-place-1048576 base_payload_bytes=4198882 acquired_bytes=25582 acquired_payload_bytes=16528 acquired_node_bytes=9054 acquired_objects=5 exclusive_discarded=0 final_bytes=4194304 nodes_read=8 nodes_created=3 payloads_created=1 peak_deferred_bytes=9424 amplification_milli=6
+test the_transition_reads_only_what_it_keeps_and_charges_it ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/file_complete.rs (core/target/cluster2-linux/debug/deps/file_complete-08047e9f27bab856)
+
+running 14 tests
+test empty_file_uses_the_defined_file_state_form ... ok
+test chunk_partition_is_frozen_for_the_reference_input ... ok
+test below_cutoff_uses_one_whole_file_object_and_reads_back_exactly ... ok
+test late_input_failure_after_early_output_is_returned_once ... ok
+test one_byte_file_is_a_whole_file_object ... ok
+test construction_is_deterministic_for_the_same_input ... ok
+test compressible_and_incompressible_inputs_agree_with_their_source ... ok
+test chunks_respect_the_frozen_size_window ... ok
+test representation_boundaries_are_exact_and_exclusive ... ok
+test unsupported_policy_values_are_rejected_before_work ... ok
+test whole_file_payload_is_classified_without_a_db ... ok
+test at_and_above_cutoff_uses_a_chunked_tree ... ok
+test streamed_source_requests_stay_bounded ... ok
+test known_length_and_streaming_inputs_agree_exactly ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/file_read.rs (core/target/cluster2-linux/debug/deps/file_read-63224d650d9c3cfd)
+
+running 16 tests
+test a_short_page_is_accepted_as_a_root_and_refused_as_a_non_root ... ok
+test a_provider_failure_is_returned_once_and_stops_the_read ... ok
+test empty_range_at_end_of_file_is_empty_and_at_eof_bound_is_allowed ... ok
+test a_leaf_slice_outside_the_chunk_grammar_is_refused_at_decode ... ok
+test a_state_that_contradicts_its_root_page_is_refused_before_the_walk ... ok
+test full_read_returns_exact_bytes_for_every_representation ... ok
+test out_of_bounds_and_inverted_ranges_fail ... ok
+test repeated_demands_of_one_payload_read_it_once_and_emit_it_every_time ... ok
+test whole_file_root_rejects_a_range_beyond_its_payload ... ok
+test ranges_cross_extents_and_page_boundaries ... ok
+test the_payload_wave_enforces_both_its_object_and_its_byte_ceiling ... ok
+test a_range_read_serves_a_tree_with_more_than_one_branch_level ... ok
+test a_wave_is_released_before_the_next_one_is_read ... ok
+test a_state_that_overstates_its_mapping_is_refused_not_partly_served ... ok
+test navigation_acquires_a_whole_level_per_provider_call ... ok
+test a_large_read_acquires_payloads_in_bounded_batches ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/filesystem_attributes.rs (core/target/cluster2-linux/debug/deps/filesystem_attributes-4843aa15ccd6dcf0)
+
+running 12 tests
+test a_reader_boundary_is_not_a_store_and_writes_are_rejected_once ... ok
+test generic_domains_are_accepted_without_platform_dispatch ... ok
+test attribute_pages_reject_malformed_rows_and_reserved_fields ... ok
+test a_missing_or_foreign_attribute_tree_fails_explicitly ... ok
+test exact_sizing_partitions_match_the_encoder_and_the_tail_rebalances ... ok
+test portable_fields_round_trip_and_are_checked ... ok
+test opaque_values_survive_patches_without_being_decoded ... ok
+test the_patch_route_and_a_from_scratch_build_agree_on_the_same_final_set ... ok
+test values_are_extent_only_at_every_size ... ok
+test reference_attribute_trees_are_reproduced_exactly ... ok
+test every_attribute_descent_rejects_same_or_skipped_child_levels ... ok
+test an_inode_attribute_tree_is_read_through_a_path ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/filesystem_bounds.rs (core/target/cluster2-linux/debug/deps/filesystem_bounds-93d877a0d3610e2c)
+
+running 17 tests
+test a_backing_too_small_for_the_declared_ceiling_is_refused_up_front ... ok
+test an_empty_tree_and_a_deep_tree_both_stay_inside_their_declared_ceilings ... ok
+test every_reported_owner_is_nonzero_where_work_happened_and_zero_where_it_did_not ... ok
+test a_wide_branch_page_reads_its_children_in_one_wave ... ok
+test a_grouped_demand_is_one_wave_and_every_page_it_decoded ... ok
+test a_small_change_reads_its_own_path_and_never_an_unrelated_subtree ... ok
+test one_grouped_demand_is_one_charged_wave ... ok
+test merge_inputs_and_output_are_covered_by_the_declared_ceiling ... ok
+test one_batched_demand_is_exactly_one_read_wave ... ok
+test validation_reads_are_charged_to_the_operation ... ok
+test released_subtrees_are_traversed_in_bounded_pages_and_aliases_survive ... ok
+release: released 128 pages 65 base_records 129
+test the_release_frontier_reads_one_wave_per_batch_not_one_record_per_demand ... ok
+test a_build_has_no_independent_cycle_walk_limit ... ok
+test binding_lookups_are_batched_per_phase ... ok
+test narrowing_keeps_a_small_scratch_working ... ok
+test a_directory_larger_than_the_former_walk_ceiling_can_be_rebound ... ok
+test a_branch_materialization_reads_children_in_one_wave ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/filesystem_codec.rs (core/target/cluster2-linux/debug/deps/filesystem_codec-041ebfce91050893)
+
+running 9 tests
+test attribute_pages_match_the_reference_bytes ... ok
+test both_inode_leaf_routes_are_one_grammar ... ok
+test directory_pages_match_the_reference_bytes ... ok
+test a_directory_leaf_never_exceeds_the_page_ceiling ... ok
+test every_tree_role_checks_its_role_byte_and_its_flags ... ok
+test malformed_and_reserved_input_is_rejected_once ... ok
+test roles_and_identity_are_not_interchangeable ... ok
+test inode_pages_match_the_reference_bytes ... ok
+test roots_and_symlinks_match_the_reference_bytes ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_failure.rs (core/target/cluster2-linux/debug/deps/filesystem_failure-187e3491c85abe78)
+
+running 8 tests
+test a_binding_serial_outside_the_stored_range_is_refused ... ok
+test invalid_input_is_refused_before_anything_is_emitted ... ok
+test the_attribute_value_bound_is_the_chunk_maximum_at_its_boundary ... ok
+test a_malformed_or_unauthenticated_demanded_page_is_rejected_without_a_root ... ok
+test cancellation_leaves_no_owned_ordering_resources_and_repeatable_state ... ok
+test a_refusing_consumer_ends_the_operation_once_without_a_root ... ok
+test a_read_failure_at_each_boundary_publishes_no_root_and_keeps_the_old_one ... ok
+test a_branch_that_misstates_its_summary_is_refused_by_the_tree_engine ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_hardlinks.rs (core/target/cluster2-linux/debug/deps/filesystem_hardlinks-f481d9fe5595c519)
+
+running 6 tests
+test a_declared_new_inode_cannot_lose_a_binding ... ok
+test a_regular_file_keeps_at_least_one_binding ... ok
+test removing_one_alias_leaves_the_other_and_removing_the_last_removes_it ... ok
+test a_move_across_directories_keeps_the_count_and_the_inode ... ok
+test a_child_moved_out_of_a_removed_subtree_survives ... ok
+test two_aliases_reach_one_derived_count ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_limits.rs (core/target/cluster2-linux/debug/deps/filesystem_limits-4981cdd210ead34b)
+
+running 7 tests
+test a_component_name_is_accepted_at_255_bytes_and_refused_at_256 ... ok
+test a_path_is_accepted_at_4096_bytes_and_refused_at_4097 ... ok
+test a_path_is_accepted_at_256_components_and_refused_at_257 ... ok
+test a_symlink_target_is_accepted_at_4096_bytes_and_refused_at_4097 ... ok
+test an_attribute_domain_and_key_are_accepted_at_their_bounds_and_refused_over ... ok
+test the_limits_this_suite_cannot_bound_are_named_with_their_reason ... ok
+test a_read_wave_is_accepted_at_4096_demands_and_refused_at_4097 ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_ordering.rs (core/target/cluster2-linux/debug/deps/filesystem_ordering-0438038296c1d156)
+
+running 18 tests
+test a_failed_run_removal_keeps_the_file_and_its_bytes_in_the_account ... ok
+test a_removal_that_fails_is_visible_instead_of_being_hidden_in_drop ... ok
+test a_stale_run_file_does_not_block_a_later_backing ... ok
+test a_fresh_build_counts_bindings_without_ordering_runs ... ok
+test growth_is_reserved_before_it_happens_and_cleanup_returns_the_bytes ... ok
+test records_are_fixed_width_and_every_malformed_field_is_rejected ... ok
+test a_fresh_build_charges_its_count_array_to_the_ordering_ceiling ... ok
+test the_operation_ceiling_is_enforced_before_the_rows_are_written ... ok
+test the_parent_membership_charges_parents_not_bindings ... ok
+test append_read_flush_and_release_failures_fail_the_operation_without_a_root ... ok
+test a_successful_operation_releases_its_ordering_resources_once ... ok
+test a_high_pending_ceiling_runs_spill_free_to_the_byte_bound ... ok
+test run_lookup_answers_every_serial_in_every_order ... ok
+test a_spill_keeps_the_scans_of_tiers_above_its_level ... ok
+test tier_carries_keep_the_newest_row_and_accumulate_counts ... ok
+test carried_state_removes_the_zero_count_re_pass ... ok
+test a_spilled_lookup_agrees_with_a_full_scan_of_every_tier ... ok
+test the_pending_threshold_changes_only_where_the_rows_live ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/filesystem_ordering_consolidate.rs (core/target/cluster2-linux/debug/deps/filesystem_ordering_consolidate-7deb456b74bbfff9)
+
+running 1 test
+test consolidation_never_writes_into_a_run_it_merges ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/filesystem_ordering_scan.rs (core/target/cluster2-linux/debug/deps/filesystem_ordering_scan-336bd6b49d81dcca)
+
+running 3 tests
+test a_restarted_scan_returns_the_same_rows_as_a_fresh_one ... ok
+test a_sparse_newer_tier_skips_its_gap_and_finds_older_rows ... ok
+test lookups_allocate_nothing_after_the_tiers_are_built ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_parent_lookup.rs (core/target/cluster2-linux/debug/deps/filesystem_parent_lookup-5cd81a3bf02cbacb)
+
+running 5 tests
+test inherited_children_resolve_and_list_by_parent_identity ... ok
+parent lookup demands for batches 1/3/64: [22, 10, 6]
+explicit parent value demands for batches 1/3/64: [18, 9, 6]
+quota pending=1 bytes=96 batch=1 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 192 }
+test parent_values_remain_correct_when_the_reference_reducer_spills ... ok
+test unchanged_parents_share_reads_and_reuse_their_authenticated_values ... ok
+test partial_parent_batches_preserve_values_new_directories_and_removals ... ok
+quota pending=1 bytes=96 batch=64 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 192 }
+quota pending=1 bytes=192 batch=1 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 288 }
+quota pending=1 bytes=192 batch=64 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 288 }
+quota pending=1 bytes=288 batch=1 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 480 }
+quota pending=1 bytes=288 batch=64 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 480 }
+quota pending=1 bytes=384 batch=1 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 480 }
+quota pending=1 bytes=384 batch=64 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 480 }
+quota pending=1 bytes=480 batch=1 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 672 }
+quota pending=1 bytes=480 batch=64 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 672 }
+quota pending=1 bytes=576 batch=1 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 672 }
+quota pending=1 bytes=576 batch=64 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 672 }
+quota pending=1 bytes=672 batch=1 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 768 }
+quota pending=1 bytes=672 batch=64 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 768 }
+quota pending=1 bytes=768 batch=1 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 864 }
+quota pending=1 bytes=768 batch=64 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 864 }
+quota pending=1 bytes=864 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=864 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=960 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=960 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1152 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1152 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1536 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1536 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=2304 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=2304 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=3072 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=3072 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=96 batch=1 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 384 }
+quota pending=2 bytes=96 batch=64 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 384 }
+quota pending=2 bytes=192 batch=1 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 384 }
+quota pending=2 bytes=192 batch=64 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 384 }
+quota pending=2 bytes=288 batch=1 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 384 }
+quota pending=2 bytes=288 batch=64 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 384 }
+quota pending=2 bytes=384 batch=1 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 576 }
+quota pending=2 bytes=384 batch=64 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 576 }
+quota pending=2 bytes=480 batch=1 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 576 }
+quota pending=2 bytes=480 batch=64 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 576 }
+quota pending=2 bytes=576 batch=1 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 960 }
+quota pending=2 bytes=576 batch=64 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 960 }
+quota pending=2 bytes=672 batch=1 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 960 }
+quota pending=2 bytes=672 batch=64 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 960 }
+quota pending=2 bytes=768 batch=1 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 960 }
+quota pending=2 bytes=768 batch=64 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 960 }
+quota pending=2 bytes=864 batch=1 outcome=ERR ObjectLimitExceeded { limit: 864, actual: 960 }
+quota pending=2 bytes=864 batch=64 outcome=ERR ObjectLimitExceeded { limit: 864, actual: 960 }
+quota pending=2 bytes=960 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=960 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=1152 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=1152 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=1536 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=1536 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=2304 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=2304 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=3072 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=3072 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+test parent_value_ordering_quota_matrix_is_explicit_and_canonical ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/filesystem_profile.rs (core/target/cluster2-linux/debug/deps/filesystem_profile-1e2b7fb0e1f6f4ae)
+
+running 2 tests
+test a_foreign_profile_is_refused_before_a_root_exists ... ok
+test the_profile_text_names_the_bounds_it_is_hashed_with ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_read.rs (core/target/cluster2-linux/debug/deps/filesystem_read-dcda8cbb1b6ccfe1)
+
+running 6 tests
+test a_serial_the_table_lacks_is_not_provider_absence ... ok
+test a_symlink_reads_back_its_exact_stored_target ... ok
+test an_unbound_name_is_not_provider_absence ... ok
+test resolve_stat_and_list_agree_on_the_same_tree ... ok
+test repeated_and_shared_demands_keep_order_and_cardinality ... ok
+test listing_is_bounded_by_bytes_as_well_as_count ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_reference.rs (core/target/cluster2-linux/debug/deps/filesystem_reference-033ccd147fa4da08)
+
+running 2 tests
+test construction_matches_the_sealed_reference_roots_and_pages ... ok
+test updates_match_the_sealed_reference_operation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/filesystem_rows.rs (core/target/cluster2-linux/debug/deps/filesystem_rows-021f0346d51ccd89)
+
+running 6 tests
+test a_spool_that_does_not_hold_its_declared_rows_is_refused ... ok
+test a_spool_refuses_a_key_that_does_not_rise_inside_its_run ... ok
+test a_spool_refuses_a_row_beyond_its_declared_totals_or_capacity ... ok
+test the_spool_file_is_removed_when_the_update_is_done ... ok
+test a_spooled_update_publishes_the_same_root_as_resident_rows ... ok
+test a_wide_spooled_generation_applies_every_row_from_the_file ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/filesystem_sorted.rs (core/target/cluster2-linux/debug/deps/filesystem_sorted-b6768a46bbf7ebc8)
+
+running 7 tests
+test a_late_source_error_propagates_and_publishes_nothing ... ok
+test a_genuinely_empty_directory_is_emitted_once ... ok
+test a_tiny_supported_budget_works_or_refuses_before_allocating ... ok
+test an_unsorted_duplicate_or_repeating_change_is_refused_once ... ok
+test initial_construction_needs_no_provisional_seed ... ok
+test page_widths_running_total_matches_the_recorded_partition ... ok
+test leaf_and_branch_boundaries_are_partitioned_canonically ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_timing.rs (core/target/cluster2-linux/debug/deps/filesystem_timing-5c74b71efd473287)
+
+running 2 tests
+test a_recorded_construction_reports_its_phases ... ok
+test a_recorded_update_reports_coarse_phases_and_changes_nothing ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_topology.rs (core/target/cluster2-linux/debug/deps/filesystem_topology-be3c556a8e040ddd)
+
+running 19 tests
+test a_build_whose_root_is_not_declared_new_is_refused_up_front ... ok
+test a_build_with_a_disconnected_directory_cycle_is_refused ... ok
+test a_cycle_formed_by_moving_a_directory_below_itself_is_refused ... ok
+test a_build_cycle_that_the_root_holds_is_refused ... ok
+test a_base_resident_directory_can_be_renamed_by_unbinding_first ... ok
+test a_base_resident_symlink_cannot_gain_a_second_parent ... ok
+test a_base_resident_directory_cannot_gain_a_second_parent ... ok
+test a_directory_or_symlink_cannot_have_two_parents ... ok
+test a_caller_asserted_count_is_never_trusted ... ok
+test a_cycle_formed_inside_a_build_is_refused ... ok
+test a_disconnected_new_record_is_refused ... ok
+test a_dropped_directory_emits_no_page_of_its_own ... ok
+test a_foreign_scope_or_profile_is_refused ... ok
+test a_self_binding_is_refused ... ok
+test an_update_cycling_two_declared_new_directories_is_refused ... ok
+test an_update_with_a_disconnected_fresh_directory_cycle_is_refused ... ok
+test the_root_stays_a_zero_count_directory ... ok
+test a_reused_identity_is_refused ... ok
+test a_permutation_of_65_directory_bindings_is_one_linear_walk ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_updates.rs (core/target/cluster2-linux/debug/deps/filesystem_updates-5dce2593b4243eee)
+
+running 6 tests
+test an_unsorted_or_duplicate_change_list_is_refused_before_any_write ... ok
+test a_same_name_no_op_keeps_the_root_identity ... ok
+test a_content_only_change_leaves_every_directory_page_untouched ... ok
+test a_type_replacement_replaces_the_binding_and_the_record ... ok
+test removing_the_last_binding_removes_the_inode_and_keeps_the_root_readable ... ok
+test a_tiny_tree_is_created_and_read_back_exactly ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fixture_seal.rs (core/target/cluster2-linux/debug/deps/fixture_seal-a5cccca4e7fab4ca)
+
+running 2 tests
+test the_generator_cannot_reseal_during_an_ordinary_test_run ... ok
+test the_sealed_fixtures_are_exactly_the_frozen_ones ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/inode_leaf.rs (core/target/cluster2-linux/debug/deps/inode_leaf-ac0bc3a7e7a7dbcc)
+
+running 7 tests
+test a_pooled_body_rejects_a_zero_ordinal_and_a_wrong_width ... ok
+test a_pooled_body_keeps_the_prefix_and_the_serials ... ok
+test a_pooled_value_object_is_exactly_ninety_four_canonical_bytes ... ok
+test a_leaf_round_trips_with_its_exact_layout ... ok
+test an_inode_value_round_trips_and_rejects_a_foreign_kind ... ok
+test checked_pooling_leaf_reuses_decode_and_retains_all_ordinal_checks ... ok
+test malformed_leaves_are_rejected ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/object_admission.rs (core/target/cluster2-linux/debug/deps/object_admission-437ba1a19cd33fb2)
+
+running 4 tests
+test all_thirteen_roles_derive_exact_references_and_move_the_canonical_allocation ... ok
+test rehashed_impossible_counts_summaries_flags_and_values_are_refused ... ok
+test role_confusion_truncation_and_generic_envelopes_are_refused ... ok
+test domain_identity_scope_and_selected_store_policy_are_required ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/object_identity.rs (core/target/cluster2-linux/debug/deps/object_identity-a8173ec6f752a1a7)
+
+running 11 tests
+test identity_is_domain_separated_and_not_a_raw_digest ... ok
+test identity_has_no_variable_width_or_text_shortcuts ... ok
+test chunk_fixture_bytes_and_identity_are_frozen ... ok
+test identity_of_a_damaged_canonical_object_changes ... ok
+test malformed_envelopes_are_rejected_exactly ... ok
+test mapping_profile_and_empty_form_identities_are_frozen ... ok
+test moving_an_objects_pieces_keeps_its_advisory_predecessors ... ok
+test small_fixture_bytes_and_identity_are_frozen ... ok
+test writing_to_a_sink_matches_the_single_allocation_encoder ... ok
+test the_envelope_ceiling_is_enforced_at_plus_or_minus_one ... ok
+test the_field_ceiling_is_the_frozen_eight_mib_not_the_envelope ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/runs.rs (core/target/cluster2-linux/debug/deps/runs-04c2f77079d8a251)
+
+running 4 tests
+ZERO_EQUAL prefix=0 zero=0 suffix=0 window=31 processed=0 chunks=0 nodes=1
+ZERO_EQUAL prefix=7 zero=19 suffix=11 window=1 processed=19 chunks=0 nodes=0
+ZERO_EQUAL prefix=0 zero=131071 suffix=0 window=32768 processed=131071 chunks=0 nodes=0
+test invalid_windows_and_consumer_failure_stop_the_single_operation ... ok
+ZERO_EQUAL prefix=0 zero=131072 suffix=0 window=32768 processed=131072 chunks=4 nodes=1
+ZERO_EQUAL prefix=0 zero=131073 suffix=0 window=32768 processed=131073 chunks=5 nodes=1
+ZERO_SCALE logical_zero=1048576 processed=32768 chunks=10 nodes=1 peak_pending=40 canonical_bytes=198988
+ZERO_EQUAL prefix=131077 zero=32769 suffix=9001 window=113 processed=32769 chunks=10 nodes=1
+ZERO_SCALE logical_zero=1073741824 processed=32768 chunks=10 nodes=8 peak_pending=328 canonical_bytes=225856
+ZERO_SCALE logical_zero=1099511627776 processed=32768 chunks=10 nodes=13 peak_pending=455 canonical_bytes=251372
+test terabyte_zero_runs_emit_logarithmic_objects_and_read_exact_boundaries ... ok
+test multi_level_repetition_matches_streaming_extent_builder_without_zero_byte_scan ... ok
+ZERO_EQUAL prefix=131083 zero=4259847 suffix=32873 window=777 processed=32775 chunks=12 nodes=3
+ZERO_EQUAL prefix=32771 zero=6324225 suffix=3 window=255 processed=131073 chunks=7 nodes=3
+ZERO_EQUAL prefix=131091 zero=12615680 suffix=10003 window=32767 processed=32768 chunks=11 nodes=5
+test run_roots_equal_streaming_at_cutoff_cdc_and_leaf_partition_boundaries ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/streaming.rs (core/target/cluster2-linux/debug/deps/streaming-b41479e550e74f60)
+
+running 9 tests
+test a_short_source_is_a_definitive_whole_file_result ... ok
+test a_late_input_failure_is_returned_once_after_early_output ... ok
+test a_discarding_consumer_never_allocates_a_payload_copy ... ok
+test root_identity_is_stable_across_repeated_streaming_runs ... ok
+test children_are_emitted_before_their_parents ... ok
+test input_requests_stay_bounded_by_the_declared_windows ... ok
+test unknown_length_and_known_length_agree_object_by_object ... ok
+test many_files_do_not_retain_the_whole_workload ... ok
+test the_builder_retains_a_bounded_number_of_entries ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/timing.rs (core/target/cluster2-linux/debug/deps/timing-66220ce7dd677213)
+
+running 7 tests
+test small_construction_reports_its_real_scopes ... ok
+test repeated_labels_stay_distinct_and_ordered ... ok
+test chunked_construction_reports_the_chunk_scope ... ok
+test a_construction_failure_keeps_its_completed_timing ... ok
+test a_discarding_consumer_still_runs_the_real_constructor ... ok
+test a_read_reports_its_own_scopes_without_storage ... ok
+test recording_and_disabled_execution_produce_identical_results ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/zero_cdc.rs (core/target/cluster2-linux/debug/deps/zero_cdc-ed4cdc4ba5504fc6)
+
+running 1 test
+ZERO_CDC chunks=[32768, 32768, 32768, 32768, 17] period=32768
+test frozen_zero_chunk_period_is_the_maximum ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/edit_memory_probe.rs (core/target/cluster2-linux/debug/examples/edit_memory_probe-25335a68ceaa2520)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/edit_timing_c1.rs (core/target/cluster2-linux/debug/examples/edit_timing_c1-e3bf23f434a1ef8e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/filesystem_primitives_candidate.rs (core/target/cluster2-linux/debug/examples/filesystem_primitives_candidate-72777a83c6f2d909)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/filesystem_timing_c1.rs (core/target/cluster2-linux/debug/examples/filesystem_timing_c1-87fe114a155c116b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/fingerprint_collision_search.rs (core/target/cluster2-linux/debug/examples/fingerprint_collision_search-bd22a8c87e0ced06)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -7,7 +7,7 @@ pub mod reduce;
 pub mod release;
 pub mod runs;
 
-pub use backing::{FileBacking, OrderingBacking, OrderingRun};
+pub use backing::{CleanupFailure, FileBacking, OrderingBacking, OrderingRun};
 pub use merge::{merge_runs, MergeWork, Run, RunReader};
 pub use record::{Row, ROW_BYTES};
 pub use reduce::{

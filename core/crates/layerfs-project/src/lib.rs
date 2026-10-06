@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 mod import;
-pub use error::{ProjectError, ProjectResult};
+pub use error::{ProjectError, ProjectResult, RetainedScratch};
 #[cfg(unix)]
 pub(crate) use import::batch;
 pub(crate) use import::error;

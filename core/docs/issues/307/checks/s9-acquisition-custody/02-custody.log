@@ -1,0 +1,15 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running tests/acquisition_custody.rs (core/target/cluster2-runtime-tests/debug/deps/acquisition_custody-de71bfa684e1c05f)
+
+running 2 tests
+test scratch_inside_source_is_refused_before_the_source_changes ... ok
+ACQUISITION_CUSTODY cause=Some(Content(ResourceUnavailable { what: "ordering run file" })) error=Os { code: 13, kind: PermissionDenied, message: "Permission denied" } runs=2 bytes=110
+test failed_scratch_release_reports_its_cause_and_retained_runs ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+

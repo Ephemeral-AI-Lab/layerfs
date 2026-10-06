@@ -7,6 +7,12 @@
 //! happens, obsolete runs give their bytes back when they are dropped, and the
 //! finishing cleanup is checked rather than hidden in a destructor.
 //!
+//! **Custody.** The account lists every run path that is still on disk with the
+//! bytes that reached it, including the written part of an append that failed.
+//! A path leaves the list only when its file is gone. A checked release that
+//! fails keeps the paths it could not remove, records the deciding cause, and is
+//! never replayed by a destructor: what remains is the caller's to dispose of.
+//!
 //! **Completion contract.** An operation calls [`OrderingBacking::release`] exactly
 //! once, after every row consumer has closed its handles and before it reports
 //! success. A release that fails fails the operation. A caller that needs the
@@ -90,6 +96,37 @@ struct Account {
     /// `held_bytes` and `owns_storage` describe what is still on disk rather than
     /// what the operation wished it had removed.
     paths: RefCell<BTreeMap<PathBuf, u64>>,
+    /// True once the checked release ran and left at least one path behind.
+    release_failed: Cell<bool>,
+    /// First removal that did not complete; later failures do not replace it.
+    failure: RefCell<Option<CleanupFailure>>,
+}
+
+/// The first run removal one backing could not complete.
+///
+/// The path is still on disk and still counted by the backing's account. The
+/// host cause is kept as its kind and raw code because the content error type
+/// is comparable and cannot carry the host error itself.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CleanupFailure {
+    /// Run file the backing still owns.
+    pub path: PathBuf,
+    /// Bytes that reached that file.
+    pub bytes: u64,
+    /// Kind of the host failure that decided the cleanup.
+    pub kind: std::io::ErrorKind,
+    /// Raw host error code, when the host supplied one.
+    pub os_error: Option<i32>,
+}
+
+impl CleanupFailure {
+    /// The deciding host failure as an I/O error.
+    pub fn to_io_error(&self) -> std::io::Error {
+        match self.os_error {
+            Some(code) => std::io::Error::from_raw_os_error(code),
+            None => std::io::Error::from(self.kind),
+        }
+    }
 }
 
 impl Account {
@@ -116,16 +153,40 @@ impl Account {
         self.held.set(self.held.get().saturating_sub(bytes));
     }
 
-    /// Gives one removed path's bytes back and forgets the path.
-    fn released(&self, path: &Path, bytes: u64) {
-        self.paths.borrow_mut().remove(path);
-        self.release_bytes(bytes);
+    /// Forgets one removed path and gives back exactly the bytes listed for it.
+    ///
+    /// The list is the only source of the amount: a path that already left it
+    /// returns nothing, so another path's retained bytes are never given back.
+    fn released(&self, path: &Path) {
+        let listed = self.paths.borrow_mut().remove(path);
+        if let Some(bytes) = listed {
+            self.release_bytes(bytes);
+        }
+    }
+
+    /// True while `path` is still listed as owned.
+    fn owns(&self, path: &Path) -> bool {
+        self.paths.borrow().contains_key(path)
     }
 
     /// Adds `bytes` to the bytes one still-owned path holds.
     fn record(&self, path: &Path, bytes: u64) {
         if let Some(entry) = self.paths.borrow_mut().get_mut(path) {
             *entry = entry.saturating_add(bytes);
+        }
+    }
+
+    /// Records one removal that did not complete; the first cause is kept.
+    fn removal_failed(&self, path: &Path, bytes: u64, error: &std::io::Error) {
+        self.cleanup_failed.set(true);
+        let mut failure = self.failure.borrow_mut();
+        if failure.is_none() {
+            *failure = Some(CleanupFailure {
+                path: path.to_path_buf(),
+                bytes,
+                kind: error.kind(),
+                os_error: error.raw_os_error(),
+            });
         }
     }
 }
@@ -171,6 +232,8 @@ pub struct FileBacking {
     next: u64,
     account: Rc<Account>,
     released: bool,
+    /// True once the checked release ran, whatever it returned.
+    release_attempted: bool,
 }
 
 impl FileBacking {
@@ -193,8 +256,11 @@ impl FileBacking {
                 runs: Cell::new(0),
                 cleanup_failed: Cell::new(false),
                 paths: RefCell::new(BTreeMap::new()),
+                release_failed: Cell::new(false),
+                failure: RefCell::new(None),
             }),
             released: false,
+            release_attempted: false,
         }
     }
 
@@ -208,35 +274,48 @@ impl FileBacking {
         !self.account.paths.borrow().is_empty()
     }
 
+    /// Run files this backing still owns.
+    pub fn owned_runs(&self) -> u64 {
+        self.account.paths.borrow().len() as u64
+    }
+
+    /// The first run removal that did not complete, with its deciding cause.
+    pub fn cleanup_failure(&self) -> Option<CleanupFailure> {
+        self.account.failure.borrow().clone()
+    }
+
     /// Removes every path the account still lists, reporting the first failure.
     ///
     /// A path whose file is gone leaves the account and gives its bytes back. A
     /// path that could not be removed stays listed and stays counted, so the
     /// accessors keep describing the storage this backing still owns.
     fn discard_paths(&self) -> ContentResult<()> {
-        let paths = std::mem::take(&mut *self.account.paths.borrow_mut());
-        let mut failure = None;
+        let paths: Vec<(PathBuf, u64)> = self
+            .account
+            .paths
+            .borrow()
+            .iter()
+            .map(|(path, bytes)| (path.clone(), *bytes))
+            .collect();
+        let mut failed = false;
         for (path, bytes) in paths {
             match std::fs::remove_file(&path) {
-                Ok(()) => self.account.released(&path, bytes),
+                Ok(()) => self.account.released(&path),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    self.account.released(&path, bytes);
+                    self.account.released(&path);
                 }
-                Err(_) => {
-                    failure = Some(());
-                    self.account.paths.borrow_mut().insert(path, bytes);
+                Err(error) => {
+                    failed = true;
+                    self.account.removal_failed(&path, bytes, &error);
                 }
             }
         }
-        match failure {
-            Some(()) => {
-                self.account.cleanup_failed.set(true);
-                Err(ContentError::ResourceUnavailable {
-                    what: "ordering run cleanup",
-                })
-            }
-            None => Ok(()),
+        if failed {
+            return Err(ContentError::ResourceUnavailable {
+                what: "ordering run cleanup",
+            });
         }
+        Ok(())
     }
 }
 
@@ -262,6 +341,7 @@ impl OrderingBacking for FileBacking {
             file,
             path,
             written: 0,
+            failed: false,
             account: self.account.clone(),
         }))
     }
@@ -286,9 +366,11 @@ impl OrderingBacking for FileBacking {
         if self.released {
             return Ok(());
         }
+        self.release_attempted = true;
         let outcome = self.discard_paths();
-        if outcome.is_ok() {
-            self.released = true;
+        match outcome {
+            Ok(()) => self.released = true,
+            Err(_) => self.account.release_failed.set(true),
         }
         outcome
     }
@@ -296,32 +378,67 @@ impl OrderingBacking for FileBacking {
 
 impl Drop for FileBacking {
     fn drop(&mut self) {
-        // Ordinary cancellation path: every run this backing still owns is
-        // removed, and a failure is recorded instead of being thrown away. The
-        // operation's own result is decided before this runs.
-        let _ = self.discard_paths();
+        // Ordinary cancellation path: an operation that never reached its
+        // checked release has every run it still owns removed, and a failure is
+        // recorded instead of being thrown away. A checked release that already
+        // ran is final: what it could not remove stays owned and is not
+        // attempted again here.
+        if !self.release_attempted {
+            let _ = self.discard_paths();
+        }
     }
 }
 
 struct FileRun {
     file: std::fs::File,
     path: PathBuf,
+    /// Bytes of complete appends; the run's logical length.
     written: u64,
+    /// True once an append failed: the file may end in a partial record.
+    failed: bool,
     account: Rc<Account>,
+}
+
+impl FileRun {
+    /// Writes `bytes` in order and returns how many reached the file.
+    fn write_counted(&mut self, bytes: &[u8]) -> usize {
+        let mut done = 0;
+        while done < bytes.len() {
+            match self.file.write(&bytes[done..]) {
+                Ok(0) => break,
+                Ok(count) => done += count,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(_) => break,
+            }
+        }
+        done
+    }
 }
 
 impl OrderingRun for FileRun {
     fn append(&mut self, bytes: &[u8]) -> ContentResult<()> {
+        if self.failed {
+            // An earlier append left a partial record: offsets past it no longer
+            // match the logical length, so the run takes no further rows.
+            return Err(ContentError::Io);
+        }
+        if !self.account.owns(&self.path) {
+            return Err(ContentError::ResourceUnavailable {
+                what: "released ordering run",
+            });
+        }
         let length = bytes.len() as u64;
         self.account.reserve(length)?;
-        if self.file.write_all(bytes).is_err() {
-            // The write did not happen: the reservation is returned rather than
-            // counted as owned storage.
-            self.account.release_bytes(length);
+        let reached = self.write_counted(bytes) as u64;
+        // Bytes that reached the file stay charged to its path whether or not
+        // the append completed; only the part never written is given back.
+        self.account.record(&self.path, reached);
+        if reached < length {
+            self.account.release_bytes(length - reached);
+            self.failed = true;
             return Err(ContentError::Io);
         }
         self.written = self.written.saturating_add(length);
-        self.account.record(&self.path, length);
         Ok(())
     }
 
@@ -345,16 +462,23 @@ impl Drop for FileRun {
     fn drop(&mut self) {
         // A run stops being needed when the merge that consumed it finishes, so
         // dropping it is what returns its bytes: the file goes away and the
-        // account stops counting it.
-        let removed = match std::fs::remove_file(&self.path) {
-            Ok(()) => true,
-            Err(error) => error.kind() == std::io::ErrorKind::NotFound,
-        };
-        if removed {
-            self.account.released(&self.path, self.written);
-        } else {
-            // The file is still there, so it stays owned and stays counted.
-            self.account.cleanup_failed.set(true);
+        // account stops counting it. A path the backing already removed has
+        // nothing left to return, and a path a failed checked release kept is
+        // retained as it is rather than attempted again.
+        if !self.account.owns(&self.path) || self.account.release_failed.get() {
+            return;
+        }
+        match std::fs::remove_file(&self.path) {
+            Ok(()) => self.account.released(&self.path),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                self.account.released(&self.path);
+            }
+            Err(error) => {
+                // The file is still there, so it stays owned and stays counted.
+                let bytes = self.account.paths.borrow().get(&self.path).copied();
+                self.account
+                    .removal_failed(&self.path, bytes.unwrap_or(0), &error);
+            }
         }
     }
 }

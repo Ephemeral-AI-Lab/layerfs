@@ -4,9 +4,10 @@
 //! identities and every per-entry root live in ordering runs the content crate's
 //! file backing owns and charges. The scratch is disposable: nothing is
 //! synchronized, and completion releases every run and removes the directory
-//! with a checked result.
+//! with a checked result. A cleanup step that fails is the deciding cause; the
+//! directory and runs it left are reported as retained, never attempted again.
 use crate::error::content;
-use crate::ProjectError as Failure;
+use crate::{ProjectError as Failure, RetainedScratch};
 use layerfs_content::filesystem::references::{FileBacking, OrderingBacking};
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use std::{
@@ -52,11 +53,28 @@ impl Scratch {
     pub(crate) fn peak_bytes(&self) -> u64 {
         self.backing.peak_bytes()
     }
-    /// Releases every remaining run and removes the directory.
-    pub(crate) fn finish(mut self) -> Result<(), io::Error> {
-        let released = self.backing.release();
-        fs::remove_dir(&self.directory)?;
-        released.map_err(|error| io::Error::other(content(error).to_string()))
+    /// Releases every remaining run, then removes the emptied directory.
+    ///
+    /// A failed release decides the outcome with its own host cause: the
+    /// directory still holds the runs, so its removal is not attempted and
+    /// cannot replace that cause.
+    pub(crate) fn finish(mut self) -> Result<(), (io::Error, RetainedScratch)> {
+        let error = match self.backing.release() {
+            Ok(()) => match fs::remove_dir(&self.directory) {
+                Ok(()) => return Ok(()),
+                Err(error) => error,
+            },
+            Err(error) => match self.backing.cleanup_failure() {
+                Some(failure) => failure.to_io_error(),
+                None => io::Error::other(error),
+            },
+        };
+        let retained = RetainedScratch {
+            runs: self.backing.owned_runs(),
+            run_bytes: self.backing.held_bytes(),
+            directory: self.directory.clone(),
+        };
+        Err((error, retained))
     }
 }
 

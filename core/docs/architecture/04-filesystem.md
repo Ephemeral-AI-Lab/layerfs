@@ -243,6 +243,13 @@ kind of thing a qualification pass has to check:
 Nothing here is free memory or free disk: one explicit account owns the bytes,
 growth is reserved **before** it happens, obsolete runs give their bytes back when
 dropped, and the finishing cleanup is **checked, not hidden in a destructor**.
+The file backing's account lists each run path with the bytes that reached it.
+An append the host accepts only in part keeps those bytes charged, returns only
+the unwritten remainder of its reservation and closes the run to further rows. A
+path returns exactly its listed bytes when its file is gone, so dropping one run
+never gives back another path's retained bytes. A checked release that fails
+records the first removal's host cause (`FileBacking::cleanup_failure`), keeps
+what it could not remove, and is final: no destructor attempts it again.
 
 **The pending ceiling is a dial, and its spill-free bound is arithmetic.** The
 pending map holds at most `FilesystemResources.maximum_pending_records` rows

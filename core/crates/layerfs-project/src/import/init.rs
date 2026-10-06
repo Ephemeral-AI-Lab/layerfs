@@ -23,6 +23,9 @@ pub struct InitRequest<'a> {
     /// Host-visible regular directory, checked before construction.
     pub source: &'a Path,
     /// Existing writable parent for the operation-owned backed acquisition scratch.
+    ///
+    /// It must lie outside `source` through every path alias; a parent that is
+    /// the source or inside it is refused before anything is created.
     pub scratch_parent: &'a Path,
     /// LayerStack authority identity selected by the application.
     pub stack: LayerStackId,
@@ -64,6 +67,7 @@ pub fn init(
     let mut progress = ImportProgress::new(request.deadline);
     progress.tick()?;
     let source = scan::check_root(request.source)?;
+    super::source::outside_source(&source, request.scratch_parent)?;
     let scope = scope_for_seed(request.scope_seed);
     let mut scratch = Scratch::create(request.scratch_parent)?;
     let acquired = acquire(
@@ -79,10 +83,11 @@ pub fn init(
     let (root, root_serial, entries, save) = match (acquired, scratch.finish()) {
         (Ok(value), Ok(())) => value,
         (Err(error), Ok(())) => return Err(error),
-        (result, Err(error)) => {
+        (result, Err((error, retained))) => {
             return Err(ProjectError::Cleanup {
                 cause: result.err().map(Box::new),
                 error,
+                retained,
             })
         }
     };

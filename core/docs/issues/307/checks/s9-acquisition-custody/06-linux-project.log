@@ -1,0 +1,169 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.18s
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_project-21b6bef1262321bf)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/acquisition_custody.rs (core/target/cluster2-linux/debug/deps/acquisition_custody-32a74590dd6c3efc)
+
+running 2 tests
+test scratch_inside_source_is_refused_before_the_source_changes ... ok
+ACQUISITION_CUSTODY skipped: directory permissions do not bind uid 0
+test failed_scratch_release_reports_its_cause_and_retained_runs ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/backed_acquisition.rs (core/target/cluster2-linux/debug/deps/backed_acquisition-dfba30bfb87e91d8)
+
+running 3 tests
+test refused_source_removes_scratch_and_publishes_no_history ... ok
+S9_BACKED_ACQUISITION entries=1314 work=NamespaceWork { unique_files: 1302, regular_aliases: 2, entries: 1314, entry_capacity_bytes: 131072, jobs: 1304, job_capacity_bytes: 118784, frontier: 4, frontier_capacity_bytes: 65536, directory_children: 1302, child_vector_bytes: 61440, serial_capacity_bytes: 0, inode_capacity_bytes: 458752, directory_bindings: 1313, directory_capacity_bytes: 0, change_capacity_bytes: 0, sort_capacity_bytes: 1179648, backing_bytes: 495971 }
+test wide_nested_aliased_root_equals_the_whole_namespace_constructor ... ok
+S9_BACKED_ACQUISITION_WIDE work=NamespaceWork { unique_files: 0, regular_aliases: 0, entries: 17002, entry_capacity_bytes: 131072, jobs: 0, job_capacity_bytes: 118784, frontier: 1, frontier_capacity_bytes: 65536, directory_children: 17000, child_vector_bytes: 61440, serial_capacity_bytes: 0, inode_capacity_bytes: 393216, directory_bindings: 17001, directory_capacity_bytes: 0, change_capacity_bytes: 0, sort_capacity_bytes: 2228224, backing_bytes: 35303848 }
+test very_wide_directory_is_ordered_through_merged_runs ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.33s
+
+     Running tests/complete_root.rs (core/target/cluster2-linux/debug/deps/complete_root-cf3c82a49ea1d8cf)
+
+running 1 test
+S9_COMPLETE_ROOT entries=25 work=NamespaceWork { unique_files: 8, regular_aliases: 1, entries: 25, entry_capacity_bytes: 131072, jobs: 9, job_capacity_bytes: 118784, frontier: 5, frontier_capacity_bytes: 65536, directory_children: 12, child_vector_bytes: 1920, serial_capacity_bytes: 0, inode_capacity_bytes: 458752, directory_bindings: 24, directory_capacity_bytes: 0, change_capacity_bytes: 0, sort_capacity_bytes: 1179648, backing_bytes: 4850 }
+test native_import_keeps_ignored_git_dependencies_outputs_and_exact_link_targets ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/history_proof_memo.rs (core/target/cluster2-linux/debug/deps/history_proof_memo-319de1b77b0fe5b5)
+
+running 4 tests
+test short_source_batch_is_refused_before_cache_admission ... ok
+test mixed_hits_misses_duplicates_and_order_keep_exact_bytes ... ok
+test identity_and_missing_failures_are_not_cached ... ok
+test eviction_respects_both_fixed_bounds_and_fresh_invocation_starts_empty ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/init_memory.rs (core/target/cluster2-linux/debug/deps/init_memory-2378e72a99440190)
+
+running 1 test
+DIAGNOSTIC init-memory-100 Diagnostics { policy: 1, locate: 4, read_packs: 0, read_pack_selections: 1, whole_selected: 1, whole_due_density: 0, whole_due_singleton: 0, whole_due_small: 1, whole_due_reuse: 0, range_selected: 0, range_scan_bytes: 0, range_acquired_bytes: 0, range_materialized_bytes: 0, value_groups: 2, signatures: 1, reserve: 2, publish: 4, payload_reads: 1, payload_read_bytes: 377, pack_read_bytes: 0, pack_write_bytes: 18327, pooled_packs: 1, pooled_groups: 2, reserved_directory_bytes: 4096, ordinal_reservations: 1, locator_hits: 436, locator_misses: 136, locator_evictions: 0, locator_eviction_probes: 0, locator_second_chances: 0, locator_bookkeeping_live_peak_bytes: 48, pack_hits: 297, pack_misses: 1, pack_evictions: 0, pack_evicted_bytes: 0, directory_validations: 597, directory_unshared_walks: 597, directory_entry_bounds: 597, prefetch_group_decodes: 0, forced_seals: 0 }
+DIAGNOSTIC init-memory-1000 Diagnostics { policy: 1, locate: 8, read_packs: 0, read_pack_selections: 3, whole_selected: 3, whole_due_density: 2, whole_due_singleton: 0, whole_due_small: 1, whole_due_reuse: 0, range_selected: 0, range_scan_bytes: 0, range_acquired_bytes: 0, range_materialized_bytes: 0, value_groups: 2, signatures: 1, reserve: 4, publish: 7, payload_reads: 3, payload_read_bytes: 40478, pack_read_bytes: 0, pack_write_bytes: 247410, pooled_packs: 1, pooled_groups: 20, reserved_directory_bytes: 4096, ordinal_reservations: 3, locator_hits: 4120, locator_misses: 1163, locator_evictions: 0, locator_eviction_probes: 0, locator_second_chances: 0, locator_bookkeeping_live_peak_bytes: 64, pack_hits: 3172, pack_misses: 3, pack_evictions: 0, pack_evicted_bytes: 0, directory_validations: 6359, directory_unshared_walks: 6359, directory_entry_bounds: 6359, prefetch_group_decodes: 0, forced_seals: 0 }
+test init_100_and_1000_over_memory_ports_pass_the_full_namespace_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/init_sqlite.rs (core/target/cluster2-linux/debug/deps/init_sqlite-660b519c20e1e860)
+
+running 1 test
+test an_unsupported_platform_refuses_the_store_before_any_file_exists ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/namespace_scaling.rs (core/target/cluster2-linux/debug/deps/namespace_scaling-354acd30e90eb5c9)
+
+running 1 test
+DIAGNOSTIC namespace-count-100 NamespaceWork { unique_files: 100, regular_aliases: 0, entries: 111, entry_capacity_bytes: 131072, jobs: 100, job_capacity_bytes: 118784, frontier: 10, frontier_capacity_bytes: 65536, directory_children: 10, child_vector_bytes: 1920, serial_capacity_bytes: 0, inode_capacity_bytes: 393216, directory_bindings: 110, directory_capacity_bytes: 0, change_capacity_bytes: 0, sort_capacity_bytes: 1179648, backing_bytes: 37760 }
+DIAGNOSTIC namespace-count-3000 NamespaceWork { unique_files: 3000, regular_aliases: 0, entries: 3011, entry_capacity_bytes: 131072, jobs: 3000, job_capacity_bytes: 118784, frontier: 10, frontier_capacity_bytes: 65536, directory_children: 300, child_vector_bytes: 61440, serial_capacity_bytes: 0, inode_capacity_bytes: 393216, directory_bindings: 3010, directory_capacity_bytes: 0, change_capacity_bytes: 0, sort_capacity_bytes: 1179648, backing_bytes: 1119460 }
+DIAGNOSTIC namespace-count-6000 NamespaceWork { unique_files: 6000, regular_aliases: 0, entries: 6011, entry_capacity_bytes: 131072, jobs: 6000, job_capacity_bytes: 118784, frontier: 10, frontier_capacity_bytes: 65536, directory_children: 600, child_vector_bytes: 61440, serial_capacity_bytes: 0, inode_capacity_bytes: 393216, directory_bindings: 6010, directory_capacity_bytes: 0, change_capacity_bytes: 0, sort_capacity_bytes: 1310720, backing_bytes: 2238460 }
+test backed_counts_grow_while_resident_buffers_stay_fixed ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+
+     Running unittests examples/benchmark_history.rs (core/target/cluster2-linux/debug/examples/benchmark_history-12e82155cf06ab73)
+
+running 28 tests
+test workload::gitoid::tests::object_ids_parse_and_render_round_trip ... ok
+test workload::gitoid::tests::a_blob_oid_is_the_header_plus_the_bytes ... ok
+test workload::gitoid::tests::the_buffer_boundaries_are_exact ... ok
+test workload::history::tests::a_malformed_oracle_is_refused_rather_than_counted ... ok
+test workload::history::tests::a_blob_that_does_not_identify_is_refused_both_ways ... ok
+test workload::history::tests::a_missing_corpus_is_refused_rather_than_defaulted ... ok
+test workload::history::tests::a_transition_counts_and_sizes_only_what_it_added_or_modified ... ok
+test workload::history::tests::a_selection_that_is_not_the_declared_shape_is_refused ... ok
+test workload::history::tests::a_tree_line_parses_in_the_corpus_column_order ... ok
+test workload::history::tests::hex_decoding_refuses_odd_lengths_and_non_hex ... ok
+test workload::history::tests::an_oracle_parses_files_and_directories_apart ... ok
+test workload::history::tests::path_states_are_not_the_manifest_file_count ... ok
+test workload::history::tests::the_pinned_totals_agree_with_the_selections ... ok
+test workload::history::tests::the_three_selections_are_the_declared_indices ... ok
+test workload::history::tests::sealed_oracle_counts_cover_all_checkpoints_and_refuse_drift ... ok
+test workload::json::tests::counting_agrees_with_building ... ok
+test workload::json::tests::escapes_resolve_including_a_surrogate_pair ... ok
+test workload::json::tests::accessors_are_typed_rather_than_coercing ... ok
+test workload::json::tests::a_duplicate_key_is_refused_rather_than_resolved ... ok
+test workload::json::tests::malformed_documents_are_refused ... ok
+test workload::json::tests::scalars_and_containers_round_trip ... ok
+test workload::json::tests::the_depth_guard_refuses_rather_than_overflowing ... ok
+PROBE missing 9ec54df692d13dd9bd162281e44fed0b99153a66f241a5580692c2fe5b49ba7e admitted=false chain=6 allowed=4 served=4 refused=1 demanded=5
+PROBE missing 10e80bf5a94eca10296a857277234d2acf27f6220ee2938182324471f3e5c133 admitted=false chain=6 allowed=4 served=4 refused=2 demanded=6
+PROBE missing f5f32f2d850500cb3a3da5d9f2e853266fed134a1e0fa79deb1af3c7d1fd0072 admitted=false chain=6 allowed=3 served=1 refused=1 demanded=2
+test workload::providers::tests::prefix_keys_admit_the_snapshot_and_nothing_else ... ok
+test workload::providers::tests::a_batch_demanding_a_later_object_gets_the_snapshot_error ... ok
+test workload::history::tests::a_malformed_tree_line_names_its_line_and_is_refused ... ok
+test workload::providers::tests::a_cumulative_prefix_serves_bytes_and_demand_order_identically ... ok
+test workload::gitoid::tests::sha1_matches_the_published_vectors ... ok
+test workload::gitoid::tests::blob_oid_matches_scalar_across_blocks_and_large_payloads ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests examples/benchmark_init.rs (core/target/cluster2-linux/debug/examples/benchmark_init-2d214626b2df75e7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/cause_namespace.rs (core/target/cluster2-linux/debug/examples/cause_namespace-046af38789920c94)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/verify_history.rs (core/target/cluster2-linux/debug/examples/verify_history-991018db321e9076)
+
+running 28 tests
+test workload::gitoid::tests::object_ids_parse_and_render_round_trip ... ok
+test workload::gitoid::tests::a_blob_oid_is_the_header_plus_the_bytes ... ok
+test workload::gitoid::tests::the_buffer_boundaries_are_exact ... ok
+test workload::history::tests::a_malformed_oracle_is_refused_rather_than_counted ... ok
+test workload::history::tests::a_blob_that_does_not_identify_is_refused_both_ways ... ok
+test workload::history::tests::a_selection_that_is_not_the_declared_shape_is_refused ... ok
+test workload::history::tests::a_missing_corpus_is_refused_rather_than_defaulted ... ok
+test workload::history::tests::a_transition_counts_and_sizes_only_what_it_added_or_modified ... ok
+test workload::history::tests::an_oracle_parses_files_and_directories_apart ... ok
+test workload::history::tests::hex_decoding_refuses_odd_lengths_and_non_hex ... ok
+test workload::history::tests::a_tree_line_parses_in_the_corpus_column_order ... ok
+test workload::history::tests::path_states_are_not_the_manifest_file_count ... ok
+test workload::history::tests::the_three_selections_are_the_declared_indices ... ok
+test workload::history::tests::the_pinned_totals_agree_with_the_selections ... ok
+test workload::json::tests::a_duplicate_key_is_refused_rather_than_resolved ... ok
+test workload::json::tests::accessors_are_typed_rather_than_coercing ... ok
+test workload::json::tests::counting_agrees_with_building ... ok
+test workload::json::tests::escapes_resolve_including_a_surrogate_pair ... ok
+test workload::history::tests::sealed_oracle_counts_cover_all_checkpoints_and_refuse_drift ... ok
+test workload::json::tests::malformed_documents_are_refused ... ok
+test workload::json::tests::scalars_and_containers_round_trip ... ok
+test workload::json::tests::the_depth_guard_refuses_rather_than_overflowing ... ok
+PROBE missing f5f32f2d850500cb3a3da5d9f2e853266fed134a1e0fa79deb1af3c7d1fd0072 admitted=false chain=6 allowed=3 served=1 refused=1 demanded=2
+PROBE missing 9ec54df692d13dd9bd162281e44fed0b99153a66f241a5580692c2fe5b49ba7e admitted=false chain=6 allowed=4 served=4 refused=1 demanded=5
+PROBE missing 10e80bf5a94eca10296a857277234d2acf27f6220ee2938182324471f3e5c133 admitted=false chain=6 allowed=4 served=4 refused=2 demanded=6
+test workload::providers::tests::a_batch_demanding_a_later_object_gets_the_snapshot_error ... ok
+test workload::providers::tests::prefix_keys_admit_the_snapshot_and_nothing_else ... ok
+test workload::providers::tests::a_cumulative_prefix_serves_bytes_and_demand_order_identically ... ok
+test workload::history::tests::a_malformed_tree_line_names_its_line_and_is_refused ... ok
+test workload::gitoid::tests::sha1_matches_the_published_vectors ... ok
+test workload::gitoid::tests::blob_oid_matches_scalar_across_blocks_and_large_payloads ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests examples/verify_namespace.rs (core/target/cluster2-linux/debug/examples/verify_namespace-6bbc2e16a228fc93)
+
+running 1 test
+test tests::lite_sample_covers_anchors_empty_sizes_and_tree_tail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

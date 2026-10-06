@@ -29,3 +29,24 @@ pub(super) fn read_link(path: &Path, scanned: &Metadata) -> Result<Vec<u8>, Proj
         .map_err(ProjectError::Content)?;
     Ok(target.as_bytes().to_vec())
 }
+
+/// Refuses a scratch parent that is the source or lies inside it.
+///
+/// The parent is resolved through its links first, then each ancestor's native
+/// identity is compared with the source's, so a symlinked or otherwise aliased
+/// spelling of a directory inside the source is recognised. Nothing is created
+/// or changed: the check runs before the scratch directory exists, because a
+/// scratch inside the source would both alter the source directory and be
+/// acquired as part of it.
+pub(super) fn outside_source(source: &Metadata, scratch_parent: &Path) -> Result<(), ProjectError> {
+    let mut ancestor = fs::canonicalize(scratch_parent)?;
+    loop {
+        let metadata = fs::symlink_metadata(&ancestor)?;
+        if metadata.dev() == source.dev() && metadata.ino() == source.ino() {
+            return Err(ProjectError::ScratchInsideSource);
+        }
+        if !ancestor.pop() {
+            return Ok(());
+        }
+    }
+}

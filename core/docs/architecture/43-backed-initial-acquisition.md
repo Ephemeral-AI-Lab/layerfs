@@ -26,6 +26,22 @@ directory as superseded evidence. Runs are append-only files in one private
 charges every byte before it is written and reports the simultaneous peak. Capacity
 is the physical device; there is no total-input byte cap. Nothing is synchronized.
 
+**Placement.** `scratch_parent` must lie outside the source. Before the scratch
+directory is created, the parent is resolved through its links and each ancestor's
+native `(device, inode)` is compared with the source root's. A parent that is the
+source or inside it, under any spelling, is refused as
+`ProjectError::ScratchInsideSource` with the source untouched: a scratch inside the
+source would change the source directory and be acquired as part of it. The walk
+is bounded by path depth and reads no source content. A second mount of a source
+subtree at an unrelated path is not recognised by an ancestor walk and is outside
+this check.
+
+**Account.** The backing lists each run path with the bytes that reached it. An
+append the host accepts only in part keeps the written bytes charged to that path,
+returns only the unwritten remainder of its reservation, and closes the run to
+further rows; the run's logical length does not include the partial record. A path
+leaves the list, and returns exactly its listed bytes, only when its file is gone.
+
 `import/runs.rs` owns the mechanics: a buffered `Writer`, a typed sequential
 `Cursor` and a `Sorter`. `import/scratch.rs` owns the directory lifecycle and the
 big-endian record grammar. A run is written once and then read; it is never read
@@ -62,7 +78,13 @@ unused and are never recycled.
 
 Scratch release and directory removal are checked before the tree Save is finished
 or history is published; a cleanup failure is `ProjectError::Cleanup` carrying the
-original cause. One attempt only: no retry, refresh or replay.
+original construction cause, the deciding cleanup failure and a `RetainedScratch`
+naming the directory, run count and run bytes still on disk. The deciding failure
+is the first step that did not complete: a refused run removal is reported with
+its own host error, and the directory removal that could only fail after it is not
+attempted. One attempt only: no retry, refresh or replay. A checked release that
+failed is final; neither the backing's nor a run's destructor attempts it again,
+and the retained paths stay charged in the account for the caller to dispose of.
 
 ## Work and resident state
 
@@ -88,6 +110,11 @@ orders 17 000 symlinks with long opaque targets through a 16-way merge and a
 final merge.
 A refused set-id source leaves no scratch and publishes no history. Existing
 complete-root, memory and both macOS Store profile tests are unchanged and pass.
+Placement refusal, partial-append charging, the final failed release and the
+reported cleanup cause have public tests; their receipts and limits are under
+[custody checks](../issues/307/checks/s9-acquisition-custody/identity.json).
+The Store oracle is gated to macOS, and other platforms prove the explicit
+`BackendUnavailable` refusal instead.
 Append-only receipts, the retained Linux failure of the ungated macOS-only
 `init_sqlite` test and source identity are under
 [checks](../issues/307/checks/s9-backed-acquisition/identity.json).
