@@ -2,8 +2,10 @@
 mod failure;
 mod header;
 pub use failure::{FailureDomain, FailureField, FailureFields, FailureValue, RemoteFailure};
+mod attachment;
 mod call;
 mod call_error;
+pub use attachment::{Attachment, AttachmentError, ConsumerFence};
 mod ports;
 pub use ports::{PortFailure, RemoteLengths, RemoteObjects, RemoteSerials};
 mod input;

@@ -1,0 +1,31 @@
+{
+  "head": "da331dfb607f5939b3e150c82480faabf6fb258c",
+  "tree": "29ed5e63eb40baad5db196ac970be1ff35d93bf9",
+  "product_tree": "e67f06e72239363ffb8614ed5cecc08d1e906474",
+  "branch": "main",
+  "initial_untracked": [
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md"
+  ],
+  "preserved_containers": [
+    "9cf2fe345496",
+    "ce75ac504df9",
+    "d2433851ea59",
+    "d2550144998b"
+  ],
+  "tracker_last_receipts": [
+    "6023150742",
+    "6023151427"
+  ],
+  "prior_gates": {
+    "init_speed": "FAIL all eight",
+    "init_strict_allocation": "FAIL all eight",
+    "history_approved_speed_allocation": "PASS all six"
+  },
+  "builds_samples_at_reconciliation": 0,
+  "next_ready": [
+    "R1",
+    "E1"
+  ],
+  "goal": "active; S0/S7-S13 incomplete"
+}

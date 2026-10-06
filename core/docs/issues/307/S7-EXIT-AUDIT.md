@@ -275,3 +275,10 @@ original #302 candidate observations reused after exact identity/closure audit;
 old7edddb competitive results stay separate. This is component evidence only.
 S7 remains incomplete and unchecked; no full runtime/residency/flow acceptance
 or reopening of closed S5/S6 follows. No further layout redesign is selected.
+
+
+## Active full-goal composition checkpoint (2026-10-07)
+
+The starting source reconciles to local main `da331dfb607f5939b3e150c82480faabf6fb258c` and restored product `e67f06e72239363ffb8614ed5cecc08d1e906474`. Current [restoration results](INCUMBENT-RESTORATION-RESULTS-20261007.md) retain all 8 Init speed/strict allocation FAIL and 6 approved history PASS, within their distinct routes. No resampling or new Init mechanism is selected.
+
+R1 source supplies actual initialized host/socket composition and legitimate input/output/held-credit observations; bounded root context adds real authorized demand work. The [R1 checkpoint](R1-ROOT-BINDING-20261007.md) records43 host and 11 Linux portable SDK bodies, source bounds, original failures and exact LOC(+1113 core/combined; reference unchanged). No SQL/schema changed. Full original-operation SQL/VM/pages/bytes/copies, physical allocation/high-water/freelist/range costs, phase residency, sustainable service and eligible-debt gates remain E2–E4. E1 registration tooling is undergoing independent fail-closed evidence corrections; all 27 samples remain NOT_RUN. Kernel ownership/native dimensions require the later S8 route; their absence does not stop independent E work. S7 stays CHECKPOINT/unchecked; the active full goal continues.

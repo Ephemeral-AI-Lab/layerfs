@@ -1,0 +1,17 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "fmt",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--all",
+    "--",
+    "--check"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": 1,
+  "timed_out": false,
+  "wall_ns": 1506026041,
+  "kind": "core workspace format check"
+}

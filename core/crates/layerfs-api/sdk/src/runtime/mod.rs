@@ -8,10 +8,13 @@ mod error;
 mod ports;
 pub(crate) use ports::lengths as length_port;
 mod owner;
+mod root_binding;
 pub(crate) use ports::serials as serial_port;
 /// Bounded fair host adapter dispatch and local disconnect/result custody.
 pub mod service;
 mod sessions;
+/// Host-thread composition of provider service and independently fenced sockets.
+pub mod supervisor;
 mod types;
 
 pub use binding::{Authorization, Binding};

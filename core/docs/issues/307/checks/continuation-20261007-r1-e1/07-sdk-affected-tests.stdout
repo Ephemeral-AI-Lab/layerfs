@@ -1,0 +1,25 @@
+
+running 6 tests
+test pre_body_denial_delivers_original_refusal_then_returns_joined_custody_without_dispatch ... ok
+test fence_before_service_admission_returns_original_decoded_unattempted_input ... ok
+test idle_peer_does_not_hold_unrelated_service_and_held_delivery_keeps_both_credits ... ok
+test peer_blocked_after_grant_cannot_hold_unrelated_policy_and_partial_input_returns_at_fence ... ok
+test slow_output_does_not_hold_provider_service_and_fence_returns_dispatched_result ... ok
+test real_supervisor_delivers_binding_same_save_objects_history_and_consumer_ports ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+
+running 9 tests
+test fixed_headers_validate_every_operation_and_refuse_wrong_envelope_before_allocation ... ok
+test typed_refusal_preserves_nested_unknown_original_cleanup_and_opaque_io ... ok
+test consumer_close_fences_a_blocked_call_without_waiting_for_its_mutex_or_replay ... ok
+test consumer_wrong_result_retains_original_body_and_stops_before_another_call ... ok
+test output_permit_charges_retained_capacity_and_refuses_terminal_second_transfer ... ok
+test output_permit_refuses_large_capacity_even_when_wire_length_fits ... ok
+test refused_native_header_never_allocates_or_copies_declared_canonical_body ... ok
+test output_rotates_ready_classes_and_caller_receipts_hold_real_shared_credit ... ok
+test actual_grant_streams_canonical_input_and_disconnect_returns_partial_original ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

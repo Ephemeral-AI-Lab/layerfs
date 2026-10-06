@@ -43,8 +43,12 @@ pub struct OutputWork {
     pub owners: usize,
     /// Current packets still holding output credit, including caller receipts.
     pub messages: usize,
-    /// Exact packet capacities plus fixed job/receipt charge still owned.
+    /// Packet capacities, pre-encoding reservations and fixed ownership charges.
     pub credited_bytes: usize,
+    /// Current packet Vec capacities, including retained unsent originals.
+    pub packet_capacity_bytes: usize,
+    /// Pre-encoding capacity credits whose packet has not yet been allocated.
+    pub reserved_bytes: usize,
     /// Largest aggregate credit observation, not whole-system residency.
     pub peak_credited_bytes: usize,
 }
@@ -81,12 +85,27 @@ impl Drop for OwnerLease {
 struct Credit {
     ledger: Arc<Mutex<Ledger>>,
     bytes: usize,
+    packet_capacity: usize,
+    reserved: bool,
+}
+/// Reserved output capacity acquired before provider invocation or reply encoding.
+/// A missing permit is a readiness wait, with no socket send or operation attempt.
+pub struct OutputPermit {
+    correlation: u64,
+    class: MessageClass,
+    capacity: usize,
+    credit: Credit,
+    owner: Arc<OwnerLease>,
 }
 impl Drop for Credit {
     fn drop(&mut self) {
         if let Ok(mut ledger) = self.ledger.lock() {
             ledger.work.messages -= 1;
             ledger.work.credited_bytes -= self.bytes;
+            ledger.work.packet_capacity_bytes -= self.packet_capacity;
+            if self.reserved {
+                ledger.work.reserved_bytes -= self.bytes;
+            }
         }
     }
 }
@@ -259,6 +278,144 @@ pub struct NativeOutput {
     fenced: bool,
 }
 impl NativeOutput {
+    /// Reserves one original reply's maximum allocation before encoding. `None`
+    /// means the bounded delivery window is occupied; no packet was submitted.
+    /// The permit is bound to this output pool and cannot replay a prior send.
+    pub fn reserve(
+        &self,
+        correlation: u64,
+        class: MessageClass,
+        capacity: usize,
+    ) -> Result<Option<OutputPermit>, FrameError> {
+        if correlation == 0 || self.fenced {
+            return Err(FrameError::Invalid("output reservation identity/state"));
+        }
+        let mut ledger = self.ledger.lock().map_err(|_| FrameError::Poisoned)?;
+        let config = ledger.config;
+        let (count, bytes) = match class {
+            MessageClass::Save => (
+                config.messages - config.demand_messages - config.control_messages,
+                config.bytes - config.demand_reserve - config.control_reserve,
+            ),
+            MessageClass::Demand => (
+                config.messages - config.control_messages,
+                config.bytes - config.control_reserve,
+            ),
+            MessageClass::Control => (config.messages, config.bytes),
+        };
+        let charge = capacity
+            .checked_add(std::mem::size_of::<Job>() + std::mem::size_of::<OutputReceipt>())
+            .ok_or(FrameError::Invalid("output reservation charge"))?;
+        if charge > bytes {
+            return Err(FrameError::Invalid(
+                "output reservation exceeds class window",
+            ));
+        }
+        if ledger.work.credited_bytes > bytes - charge || ledger.work.messages >= count {
+            return Ok(None);
+        }
+        ledger.work.messages += 1;
+        ledger.work.credited_bytes += charge;
+        ledger.work.reserved_bytes += charge;
+        ledger.work.peak_credited_bytes = ledger
+            .work
+            .peak_credited_bytes
+            .max(ledger.work.credited_bytes);
+        Ok(Some(OutputPermit {
+            correlation,
+            class,
+            capacity,
+            credit: Credit {
+                ledger: self.ledger.clone(),
+                bytes: charge,
+                packet_capacity: 0,
+                reserved: true,
+            },
+            owner: self.owner.clone(),
+        }))
+    }
+
+    /// Transfers one credited original packet once. Refusal returns packet and
+    /// permit; an attempted transfer consumes its reservation state. A returned
+    /// terminal permit refuses a second transfer before accounting or native I/O.
+    #[allow(clippy::result_large_err)]
+    pub fn submit_reserved(
+        &self,
+        permit: OutputPermit,
+        packet: OutputPacket,
+    ) -> Result<(), (OutputAdmissionError, OutputPacket, OutputPermit)> {
+        if self.fenced
+            || !permit.credit.reserved
+            || !Arc::ptr_eq(&self.ledger, &permit.credit.ledger)
+            || !Arc::ptr_eq(&self.owner, &permit.owner)
+            || packet.correlation != permit.correlation
+            || packet.class != permit.class
+            || packet.bytes.capacity() > permit.capacity
+        {
+            return Err((
+                OutputAdmissionError::Frame(FrameError::Invalid("output permit/packet")),
+                packet,
+                permit,
+            ));
+        }
+        if let Ok(mut ledger) = self.ledger.lock() {
+            ledger.work.submissions = ledger.work.submissions.saturating_add(1);
+        }
+        let OutputPermit {
+            mut credit,
+            correlation,
+            class,
+            capacity,
+            owner,
+        } = permit;
+        let actual_charge = packet.bytes.capacity()
+            + std::mem::size_of::<Job>()
+            + std::mem::size_of::<OutputReceipt>();
+        if let Ok(mut ledger) = self.ledger.lock() {
+            ledger.work.reserved_bytes -= credit.bytes;
+            ledger.work.credited_bytes -= credit.bytes - actual_charge;
+            ledger.work.packet_capacity_bytes += packet.bytes.capacity();
+        }
+        credit.bytes = actual_charge;
+        credit.packet_capacity = packet.bytes.capacity();
+        credit.reserved = false;
+        let job = Job {
+            packet,
+            progress: None,
+            _credit: credit,
+        };
+        match self.jobs.as_ref().expect("unfenced jobs").try_send(job) {
+            Ok(()) => {
+                if let Ok(mut ledger) = self.ledger.lock() {
+                    ledger.work.admitted = ledger.work.admitted.saturating_add(1);
+                }
+                Ok(())
+            }
+            Err(error) => {
+                let (error, job) = match error {
+                    mpsc::TrySendError::Full(job) => (
+                        OutputAdmissionError::Frame(FrameError::AdmissionUnavailable),
+                        job,
+                    ),
+                    mpsc::TrySendError::Disconnected(job) => (OutputAdmissionError::Detached, job),
+                };
+                if let Ok(mut ledger) = self.ledger.lock() {
+                    ledger.work.refused = ledger.work.refused.saturating_add(1);
+                }
+                Err((
+                    error,
+                    job.packet,
+                    OutputPermit {
+                        correlation,
+                        class,
+                        capacity,
+                        credit: job._credit,
+                        owner,
+                    },
+                ))
+            }
+        }
+    }
     /// Credits one original owned packet before nonblocking queue transfer. Any
     /// refusal returns its exact bytes without a native write or provider replay.
     pub fn try_submit(
@@ -296,6 +453,7 @@ impl NativeOutput {
             }
             ledger.work.messages += 1;
             ledger.work.credited_bytes += charge;
+            ledger.work.packet_capacity_bytes += packet.bytes.capacity();
             ledger.work.admitted = ledger.work.admitted.saturating_add(1);
             ledger.work.peak_credited_bytes = ledger
                 .work
@@ -304,6 +462,8 @@ impl NativeOutput {
             Ok(Credit {
                 ledger: self.ledger.clone(),
                 bytes: charge,
+                packet_capacity: packet.bytes.capacity(),
+                reserved: false,
             })
         })();
         let credit = match credit {

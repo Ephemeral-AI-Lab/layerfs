@@ -463,3 +463,12 @@ original #302 candidate observations reused after exact identity/closure audit;
 old7edddb competitive results stay separate. This is component evidence only.
 S9 remains incomplete and unchecked; no full runtime/residency/flow acceptance
 or reopening of closed S5/S6 follows. No further layout redesign is selected.
+
+
+## Active full-goal R1/root-binding checkpoint (2026-10-07)
+
+The continuation starts at `da331dfb607f5939b3e150c82480faabf6fb258c`, with restored product subtree `e67f06e72239363ffb8614ed5cecc08d1e906474`. The latest [restoration verdicts](INCUMBENT-RESTORATION-RESULTS-20261007.md) supersede the current-status implication of the older matrix immediately above: all eight Init speed and strict allocation gates FAIL; six history pairs PASS their original scope. No campaign was reopened.
+
+R1 adds initialized provider/service plus authenticated independent socket composition, bounded consumer attachments, pre-dispatch reply reservations and exact joined local custody. The focused R2 binding slice checks actual root-inode/portable-metadata context with authority before demanded children, without a namespace scan/provider reopen. Independent review and public checks cover 43 host SDK bodies and 11 Linux portable bodies; macOS Store targets execute 0 bodies on Linux. All original failures/corrections and LOC95056->96169 core,65417 unchanged reference,160473->161586 combined(+1113) are retained in [the checkpoint](R1-ROOT-BINDING-20261007.md).
+
+Direct-child/contextual topology admission, R3 restart/terminal custody, R4 macOS-host/Docker assembly, full-root/huge/dense>4GiB oracles and E/Q numerical/resource exits remain open. S9 remains CHECKPOINT/unchecked; the full goal continues.

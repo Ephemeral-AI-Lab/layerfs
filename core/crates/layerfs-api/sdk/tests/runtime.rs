@@ -2,7 +2,6 @@
 #![cfg(target_os = "macos")]
 
 use layerfs_content::filesystem::{
-    attributes::{encode_attribute_page, AttributePage},
     directory::{encode_directory_page, DirectoryPage},
     inode::{encode_inode_page, InodePage},
     profile_id, scope_for_seed, FilesystemRoot,
@@ -100,16 +99,41 @@ impl Fixture {
             layerfs_content::FinalizedObject::new(ObjectRole::DirectoryLeaf, directory).unwrap(),
         )
         .unwrap();
-        let metadata = encode_attribute_page(&AttributePage::Leaf {
-            subtree_bytes: 0,
-            entries: vec![],
-        })
-        .unwrap();
-        let meta_id = ObjectId::for_bytes(&metadata);
-        save.accept(
-            layerfs_content::FinalizedObject::new(ObjectRole::AttributeLeaf, metadata).unwrap(),
-        )
-        .unwrap();
+        let meta_id = {
+            use layerfs_content::filesystem::attributes::{
+                build_attribute_tree, emit_value, AttributeEntry, AttributeKey, PortableMetadata,
+            };
+            let metadata = PortableMetadata {
+                mode: 0o755,
+                mtime_seconds: 0,
+                mtime_nanoseconds: 0,
+            };
+            let mut sink = save.sink();
+            let mut objects = layerfs_content::FilesystemObjects::new(&save, &mut sink);
+            let mode = emit_value(
+                &mut objects,
+                &metadata.mode_bytes(InodeKind::Directory).unwrap(),
+            )
+            .unwrap();
+            let mtime = emit_value(&mut objects, &metadata.mtime_bytes().unwrap()).unwrap();
+            build_attribute_tree(
+                &mut objects,
+                [
+                    AttributeEntry {
+                        key: AttributeKey::new("portable".into(), b"mode".to_vec()).unwrap(),
+                        value_root: mode,
+                    },
+                    AttributeEntry {
+                        key: AttributeKey::new("portable".into(), b"mtime".to_vec()).unwrap(),
+                        value_root: mtime,
+                    },
+                ]
+                .into_iter()
+                .map(Ok),
+            )
+            .unwrap()
+            .0
+        };
         let table = encode_inode_page(&InodePage::Leaf {
             entries: vec![(
                 1,

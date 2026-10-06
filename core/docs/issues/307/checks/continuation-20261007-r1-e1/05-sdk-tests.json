@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-sdk",
+    "--all-targets"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 101,
+  "timed_out": false,
+  "wall_ns": 3901357208,
+  "kind": "public SDK functional tests after locked no-run; cache uncontrolled, no performance claim",
+  "workers": 1
+}

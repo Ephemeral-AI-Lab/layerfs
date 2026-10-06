@@ -16,6 +16,6 @@ mod input;
 pub use input::{InputEvent, InputFailure, InputFence, InputPool, InputReport, NativeInput};
 mod output;
 pub use output::{
-    NativeOutput, OutputAdmissionError, OutputConfig, OutputFence, OutputPacket, OutputPool,
-    OutputReceipt, OutputReport, OutputStartError, OutputWork,
+    NativeOutput, OutputAdmissionError, OutputConfig, OutputFence, OutputPacket, OutputPermit,
+    OutputPool, OutputReceipt, OutputReport, OutputStartError, OutputWork,
 };

@@ -31,6 +31,34 @@ sample or milestone completion. Existing failed/ineligible/unrun evidence and
 the completed S5/S6 stopping record remain unchanged. The planning source/LOC
 receipt is recorded separately; no push/release/deployment is implied.
 
+## Active continuation: R1 and bounded root context (2026-10-07)
+
+The full-goal continuation reconciled local `main` at `da331dfb607f5939b3e150c82480faabf6fb258c`,
+tree `29ed5e63eb40baad5db196ac970be1ff35d93bf9`, and the latest #307 planning
+receipts. The two separately owned notes and four unrelated containers remain
+preserved. All eight current Init speed/strict allocation failures stay selected;
+the six approved history pairs do not qualify acquisition or runtime.
+
+R1 now composes initialized host Sessions/Service and independent authenticated
+socket owners, pre-dispatch reply reservations, exact retained results and joined
+completion fences. Consumer attachment supplies existing object/length/serial
+ports. The focused R2 root-binding slice checks actual root directory and portable
+metadata under per-demand authority without a tree scan. Full contextual topology
+admission remains open.
+
+Host checks cover 43 unique SDK bodies; Linux portable checks cover 11, with
+macOS Store targets executing zero bodies there. Locked no-run, host/Linux SDK
+Clippy, core format, 669-file boundary guard and 40 tooling tests pass after the
+retained failures were diagnosed. These are component functional checks with
+uncontrolled caches, not resource/service or latency qualification.
+
+The [R1 checkpoint](R1-ROOT-BINDING-20261007.md) and
+[append-only checks](checks/continuation-20261007-r1-e1/) own exact outcomes and
+LOC. E1 tooling is independently authored and receiving evidence-review repairs;
+all 27 proposed samples remain NOT_RUN. R3 custody, Content direct-child admission,
+E2–E4/R4/Q1, S8 and backed S10 construction remain useful next work. S0 and S7–S13
+remain unchecked; the active goal continues.
+
 ## Historical checkpoint (2026-10-06, S7–S9 batch)
 
 The primary checkout and tracker reconcile to S6 product983c2ee6d, tree

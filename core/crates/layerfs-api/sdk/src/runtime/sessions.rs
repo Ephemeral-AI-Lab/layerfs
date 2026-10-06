@@ -3,7 +3,7 @@ use super::{
     Authorization, Binding, Completion, CompletionPhase, ObjectReply, Runtime, RuntimeError,
     RuntimeResult, SaveId,
 };
-use layerfs_content::{FilesystemRoot, FinalizedObject, InodeScope, ObjectId, ObjectRole};
+use layerfs_content::{FinalizedObject, InodeScope, ObjectId, ObjectRole};
 use layerfs_history::{BranchId, HistoryCatalog, WorkspaceId};
 use layerfs_persistence::HistoryProvider;
 use layerfs_storage::{save::Save, Storage, StoragePolicy};
@@ -65,7 +65,9 @@ impl<'a> Sessions<'a> {
         }
     }
 
-    /// Authorizes one peer/Workspace/Branch and demand-loads only its root.
+    /// Authorizes one peer/Workspace/Branch and validates its actual root inode.
+    /// Demand-loads its inode path, directory root and portable mode/mtime paths,
+    /// never a whole-tree scan.
     /// The peer is established by the native bridge's completed KK handshake.
     pub fn bind(
         &self,
@@ -82,20 +84,13 @@ impl<'a> Sessions<'a> {
             .history
             .branch_snapshot(branch)?
             .ok_or(RuntimeError::Invalid("missing Branch"))?;
-        self.authority
-            .objects(peer, workspace, branch, &[snapshot.effective_root])?;
-        let reader = self.demand.reader()?;
-        let mut values = reader.read_objects(&[snapshot.effective_root])?;
-        if values.len() != 1 {
-            return Err(RuntimeError::Invalid("root demand cardinality"));
-        }
-        let canonical = values
-            .pop()
-            .ok_or(RuntimeError::Invalid("missing root reply"))?;
-        let root = FilesystemRoot::decode(&canonical)?;
-        if root.scope().object() != snapshot.scope || root.profile() != snapshot.profile {
-            return Err(RuntimeError::Invalid("Branch root scope/profile"));
-        }
+        let root = super::root_binding::validate(
+            self.demand.reader()?,
+            self.authority,
+            peer,
+            workspace,
+            &snapshot,
+        )?;
         Ok(Binding {
             owner: self.owner,
             peer,

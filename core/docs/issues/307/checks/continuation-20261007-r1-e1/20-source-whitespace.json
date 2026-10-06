@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "command": [
+    "git",
+    "diff",
+    "--cached",
+    "--check",
+    "--",
+    ".",
+    "excludes raw .stdout/.stderr in owning receipt folder"
+  ],
+  "excluded": "raw immutable command bytes preserve original whitespace, including retained formatter failure; product/source/docs/structured receipts checked"
+}

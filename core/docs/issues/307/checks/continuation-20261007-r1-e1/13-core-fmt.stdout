@@ -1,0 +1,21 @@
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk/src/runtime/mod.rs:12:
+ pub(crate) use ports::serials as serial_port;
+ /// Bounded fair host adapter dispatch and local disconnect/result custody.
+ pub mod service;
++mod sessions;
+ /// Host-thread composition of provider service and independently fenced sockets.
+ pub mod supervisor;
+-mod sessions;
+ mod types;
+ 
+ pub use binding::{Authorization, Binding};
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk/src/runtime/service/mod.rs:16:
+ pub use input::{InputEvent, InputFailure, InputFence, InputPool, InputReport, NativeInput};
+ mod output;
+ pub use output::{
+-    NativeOutput, OutputAdmissionError, OutputConfig, OutputFence, OutputPacket, OutputPool,
+-    OutputPermit, OutputReceipt, OutputReport, OutputStartError, OutputWork,
++    NativeOutput, OutputAdmissionError, OutputConfig, OutputFence, OutputPacket, OutputPermit,
++    OutputPool, OutputReceipt, OutputReport, OutputStartError, OutputWork,
+ };
+ 

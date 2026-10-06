@@ -69,6 +69,28 @@ pub struct Calls {
     closed: AtomicBool,
 }
 impl Calls {
+    pub(super) fn try_fence(&self) -> Result<Option<super::attachment::FenceParts>, FrameError> {
+        if !self.closed.load(Ordering::Acquire) {
+            return Err(FrameError::Invalid("runtime exchange not fenced"));
+        }
+        let mut driver = match self.driver.try_lock() {
+            Ok(driver) => driver,
+            Err(std::sync::TryLockError::WouldBlock) => return Ok(None),
+            Err(std::sync::TryLockError::Poisoned(_)) => return Err(FrameError::Poisoned),
+        };
+        let (send_framing, send_native, id_copied_bytes) = driver.send.work();
+        let receive_native = driver.receive.work().0;
+        let partial = driver.receive.drain_partial();
+        let receive = driver.receive.work().1;
+        Ok(Some(super::attachment::FenceParts {
+            partial,
+            send_framing,
+            send_native,
+            id_copied_bytes,
+            receive_native,
+            receive,
+        }))
+    }
     /// Takes the original directions once, without reconnect or provider bootstrap.
     pub fn new(
         send: ClientSender,

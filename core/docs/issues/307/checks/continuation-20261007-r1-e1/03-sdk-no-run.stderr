@@ -1,0 +1,242 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+warning: unused imports: `AttributePage` and `encode_attribute_page`
+ --> crates/layerfs-api/sdk/tests/runtime.rs:5:18
+  |
+5 |     attributes::{encode_attribute_page, AttributePage},
+  |                  ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: function `poll` is never used
+  --> crates/layerfs-api/sdk/tests/support/native.rs:49:8
+   |
+49 | pub fn poll<T>(mut f: impl FnMut() -> Option<T>) -> T {
+   |        ^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+error[E0599]: no function or associated item named `new` found for struct `WorkspaceId` in the current scope
+   --> crates/layerfs-api/sdk/tests/supervisor.rs:77:34
+    |
+77  |     let workspace = WorkspaceId::new([2; 16], [3; 16]);
+    |                                  ^^^ function or associated item not found in `WorkspaceId`
+    |
+note: if you're trying to build a new `WorkspaceId` consider using one of the following associated functions:
+      WorkspaceId::from_authority
+      WorkspaceId::from_slice
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history/src/contract/identity.rs:132:5
+    |
+132 |     pub fn from_authority(bytes: [u8; WORKSPACE_BYTES]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+140 |     pub fn from_slice(bytes: &[u8]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is a method `ne` with a similar name, but with different arguments
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/cmp.rs:261:5
+
+error[E0599]: no function or associated item named `new` found for struct `WorkspaceId` in the current scope
+   --> crates/layerfs-api/sdk/tests/supervisor.rs:218:38
+    |
+218 |         .attach(server, WorkspaceId::new([1; 16], [1; 16]), branch)
+    |                                      ^^^ function or associated item not found in `WorkspaceId`
+    |
+note: if you're trying to build a new `WorkspaceId` consider using one of the following associated functions:
+      WorkspaceId::from_authority
+      WorkspaceId::from_slice
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history/src/contract/identity.rs:132:5
+    |
+132 |     pub fn from_authority(bytes: [u8; WORKSPACE_BYTES]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+140 |     pub fn from_slice(bytes: &[u8]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is a method `ne` with a similar name, but with different arguments
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/cmp.rs:261:5
+
+error[E0277]: `ClientReceiveError` doesn't implement `Debug`
+   --> crates/layerfs-api/sdk/tests/supervisor.rs:231:35
+    |
+231 |     let grant = receive.receive().unwrap();
+    |                                   ^^^^^^ `ClientReceiveError` cannot be formatted using `{:?}` because it doesn't implement `Debug`
+    |
+    = help: the trait `Debug` is not implemented for `ClientReceiveError`
+note: required by a bound in `Result::<T, E>::unwrap`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:1103:5
+
+error[E0277]: `ClientReceiveError` doesn't implement `Debug`
+   --> crates/layerfs-api/sdk/tests/supervisor.rs:237:35
+    |
+237 |     let begin = receive.receive().unwrap();
+    |                                   ^^^^^^ `ClientReceiveError` cannot be formatted using `{:?}` because it doesn't implement `Debug`
+    |
+    = help: the trait `Debug` is not implemented for `ClientReceiveError`
+note: required by a bound in `Result::<T, E>::unwrap`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:1103:5
+
+error[E0277]: `ClientReceiveError` doesn't implement `Debug`
+   --> crates/layerfs-api/sdk/tests/supervisor.rs:256:35
+    |
+256 |     let grant = receive.receive().unwrap();
+    |                                   ^^^^^^ `ClientReceiveError` cannot be formatted using `{:?}` because it doesn't implement `Debug`
+    |
+    = help: the trait `Debug` is not implemented for `ClientReceiveError`
+note: required by a bound in `Result::<T, E>::unwrap`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:1103:5
+
+error[E0599]: no function or associated item named `new` found for struct `WorkspaceId` in the current scope
+   --> crates/layerfs-api/sdk/tests/supervisor.rs:264:38
+    |
+264 |         .attach(server, WorkspaceId::new([2; 16], [2; 16]), branch)
+    |                                      ^^^ function or associated item not found in `WorkspaceId`
+    |
+note: if you're trying to build a new `WorkspaceId` consider using one of the following associated functions:
+      WorkspaceId::from_authority
+      WorkspaceId::from_slice
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history/src/contract/identity.rs:132:5
+    |
+132 |     pub fn from_authority(bytes: [u8; WORKSPACE_BYTES]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+140 |     pub fn from_slice(bytes: &[u8]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is a method `ne` with a similar name, but with different arguments
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/cmp.rs:261:5
+
+error[E0599]: no function or associated item named `new` found for struct `WorkspaceId` in the current scope
+   --> crates/layerfs-api/sdk/tests/supervisor.rs:308:38
+    |
+308 |         .attach(server, WorkspaceId::new([4; 16], [4; 16]), branch)
+    |                                      ^^^ function or associated item not found in `WorkspaceId`
+    |
+note: if you're trying to build a new `WorkspaceId` consider using one of the following associated functions:
+      WorkspaceId::from_authority
+      WorkspaceId::from_slice
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history/src/contract/identity.rs:132:5
+    |
+132 |     pub fn from_authority(bytes: [u8; WORKSPACE_BYTES]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+140 |     pub fn from_slice(bytes: &[u8]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is a method `ne` with a similar name, but with different arguments
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/cmp.rs:261:5
+
+error[E0599]: no function or associated item named `new` found for struct `WorkspaceId` in the current scope
+   --> crates/layerfs-api/sdk/tests/supervisor.rs:369:38
+    |
+369 |         .attach(server, WorkspaceId::new([5; 16], [5; 16]), branch)
+    |                                      ^^^ function or associated item not found in `WorkspaceId`
+    |
+note: if you're trying to build a new `WorkspaceId` consider using one of the following associated functions:
+      WorkspaceId::from_authority
+      WorkspaceId::from_slice
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history/src/contract/identity.rs:132:5
+    |
+132 |     pub fn from_authority(bytes: [u8; WORKSPACE_BYTES]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+140 |     pub fn from_slice(bytes: &[u8]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is a method `ne` with a similar name, but with different arguments
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/cmp.rs:261:5
+
+error[E0277]: `ClientReceiveError` doesn't implement `Debug`
+   --> crates/layerfs-api/sdk/tests/supervisor.rs:381:35
+    |
+381 |     let grant = receive.receive().unwrap();
+    |                                   ^^^^^^ `ClientReceiveError` cannot be formatted using `{:?}` because it doesn't implement `Debug`
+    |
+    = help: the trait `Debug` is not implemented for `ClientReceiveError`
+note: required by a bound in `Result::<T, E>::unwrap`
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/result.rs:1103:5
+
+error[E0599]: no function or associated item named `new` found for struct `WorkspaceId` in the current scope
+   --> crates/layerfs-api/sdk/tests/supervisor.rs:389:38
+    |
+389 |         .attach(server, WorkspaceId::new([6; 16], [6; 16]), branch)
+    |                                      ^^^ function or associated item not found in `WorkspaceId`
+    |
+note: if you're trying to build a new `WorkspaceId` consider using one of the following associated functions:
+      WorkspaceId::from_authority
+      WorkspaceId::from_slice
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history/src/contract/identity.rs:132:5
+    |
+132 |     pub fn from_authority(bytes: [u8; WORKSPACE_BYTES]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+140 |     pub fn from_slice(bytes: &[u8]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is a method `ne` with a similar name, but with different arguments
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/cmp.rs:261:5
+
+error[E0599]: no function or associated item named `new` found for struct `WorkspaceId` in the current scope
+   --> crates/layerfs-api/sdk/tests/supervisor.rs:443:38
+    |
+443 |         .attach(server, WorkspaceId::new([7; 16], [7; 16]), branch)
+    |                                      ^^^ function or associated item not found in `WorkspaceId`
+    |
+note: if you're trying to build a new `WorkspaceId` consider using one of the following associated functions:
+      WorkspaceId::from_authority
+      WorkspaceId::from_slice
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history/src/contract/identity.rs:132:5
+    |
+132 |     pub fn from_authority(bytes: [u8; WORKSPACE_BYTES]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+140 |     pub fn from_slice(bytes: &[u8]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is a method `ne` with a similar name, but with different arguments
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/cmp.rs:261:5
+
+error[E0599]: no function or associated item named `new` found for struct `WorkspaceId` in the current scope
+   --> crates/layerfs-api/sdk/tests/supervisor.rs:448:38
+    |
+448 |         .attach(server, WorkspaceId::new([8; 16], [8; 16]), branch)
+    |                                      ^^^ function or associated item not found in `WorkspaceId`
+    |
+note: if you're trying to build a new `WorkspaceId` consider using one of the following associated functions:
+      WorkspaceId::from_authority
+      WorkspaceId::from_slice
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history/src/contract/identity.rs:132:5
+    |
+132 |     pub fn from_authority(bytes: [u8; WORKSPACE_BYTES]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+140 |     pub fn from_slice(bytes: &[u8]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is a method `ne` with a similar name, but with different arguments
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/cmp.rs:261:5
+
+error[E0599]: no function or associated item named `new` found for struct `WorkspaceId` in the current scope
+   --> crates/layerfs-api/sdk/tests/supervisor.rs:499:38
+    |
+499 |         .attach(server, WorkspaceId::new([9; 16], [9; 16]), branch)
+    |                                      ^^^ function or associated item not found in `WorkspaceId`
+    |
+note: if you're trying to build a new `WorkspaceId` consider using one of the following associated functions:
+      WorkspaceId::from_authority
+      WorkspaceId::from_slice
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history/src/contract/identity.rs:132:5
+    |
+132 |     pub fn from_authority(bytes: [u8; WORKSPACE_BYTES]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+140 |     pub fn from_slice(bytes: &[u8]) -> HistoryResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is a method `ne` with a similar name, but with different arguments
+   --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/cmp.rs:261:5
+
+Some errors have detailed explanations: E0277, E0599.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `layerfs-sdk` (test "supervisor") due to 13 previous errors
+warning: build failed, waiting for other jobs to finish...
+warning: `layerfs-sdk` (test "runtime_binding") generated 1 warning
+warning: `layerfs-sdk` (test "runtime") generated 1 warning (run `cargo fix --test "runtime"` to apply 1 suggestion)

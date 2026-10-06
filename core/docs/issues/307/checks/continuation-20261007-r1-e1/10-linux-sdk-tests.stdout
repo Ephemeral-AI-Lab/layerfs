@@ -1,0 +1,41 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test wrong_budget_kind_refuses_attachment_before_native_request ... ok
+test consumer_fence_wakes_blocked_call_and_retains_original_failure ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 9 tests
+test fixed_headers_validate_every_operation_and_refuse_wrong_envelope_before_allocation ... ok
+test typed_refusal_preserves_nested_unknown_original_cleanup_and_opaque_io ... ok
+test output_permit_charges_retained_capacity_and_refuses_terminal_second_transfer ... ok
+test output_permit_refuses_large_capacity_even_when_wire_length_fits ... ok
+test output_rotates_ready_classes_and_caller_receipts_hold_real_shared_credit ... ok
+test consumer_close_fences_a_blocked_call_without_waiting_for_its_mutex_or_replay ... ok
+test refused_native_header_never_allocates_or_copies_declared_canonical_body ... ok
+test consumer_wrong_result_retains_original_body_and_stops_before_another_call ... ok
+test actual_grant_streams_canonical_input_and_disconnect_returns_partial_original ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+

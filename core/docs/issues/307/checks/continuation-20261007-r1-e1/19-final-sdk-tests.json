@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-sdk",
+    "--all-targets"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 5577544375,
+  "kind": "one final covering proof at r1-final-source identity; no performance sample",
+  "workers": 1
+}

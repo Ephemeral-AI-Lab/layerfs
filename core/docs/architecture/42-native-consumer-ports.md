@@ -51,3 +51,11 @@ S9 work; S8 is explicitly a separate batch. S7's independent complete engine cos
 resource evidence remains open, with integrated kernel request accounting depending
 on S8. P3/P6/P7/P13/P14 and S10–S13 are outside this batch. Existing primitive/local
 checks do not establish full milestone acceptance or cold speed/RSS/sustained rates.
+
+R1 now provides [owning host supervision and consumer Attachment](45-runtime-supervision.md)
+using these existing ports and Calls. Consumer configuration validates Reply-kind
+shared credit before moving directions; original native ownership returns on startup
+refusal. Explicit independent shutdown followed by a nonblocking call-completion
+check returns original partial replies and work observations. The original CallFailure
+remains with its caller. R3 process-restart custody, R4 daemon/Sandbox composition and
+full contextual/root/service/resource acceptance remain open.

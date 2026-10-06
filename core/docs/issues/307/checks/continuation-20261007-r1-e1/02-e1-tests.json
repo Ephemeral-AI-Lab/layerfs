@@ -1,0 +1,19 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "core/benchmark/fs-bench-pro/tests",
+    "-p",
+    "test_cluster_two_registration.py",
+    "-v"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 322483333,
+  "kind": "registration-only harness tests; no product or performance run"
+}

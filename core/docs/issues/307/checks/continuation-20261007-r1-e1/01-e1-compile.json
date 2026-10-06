@@ -1,0 +1,19 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "py_compile",
+    "core/benchmark/fs-bench-pro/runner.py",
+    "core/benchmark/fs-bench-pro/families/cluster_two_evidence.py",
+    "core/benchmark/fs-bench-pro/shared/evidence_gates.py",
+    "core/benchmark/fs-bench-pro/shared/evidence_registration.py",
+    "core/benchmark/fs-bench-pro/shared/evidence_workload.py",
+    "core/benchmark/fs-bench-pro/tests/test_cluster_two_registration.py"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 87490916,
+  "kind": "harness compilation; no product or performance run"
+}

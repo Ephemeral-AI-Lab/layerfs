@@ -71,6 +71,9 @@ pub struct ClientSender {
     owner: Arc<()>,
 }
 impl ClientSender {
+    pub(super) fn into_native(self) -> Sender {
+        self.sender.into_native()
+    }
     /// Wraps the authenticated direction or returns its original ownership.
     // Allocation refusal returns the original owner inline without allocating
     // another error container merely to satisfy an enum-size lint.

@@ -1,0 +1,13 @@
+{
+  "files": [
+    "core/docs/issues/307/R1-ROOT-BINDING-20261007.md",
+    "core/docs/issues/307/PROGRESS.md",
+    "core/docs/architecture/22-sdk-runtime.md",
+    "core/docs/architecture/40-runtime-wire-ownership.md",
+    "core/docs/architecture/42-native-consumer-ports.md",
+    "core/docs/architecture/45-runtime-supervision.md"
+  ],
+  "local_links_checked": 74,
+  "errors": [],
+  "status": "PASS"
+}

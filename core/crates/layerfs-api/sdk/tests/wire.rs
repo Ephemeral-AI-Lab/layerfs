@@ -131,6 +131,98 @@ fn fixed_headers_validate_every_operation_and_refuse_wrong_envelope_before_alloc
     assert!(runtime::check_header(envelope, &bytes).is_err());
 }
 #[test]
+fn output_permit_charges_retained_capacity_and_refuses_terminal_second_transfer() {
+    let (_client, server) = sockets::pair();
+    let pool = OutputPool::new(output_config()).unwrap();
+    let mut output = pool.start(server.send).map_err(|_| "output start").unwrap();
+    // Drop receipt delivery before the first send so worker exit is deterministic
+    // after its original local write, independent of thread scheduling.
+    drop(output.detach_receipts());
+    output
+        .try_submit(OutputPacket {
+            correlation: 1,
+            class: MessageClass::Control,
+            bytes: b"LRG1\x01\x00\x00\x00".to_vec(),
+        })
+        .map_err(|_| "initial send")
+        .unwrap();
+    let joined = sockets::poll(|| output.try_join());
+    let before = pool.work().unwrap();
+    let mut bytes = Vec::with_capacity(4096);
+    bytes.extend_from_slice(b"LRG1\x01\x00\x00\x00");
+    let capacity = bytes.capacity();
+    let permit = output
+        .reserve(2, MessageClass::Control, capacity)
+        .unwrap()
+        .unwrap();
+    assert!(pool.work().unwrap().reserved_bytes >= capacity);
+    let (error, packet, permit) = output
+        .submit_reserved(
+            permit,
+            OutputPacket {
+                correlation: 2,
+                class: MessageClass::Control,
+                bytes,
+            },
+        )
+        .expect_err("worker already exited");
+    assert!(matches!(error, OutputAdmissionError::Detached));
+    let terminal = pool.work().unwrap();
+    assert_eq!(terminal.reserved_bytes, 0);
+    assert_eq!(
+        terminal.packet_capacity_bytes,
+        before.packet_capacity_bytes + capacity
+    );
+    let (error, packet, permit) = output
+        .submit_reserved(permit, packet)
+        .expect_err("terminal reservation refuses replay");
+    assert!(matches!(error, OutputAdmissionError::Frame(_)));
+    assert_eq!(pool.work().unwrap().credited_bytes, terminal.credited_bytes);
+    assert_eq!(
+        pool.work().unwrap().packet_capacity_bytes,
+        terminal.packet_capacity_bytes
+    );
+    assert_eq!(pool.work().unwrap().submissions, terminal.submissions);
+    drop((packet, permit));
+    assert_eq!(pool.work().unwrap().credited_bytes, before.credited_bytes);
+    drop(joined);
+    assert_eq!(pool.work().unwrap().credited_bytes, 0);
+    assert_eq!(pool.work().unwrap().packet_capacity_bytes, 0);
+}
+#[test]
+fn output_permit_refuses_large_capacity_even_when_wire_length_fits() {
+    let (_client, server) = sockets::pair();
+    let pool = OutputPool::new(output_config()).unwrap();
+    let mut output = pool.start(server.send).map_err(|_| "output start").unwrap();
+    let permit = output
+        .reserve(1, MessageClass::Control, 8)
+        .unwrap()
+        .unwrap();
+    let mut bytes = Vec::with_capacity(4096);
+    bytes.extend_from_slice(b"LRG1\x01\x00\x00\x00");
+    let before = pool.work().unwrap();
+    let (error, packet, permit) = output
+        .submit_reserved(
+            permit,
+            OutputPacket {
+                correlation: 1,
+                class: MessageClass::Control,
+                bytes,
+            },
+        )
+        .expect_err("retained allocation exceeds reservation");
+    assert!(matches!(error, OutputAdmissionError::Frame(_)));
+    assert_eq!(pool.work().unwrap().credited_bytes, before.credited_bytes);
+    assert_eq!(pool.work().unwrap().submissions, before.submissions);
+    assert_eq!(packet.bytes.len(), 8);
+    assert!(packet.bytes.capacity() > 8);
+    drop((packet, permit));
+    output.fence();
+    drop(output.detach_receipts());
+    drop(sockets::poll(|| output.try_join()));
+    assert_eq!(pool.work().unwrap().credited_bytes, 0);
+}
+#[test]
 fn refused_native_header_never_allocates_or_copies_declared_canonical_body() {
     let (client, server) = sockets::pair();
     let budget = ReceiveBudget::new(config(MessageKind::Request)).unwrap();

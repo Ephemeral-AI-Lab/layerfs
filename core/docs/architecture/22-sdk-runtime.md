@@ -110,3 +110,35 @@ S9 adds [bound history handlers/receipts](37-runtime-history-receipts.md) and
 local mechanisms preserve the initial public APIs and exact authority/custody;
 logical transport, actual network/restart fences and full acceptance remain open.
 Earlier limitations above retain their original checkpoint identity.
+
+R1 composes these initialized owners through [host runtime supervision and consumer
+attachment](45-runtime-supervision.md). Its host-thread Supervisor borrows Sessions,
+dispatches bounded Service jobs and independently fences real socket workers. Provider
+locks never span native I/O, original delivery/partial/result credits stay owned, and
+Saves outlive connection detach. R2 contextual acceptance, R3 restart custody,
+R4 integrated consumers and complete S7/S9 qualification remain open.
+
+## R2 root-binding context
+
+The S7–S13 continuation after `da331dfb607f5939b3e150c82480faabf6fb258c`
+extends [`Sessions::bind`](../../crates/layerfs-api/sdk/src/runtime/sessions.rs)
+through [authorized root demands](../../crates/layerfs-api/sdk/src/runtime/root_binding.rs).
+The coherent Branch snapshot still fixes the expected root, scope and profile.
+Binding now reads the actual root inode along its indexed canonical table path,
+checks the root-directory/zero-reference invariant, decodes its directory root
+page and reads the required portable mode/mtime using Content's public readers.
+Every demanded identity is authorized before provider acquisition; the first
+original authority or Storage error survives the narrower Content provider port.
+No failure is retried and no binding is returned from partial validation.
+
+Work follows one inode path, one directory page, two metadata paths and their
+bounded 4/12-byte attribute-value mappings. It is independent of untouched
+namespace population except for canonical tree depth. One initialized Reader
+owns the operation's existing bounded caches. This adds real demand/read work
+to binding; it is neither zero-I/O readiness nor a whole-tree closure proof.
+
+The external `runtime_binding` target covers both Store profiles, invalid/missing
+root-inode context, wrong content/metadata roles, scope disagreement, malformed
+or absent portable fields and exact descendant authorization refusal. Full
+contextual Save child meanings, saved closure and incremental alias/cycle evidence
+remain R2/K2 work. This source change does not complete S9 or qualify native mount.

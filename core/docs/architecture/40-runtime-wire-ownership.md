@@ -172,3 +172,11 @@ checks those costs after a quarantined-channel refusal without socket I/O.
 calls to the public object/length/serial interfaces, preserving first failure and
 independent close while a call holds its mutex. Original publication/custody knowledge
 stays typed and fenced; S8 and complete S7/S9 acceptance remain separate/open.
+
+R1 adds [host supervision and consumer attachment](45-runtime-supervision.md) over
+these existing boundaries. OutputPermit reserves delivery capacity before provider
+submission/encoding and shrinks to actual packet capacity on transfer. OutputWork
+now distinguishes reserved bytes and packet Vec capacities; credited_bytes includes
+both and fixed ownership charges. Original results/input/packets return through
+local Delivery and joined AttachmentFence custody. Process-restart recovery,
+contextual authority and complete runtime/resource qualification remain open.
