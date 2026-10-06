@@ -88,7 +88,11 @@ pub(crate) fn discard(
     let (rows, bytes) = (entry_rows + native_rows, entry_bytes + native_bytes);
     let remaining_rows = credit(tx, target, rows, bytes)?;
     if rows != 0 && tx.reclamation_enabled() {
-        super::super::reclamation::job(tx, crate::RECLAMATION_PAGE_LIMIT)?;
+        super::super::reclamation::job_when(
+            tx,
+            crate::RECLAMATION_PAGE_LIMIT,
+            u64::from(crate::RECLAMATION_PAGE_LIMIT),
+        )?;
     }
     Ok(Discarded {
         rows: unsigned(rows)?,

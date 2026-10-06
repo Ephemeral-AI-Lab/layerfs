@@ -73,3 +73,12 @@ The tiers change both file count and logical bytes (5/20/300/500 MB). Report raw
 deltas and per-entry SQL work; those tiers alone do not establish a pure scaling
 exponent or qualify an unmeasured namespace. New source measurements decide
 speed/storage acceptance independently; S7/S8/S9 runtime closure remains open.
+
+
+The final-source correction batches live cleanup reclamation: it accumulates
+less than512 free pages as reuse headroom, runs one at-most512-page job when
+that threshold is reached, and reclaims a smaller tail at release or explicit
+maintenance. This reduces repeated SQLite statement expiration/repreparation;
+its source and runtime counters determine the actual effect. The v1 campaign
+is retained, including all gate failures. The prospective final source uses
+space-scaling-v2 cases with identical inputs, cold state,30/19s caps and gates.

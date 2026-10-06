@@ -842,3 +842,12 @@ not the earlier Service rows in the historical table above. Five latency screens
 pass; all eight strict allocation comparisons and joint gates fail. Correctness,
 cold-content attestation, cleanup and fixed limits pass throughout. Historical
 rows and their original competitive labels remain. S7/S8/S9 are incomplete.
+
+
+The final-source correction batches live cleanup reclamation: it accumulates
+less than512 free pages as reuse headroom, runs one at-most512-page job when
+that threshold is reached, and reclaims a smaller tail at release or explicit
+maintenance. This reduces repeated SQLite statement expiration/repreparation;
+its source and runtime counters determine the actual effect. The v1 campaign
+is retained, including all gate failures. The prospective final source uses
+space-scaling-v2 cases with identical inputs, cold state,30/19s caps and gates.

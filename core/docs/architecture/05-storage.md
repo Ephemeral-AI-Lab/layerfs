@@ -1483,3 +1483,12 @@ O(K log N), and physical maintenance is bounded per job. Exact row/byte charges,
 entry-first order, owner fencing, rollback and uncertain custody are preserved.
 The new-source plans/profiles and frozen cold measurements decide qualification;
 implementation alone does not establish speed, allocation or S7/S9 acceptance.
+
+
+The final-source correction batches live cleanup reclamation: it accumulates
+less than512 free pages as reuse headroom, runs one at-most512-page job when
+that threshold is reached, and reclaims a smaller tail at release or explicit
+maintenance. This reduces repeated SQLite statement expiration/repreparation;
+its source and runtime counters determine the actual effect. The v1 campaign
+is retained, including all gate failures. The prospective final source uses
+space-scaling-v2 cases with identical inputs, cold state,30/19s caps and gates.

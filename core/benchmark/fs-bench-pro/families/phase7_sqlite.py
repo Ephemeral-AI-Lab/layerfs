@@ -200,6 +200,14 @@ for original in REGRESSION_CASES:
         old.verification_budget_ns,old.profile,old.proof_policy,'monolithic',old.proof_envelope)
     SPACE_SCALING_CASES.append(new)
 SPACE_SCALING_CASES=tuple(SPACE_SCALING_CASES)
+SPACE_SCALING_V1_CASES=SPACE_SCALING_CASES
+SPACE_SCALING_CASES=[]
+for original in SPACE_SCALING_V1_CASES:
+    old=CASES[original];new=original.rsplit('-v',1)[0]+'-v2'
+    CASES[new]=Case(new,old.fixture,None,None,old.command_budget_ns,
+        old.verification_budget_ns,old.profile,old.proof_policy,'monolithic',old.proof_envelope)
+    SPACE_SCALING_CASES.append(new)
+SPACE_SCALING_CASES=tuple(SPACE_SCALING_CASES)
 
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
@@ -259,7 +267,7 @@ def build(root,arm,out,common):
 def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pins=None):
     case=CASES[selection]
     if selection in RETIRED_PAYLOAD_SEGMENT_CASES:raise ValueError('payload layout withdrawn; historical receipts retained; no active vehicle')
-    regression=selection in REGRESSION_CASES+SPACE_SCALING_CASES
+    regression=selection in REGRESSION_CASES+SPACE_SCALING_V1_CASES+SPACE_SCALING_CASES
     if regression and arm!='candidate':raise ValueError('regression baseline is reused qualified Project Init at197d2fb7d; never the old Service wrapper')
     if selection in RETIRED_WAL_RESERVATION_CASES:
         raise ValueError('rejected WAL reservation selection retired; original receipts retained')

@@ -31,13 +31,23 @@ impl Session {
 
 /// One bounded job within the caller's existing short transaction.
 pub(crate) fn job(tx: &Transaction<'_>, pages: u32) -> Result<SpaceReclamation, BackendError> {
+    job_when(tx, pages, 1)
+}
+
+/// Accumulate less than one fixed job of reuse headroom during live cleanup.
+/// Release and explicit maintenance use a minimum of one, draining the tail.
+pub(crate) fn job_when(
+    tx: &Transaction<'_>,
+    pages: u32,
+    minimum_free_pages: u64,
+) -> Result<SpaceReclamation, BackendError> {
     let free = |tx: &Transaction<'_>| -> Result<u64, BackendError> {
         let value = tx.query("PRAGMA freelist_count", vec![])?;
         let count: i64 = value.first().ok_or(BackendError::Integrity)?.get(0)?;
         u64::try_from(count).map_err(|_| BackendError::Integrity)
     };
     let before = free(tx)?;
-    if before != 0 {
+    if before >= minimum_free_pages {
         // SQLite moves/truncates at most this many pages. The enclosing
         // ordinary short transaction supplies the selected sync and
         // definite/uncertain outcome handling; no whole-file rebuild.
