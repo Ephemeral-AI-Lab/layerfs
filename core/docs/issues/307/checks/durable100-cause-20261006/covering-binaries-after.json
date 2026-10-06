@@ -1,0 +1,292 @@
+[
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/layerfs_persistence-cc89418160e6b6ac",
+    "sha256": "d190a344655e4cb6397bdddd7a7d1e5b9f9dcb23112f3cae9959d31335427b0e",
+    "after_sha256": "d190a344655e4cb6397bdddd7a7d1e5b9f9dcb23112f3cae9959d31335427b0e"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/acquisition_batching-22dc56f552159580",
+    "sha256": "c014c29c2949646cec0b74337139d4d0ca623372364ea8ea7affdae793bb48c3",
+    "after_sha256": "c014c29c2949646cec0b74337139d4d0ca623372364ea8ea7affdae793bb48c3"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/acquisition_schema-0ff8296d6c617dcb",
+    "sha256": "e8ff48b70569a4518bda0ef3a573ec430b502e7df7275b3a4ebecac740d7057f",
+    "after_sha256": "e8ff48b70569a4518bda0ef3a573ec430b502e7df7275b3a4ebecac740d7057f"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/acquisition_units-5fd24c91be0680f3",
+    "sha256": "f28344033645fc796a41250ea3b00d6bc460f82c5250aa4ca21cf620317a923c",
+    "after_sha256": "f28344033645fc796a41250ea3b00d6bc460f82c5250aa4ca21cf620317a923c"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/file_lengths-8885c06688acdf7c",
+    "sha256": "0337959947eb1c28996ec217070707c7900e293c71e3a34d203b9d20e9880d98",
+    "after_sha256": "0337959947eb1c28996ec217070707c7900e293c71e3a34d203b9d20e9880d98"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/history_allocation-ae289dce51ef3650",
+    "sha256": "316efd53425c8646f91084a0cf5a943c5fbffa7e163b62ee055f7bd2b472c1e3",
+    "after_sha256": "316efd53425c8646f91084a0cf5a943c5fbffa7e163b62ee055f7bd2b472c1e3"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/history_conditional_updates-9c31e21dc51693c4",
+    "sha256": "6a50030b6df2aac802ef623f51c102e2547e008eee1633406c6af1c2c10e58ba",
+    "after_sha256": "6a50030b6df2aac802ef623f51c102e2547e008eee1633406c6af1c2c10e58ba"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/history_history_pages-5b41b6d5300cfdd2",
+    "sha256": "f3638b72972ec67fcedaed9f15e47d6cc32cf9dca795418c93c9abc05ec536a5",
+    "after_sha256": "f3638b72972ec67fcedaed9f15e47d6cc32cf9dca795418c93c9abc05ec536a5"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/history_lifecycle-068f9bc1d8f21ef0",
+    "sha256": "18ea9367e1bc78173640bfaf3a7131b2c00a54a33177eeb7c704a3bd9ca1a125",
+    "after_sha256": "18ea9367e1bc78173640bfaf3a7131b2c00a54a33177eeb7c704a3bd9ca1a125"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/history_remediation-eac8f9d9018c6819",
+    "sha256": "e53928af73586e00b831ff10aae80d94cd401d47a71125c3c5a583ba425290bb",
+    "after_sha256": "e53928af73586e00b831ff10aae80d94cd401d47a71125c3c5a583ba425290bb"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/history_reopen-4f5e99953bc52c4a",
+    "sha256": "535a8646d5c6a5deeb42288922e41b2befebbf3fe7ff38eea57d152b31af1afb",
+    "after_sha256": "535a8646d5c6a5deeb42288922e41b2befebbf3fe7ff38eea57d152b31af1afb"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/interleaved_saves-ff8a0bbba23f38cc",
+    "sha256": "57c6c71d0ffecca9a03baee141490386f8f35ae81b15ef284e5a754dbf22ed63",
+    "after_sha256": "57c6c71d0ffecca9a03baee141490386f8f35ae81b15ef284e5a754dbf22ed63"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/semantic_admission-41991402795bdc3d",
+    "sha256": "35882fa378fe6f172af3108da8c7949d8d989a4e6b2f2f9105d88c3fc79e06b9",
+    "after_sha256": "35882fa378fe6f172af3108da8c7949d8d989a4e6b2f2f9105d88c3fc79e06b9"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/sqlite_allocation_release-38c16b717c74d776",
+    "sha256": "8b10aa209d600479875470905df4c1b3d37b5d906d31fde831b9c6b568203e22",
+    "after_sha256": "8b10aa209d600479875470905df4c1b3d37b5d906d31fde831b9c6b568203e22"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/sqlite_group_rows-ba50d433ea251e0d",
+    "sha256": "062ab3f6982e942327dd5b1464c11df849fad163622c52a1ef9e3618c8d374dd",
+    "after_sha256": "062ab3f6982e942327dd5b1464c11df849fad163622c52a1ef9e3618c8d374dd"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/sqlite_group_rows_indexed-1c6c464933e45739",
+    "sha256": "8ca80dc65911bfef379f86928622330311a70241df85d95e8f5511c952d35892",
+    "after_sha256": "8ca80dc65911bfef379f86928622330311a70241df85d95e8f5511c952d35892"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/sqlite_ordinal_lookahead-d52323a5420a04b5",
+    "sha256": "fe6cfe5594d77350e42a187a0922d1b874ddec1299508ed2242fac10a0f9f611",
+    "after_sha256": "fe6cfe5594d77350e42a187a0922d1b874ddec1299508ed2242fac10a0f9f611"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/sqlite_pack_selection-fb7d337033d0043c",
+    "sha256": "d1f4c2e2a36a017b4c9e02eb8a4732e70fd61c9ffbd48c72d74d5e0b40704d71",
+    "after_sha256": "d1f4c2e2a36a017b4c9e02eb8a4732e70fd61c9ffbd48c72d74d5e0b40704d71"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/sqlite_publication-d1e36b64dd368bf0",
+    "sha256": "5dea2d59fc4a79f9b6e2789110c523a044e922644d79047af715d88969b9d358",
+    "after_sha256": "5dea2d59fc4a79f9b6e2789110c523a044e922644d79047af715d88969b9d358"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/sqlite_recovery-c8bae7a6517ff80d",
+    "sha256": "831668830aeb2e10050ccbf6ccb826adb6b513f2f21cc825003761c9a557eaa6",
+    "after_sha256": "831668830aeb2e10050ccbf6ccb826adb6b513f2f21cc825003761c9a557eaa6"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/sqlite_reference_acquisition-af4d8bac5f950aba",
+    "sha256": "c3cb3bf8a0334eea4b1104fc7b0f3e7b68fc8df69e29cd8a5ece9a1f8c2c5df5",
+    "after_sha256": "c3cb3bf8a0334eea4b1104fc7b0f3e7b68fc8df69e29cd8a5ece9a1f8c2c5df5"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/sqlite_transaction_units-677cf916d8486ca1",
+    "sha256": "9236d931726e4b2bf9bce5009b0e845d1a4269150ebc25d81a1260bc1a984a1c",
+    "after_sha256": "9236d931726e4b2bf9bce5009b0e845d1a4269150ebc25d81a1260bc1a984a1c"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/examples/metadata_allocation_probe-a0e6a3d08857b3e4",
+    "sha256": "129cf7f1499735c90c688316126f5710ffda256d1f892e57b18ecfb36135031e",
+    "after_sha256": "129cf7f1499735c90c688316126f5710ffda256d1f892e57b18ecfb36135031e"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/layerfs_project-cffae0e2b52819f6",
+    "sha256": "1c236c3381e6e1273dab80ba73f1e3a23ff22cabba32943b6463b4093d055199",
+    "after_sha256": "1c236c3381e6e1273dab80ba73f1e3a23ff22cabba32943b6463b4093d055199"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/acquisition_custody-de71bfa684e1c05f",
+    "sha256": "dbe1519c76b8e28aac2778366ac5f8521f852d6cf9d8c50d3f5d49104c906715",
+    "after_sha256": "dbe1519c76b8e28aac2778366ac5f8521f852d6cf9d8c50d3f5d49104c906715"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/backed_acquisition-56c879d1d2910153",
+    "sha256": "fca8fe2089c6ba9e812acf7a3bc5543f8c6d80e57d98af92e4b33ac7e950fec4",
+    "after_sha256": "fca8fe2089c6ba9e812acf7a3bc5543f8c6d80e57d98af92e4b33ac7e950fec4"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/complete_root-7bc313d53b4b8645",
+    "sha256": "29c33f7130a85722d99d6f61e987376d91d8fabe723ae7ae29ae4ffe13c47bac",
+    "after_sha256": "29c33f7130a85722d99d6f61e987376d91d8fabe723ae7ae29ae4ffe13c47bac"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/history_proof_memo-63e0a379bb7f70d8",
+    "sha256": "0ceca3233f6aab6fa660c4ddf3ef35a0188eb875aa6400455c4fbfb5824ffce4",
+    "after_sha256": "0ceca3233f6aab6fa660c4ddf3ef35a0188eb875aa6400455c4fbfb5824ffce4"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/init_memory-4dff77e098c7527d",
+    "sha256": "62977f4dbd547cffc441886e98aaf577bf72268a375b214b8312f76350dde2a1",
+    "after_sha256": "62977f4dbd547cffc441886e98aaf577bf72268a375b214b8312f76350dde2a1"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/init_sqlite-a81263fb89d61840",
+    "sha256": "5fe26e8c32802a0a24ef96014c7b7460960d6740eb398e0f5cc4c25e9c5b01c2",
+    "after_sha256": "5fe26e8c32802a0a24ef96014c7b7460960d6740eb398e0f5cc4c25e9c5b01c2"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/namespace_scaling-9ba4bcc3e4bcccd6",
+    "sha256": "6200bc3cfbd45186cb8904059720028531019322db1ae1a26a320ed709e700e0",
+    "after_sha256": "6200bc3cfbd45186cb8904059720028531019322db1ae1a26a320ed709e700e0"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/examples/acquisition_profile-eb1d4e8c03d2f167",
+    "sha256": "2abc149d8da70427a6a2aa77e1d5ee0b5491d108f401433731e5dd573868c1ca",
+    "after_sha256": "2abc149d8da70427a6a2aa77e1d5ee0b5491d108f401433731e5dd573868c1ca"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/examples/benchmark_history-25eeb0e283ed40d5",
+    "sha256": "c4c5941d88254beb8f343da16f401508cea429da50bcf3418f36afa91ca401bc",
+    "after_sha256": "c4c5941d88254beb8f343da16f401508cea429da50bcf3418f36afa91ca401bc"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/examples/benchmark_init-458c4c4d44746f69",
+    "sha256": "8f57bd8da4f47e19aa5bbf74c69c14c289422c8508eaf16fb10f16c0a1f60a1b",
+    "after_sha256": "8f57bd8da4f47e19aa5bbf74c69c14c289422c8508eaf16fb10f16c0a1f60a1b"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/examples/cause_namespace-7aedcb121d53d725",
+    "sha256": "6c0f3f93a53a526c2ea0efec666c903c9861c2285bfb2477e6f6b1656bf461a4",
+    "after_sha256": "6c0f3f93a53a526c2ea0efec666c903c9861c2285bfb2477e6f6b1656bf461a4"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/examples/durable_init_costs-91bce26aaecd6d72",
+    "sha256": "bc93404c605cb0707810142f580feb204be1bb6dfd316b751da58be3e33e5846",
+    "after_sha256": "bc93404c605cb0707810142f580feb204be1bb6dfd316b751da58be3e33e5846"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/examples/verify_history-902dc25e49e113ab",
+    "sha256": "8d7ca2e454ef1617debb81ae759654aed389530f38b8ed402db33e8f438082e1",
+    "after_sha256": "8d7ca2e454ef1617debb81ae759654aed389530f38b8ed402db33e8f438082e1"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/examples/verify_namespace-bb9c33c4490085ee",
+    "sha256": "cc38ad236aa4047f5bfdf31dd6026e592b84337c559f8aa1b64c33f80b12977a",
+    "after_sha256": "cc38ad236aa4047f5bfdf31dd6026e592b84337c559f8aa1b64c33f80b12977a"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/layerfs_sdk-a9ac2f7b76117cf8",
+    "sha256": "d4b79829a65492992a63005bca1166004d1e46473b86eae726658f0e8b3aba4a",
+    "after_sha256": "d4b79829a65492992a63005bca1166004d1e46473b86eae726658f0e8b3aba4a"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/runtime-0693fe70d77b0de3",
+    "sha256": "a4f2e6ada99f09c27ec8ecb35c77ea55d0e28427cb3491c5b789f309f24e0f64",
+    "after_sha256": "a4f2e6ada99f09c27ec8ecb35c77ea55d0e28427cb3491c5b789f309f24e0f64"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/wire-23c7eeaa14dddada",
+    "sha256": "0291253ad705e8b08f042d66651dc1fa0a9ad7d9ca87fce41e651a7c6ec1e7df",
+    "after_sha256": "0291253ad705e8b08f042d66651dc1fa0a9ad7d9ca87fce41e651a7c6ec1e7df"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/layerfs_storage-5e9a8d43227e1126",
+    "sha256": "f2531c48d9ca1a17e5d81cab8ad8562d52c2362487e6c01e24dd7040bc7d2e2e",
+    "after_sha256": "f2531c48d9ca1a17e5d81cab8ad8562d52c2362487e6c01e24dd7040bc7d2e2e"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/codec_frames-4c026ece6c3f0ecf",
+    "sha256": "cdcee95d6c44cdda57598eee8dd73e97f024fc0431333a5e0cfaa635ed5d3af5",
+    "after_sha256": "cdcee95d6c44cdda57598eee8dd73e97f024fc0431333a5e0cfaa635ed5d3af5"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/decoded_group_retention-c30a4c9e49c06e73",
+    "sha256": "5a493a8b245a2a79901193a077894881ca901d167ed39f119d279844e6acab54",
+    "after_sha256": "5a493a8b245a2a79901193a077894881ca901d167ed39f119d279844e6acab54"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/locator_pressure-850786723554273e",
+    "sha256": "4a04af84f714bbd8ac9ca597f6ad7ce45206fc117d3ebe402ba4d1b8be3bb2c8",
+    "after_sha256": "4a04af84f714bbd8ac9ca597f6ad7ce45206fc117d3ebe402ba4d1b8be3bb2c8"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/object_key-818fe01b5ebfaf70",
+    "sha256": "6b3662b91754de4e57e01703a311d5a273f6a5effecd3855feb1470ce59f138c",
+    "after_sha256": "6b3662b91754de4e57e01703a311d5a273f6a5effecd3855feb1470ce59f138c"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/pack_cache_contract-88cca7b9685a4f6a",
+    "sha256": "bc3455d9beff378b46f322fb7ee9adff1f23d703f5da326cc31b0d57ba13e084",
+    "after_sha256": "bc3455d9beff378b46f322fb7ee9adff1f23d703f5da326cc31b0d57ba13e084"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/pack_range_contract-74621c8c161e9b79",
+    "sha256": "9cb4256a4f33b5a10493afd81385fddf6a53b25b9140e6dc778cb1a145b69060",
+    "after_sha256": "9cb4256a4f33b5a10493afd81385fddf6a53b25b9140e6dc778cb1a145b69060"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/physical_formats-ef4195a93e3eb456",
+    "sha256": "f9415e52fa63c624522be07ef07d9aa3ac5ffaa41f56037057772a7358e9990c",
+    "after_sha256": "f9415e52fa63c624522be07ef07d9aa3ac5ffaa41f56037057772a7358e9990c"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/pooled_demand_work-37763a6a440484ab",
+    "sha256": "39e7eafa93e624d2e12a14224b126cc9b370a782b5d2771fb75b29419a69590c",
+    "after_sha256": "39e7eafa93e624d2e12a14224b126cc9b370a782b5d2771fb75b29419a69590c"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/pooled_dependency_integrity-e88cc6cd5a2e174a",
+    "sha256": "9dad6e6ff3c1fa8ea8ec6383251256f4b7be5fe2b72e42f8d3372a26c1716895",
+    "after_sha256": "9dad6e6ff3c1fa8ea8ec6383251256f4b7be5fe2b72e42f8d3372a26c1716895"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/pooled_value_retention-f5cd11d434ed512d",
+    "sha256": "c4ad66442156c518595d72d06cfd8be3e3da3571bbc54a24d6069485b68aaea6",
+    "after_sha256": "c4ad66442156c518595d72d06cfd8be3e3da3571bbc54a24d6069485b68aaea6"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/read_demand_custody-1a1fb525d99edaa1",
+    "sha256": "6f9a07402a0b57864972840b2da3852363aa2173cb653d314320087592810101",
+    "after_sha256": "6f9a07402a0b57864972840b2da3852363aa2173cb653d314320087592810101"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/read_pack_locality-8204cf82ea5fec2e",
+    "sha256": "e9b3af15fd2c6a362fb2926f492725b6a6a93af63241b045f1f541c8164a386a",
+    "after_sha256": "e9b3af15fd2c6a362fb2926f492725b6a6a93af63241b045f1f541c8164a386a"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/save_demand_locality-568e8a85dbf5c34b",
+    "sha256": "3ae732f80eb8f793eb548eb5641226921bd623dd65b97f9745604cc111fae855",
+    "after_sha256": "3ae732f80eb8f793eb548eb5641226921bd623dd65b97f9745604cc111fae855"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/selected_cache_bounds-034a34927cec4b92",
+    "sha256": "aebd6a494c26d6dc848a57b0ef69c951ecdbf69c08c24267d797c2c4da9e382a",
+    "after_sha256": "aebd6a494c26d6dc848a57b0ef69c951ecdbf69c08c24267d797c2c4da9e382a"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/selected_group_reads-79baace56d7da732",
+    "sha256": "24f4d52a34d3c805ce7e88a93050d47b05125533d43a74801ed9733abf81568d",
+    "after_sha256": "24f4d52a34d3c805ce7e88a93050d47b05125533d43a74801ed9733abf81568d"
+  },
+  {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006/debug/deps/verified_pack_read-fd00751c024b3b5f",
+    "sha256": "540f87f137272efa1506f7e9658997672292576f1b79888624fe2f7805766efd",
+    "after_sha256": "540f87f137272efa1506f7e9658997672292576f1b79888624fe2f7805766efd"
+  }
+]

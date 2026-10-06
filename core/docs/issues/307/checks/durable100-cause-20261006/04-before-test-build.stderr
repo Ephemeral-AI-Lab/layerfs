@@ -1,0 +1,24 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+error[E0433]: failed to resolve: could not find `mapping` in `layerfs_content`
+   --> crates/layerfs-persistence/tests/sqlite_transaction_units.rs:390:34
+    |
+390 |                 layerfs_content::mapping::encode_chunk_object(noise.canonical()).unwrap(),
+    |                                  ^^^^^^^ could not find `mapping` in `layerfs_content`
+    |
+help: consider importing this module
+    |
+3   + use layerfs_content::file::mapping;
+    |
+help: if you import `mapping`, refer to it directly
+    |
+390 -                 layerfs_content::mapping::encode_chunk_object(noise.canonical()).unwrap(),
+390 +                 mapping::encode_chunk_object(noise.canonical()).unwrap(),
+    |
+
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `layerfs-persistence` (test "sqlite_transaction_units") due to 1 previous error

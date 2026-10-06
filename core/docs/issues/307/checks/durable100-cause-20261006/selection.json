@@ -1,0 +1,17 @@
+{
+ "scope":"Prospective cause diagnostic only; uncontrolled/instrumented clocks ineligible",
+ "question":"Durable100 bootstrap SQL versus COMMIT cost and per-port acquisition/reservation/publication attribution",
+ "product_source":"a6bd6860c5061e03c4803c8962d847eb348d6069",
+ "checkout":"fca6e386a13b20a37131858fcd7eedb98ecfa54e",
+ "cases":["namespace-100-compact-v3"],
+ "profiles":["Durable WAL/FULL/fullfsync"],
+ "fixture":"identity-checked closed seed1 100 files/5MB prepared master",
+ "example":"durable_init_costs, public ports only, no private source access",
+ "observers":["creation wall and actual SQLite work","nested public Init stages","per-physical-port SQL/VM/COMMIT counts and inclusive clocks","per-acquisition-port SQL/VM/COMMIT","publication rows/body bytes","reservation demand"],
+ "build_wall_s":30,
+ "run_wall_s":15,
+ "construction_workers_env":1,
+ "namespace_constructors":4,
+ "attempts":1,
+ "unavailable":["VFS/device/physical sync counters","phase/system residency"]
+}

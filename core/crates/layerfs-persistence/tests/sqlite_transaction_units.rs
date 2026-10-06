@@ -370,3 +370,57 @@ fn successful_save_history_retains_selection_and_group_work_from_final_drain() {
         vec![whole.canonical().to_vec()]
     );
 }
+
+#[test]
+fn queued_chunk_groups_use_the_acknowledged_pack_tail() {
+    let t = support::Temp::new("queued-group-reservation-tail");
+    let h = create(&t.join("db"));
+    let storage = Storage::new(h.storage.clone()).unwrap();
+    // One small initial Save acknowledges seven IDs and consumes only one.
+    let initial = object(9000, 16);
+    let save = storage.begin_save().unwrap();
+    save.accept(initial).unwrap();
+    save.finish().unwrap();
+    let before = storage.diagnostics().reserve;
+    let chunks = (1_u64..=128)
+        .map(|seed| {
+            let mut raw = vec![seed as u8; 32768];
+            raw[..8].copy_from_slice(&seed.to_be_bytes());
+            FinalizedObject::new(
+                ObjectRole::Chunk,
+                layerfs_content::file::mapping::encode_chunk_object(&raw).unwrap(),
+            )
+            .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let save = storage.begin_save().unwrap();
+    for chunk in &chunks {
+        save.accept(chunk.clone()).unwrap();
+    }
+    save.finish().unwrap();
+    let after = storage.diagnostics().reserve;
+    println!(
+        "QUEUED_PACK_RESERVATION before={before} after={after} chunks={}",
+        chunks.len()
+    );
+    assert_eq!(
+        after, before,
+        "six acknowledged IDs cover the queued native pack; groups are not packs"
+    );
+    let ids = chunks.iter().map(FinalizedObject::id).collect::<Vec<_>>();
+    assert_eq!(
+        storage.reader().unwrap().read_objects(&ids).unwrap(),
+        chunks
+            .iter()
+            .map(|o| o.canonical().to_vec())
+            .collect::<Vec<_>>()
+    );
+    let sql = rusqlite::Connection::open(t.join("db")).unwrap();
+    let packs: i64 = sql
+        .query_row("SELECT count(*) FROM pack", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(
+        packs, 2,
+        "one initial pack and one tight-directory native pack"
+    );
+}

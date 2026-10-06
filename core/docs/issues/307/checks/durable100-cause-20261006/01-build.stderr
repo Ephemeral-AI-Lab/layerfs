@@ -1,0 +1,24 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+error[E0599]: no function or associated item named `enabled` found for struct `Timing` in the current scope
+   --> crates/layerfs-project/examples/durable_init_costs.rs:144:36
+    |
+144 |     let (result, timing) = Timing::enabled("project.init", |timer| {
+    |                                    ^^^^^^^ function or associated item not found in `Timing`
+
+warning: unused import: `PackPersistence`
+  --> crates/layerfs-project/examples/durable_init_costs.rs:10:28
+   |
+10 |     port::{acquisition::*, PackPersistence},
+   |                            ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+For more information about this error, try `rustc --explain E0599`.
+warning: `layerfs-project` (example "durable_init_costs") generated 1 warning
+error: could not compile `layerfs-project` (example "durable_init_costs") due to 1 previous error; 1 warning emitted

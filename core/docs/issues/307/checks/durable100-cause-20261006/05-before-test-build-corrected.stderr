@@ -1,0 +1,8 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.04s
+  Executable tests/sqlite_transaction_units.rs (core/target/init-acquisition-fix-20261006/debug/deps/sqlite_transaction_units-677cf916d8486ca1)

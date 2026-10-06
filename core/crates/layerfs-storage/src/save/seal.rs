@@ -194,7 +194,16 @@ impl Packer {
             + self
                 .queued
                 .iter()
-                .map(|queue| queue.groups.len())
+                // Live queues share PACK_LIMIT bytes including each lane's
+                // directory. Every directory-sized subset therefore fits the
+                // byte bound; only the fixed group-count limit splits it.
+                // Unsealed groups can still force a flush, so retain one ID
+                // per nonempty unsealed group above this queued-pack bound.
+                .map(|queue| {
+                    queue.lane.map_or(0, |lane| {
+                        queue.groups.len().div_ceil(lane.group_count_limit())
+                    })
+                })
                 .sum::<usize>()
     }
     fn flush_lane(&mut self, lane: PackLane, next: &mut i64, end: i64) -> StorageResult<()> {

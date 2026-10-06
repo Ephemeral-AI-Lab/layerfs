@@ -1,0 +1,14 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running tests/sqlite_transaction_units.rs (core/target/init-acquisition-fix-20261006/debug/deps/sqlite_transaction_units-677cf916d8486ca1)
+
+thread 'queued_chunk_groups_use_the_acknowledged_pack_tail' panicked at crates/layerfs-persistence/tests/sqlite_transaction_units.rs:421:5:
+assertion `left == right` failed: one initial pack and two tight-directory native packs
+  left: 2
+ right: 3
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+error: test failed, to rerun pass `-p layerfs-persistence --test sqlite_transaction_units`

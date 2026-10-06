@@ -1,0 +1,15 @@
+{
+  "command": [
+    "core/target/cluster2-runtime-tests/release/examples/durable_init_costs",
+    "benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/payload",
+    "benchmark-results/fs-bench-pro/durable100-after-bound-20261006/store.sqlite",
+    "durable"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+  "env_target": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-runtime-tests",
+  "wall_timeout_s": 15.0,
+  "wall_ns": 1316267166,
+  "exit_code": 0,
+  "timeout": false,
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe"
+}

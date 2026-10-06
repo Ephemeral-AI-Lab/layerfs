@@ -336,6 +336,20 @@ the caller's operation.
 
 ### 18.4.3 Exact payload packs and pooled reuse (#237)
 
+The 2026-10-06 queued-tail correction changes the bounded pack-ID estimate at
+`Save::finish`. A live queue has already enforced the shared 256-KiB byte limit,
+including its lane directory. Its queued groups therefore need
+`ceil(group_count / lane_group_limit)` pack IDs, rather than one ID per group.
+Nonempty unsealed groups retain one conservative ID each because sealing can
+force an earlier flush. This constant-lane calculation reuses the acknowledged
+reservation tail without another queue scan, allocation or database operation.
+It does not change group encoding, placement, reservation-block sizing, Save
+publication boundaries or durability. The public regression checks a Save with
+128 compressible chunk groups against a previously acknowledged tail and reads
+every canonical object back. The separately retained Durable100 count diagnostic
+removes one reservation write unit; its instrumented clocks do not establish a
+performance verdict.
+
 Placement decides a pack's final length before writing it. Ordinary,
 Native and WholeFile packs close at each `select_many` flush; a newly
 created row therefore uses its exact declared `used` length as its

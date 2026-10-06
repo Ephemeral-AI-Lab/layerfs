@@ -1,0 +1,79 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.22s
+     Running unittests src/lib.rs (core/target/init-acquisition-fix-20261006/debug/deps/layerfs_persistence-cc89418160e6b6ac)
+     Running tests/acquisition_batching.rs (core/target/init-acquisition-fix-20261006/debug/deps/acquisition_batching-22dc56f552159580)
+     Running tests/acquisition_schema.rs (core/target/init-acquisition-fix-20261006/debug/deps/acquisition_schema-0ff8296d6c617dcb)
+     Running tests/acquisition_units.rs (core/target/init-acquisition-fix-20261006/debug/deps/acquisition_units-5fd24c91be0680f3)
+     Running tests/file_lengths.rs (core/target/init-acquisition-fix-20261006/debug/deps/file_lengths-8885c06688acdf7c)
+     Running tests/history_allocation.rs (core/target/init-acquisition-fix-20261006/debug/deps/history_allocation-ae289dce51ef3650)
+     Running tests/history_conditional_updates.rs (core/target/init-acquisition-fix-20261006/debug/deps/history_conditional_updates-9c31e21dc51693c4)
+     Running tests/history_history_pages.rs (core/target/init-acquisition-fix-20261006/debug/deps/history_history_pages-5b41b6d5300cfdd2)
+     Running tests/history_lifecycle.rs (core/target/init-acquisition-fix-20261006/debug/deps/history_lifecycle-068f9bc1d8f21ef0)
+     Running tests/history_remediation.rs (core/target/init-acquisition-fix-20261006/debug/deps/history_remediation-eac8f9d9018c6819)
+     Running tests/history_reopen.rs (core/target/init-acquisition-fix-20261006/debug/deps/history_reopen-4f5e99953bc52c4a)
+     Running tests/interleaved_saves.rs (core/target/init-acquisition-fix-20261006/debug/deps/interleaved_saves-ff8a0bbba23f38cc)
+     Running tests/semantic_admission.rs (core/target/init-acquisition-fix-20261006/debug/deps/semantic_admission-41991402795bdc3d)
+     Running tests/sqlite_allocation_release.rs (core/target/init-acquisition-fix-20261006/debug/deps/sqlite_allocation_release-38c16b717c74d776)
+     Running tests/sqlite_group_rows.rs (core/target/init-acquisition-fix-20261006/debug/deps/sqlite_group_rows-ba50d433ea251e0d)
+     Running tests/sqlite_group_rows_indexed.rs (core/target/init-acquisition-fix-20261006/debug/deps/sqlite_group_rows_indexed-1c6c464933e45739)
+     Running tests/sqlite_ordinal_lookahead.rs (core/target/init-acquisition-fix-20261006/debug/deps/sqlite_ordinal_lookahead-d52323a5420a04b5)
+     Running tests/sqlite_pack_selection.rs (core/target/init-acquisition-fix-20261006/debug/deps/sqlite_pack_selection-fb7d337033d0043c)
+     Running tests/sqlite_publication.rs (core/target/init-acquisition-fix-20261006/debug/deps/sqlite_publication-d1e36b64dd368bf0)
+     Running tests/sqlite_recovery.rs (core/target/init-acquisition-fix-20261006/debug/deps/sqlite_recovery-c8bae7a6517ff80d)
+     Running tests/sqlite_reference_acquisition.rs (core/target/init-acquisition-fix-20261006/debug/deps/sqlite_reference_acquisition-af4d8bac5f950aba)
+DIAGNOSTIC logical child acquisition: batched=0 individual=0 bytes=0
+     Running tests/sqlite_transaction_units.rs (core/target/init-acquisition-fix-20261006/debug/deps/sqlite_transaction_units-677cf916d8486ca1)
+DIAGNOSTIC sealed packs=4 publications=3
+DIAGNOSTIC pack reservations=1 body inserts=21
+     Running unittests examples/explain_reservation.rs (core/target/init-acquisition-fix-20261006/debug/examples/explain_reservation-5755f0660bf51db9)
+     Running unittests examples/metadata_allocation_probe.rs (core/target/init-acquisition-fix-20261006/debug/examples/metadata_allocation_probe-a0e6a3d08857b3e4)
+     Running unittests src/lib.rs (core/target/init-acquisition-fix-20261006/debug/deps/layerfs_project-cffae0e2b52819f6)
+     Running tests/acquisition_custody.rs (core/target/init-acquisition-fix-20261006/debug/deps/acquisition_custody-de71bfa684e1c05f)
+     Running tests/backed_acquisition.rs (core/target/init-acquisition-fix-20261006/debug/deps/backed_acquisition-56c879d1d2910153)
+     Running tests/complete_root.rs (core/target/init-acquisition-fix-20261006/debug/deps/complete_root-7bc313d53b4b8645)
+     Running tests/history_proof_memo.rs (core/target/init-acquisition-fix-20261006/debug/deps/history_proof_memo-63e0a379bb7f70d8)
+     Running tests/init_memory.rs (core/target/init-acquisition-fix-20261006/debug/deps/init_memory-4dff77e098c7527d)
+     Running tests/init_sqlite.rs (core/target/init-acquisition-fix-20261006/debug/deps/init_sqlite-a81263fb89d61840)
+     Running tests/namespace_scaling.rs (core/target/init-acquisition-fix-20261006/debug/deps/namespace_scaling-9ba4bcc3e4bcccd6)
+     Running unittests examples/acquisition_profile.rs (core/target/init-acquisition-fix-20261006/debug/examples/acquisition_profile-eb1d4e8c03d2f167)
+     Running unittests examples/benchmark_history.rs (core/target/init-acquisition-fix-20261006/debug/examples/benchmark_history-25eeb0e283ed40d5)
+PROBE missing f5f32f2d850500cb3a3da5d9f2e853266fed134a1e0fa79deb1af3c7d1fd0072 admitted=false chain=6 allowed=3 served=1 refused=1 demanded=2
+PROBE missing 9ec54df692d13dd9bd162281e44fed0b99153a66f241a5580692c2fe5b49ba7e admitted=false chain=6 allowed=4 served=4 refused=1 demanded=5
+PROBE missing 10e80bf5a94eca10296a857277234d2acf27f6220ee2938182324471f3e5c133 admitted=false chain=6 allowed=4 served=4 refused=2 demanded=6
+     Running unittests examples/benchmark_init.rs (core/target/init-acquisition-fix-20261006/debug/examples/benchmark_init-458c4c4d44746f69)
+     Running unittests examples/cause_namespace.rs (core/target/init-acquisition-fix-20261006/debug/examples/cause_namespace-7aedcb121d53d725)
+     Running unittests examples/durable_init_costs.rs (core/target/init-acquisition-fix-20261006/debug/examples/durable_init_costs-91bce26aaecd6d72)
+     Running unittests examples/verify_history.rs (core/target/init-acquisition-fix-20261006/debug/examples/verify_history-902dc25e49e113ab)
+PROBE missing f5f32f2d850500cb3a3da5d9f2e853266fed134a1e0fa79deb1af3c7d1fd0072 admitted=false chain=6 allowed=3 served=1 refused=1 demanded=2
+PROBE missing 9ec54df692d13dd9bd162281e44fed0b99153a66f241a5580692c2fe5b49ba7e admitted=false chain=6 allowed=4 served=4 refused=1 demanded=5
+PROBE missing 10e80bf5a94eca10296a857277234d2acf27f6220ee2938182324471f3e5c133 admitted=false chain=6 allowed=4 served=4 refused=2 demanded=6
+     Running unittests examples/verify_namespace.rs (core/target/init-acquisition-fix-20261006/debug/examples/verify_namespace-bb9c33c4490085ee)
+     Running unittests src/lib.rs (core/target/init-acquisition-fix-20261006/debug/deps/layerfs_sdk-a9ac2f7b76117cf8)
+     Running tests/runtime.rs (core/target/init-acquisition-fix-20261006/debug/deps/runtime-0693fe70d77b0de3)
+     Running tests/wire.rs (core/target/init-acquisition-fix-20261006/debug/deps/wire-23c7eeaa14dddada)
+     Running unittests src/lib.rs (core/target/init-acquisition-fix-20261006/debug/deps/layerfs_storage-5e9a8d43227e1126)
+     Running tests/codec_frames.rs (core/target/init-acquisition-fix-20261006/debug/deps/codec_frames-4c026ece6c3f0ecf)
+     Running tests/decoded_group_retention.rs (core/target/init-acquisition-fix-20261006/debug/deps/decoded_group_retention-c30a4c9e49c06e73)
+     Running tests/locator_pressure.rs (core/target/init-acquisition-fix-20261006/debug/deps/locator_pressure-850786723554273e)
+DIAGNOSTIC locator-pressure requests=[("locate", 1)]
+DIAGNOSTIC locator-pressure requests=[("locate", 1), ("locate", 1), ("locate", 1)]
+     Running tests/object_key.rs (core/target/init-acquisition-fix-20261006/debug/deps/object_key-818fe01b5ebfaf70)
+     Running tests/pack_cache_contract.rs (core/target/init-acquisition-fix-20261006/debug/deps/pack_cache_contract-88cca7b9685a4f6a)
+     Running tests/pack_range_contract.rs (core/target/init-acquisition-fix-20261006/debug/deps/pack_range_contract-74621c8c161e9b79)
+     Running tests/physical_formats.rs (core/target/init-acquisition-fix-20261006/debug/deps/physical_formats-ef4195a93e3eb456)
+     Running tests/pooled_demand_work.rs (core/target/init-acquisition-fix-20261006/debug/deps/pooled_demand_work-37763a6a440484ab)
+     Running tests/pooled_dependency_integrity.rs (core/target/init-acquisition-fix-20261006/debug/deps/pooled_dependency_integrity-e88cc6cd5a2e174a)
+     Running tests/pooled_value_retention.rs (core/target/init-acquisition-fix-20261006/debug/deps/pooled_value_retention-f5cd11d434ed512d)
+     Running tests/read_demand_custody.rs (core/target/init-acquisition-fix-20261006/debug/deps/read_demand_custody-1a1fb525d99edaa1)
+     Running tests/read_pack_locality.rs (core/target/init-acquisition-fix-20261006/debug/deps/read_pack_locality-8204cf82ea5fec2e)
+locality: 74 body acquisitions for 37 packs
+     Running tests/save_demand_locality.rs (core/target/init-acquisition-fix-20261006/debug/deps/save_demand_locality-568e8a85dbf5c34b)
+Save exact reuse: 74 acquisitions, 37 distinct packs
+     Running tests/selected_cache_bounds.rs (core/target/init-acquisition-fix-20261006/debug/deps/selected_cache_bounds-034a34927cec4b92)
+     Running tests/selected_group_reads.rs (core/target/init-acquisition-fix-20261006/debug/deps/selected_group_reads-79baace56d7da732)
+     Running tests/verified_pack_read.rs (core/target/init-acquisition-fix-20261006/debug/deps/verified_pack_read-fd00751c024b3b5f)

@@ -1,0 +1,14 @@
+{
+  "scope": "Changed-source count diagnostic only, no speed/RSS gate",
+  "question": "does actual Durable100 avoid the spurious pack-ID reservation?",
+  "case": "namespace-100-compact-v3",
+  "profile": "Durable WAL/FULL/fullfsync",
+  "build_s": 30,
+  "run_s": 15,
+  "attempts": 1,
+  "code_sha256": "8b3e5e54838ddcce04cc2d4e595f386eaa393e29b6c4d5282475e02291f4a889",
+  "observer_sha256": "454f2d3cf18190ed20a992c44c95b5e380a69052ebdef69b5af1ffb4031a7fbb",
+  "binary_sha256": "fdb87632f7a4098056fb840d9dd1a8a5a08c3cd4561a855a73a831b1a7c92bf6",
+  "database": "benchmark-results/fs-bench-pro/durable100-after-bound-20261006/store.sqlite",
+  "cache": "uncontrolled/instrumented, no performance admission"
+}

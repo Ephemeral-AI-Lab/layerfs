@@ -1,0 +1,24 @@
+{
+  "source": "fca6e386a13b20a37131858fcd7eedb98ecfa54e",
+  "tree": "050205652d5b31c625398e5b2928af63f0132f91",
+  "dirty": [
+    "?? core/crates/layerfs-project/examples/durable_init_costs.rs",
+    "?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+    "?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md",
+    "?? core/docs/issues/307/checks/durable100-cause-20261006/"
+  ],
+  "observer_sha256": "454f2d3cf18190ed20a992c44c95b5e380a69052ebdef69b5af1ffb4031a7fbb",
+  "binary_sha256": "cdde74a156c0b77f329c1a9a199437647a2d3f479b4acfebe1a17df41da752e2",
+  "fixture": {
+    "case": "namespace-100-compact-v3",
+    "directories": 2,
+    "files": 100,
+    "logical_bytes": 5000000,
+    "manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+    "profile": "core-sdk-init-fixture-v2",
+    "route": "host-direct-sdk-v2",
+    "seed": 1
+  },
+  "database": "benchmark-results/fs-bench-pro/durable100-cause-20261006/store.sqlite",
+  "cache": "uncontrolled diagnostic, no performance admission"
+}
