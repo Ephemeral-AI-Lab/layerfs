@@ -1,0 +1,488 @@
+{
+  "campaign": "incumbent-restoration-20261007",
+  "source": "2fced797d14f9d4f6b72c9ad00574976a4dfd5f0",
+  "init": [
+    {
+      "case": "phase7-sqlite-init-100-incumbent-restored-v1",
+      "profile": "durable",
+      "files": 100,
+      "control_ns": 79759708,
+      "control_bytes": 5255168,
+      "status": "COMPLETE",
+      "candidate_ns": 93168667,
+      "candidate_bytes": 5292032,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "command_wall_ns": 127826042,
+      "verification_wall_ns": 21656667,
+      "binary_sha256": "a608d02a44af854dcb55065c1f09dbb008c82b87c3495c83ec0f2cd49bc15627",
+      "product_seal": "830593d5d4cd4f79b524345cc82236ce0dd050ca00a2b0a9a052fb35b0c53eb2",
+      "phases": {
+        "bootstrap_ns": 11776917,
+        "init_ns": 75048375,
+        "checkpoint_ns": 5256458,
+        "close_ns": 1015125
+      },
+      "run": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-init-100-incumbent-restored-v1-candidate",
+      "receipt_sha256": "6ddaa6d200fd2c1d65d627bc8274776c51c4f953d025c340d055e5356cb30db8",
+      "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-init-100-incumbent-restored-v1/candidate/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-init-1000-incumbent-restored-v1",
+      "profile": "durable",
+      "files": 1000,
+      "control_ns": 201566000,
+      "control_bytes": 20545536,
+      "status": "COMPLETE",
+      "candidate_ns": 232671917,
+      "candidate_bytes": 20611072,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "command_wall_ns": 323488291,
+      "verification_wall_ns": 28566875,
+      "binary_sha256": "a608d02a44af854dcb55065c1f09dbb008c82b87c3495c83ec0f2cd49bc15627",
+      "product_seal": "830593d5d4cd4f79b524345cc82236ce0dd050ca00a2b0a9a052fb35b0c53eb2",
+      "phases": {
+        "bootstrap_ns": 10154375,
+        "init_ns": 219841792,
+        "checkpoint_ns": 2287000,
+        "close_ns": 325166
+      },
+      "run": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-init-1000-incumbent-restored-v1-candidate",
+      "receipt_sha256": "040895ea30dd8fe4bb2b4e593ee6815d78e17cb88b44ab1becf89b325605ee88",
+      "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-init-1000-incumbent-restored-v1/candidate/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-init-10000-incumbent-restored-v1",
+      "profile": "durable",
+      "files": 10000,
+      "control_ns": 2492429625,
+      "control_bytes": 305070080,
+      "status": "COMPLETE",
+      "candidate_ns": 2885705750,
+      "candidate_bytes": 305516544,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "command_wall_ns": 3688801625,
+      "verification_wall_ns": 327888417,
+      "binary_sha256": "a608d02a44af854dcb55065c1f09dbb008c82b87c3495c83ec0f2cd49bc15627",
+      "product_seal": "830593d5d4cd4f79b524345cc82236ce0dd050ca00a2b0a9a052fb35b0c53eb2",
+      "phases": {
+        "bootstrap_ns": 10617667,
+        "init_ns": 2865032167,
+        "checkpoint_ns": 9398458,
+        "close_ns": 595917
+      },
+      "run": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-init-10000-incumbent-restored-v1-candidate",
+      "receipt_sha256": "e1821ece71ffe53ad9b3a47362686116668e9890f481eef1fbdf1eae7b0d0470",
+      "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-init-10000-incumbent-restored-v1/candidate/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-init-100000-incumbent-restored-v1",
+      "profile": "durable",
+      "files": 100000,
+      "control_ns": 7724523333,
+      "control_bytes": 514965504,
+      "status": "COMPLETE",
+      "candidate_ns": 10692601500,
+      "candidate_bytes": 515624960,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "command_wall_ns": 18835135541,
+      "verification_wall_ns": 738876750,
+      "binary_sha256": "a608d02a44af854dcb55065c1f09dbb008c82b87c3495c83ec0f2cd49bc15627",
+      "product_seal": "830593d5d4cd4f79b524345cc82236ce0dd050ca00a2b0a9a052fb35b0c53eb2",
+      "phases": {
+        "bootstrap_ns": 42151250,
+        "init_ns": 10630905125,
+        "checkpoint_ns": 18088375,
+        "close_ns": 1354292
+      },
+      "run": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-init-100000-incumbent-restored-v1-candidate",
+      "receipt_sha256": "5efcf2923fccdb0e1bce3a5c9be8c2428c8e0f22314101d34d83eeadf05dd4f7",
+      "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-init-100000-incumbent-restored-v1/candidate/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-100-incumbent-restored-v1",
+      "profile": "disposable",
+      "files": 100,
+      "control_ns": 38747750,
+      "control_bytes": 5222400,
+      "status": "COMPLETE",
+      "candidate_ns": 45688500,
+      "candidate_bytes": 5255168,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "command_wall_ns": 72769625,
+      "verification_wall_ns": 15084416,
+      "binary_sha256": "a608d02a44af854dcb55065c1f09dbb008c82b87c3495c83ec0f2cd49bc15627",
+      "product_seal": "830593d5d4cd4f79b524345cc82236ce0dd050ca00a2b0a9a052fb35b0c53eb2",
+      "phases": {
+        "bootstrap_ns": 6528458,
+        "init_ns": 38087458,
+        "checkpoint_ns": 213709,
+        "close_ns": 813042
+      },
+      "run": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-disposable-init-100-incumbent-restored-v1-candidate",
+      "receipt_sha256": "1d9b096675ef04ccf3aeca6f9630859f81a6d4c0df4c7b0bdd2116ac3588d116",
+      "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-disposable-init-100-incumbent-restored-v1/candidate/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-1000-incumbent-restored-v1",
+      "profile": "disposable",
+      "files": 1000,
+      "control_ns": 129258375,
+      "control_bytes": 20537344,
+      "status": "COMPLETE",
+      "candidate_ns": 155291459,
+      "candidate_bytes": 20590592,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "command_wall_ns": 251292875,
+      "verification_wall_ns": 31467708,
+      "binary_sha256": "a608d02a44af854dcb55065c1f09dbb008c82b87c3495c83ec0f2cd49bc15627",
+      "product_seal": "830593d5d4cd4f79b524345cc82236ce0dd050ca00a2b0a9a052fb35b0c53eb2",
+      "phases": {
+        "bootstrap_ns": 4653167,
+        "init_ns": 141383291,
+        "checkpoint_ns": 241041,
+        "close_ns": 8957708
+      },
+      "run": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-disposable-init-1000-incumbent-restored-v1-candidate",
+      "receipt_sha256": "eedfd8a8a45e8a59fdae59317cee05471f99e2e118b78ffd344ceb007c21e1a8",
+      "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-disposable-init-1000-incumbent-restored-v1/candidate/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-10000-incumbent-restored-v1",
+      "profile": "disposable",
+      "files": 10000,
+      "control_ns": 1645276292,
+      "control_bytes": 305074176,
+      "status": "COMPLETE",
+      "candidate_ns": 1943650833,
+      "candidate_bytes": 305471488,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "command_wall_ns": 2746595083,
+      "verification_wall_ns": 346910875,
+      "binary_sha256": "a608d02a44af854dcb55065c1f09dbb008c82b87c3495c83ec0f2cd49bc15627",
+      "product_seal": "830593d5d4cd4f79b524345cc82236ce0dd050ca00a2b0a9a052fb35b0c53eb2",
+      "phases": {
+        "bootstrap_ns": 5550791,
+        "init_ns": 1718774042,
+        "checkpoint_ns": 347292,
+        "close_ns": 218843083
+      },
+      "run": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-disposable-init-10000-incumbent-restored-v1-candidate",
+      "receipt_sha256": "912ffed2735f0ffd36b5b807afc87e9131795dde8ce46cd4f48af7311e528551",
+      "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-disposable-init-10000-incumbent-restored-v1/candidate/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-100000-incumbent-restored-v1",
+      "profile": "disposable",
+      "files": 100000,
+      "control_ns": 5558569958,
+      "control_bytes": 514940928,
+      "status": "COMPLETE",
+      "candidate_ns": 7423399375,
+      "candidate_bytes": 515579904,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "command_wall_ns": 15509010958,
+      "verification_wall_ns": 796405458,
+      "binary_sha256": "a608d02a44af854dcb55065c1f09dbb008c82b87c3495c83ec0f2cd49bc15627",
+      "product_seal": "830593d5d4cd4f79b524345cc82236ce0dd050ca00a2b0a9a052fb35b0c53eb2",
+      "phases": {
+        "bootstrap_ns": 4482291,
+        "init_ns": 6952077625,
+        "checkpoint_ns": 353083,
+        "close_ns": 466337833
+      },
+      "run": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-disposable-init-100000-incumbent-restored-v1-candidate",
+      "receipt_sha256": "1b9e139019fa3f67b0313c2c8c3186f0e5ff6bee3b3ee2052423fe210b5b709e",
+      "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-disposable-init-100000-incumbent-restored-v1/candidate/receipt.json"
+    }
+  ],
+  "history": [
+    {
+      "case": "phase7-sqlite-history-stride10-group-rows-indexed-v2",
+      "profile": "durable",
+      "states": 17,
+      "allocation_ceiling": 54278964,
+      "first_selection": {
+        "arms": {
+          "baseline": {
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 36579340833,
+            "storage_bytes": 52473856,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 58703948750,
+            "command_budget_ns": 120000000000,
+            "verification_wall_ns": 3369130500,
+            "verification_budget_ns": 24000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-history-stride10-group-rows-indexed-v2-baseline",
+            "receipt_sha256": "5b17ad6d4ea50e5fbec13c6e48620fd0027d96eec53557df7d18de0dc1a63e17",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-history-stride10-group-rows-indexed-v2/baseline/receipt.json"
+          },
+          "candidate": {
+            "status": "INELIGIBLE",
+            "sample_count": 0,
+            "comparison_ns": null,
+            "storage_bytes": null,
+            "proof": "NOT_RUN",
+            "cache": "INELIGIBLE",
+            "cleanup": "NOT_RUN",
+            "command_wall_ns": null,
+            "command_budget_ns": 120000000000,
+            "verification_wall_ns": null,
+            "verification_budget_ns": 24000000000,
+            "source_residency": {
+              "resident_first": 17201,
+              "resident_after": 1466,
+              "invalidated_files": 12090,
+              "status": "INELIGIBLE"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-history-stride10-group-rows-indexed-v2-candidate",
+            "receipt_sha256": "e77f9a1c3023229468676922aeeabbc8075eb4576f72307245937925ee769d68",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-history-stride10-group-rows-indexed-v2/candidate/receipt.json"
+          }
+        },
+        "source": "2fced797d14f9d4f6b72c9ad00574976a4dfd5f0"
+      },
+      "second_selection": {
+        "arms": {
+          "baseline": {
+            "status": "NOT_RUN"
+          },
+          "candidate": {
+            "status": "NOT_RUN"
+          }
+        }
+      }
+    },
+    {
+      "case": "phase7-sqlite-history-stride3-group-rows-indexed-v2",
+      "profile": "durable",
+      "states": 53,
+      "allocation_ceiling": 70427034,
+      "first_selection": {
+        "arms": {
+          "baseline": {
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 74818878083,
+            "storage_bytes": 65142784,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 97415453333,
+            "command_budget_ns": 340000000000,
+            "verification_wall_ns": 7030706583,
+            "verification_budget_ns": 24000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-history-stride3-group-rows-indexed-v2-baseline",
+            "receipt_sha256": "36b4d0566ee71203d8923997ef22a516949e19f7f7478b6357e93fb531545b8a",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-history-stride3-group-rows-indexed-v2/baseline/receipt.json"
+          },
+          "candidate": {
+            "status": "INELIGIBLE",
+            "sample_count": 0,
+            "comparison_ns": null,
+            "storage_bytes": null,
+            "proof": "NOT_RUN",
+            "cache": "INELIGIBLE",
+            "cleanup": "NOT_RUN",
+            "command_wall_ns": null,
+            "command_budget_ns": 340000000000,
+            "verification_wall_ns": null,
+            "verification_budget_ns": 24000000000,
+            "source_residency": {
+              "resident_first": 24726,
+              "resident_after": 1345,
+              "invalidated_files": 17340,
+              "status": "INELIGIBLE"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-history-stride3-group-rows-indexed-v2-candidate",
+            "receipt_sha256": "97306649f7892313c8724f6aa883979b84c1afbe81f280d3254d3c0b62c6cdc7",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-history-stride3-group-rows-indexed-v2/candidate/receipt.json"
+          }
+        },
+        "source": "2fced797d14f9d4f6b72c9ad00574976a4dfd5f0"
+      },
+      "second_selection": {
+        "arms": {
+          "baseline": {
+            "status": "NOT_RUN"
+          },
+          "candidate": {
+            "status": "NOT_RUN"
+          }
+        }
+      }
+    },
+    {
+      "case": "phase7-sqlite-history-stride1-group-rows-indexed-v2",
+      "profile": "durable",
+      "states": 157,
+      "allocation_ceiling": 92342273,
+      "first_selection": {
+        "arms": {
+          "baseline": {
+            "status": "NOT_RUN"
+          },
+          "candidate": {
+            "status": "NOT_RUN"
+          }
+        }
+      },
+      "second_selection": {
+        "arms": {
+          "baseline": {
+            "status": "NOT_RUN"
+          },
+          "candidate": {
+            "status": "NOT_RUN"
+          }
+        }
+      }
+    },
+    {
+      "case": "phase7-sqlite-disposable-history-stride10-group-rows-indexed-v1",
+      "profile": "disposable",
+      "states": 17,
+      "allocation_ceiling": 54278964,
+      "first_selection": {
+        "arms": {
+          "baseline": {
+            "status": "NOT_RUN"
+          },
+          "candidate": {
+            "status": "NOT_RUN"
+          }
+        }
+      },
+      "second_selection": {
+        "arms": {
+          "baseline": {
+            "status": "NOT_RUN"
+          },
+          "candidate": {
+            "status": "NOT_RUN"
+          }
+        }
+      }
+    },
+    {
+      "case": "phase7-sqlite-disposable-history-stride3-group-rows-indexed-v1",
+      "profile": "disposable",
+      "states": 53,
+      "allocation_ceiling": 70427034,
+      "first_selection": {
+        "arms": {
+          "baseline": {
+            "status": "NOT_RUN"
+          },
+          "candidate": {
+            "status": "NOT_RUN"
+          }
+        }
+      },
+      "second_selection": {
+        "arms": {
+          "baseline": {
+            "status": "NOT_RUN"
+          },
+          "candidate": {
+            "status": "NOT_RUN"
+          }
+        }
+      }
+    },
+    {
+      "case": "phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1",
+      "profile": "disposable",
+      "states": 157,
+      "allocation_ceiling": 92342273,
+      "first_selection": {
+        "arms": {
+          "baseline": {
+            "status": "NOT_RUN"
+          },
+          "candidate": {
+            "status": "NOT_RUN"
+          }
+        }
+      },
+      "second_selection": {
+        "arms": {
+          "baseline": {
+            "status": "NOT_RUN"
+          },
+          "candidate": {
+            "status": "NOT_RUN"
+          }
+        }
+      }
+    }
+  ],
+  "preconditioning": [
+    {
+      "label": "after-spotlight-exclusion",
+      "round": 0,
+      "settle_s": 20.3,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 0,
+      "resident_after": 0,
+      "invalidated_files": 0,
+      "first_pass_ns": 7124530000,
+      "attestation_ns": 7394353000,
+      "time": "2026-10-07T01:40:09+0800",
+      "status": "READY"
+    }
+  ]
+}

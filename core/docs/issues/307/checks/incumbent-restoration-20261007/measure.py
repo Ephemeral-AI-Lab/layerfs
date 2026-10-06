@@ -2,7 +2,7 @@
 import os,sys,pathlib,subprocess,time,json,hashlib,signal
 primary=pathlib.Path('/Users/yifanxu/Ephemeral-AI-Lab/layerfs')
 root=pathlib.Path(sys.argv[1]);case=sys.argv[2];arm=sys.argv[3];limit=int(sys.argv[4]);extra=sys.argv[5:]
-campaign='incumbent-restoration-20261007'
+campaign=os.environ.get('LAYERFS_CAMPAIGN','incumbent-restoration-20261007')
 folder=root/'benchmark-results/fs-bench-pro'/(campaign+'-wrapper');folder.mkdir(exist_ok=True);stem=folder/(case+'-'+arm)
 report=(primary/'benchmark_agent_report.md').read_bytes()
 out=root/'benchmark-results/fs-bench-pro'/(campaign+'-'+case+'-'+arm);assert not out.exists()

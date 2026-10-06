@@ -1,0 +1,25 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/benchmark/fs-bench-pro/runner.py",
+    "run",
+    "--case",
+    "phase7-sqlite-history-stride10-group-rows-indexed-v2",
+    "--arm",
+    "baseline",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-history-stride10-group-rows-indexed-v2-baseline",
+    "--baseline-root",
+    "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/target/phase7-baseline/layerfs"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs",
+  "wall_timeout_s": 300,
+  "wall_ns": 64368745417,
+  "exit_code": 0,
+  "timed_out": false,
+  "output": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-phase7-sqlite-history-stride10-group-rows-indexed-v2-baseline",
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe",
+  "source": "2fced797d14f9d4f6b72c9ad00574976a4dfd5f0",
+  "dirty_after": []
+}
