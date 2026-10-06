@@ -30,3 +30,24 @@ Verification covers248 affected Storage/Persistence/Project test bodies, Clippy-
 Product commit Production LOC:160473→160673(+200), Core95056→95256, reference65417 unchanged, exact first-parent/staged/committed trees using unchanged production counter. No source relocation/reference retirement. [Counting record](checks/init-streaming-20261007/production-loc.json).
 
 Independent ordinary byte copies retain full closed Stores/rawoutputs/binaries under benchmark-results/fs-bench-pro/init-streaming-retained-20261007; SHA values were compared at copy. No own build/test/copy overlapped a measured operation in the measurement worktree. After Durable100000, source editing/read-only small-log review by subagents occurred in the primary worktree, with no agent builds/measurements; competing-process/container snapshots remain in receipts. No current device-byte/VFS attribution or phase-only RSS claim is available. Immutable compatibility and S9/application/runtime qualification remain distinct.
+
+## Retained bounded-coalescing V2 results
+
+The second source is890a144ff5bf063e6c65001b5da2cfd2b5cfdae4. All eight complete/proof/cache/cleanup checks PASS; Durable1000 passes speed, seven speed gates fail, all eight allocation gates fail, no joint gate passes. Final freelist and acquisition rows are zero in every case. [V2ledger](checks/init-streaming-batched-20261007/ledger.json) and [independent closed copies](checks/init-streaming-batched-20261007/closed-copy-manifest.json) retain every outcome.
+
+| Profile / files | Control ns | V2 ns | Control B | V2 B | Speed | Allocation |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| durable / 100 | 79759708 | 101886250 | 5255168 | 5287936 | FAIL | FAIL |
+| durable / 1000 | 201566000 | 220885042 | 20545536 | 20615168 | PASS | FAIL |
+| durable / 10000 | 2492429625 | 2946561709 | 305070080 | 305426432 | FAIL | FAIL |
+| durable / 100000 | 7724523333 | 10535288833 | 514965504 | 515747840 | FAIL | FAIL |
+| disposable / 100 | 38747750 | 44650458 | 5222400 | 5246976 | FAIL | FAIL |
+| disposable / 1000 | 129258375 | 163748375 | 20537344 | 20582400 | FAIL | FAIL |
+| disposable / 10000 | 1645276292 | 1987603209 | 305074176 | 305369088 | FAIL | FAIL |
+| disposable / 100000 | 5558569958 | 7888940875 | 514940928 | 515698688 | FAIL | FAIL |
+
+The instrumented 100000 diagnostic completed under15s with separate19s proof. Whole SQL: 22277 executions / 53079314 VM steps / 538 write commits; acquisition remains12544 /38310695 /88, with no completion or root-read calls. Output frame reduction changes ordinary Save multiplicities; no SQL plan changed. Query plan SHA values were revalidated and earlier unchanged Storage/Persistence proof reused. Instrumented time is ineligible for performance acceptance.
+
+Ordinary Durable100000 frames fall100796→28248 and complete product time12.798→10.535s, but remain slower than incumbent9.749s. Completed high-water reaches512. One-job replenishment repeatedly allows queue-idle flushes; the final half-free refill treatment targets that source-supported mechanism. It adds no worker/schema/profile and leaves exact Unknown/alias/final-root boundaries intact. Exclusive wakeup/queue wall remains unavailable; mixed Save sealing/publication stays a separate cost.
+
+V2verification:81 Project all-target bodies, including5 streaming proofs, completed22.943s under120s; Clippy-Dwarnings/fmt/662-file guard/40 guardselftests/16 harness tests PASS. Unchanged Storage/Persistence and actual SQL plan evidence reused by exact source/hash. Production LOC160673→160743(+70), Core95256→95326, reference65417 unchanged. The final candidate has its own source/proofs/selection; no V2sample is rerun.

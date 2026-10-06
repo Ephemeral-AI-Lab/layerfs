@@ -464,3 +464,65 @@ fn a_later_constructor_error_remains_visible_after_coalesced_successes() {
     assert!(history.layer_stack(stack()).unwrap().is_none());
     assert_eq!(persistence.observed.lock().unwrap().filesystem_roots, 0);
 }
+
+#[test]
+fn admission_bursts_close_empty_partial_and_exact_window_inputs() {
+    for (count, expected_units) in [(0, 0), (1, 1), (512, 1), (513, 2), (768, 2), (769, 3)] {
+        let fixture = Fixture::new(count);
+        let acquisition = MemoryAcquisition::default();
+        let store = support::storage(Arc::new(MemoryMetadata::default()));
+        let history = MemoryHistory::default();
+        let initialized = attempt(&fixture, &store, &history, &acquisition).unwrap();
+        assert_eq!(initialized.namespace_work.unique_files, count);
+        assert_eq!(
+            initialized.namespace_work.file_admission_units,
+            expected_units
+        );
+        assert!(initialized.namespace_work.file_admission_rows <= 512);
+        assert!(initialized.namespace_work.file_completed_rows <= 512);
+        assert!(acquisition.operations().is_empty());
+        assert_eq!(
+            initialized.entries as usize,
+            count + count.min(10) + 1,
+            "every scanned entry remains in the completed namespace"
+        );
+        let stack = history.layer_stack(stack()).unwrap().unwrap();
+        assert_eq!(
+            history.layer(stack.head_layer).unwrap().unwrap().root,
+            initialized.root
+        );
+
+        let reader = store.reader().unwrap();
+        let mut view = FilesystemRead::new(
+            &reader,
+            layerfs_content::filesystem::FilesystemRootId(initialized.root),
+        )
+        .unwrap();
+        let root = view.resolve(&LogicalPath::new("").unwrap()).unwrap();
+        assert_eq!(root.serial, initialized.root_serial);
+        let mut body = Vec::new();
+        for (path, expected) in &fixture.expected {
+            let file = view.resolve(&LogicalPath::new(path).unwrap()).unwrap();
+            body.clear();
+            Timing::disabled("streaming.boundary.read", |timer| {
+                read_all(
+                    &reader,
+                    file.value.content_root,
+                    &mut body,
+                    timer.child("file"),
+                )
+            })
+            .0
+            .unwrap();
+            assert_eq!(&body, expected, "{count}-file input: {path}");
+        }
+        if count == 0 {
+            assert!(view
+                .list_inode(root.serial, None, 8, 1024)
+                .unwrap()
+                .entries
+                .is_empty());
+            assert_eq!(initialized.namespace_work.file_output_batches, 0);
+        }
+    }
+}

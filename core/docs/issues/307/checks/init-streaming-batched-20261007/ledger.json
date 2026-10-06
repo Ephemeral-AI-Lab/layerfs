@@ -1,0 +1,201 @@
+{
+  "source": "890a144ff5bf063e6c65001b5da2cfd2b5cfdae4",
+  "rows": [
+    {
+      "case": "phase7-sqlite-init-100-streaming-v2",
+      "profile": "durable",
+      "control_ns": 79759708,
+      "candidate_ns": 101886250,
+      "control_bytes": 5255168,
+      "candidate_bytes": 5287936,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-batched-20261007/raw/phase7-sqlite-init-100-streaming-v2/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-init-1000-streaming-v2",
+      "profile": "durable",
+      "control_ns": 201566000,
+      "candidate_ns": 220885042,
+      "control_bytes": 20545536,
+      "candidate_bytes": 20615168,
+      "speed_gate": "PASS",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-batched-20261007/raw/phase7-sqlite-init-1000-streaming-v2/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-init-10000-streaming-v2",
+      "profile": "durable",
+      "control_ns": 2492429625,
+      "candidate_ns": 2946561709,
+      "control_bytes": 305070080,
+      "candidate_bytes": 305426432,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-batched-20261007/raw/phase7-sqlite-init-10000-streaming-v2/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-init-100000-streaming-v2",
+      "profile": "durable",
+      "control_ns": 7724523333,
+      "candidate_ns": 10535288833,
+      "control_bytes": 514965504,
+      "candidate_bytes": 515747840,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-batched-20261007/raw/phase7-sqlite-init-100000-streaming-v2/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-100-streaming-v2",
+      "profile": "disposable",
+      "control_ns": 38747750,
+      "candidate_ns": 44650458,
+      "control_bytes": 5222400,
+      "candidate_bytes": 5246976,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-batched-20261007/raw/phase7-sqlite-disposable-init-100-streaming-v2/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-1000-streaming-v2",
+      "profile": "disposable",
+      "control_ns": 129258375,
+      "candidate_ns": 163748375,
+      "control_bytes": 20537344,
+      "candidate_bytes": 20582400,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-batched-20261007/raw/phase7-sqlite-disposable-init-1000-streaming-v2/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-10000-streaming-v2",
+      "profile": "disposable",
+      "control_ns": 1645276292,
+      "candidate_ns": 1987603209,
+      "control_bytes": 305074176,
+      "candidate_bytes": 305369088,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-batched-20261007/raw/phase7-sqlite-disposable-init-10000-streaming-v2/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-100000-streaming-v2",
+      "profile": "disposable",
+      "control_ns": 5558569958,
+      "candidate_ns": 7888940875,
+      "control_bytes": 514940928,
+      "candidate_bytes": 515698688,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-batched-20261007/raw/phase7-sqlite-disposable-init-100000-streaming-v2/receipt.json"
+    }
+  ],
+  "diagnostic": {
+    "status": "DIAGNOSTIC_COMPLETE",
+    "receipt": "diagnostics/receipt.json",
+    "whole": {
+      "calls": 1,
+      "commit_ns": 3836416832,
+      "fullscan_steps": 992,
+      "read_snapshot_ns": 87950382,
+      "read_snapshots": 401,
+      "reprepares": 20,
+      "returned_rows": 745922,
+      "sorts": 1,
+      "statement_ns": 5889027865,
+      "statements": 22277,
+      "unit": "complete_init",
+      "unit_ns": 0,
+      "vm_steps": 53079314,
+      "write_commits": 538
+    },
+    "acquisition": {
+      "calls": 690,
+      "statements": 12544,
+      "vm_steps": 38310695,
+      "write_commits": 88,
+      "read_snapshots": 401
+    }
+  },
+  "interference": "No own builds/tests/copies overlap timed operation in measurementworktree. Subagents edit/read small primary source and logs; no builds/measurements. Competing processes retained in receipts."
+}

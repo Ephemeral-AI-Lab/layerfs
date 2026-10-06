@@ -36,6 +36,7 @@ pub(crate) struct FileCompletions<'b, 'p, 's> {
     completed: usize,
     completed_peak: usize,
     batches: u64,
+    admission_units: u64,
 }
 
 impl<'b, 'p, 's> FileCompletions<'b, 'p, 's> {
@@ -60,6 +61,7 @@ impl<'b, 'p, 's> FileCompletions<'b, 'p, 's> {
             completed: 0,
             completed_peak: 0,
             batches: 0,
+            admission_units: 0,
         }
     }
 
@@ -73,7 +75,13 @@ impl<'b, 'p, 's> FileCompletions<'b, 'p, 's> {
 
     /// Queue admission cannot exceed the slots: a queued job keeps its slot
     /// through construction and completion until the inode stream consumes it.
+    /// Refill to the full window once at least half its credits are free, so
+    /// constructors receive bursts instead of repeatedly waiting for one job.
     pub(super) fn admit(&mut self) -> Result<(), Failure> {
+        if self.slots.len() > WINDOW_ROWS / 2 {
+            return Ok(());
+        }
+        let mut productive = false;
         while self.feed.is_some() && self.slots.len() < WINDOW_ROWS {
             self.tick()?;
             let Some(job) = self.jobs.next()? else {
@@ -105,6 +113,10 @@ impl<'b, 'p, 's> FileCompletions<'b, 'p, 's> {
                 .ok_or(Failure::WorkerUnavailable)?
                 .try_send(Job::of(job))
                 .map_err(|_| Failure::WorkerUnavailable)?;
+            if !productive {
+                self.admission_units += 1;
+                productive = true;
+            }
             self.last_admitted = Some(id);
             self.admitted_peak = self.admitted_peak.max(self.slots.len());
         }
@@ -202,6 +214,7 @@ impl<'b, 'p, 's> FileCompletions<'b, 'p, 's> {
         work.file_admission_rows = work.file_admission_rows.max(self.admitted_peak);
         work.file_completed_rows = work.file_completed_rows.max(self.completed_peak);
         work.file_output_batches += self.batches;
+        work.file_admission_units += self.admission_units;
     }
 
     /// Called before scoped joins: a blocked job receive or output send loses

@@ -1,0 +1,125 @@
+{
+  "Project_test_bodies": 82,
+  "checks": [
+    {
+      "record": "runtime.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-project",
+        "--all-targets",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 23735845667
+    },
+    {
+      "record": "no-run.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-project",
+        "--all-targets",
+        "--no-run"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 7787250208
+    },
+    {
+      "record": "clippy.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "clippy",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-project",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 2176201417
+    },
+    {
+      "record": "fmt.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "fmt",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 1628972833
+    },
+    {
+      "record": "harness.json",
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "core/benchmark/fs-bench-pro/tests",
+        "-p",
+        "test_phase7_sqlite.py"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 720826792
+    },
+    {
+      "record": "guard-self-tests.json",
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "core/tools",
+        "-p",
+        "test_*.py"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 292517375
+    },
+    {
+      "record": "boundary.json",
+      "command": [
+        "python3",
+        "-B",
+        "core/tools/check_product_boundary.py"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 451830250
+    }
+  ],
+  "reused": "Unchanged Storage/Persistence tests at5a9704610; same3 actualSQL plans verified byhash; runtimecount selectedatV3; content/history source unchanged",
+  "limits": "Native blockedOSIO notinterrupted; up to255 freecredits unused behindslowhead; no performance claim before sealed sample"
+}

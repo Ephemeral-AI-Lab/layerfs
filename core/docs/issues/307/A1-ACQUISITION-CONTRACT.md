@@ -582,3 +582,9 @@ ordinary read progress. Canonical demand is one atomic scalar; worker-local
 producer access does not add a growing index or helper. Final publication,
 ownership, durability and bounds remain. V1regressions and its separate counts
 are retained at5a9704610; V2must establish its own time/allocation/counter result.
+
+
+The final [admission refinement](INIT-STREAMING-REFILL-PLAN-20261007.md) refills
+512aggregate slots once at most256remain. It leaves the coalescing/error/demand
+and final-publication contracts intact. Productive refill counts are distinct
+from SQLread units; unused slack behind a slow canonical head is explicit.

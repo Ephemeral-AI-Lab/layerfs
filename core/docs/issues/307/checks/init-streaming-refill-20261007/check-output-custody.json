@@ -1,0 +1,89 @@
+{
+  "method": "lossless gzip; raw retained",
+  "files": [
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/boundary.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/boundary.stdout.gz",
+      "sha256": "7e388653598e949e0b81309f9ea02b67299f7cff41dcff12854eb6ae13a47992",
+      "bytes": 76
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/clippy.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/clippy.stdout.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/fmt.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/fmt.stdout.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/guard-self-tests.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/guard-self-tests.stdout.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/harness.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/harness.stdout.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/no-run.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/no-run.stdout.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/runtime.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/runtime.stdout.gz",
+      "sha256": "59e538318d0eb2101a1b8f079f0f7933de4bf7c50f18c444e0079d4ac6e1296d",
+      "bytes": 22283
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/boundary.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/boundary.stderr.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/clippy.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/clippy.stderr.gz",
+      "sha256": "e9109bb8b35913c846103ca4a12411e7f6499aae5d039ccf4cf492c78dea4a4a",
+      "bytes": 613
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/fmt.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/fmt.stderr.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/guard-self-tests.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/guard-self-tests.stderr.gz",
+      "sha256": "25490cb0fa82a5ea3f1cf2d04279081fd124310e9260a651bc6fdaab0e1fa3ac",
+      "bytes": 139
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/harness.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/harness.stderr.gz",
+      "sha256": "3c5f655749880fd12bcd27b0c47e727a9a731ff5b53244c89adfcfe2e90b43ba",
+      "bytes": 116
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/no-run.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/no-run.stderr.gz",
+      "sha256": "2866cdee8be716923899f3c93301c7acda1b3d9b147f7f0bc0d68a3519b56bfd",
+      "bytes": 2281
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-refill-20261007/runtime.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-refill-20261007/runtime.stderr.gz",
+      "sha256": "c839d4d579a7ae5fee7fcb62b1a34550a4169ee0bd2aea172236dd4ee7fa2ebe",
+      "bytes": 3027
+    }
+  ]
+}

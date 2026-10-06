@@ -196,3 +196,10 @@ is separate. Physical pages, peak journal, synchronization-call cost and phase
 residency remain unqualified. Greater-than-4 GiB native proof remains NOT_RUN. Capacity
 failure and a real quarantined Session are not exercised through Init. Application
 or daemon assembly, context, restart custody and S9 qualification remain open.
+
+
+The current coordinator refills admission in bounded bursts after at least half
+of its512slots become free. `file_admission_units` records productive refills.
+This reduces single-job queue transitions while retaining canonical-only release;
+a slow head can leave up to255credits unused until the threshold. Source and
+qualification remain separate in the [final refill selection](../issues/307/INIT-STREAMING-REFILL-PLAN-20261007.md).

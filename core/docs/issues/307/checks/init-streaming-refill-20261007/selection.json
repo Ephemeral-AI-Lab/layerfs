@@ -1,0 +1,70 @@
+{
+  "parent_source": "890a144ff5bf063e6c65001b5da2cfd2b5cfdae4",
+  "cases": [
+    {
+      "id": "phase7-sqlite-init-100-streaming-v3",
+      "status": "NOT_RUN",
+      "profile": "durable",
+      "fixture": "namespace-100-compact-v3",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-init-1000-streaming-v3",
+      "status": "NOT_RUN",
+      "profile": "durable",
+      "fixture": "namespace-1000-compact-v3",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-init-10000-streaming-v3",
+      "status": "NOT_RUN",
+      "profile": "durable",
+      "fixture": "namespace-10000",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-init-100000-streaming-v3",
+      "status": "NOT_RUN",
+      "profile": "durable",
+      "fixture": "namespace-100000",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-disposable-init-100-streaming-v3",
+      "status": "NOT_RUN",
+      "profile": "disposable",
+      "fixture": "namespace-100-compact-v3",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-disposable-init-1000-streaming-v3",
+      "status": "NOT_RUN",
+      "profile": "disposable",
+      "fixture": "namespace-1000-compact-v3",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-disposable-init-10000-streaming-v3",
+      "status": "NOT_RUN",
+      "profile": "disposable",
+      "fixture": "namespace-10000",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    },
+    {
+      "id": "phase7-sqlite-disposable-init-100000-streaming-v3",
+      "status": "NOT_RUN",
+      "profile": "disposable",
+      "fixture": "namespace-100000",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000
+    }
+  ],
+  "selection": "one fresh cold sample each at sealedV3; reuse qualified197dcontrols; allV1/V2failures retained; same workloads/cache/four constructors/fullfresh lifecycle;30scomplete/build19sproof;speed1.10/strictfinalallocation;15s diagnostic separately; final streaming correction, then retain candidate/restore incumbent if regressed"
+}
