@@ -260,3 +260,111 @@ fn root_window_index_work_ignores_unrelated_population() {
     assert_eq!(work[0][2], work[1][2]);
     assert!(work[1][1] <= work[0][1] + work[0][1] / 10);
 }
+
+#[test]
+fn independent_entries_share_executions_and_population_work_stays_indexed() {
+    let mut work = Vec::new();
+    for population in [2000_u64, 20000] {
+        let temp = Temp::new("acquisition-entry-index-work");
+        let handles = create(&temp, SqlitePersistenceProfile::Disposable);
+        let port = &handles.acquisition;
+        let owner = begin(&handles);
+        port.put_entries(owner, &[directory(None, b"", 0)]).unwrap();
+        let mut next = 1;
+        while next <= population {
+            let end = (next + 999).min(population);
+            let entries: Vec<_> = (next..=end).map(|n| file(n, n)).collect();
+            port.put_entries(owner, &entries).unwrap();
+            next = end + 1;
+        }
+        let entries: Vec<_> = (population + 1..=population + 32)
+            .map(|n| file(n, n))
+            .collect();
+        let before = handles.diagnostics().unwrap();
+        assert_eq!(
+            port.put_entries(owner, &entries).unwrap(),
+            (population + 1..=population + 32).collect::<Vec<_>>()
+        );
+        let after = handles.diagnostics().unwrap();
+        let delta = [
+            after.statements - before.statements,
+            after.vm_steps - before.vm_steps,
+            after.fullscan_steps - before.fullscan_steps,
+            after.sorts - before.sorts,
+            after.autoindex_rows - before.autoindex_rows,
+            after.reprepares - before.reprepares,
+        ];
+        println!("ENTRY_WINDOW_PROFILE population={population} [statements,vm_steps,fullscan,sorts,autoindex,reprepares]={delta:?}");
+        assert!(
+            delta[0] <= 8,
+            "independent entries execute per row: {delta:?}"
+        );
+        assert_eq!(&delta[3..], &[0, 0, 0]);
+        work.push(delta);
+    }
+    assert_eq!(work[0][0], work[1][0]);
+    assert_eq!(work[0][2], work[1][2]);
+    assert!(work[1][1] <= work[0][1] + work[0][1] / 10);
+}
+
+#[test]
+fn entry_refusal_order_and_full_unit_rollback_survive_execution_windows() {
+    use layerfs_storage::port::PersistenceError;
+    let temp = Temp::new("acquisition-entry-refusal-order");
+    let handles = create(&temp, SqlitePersistenceProfile::Disposable);
+    let port = &handles.acquisition;
+    let owner = begin(&handles);
+    port.put_entries(owner, &[directory(None, b"", 0), file(1, 1)])
+        .unwrap();
+    let before = port.work(owner).unwrap();
+    let prefix: Vec<_> = (2..=40).map(|n| file(n, n)).collect();
+    let mut changed = file(41, 1);
+    changed.native.as_mut().unwrap().evidence[0] ^= 1;
+    let mut invalid = file(42, 42);
+    invalid.kind = InodeKind::Directory;
+    let duplicate = file(1, 43);
+    let malformed = AcquisitionError::Persistence(PersistenceError::Malformed);
+    for (tail, expected) in [
+        (
+            vec![changed.clone(), invalid.clone()],
+            AcquisitionError::Changed { position: 41 },
+        ),
+        (
+            vec![invalid.clone(), changed.clone()],
+            AcquisitionError::Bounds,
+        ),
+        (vec![duplicate.clone(), changed.clone()], malformed.clone()),
+        (
+            vec![changed.clone(), duplicate.clone()],
+            AcquisitionError::Changed { position: 41 },
+        ),
+        (
+            vec![file(50, 50), file(50, 51), invalid.clone()],
+            malformed.clone(),
+        ),
+        (
+            vec![file(51, 51), file(52, 51), changed.clone()],
+            AcquisitionError::Changed { position: 41 },
+        ),
+    ] {
+        let mut entries = prefix.clone();
+        entries.extend(tail);
+        assert_eq!(port.put_entries(owner, &entries), Err(expected));
+        assert_eq!(port.work(owner).unwrap(), before);
+        assert_eq!(port.entries(owner, None, Limits::MAXIMUM).unwrap().len(), 2);
+        assert_eq!(
+            port.file_roots(owner, None, Limits::MAXIMUM).unwrap()[0].aliases,
+            0
+        );
+    }
+    // Fresh and existing aliases cross SQL windows, preserving the first path.
+    let mut entries = prefix;
+    entries.push(file(41, 2));
+    entries.push(file(42, 1));
+    let result = port.put_entries(owner, &entries).unwrap();
+    assert_eq!(&result[result.len() - 2..], &[2, 1]);
+    assert_eq!(
+        port.file_roots(owner, None, Limits::MAXIMUM).unwrap()[0].aliases,
+        1
+    );
+}

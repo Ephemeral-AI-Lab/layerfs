@@ -25,6 +25,9 @@ statement!(ADVANCE, "advance");
 statement!(RELEASE, "release");
 statement!(PUT_ENTRY, "put_entry");
 statement!(BIND_NATIVE, "bind_native");
+statement!(ENTRY_DEPENDENCIES, "entry_dependencies");
+statement!(PUT_ENTRIES, "put_entries");
+statement!(PUT_NATIVE, "put_native");
 statement!(UNPLACED_FIRST, "unplaced_first");
 statement!(UNPLACED_NEXT, "unplaced_next");
 statement!(PLACE_ENTRY, "place_entry");
@@ -43,7 +46,7 @@ statement!(ABANDONED, "abandoned");
 statement!(RELEASE_ABANDONED, "release_abandoned");
 
 /// Every shipped statement by name, in a fixed order, for plan inspection.
-pub(crate) const ALL: [(&str, &str); 25] = [
+pub(crate) const ALL: [(&str, &str); 28] = [
     ("begin", BEGIN),
     ("claim_epoch", CLAIM_EPOCH),
     ("owner", OWNER),
@@ -53,6 +56,9 @@ pub(crate) const ALL: [(&str, &str); 25] = [
     ("release", RELEASE),
     ("put_entry", PUT_ENTRY),
     ("bind_native", BIND_NATIVE),
+    ("entry_dependencies", ENTRY_DEPENDENCIES),
+    ("put_entries", PUT_ENTRIES),
+    ("put_native", PUT_NATIVE),
     ("unplaced_first", UNPLACED_FIRST),
     ("unplaced_next", UNPLACED_NEXT),
     ("place_entry", PLACE_ENTRY),

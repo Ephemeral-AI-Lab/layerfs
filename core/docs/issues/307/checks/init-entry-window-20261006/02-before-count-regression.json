@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-persistence",
+    "--test",
+    "acquisition_batching",
+    "independent_entries_share_executions",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "wall_timeout_s": 30.0,
+  "wall_ns": 2414268208,
+  "exit_code": 0,
+  "timeout": false,
+  "target": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006",
+  "construction_workers": 1
+}

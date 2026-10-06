@@ -2,7 +2,7 @@
 use super::accounting::{charge, entry_bytes, native_bytes, NATIVE_BYTES};
 use super::statements::{
     signed, unsigned, Failure, ADVANCE, BEGIN, BIND_NATIVE, CLAIM_EPOCH, COMPLETE_FILE,
-    PLACE_ENTRY, PUT_ENTRY, SET_DIRECTORY_ROOT,
+    PLACE_ENTRY, SET_DIRECTORY_ROOT,
 };
 use crate::backend::sqlite::prepared::Prepared;
 use crate::backend::{records::BackendError, Transaction};
@@ -84,70 +84,78 @@ pub(crate) fn put_entries(
     owner: Owner,
     entries: &[NewEntry],
 ) -> Result<Vec<u64>, Failure> {
-    let operation = signed(owner.operation)?;
+    super::entry_windows::append(tx, owner, entries)
+}
+
+/// Executes one dependency/refusal boundary in the original native-then-entry order.
+pub(crate) fn put_one(
+    native_statement: &mut Prepared<'_>,
+    entry_statement: &mut Prepared<'_>,
+    operation: i64,
+    entry: &NewEntry,
+) -> Result<(Option<u64>, i64, i64), Failure> {
     let (mut rows, mut bytes) = (0_i64, 0_i64);
-    let mut canonical = Vec::new();
-    let mut native_statement = tx.prepare(BIND_NATIVE)?;
-    let mut entry_statement = tx.prepare(PUT_ENTRY)?;
-    for entry in entries {
-        let parent = match entry.key.parent {
-            Some(parent) => signed(parent)?,
-            None => ROOT_PARENT,
-        };
-        let position = entry.position.map(signed).transpose()?;
-        let path = entry.native_path.as_deref();
-        let well_formed = match entry.kind {
-            InodeKind::Directory => path.is_some() && entry.native.is_none(),
-            InodeKind::RegularFile => path.is_some() && entry.native.is_some(),
-            InodeKind::Symlink => path.is_none() && entry.native.is_none(),
-        } && (entry.kind == InodeKind::Symlink) == entry.target_root.is_some()
-            && entry.key.parent.is_some() != (entry.position == Some(0))
-            && entry.key.parent.is_some() != entry.key.name.is_empty()
-            && (entry.key.parent.is_some() || entry.kind == InodeKind::Directory);
-        if !well_formed {
-            return Err(Failure::Bounds);
-        }
-        let mut first = None;
-        if let (Some(own), Some(native), Some(path)) = (entry.position, &entry.native, path) {
-            let (bound, created) = bind(&mut native_statement, operation, own, native, path)?;
-            first = Some(bound);
-            canonical.push(unsigned(bound)?);
-            if created {
-                rows += 1;
-                bytes += native_bytes(path);
-            }
-        }
-        // A regular file's path lives with its identity; only directories keep one.
-        let stored_path = path.filter(|_| entry.kind == InodeKind::Directory);
-        let unplaced = entry.native.filter(|_| entry.position.is_none());
-        let unplaced = unplaced.map(packed);
-        entry_statement.borrowed(
-            &[
-                &operation,
-                &parent,
-                &entry.key.name.as_slice(),
-                &position,
-                &i64::from(entry.kind.code()),
-                &first,
-                &entry.metadata_root.as_bytes().as_slice(),
-                &entry
-                    .target_root
-                    .as_ref()
-                    .map(|root| root.as_bytes().as_slice()),
-                &stored_path,
-                &unplaced.as_ref().map(|native| native.as_slice()),
-            ],
-            entry_bytes(entry) as u64 + 40,
-        )?;
-        rows += 1;
-        bytes += entry_bytes(entry);
+    let parent = match entry.key.parent {
+        Some(parent) => signed(parent)?,
+        None => ROOT_PARENT,
+    };
+    let position = entry.position.map(signed).transpose()?;
+    let path = entry.native_path.as_deref();
+    if !well_formed(entry) {
+        return Err(Failure::Bounds);
     }
-    charge(tx, owner, rows, bytes)?;
-    Ok(canonical)
+    let mut first = None;
+    if let (Some(own), Some(native), Some(path)) = (entry.position, &entry.native, path) {
+        let (bound, created) = bind(native_statement, operation, own, native, path)?;
+        first = Some(bound);
+
+        if created {
+            rows += 1;
+            bytes += native_bytes(path);
+        }
+    }
+    // A regular file's path lives with its identity; only directories keep one.
+    let stored_path = path.filter(|_| entry.kind == InodeKind::Directory);
+    let unplaced = entry.native.filter(|_| entry.position.is_none());
+    let unplaced = unplaced.map(packed);
+    entry_statement.borrowed(
+        &[
+            &operation,
+            &parent,
+            &entry.key.name.as_slice(),
+            &position,
+            &i64::from(entry.kind.code()),
+            &first,
+            &entry.metadata_root.as_bytes().as_slice(),
+            &entry
+                .target_root
+                .as_ref()
+                .map(|root| root.as_bytes().as_slice()),
+            &stored_path,
+            &unplaced.as_ref().map(|native| native.as_slice()),
+        ],
+        entry_bytes(entry) as u64 + 40,
+    )?;
+    rows += 1;
+    bytes += entry_bytes(entry);
+    Ok((first.map(unsigned).transpose()?, rows, bytes))
+}
+
+/// Shape validation before an individual entry's original attempted mutations.
+pub(crate) fn well_formed(entry: &NewEntry) -> bool {
+    let path = entry.native_path.as_deref();
+    (match entry.kind {
+        InodeKind::Directory => path.is_some() && entry.native.is_none(),
+        InodeKind::RegularFile => path.is_some() && entry.native.is_some(),
+        InodeKind::Symlink => path.is_none() && entry.native.is_none(),
+    }) && (entry.kind == InodeKind::Symlink) == entry.target_root.is_some()
+        && entry.key.parent.is_some() != (entry.position == Some(0))
+        && entry.key.parent.is_some() != entry.key.name.is_empty()
+        && (entry.key.parent.is_some() || entry.kind == InodeKind::Directory)
 }
 
 /// Device, inode and evidence as one stored value.
-fn packed(native: NativeIdentity) -> [u8; NATIVE_BYTES as usize] {
+pub(crate) fn packed(native: NativeIdentity) -> [u8; NATIVE_BYTES as usize] {
     let mut out = [0; NATIVE_BYTES as usize];
     out[..8].copy_from_slice(&native.device.to_be_bytes());
     out[8..16].copy_from_slice(&native.inode.to_be_bytes());

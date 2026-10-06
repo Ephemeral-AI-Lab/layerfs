@@ -1,0 +1,13 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/tools/check_product_boundary.py"
+  ],
+  "wall_timeout_s": 30.0,
+  "wall_ns": 506031041,
+  "exit_code": 0,
+  "timeout": false,
+  "target": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006",
+  "construction_workers": 1
+}

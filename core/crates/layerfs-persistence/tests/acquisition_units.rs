@@ -605,6 +605,7 @@ fn every_statement_is_an_indexed_search_and_window_work_ignores_population() {
     let port = &handles.acquisition;
     for (name, plan) in handles.explain_acquisition().unwrap() {
         println!("ACQUISITION_PLAN {name}: {plan:?}");
+        let entry_window = matches!(name, "entry_dependencies" | "put_entries" | "put_native");
         let root_window = matches!(name, "complete_file" | "set_directory_root");
         if root_window {
             assert!(
@@ -613,8 +614,13 @@ fn every_statement_is_an_indexed_search_and_window_work_ignores_population() {
             );
         }
         for line in &plan {
-            let constant_input =
-                root_window && matches!(line.as_str(), "SCAN 32 CONSTANT ROWS" | "SCAN roots");
+            let constant_input = (root_window
+                && matches!(line.as_str(), "SCAN 32 CONSTANT ROWS" | "SCAN roots"))
+                || (entry_window
+                    && matches!(
+                        line.as_str(),
+                        "SCAN 32 CONSTANT ROWS" | "SCAN input" | "SCAN source"
+                    ));
             assert!(
                 !line.starts_with("SCAN") || constant_input,
                 "{name} scans stored state: {line}"
@@ -650,7 +656,8 @@ fn every_statement_is_an_indexed_search_and_window_work_ignores_population() {
         );
         // A bound LIMIT the planner could read would re-prepare its statement
         // on every execution and let the plan follow the value.
-        for work in [written, read, removed] {
+        assert_eq!(&written[3..], &[0, 0, 0]);
+        for work in [read, removed] {
             assert_eq!(
                 &work[2..],
                 [0, 0, 0, 0],

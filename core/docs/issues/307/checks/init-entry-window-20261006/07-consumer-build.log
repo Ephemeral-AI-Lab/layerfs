@@ -1,0 +1,75 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling version_check v0.9.5
+   Compiling subtle v2.6.1
+   Compiling zeroize v1.9.0
+   Compiling semver v1.0.28
+   Compiling opaque-debug v0.3.1
+   Compiling getrandom v0.2.17
+   Compiling cpufeatures v0.2.17
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+   Compiling rand_core v0.6.4
+   Compiling rustc_version v0.4.1
+   Compiling generic-array v0.14.7
+   Compiling curve25519-dalek v4.1.3
+   Compiling snow v0.9.6
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling crypto-common v0.1.7
+   Compiling inout v0.1.4
+   Compiling block-buffer v0.10.4
+   Compiling universal-hash v0.5.1
+   Compiling cipher v0.4.4
+   Compiling digest v0.10.7
+   Compiling polyval v0.6.2
+   Compiling aead v0.5.2
+   Compiling ghash v0.5.1
+   Compiling chacha20 v0.9.1
+   Compiling ctr v0.9.2
+   Compiling aes v0.8.4
+   Compiling poly1305 v0.8.0
+   Compiling sha2 v0.10.9
+   Compiling blake2 v0.10.6
+   Compiling chacha20poly1305 v0.10.1
+   Compiling aes-gcm v0.10.3
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Finished `test` profile [optimized + debuginfo] target(s) in 17.83s
+  Executable unittests src/lib.rs (core/target/init-acquisition-fix-20261006/debug/deps/layerfs_project-cffae0e2b52819f6)
+  Executable tests/acquisition_custody.rs (core/target/init-acquisition-fix-20261006/debug/deps/acquisition_custody-de71bfa684e1c05f)
+  Executable tests/backed_acquisition.rs (core/target/init-acquisition-fix-20261006/debug/deps/backed_acquisition-56c879d1d2910153)
+  Executable tests/complete_root.rs (core/target/init-acquisition-fix-20261006/debug/deps/complete_root-7bc313d53b4b8645)
+  Executable tests/history_proof_memo.rs (core/target/init-acquisition-fix-20261006/debug/deps/history_proof_memo-63e0a379bb7f70d8)
+  Executable tests/init_memory.rs (core/target/init-acquisition-fix-20261006/debug/deps/init_memory-4dff77e098c7527d)
+  Executable tests/init_sqlite.rs (core/target/init-acquisition-fix-20261006/debug/deps/init_sqlite-a81263fb89d61840)
+  Executable tests/namespace_scaling.rs (core/target/init-acquisition-fix-20261006/debug/deps/namespace_scaling-9ba4bcc3e4bcccd6)
+  Executable unittests examples/acquisition_profile.rs (core/target/init-acquisition-fix-20261006/debug/examples/acquisition_profile-eb1d4e8c03d2f167)
+  Executable unittests examples/benchmark_history.rs (core/target/init-acquisition-fix-20261006/debug/examples/benchmark_history-25eeb0e283ed40d5)
+  Executable unittests examples/benchmark_init.rs (core/target/init-acquisition-fix-20261006/debug/examples/benchmark_init-458c4c4d44746f69)
+  Executable unittests examples/cause_namespace.rs (core/target/init-acquisition-fix-20261006/debug/examples/cause_namespace-7aedcb121d53d725)
+  Executable unittests examples/verify_history.rs (core/target/init-acquisition-fix-20261006/debug/examples/verify_history-902dc25e49e113ab)
+  Executable unittests examples/verify_namespace.rs (core/target/init-acquisition-fix-20261006/debug/examples/verify_namespace-bb9c33c4490085ee)
+  Executable unittests src/lib.rs (core/target/init-acquisition-fix-20261006/debug/deps/layerfs_sdk-a9ac2f7b76117cf8)
+  Executable tests/runtime.rs (core/target/init-acquisition-fix-20261006/debug/deps/runtime-0693fe70d77b0de3)
+  Executable tests/wire.rs (core/target/init-acquisition-fix-20261006/debug/deps/wire-23c7eeaa14dddada)
+  Executable unittests src/lib.rs (core/target/init-acquisition-fix-20261006/debug/deps/layerfs_storage-5e9a8d43227e1126)
+  Executable tests/codec_frames.rs (core/target/init-acquisition-fix-20261006/debug/deps/codec_frames-4c026ece6c3f0ecf)
+  Executable tests/decoded_group_retention.rs (core/target/init-acquisition-fix-20261006/debug/deps/decoded_group_retention-c30a4c9e49c06e73)
+  Executable tests/locator_pressure.rs (core/target/init-acquisition-fix-20261006/debug/deps/locator_pressure-850786723554273e)
+  Executable tests/object_key.rs (core/target/init-acquisition-fix-20261006/debug/deps/object_key-818fe01b5ebfaf70)
+  Executable tests/pack_cache_contract.rs (core/target/init-acquisition-fix-20261006/debug/deps/pack_cache_contract-88cca7b9685a4f6a)
+  Executable tests/pack_range_contract.rs (core/target/init-acquisition-fix-20261006/debug/deps/pack_range_contract-74621c8c161e9b79)
+  Executable tests/physical_formats.rs (core/target/init-acquisition-fix-20261006/debug/deps/physical_formats-ef4195a93e3eb456)
+  Executable tests/pooled_demand_work.rs (core/target/init-acquisition-fix-20261006/debug/deps/pooled_demand_work-37763a6a440484ab)
+  Executable tests/pooled_dependency_integrity.rs (core/target/init-acquisition-fix-20261006/debug/deps/pooled_dependency_integrity-e88cc6cd5a2e174a)
+  Executable tests/pooled_value_retention.rs (core/target/init-acquisition-fix-20261006/debug/deps/pooled_value_retention-f5cd11d434ed512d)
+  Executable tests/read_demand_custody.rs (core/target/init-acquisition-fix-20261006/debug/deps/read_demand_custody-1a1fb525d99edaa1)
+  Executable tests/read_pack_locality.rs (core/target/init-acquisition-fix-20261006/debug/deps/read_pack_locality-8204cf82ea5fec2e)
+  Executable tests/save_demand_locality.rs (core/target/init-acquisition-fix-20261006/debug/deps/save_demand_locality-568e8a85dbf5c34b)
+  Executable tests/selected_cache_bounds.rs (core/target/init-acquisition-fix-20261006/debug/deps/selected_cache_bounds-034a34927cec4b92)
+  Executable tests/selected_group_reads.rs (core/target/init-acquisition-fix-20261006/debug/deps/selected_group_reads-79baace56d7da732)
+  Executable tests/verified_pack_read.rs (core/target/init-acquisition-fix-20261006/debug/deps/verified_pack_read-fd00751c024b3b5f)

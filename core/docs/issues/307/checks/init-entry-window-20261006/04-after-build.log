@@ -1,0 +1,60 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+warning: unused import: `PUT_ENTRY`
+ --> crates/layerfs-persistence/src/backend/sqlite/acquisition/writes.rs:5:18
+  |
+5 |     PLACE_ENTRY, PUT_ENTRY, SET_DIRECTORY_ROOT,
+  |                  ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+error[E0308]: mismatched types
+   --> crates/layerfs-persistence/src/backend/sqlite/acquisition/writes.rs:147:5
+    |
+147 | /     match entry.kind {
+148 | |         InodeKind::Directory => path.is_some() && entry.native.is_none(),
+149 | |         InodeKind::RegularFile => path.is_some() && entry.native.is_some(),
+150 | |         InodeKind::Symlink => path.is_none() && entry.native.is_none(),
+151 | |     }
+    | |     ^- help: consider using a semicolon here
+    | |_____|
+    |       expected `()`, found `bool`
+
+error[E0277]: can't compare `&&bool` with `bool`
+   --> crates/layerfs-persistence/src/backend/sqlite/acquisition/writes.rs:152:42
+    |
+152 |     &&(entry.kind == InodeKind::Symlink) == entry.target_root.is_some()
+    |                                          ^^ no implementation for `&&bool == bool`
+    |
+    = help: the trait `PartialEq<bool>` is not implemented for `&&bool`
+help: consider removing the borrows
+    |
+152 -     &&(entry.kind == InodeKind::Symlink) == entry.target_root.is_some()
+152 +     (entry.kind == InodeKind::Symlink) == entry.target_root.is_some()
+    |
+
+error[E0502]: cannot borrow `input` as mutable because it is also borrowed as immutable
+   --> crates/layerfs-persistence/src/backend/sqlite/acquisition/entry_windows.rs:148:34
+    |
+119 |                 std::array::from_fn(|i| input[i].native.as_ref().map(|n| n.as_slice()));
+    |                                     --- ----- first borrow occurs due to use of `input` in closure
+    |                                     |
+    |                                     immutable borrow occurs here
+...
+148 |                 for slot in &mut input[count..] {
+    |                                  ^^^^^ mutable borrow occurs here
+...
+151 |                 drop(values);
+    |                      ------ immutable borrow later used here
+
+Some errors have detailed explanations: E0277, E0308, E0502.
+For more information about an error, try `rustc --explain E0277`.
+warning: `layerfs-persistence` (lib) generated 1 warning (1 duplicate)
+error: could not compile `layerfs-persistence` (lib) due to 3 previous errors; 1 warning emitted
+warning: build failed, waiting for other jobs to finish...
+warning: `layerfs-persistence` (lib test) generated 1 warning
+error: could not compile `layerfs-persistence` (lib test) due to 3 previous errors; 1 warning emitted

@@ -1,0 +1,19 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "core/tools",
+    "-p",
+    "test_*.py"
+  ],
+  "wall_timeout_s": 30.0,
+  "wall_ns": 292405250,
+  "exit_code": 0,
+  "timeout": false,
+  "target": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/init-acquisition-fix-20261006",
+  "construction_workers": 1
+}

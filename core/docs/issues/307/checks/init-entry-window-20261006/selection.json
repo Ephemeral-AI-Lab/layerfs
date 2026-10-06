@@ -1,0 +1,17 @@
+{
+  "kind":"prospective count diagnostic and public contract proof",
+  "before_source":"aed249da2fb2950edc14f516f8754096040027a5",
+  "before_product":"4c03b41bf5fcc684df3a707d223ad2b9166396f8",
+  "mechanism":"32-slot independent-entry insert inputs with indexed dependency classification; original per-row execution at dependency/refusal boundaries",
+  "profiles":["Durable","Disposable"],
+  "population_cases":[2000,20000],
+  "observed_window_rows":32,
+  "observations":["SQL executions","VM steps","constant-input fullscan steps","sorts","autoindex rows","reprepares","indexed EXPLAIN QUERY PLAN","ordered typed refusal","full-unit rollback","canonical aliases","exact engine logical charges"],
+  "test_wall_cap_s":60,
+  "build_wall_cap_s":90,
+  "cache":"uncontrolled; counters and functional proof only; numerical speed/RSS admission INELIGIBLE",
+  "historical_failures":"retained unchanged; incorrect partial exact filter ran zero bodies; corrected count regression FAILED at 68 executions/5353 VM",
+  "unavailable":["pager/journal/device I/O","phase and system RSS","sustained rate"],
+  "construction_workers_env":1,
+  "performance":"register changed-source affected checkpoint separately before sampling; unchanged reference receipts reused by identity"
+}

@@ -196,3 +196,49 @@ The source-qualified plans, public atomicity/alias proofs and before/after unit
 diagnostics are retained under [execution-fix checks](../issues/307/checks/init-acquisition-fix-20261006/).
 The separately registered revised-source sample retains its actual partial result;
 no diagnostic timing is promoted into speed acceptance.
+
+## Independent entry execution inputs (2026-10-06)
+
+The revised provider groups up to32 independent observed entries into fixed
+`VALUES` inputs. Its indexed dependency statement checks the parent/name key,
+directory-position index and both native keys in the same transaction as the
+inserts. Within-input duplicate keys, directory positions, native identities or
+native canonical positions end the prefix. A malformed row also ends it. Existing
+rows and aliases end the independent prefix at the earliest input slot; that row
+executes once in the original native-upsert/entry-insert order. This is a planned
+dependency boundary, before a mutation attempt, not replay after an error.
+
+A proven independent prefix uses one native INSERT and one entry INSERT, without
+RETURNING rows or assuming engine iteration/return order. Its canonical native
+positions are the original input positions. Only entirely new native identities
+are grouped; existing identities retain the original evidence/alias/path rules.
+The same short public unit encloses every input and dependency row and applies
+its exact logical charge once. A refusal rolls back the entire unit. Existing
+owner/epoch, abandoned custody and unknown-session quarantine checks are unchanged.
+There is no schema, profile, index, public limit, database or constructor change.
+
+For K input entries and N stored indexed rows, classifier/insertion work is
+O(K logN) plus actual key/BLOB/index/page work. At most32 candidate entries and
+four sets of at most32 borrowed keys are resident; repeated dependency entries
+can classify up to32 candidates each, a fixed factor rather than a growing
+population scan. SQL scans only fixed input rows. Packed native evidence is60
+bytes per input; names, paths and object IDs stay borrowed through binding.
+SQLite's own binding/materialization copies and journal/page costs remain real.
+Public output positions remain bounded by the unchanged4096-row write unit.
+
+Plans and actual runtime counters, ordered-refusal/rollback proofs and final
+component qualification are retained under
+[entry-window checks](../issues/307/checks/init-entry-window-20261006/selection.json).
+This source description establishes no complete-operation speed, phase RSS,
+physical-I/O or sustained-rate result. Historical speed FAILs remain unchanged.
+
+The final real-Store profile for32 fresh regular files is7 statements/7828 VM,
+zero measured fullscan/sort/autoindex/reprepare at both2000 and20000 stored rows.
+The predecessor unit used68 statements/5353 VM. The extra indexed preflight
+raises VM work46.236% while reducing execution count89.706%; speed acceptance
+therefore depends on the separately registered complete-operation checkpoint.
+All102 provider and157 Project/Storage/SDK test bodies pass; both-platform
+changed-scope no-run/Clippy, source boundary, formatting and40 tool tests pass.
+The changed provider executes on macOS; Linux compilation establishes no global
+Store runtime support. Exact failures/check budgets and custody limits remain
+in the linked check folder.
