@@ -1,0 +1,18 @@
+{
+  "status": "POSTED",
+  "issue": 307,
+  "repo": "Ephemeral-AI-Lab/layerfs",
+  "s7": {
+    "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6016874942",
+    "body_sha256": "7eda7be9a78a5b9ce1c3bbd968753b24798915b46d89196dd318933dc6d04e19"
+  },
+  "s9": {
+    "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6016875520",
+    "body_sha256": "bf047e3d82266a04b25a2541dbe8d7b6b9303932845319c2287b744948694487"
+  },
+  "authorization": "explicit owner local commit/issue update instruction; no push/release/deployment",
+  "commands": [
+    "gh issue comment307 --repo Ephemeral-AI-Lab/layerfs --body-file /tmp/layerfs-cluster-one-regression-s7-20261006.md",
+    "gh issue comment307 --repo Ephemeral-AI-Lab/layerfs --body-file /tmp/layerfs-cluster-one-regression-s9-20261006.md"
+  ]
+}

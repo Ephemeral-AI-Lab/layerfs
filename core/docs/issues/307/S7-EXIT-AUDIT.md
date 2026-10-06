@@ -262,3 +262,16 @@ reservation/high-water/freelist/range and sustained engine acceptance remain ope
 S7 stays CHECKPOINT/unchecked. E1–E4 remain open at their full required scopes.
 
 [Exact result, source/checks/LOC, retained outcomes and next-ready work](INIT-ENTRY-WINDOW-RESULTS-20261006.md).
+
+## Restored Monolithic regression checkpoint, 2026-10-06
+
+Source `7878bbbb40b2d162e03dcb6e4e43da7b63d5b5e4` restores retained9b product
+behavior and withdraws the payload format without changing S7 implementation.
+The [full same-profile cluster-one-end matrix](CLUSTER-ONE-END-REGRESSION-RESULTS-20261006.md)
+runs all eight public Project Init cases:5/8 latency screens PASS,0/8 strict
+allocation/joint PASS. Every root/sample proof, cold-content attestation, cleanup
+and30/19s bound PASS. The correct control is197d2fb7d public Project, with
+original #302 candidate observations reused after exact identity/closure audit;
+old7edddb competitive results stay separate. This is component evidence only.
+S7 remains incomplete and unchecked; no full runtime/residency/flow acceptance
+or reopening of closed S5/S6 follows. No further layout redesign is selected.

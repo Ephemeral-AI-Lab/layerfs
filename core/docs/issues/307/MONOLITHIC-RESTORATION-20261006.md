@@ -62,3 +62,8 @@ same-profile latency/allocation versus these controls. Speed is
 allowance is invented. Show raw growth/deltas/percentages and speed/storage separately;
 joint PASS requires every required condition. Keep the older competitive gate
 separate and never relabel its historical failures.
+
+Completed at restored source7878bbbb4: all eight cases ran. See the
+[final report](CLUSTER-ONE-END-REGRESSION-RESULTS-20261006.md)
+for exact five latency PASS, eight storage FAIL, all correctness/cache/cleanup/limit
+PASS, and the explicit stop at the owner-requested review boundary.

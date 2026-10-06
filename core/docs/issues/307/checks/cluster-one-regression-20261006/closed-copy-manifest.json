@@ -1,0 +1,582 @@
+{
+  "status": "PASS",
+  "method": "full closed append-only raw manifests rehashed, ordinary independent byte copies including stores and immutable binaries, every copy hash rechecked",
+  "files": [
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100-cluster-one-regression-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100-cluster-one-regression-v1/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100-cluster-one-regression-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100-cluster-one-regression-v1/verifier.stdout",
+      "sha256": "a32c8277e8abc04390ebba2847145307753df7d2bb376059fff0cc0f153b3763",
+      "bytes": 387
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100-cluster-one-regression-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100-cluster-one-regression-v1/driver.stdout",
+      "sha256": "5e8dbf246feba2e172eba32530c9384982b2c487aad643012c1dee043afec636",
+      "bytes": 279
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100-cluster-one-regression-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100-cluster-one-regression-v1/cold.stdout",
+      "sha256": "c1bf0e02e05b32c94507d1dc199d1e947774e5126ccbcc1b7ddd5728990233d6",
+      "bytes": 332
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100-cluster-one-regression-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100-cluster-one-regression-v1/driver.stderr",
+      "sha256": "24feb905016ee56ff1ef95130ba4b58b7aedb4bc530b1a3b16e01b3ef8dbde83",
+      "bytes": 8680
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100-cluster-one-regression-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100-cluster-one-regression-v1/cold.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100-cluster-one-regression-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100-cluster-one-regression-v1/verifier.stderr",
+      "sha256": "d76aa0600bacac5be5dd103f3f51e98c13cad82e15cd068cb60eca2835ad6fa6",
+      "bytes": 120
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100-cluster-one-regression-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100-cluster-one-regression-v1/build.stderr",
+      "sha256": "3fea758c8e3fa23607842accf9060fbf6776a4e61aad0e93fe42779fd17d202d",
+      "bytes": 786
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100-cluster-one-regression-v1-candidate/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100-cluster-one-regression-v1/store.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100-cluster-one-regression-v1-candidate/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100-cluster-one-regression-v1/store.sqlite-shm",
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "bytes": 32768
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100-cluster-one-regression-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100-cluster-one-regression-v1/manifest.json",
+      "sha256": "929210eee3691cab98c81f3de0674b4744e1cc225f0b78a4d10b2aa9ac7b4808",
+      "bytes": 1666
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100-cluster-one-regression-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100-cluster-one-regression-v1/store.sqlite",
+      "sha256": "2ed018ee5234c419636ed3bd64402946d3da9f888ce4dd88b737286d86fb3138",
+      "bytes": 5271552
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100-cluster-one-regression-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100-cluster-one-regression-v1/receipt.json",
+      "sha256": "83577f9b2df5dce4707102d490acb8b9c4c8978a08e50d657377bf78f6c6a2e4",
+      "bytes": 18588
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-1000-cluster-one-regression-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-1000-cluster-one-regression-v1/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-1000-cluster-one-regression-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-1000-cluster-one-regression-v1/verifier.stdout",
+      "sha256": "3e4cfe2f97847d03108054027d8db8a4260436c8e5d6844ea33e69b10a576c4d",
+      "bytes": 391
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-1000-cluster-one-regression-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-1000-cluster-one-regression-v1/driver.stdout",
+      "sha256": "99c8661035d4044f0596a75febf308e7fa1627056d69872750d8e3b294c56db0",
+      "bytes": 280
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-1000-cluster-one-regression-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-1000-cluster-one-regression-v1/cold.stdout",
+      "sha256": "9f0b1721319a0a1c0746cffe87bb1ce27236bc111c540c31885588765fea9148",
+      "bytes": 344
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-1000-cluster-one-regression-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-1000-cluster-one-regression-v1/driver.stderr",
+      "sha256": "6ebf2752693a0b40b1dbf98e7408e0b481b51d15036a3a5c807662ac39dd02c8",
+      "bytes": 8746
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-1000-cluster-one-regression-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-1000-cluster-one-regression-v1/cold.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-1000-cluster-one-regression-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-1000-cluster-one-regression-v1/verifier.stderr",
+      "sha256": "a5d84a2491c400d84e9113a6a31366efcf23b1cb110c2056b3ee5f7d56b79add",
+      "bytes": 123
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-1000-cluster-one-regression-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-1000-cluster-one-regression-v1/build.stderr",
+      "sha256": "13b7e9605a7803dfdaa018ebc06fd687a2675c67165b3f17e8cf75f4b5ba483c",
+      "bytes": 520
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-1000-cluster-one-regression-v1-candidate/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-1000-cluster-one-regression-v1/store.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-1000-cluster-one-regression-v1-candidate/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-1000-cluster-one-regression-v1/store.sqlite-shm",
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "bytes": 32768
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-1000-cluster-one-regression-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-1000-cluster-one-regression-v1/manifest.json",
+      "sha256": "1a791e3f11f78f0eb3ae636a0e2cb26e5f3c0f656d7dae064fce90d7fea87bb9",
+      "bytes": 1667
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-1000-cluster-one-regression-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-1000-cluster-one-regression-v1/store.sqlite",
+      "sha256": "62966f096fde2de6e57dce2d8804985ffd9584ce1cf900c8757c33e51151fa2e",
+      "bytes": 20889600
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-1000-cluster-one-regression-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-1000-cluster-one-regression-v1/receipt.json",
+      "sha256": "7627c8095b2ad19d45a82695d11064f108eb30391e4a9fa935a49a73455dc56a",
+      "bytes": 18648
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-10000-cluster-one-regression-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-10000-cluster-one-regression-v1/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-10000-cluster-one-regression-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-10000-cluster-one-regression-v1/verifier.stdout",
+      "sha256": "ac928e20282f29b9d9395f85b6cdc23e77c798331a40e638e03c84efe6797f65",
+      "bytes": 397
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-10000-cluster-one-regression-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-10000-cluster-one-regression-v1/driver.stdout",
+      "sha256": "603c9cb5edfa9dfdf4c88fc645b9365a8a967da41bcf3892fb11a3f249edc678",
+      "bytes": 284
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-10000-cluster-one-regression-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-10000-cluster-one-regression-v1/cold.stdout",
+      "sha256": "31412a670eba47f7aa704c9cb540cd0999fccc706692d8bb50dee5da170e5669",
+      "bytes": 356
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-10000-cluster-one-regression-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-10000-cluster-one-regression-v1/driver.stderr",
+      "sha256": "c0b4da1e8c8aae7f09fad76dac31f7e04baac0f2e7ab4eb9ff97cae1a4e18261",
+      "bytes": 8865
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-10000-cluster-one-regression-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-10000-cluster-one-regression-v1/cold.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-10000-cluster-one-regression-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-10000-cluster-one-regression-v1/verifier.stderr",
+      "sha256": "3b02fd4b1f2831e300c7abd39fe1e742cd03921f43ff3f4f153f34e63c32de91",
+      "bytes": 126
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-10000-cluster-one-regression-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-10000-cluster-one-regression-v1/build.stderr",
+      "sha256": "13b7e9605a7803dfdaa018ebc06fd687a2675c67165b3f17e8cf75f4b5ba483c",
+      "bytes": 520
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-10000-cluster-one-regression-v1-candidate/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-10000-cluster-one-regression-v1/store.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-10000-cluster-one-regression-v1-candidate/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-10000-cluster-one-regression-v1/store.sqlite-shm",
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "bytes": 32768
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-10000-cluster-one-regression-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-10000-cluster-one-regression-v1/manifest.json",
+      "sha256": "c69413e6ad8e1e14437ca503e78457fcc6c54ea20dd80e9c2e25f43eea5c9888",
+      "bytes": 1668
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-10000-cluster-one-regression-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-10000-cluster-one-regression-v1/store.sqlite",
+      "sha256": "591f565d74397b54a5f44630d7bbfcb594bd213a0fd369f2b9f3ca59de4640a7",
+      "bytes": 308281344
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-10000-cluster-one-regression-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-10000-cluster-one-regression-v1/receipt.json",
+      "sha256": "522ad58706ad35a6d15248ba357b40d0da36ce9386693013a74103c4e7c11824",
+      "bytes": 18627
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100000-cluster-one-regression-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100000-cluster-one-regression-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/verifier.stdout",
+      "sha256": "9df738af867a71c17004ffe56f91743897901d86bcc122fd13da21da83cbca55",
+      "bytes": 400
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100000-cluster-one-regression-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/driver.stdout",
+      "sha256": "3226ffb0317817afd74eb2f18143762973b3e6578b46d2feae748caed8062a7d",
+      "bytes": 287
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100000-cluster-one-regression-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/cold.stdout",
+      "sha256": "6dcc3a9f628bcebe155d84066d2ceee43afba71b5fa61be12650e99e2e9f4a78",
+      "bytes": 366
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100000-cluster-one-regression-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/driver.stderr",
+      "sha256": "6847b57601fb9c65d6030b0c0ade83e225bd3ff295e9c460e31eb503cef62161",
+      "bytes": 8937
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100000-cluster-one-regression-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/cold.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100000-cluster-one-regression-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/verifier.stderr",
+      "sha256": "bd9c312560fddaac4362737cdb149be7381d9814349093c9f172da42c5007c72",
+      "bytes": 129
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100000-cluster-one-regression-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/build.stderr",
+      "sha256": "13b7e9605a7803dfdaa018ebc06fd687a2675c67165b3f17e8cf75f4b5ba483c",
+      "bytes": 520
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100000-cluster-one-regression-v1-candidate/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/store.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100000-cluster-one-regression-v1-candidate/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/store.sqlite-shm",
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "bytes": 32768
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100000-cluster-one-regression-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/manifest.json",
+      "sha256": "b47ac50ddab82972d666136e2d6e58e099b1a6ec17526277e2192e7152f5b527",
+      "bytes": 1668
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100000-cluster-one-regression-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/store.sqlite",
+      "sha256": "d3993196f33161a8fc8224eb9ad33b1cb1ccbae048acf6486b645a2b21ee7221",
+      "bytes": 551337984
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-init-100000-cluster-one-regression-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/receipt.json",
+      "sha256": "0c4635061bd4f7ec9d6c66140d95a22d8ded85d87ea439427a322b3abb5ac91d",
+      "bytes": 18685
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100-cluster-one-regression-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100-cluster-one-regression-v1/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100-cluster-one-regression-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100-cluster-one-regression-v1/verifier.stdout",
+      "sha256": "a32c8277e8abc04390ebba2847145307753df7d2bb376059fff0cc0f153b3763",
+      "bytes": 387
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100-cluster-one-regression-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100-cluster-one-regression-v1/driver.stdout",
+      "sha256": "c92636ff61aa1b13d660965a7bc7ea16dca723e537f2569479f2243c1b9d5da4",
+      "bytes": 276
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100-cluster-one-regression-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100-cluster-one-regression-v1/cold.stdout",
+      "sha256": "c222c5964a034649e5f5a0fd4200cab7c230c6dcb5f70c6f4beef20cde07bf4f",
+      "bytes": 332
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100-cluster-one-regression-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100-cluster-one-regression-v1/driver.stderr",
+      "sha256": "9fa4361d54334e1740721d4df30495dd140eee4988ed8dc4a0ac93a4a2103d0d",
+      "bytes": 8672
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100-cluster-one-regression-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100-cluster-one-regression-v1/cold.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100-cluster-one-regression-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100-cluster-one-regression-v1/verifier.stderr",
+      "sha256": "d76aa0600bacac5be5dd103f3f51e98c13cad82e15cd068cb60eca2835ad6fa6",
+      "bytes": 120
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100-cluster-one-regression-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100-cluster-one-regression-v1/build.stderr",
+      "sha256": "dc1ade067140fa0d6c551a72d14b85c973daa522b7e73a6faabad82bd09f3dbb",
+      "bytes": 520
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100-cluster-one-regression-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100-cluster-one-regression-v1/manifest.json",
+      "sha256": "a658e0765f17d180b392287c6985a337c7be5bd5276d9e29b76a0acfdd1dfadf",
+      "bytes": 1394
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100-cluster-one-regression-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100-cluster-one-regression-v1/store.sqlite",
+      "sha256": "00fc620387458ea0a1cff7fe877af1bb4905e14ffe552d1ef274ae9af849956c",
+      "bytes": 5271552
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100-cluster-one-regression-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100-cluster-one-regression-v1/receipt.json",
+      "sha256": "1d25442c9b2e733a2ffcd972e9df4d76af1f4d6c2e60f008b660376622d538b3",
+      "bytes": 18054
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-1000-cluster-one-regression-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-1000-cluster-one-regression-v1/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-1000-cluster-one-regression-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-1000-cluster-one-regression-v1/verifier.stdout",
+      "sha256": "3e4cfe2f97847d03108054027d8db8a4260436c8e5d6844ea33e69b10a576c4d",
+      "bytes": 391
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-1000-cluster-one-regression-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-1000-cluster-one-regression-v1/driver.stdout",
+      "sha256": "cf10cc8cd71a1430304e041c9d4ff6d8decb23994a7405078d613c7617db82c3",
+      "bytes": 280
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-1000-cluster-one-regression-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-1000-cluster-one-regression-v1/cold.stdout",
+      "sha256": "20eaad7be04fefc511012f10e64da724dd55355b7ef4a4819b14e49f58075542",
+      "bytes": 344
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-1000-cluster-one-regression-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-1000-cluster-one-regression-v1/driver.stderr",
+      "sha256": "4d0fc4d7becbb8e544c342f3ab77deab312f6d56785499b5cdc2ae37da532208",
+      "bytes": 8734
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-1000-cluster-one-regression-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-1000-cluster-one-regression-v1/cold.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-1000-cluster-one-regression-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-1000-cluster-one-regression-v1/verifier.stderr",
+      "sha256": "a5d84a2491c400d84e9113a6a31366efcf23b1cb110c2056b3ee5f7d56b79add",
+      "bytes": 123
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-1000-cluster-one-regression-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-1000-cluster-one-regression-v1/build.stderr",
+      "sha256": "13b7e9605a7803dfdaa018ebc06fd687a2675c67165b3f17e8cf75f4b5ba483c",
+      "bytes": 520
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-1000-cluster-one-regression-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-1000-cluster-one-regression-v1/manifest.json",
+      "sha256": "3ddc648307f7b2b3f6667fdd4a227f89215c085a9a2bdece1ff8629eb4309c0e",
+      "bytes": 1395
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-1000-cluster-one-regression-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-1000-cluster-one-regression-v1/store.sqlite",
+      "sha256": "14f9c644897688f161b7cdb96cb2b9257287de37529647abf69774d55912d794",
+      "bytes": 20897792
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-1000-cluster-one-regression-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-1000-cluster-one-regression-v1/receipt.json",
+      "sha256": "648982658fcb256c9cd64fba27d73beeac60f2faf4a09b5e547cb5b1e1caa7a1",
+      "bytes": 18123
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-10000-cluster-one-regression-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-10000-cluster-one-regression-v1/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-10000-cluster-one-regression-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-10000-cluster-one-regression-v1/verifier.stdout",
+      "sha256": "ac928e20282f29b9d9395f85b6cdc23e77c798331a40e638e03c84efe6797f65",
+      "bytes": 397
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-10000-cluster-one-regression-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-10000-cluster-one-regression-v1/driver.stdout",
+      "sha256": "9d7fcde588e72ee3bf5e5e3040015d9cea40e779e9af3685f4cebdd3d3185a22",
+      "bytes": 284
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-10000-cluster-one-regression-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-10000-cluster-one-regression-v1/cold.stdout",
+      "sha256": "8d7cab6b91781dabf79e87e1dd22105546bc7fa8d4065a4fde3c26c28ae355e6",
+      "bytes": 364
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-10000-cluster-one-regression-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-10000-cluster-one-regression-v1/driver.stderr",
+      "sha256": "fe05635c8ea2288e94206727d5552973c177b2cb802962e1471e2066a8bcce1c",
+      "bytes": 8852
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-10000-cluster-one-regression-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-10000-cluster-one-regression-v1/cold.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-10000-cluster-one-regression-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-10000-cluster-one-regression-v1/verifier.stderr",
+      "sha256": "3b02fd4b1f2831e300c7abd39fe1e742cd03921f43ff3f4f153f34e63c32de91",
+      "bytes": 126
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-10000-cluster-one-regression-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-10000-cluster-one-regression-v1/build.stderr",
+      "sha256": "13b7e9605a7803dfdaa018ebc06fd687a2675c67165b3f17e8cf75f4b5ba483c",
+      "bytes": 520
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-10000-cluster-one-regression-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-10000-cluster-one-regression-v1/manifest.json",
+      "sha256": "fdd30106f2da5a18900575af2ae6b808347dca58f79082aa4ce8eb49f9bf7d30",
+      "bytes": 1396
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-10000-cluster-one-regression-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-10000-cluster-one-regression-v1/store.sqlite",
+      "sha256": "df361a53cb05adb0f0906b7783a44e29acfdb72e3f2c88ece1e3974abbf8dff3",
+      "bytes": 308264960
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-10000-cluster-one-regression-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-10000-cluster-one-regression-v1/receipt.json",
+      "sha256": "3f375cbde9ea32981892e99f4b2d978ab6228183283f79b1c184fd91a2015633",
+      "bytes": 18116
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100000-cluster-one-regression-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100000-cluster-one-regression-v1/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100000-cluster-one-regression-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100000-cluster-one-regression-v1/verifier.stdout",
+      "sha256": "9df738af867a71c17004ffe56f91743897901d86bcc122fd13da21da83cbca55",
+      "bytes": 400
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100000-cluster-one-regression-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100000-cluster-one-regression-v1/driver.stdout",
+      "sha256": "cfbce925d334f8aa22b0d60b5b3519ac4085fb1b1b20abbabaf7b4519bffdf28",
+      "bytes": 286
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100000-cluster-one-regression-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100000-cluster-one-regression-v1/cold.stdout",
+      "sha256": "5203e25220bc0c19ea7d8dcd77a66f3da83ab052d3054bf7c99548e06dd2c037",
+      "bytes": 378
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100000-cluster-one-regression-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100000-cluster-one-regression-v1/driver.stderr",
+      "sha256": "10b9ce56838ad7b45cc75fc27de6b9ca6c9b640638e0ff98533988e0347950d3",
+      "bytes": 8932
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100000-cluster-one-regression-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100000-cluster-one-regression-v1/cold.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100000-cluster-one-regression-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100000-cluster-one-regression-v1/verifier.stderr",
+      "sha256": "bd9c312560fddaac4362737cdb149be7381d9814349093c9f172da42c5007c72",
+      "bytes": 129
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100000-cluster-one-regression-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100000-cluster-one-regression-v1/build.stderr",
+      "sha256": "13b7e9605a7803dfdaa018ebc06fd687a2675c67165b3f17e8cf75f4b5ba483c",
+      "bytes": 520
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100000-cluster-one-regression-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100000-cluster-one-regression-v1/manifest.json",
+      "sha256": "4d8d3b809c9d6bc94a82d838e71b7a2bcebc9eff76ceeab59193dc814099e7bc",
+      "bytes": 1396
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100000-cluster-one-regression-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100000-cluster-one-regression-v1/store.sqlite",
+      "sha256": "9e943bef7902ae9ff2b9f248b2dc9e22537372726e05f19dcc0d1dda71ac96ee",
+      "bytes": 551313408
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-100000-cluster-one-regression-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-disposable-init-100000-cluster-one-regression-v1/receipt.json",
+      "sha256": "403efec54dda343104fffac64241f72482986d5bcef0a8e3d3340e6dc190062d",
+      "bytes": 18179
+    }
+  ]
+}

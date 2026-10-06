@@ -822,3 +822,13 @@ bounds change, and advance the source pin explicitly. Link new benchmark evidenc
 with its actual identity/status rather than editing historical receipts. Follow
 [root agent rules](AGENTS.md), [Core rules](core/AGENTS.md), and
 [documentation policy](docs/general/documentation-policy.md).
+
+### Restored Monolithic regression checkpoint, 2026-10-06
+
+The live S7/S9 product is restored to9b74ac035 behavior at7878bbbb4; the
+payload experiment is withdrawn. The [full eight-case same-profile comparison](core/docs/issues/307/CLUSTER-ONE-END-REGRESSION-RESULTS-20261006.md)
+uses original197d2fb7d public Project observations as cluster-one-end controls,
+not the earlier Service rows in the historical table above. Five latency screens
+pass; all eight strict allocation comparisons and joint gates fail. Correctness,
+cold-content attestation, cleanup and fixed limits pass throughout. Historical
+rows and their original competitive labels remain. S7/S8/S9 are incomplete.

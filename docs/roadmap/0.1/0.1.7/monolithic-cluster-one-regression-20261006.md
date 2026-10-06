@@ -56,3 +56,8 @@ No CI or aggregate pre-push wrapper, push, release or deployment. Maintain separ
 S7/S9 audits and #307 receipts; all three S7/S8/S9 milestones remain incomplete.
 Finish restoration plus the complete eight-case campaign, then stop at that reviewable
 boundary before another design or mechanism is proposed or implemented.
+
+Completed at restored source7878bbbb4: all eight cases ran. See the
+[final report](../../../../core/docs/issues/307/CLUSTER-ONE-END-REGRESSION-RESULTS-20261006.md)
+for exact five latency PASS, eight storage FAIL, all correctness/cache/cleanup/limit
+PASS, and the explicit stop at the owner-requested review boundary.

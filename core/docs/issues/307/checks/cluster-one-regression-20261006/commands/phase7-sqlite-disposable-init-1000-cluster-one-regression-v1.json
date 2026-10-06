@@ -1,0 +1,23 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/benchmark/fs-bench-pro/runner.py",
+    "run",
+    "--case",
+    "phase7-sqlite-disposable-init-1000-cluster-one-regression-v1",
+    "--arm",
+    "candidate",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-1000-cluster-one-regression-v1-candidate"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs",
+  "wall_timeout_s": 120,
+  "wall_ns": 1140155958,
+  "exit_code": 0,
+  "timed_out": false,
+  "output": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-20261006-phase7-sqlite-disposable-init-1000-cluster-one-regression-v1-candidate",
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe",
+  "candidate_source": "7878bbbb40b2d162e03dcb6e4e43da7b63d5b5e4",
+  "candidate_dirty_after": []
+}
