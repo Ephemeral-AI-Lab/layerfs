@@ -1,0 +1,126 @@
+{
+  "links": [
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "../../../../docs/roadmap/0.1/0.1.7/namespace-init-durable100-tail-20261006.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "../../../../docs/roadmap/0.1/0.1.7/namespace-init-durable100-prerequisites-20261006.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "checks/durable100-tail-results-20261006/setup-reference-reuse.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "checks/durable100-tail-results-20261006/ledger.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "checks/durable100-prerequisites-results-20261006/ledger.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "checks/durable100-cause-20261006/CAUSE-AND-CHECKS.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "checks/durable100-prerequisites-20261006/CAUSE-AND-CHECKS.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "checks/durable100-prerequisites-results-20261006/restoration.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "checks/durable100-prerequisites-results-20261006/restored-product-seal.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "../302/SQLITE-VFS-CAUSE-RESULTS.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "checks/durable100-cause-20261006/source-committed-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "checks/durable100-prerequisites-20261006/source-committed-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "checks/durable100-prerequisites-results-20261006/restoration-committed-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "checks/durable100-vfs-20261006/observer-committed-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "DURABLE100-VFS-RESULTS-20261006.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "DURABLE100-ACQUISITION-PLACEMENT-REVIEW-20261006.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-RESULTS-20261006.md",
+      "link": "DURABLE100-NEXT-LAYOUT-PROPOSAL-20261006.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-VFS-RESULTS-20261006.md",
+      "link": "checks/durable100-vfs-20261006/closure-and-postseals.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-VFS-RESULTS-20261006.md",
+      "link": "checks/durable100-vfs-20261006/complete-identities.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-VFS-RESULTS-20261006.md",
+      "link": "checks/durable100-vfs-20261006/raw/",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-VFS-RESULTS-20261006.md",
+      "link": "DURABLE100-ACQUISITION-PLACEMENT-REVIEW-20261006.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-ACQUISITION-PLACEMENT-REVIEW-20261006.md",
+      "link": "A1-ACQUISITION-CONTRACT.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-ACQUISITION-PLACEMENT-REVIEW-20261006.md",
+      "link": "../../../crates/layerfs-persistence/src/storage/acquisition/provider.rs",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/DURABLE100-ACQUISITION-PLACEMENT-REVIEW-20261006.md",
+      "link": "../../../crates/layerfs-storage/src/port/acquisition/contract.rs",
+      "exists": true
+    }
+  ],
+  "git_diff_check": 0,
+  "current_scope": "docs/examples/diagnostics; product tests reused at exact restored seal, no aggregate CI claim"
+}

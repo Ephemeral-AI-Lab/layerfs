@@ -1,0 +1,46 @@
+{
+  "environment": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_HISTORY_CURSOR_KEY": "declared fixture cursor 28 repeated32"
+  },
+  "kind": "separate corrected read-only proof after verifier configuration refusal",
+  "main_database_after_sha256": "39e0bbd30bd1be0456ddb6cd09d061c2e3614295469da472c1f484ca741ad648",
+  "main_database_before_sha256": "39e0bbd30bd1be0456ddb6cd09d061c2e3614295469da472c1f484ca741ad648",
+  "original_count_receipt_sha256": "d809b8736be39bd2ca58488274726ea6e65ff0b95270515791cb712b19a92fd0",
+  "original_proof_failure": "NotPresent: missing LAYERFS_HISTORY_CURSOR_KEY, failed before Store open",
+  "producer_replayed": false,
+  "proof": {
+    "budget_ns": 9500000000,
+    "child": {
+      "directories": 2,
+      "discovered_files": 100,
+      "manifest_bytes": 5000000,
+      "manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+      "metadata_attribute_waves": 5,
+      "paths": 102,
+      "root": "ca1c20f806277e3fb0447ef526a5ca8d298753d01667f501e8b58b6350cd86f1",
+      "sample_policy": "stride64-size-log2-endpoints-v1",
+      "sampled_bytes": 3354003,
+      "sampled_files": 53,
+      "status": "PASS",
+      "workers": 4
+    },
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/539bfca1fbdf9096856a7aa8a68a44d365d3a0c6bf2efefd060e1b1455c4d317/verify_namespace",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/store.sqlite",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/store.sqlite",
+      "ca1c20f806277e3fb0447ef526a5ca8d298753d01667f501e8b58b6350cd86f1",
+      "41414141414141414141414141414141",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/manifest.tsv",
+      "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+      "durable"
+    ],
+    "cpu_ns": 40950000,
+    "exit_code": 0,
+    "peak_rss_bytes": 25296896,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "timed_out": false,
+    "wall_ns": 26219959
+  },
+  "status": "PASS"
+}

@@ -1,0 +1,17 @@
+{
+  "files": {
+    "receipt.json": {
+      "bytes": 2355,
+      "sha256": "9fd073f7186f9810e69f28cf8b76b3f0a63673ad85c07fa27a9d0e5c96eb00c5"
+    },
+    "verifier.stderr": {
+      "bytes": 120,
+      "sha256": "d76aa0600bacac5be5dd103f3f51e98c13cad82e15cd068cb60eca2835ad6fa6"
+    },
+    "verifier.stdout": {
+      "bytes": 387,
+      "sha256": "a32c8277e8abc04390ebba2847145307753df7d2bb376059fff0cc0f153b3763"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

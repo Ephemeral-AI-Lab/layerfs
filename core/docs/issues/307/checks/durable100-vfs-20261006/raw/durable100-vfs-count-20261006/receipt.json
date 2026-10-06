@@ -1,0 +1,160 @@
+{
+  "admission_eligible": false,
+  "budgets_s": {
+    "build": 30,
+    "diagnostic": 15,
+    "proof": 9.5
+  },
+  "build": {
+    "budget_ns": 30000000000,
+    "child": null,
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "build",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--release",
+      "--locked",
+      "-p",
+      "layerfs-project",
+      "--example",
+      "durable_init_costs",
+      "--example",
+      "verify_namespace"
+    ],
+    "cpu_ns": 32783206000,
+    "exit_code": 0,
+    "peak_rss_bytes": 398065664,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "timed_out": false,
+    "wall_ns": 5587021708
+  },
+  "cache": "uncontrolled/instrumented; no numerical speed/RSS/rate admission",
+  "case": "namespace-100-compact-v3",
+  "competing_work": [
+    "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+  ],
+  "diagnostic_environment": {
+    "CARGO_TARGET_DIR": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/target",
+    "DYLD_INSERT_LIBRARIES": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/7f80d6d308eed57a0376accdd61644063033d2e28d4bf4e86b4af1860ab16072/durable100-init-vfs.dylib",
+    "LAYERFS_CAUSE_VFS_LOG": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/vfs.json",
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_INIT_VFS_EVENTS": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/events.json"
+  },
+  "driver": {
+    "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/74b2cc2b61d5b9525892898ac851eb4899bb0090cffa22fdf01c0e5078b7fe0a/durable_init_costs",
+    "sha256": "74b2cc2b61d5b9525892898ac851eb4899bb0090cffa22fdf01c0e5078b7fe0a"
+  },
+  "fixture": {
+    "case": "namespace-100-compact-v3",
+    "directories": 2,
+    "files": 100,
+    "logical_bytes": 5000000,
+    "manifest": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/manifest.tsv",
+    "manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+    "preparation_wall_ns": 4960667,
+    "profile": "core-sdk-init-fixture-v2",
+    "reused": true,
+    "route": "host-direct-sdk-v2",
+    "seed": 1,
+    "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/payload"
+  },
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "04db4f6e7264765d6c069ab71fbb49099c19f83385839cc35c6991cb7158ebb9",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "ddb50dfc46b0812877adb757b6ee6d06a922451c0864cfddc5d207aef0293ddb",
+    "product_seal": "e70c897eb4d7a2c62556c650efa63bd58860637596ba60718bfc960d430fdff0",
+    "source_commit": "593e259714967c9330f9d59199f9d091c9069ddf",
+    "source_dirty": false,
+    "source_tree": "19c662e0994bbd3e360e1e07d49e17910ca750b5"
+  },
+  "kind": "Durable100 current per-port VFS cause diagnostic",
+  "library": {
+    "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/7f80d6d308eed57a0376accdd61644063033d2e28d4bf4e86b4af1860ab16072/durable100-init-vfs.dylib",
+    "sha256": "7f80d6d308eed57a0376accdd61644063033d2e28d4bf4e86b4af1860ab16072"
+  },
+  "observer_build": {
+    "budget_ns": 30000000000,
+    "child": null,
+    "command": [
+      "clang",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-dynamiclib",
+      "core/benchmark/fs-bench-pro/diagnostics/sqlite_init_vfs_observer.c",
+      "-lsqlite3",
+      "-o",
+      "core/target/durable100-init-vfs.dylib"
+    ],
+    "cpu_ns": 176991000,
+    "exit_code": 0,
+    "peak_rss_bytes": 52166656,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "timed_out": false,
+    "wall_ns": 154005042
+  },
+  "orchestrator_sha256": "bb4255052c000b48247b00d36bede8353967d4a0039dfd31c1e369280995c28c",
+  "performance_samples": 0,
+  "product_seal": "44f07dd216a13d3103440b15b6d295a026ee80878f6e572e468855f27e2e74c5",
+  "proof": {
+    "budget_ns": 9500000000,
+    "child": null,
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/539bfca1fbdf9096856a7aa8a68a44d365d3a0c6bf2efefd060e1b1455c4d317/verify_namespace",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/store.sqlite",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/store.sqlite",
+      "ca1c20f806277e3fb0447ef526a5ca8d298753d01667f501e8b58b6350cd86f1",
+      "41414141414141414141414141414141",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/manifest.tsv",
+      "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+      "durable"
+    ],
+    "cpu_ns": 3606000,
+    "exit_code": 1,
+    "peak_rss_bytes": 1867776,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "timed_out": false,
+    "wall_ns": 5751375
+  },
+  "reason": "",
+  "run": {
+    "budget_ns": 15000000000,
+    "child": null,
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/74b2cc2b61d5b9525892898ac851eb4899bb0090cffa22fdf01c0e5078b7fe0a/durable_init_costs",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/payload",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/store.sqlite",
+      "durable",
+      "--vfs"
+    ],
+    "cpu_ns": 85488000,
+    "exit_code": 0,
+    "peak_rss_bytes": 40747008,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+    "timed_out": false,
+    "wall_ns": 1760474959
+  },
+  "sample_count": 1,
+  "source_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/durable100-tail-results-20261006/raw/phase7-sqlite-init-100-acquisition-v2/receipt.json",
+  "source_receipt_sha256": "81c9c11cd3173c07c4a5fdfd2b598b89153f90b0de0be05caf0ba228ba6ece5b",
+  "status": "FAIL",
+  "verifier": {
+    "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/539bfca1fbdf9096856a7aa8a68a44d365d3a0c6bf2efefd060e1b1455c4d317/verify_namespace",
+    "sha256": "539bfca1fbdf9096856a7aa8a68a44d365d3a0c6bf2efefd060e1b1455c4d317"
+  }
+}

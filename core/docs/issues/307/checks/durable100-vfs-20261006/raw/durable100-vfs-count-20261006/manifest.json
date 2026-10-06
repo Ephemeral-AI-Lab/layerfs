@@ -1,0 +1,61 @@
+{
+  "files": {
+    "build.stderr": {
+      "bytes": 915,
+      "sha256": "7f51ee60ed36c824607609c24a63cadab39cf0015bddb4875b53105994a90732"
+    },
+    "build.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "driver.stderr": {
+      "bytes": 9245,
+      "sha256": "f5dadf44c44eba1efe1a62e7837facfd069ac27285d63f80fe4d118ef9a59f85"
+    },
+    "driver.stdout": {
+      "bytes": 9965,
+      "sha256": "735ba40f2c47b36aa33a22718acb94cfd791ac251fd00de77e59801b90379bd3"
+    },
+    "events.json": {
+      "bytes": 14470,
+      "sha256": "2c4acd5b1746b7bd005378a7acf67621eb698e4d1d651d1980dfc42a41c24934"
+    },
+    "observer-build.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "observer-build.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "receipt.json": {
+      "bytes": 8029,
+      "sha256": "d809b8736be39bd2ca58488274726ea6e65ff0b95270515791cb712b19a92fd0"
+    },
+    "store.sqlite": {
+      "bytes": 5271552,
+      "sha256": "39e0bbd30bd1be0456ddb6cd09d061c2e3614295469da472c1f484ca741ad648"
+    },
+    "store.sqlite-shm": {
+      "bytes": 32768,
+      "sha256": "9443a1306933855256dff5056692511398a2b0a16b710439586e4fec678ea136"
+    },
+    "store.sqlite-wal": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "verifier.stderr": {
+      "bytes": 18,
+      "sha256": "7e0ec04fad0a87bb281688331258f6fc350a6a4296ab67ff60e0e9d1f0290f94"
+    },
+    "verifier.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "vfs.json": {
+      "bytes": 3671,
+      "sha256": "718c2fe5461db3cae7df8c5e787f7af6d38f9f877fbea834a9f237fa30e884e6"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

@@ -185,10 +185,20 @@ manifests, third-party and generated artifacts do not.
 | --- | --- | --- | --- |
 |9b74ac035 retained reservation fix|94495→94499 (+4)|65417→65417 (0)|159912→159916 (+4)|
 |3d40600be rejected experiment|94499→94497 (-2)|65417→65417 (0)|159916→159914 (-2)|
+|ee387232b exact restoration|94497→94499 (+2)|65417→65417 (0)|159914→159916 (+2)|
+|593e25971 observer/placement review|94499→94499 (0)|65417→65417 (0)|159916→159916 (0)|
 
 [First correction comparison](checks/durable100-cause-20261006/source-committed-loc.json)
 and [experiment comparison](checks/durable100-prerequisites-20261006/source-committed-loc.json)
 confirm committed trees. Restoration compares its first parent/final staged tree
 before committing and confirms afterward in the primary retained receipt and
-handoff. This is source-size accounting; no legacy retirement or algorithmic
+handoff; [restoration receipt](checks/durable100-prerequisites-results-20261006/restoration-committed-loc.json)
+and [observer receipt](checks/durable100-vfs-20261006/observer-committed-loc.json)
+confirm their trees. This is source-size accounting; no legacy retirement or algorithmic
 performance claim is inferred. All commits remain local and unpushed.
+
+The owner's subsequent **both** selection is completed in
+[current VFS findings](DURABLE100-VFS-RESULTS-20261006.md) and
+[placement review](DURABLE100-ACQUISITION-PLACEMENT-REVIEW-20261006.md).
+The [next layout proposal](DURABLE100-NEXT-LAYOUT-PROPOSAL-20261006.md) is reviewable
+and awaits a scope decision because the current case freezes Monolithic schema4.

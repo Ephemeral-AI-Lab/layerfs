@@ -1,0 +1,55 @@
+VFS_UNIT {"unit":"bootstrap","unit_id":1,"classes":[[4, 4228, 9666, 1, 4096, 19250, 1, 56750], [0, 0, 0, 41, 164832, 451419, 2, 9566917], [1, 8, 917, 2, 524, 56417, 1, 104042], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.policy","unit_id":2,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"begin","unit_id":3,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 2, 8240, 26875, 1, 3436792], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.signatures","unit_id":4,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"put_entries","unit_id":5,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 3, 12360, 588291, 1, 2127333], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"directories","unit_id":6,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"put_entries","unit_id":7,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 3, 12360, 40791, 1, 689042], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"directories","unit_id":8,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"put_entries","unit_id":9,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 14, 57680, 239917, 1, 656208], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"directories","unit_id":10,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.locate","unit_id":11,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.reserve","unit_id":12,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 1, 4120, 11666, 1, 519250], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.publish","unit_id":13,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 2, 8240, 34458, 1, 745291], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"jobs","unit_id":14,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"jobs","unit_id":15,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"jobs","unit_id":16,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.locate","unit_id":17,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.publish","unit_id":18,"classes":[[0, 0, 0, 1016, 4161536, 3548912, 1, 1527500], [1018, 4169728, 942272, 971, 4000520, 5012386, 2, 1922292], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"complete_files","unit_id":19,"classes":[[14, 57344, 16043, 0, 0, 0, 0, 0], [0, 0, 0, 10, 37112, 31498, 2, 1331249], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.locate","unit_id":20,"classes":[[8, 32768, 9833, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.publish","unit_id":21,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 241, 992920, 490290, 1, 925375], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.locate","unit_id":22,"classes":[[11, 45056, 19208, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.publish","unit_id":23,"classes":[[2, 8192, 4333, 0, 0, 0, 0, 0], [0, 0, 0, 47, 193640, 95458, 1, 692166], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"entries","unit_id":24,"classes":[[3, 12288, 17792, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"entries","unit_id":25,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"set_directory_roots","unit_id":26,"classes":[[1, 4096, 1625, 0, 0, 0, 0, 0], [0, 0, 0, 2, 8240, 8542, 1, 464417], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"entries","unit_id":27,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"file_roots","unit_id":28,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"entries","unit_id":29,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"file_roots","unit_id":30,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"discard","unit_id":31,"classes":[[1, 4096, 2875, 0, 0, 0, 0, 0], [0, 0, 0, 14, 57680, 33374, 1, 363167], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"release","unit_id":32,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 1, 4120, 6250, 1, 325041], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.locate","unit_id":33,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.value_groups","unit_id":34,"classes":[[1, 4096, 1584, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.value_groups","unit_id":35,"classes":[[1, 4096, 2000, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.reserve","unit_id":36,"classes":[[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 1, 4120, 3833, 1, 430709], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+VFS_UNIT {"unit":"storage.publish","unit_id":37,"classes":[[1, 4096, 1708, 0, 0, 0, 0, 0], [0, 0, 0, 13, 53560, 30876, 1, 619375], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}
+{"unit":"complete_init","calls":1,"statements":207,"vm_steps":87882,"returned_rows":1317,"fullscan_steps":155,"sorts":1,"reprepares":3,"write_commits":17,"statement_ns":40020794,"commit_ns":31094089,"unit_ns":0}
+{"unit":"begin","calls":1,"statements":4,"vm_steps":157,"returned_rows":2,"fullscan_steps":0,"sorts":0,"reprepares":1,"write_commits":1,"statement_ns":3635166,"commit_ns":3489208,"unit_ns":3671208}
+{"unit":"complete_files","calls":1,"statements":8,"vm_steps":6905,"returned_rows":102,"fullscan_steps":124,"sorts":0,"reprepares":0,"write_commits":1,"statement_ns":2072086,"commit_ns":1513750,"unit_ns":2084042}
+{"unit":"directories","calls":3,"statements":12,"vm_steps":152,"returned_rows":5,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":114960,"commit_ns":9959,"unit_ns":123083}
+{"unit":"discard","calls":1,"statements":7,"vm_steps":12025,"returned_rows":205,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":1,"statement_ns":912458,"commit_ns":412749,"unit_ns":918166}
+{"unit":"entries","calls":4,"statements":16,"vm_steps":2436,"returned_rows":208,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":300541,"commit_ns":11750,"unit_ns":348124}
+{"unit":"file_roots","calls":2,"statements":8,"vm_steps":786,"returned_rows":102,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":101877,"commit_ns":5043,"unit_ns":114750}
+{"unit":"jobs","calls":3,"statements":12,"vm_steps":1028,"returned_rows":103,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":385834,"commit_ns":11582,"unit_ns":412041}
+{"unit":"put_entries","calls":3,"statements":30,"vm_steps":28763,"returned_rows":12,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":3,"statement_ns":5690535,"commit_ns":4411292,"unit_ns":5798376}
+{"unit":"release","calls":1,"statements":5,"vm_steps":97,"returned_rows":3,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":1,"statement_ns":383002,"commit_ns":336583,"unit_ns":384792}
+{"unit":"set_directory_roots","calls":1,"statements":5,"vm_steps":614,"returned_rows":4,"fullscan_steps":31,"sorts":0,"reprepares":0,"write_commits":1,"statement_ns":664123,"commit_ns":485126,"unit_ns":666875}
+{"unit":"storage.locate","calls":5,"statements":15,"vm_steps":6872,"returned_rows":216,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":977209,"commit_ns":24585,"unit_ns":1132458}
+{"unit":"storage.policy","calls":1,"statements":3,"vm_steps":21,"returned_rows":1,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":24167,"commit_ns":3167,"unit_ns":41959}
+{"unit":"storage.publish","calls":5,"statements":54,"vm_steps":27453,"returned_rows":346,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":5,"statement_ns":22136171,"commit_ns":18212337,"unit_ns":25652542}
+{"unit":"storage.reserve","calls":2,"statements":8,"vm_steps":108,"returned_rows":2,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":2,"statement_ns":1068372,"commit_ns":978334,"unit_ns":1071626}
+{"unit":"storage.signatures","calls":1,"statements":3,"vm_steps":17,"returned_rows":0,"fullscan_steps":0,"sorts":1,"reprepares":0,"write_commits":0,"statement_ns":63959,"commit_ns":3876,"unit_ns":123167}
+{"unit":"storage.value_groups","calls":2,"statements":8,"vm_steps":50,"returned_rows":2,"fullscan_steps":0,"sorts":0,"reprepares":2,"write_commits":0,"statement_ns":66668,"commit_ns":4707,"unit_ns":69833}
+VFS_UNIT {"unit":"checkpoint","unit_id":38,"classes":[[0, 0, 0, 303, 1241088, 919985, 1, 960042], [303, 1241088, 278833, 0, 0, 0, 1, 546625], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]}

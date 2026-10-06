@@ -1,0 +1,151 @@
+{
+  "product_seal_actual": "44f07dd216a13d3103440b15b6d295a026ee80878f6e572e468855f27e2e74c5",
+  "matches_retained_reservation_only": true,
+  "binaries": [
+    {
+      "role": "driver",
+      "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/74b2cc2b61d5b9525892898ac851eb4899bb0090cffa22fdf01c0e5078b7fe0a/durable_init_costs",
+      "sha256": "74b2cc2b61d5b9525892898ac851eb4899bb0090cffa22fdf01c0e5078b7fe0a",
+      "pre_build_archive_record_and_post_match": true
+    },
+    {
+      "role": "verifier",
+      "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/539bfca1fbdf9096856a7aa8a68a44d365d3a0c6bf2efefd060e1b1455c4d317/verify_namespace",
+      "sha256": "539bfca1fbdf9096856a7aa8a68a44d365d3a0c6bf2efefd060e1b1455c4d317",
+      "pre_build_archive_record_and_post_match": true
+    },
+    {
+      "role": "library",
+      "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/7f80d6d308eed57a0376accdd61644063033d2e28d4bf4e86b4af1860ab16072/durable100-init-vfs.dylib",
+      "sha256": "7f80d6d308eed57a0376accdd61644063033d2e28d4bf4e86b4af1860ab16072",
+      "pre_build_archive_record_and_post_match": true
+    }
+  ],
+  "copied_outputs": [
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/verifier.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/events.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/events.json",
+      "sha256": "2c4acd5b1746b7bd005378a7acf67621eb698e4d1d651d1980dfc42a41c24934",
+      "bytes": 14470
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/driver.stdout",
+      "sha256": "735ba40f2c47b36aa33a22718acb94cfd791ac251fd00de77e59801b90379bd3",
+      "bytes": 9965
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/driver.stderr",
+      "sha256": "f5dadf44c44eba1efe1a62e7837facfd069ac27285d63f80fe4d118ef9a59f85",
+      "bytes": 9245
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/verifier.stderr",
+      "sha256": "7e0ec04fad0a87bb281688331258f6fc350a6a4296ab67ff60e0e9d1f0290f94",
+      "bytes": 18
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/build.stderr",
+      "sha256": "7f51ee60ed36c824607609c24a63cadab39cf0015bddb4875b53105994a90732",
+      "bytes": 915
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/store.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/observer-build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/observer-build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/store.sqlite-shm",
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "bytes": 32768
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/manifest.json",
+      "sha256": "e82cbd39b8a1b8630f619ae9322dfec573af4dc4141e8d96cfdcbbf2a3521b8c",
+      "bytes": 1943
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/store.sqlite",
+      "sha256": "39e0bbd30bd1be0456ddb6cd09d061c2e3614295469da472c1f484ca741ad648",
+      "bytes": 5271552
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/vfs.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/vfs.json",
+      "sha256": "718c2fe5461db3cae7df8c5e787f7af6d38f9f877fbea834a9f237fa30e884e6",
+      "bytes": 3671
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/observer-build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/observer-build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-count-20261006/receipt.json",
+      "sha256": "d809b8736be39bd2ca58488274726ea6e65ff0b95270515791cb712b19a92fd0",
+      "bytes": 8029
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-proof-20261006/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-proof-20261006/verifier.stdout",
+      "sha256": "a32c8277e8abc04390ebba2847145307753df7d2bb376059fff0cc0f153b3763",
+      "bytes": 387
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-proof-20261006/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-proof-20261006/verifier.stderr",
+      "sha256": "d76aa0600bacac5be5dd103f3f51e98c13cad82e15cd068cb60eca2835ad6fa6",
+      "bytes": 120
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-proof-20261006/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-proof-20261006/manifest.json",
+      "sha256": "dc92b1ac805bfaf19785c516558180697c56f76fcfc9fe3456a5a0f8baa05dae",
+      "bytes": 468
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-proof-20261006/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-retained-20261006/durable100-vfs-proof-20261006/receipt.json",
+      "sha256": "9fd073f7186f9810e69f28cf8b76b3f0a63673ad85c07fa27a9d0e5c96eb00c5",
+      "bytes": 2355
+    }
+  ],
+  "closure_gaps": [
+    {
+      "file": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-vfs-count-20261006/store.sqlite-shm",
+      "producer_manifest_sha256": "9443a1306933855256dff5056692511398a2b0a16b710439586e4fec678ea136",
+      "after_read_only_supplemental_proof_sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "cause": "SQLite read-only verifier updates its writable shared-memory side file; original producer SHM bytes were not separately archived before supplemental proof",
+      "disposition": "original manifest retained unchanged; original SHM closure INCOMPLETE; main DB hash unchanged, traces/raw other files match; no producer rerun"
+    }
+  ],
+  "independent_proof": "corrected separate proof PASS; original count orchestrator FAIL retained unchanged",
+  "producer_attempts": 1
+}
