@@ -1,0 +1,11 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/docs/issues/307/checks/s7-s9-all-state-handoff/docs-validation.py"
+  ],
+  "wall_timeout_s": 60,
+  "wall_ns": 515004083,
+  "exit": 0,
+  "kind": "Final scoped documentation links/anchors/status, graphics/ZIP and preserved-source validation"
+}

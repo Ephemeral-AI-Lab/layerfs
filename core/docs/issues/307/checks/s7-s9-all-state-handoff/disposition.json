@@ -1,0 +1,18 @@
+{
+  "owner_request": "Commit everything we have and update S7-S9 handoff; use Docker for FUSE verification",
+  "first_parent": "5cde942fc6b84abbfa6c12a11db83fc6689a2ad9",
+  "milestone_states": "S1-S6 complete; S0/S7-S13 unchecked",
+  "native_verification": "Existing Docker receipts reused unchanged, no new native test or performance claim",
+  "remaining_native_failure": "i64::MIN with200000000ns normalizes to0ns in backend VFS",
+  "kernel_correction_applied": false,
+  "qemu_guest_booted": false,
+  "alternative_docker_backend_created": false,
+  "docker_context": "desktop-linux",
+  "preserved_containers": [
+    "9cf2fe345496 layerfs-experiment-305-dev",
+    "ce75ac504df9 layerfs-4c8cde9ee1cf49f8049298b3377d4927",
+    "d2433851ea59 layerfs-dbd59ea75fdc62de0a1f6d9d099609ab",
+    "d2550144998b layerfs-76b116dc9d984679f5802e2ec9c0798d"
+  ],
+  "rust_checks": "Not rerun: this change only adds/updates docs, receipts and existing graphics, production/build/harness source unchanged."
+}

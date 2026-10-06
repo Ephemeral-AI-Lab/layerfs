@@ -1,0 +1,93 @@
+{
+  "first_parent": "5cde942fc6b84abbfa6c12a11db83fc6689a2ad9",
+  "files": {
+    "core/docs/issues/301/01-architecture.md": {
+      "bytes": 18966,
+      "sha256": "c5769b3b2803afa9c05cae8ef3b7a1800c4b9bf8376f0e80f5605aa05cae9e1e"
+    },
+    "core/docs/issues/301/02-workspace-overlay.md": {
+      "bytes": 17294,
+      "sha256": "d614c30df602b2e68d4b5666fa8d0978461783dfc9f3bd39d487b70b478e58d7"
+    },
+    "core/docs/issues/301/03-commit-workflow.md": {
+      "bytes": 9132,
+      "sha256": "cf9ccad3a41a06b9e10da41a7e96d0a107a6655193b22e806a933b16b7beff1f"
+    },
+    "core/docs/issues/301/04-storage-interfaces.md": {
+      "bytes": 22311,
+      "sha256": "5b26e444cbc9f7dd8a540e2f73407aa15a429aee8d4ca8eed53364874426e7d3"
+    },
+    "core/docs/issues/301/05-migration-plan.md": {
+      "bytes": 16960,
+      "sha256": "cf107c80621b2ffc3fff8b4cbc0beb973a266d9781697695835911cf60bcadc3"
+    },
+    "core/docs/issues/301/06-tables.md": {
+      "bytes": 6051,
+      "sha256": "9e628a0e9c6335e147d8d34510d1c9b42a3d61025b25c1d814208b9fa69c0d42"
+    },
+    "core/docs/issues/301/README.md": {
+      "bytes": 12051,
+      "sha256": "923f7b2a9a2b2d62cafb47a102c8a53657b34da98bdf838a41196ad900578175"
+    },
+    "core/docs/issues/301/prompts/cluster1-storage-plan.md": {
+      "bytes": 12407,
+      "sha256": "6ce5462c0b4300f24c70f6de3482361bdb76fd6be0982ece76d4c2ab94ce9c3b"
+    },
+    "core/docs/issues/301/prompts/cluster2-sandbox-plan.md": {
+      "bytes": 13713,
+      "sha256": "5e4e480fbde2094858a07aef1bc38c48664baa49f9ba8dfe4e01306cc280ef4a"
+    },
+    "core/docs/issues/307/SOURCE-ORGANIZATION-S7-S13.md": {
+      "bytes": 26243,
+      "sha256": "c8275db530d1bd3a1d7ac27c80b3e8b4e5eeabf19b5483f8bd156ec2d6df6296"
+    },
+    "core/docs/issues/307/WORKSPACE-EFFICIENCY-ANALYSIS.md": {
+      "bytes": 36961,
+      "sha256": "af7b7adac38f001bfe01fec9ff9f864a0901c3ebaafd0de79654706126a7561b"
+    },
+    "docs/README.md": {
+      "bytes": 3038,
+      "sha256": "bb8b3c5306b542eb53c79757d47cc45895207a45d1895bba33e3761b0358ade0"
+    },
+    "docs/general/sandbox-cache-design.md": {
+      "bytes": 14023,
+      "sha256": "c7a32ba358901918db04df77c62f5d7e63623b9deb73e7d961ea0bff0479309d"
+    },
+    "docs/general/workspace-filesystem-view.md": {
+      "bytes": 15446,
+      "sha256": "45995d9ca416f04b928be206e8c69edf07c1387fb6313d40e66f36bad6657a9d"
+    },
+    "docs/general/workspace-queue-scheduling.md": {
+      "bytes": 14452,
+      "sha256": "7d25a935dc3b62471bd8299f208c785bc61db3b762fea7df1be92f9c0c56fbd4"
+    },
+    "docs/research/extent-normalization-analysis-2026-10-02.md": {
+      "bytes": 9962,
+      "sha256": "b87a852cc2b3b3c5ebded12c565019903ee4428892949b15c252110243d2c982"
+    },
+    "output/imagegen/cluster-one-x-20261005/01-architecture.png": {
+      "bytes": 1460384,
+      "sha256": "8ca4e1e3cec7b8e38df14a9c623314c00a05d22455e43f66fa113f856aec3eb0"
+    },
+    "output/imagegen/cluster-one-x-20261005/02-streaming.png": {
+      "bytes": 1588047,
+      "sha256": "a8b627b7f143aa36d77209b61e30f7c1c63584faca5282bc30ccad32f9de0235"
+    },
+    "output/imagegen/cluster-one-x-20261005/03-cdc-cas-delta.png": {
+      "bytes": 1669919,
+      "sha256": "947e7a7cfb1c8fdc49854914ea68a1f773bde3030af40144b9be4811f30925c8"
+    },
+    "output/imagegen/cluster-one-x-20261005/04-validation.png": {
+      "bytes": 1580152,
+      "sha256": "1b4fbbfaf8b6d6d583440847f52a191a7f1375368229be94908fe7d1d6f2ece5"
+    },
+    "output/imagegen/cluster-one-x-20261005/cluster-one-x-images.zip": {
+      "bytes": 6247184,
+      "sha256": "f51f546c99e568418988b4aed7af8306c041a980d272faa880850697960670e9"
+    },
+    "output/imagegen/cluster-one-x-20261005/generation-notes.md": {
+      "bytes": 1431,
+      "sha256": "1686ddd7784bbd9cf94682744b2d6b9c6f5b3d152b0a41292a7f18d438bd7899"
+    }
+  }
+}

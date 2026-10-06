@@ -1,0 +1,8 @@
+{
+  "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.76.tar.xz",
+  "archive_sha256": "bbb43e834c46e6bd49a5c28f22e679a937443404e1f653204d4b24929f3ad896",
+  "official_checksum_url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/sha256sums.asc",
+  "sha256sums_sha256": "15013d4cd3f3d34bd158fef485fa648e04f42570c835c7b77bb40fd5db332682",
+  "bytes": 148213372,
+  "wall_ns": 37400705000
+}

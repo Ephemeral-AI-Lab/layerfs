@@ -1,0 +1,43 @@
+{
+  "documents": 21,
+  "local_links": 280,
+  "anchors": 37,
+  "errors": [],
+  "images": {
+    "01-architecture.png": {
+      "bytes": 1460384,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "sha256": "8ca4e1e3cec7b8e38df14a9c623314c00a05d22455e43f66fa113f856aec3eb0"
+    },
+    "02-streaming.png": {
+      "bytes": 1588047,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "sha256": "a8b627b7f143aa36d77209b61e30f7c1c63584faca5282bc30ccad32f9de0235"
+    },
+    "03-cdc-cas-delta.png": {
+      "bytes": 1669919,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "sha256": "947e7a7cfb1c8fdc49854914ea68a1f773bde3030af40144b9be4811f30925c8"
+    },
+    "04-validation.png": {
+      "bytes": 1580152,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "sha256": "1b4fbbfaf8b6d6d583440847f52a191a7f1375368229be94908fe7d1d6f2ece5"
+    }
+  },
+  "zip_matches_four_pngs": true,
+  "initial_documents_and_binary_assets_preserved_except_declared_navigation_status_edits": true,
+  "production_build_harness_counter_and_closed_S5_S6_handoff_unchanged": true
+}

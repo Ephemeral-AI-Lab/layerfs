@@ -1,0 +1,11 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/docs/issues/307/checks/s7-s9-all-state-handoff/docs-validation.py"
+  ],
+  "wall_timeout_s": 60,
+  "wall_ns": 184972584,
+  "exit": 0,
+  "reason": "Validate fixed explicit document selection after replacing working-tree discovery for clean-checkout reproducibility."
+}

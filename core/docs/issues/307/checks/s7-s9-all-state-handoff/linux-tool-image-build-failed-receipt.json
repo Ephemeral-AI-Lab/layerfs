@@ -1,0 +1,16 @@
+{
+  "command": [
+    "docker",
+    "build",
+    "--pull=false",
+    "--platform",
+    "linux/arm64",
+    "-t",
+    "layerfs-307-linux-timestamp-build:6.12.76",
+    "core/target/cluster2-307/linux-timestamp-fix/toolchain-image"
+  ],
+  "exit": 1,
+  "wall_ns": 85654166083,
+  "base_image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "purpose": "Owned kernel build tools, no live runtime change"
+}

@@ -1,0 +1,11 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "/tmp/layerfs-all-state-docs-check.py"
+  ],
+  "wall_timeout_s": 60,
+  "wall_ns": 558773500,
+  "exit": 1,
+  "kind": "Scoped documentation links/anchors/status, immutable artwork/ZIP and unchanged source validation"
+}

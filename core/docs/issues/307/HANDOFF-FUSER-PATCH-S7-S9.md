@@ -9,6 +9,12 @@ incomplete; no milestone checkbox advances. The library conversion defect is
 fixed reproducibly. The exact native fractional-minimum requirement retains a
 hard owning Linux boundary gate, independently of remaining implementation gaps.
 
+Subsequent owner direction: commit all remaining working-tree documents/assets and
+use Docker for FUSE verification. The current
+[S7–S9 continuation prompt](HANDOFF-S7-S9.md) supersedes this receipt's next-chat
+routing and untracked/unstaged custody description. The exact source/proof
+identities and earlier preserved-state receipt below remain historical evidence.
+
 ## Exact source and receipt identities
 
 - S5 completion `a0dc7da9b`; S6 completion

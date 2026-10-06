@@ -1,0 +1,15 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--cached",
+    "--check",
+    "--",
+    ".",
+    ":(exclude)core/docs/issues/307/checks/s7-s9-all-state-handoff/linux-tool-image-build-failed.log"
+  ],
+  "exit": 2,
+  "output": "core/docs/issues/307/checks/s7-s9-all-state-handoff/whitespace-full.log:2: trailing whitespace.\n++   3 |     \n",
+  "diagnosis_of_prior_exit128": "The first scoped command omitted -- and included a dot path with a trailing space. Corrected the check command only; retained that error receipt.",
+  "full_check_disposition": "One original raw Docker failure-log whitespace line remains preserved, full exit2; all staged first-party documents and receipts pass scoped check."
+}

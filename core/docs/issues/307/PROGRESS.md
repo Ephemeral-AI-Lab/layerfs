@@ -35,6 +35,15 @@ No S0/S7/S8/S9 checklist item advances solely from the patch.
 The [latest exact stopping handoff](HANDOFF-FUSER-PATCH-S7-S9.md) records the
 committed correction, remaining Linux boundary failure and independently ready work.
 
+The owner subsequently requested committing all remaining state. The current
+[copy-and-paste S7–S9 continuation prompt](HANDOFF-S7-S9.md) carries that snapshot
+and the Docker-only FUSE verification direction. The side documents, historical
+#301 packet, general guides/research and generated image bundle are now retained
+in Git. Their original review pins and proposal/research status remain explicit.
+The [native timestamp clarification](LINUX-TIMESTAMP-DOCKER-20261006.md) distinguishes
+the corrected fuser parser from Linux's endpoint normalization; no kernel fix or
+new native proof was delivered by this documentation checkpoint.
+
 ## Earlier checkpoint history (before S6 completion)
 
 S5 completion after `f5558fc22`: bounded cells/tails/validity, atomic append and

@@ -1,0 +1,5 @@
+{
+  "initial_exit": 1,
+  "cause": "Historical301/06-tables supersession link used the old #3-schema heading; current303 heading is Schema direction; replacement payload contract required.",
+  "repair": "Repair only that navigation anchor; preserve the old packet body and pins. Final validation gets fresh output names; initial failure retained."
+}

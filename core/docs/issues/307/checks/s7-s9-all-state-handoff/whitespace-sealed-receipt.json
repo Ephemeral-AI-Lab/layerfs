@@ -1,0 +1,16 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--cached",
+    "--check",
+    "--",
+    ".",
+    ":(exclude)core/docs/issues/307/checks/s7-s9-all-state-handoff/*.log"
+  ],
+  "exit": 0,
+  "output": "",
+  "scope": "All staged first-party documents/receipts/assets; raw append-only *.log bytes retained verbatim.",
+  "prior_checks": "whitespace-receipt scoped command failed128 due a malformed path; whitespace-final-receipt scoped command failed2 due whitespace in the captured raw failure log. Their scoped-pass wording was premature; both actual failures remain retained and are superseded only by this successful check.",
+  "full_whitespace_check": "Known original Docker failure-log whitespace and its exact captured warning remain; no raw log edited to change a verdict."
+}

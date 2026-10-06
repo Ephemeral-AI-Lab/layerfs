@@ -1,0 +1,24 @@
+{
+  "pinned-inode": {
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.12.76/fs/inode.c",
+    "sha256": "05f873648c57568a496e1bde9f313152de67f3bac0e1b621e5710da1e5f50663"
+  },
+  "pinned-attr": {
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.12.76/fs/attr.c",
+    "sha256": "c73fd96695dc37122efe103496c794a55eb7c739c5338d8ce5f805ba39ca0b90"
+  },
+  "pinned-super": {
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.12.76/fs/super.c",
+    "sha256": "7c5325df45278f3b9dd8077f5a87949f18b42c3a91415197df250b05cb8c93e2"
+  },
+  "pinned-fuse-inode": {
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.12.76/fs/fuse/inode.c",
+    "sha256": "28f03bf42d2b2b07689f10e03b4ad277f5e461a80bf38184a6b89e1349dc100f"
+  },
+  "current-upstream": {
+    "revision": "67f0943b394d920b6c142aad8c6af94340342ae7",
+    "url": "https://raw.githubusercontent.com/torvalds/linux/67f0943b394d920b6c142aad8c6af94340342ae7/fs/inode.c",
+    "sha256": "93f7048474c5a6c4f15b6ab3d1e81a994be6240c129c6128eb9bf83de4fd6862",
+    "same_boundary_zeroing_rule_present": true
+  }
+}

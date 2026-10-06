@@ -45,7 +45,11 @@
 - [0.1.1 history](roadmap/0.1/0.1.1/README.md)
 - [0.1.3 completed checkpoint](roadmap/0.1/0.1.3/README.md)
 - [0.1.x development](roadmap/0.1/development.md)
+- [Current S7–S9 continuation prompt](../core/docs/issues/307/HANDOFF-S7-S9.md): primary local checkout, exact checkpoints, Docker FUSE qualification and remaining milestone work
 - [Core concepts](general/concepts.md)
+- [Sandbox cache design](general/sandbox-cache-design.md): cluster-two ownership, branch sharing, source structure and remaining qualification
+- [Workspace filesystem view](general/workspace-filesystem-view.md): global Store base, daemon overlay, lazy FUSE read path and ASCII diagrams
+- [Workspace queue scheduling](general/workspace-queue-scheduling.md): bounded fair service, capture ordering and concurrent workload tradeoffs
 - [Benchmark rules](general/benchmark_rules.md)
 - [Release policy](general/release-policy.md)
 - [Documentation policy](general/documentation-policy.md)

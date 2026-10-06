@@ -1,0 +1,59 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 275B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/layerfs-307-fuser-patch-base:exact
+#2 DONE 0.1s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/2] FROM docker.io/library/layerfs-307-fuser-patch-base:exact@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#4 resolve docker.io/library/layerfs-307-fuser-patch-base:exact@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4 0.0s done
+#4 CACHED
+
+#5 [2/2] RUN apt-get -o Acquire::Retries=0 update && apt-get -o Acquire::Retries=0 install --no-install-recommends -y flex bison bc cpio busybox-static libelf-dev libssl-dev && rm -rf /var/lib/apt/lists/*
+#5 1.182 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+#5 1.760 Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+#5 2.887 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+#5 21.95 Ign:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+#5 23.75 Get:5 http://deb.debian.org/debian bookworm-updates/main arm64 Packages [6936 B]
+#5 26.22 Get:6 http://deb.debian.org/debian-security bookworm-security/main arm64 Packages [347 kB]
+#5 42.97 Err:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+#5 42.97   500  reading HTTP response body: unexpected EOF [IP: 192.168.65.1 3128]
+#5 63.65 Ign:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+#5 83.94 Err:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+#5 83.94   500  reading HTTP response body: unexpected EOF [IP: 192.168.65.1 3128]
+#5 84.44 Ign:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+#5 84.88 Err:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+#5 84.88   500  reading HTTP response body: unexpected EOF [IP: 192.168.65.1 3128]
+#5 84.89 Fetched 595 kB in 1min 25s (7018 B/s)
+#5 84.89 Reading package lists...
+#5 84.92 E: Failed to fetch http://deb.debian.org/debian/dists/bookworm/main/binary-arm64/Packages  500  reading HTTP response body: unexpected EOF [IP: 192.168.65.1 3128]
+#5 84.92 E: Some index files failed to download. They have been ignored, or old ones used instead.
+#5 ERROR: process "/bin/sh -c apt-get -o Acquire::Retries=0 update && apt-get -o Acquire::Retries=0 install --no-install-recommends -y flex bison bc cpio busybox-static libelf-dev libssl-dev && rm -rf /var/lib/apt/lists/*" did not complete successfully: exit code: 100
+------
+ > [2/2] RUN apt-get -o Acquire::Retries=0 update && apt-get -o Acquire::Retries=0 install --no-install-recommends -y flex bison bc cpio busybox-static libelf-dev libssl-dev && rm -rf /var/lib/apt/lists/*:
+63.65 Ign:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+83.94 Err:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+83.94   500  reading HTTP response body: unexpected EOF [IP: 192.168.65.1 3128]
+84.44 Ign:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+84.88 Err:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+84.88   500  reading HTTP response body: unexpected EOF [IP: 192.168.65.1 3128]
+84.89 Fetched 595 kB in 1min 25s (7018 B/s)
+84.89 Reading package lists...
+84.92 E: Failed to fetch http://deb.debian.org/debian/dists/bookworm/main/binary-arm64/Packages  500  reading HTTP response body: unexpected EOF [IP: 192.168.65.1 3128]
+84.92 E: Some index files failed to download. They have been ignored, or old ones used instead.
+------
+Dockerfile:2
+--------------------
+   1 |     FROM layerfs-307-fuser-patch-base:exact
+   2 | >>> RUN apt-get -o Acquire::Retries=0 update && apt-get -o Acquire::Retries=0 install --no-install-recommends -y flex bison bc cpio busybox-static libelf-dev libssl-dev && rm -rf /var/lib/apt/lists/*
+   3 |     
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c apt-get -o Acquire::Retries=0 update && apt-get -o Acquire::Retries=0 install --no-install-recommends -y flex bison bc cpio busybox-static libelf-dev libssl-dev && rm -rf /var/lib/apt/lists/*" did not complete successfully: exit code: 100
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/re43fpf8bzwc0765osqnsgtkm

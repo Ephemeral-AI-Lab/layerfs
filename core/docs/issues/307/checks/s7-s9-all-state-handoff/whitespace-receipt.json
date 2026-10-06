@@ -1,0 +1,21 @@
+{
+  "full_command": [
+    "git",
+    "diff",
+    "--cached",
+    "--check"
+  ],
+  "full_exit": 2,
+  "full_findings": "One retained raw Docker failure-log whitespace line; original bytes preserved.",
+  "scoped_command": [
+    "git",
+    "diff",
+    "--cached",
+    "--check",
+    ".",
+    ". ",
+    ":(exclude)core/docs/issues/307/checks/s7-s9-all-state-handoff/linux-tool-image-build-failed.log"
+  ],
+  "scoped_exit": 128,
+  "scoped_output": "fatal: . : no such path in the working tree.\nUse 'git <command> -- <path>...' to specify paths that do not exist locally.\n"
+}

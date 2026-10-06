@@ -1,0 +1,2 @@
+FROM layerfs-307-fuser-patch-base:exact
+RUN apt-get -o Acquire::Retries=0 update && apt-get -o Acquire::Retries=0 install --no-install-recommends -y flex bison bc cpio busybox-static libelf-dev libssl-dev && rm -rf /var/lib/apt/lists/*
