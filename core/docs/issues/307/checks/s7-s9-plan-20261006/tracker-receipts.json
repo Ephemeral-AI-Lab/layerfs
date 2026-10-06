@@ -1,0 +1,12 @@
+{
+  "plan_commit": "5900de7331202e8ead57b4c6c7c77941e8c56bbb",
+  "plan_tree": "4a11ab6a242f27218a095bf5d2aeffe1d202df58",
+  "s7_tracker_receipt": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6010922165",
+  "s9_tracker_receipt": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6010923803",
+  "tracker_state": "OPEN; S7/S8/S9 unchecked",
+  "bodies_sha256": {
+    "/tmp/layerfs-307-s7-plan-receipt.txt": "9aa49e4ff3589c022369b03cb7111ffbc1113534c5068986f0bee1a3f1284a76",
+    "/tmp/layerfs-307-s9-plan-receipt.txt": "e5de46e2b62281eb317d41873018a8df81a36f5e07709258785005b509684cf2"
+  },
+  "product_state": "unchanged by plan/guard guidance; remaining implementation explicit"
+}

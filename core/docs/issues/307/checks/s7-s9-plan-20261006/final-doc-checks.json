@@ -1,0 +1,340 @@
+{
+  "status": "PASS",
+  "links": [
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../../../../AGENTS.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../../../AGENTS.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../../../../cluster_one_handbook.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../../../../cas_cdc_deltaencoding_handbook.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../303/README.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../303/daemon-sqlite.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../303/fuse.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../303/06-cluster-one-integration.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../303/07-implementation-validation.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "SOURCE-ORGANIZATION-S7-S13.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "SOURCE-ORGANIZATION.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "HANDOFF-S7-S13.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "HANDOFF-S7-S9-RESUME-20261006.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "S7-S9-SPEED-TEST-PLAN.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "WORKSPACE-EFFICIENCY-ANALYSIS.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "checks/s9-consumer-ports/committed-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "checks/s9-backed-acquisition/committed-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "S7-EXIT-AUDIT.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../../architecture/36-operation-cost-observations.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "checks/s9-consumer-ports/identity.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "checks/s9-backed-acquisition/FAILURES.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "checks/s9-backed-acquisition/identity.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../../../Cargo.toml",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "checks/s7-s9-review-20261006/review.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../../../../docs/general/optimization-guide.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../../../../docs/general/agent-measurement-policy.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../../../../docs/general/benchmark_rules.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../../../../benchmark_agent_report.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "../../../benchmark/fs-bench-pro/AGENTS.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "FUSER-REGISTRY-PATCH-20261006.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "target": "checks/s7-s9-plan-20261006/committed-loc.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "HANDOFF-S7-S13.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "SOURCE-ORGANIZATION-S7-S13.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "../../architecture/36-operation-cost-observations.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "checks/s7-costs/linux-layerfs-overlay.log",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "checks/s7-costs/linux-layerfs-workspace.log",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "checks/s7-costs/costs-repaired.log",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "checks/s7-costs/host-covering-receipts.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "checks/s7-costs/linux-receipts.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "checks/s7-costs/FAILURES.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "checks/s7-costs/identity.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "../../architecture/36-operation-cost-observations.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "checks/s7-startup-s9-service/",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "../../architecture/40-runtime-wire-ownership.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "checks/s9-runtime-wire/",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S7-EXIT-AUDIT.md",
+      "target": "checks/s7-s9-review-20261006/review.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "../../architecture/37-runtime-history-receipts.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "checks/s9-history/layerfs-sdk-covering.log",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "checks/s9-history/",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "checks/s9-history/FAILURES.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "checks/s9-history/identity.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "../../architecture/38-authenticated-runtime-service.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "../../architecture/39-native-import-links.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "checks/s7-startup-s9-service/",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "../../architecture/40-runtime-wire-ownership.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "../../architecture/41-native-regular-aliases.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "../../architecture/42-native-consumer-ports.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "checks/s9-consumer-ports/identity.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "checks/s9-consumer-ports/FAILURES.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "../../architecture/43-backed-initial-acquisition.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "checks/s9-backed-acquisition/FAILURES.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "checks/s9-backed-acquisition/identity.json",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "IMPLEMENTATION-PLAN-S7-S9-20261006.md",
+      "exists": true
+    },
+    {
+      "file": "core/docs/issues/307/S9-EXIT-AUDIT.md",
+      "target": "checks/s7-s9-review-20261006/review.json",
+      "exists": true
+    }
+  ],
+  "production_inputs_unchanged": 892,
+  "protected_documents_and_counter_unchanged": {
+    "core/docs/issues/307/SOURCE-ORGANIZATION-S7-S13.md": "c8275db530d1bd3a1d7ac27c80b3e8b4e5eeabf19b5483f8bd156ec2d6df6296",
+    "core/docs/issues/307/WORKSPACE-EFFICIENCY-ANALYSIS.md": "af7b7adac38f001bfe01fec9ff9f864a0901c3ebaafd0de79654706126a7561b",
+    "core/docs/issues/307/HANDOFF-S7-S13.md": "b5ce451aad71549c3cce03c45773fef0c00901d7cc3fd302dc01df410e8eaf40",
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027",
+    "tools/production_loc.py": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb"
+  },
+  "rust_and_tool_test_reuse": "5900de733 tooling/source scope unchanged; documentation/receipt-only follow-up; no new test run necessary"
+}

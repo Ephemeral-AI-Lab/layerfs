@@ -229,3 +229,34 @@ resolver obligation, and public-API/real-Store qualification of interleaved Save
 fairness and repeated bound use. Greater-than-4GiB native proof remains NOT_RUN.
 S9 remains CHECKPOINT/unchecked; S8 is a later batch; S10–S13 and
 P3/P6/P7/P13/P14 remain later Commit prerequisites.
+
+## Review and SQLite correction plan (2026-10-06)
+
+[The remaining implementation plan](IMPLEMENTATION-PLAN-S7-S9-20261006.md)
+records committed consumer `90d7a2c5b` and run-backed acquisition `97a02fffc` as
+checkpoints. It preserves their functional outcomes and limits. The acquisition
+checkpoint's Docker all-target command remains FAILED; the later scaling pass
+does not replace it. Acquisition binary pre/post seals were not recorded.
+
+Planning/tooling source `5900de7331202e8ead57b4c6c7c77941e8c56bbb`, tree `4a11ab6a242f27218a095bf5d2aeffe1d202df58`, clarifies that direct
+Project→rusqlite violates placement while provider-owned SQLite backing through
+a domain port is permitted. The dependency graph is unchanged. The first next
+implementation is the capability/Store-open/schema-compatibility design, followed
+by the actual indexed provider and Project ordinary path. There is no implemented
+new port, restored SQLite backend or permission to use the rejected per-Init
+prototype unchanged. Keep streamed canonical construction and identity proofs.
+
+Two public regressions failed once each after an isolated Cargo no-run: an empty
+source with its scratch parent inside the source fails ENOENT; a failed Content
+FileBacking append leaves4096 disk bytes while charging0 held bytes. Both and the
+initial manual-link harness compile failure are preserved in [review receipts](checks/s7-s9-review-20261006/review.json).
+The probe uses its own lock/test profile and supplies source-level diagnostics,
+not sealed product qualification. Original cleanup cause/residual custody also
+requires correction. No product Rust source was changed in this planning step.
+
+Runtime supervisor/attachment, contextual authority, exact restart/disconnect
+custody, explicit P10 scope and real Store/huge-root/>4GiB/resource qualification
+remain open. S9 is incomplete/unchecked; S8 and later Commit prerequisites stay
+deferred. [S9 tracker receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6010923803) now records both previously unposted
+checkpoints, their exact production LOC and these corrections. The plan/guard
+change itself has core92680/reference65417/combined158097 unchanged, delta0.

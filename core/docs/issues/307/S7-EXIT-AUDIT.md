@@ -181,3 +181,23 @@ whole-system phase residency and sustained numerical service/debt gates remain
 open. Full268435456-byte daemon reservation/high-water and backed count-trigger/
 freelist/range costs retain earlier identities; S6 diagnostics receive no cold
 speed/RSS/rate credit. Native product request frontiers still need S8 integration.
+
+## Remaining-plan reconciliation (2026-10-06)
+
+[The remaining implementation plan](IMPLEMENTATION-PLAN-S7-S9-20261006.md)
+reconciles actual source and defines S7 observer/workload registration, complete
+cost/page/I/O/phase-residency and numerical service/debt packages. Planning/tooling
+commit `5900de7331202e8ead57b4c6c7c77941e8c56bbb`, tree `4a11ab6a242f27218a095bf5d2aeffe1d202df58`, changes no Rust production/schema/profile.
+Existing S7 engine evidence keeps its original identity; no new cost/resource
+campaign ran and S7 remains incomplete/unchecked. The exact mounted-kernel request
+requirement depends on S8; independent engine work does not.
+
+The clarified Project/SQLite guard guidance and 40 passing tooling tests establish
+placement, not an acquisition capability. Two failed public review probes for
+scratch/source overlap and inherited partial-write byte charge remain diagnostic
+[receipts](checks/s7-s9-review-20261006/review.json); they are not S7 qualification.
+A first manual-link harness compile failure is retained separately. Source/plan
+links and guard checks pass; cold speed/RSS/rate and huge-root work remain unrun.
+Separate [S7 tracker receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6010922165) records this status and next-ready work.
+Production LOC: core92680 →92680 (+0), reference65417 →65417 (+0),
+combined158097 →158097 (+0); exact staged/committed comparison verified.

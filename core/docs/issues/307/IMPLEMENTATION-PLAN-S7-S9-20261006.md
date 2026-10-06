@@ -564,3 +564,20 @@ exits, exact commits/LOC/trees, dirty state, retained custody and concrete next-
 work. Stop on actual batch completion or a precise required external/deferred gate
 after exhausting useful independent work. Unwritten source, observers, registration
 or an untested huge-root case are work remaining, not external blockers.
+
+## 8. Plan delivery receipt
+
+Plan/guard-guidance commit: `5900de7331202e8ead57b4c6c7c77941e8c56bbb`, tree `4a11ab6a242f27218a095bf5d2aeffe1d202df58`, first parent
+`b2b979f91aadc23a7858d618a438a39a4e6a3edd`. Production LOC remains
+core92680/reference65417/combined158097, signed delta0 in each scope, verified
+against the exact prepared staged tree. [Committed LOC receipt](checks/s7-s9-plan-20261006/committed-loc.json).
+Python compilation preceded 40 scoped tooling tests under a30s wall ceiling;
+all passed, with no timeout. The boundary scanned609 production files and the
+plan's30 initial local links resolved. Rust production code/schema/profile and
+manifests were unchanged, so new Rust runtime checks were inapplicable.
+
+T0's missing tracker receipts are now recorded separately:
+[S7 remaining gate](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6010922165) and [S9 checkpoint/correction](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6010923803).
+This append does not change the initial inspection's historical tracker state.
+S7/S8/S9 remain unchecked. T0 reporting is delivered; A1/A4/R1/E1 are the next
+ready implementation packages. None of A2–Q1 is completed by this plan.
