@@ -349,3 +349,11 @@ first parent/final staged archives use unchanged tools/production_loc.py SHA256
 c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb, counting product/
 shipped SQL/excluded predecessors and excluding tests/docs/tools/manifests/third-party.
 No reference retirement, new resident alias map or algorithmic shrink is claimed.
+
+Verified regular-alias implementation: commit551f165ed332955067b30ce184ca3578f4e13f05,
+treeca31b91c7793b3ff8a4936ae66f85a3ce6355452, first parent
+32f5073593ea60f27a85db5ab4ecdb2ea4a1dd1b. Its committed tree/production hashes
+match prepared/build receipts. [S9 alias receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6009500696)
+retains CHECKPOINT and all gaps; no checkbox completion. Following metadata-only
+receipt comparison is core91342/reference65417/combined156759, delta0, with its
+own exact first-parent/staged/committed confirmation. No source check is repeated.
