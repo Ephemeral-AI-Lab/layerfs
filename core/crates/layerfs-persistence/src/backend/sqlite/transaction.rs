@@ -23,12 +23,6 @@ impl Transaction<'_> {
     pub(crate) fn schema_version(&self) -> i64 {
         self.owner.schema_version()
     }
-    #[cfg(target_os = "macos")]
-    pub(crate) fn segment_owner(
-        &self,
-    ) -> Result<&super::segment_owner::SegmentOwner, BackendError> {
-        self.owner.segments.as_ref().ok_or(BackendError::Integrity)
-    }
     pub(crate) fn before_pack(&self, capacity: usize) -> Result<(), BackendError> {
         #[cfg(target_os = "macos")]
         {

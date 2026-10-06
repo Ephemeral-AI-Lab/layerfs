@@ -114,3 +114,7 @@ to retained Monolithic behavior at `9b74ac035`, with all later evidence preserve
 A separate full eight-case regression campaign will use the actual cluster-one-end
 public Project Init source `197d2fb7d`; the old Service MEMORY/OFF competitive
 reference is not its main control. This does not relabel any historical verdict.
+
+Owner supersession: the payload format is withdrawn; active behavior and the new
+full same-profile regression screen are described in [Monolithic restoration](MONOLITHIC-RESTORATION-20261006.md).
+Historical proposal/measurements keep their original identity and verdict.

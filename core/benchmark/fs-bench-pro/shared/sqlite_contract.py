@@ -36,21 +36,12 @@ def gate(candidate,baseline,storage_limit,exclusive_storage=False):
     fits=candidate['storage_bytes']<storage_limit if exclusive_storage else candidate['storage_bytes']<=storage_limit
     return 'PASS' if fits else 'FAIL'
 
-def allocations(paths,include_payloads=False):
+def allocations(paths):
     items=[]
     for p in map(Path,paths):
         for suffix in ('','-wal','-shm'):
             f=Path(str(p)+suffix)
             if f.exists():
                 s=f.stat();items.append({'path':str(f),'length_bytes':s.st_size,'allocated_bytes':s.st_blocks*512})
-        if include_payloads:
-            folder=Path(str(p)+'.payload')
-            if folder.is_symlink() or not folder.is_dir():raise ValueError('ordinary payload directory required')
-            s=folder.stat();items.append({'path':str(folder),'length_bytes':s.st_size,'allocated_bytes':s.st_blocks*512,'kind':'payload-directory'})
-            for f in sorted(folder.iterdir()):
-                if f.is_symlink() or not f.is_file():raise ValueError('regular payload segment required')
-                s=f.stat()
-                if s.st_nlink!=1:raise ValueError('exclusive payload segment required')
-                items.append({'path':str(f),'length_bytes':s.st_size,'allocated_bytes':s.st_blocks*512,'kind':'payload-segment'})
     return {'files':items,'total_bytes':sum(i['allocated_bytes'] for i in items),
-            'scope':('database/WAL/SHM and every payload directory/segment' if include_payloads else 'database/WAL/SHM')+' at this observation; not an unobserved peak'}
+            'scope':'database/WAL/SHM at this observation; not an unobserved peak'}

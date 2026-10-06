@@ -1,0 +1,42 @@
+{
+  "status": "PASS",
+  "rows": [
+    {
+      "files": 100,
+      "source": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b",
+      "target": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b",
+      "method": "reuse earlier owned sealed independent copy; no measured Store",
+      "manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3"
+    },
+    {
+      "files": 1000,
+      "source": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9",
+      "target": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9",
+      "method": "reuse earlier owned sealed independent copy; no measured Store",
+      "manifest_sha256": "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c"
+    },
+    {
+      "files": 10000,
+      "source": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-10000-edd2a0ddbfc8fab0",
+      "target": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-10000-edd2a0ddbfc8fab0",
+      "method": "independent userspace streamed byte copy, exclusive new writable files, 1MiB buffer, source payload SHA checked while copying, metadata preserved; no clonefile/COW and no measured Store",
+      "payload_files_copied": 10000,
+      "all_bytes_copied": 301098216,
+      "manifest_sha256": "878f44e10303cc43f5f202a4cf59e817316b16cee153fb70f8bf389ade6253ab",
+      "cold_claim": false
+    },
+    {
+      "files": 100000,
+      "source": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5",
+      "target": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5",
+      "method": "independent userspace streamed byte copy, exclusive new writable files, 1MiB buffer, source payload SHA checked while copying, metadata preserved; no clonefile/COW and no measured Store",
+      "payload_files_copied": 100000,
+      "all_bytes_copied": 510880327,
+      "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+      "cold_claim": false
+    }
+  ],
+  "wall_ns": 31757372375,
+  "lock": "owned measurement checkout normal phase7 lock; nonblocking; no active measurement overlap",
+  "cache": "setup copy is not cold; each future arm must independently attest zero residency"
+}

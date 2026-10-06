@@ -7,9 +7,6 @@ use std::collections::BTreeSet;
 pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published, BackendError> {
     match tx.layout() {
         crate::SqlitePackLayout::Monolithic => write_packs(tx, &batch.packs)?,
-        crate::SqlitePackLayout::PayloadSegments => {
-            super::segment_publish::write(tx, &batch.packs)?
-        }
         crate::SqlitePackLayout::GroupRows | crate::SqlitePackLayout::GroupRowsIndexed => {
             super::units_publish::write(tx, &batch.packs)?
         }
@@ -71,10 +68,7 @@ pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published
 }
 
 /// Borrow complete immutable bodies into bounded INSERT pages in caller order.
-pub(super) fn write_packs(
-    tx: &Transaction<'_>,
-    packs: &[PublishedPack],
-) -> Result<(), BackendError> {
+fn write_packs(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(), BackendError> {
     if packs.is_empty() {
         return Ok(());
     }

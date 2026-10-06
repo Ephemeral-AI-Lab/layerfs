@@ -18,13 +18,6 @@ pub(crate) mod publish;
 pub(crate) mod query;
 pub(crate) mod rows;
 pub(crate) mod schema;
-#[cfg(target_os = "macos")]
-mod segment_io;
-pub(crate) mod segment_layout;
-#[cfg(target_os = "macos")]
-mod segment_owner;
-mod segment_publish;
-pub(crate) mod segment_read;
 pub(crate) mod statement_work;
 pub(crate) mod transaction;
 pub(crate) mod unit_io;

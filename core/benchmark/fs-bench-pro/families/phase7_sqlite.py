@@ -168,15 +168,27 @@ for profile,names in ACQUISITION_V1_CASES_BY_PROFILE.items():
                        c.proof_policy,c.pack_layout,'owner-init-caps-30-19-20261006-v2')
         ACQUISITION_CASES_BY_PROFILE[profile].append(new)
 
-# Owner2026-10-06 selected a versioned payload-layout candidate, retaining A1.
-# Only Durable100 is selected; the original Monolithic v2 failure stays intact.
+# Explicitly withdrawn payload format. Preserve its case identity/limits, but
+# the active Monolithic product cannot execute that historical vehicle.
 PAYLOAD_SEGMENT_CASE='phase7-sqlite-init-100-acquisition-payload-segments-v1'
-PAYLOAD_SEGMENT_REFERENCE='phase7-sqlite-init-100-acquisition-v2'
-prior=CASES[PAYLOAD_SEGMENT_REFERENCE]
-CASES[PAYLOAD_SEGMENT_CASE]=Case(PAYLOAD_SEGMENT_CASE,prior.fixture,None,None,
-    prior.command_budget_ns,prior.verification_budget_ns,prior.profile,
-    prior.proof_policy,'payload-segments',prior.proof_envelope)
-PAYLOAD_SEGMENT_ALLOCATION_RULE='candidate-final-database-wal-shm-payload-directory-and-all-segments<=retained-reference-final-total-v1'
+old=CASES['phase7-sqlite-init-100-acquisition-v2']
+CASES[PAYLOAD_SEGMENT_CASE]=Case(PAYLOAD_SEGMENT_CASE,old.fixture,None,None,
+    old.command_budget_ns,old.verification_budget_ns,old.profile,
+    old.proof_policy,'payload-segments',old.proof_envelope)
+RETIRED_PAYLOAD_SEGMENT_CASES=(PAYLOAD_SEGMENT_CASE,)
+
+# Owner-selected full final-source same-profile cluster-one-end regression.
+CLUSTER_ONE_END='197d2fb7d0a141d7a9350852022febeec3255bf2'
+REGRESSION_CASES_BY_PROFILE={'durable':[], 'disposable':[]}
+for profile,names in ACQUISITION_CASES_BY_PROFILE.items():
+    for original in names:
+        old=CASES[original]
+        new=original.replace('-acquisition-v2','-cluster-one-regression-v1')
+        CASES[new]=Case(new,old.fixture,None,None,old.command_budget_ns,
+            old.verification_budget_ns,old.profile,old.proof_policy,'monolithic',old.proof_envelope)
+        REGRESSION_CASES_BY_PROFILE[profile].append(new)
+REGRESSION_CASES=tuple(name for names in REGRESSION_CASES_BY_PROFILE.values() for name in names)
+REGRESSION_ALLOCATION_RULE='candidate-final-database-wal-shm<=same-profile-cluster-one-end-final-total-v1'
 
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
@@ -235,8 +247,9 @@ def build(root,arm,out,common):
 
 def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pins=None):
     case=CASES[selection]
-    segments=case.pack_layout=='payload-segments'
-    if segments and arm!='candidate':raise ValueError('payload candidate reuses the retained original reference; no unchanged reference resampling')
+    if selection in RETIRED_PAYLOAD_SEGMENT_CASES:raise ValueError('payload layout withdrawn; historical receipts retained; no active vehicle')
+    regression=selection in REGRESSION_CASES
+    if regression and arm!='candidate':raise ValueError('regression baseline is reused qualified Project Init at197d2fb7d; never the old Service wrapper')
     if selection in RETIRED_WAL_RESERVATION_CASES:
         raise ValueError('rejected WAL reservation selection retired; original receipts retained')
     if selection in LEGACY_HISTORY:
@@ -253,11 +266,16 @@ def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pin
     if arm=='baseline' and (not root.is_relative_to(common.ROOT/'target/phase7-baseline') or subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()!=BASE or subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True)):
         raise ValueError('reference requires clean pinned owned checkout')
     out=common.owned(output);out.mkdir(parents=True)
-    record={'schema':'phase7-sqlite-step10-v2','case':case.id,'arm':arm,'status':'NOT_RUN','sample_count':0,'verification_status':'NOT_RUN','cache_status':'INCOMPLETE','cleanup':{'status':'NOT_RUN'},'comparison_scope':'inner complete product clock including fresh database create/open, real Init, required checkpoint and final close; external child wall reported separately','margin_arithmetic':'10*candidate_ns<=11*baseline_ns','cache_contract':contract.CACHE,'requested_profile':case.profile,'profile':PROFILE_IDS[case.profile] if arm=='candidate' else 'Phase4.5 MEMORY/OFF disclosed','command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'construction_workers':4,'environment_workers':1,'acquisition_vehicle':ACQUISITION_VEHICLE if arm=='candidate' else 'reference driver at pinned base; no provider acquisition','store_schema':('payload-segments-with-acquisition-tables-user-version-10' if segments else ACQUISITION_STORE_SCHEMA) if arm=='candidate' else 'reference','required_case_ids':[PAYLOAD_SEGMENT_CASE] if segments else ACQUISITION_CASES_BY_PROFILE[case.profile] if case.id in ACQUISITION_CASES_BY_PROFILE[case.profile] else WAL_RESERVATION_CASES_BY_PROFILE[case.profile] if case.id in WAL_RESERVATION_CASES_BY_PROFILE[case.profile] else SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] if case.id in SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] else OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] if case.id in OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] else REQUIRED_BY_PROFILE[case.profile],'allocation_rule':PAYLOAD_SEGMENT_ALLOCATION_RULE if segments else INIT_ALLOCATION_RULE,'pack_layout':case.pack_layout,'retained_reference_case':PAYLOAD_SEGMENT_REFERENCE if segments else None}
+    record={'schema':'phase7-sqlite-step10-v2','case':case.id,'arm':arm,'status':'NOT_RUN','sample_count':0,'verification_status':'NOT_RUN','cache_status':'INCOMPLETE','cleanup':{'status':'NOT_RUN'},'comparison_scope':'inner complete product clock including fresh database create/open, real Init, required checkpoint and final close; external child wall reported separately','margin_arithmetic':'10*candidate_ns<=11*baseline_ns','cache_contract':contract.CACHE,'requested_profile':case.profile,'profile':PROFILE_IDS[case.profile] if arm=='candidate' else 'Phase4.5 MEMORY/OFF disclosed','command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'construction_workers':4,'environment_workers':1,'acquisition_vehicle':ACQUISITION_VEHICLE if arm=='candidate' else 'reference driver at pinned base; no provider acquisition','store_schema':ACQUISITION_STORE_SCHEMA if arm=='candidate' else 'reference','required_case_ids':REGRESSION_CASES if regression else ACQUISITION_CASES_BY_PROFILE[case.profile] if case.id in ACQUISITION_CASES_BY_PROFILE[case.profile] else WAL_RESERVATION_CASES_BY_PROFILE[case.profile] if case.id in WAL_RESERVATION_CASES_BY_PROFILE[case.profile] else SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] if case.id in SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] else OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] if case.id in OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] else REQUIRED_BY_PROFILE[case.profile],'allocation_rule':REGRESSION_ALLOCATION_RULE if regression else INIT_ALLOCATION_RULE,'pack_layout':case.pack_layout}
     locks=[]
     try:
         for p in [common.RESULTS/'phase7-sqlite.lock']+([root/'target/phase7-sqlite.lock'] if arm=='baseline' else []):
             p.parent.mkdir(parents=True,exist_ok=True);h=p.open('a+b');locks.append(h);fcntl.flock(h,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        if regression:
+            from shared.cluster_one_control import reference
+            record['regression_reference']=reference(common.ROOT,case.profile,case.fixture)
+            record['comparison_kind']='same-profile current public Project Init versus cluster-one-end public Project Init; acquisition backing differs'
+            record['older_competitive_control']='historical7edddb Service MEMORY/OFF split Store, reported separately only'
         identity=common.identities()
         if identity['source_dirty']:raise ValueError('freeze committed product/harness before an arm')
         def scope_seal(paths):
@@ -285,7 +303,6 @@ def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pin
         # The candidate holds acquisition rows in the measured Store; TMPDIR stays an empty observed directory.
         command=[driver,fixture['source'],str(db),case.id,case.profile] if arm=='candidate' else [driver,fixture['source'],str(db),str(history),case.id]
         if case.command_budget_ns == 30_000_000_000: command.append(str(case.command_budget_ns//1_000_000_000))
-        if segments: command.append(case.pack_layout)
         claim=common.RESULTS/'phase7-sqlite-sample-claims'/hashlib.sha256(json.dumps([case.id,arm,identity['source_tree'],identity['harness_seal'],record['measured_source_commit'],fixture['manifest_sha256']],sort_keys=True).encode()).hexdigest()
         claim.parent.mkdir(parents=True,exist_ok=True)
         with claim.open('x') as h:h.write(str(out)+'\n')
@@ -294,7 +311,7 @@ def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pin
         remaining=case.command_budget_ns-(time.monotonic_ns()-perf_start)
         if remaining<=0:record['status']='NOT_RUN';record['reason']='cold attestation exhausted complete performance command budget';return out
         sample=invoke(command,out,'driver',remaining,env,root);record['sample_count']=1;record['performance']=sample;record['comparison_ns']=sample['child'].get('operation_ns') if isinstance(sample['child'],dict) else None
-        record['storage']=contract.allocations([db] if arm=='candidate' else [db,history],include_payloads=segments);record['storage_bytes']=record['storage']['total_bytes'];record['cleanup']={'status':'PASS' if not list(scratch.iterdir()) and not list(out.glob('.layerfs-allocation-*')) else 'FAIL','scope':'measured child exited, TMPDIR and allocation scratch empty, database evidence retained'};record['command_wall_ns']=time.monotonic_ns()-perf_start
+        record['storage']=contract.allocations([db] if arm=='candidate' else [db,history]);record['storage_bytes']=record['storage']['total_bytes'];record['cleanup']={'status':'PASS' if not list(scratch.iterdir()) and not list(out.glob('.layerfs-allocation-*')) else 'FAIL','scope':'measured child exited, TMPDIR and allocation scratch empty, database evidence retained'};record['command_wall_ns']=time.monotonic_ns()-perf_start
         child=sample['child']
         if sample['exit_code']!=0 or sample['timed_out'] or not isinstance(child,dict) or child.get('status')!='COMPLETE':record['status']='FAIL';return out
         record['status']='COMPLETE'
@@ -305,11 +322,6 @@ def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pin
             effective=json.loads(matches[0]);record['effective_profile']=effective
             expected={'identity':PROFILE_IDS[case.profile],'journal_mode':'wal' if case.profile=='durable' else 'memory','synchronous':2 if case.profile=='durable' else 0,'foreign_keys':1,'fullfsync':1 if case.profile=='durable' else 0,'checkpoint_fullfsync':1,'page_size':4096,'cache_size':-2048,'mmap_size':0,'temp_store':2,'wal_checkpoint_performed':case.profile=='durable'}
             if effective!=expected:raise ValueError('actual selected-profile settings/completion mismatch')
-        if segments:
-            matches=[line.removeprefix('EFFECTIVE_LAYOUT ') for line in (out/'driver.stderr').read_text().splitlines() if line.startswith('EFFECTIVE_LAYOUT ')]
-            expected={'pack_layout':'payload-segments','schema_version':10,'backing':'database+immutable-payload-segments'}
-            if len(matches)!=1 or json.loads(matches[0])!=expected:raise ValueError('actual selected payload layout missing or mismatched')
-            record['effective_layout']=expected
         proof=invoke([binaries['verify_namespace']['path'],str(db),str(db if arm=='candidate' else history),child['root'],child['stack'],fixture['manifest'],fixture['manifest_sha256']]+([case.profile] if arm=='candidate' else []),out,'verifier',case.verification_budget_ns,env,root)
         record['verification']=proof;record['verification_wall_ns']=proof['wall_ns'];record['verification_status']='PASS' if proof['exit_code']==0 and not proof['timed_out'] and common.lite_verification_pass(proof['child'],fixture_case,child,fixture) else 'FAIL'
         return out

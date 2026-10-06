@@ -1,0 +1,31 @@
+{
+  "base": "9b74ac035faaf271edd01726913f63f084adaaa2",
+  "restored_product_paths": [
+    "core/crates/layerfs-persistence/sql/sqlite/objects_segments.sql",
+    "core/crates/layerfs-persistence/src/backend/sqlite/connection.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/mod.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/objects_read.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/objects_selection.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/publish.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/schema.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/segment_io.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/segment_layout.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/segment_owner.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/segment_publish.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/segment_read.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/transaction.rs",
+    "core/crates/layerfs-persistence/src/storage/provider.rs",
+    "core/crates/layerfs-persistence/src/store/config.rs"
+  ],
+  "restored_driver": "core/crates/layerfs-project/examples/benchmark_init.rs",
+  "retained_vfs_diagnostics_source": "593e259714967c9330f9d59199f9d091c9069ddf",
+  "withdrawn_active_tests_examples": "preserved under withdrawn-source and Git commits; no compilation into product",
+  "untouched": [
+    "all other core product",
+    "S7 overlay/daemon",
+    "S9 SDK/runtime/Bridge",
+    "root reference",
+    "unrelated owner notes",
+    "four containers"
+  ]
+}

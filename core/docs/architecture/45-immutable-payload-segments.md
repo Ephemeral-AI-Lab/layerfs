@@ -1,6 +1,9 @@
 # Immutable payload segments
 
-> **Status:** Implemented explicit layout; performance qualification is separate.
+> **Status:** WITHDRAWN by explicit owner direction, 2026-10-06.
+> The following describes historical `fb7f3f477` / `b1277cf1f` behavior.
+> Active source returns to `9b74ac035`; schemas7/10 and its public enum variant
+> are unavailable, without migration or fallback. Retain all experiment evidence.
 > Source: the Durable100 payload-layout change following `7399fac994`.
 
 `PersistenceConfig::with_sqlite_pack_layout(SqlitePackLayout::PayloadSegments)`

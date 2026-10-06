@@ -127,28 +127,6 @@ pub struct SqlWork {
     pub preallocation_close_ns: u64,
     /// Explicit checkpoint wall, outside SQL statement spans.
     pub checkpoint_ns: u64,
-    /// Direct immutable segment write attempts, outside SQLite VFS observations.
-    pub segment_write_calls: u64,
-    /// Successfully written direct segment bytes.
-    pub segment_write_bytes: u64,
-    /// Inclusive direct write-call wall.
-    pub segment_write_ns: u64,
-    /// Attempted F_FULLFSYNC calls on segment files.
-    pub segment_file_sync_calls: u64,
-    /// Attempted directory fsync and parent full-sync calls.
-    pub segment_directory_sync_calls: u64,
-    /// Attempted F_FULLFSYNC barriers, including Store directory creation.
-    pub segment_full_sync_calls: u64,
-    /// Inclusive direct synchronization wall, nested in publication.
-    pub segment_sync_ns: u64,
-    /// Attempted exact segment reads.
-    pub segment_read_calls: u64,
-    /// Bytes successfully returned by direct segment reads.
-    pub segment_read_bytes: u64,
-    /// Inclusive direct read-call wall.
-    pub segment_read_ns: u64,
-    /// Checked closes of segment and directory descriptors.
-    pub segment_close_calls: u64,
 }
 /// Actual allocation descriptor identity observed during completion; not ownership.
 #[derive(Clone, Copy, Debug)]
@@ -212,8 +190,6 @@ pub(crate) struct Session {
     pub(crate) acquisition: crate::SqliteAcquisitionSchema,
     #[cfg(target_os = "macos")]
     pub(crate) allocation: Option<super::allocation_owner::AllocationOwner>,
-    #[cfg(target_os = "macos")]
-    pub(crate) segments: Option<super::segment_owner::SegmentOwner>,
 }
 impl Session {
     pub(crate) fn connect(
@@ -249,16 +225,14 @@ impl Session {
                 .ok_or(BackendError::Integrity)?
                 .get::<i64>(0)?;
             let acquisition = match stored {
-                1..=3 | 7 => crate::SqliteAcquisitionSchema::Absent,
-                4..=6 | 10 => crate::SqliteAcquisitionSchema::Tables,
+                1..=3 => crate::SqliteAcquisitionSchema::Absent,
+                4..=6 => crate::SqliteAcquisitionSchema::Tables,
                 _ => return Err(BackendError::Integrity),
             };
             let layout = match stored - acquisition.version_offset() {
                 1 => crate::SqlitePackLayout::Monolithic,
                 2 => crate::SqlitePackLayout::GroupRows,
-                3 => crate::SqlitePackLayout::GroupRowsIndexed,
-                7 => crate::SqlitePackLayout::PayloadSegments,
-                _ => return Err(BackendError::Integrity),
+                _ => crate::SqlitePackLayout::GroupRowsIndexed,
             };
             (layout, acquisition)
         };
@@ -321,14 +295,6 @@ impl Session {
             None
         };
         Ok(Self {
-            #[cfg(target_os = "macos")]
-            segments: if layout == crate::SqlitePackLayout::PayloadSegments {
-                Some(super::segment_owner::SegmentOwner::open(
-                    path, create, selected, &work,
-                )?)
-            } else {
-                None
-            },
             #[cfg(target_os = "macos")]
             allocation,
             state: Mutex::new(State {

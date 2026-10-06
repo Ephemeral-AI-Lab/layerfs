@@ -54,3 +54,10 @@ uses an external observer, preserving actual synchronization and file operations
 No public API signature, third-party dependency, default profile or acquisition
 placement is changed. Local commits and #307 evidence updates are authorized;
 push/release/deployment and S10–S13 are outside this selection.
+
+## Owner supersession
+
+This payload vehicle is withdrawn and active routing refuses its retired case.
+Its failed receipts remain. The owner now selects Monolithic `9b74ac035` behavior
+and the full [cluster-one-end regression matrix](monolithic-cluster-one-regression-20261006.md).
+No later payload redesign is authorized by that selection.

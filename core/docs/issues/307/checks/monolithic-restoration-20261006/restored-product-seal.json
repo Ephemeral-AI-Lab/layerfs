@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "source_equal_to": "9b74ac035faaf271edd01726913f63f084adaaa2",
+  "product_seal": "44f07dd216a13d3103440b15b6d295a026ee80878f6e572e468855f27e2e74c5",
+  "scope": "all flat core/crates */src/**/*.rs and shipped SQL plus nested layerfs-api */src/**/*.rs; ordered relative path+NUL+contents",
+  "method": "Git product-path comparison has zero differences; exact measured reservation-only source seal restored",
+  "actual_head_before_restoration_commit": "4b43fa667ca9a77ac87d19dda1b2efbde1bc9012",
+  "unrelated_owner_notes": {
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027"
+  }
+}

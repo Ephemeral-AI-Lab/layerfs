@@ -1,0 +1,25 @@
+{
+  "status": "PASS",
+  "links": [
+    [
+      "core/docs/issues/307/MONOLITHIC-RESTORATION-20261006.md",
+      "checks/monolithic-restoration-20261006/withdrawn-source/",
+      true
+    ],
+    [
+      "core/docs/issues/307/MONOLITHIC-RESTORATION-20261006.md",
+      "checks/durable100-barriers-results-20261006/ledger.json",
+      true
+    ],
+    [
+      "core/docs/issues/307/MONOLITHIC-RESTORATION-20261006.md",
+      "checks/monolithic-restoration-20261006/cluster-one-end-baseline-audit.json",
+      true
+    ],
+    [
+      "core/docs/issues/307/MONOLITHIC-RESTORATION-20261006.md",
+      "../../../../docs/roadmap/0.1/0.1.7/monolithic-cluster-one-regression-20261006.md",
+      true
+    ]
+  ]
+}

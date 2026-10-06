@@ -243,8 +243,8 @@ The changed provider executes on macOS; Linux compilation establishes no global
 Store runtime support. Exact failures/check budgets and custody limits remain
 in the linked check folder.
 
-## Payload layout selection, 2026-10-06
+## Monolithic restoration, 2026-10-06
 
-[PayloadSegments](45-immutable-payload-segments.md) adds schema7 without acquisition
-and schema10 with the same acquisition tables. A1 remains on the same durable
-Session; no acquisition-placement or crash-guarantee change follows.
+The schema7/10 [payload-layout experiment](45-immutable-payload-segments.md) is
+withdrawn. Active acquisition uses original schema4–6 and the same Durable
+Session; no placement/crash guarantee change is selected.

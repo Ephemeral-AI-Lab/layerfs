@@ -1,0 +1,160 @@
+{
+  "status": "PASS",
+  "host_test_bodies": 260,
+  "linux_portable_test_bodies": 128,
+  "host_no_run": {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-persistence",
+      "-p",
+      "layerfs-storage",
+      "-p",
+      "layerfs-project",
+      "-p",
+      "layerfs-sdk",
+      "--all-targets",
+      "--no-run"
+    ],
+    "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+    "env_target": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-runtime-tests",
+    "wall_timeout_s": 120.0,
+    "wall_ns": 9530297666,
+    "exit_code": 0,
+    "timeout": false,
+    "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe"
+  },
+  "linux_no_run": {
+    "command": [
+      "docker",
+      "run",
+      "--rm",
+      "--mount",
+      "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/layerfs,dst=/work",
+      "-w",
+      "/work",
+      "-e",
+      "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+      "-e",
+      "CARGO_TARGET_DIR=/work/core/target/cluster2-linux",
+      "-e",
+      "LAYERFS_CONSTRUCTION_WORKERS=1",
+      "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=1s",
+      "110s",
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-persistence",
+      "-p",
+      "layerfs-storage",
+      "-p",
+      "layerfs-project",
+      "-p",
+      "layerfs-sdk",
+      "--all-targets",
+      "--no-run"
+    ],
+    "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+    "env_target": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-runtime-tests",
+    "wall_timeout_s": 120.0,
+    "wall_ns": 28810709875,
+    "exit_code": 0,
+    "timeout": false,
+    "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe"
+  },
+  "commands": {
+    "tooling-tests": {
+      "exit_code": 0,
+      "timeout": false,
+      "wall_ns": 290847166,
+      "wall_timeout_s": 30.0
+    },
+    "linux-portable-tests": {
+      "exit_code": 0,
+      "timeout": false,
+      "wall_ns": 15540074042,
+      "wall_timeout_s": 120.0
+    },
+    "host-no-run": {
+      "exit_code": 0,
+      "timeout": false,
+      "wall_ns": 9530297666,
+      "wall_timeout_s": 120.0
+    },
+    "host-clippy": {
+      "exit_code": 0,
+      "timeout": false,
+      "wall_ns": 1964631291,
+      "wall_timeout_s": 120.0
+    },
+    "linux-clippy": {
+      "exit_code": 0,
+      "timeout": false,
+      "wall_ns": 4948436667,
+      "wall_timeout_s": 120.0
+    },
+    "linux-no-run": {
+      "exit_code": 0,
+      "timeout": false,
+      "wall_ns": 28810709875,
+      "wall_timeout_s": 120.0
+    },
+    "host-tests": {
+      "exit_code": 0,
+      "timeout": false,
+      "wall_ns": 46268485500,
+      "wall_timeout_s": 110.0
+    },
+    "fmt": {
+      "exit_code": 0,
+      "timeout": false,
+      "wall_ns": 1494691750,
+      "wall_timeout_s": 30.0
+    },
+    "harness-tests": {
+      "exit_code": 0,
+      "timeout": false,
+      "wall_ns": 718424292,
+      "wall_timeout_s": 30.0
+    },
+    "boundary-guard": {
+      "exit_code": 0,
+      "timeout": false,
+      "wall_ns": 448733250,
+      "wall_timeout_s": 30.0
+    },
+    "regression-harness-tests": {
+      "exit_code": 0,
+      "timeout": false,
+      "wall_ns": 128704958,
+      "wall_timeout_s": 30.0
+    }
+  },
+  "harness_tests": 16,
+  "tooling_tests": 40,
+  "boundary_files": 652,
+  "test_timeout_policy": "each invocation explicit <=120s, no-run build precedes runtime; no unchanged treatment replay",
+  "platform_scope": "global SQLite macOS runtime; portable Storage/Project Linux runtime, all selected packages Linux build/Clippy",
+  "source_equal_to": "9b74ac035faaf271edd01726913f63f084adaaa2",
+  "product_seal": "44f07dd216a13d3103440b15b6d295a026ee80878f6e572e468855f27e2e74c5",
+  "baseline_audit": "8/8 PASS; actual197d Project candidate rows reused",
+  "unrelated_containers": [
+    "9cf2fe345496",
+    "ce75ac504df9",
+    "d2433851ea59",
+    "d2550144998b"
+  ],
+  "CI": "not applicable; no aggregate wrapper"
+}

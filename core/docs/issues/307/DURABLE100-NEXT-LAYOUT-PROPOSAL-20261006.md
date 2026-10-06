@@ -88,3 +88,7 @@ the existing Monolithic schema4 vehicle. Approval would select an engineering
 experiment with unchanged durability/workload/cache/gates; it would not declare
 success or authorize release/push/deployment. No code for this layout is included
 in the current checkpoint.
+
+Owner supersession: the payload format is withdrawn; active behavior and the new
+full same-profile regression screen are described in [Monolithic restoration](MONOLITHIC-RESTORATION-20261006.md).
+Historical proposal/measurements keep their original identity and verdict.

@@ -48,11 +48,6 @@ fn read_with<T>(
     if descriptors.len() != 1 || descriptor.pack_id != id {
         return Err(PersistenceError::Malformed);
     }
-    if tx.layout() == crate::SqlitePackLayout::PayloadSegments {
-        if let Some(extent) = super::segment_read::extent(tx, descriptor)? {
-            return super::segment_read::acquire(tx, descriptor, &extent, acquire);
-        }
-    }
     tx.work.borrow_mut().blob_open_calls += 1;
     let blob = tx
         .connection

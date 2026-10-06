@@ -655,14 +655,12 @@ Source: [Save lifecycle](core/crates/layerfs-storage/src/save/operation.rs),
 | Monolithic | Creation layout schema1; complete pack BLOBs |
 | GroupRows | Creation layout schema2; independently stored complete encoded units |
 | GroupRowsIndexed | Creation layout schema3; group rows with covering mapping index |
-| PayloadSegments | Explicit schema7/10; payload packs above64KiB in immutable Store-owned filesystem segments; small/metadata packs in SQLite |
 
-Opening supports exact schema1–7 and10 selection (8/9 are unsupported). Schema4–6
-add acquisition to layouts1–3; schema10 adds it to PayloadSegments. The
-[segment custody/publication/read contract](core/docs/architecture/45-immutable-payload-segments.md)
-retains A1 durable acquisition and old readers; performance qualification is separate.
-Layout is a
-creation choice, not an implicit migration request. Profile/authority/policy
+Opening supports schema1–3 and their acquisition-table variants4–6. The
+PayloadSegments experiment (schema7/10) is withdrawn by owner direction; active
+providers refuse those retired versions. Historical design/results remain in
+[the withdrawal record](core/docs/issues/307/MONOLITHIC-RESTORATION-20261006.md).
+Layout is a creation choice, not an implicit migration request. Profile/authority/policy
 compatibility is validated. Unsupported backends/platforms fail explicitly.
 The active SQLite provider currently requires macOS; portable content/storage
 contracts do not imply this provider is available inside a Linux sandbox.
@@ -711,9 +709,10 @@ cross-profile overhead measurement.
 
 ### 9.1 Namespace Init: latest retained full family
 
-Product source `197d2fb7d`, shared main-file allocation. The current handbook
-product's `core/crates` source tree matches that restored product after the WAL
-experiment was withdrawn. Receipts still retain `197d2fb7d`; they are not relabeled
+Product source `197d2fb7d`, shared main-file allocation. The restored handbook snapshot `8cbeadef07dc9ac1e79cd59eaee3dca494e2ff87`
+has identical `core/crates` tree `c558ee85e1e751d03378b91cbd950df5fb673872`
+to this cluster-one-end source after the WAL experiment was withdrawn. The live
+S7/S9 implementation is later source; it is not relabeled as this control. Receipts still retain `197d2fb7d`; they are not relabeled
 as new measurements at `8cbeadef0`.
 
 | Profile | Files | Reference s | Candidate s | Difference | Complete command s | Proof s | Allocated bytes / limit | Joint gate |

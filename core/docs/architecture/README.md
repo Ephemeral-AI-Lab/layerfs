@@ -374,5 +374,5 @@ S9 history and service: [original bound history receipts](37-runtime-history-rec
 [provider-owned acquisition backing](44-acquisition-backing.md). Milestone exits
 and transport/bounded-import/resource gaps remain explicit in #307 audits.
 
-- [Immutable payload segments](45-immutable-payload-segments.md): explicit schema7/10
-  custody, publication, scoped reads and retained failure bodies; qualification separate.
+- [Immutable payload segments](45-immutable-payload-segments.md): withdrawn schema7/10
+  experiment retained as historical source/design evidence; active provider schemas1–6.

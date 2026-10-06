@@ -28,9 +28,6 @@ pub enum SqlitePackLayout {
     GroupRows,
     /// Schema3 group rows with a covering index for bounded mapping validation.
     GroupRowsIndexed,
-    /// Schema7 immutable large payload segments; small packs remain SQLite BLOBs.
-    /// Acquisition tables select schema10. Creation is explicit; opens never migrate.
-    PayloadSegments,
 }
 impl SqlitePackLayout {
     pub(crate) const fn uses_units(self) -> bool {
@@ -41,17 +38,16 @@ impl SqlitePackLayout {
             Self::Monolithic => 1,
             Self::GroupRows => 2,
             Self::GroupRowsIndexed => 3,
-            Self::PayloadSegments => 7,
         }
     }
 }
 /// Explicit creation-only selection of the initial-acquisition working tables.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum SqliteAcquisitionSchema {
-    /// Schema versions 1 to 3 and 7: acquisition is unavailable.
+    /// Schema versions 1 to 3: no acquisition tables; acquisition is unavailable.
     #[default]
     Absent,
-    /// Schema versions 4 to 6 and 10: pack layouts with acquisition tables.
+    /// Schema versions 4 to 6: the same pack layouts with the acquisition tables.
     Tables,
 }
 impl SqliteAcquisitionSchema {
@@ -92,7 +88,7 @@ impl PersistenceConfig {
         self.sqlite_acquisition = acquisition;
         self
     }
-    /// Selects physical layout explicitly for creation; never migrates an open Store.
+    /// Selects physical group rows explicitly for creation; never migrates an open Store.
     pub fn with_sqlite_pack_layout(mut self, layout: SqlitePackLayout) -> Self {
         self.sqlite_pack_layout = layout;
         self
