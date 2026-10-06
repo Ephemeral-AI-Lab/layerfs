@@ -390,3 +390,12 @@ A3's acceptance row is met functionally (root equivalence, membership, native
 identity, serial gaps, no input-sized resident collection in source); it has no
 resident-memory measurement. R1–R4, E1–E4, Q1 and C1 remain open. S9 remains
 CHECKPOINT/unchecked.
+
+
+## Namespace Init first-selection checkpoint (2026-10-06)
+
+A3’s provider-backed public Project Init has now run one measured arm per selected case at source45e2b09e8 (product0d84badef): all eight arms have cold-content attestation, independent sampled proof, equal pair roots and checked cleanup. The joint speed/storage gate passes only Disposable100; Durable100, Durable1000 and Disposable1000 retain speed FAIL. Full-payload/huge-root/>4-GiB proof and owning application/runtime/supervision/disconnect acceptance remain absent. A1–A3 checkpoints remain complete; R1–R4/E1–E4/Q1/C1 remain open. S9 stays CHECKPOINT/unchecked.
+
+Exact identities, commands, raw receipts, gates and next-work custody are in the
+[immutable component report](NAMESPACE-INIT-ACQUISITION-RESULTS-20261006.md).
+The S5/S6 stopping-boundary record remains unchanged.

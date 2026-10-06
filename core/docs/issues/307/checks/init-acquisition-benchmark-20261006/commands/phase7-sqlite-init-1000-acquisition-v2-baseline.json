@@ -1,0 +1,23 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/benchmark/fs-bench-pro/runner.py",
+    "run",
+    "--case",
+    "phase7-sqlite-init-1000-acquisition-v2",
+    "--arm",
+    "baseline",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/acquisition-20261006-phase7-sqlite-init-1000-acquisition-v2-baseline",
+    "--baseline-root",
+    "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/target/phase7-baseline/layerfs"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs",
+  "wall_timeout_seconds": 120,
+  "wall_ns": 1540203667,
+  "exit_code": 0,
+  "timed_out": false,
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe",
+  "output": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/acquisition-20261006-phase7-sqlite-init-1000-acquisition-v2-baseline"
+}

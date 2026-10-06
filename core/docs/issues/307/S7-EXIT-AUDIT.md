@@ -201,3 +201,12 @@ links and guard checks pass; cold speed/RSS/rate and huge-root work remain unrun
 Separate [S7 tracker receipt](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6010922165) records this status and next-ready work.
 Production LOC: core92680 →92680 (+0), reference65417 →65417 (+0),
 combined158097 →158097 (+0); exact staged/committed comparison verified.
+
+
+## Namespace Init first-selection checkpoint (2026-10-06)
+
+The owner-directed acquisition-v2 first selection now has complete component Init receipts, four matched pairs and explicit larger-tier NOT_RUN rows. All cold-content/functional/root/cleanup/absolute checks pass, but three relative-speed gates fail; only Disposable100 passes the joint gate. These rows do not close complete daemon operation/request/SQL/page/byte/copy/queue/residency/debt, 256 MiB reservation/high-water/freelist/range-allocation or sustained-rate evidence. S7 remains CHECKPOINT/unchecked. E1–E4 remain open at full required scope.
+
+Exact identities, commands, raw receipts, gates and next-work custody are in the
+[immutable component report](NAMESPACE-INIT-ACQUISITION-RESULTS-20261006.md).
+The S5/S6 stopping-boundary record remains unchanged.

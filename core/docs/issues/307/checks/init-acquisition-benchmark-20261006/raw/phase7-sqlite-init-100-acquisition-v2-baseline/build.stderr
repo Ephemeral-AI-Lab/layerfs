@@ -1,0 +1,11 @@
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/target/phase7-baseline/layerfs/core/crates/layerfs-telemetry)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/target/phase7-baseline/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/target/phase7-baseline/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-api-core v0.1.6 (/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/target/phase7-baseline/layerfs/core/crates/layerfs-api/core)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/target/phase7-baseline/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/target/phase7-baseline/layerfs/core/crates/layerfs-sandbox)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/target/phase7-baseline/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/target/phase7-baseline/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/target/phase7-baseline/layerfs/core/crates/layerfs-server)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/target/phase7-baseline/layerfs/core/crates/layerfs-api/sdk)
+    Finished `release` profile [optimized] target(s) in 10.82s

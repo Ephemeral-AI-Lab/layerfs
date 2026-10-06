@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-06T08:34:04Z",
+  "uname": "Darwin Yifans-MacBook-Pro-10.local 25.4.0 Darwin Kernel Version 25.4.0: Thu Mar 19 19:26:07 PDT 2026; root:xnu-12377.101.15~1/RELEASE_ARM64_T6031 arm64",
+  "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t26.4.1\nBuildVersion:\t\t25E253",
+  "cpu": "Apple M3 Max",
+  "memory_bytes": 38654705664,
+  "rust": "rustc 1.85.1 (4eb161250 2025-03-15)\nbinary: rustc\ncommit-hash: 4eb161250e340c8f48f66e2b929ef4a5bed7c181\ncommit-date: 2025-03-15\nhost: aarch64-apple-darwin\nrelease: 1.85.1\nLLVM version: 19.1.7",
+  "cargo": "cargo 1.85.1 (d73d2caf9 2024-12-31)",
+  "candidate_status": "",
+  "baseline_status": "",
+  "containers": [
+    "9cf2fe345496b45d79ff272e6c698552948f1e92ea106926826a770592623b24 layerfs-experiment-305-dev",
+    "ce75ac504df9d0e58cedcdd0df93fe7ef39c3b66ef3c13b0bb6b580def64516c layerfs-4c8cde9ee1cf49f8049298b3377d4927",
+    "d2433851ea5990e273b0673fdbd5c180917f1216f3c81bdfb4517da0207e2c2a layerfs-dbd59ea75fdc62de0a1f6d9d099609ab",
+    "d2550144998b4b71de98cb9ecf6448f87c7b99a3c2f69ea778a29413fffa5ffb layerfs-76b116dc9d984679f5802e2ec9c0798d"
+  ]
+}

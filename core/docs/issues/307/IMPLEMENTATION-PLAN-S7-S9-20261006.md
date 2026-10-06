@@ -762,3 +762,12 @@ Next ready: R1 (host service supervisor and consumer attachment) and E1
 (register the S7/S9 workload, cache, observer and verifier contract with a thin
 runner). R2 needs R1 and A3's acquired-root witnesses, now available. S7/S9
 remain incomplete.
+
+
+## Namespace Init first-selection checkpoint (2026-10-06)
+
+The owner directed a prospective budget lift for the fresh namespace benchmark. Local45e2b09e8 registers acquisition-v2 at30 s complete performance/19 s independent verification with all other gates unchanged. V1 remains unsampled at15/9.5 s. The initial four paired100/1000 Durable/Disposable cases have run exactly once per arm. All cold-content, sampled proof, root equality, cleanup and absolute-budget checks pass; only Disposable100 passes the joint gate, with three speed FAILs retained. Larger tiers remain NOT_RUN. This is a component follow-up after A3, not completion of E1–E4 or S7/S9, and starts no R1–R4 code. Next ready work is count-driven diagnosis of the retained speed failures and independent R1/E1 implementation.
+
+Exact identities, commands, raw receipts, gates and next-work custody are in the
+[immutable component report](NAMESPACE-INIT-ACQUISITION-RESULTS-20261006.md).
+The S5/S6 stopping-boundary record remains unchanged.
