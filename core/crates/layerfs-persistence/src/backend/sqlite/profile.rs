@@ -33,10 +33,16 @@ pub(crate) fn apply(
     c: &Connection,
     create: bool,
     selected: SqlitePersistenceProfile,
+    acquisition: crate::SqliteAcquisitionSchema,
     w: &RefCell<SqlWork>,
 ) -> Result<(), BackendError> {
     if create {
         query::run(c, "PRAGMA page_size=4096", vec![], w)?;
+        if acquisition == crate::SqliteAcquisitionSchema::Tables {
+            // Select pointer-map support before schema/WAL creation. Opening
+            // an existing Store never changes its physical format.
+            query::run(c, "PRAGMA auto_vacuum=INCREMENTAL", vec![], w)?;
+        }
     } else {
         let mode = query::run(c, "PRAGMA journal_mode", vec![], w)?
             .first()
@@ -88,6 +94,8 @@ pub(crate) fn check(p: &ConnectionProfile) -> Result<(), BackendError> {
         || p.fullfsync != selected.fullfsync()
         || p.checkpoint_fullfsync != 1
         || p.page_size != 4096
+        || !matches!(p.auto_vacuum, 0 | 2)
+        || (p.auto_vacuum == 2 && p.acquisition != crate::SqliteAcquisitionSchema::Tables)
         || p.wal_autocheckpoint != 1000
         || p.journal_size_limit != 4194304
         || p.cache_size != -2048

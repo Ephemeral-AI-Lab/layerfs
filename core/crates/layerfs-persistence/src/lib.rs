@@ -8,6 +8,7 @@ pub(crate) use store::config;
 pub(crate) use store::handles;
 mod history;
 pub use backend::sqlite::connection::{AllocationIdentity, Checkpoint, ConnectionProfile, SqlWork};
+pub use backend::sqlite::reclamation::{SpaceReclamation, RECLAMATION_PAGE_LIMIT};
 pub use backend::sqlite::statement_work::StatementPhaseWork;
 pub use config::{
     BackendSelection, PersistenceConfig, SqliteAcquisitionSchema, SqlitePackLayout,

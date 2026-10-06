@@ -15,6 +15,21 @@ pub struct Handles {
     pub acquisition: AcquisitionProvider,
 }
 impl Handles {
+    /// Reclaims at most `pages` free SQLite pages in one short atomic job.
+    ///
+    /// New Stores with acquisition tables support this operation. Existing
+    /// Stores with auto-vacuum disabled are refused without migration. The
+    /// budget must be in `1..=RECLAMATION_PAGE_LIMIT`. A caller may continue
+    /// acknowledged jobs while debt remains, releasing the writer between
+    /// jobs; a refused or uncertain attempt is never replayed automatically.
+    /// Durable jobs retain WAL/FULL/fullfsync. A final checkpoint pays the WAL
+    /// and filesystem allocation release separately, within caller timing.
+    pub fn reclaim_space(&self, pages: u32) -> Result<crate::SpaceReclamation, PersistenceError> {
+        self.storage
+            .session
+            .reclaim_space(pages)
+            .map_err(Into::into)
+    }
     /// Read-back settings from the actual shared connection.
     pub fn profile(&self) -> &ConnectionProfile {
         &self.storage.session.profile

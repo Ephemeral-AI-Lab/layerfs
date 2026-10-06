@@ -35,6 +35,8 @@ pub struct ConnectionProfile {
     pub checkpoint_fullfsync: i64,
     /// Database page bytes.
     pub page_size: i64,
+    /// Stored page-reclamation mode: 0 for retained Stores, 2 for new acquisition Stores.
+    pub auto_vacuum: i64,
     /// Automatic checkpoint page interval.
     pub wal_autocheckpoint: i64,
     /// Retained journal-byte limit, not a WAL high-water guarantee.
@@ -216,7 +218,7 @@ impl Session {
         connection
             .set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
             .map_err(rows::error)?;
-        profile::apply(&connection, create, selected, &work)?;
+        profile::apply(&connection, create, selected, creation_acquisition, &work)?;
         let (layout, acquisition) = if create {
             (creation_layout, creation_acquisition)
         } else {
@@ -265,6 +267,7 @@ impl Session {
             fullfsync: integer("fullfsync")?,
             checkpoint_fullfsync: integer("checkpoint_fullfsync")?,
             page_size: integer("page_size")?,
+            auto_vacuum: integer("auto_vacuum")?,
             wal_autocheckpoint: integer("wal_autocheckpoint")?,
             journal_size_limit: integer("journal_size_limit")?,
             cache_size: integer("cache_size")?,

@@ -6,6 +6,13 @@ from families import phase7_sqlite as f
 from shared import cluster_one_control as c
 ROOT=Path(__file__).resolve().parents[4]
 class ClusterOneRegression(unittest.TestCase):
+    def test_space_scaling_cases_preserve_the_frozen_gate_inputs(self):
+        self.assertEqual(len(f.SPACE_SCALING_CASES),8)
+        self.assertTrue(set(f.SPACE_SCALING_CASES).isdisjoint(f.REGRESSION_CASES))
+        for new,original in zip(f.SPACE_SCALING_CASES,f.REGRESSION_CASES):
+            current,previous=f.CASES[new],f.CASES[original]
+            self.assertEqual((current.fixture,current.profile,current.pack_layout,current.command_budget_ns,current.verification_budget_ns),
+                (previous.fixture,previous.profile,previous.pack_layout,previous.command_budget_ns,previous.verification_budget_ns))
     def test_all_eight_cases_keep_workload_profile_and_caps(self):
         self.assertEqual(len(f.REGRESSION_CASES),8)
         for profile,names in f.REGRESSION_CASES_BY_PROFILE.items():

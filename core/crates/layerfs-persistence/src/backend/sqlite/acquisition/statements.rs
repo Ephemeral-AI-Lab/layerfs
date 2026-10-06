@@ -32,8 +32,10 @@ statement!(UNPLACED_FIRST, "unplaced_first");
 statement!(UNPLACED_NEXT, "unplaced_next");
 statement!(PLACE_ENTRY, "place_entry");
 statement!(DIRECTORIES, "directories");
+statement!(DIRECTORY_SIZES, "directory_sizes");
 statement!(DIRECTORY_PATH, "directory_path");
 statement!(JOBS, "jobs");
+statement!(JOB_SIZES, "job_sizes");
 statement!(JOB, "job");
 statement!(COMPLETE_FILE, "complete_file");
 statement!(FILE_ROOTS, "file_roots");
@@ -42,11 +44,15 @@ statement!(ENTRIES_NEXT, "entries_next");
 statement!(SET_DIRECTORY_ROOT, "set_directory_root");
 statement!(DISCARD_ENTRIES, "discard_entries");
 statement!(DISCARD_NATIVE, "discard_native");
+statement!(DISCARD_ENTRY_KEYS, "discard_entry_keys");
+statement!(DISCARD_NATIVE_KEYS, "discard_native_keys");
+statement!(DISCARD_ENTRY_TAIL, "discard_entry_tail");
+statement!(DISCARD_NATIVE_TAIL, "discard_native_tail");
 statement!(ABANDONED, "abandoned");
 statement!(RELEASE_ABANDONED, "release_abandoned");
 
 /// Every shipped statement by name, in a fixed order, for plan inspection.
-pub(crate) const ALL: [(&str, &str); 28] = [
+pub(crate) const ALL: [(&str, &str); 34] = [
     ("begin", BEGIN),
     ("claim_epoch", CLAIM_EPOCH),
     ("owner", OWNER),
@@ -63,8 +69,10 @@ pub(crate) const ALL: [(&str, &str); 28] = [
     ("unplaced_next", UNPLACED_NEXT),
     ("place_entry", PLACE_ENTRY),
     ("directories", DIRECTORIES),
+    ("directory_sizes", DIRECTORY_SIZES),
     ("directory_path", DIRECTORY_PATH),
     ("jobs", JOBS),
+    ("job_sizes", JOB_SIZES),
     ("job", JOB),
     ("complete_file", COMPLETE_FILE),
     ("file_roots", FILE_ROOTS),
@@ -73,6 +81,10 @@ pub(crate) const ALL: [(&str, &str); 28] = [
     ("set_directory_root", SET_DIRECTORY_ROOT),
     ("discard_entries", DISCARD_ENTRIES),
     ("discard_native", DISCARD_NATIVE),
+    ("discard_entry_keys", DISCARD_ENTRY_KEYS),
+    ("discard_native_keys", DISCARD_NATIVE_KEYS),
+    ("discard_entry_tail", DISCARD_ENTRY_TAIL),
+    ("discard_native_tail", DISCARD_NATIVE_TAIL),
     ("abandoned", ABANDONED),
     ("release_abandoned", RELEASE_ABANDONED),
 ];

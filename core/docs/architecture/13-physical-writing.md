@@ -544,3 +544,30 @@ The active provider returns byte-for-byte to retained `9b74ac035` behavior:
 Monolithic/group-row schemas1–6, durable acquisition in the same Session,
 unchanged canonical data and uncertainty/custody. New schema7/10 creation/read
 is unavailable. Historical receipts remain; later S7/S9 work is preserved.
+
+
+## Acquisition page reclamation and scaling, 2026-10-06
+
+Implemented source scope is described in
+[the prospective space/scaling record](../issues/307/SPACE-AND-SCALING-PLAN-20261006.md).
+New acquisition-table Stores select incremental auto-vacuum before schema creation;
+retained mode0 Stores still open without conversion. Canonical objects and pack
+layouts are unchanged. Pointer-map pages are included in allocation. Each normal
+nonempty discard/release pays at most512 free-page removals inside its existing
+atomic unit. `Handles::reclaim_space` exposes one bounded job for residual debt;
+it refuses unsupported mode0 without migration and preserves one-attempt outcomes.
+WAL/FULL/fullfsync and MEMORY/OFF retain their scoped guarantees. Checkpoint alone
+still does not compact internal SQLite free pages. Completion measurements pay
+residual reclamation before final checkpoint/close.
+
+Path-bearing windows inspect at most512 indexed scalar lengths and then fetch
+only the actual prefix within the existing256-KiB column budget, in one snapshot.
+Cleanup selects one inclusive endpoint with a job-local offset at most4095;
+each successful job removes that prefix, so the offset never grows with N.
+The short final prefix uses a reverse indexed seek. Range DELETE removes the
+explicit IN-subquery list/Bloom filter; SQLite still buffers bounded deletion
+keys/RETURNING values. Endpoint work is O(log N+K), deletion/index work
+O(K log N), and physical maintenance is bounded per job. Exact row/byte charges,
+entry-first order, owner fencing, rollback and uncertain custody are preserved.
+The new-source plans/profiles and frozen cold measurements decide qualification;
+implementation alone does not establish speed, allocation or S7/S9 acceptance.

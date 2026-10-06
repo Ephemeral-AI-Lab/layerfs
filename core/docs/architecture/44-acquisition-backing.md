@@ -117,7 +117,7 @@ statement. The original 25-statement point/window plans and the revised root
 window plans are retained at their own source identities. Stored-state reads
 and updates use the operation-prefixed primary keys or directory index. Root
 updates additionally materialize and scan a fixed 32-row SQL input; that is
-bounded statement scratch, not a scan of the stored population. The two removal statements build a subquery list and
+bounded statement scratch, not a scan of the stored population. The original removal statements built a subquery list and
 Bloom filter bounded by their row budget. The same 512-row read window cost 4
 statements and 9267 VM steps, and the same 512-row removal job 6 statements and
 33434 VM steps, with 2000 and with 20000 stored entries; full-scan steps, sorts
@@ -248,3 +248,30 @@ in the linked check folder.
 The schema7/10 [payload-layout experiment](45-immutable-payload-segments.md) is
 withdrawn. Active acquisition uses original schema4–6 and the same Durable
 Session; no placement/crash guarantee change is selected.
+
+
+## Acquisition page reclamation and scaling, 2026-10-06
+
+Implemented source scope is described in
+[the prospective space/scaling record](../issues/307/SPACE-AND-SCALING-PLAN-20261006.md).
+New acquisition-table Stores select incremental auto-vacuum before schema creation;
+retained mode0 Stores still open without conversion. Canonical objects and pack
+layouts are unchanged. Pointer-map pages are included in allocation. Each normal
+nonempty discard/release pays at most512 free-page removals inside its existing
+atomic unit. `Handles::reclaim_space` exposes one bounded job for residual debt;
+it refuses unsupported mode0 without migration and preserves one-attempt outcomes.
+WAL/FULL/fullfsync and MEMORY/OFF retain their scoped guarantees. Checkpoint alone
+still does not compact internal SQLite free pages. Completion measurements pay
+residual reclamation before final checkpoint/close.
+
+Path-bearing windows inspect at most512 indexed scalar lengths and then fetch
+only the actual prefix within the existing256-KiB column budget, in one snapshot.
+Cleanup selects one inclusive endpoint with a job-local offset at most4095;
+each successful job removes that prefix, so the offset never grows with N.
+The short final prefix uses a reverse indexed seek. Range DELETE removes the
+explicit IN-subquery list/Bloom filter; SQLite still buffers bounded deletion
+keys/RETURNING values. Endpoint work is O(log N+K), deletion/index work
+O(K log N), and physical maintenance is bounded per job. Exact row/byte charges,
+entry-first order, owner fencing, rollback and uncertain custody are preserved.
+The new-source plans/profiles and frozen cold measurements decide qualification;
+implementation alone does not establish speed, allocation or S7/S9 acceptance.

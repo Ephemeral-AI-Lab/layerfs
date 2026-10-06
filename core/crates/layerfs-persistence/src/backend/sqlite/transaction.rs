@@ -23,6 +23,9 @@ impl Transaction<'_> {
     pub(crate) fn schema_version(&self) -> i64 {
         self.owner.schema_version()
     }
+    pub(crate) fn reclamation_enabled(&self) -> bool {
+        self.owner.profile.auto_vacuum == 2
+    }
     pub(crate) fn before_pack(&self, capacity: usize) -> Result<(), BackendError> {
         #[cfg(target_os = "macos")]
         {

@@ -190,6 +190,17 @@ for profile,names in ACQUISITION_CASES_BY_PROFILE.items():
 REGRESSION_CASES=tuple(name for names in REGRESSION_CASES_BY_PROFILE.values() for name in names)
 REGRESSION_ALLOCATION_RULE='candidate-final-database-wal-shm<=same-profile-cluster-one-end-final-total-v1'
 
+# Owner2026-10-06: fix retained free-page allocation and investigate scaling.
+# Same complete lifecycle, profiles, workloads, cold state, workers and gates;
+# bounded page reclamation is paid inside the product clock. Preserve v1 rows.
+SPACE_SCALING_CASES=[]
+for original in REGRESSION_CASES:
+    old=CASES[original];new=original.replace('-cluster-one-regression-v1','-space-scaling-v1')
+    CASES[new]=Case(new,old.fixture,None,None,old.command_budget_ns,
+        old.verification_budget_ns,old.profile,old.proof_policy,'monolithic',old.proof_envelope)
+    SPACE_SCALING_CASES.append(new)
+SPACE_SCALING_CASES=tuple(SPACE_SCALING_CASES)
+
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"
@@ -248,7 +259,7 @@ def build(root,arm,out,common):
 def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pins=None):
     case=CASES[selection]
     if selection in RETIRED_PAYLOAD_SEGMENT_CASES:raise ValueError('payload layout withdrawn; historical receipts retained; no active vehicle')
-    regression=selection in REGRESSION_CASES
+    regression=selection in REGRESSION_CASES+SPACE_SCALING_CASES
     if regression and arm!='candidate':raise ValueError('regression baseline is reused qualified Project Init at197d2fb7d; never the old Service wrapper')
     if selection in RETIRED_WAL_RESERVATION_CASES:
         raise ValueError('rejected WAL reservation selection retired; original receipts retained')
@@ -269,6 +280,9 @@ def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pin
     record={'schema':'phase7-sqlite-step10-v2','case':case.id,'arm':arm,'status':'NOT_RUN','sample_count':0,'verification_status':'NOT_RUN','cache_status':'INCOMPLETE','cleanup':{'status':'NOT_RUN'},'comparison_scope':'inner complete product clock including fresh database create/open, real Init, required checkpoint and final close; external child wall reported separately','margin_arithmetic':'10*candidate_ns<=11*baseline_ns','cache_contract':contract.CACHE,'requested_profile':case.profile,'profile':PROFILE_IDS[case.profile] if arm=='candidate' else 'Phase4.5 MEMORY/OFF disclosed','command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'construction_workers':4,'environment_workers':1,'acquisition_vehicle':ACQUISITION_VEHICLE if arm=='candidate' else 'reference driver at pinned base; no provider acquisition','store_schema':ACQUISITION_STORE_SCHEMA if arm=='candidate' else 'reference','required_case_ids':REGRESSION_CASES if regression else ACQUISITION_CASES_BY_PROFILE[case.profile] if case.id in ACQUISITION_CASES_BY_PROFILE[case.profile] else WAL_RESERVATION_CASES_BY_PROFILE[case.profile] if case.id in WAL_RESERVATION_CASES_BY_PROFILE[case.profile] else SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] if case.id in SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] else OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] if case.id in OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] else REQUIRED_BY_PROFILE[case.profile],'allocation_rule':REGRESSION_ALLOCATION_RULE if regression else INIT_ALLOCATION_RULE,'pack_layout':case.pack_layout}
     locks=[]
     try:
+        if selection in SPACE_SCALING_CASES:
+            record['required_case_ids']=SPACE_SCALING_CASES
+            record['space_policy']='new acquisition Store incremental vacuum; acknowledged 512-page jobs before final checkpoint, all timed'
         for p in [common.RESULTS/'phase7-sqlite.lock']+([root/'target/phase7-sqlite.lock'] if arm=='baseline' else []):
             p.parent.mkdir(parents=True,exist_ok=True);h=p.open('a+b');locks.append(h);fcntl.flock(h,fcntl.LOCK_EX|fcntl.LOCK_NB)
         if regression:
@@ -322,6 +336,11 @@ def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pin
             effective=json.loads(matches[0]);record['effective_profile']=effective
             expected={'identity':PROFILE_IDS[case.profile],'journal_mode':'wal' if case.profile=='durable' else 'memory','synchronous':2 if case.profile=='durable' else 0,'foreign_keys':1,'fullfsync':1 if case.profile=='durable' else 0,'checkpoint_fullfsync':1,'page_size':4096,'cache_size':-2048,'mmap_size':0,'temp_store':2,'wal_checkpoint_performed':case.profile=='durable'}
             if effective!=expected:raise ValueError('actual selected-profile settings/completion mismatch')
+            if selection in SPACE_SCALING_CASES:
+                lines=[line[len('SPACE_PROFILE '):] for line in (out/'driver.stderr').read_text().splitlines() if line.startswith('SPACE_PROFILE ')]
+                if len(lines)!=1:raise ValueError('space-policy readback missing or ambiguous')
+                record['space_profile']=json.loads(lines[0])
+                if record['space_profile']['auto_vacuum']!=2 or record['space_profile']['page_budget']!=512 or not child.get('reclamation_jobs'):raise ValueError('declared bounded reclamation was not performed')
         proof=invoke([binaries['verify_namespace']['path'],str(db),str(db if arm=='candidate' else history),child['root'],child['stack'],fixture['manifest'],fixture['manifest_sha256']]+([case.profile] if arm=='candidate' else []),out,'verifier',case.verification_budget_ns,env,root)
         record['verification']=proof;record['verification_wall_ns']=proof['wall_ns'];record['verification_status']='PASS' if proof['exit_code']==0 and not proof['timed_out'] and common.lite_verification_pass(proof['child'],fixture_case,child,fixture) else 'FAIL'
         return out

@@ -3,8 +3,8 @@
 //! A window's row count is derived from the byte limit and the largest row its
 //! statement can return, so the byte bound holds without fetching past it.
 use super::statements::{
-    signed, unsigned, Failure, DIRECTORIES, DIRECTORY_PATH, ENTRIES_FIRST, ENTRIES_NEXT,
-    FILE_ROOTS, JOB, JOBS, UNPLACED_FIRST, UNPLACED_NEXT,
+    signed, unsigned, Failure, DIRECTORIES, DIRECTORY_PATH, DIRECTORY_SIZES, ENTRIES_FIRST,
+    ENTRIES_NEXT, FILE_ROOTS, JOB, JOBS, JOB_SIZES, UNPLACED_FIRST, UNPLACED_NEXT,
 };
 use crate::backend::{
     records::{BackendError, Record},
@@ -19,13 +19,43 @@ use layerfs_storage::port::acquisition::{
 /// Largest column bytes one row of each read can carry.
 const ENTRY_ROW_BYTES: usize = 255 + 64 + 40;
 const UNPLACED_ROW_BYTES: usize = 255 + 60 + 8;
-const PATH_ROW_BYTES: usize = 4096 + 60 + 16;
 const FILE_ROOT_ROW_BYTES: usize = 48;
 
 /// Rows a window may fetch: the row limit, held within the byte limit.
 fn window(limits: Limits, row_bytes: usize) -> i64 {
     let limits = limits.clamped();
     limits.rows.min((limits.bytes / row_bytes).max(1)) as i64
+}
+
+/// Inspect only lengths for at most 512 indexed keys, then fetch the prefix
+/// whose actual columns fit. No path bytes are copied by this sizing pass.
+/// Both statements share the unit's existing snapshot and owner check.
+fn path_window(
+    tx: &Transaction<'_>,
+    sql: &str,
+    operation: i64,
+    after: i64,
+    limits: Limits,
+) -> Result<i64, Failure> {
+    let limits = limits.clamped();
+    let sizes = tx.mapped(
+        sql,
+        &[&operation, &after, &(limits.rows as i64)],
+        24,
+        limits.rows,
+        |row| row.get::<_, i64>(0).map_err(super::super::rows::error),
+    )?;
+    let (mut rows, mut bytes) = (0_i64, 0_usize);
+    for size in sizes {
+        let size = usize::try_from(size).map_err(|_| BackendError::Integrity)?;
+        let next = bytes.checked_add(size).ok_or(BackendError::Capacity)?;
+        if rows != 0 && next > limits.bytes {
+            break;
+        }
+        rows += 1;
+        bytes = next;
+    }
+    Ok(rows)
 }
 
 /// The position after which a keyset window starts; before the first when absent.
@@ -101,15 +131,12 @@ pub(crate) fn directories(
     after_position: Option<u64>,
     limits: Limits,
 ) -> Result<Vec<Directory>, Failure> {
-    let rows = tx.borrowed(
-        DIRECTORIES,
-        &[
-            &signed(owner.operation)?,
-            &after(after_position)?,
-            &window(limits, PATH_ROW_BYTES),
-        ],
-        24,
-    )?;
+    let (operation, after) = (signed(owner.operation)?, after(after_position)?);
+    let limit = path_window(tx, DIRECTORY_SIZES, operation, after, limits)?;
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
+    let rows = tx.borrowed(DIRECTORIES, &[&operation, &after, &limit], 24)?;
     rows.into_iter()
         .map(|mut row| {
             Ok(Directory {
@@ -153,15 +180,12 @@ pub(crate) fn jobs(
     after_position: Option<u64>,
     limits: Limits,
 ) -> Result<Vec<Job>, Failure> {
-    let rows = tx.borrowed(
-        JOBS,
-        &[
-            &signed(owner.operation)?,
-            &after(after_position)?,
-            &window(limits, PATH_ROW_BYTES),
-        ],
-        24,
-    )?;
+    let (operation, after) = (signed(owner.operation)?, after(after_position)?);
+    let limit = path_window(tx, JOB_SIZES, operation, after, limits)?;
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
+    let rows = tx.borrowed(JOBS, &[&operation, &after, &limit], 24)?;
     rows.into_iter().map(job_row).collect()
 }
 

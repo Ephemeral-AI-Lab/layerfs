@@ -428,3 +428,18 @@ It follows section 7 except in these respects, which supersede it:
 Not done by A3: capacity failure and a real quarantined Session through Init;
 any measurement; the host component that fences and disposes of a retained or
 abandoned operation (R3).
+
+
+## Owner-selected space/scaling correction, 2026-10-06
+
+The owner now requests physical space reclamation and scaling improvement.
+The [implementation/qualification record](SPACE-AND-SCALING-PLAN-20261006.md)
+supersedes the mode0-only creation behavior and old IN-subquery removal described
+above for new source. New acquisition Stores support incremental auto-vacuum;
+existing mode0/schema1–6 compatibility has no implicit migration. Each ordinary
+nonempty discard/release includes at most512 free-page removals in its same
+atomic unit; explicit bounded maintenance continues residual debt. Indexed
+actual-length path windows and endpoint/range removal preserve the existing
+port, row/byte bounds, owner fencing, charge and one-attempt outcome contracts.
+No acquisition relocation, extra database, canonical format or durability
+relaxation is selected. Qualification retains strict speed/allocation gates.

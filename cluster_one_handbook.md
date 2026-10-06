@@ -694,6 +694,16 @@ The base filename is caller-selected. Sidecar existence/size changes with SQLite
 lifecycle; this is not a fixed directory template. There is no required external
 payload-pack folder in the active SQLite composition.
 
+New Stores created with acquisition tables additionally select incremental
+SQLite page reclamation before schema creation. Existing mode0 Stores open
+without conversion; schemas1–6 remain supported. Normal bounded acquisition
+cleanup reclaims up to512 free pages in its own atomic job. The public
+`Handles::reclaim_space` continues residual debt through separate acknowledged
+jobs; it refuses unsupported mode0 and never rebuilds a Store implicitly.
+Pointer-map overhead and all reclamation/checkpoint costs belong in physical
+allocation and complete-operation timing. See the
+[space/scaling implementation and prospective qualification](core/docs/issues/307/SPACE-AND-SCALING-PLAN-20261006.md).
+
 ## 9. Attached benchmark results and qualification boundaries
 
 These tables reproduce retained matched-arm results; no new measurements were
