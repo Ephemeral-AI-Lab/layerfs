@@ -8,9 +8,9 @@ use crate::error::{acquisition, malformed, ProjectError as Failure};
 use crate::{NamespaceWork, RetainedAcquisition};
 use layerfs_content::ObjectId;
 use layerfs_storage::port::acquisition::{
-    Acquisition, AcquisitionError, AcquisitionResult, Binding, Directory, Entry, EntryKey,
-    FileRoot, Job, Limits, NativeIdentity, NewEntry, Owner, Phase, Placed, Unplaced,
-    EVIDENCE_BYTES, WRITE_ROW_BYTES, WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
+    Acquisition, AcquisitionError, AcquisitionResult, Binding, Directory, Entry, EntryKey, Job,
+    Limits, NativeIdentity, NewEntry, Owner, Phase, Placed, Unplaced, EVIDENCE_BYTES,
+    WRITE_ROW_BYTES, WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
 };
 use layerfs_storage::port::PersistenceError;
 use std::{cell::Cell, collections::VecDeque, fs::Metadata, os::unix::fs::MetadataExt};
@@ -188,17 +188,6 @@ impl<'a> Backing<'a> {
             |job| job.position,
         )
     }
-    /// Every native identity's constructed root and later-path count.
-    pub(crate) fn file_roots(&self) -> Stream<'_, 'a, FileRoot, u64> {
-        Stream::new(
-            self,
-            |backing, after| {
-                let port = backing.port;
-                backing.read(port.file_roots(backing.owner, after.copied(), Limits::MAXIMUM))
-            },
-            |root| root.position,
-        )
-    }
     /// One name-ordered window of a wide directory's unpositioned children.
     pub(crate) fn unplaced(
         &self,
@@ -242,16 +231,6 @@ impl<'a> Backing<'a> {
         self.read_units.set(self.read_units.get() + 1);
         let job = self.port.job(self.owner, position);
         job.map_err(acquisition)?.ok_or_else(malformed)
-    }
-    /// Records constructed file roots and empties the window.
-    pub(crate) fn complete_files(&self, roots: &mut Vec<(u64, ObjectId)>) -> Result<(), Failure> {
-        if !roots.is_empty() {
-            self.wrote(roots.len(), roots.len() * ROOT_ROW_BYTES);
-            let recorded = self.port.complete_files(self.owner, roots);
-            recorded.map_err(acquisition)?;
-            roots.clear();
-        }
-        Ok(())
     }
     /// Records built directory roots and empties the window.
     pub(crate) fn set_directory_roots(

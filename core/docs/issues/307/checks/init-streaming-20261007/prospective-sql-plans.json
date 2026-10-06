@@ -1,0 +1,1140 @@
+{
+  "scope": "Read-only EXPLAIN/EQP of exact changed SQL at dirty implementation hashes before runtime; no mutation or timing sample. Runtime profiles are separate.",
+  "database": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cluster-one-regression-retained-20261006/phase7-sqlite-init-100000-cluster-one-regression-v1/store.sqlite",
+  "parent_source": "6567b6fda5619dbae17e533c1c9889f944d566d5",
+  "sqlite_cli": "/usr/bin/sqlite3",
+  "engine": [
+    {
+      "version": "3.51.0",
+      "source_id": "2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl"
+    }
+  ],
+  "compile_options": [
+    {
+      "compile_options": "ATOMIC_INTRINSICS=1"
+    },
+    {
+      "compile_options": "BUG_COMPATIBLE_20160819"
+    },
+    {
+      "compile_options": "CCCRYPT256"
+    },
+    {
+      "compile_options": "CODEC=see-cccrypt"
+    },
+    {
+      "compile_options": "COMPILER=clang-21.0.0"
+    },
+    {
+      "compile_options": "DEFAULT_AUTOVACUUM"
+    },
+    {
+      "compile_options": "DEFAULT_CACHE_SIZE=2000"
+    },
+    {
+      "compile_options": "DEFAULT_CKPTFULLFSYNC"
+    },
+    {
+      "compile_options": "DEFAULT_FILE_FORMAT=4"
+    },
+    {
+      "compile_options": "DEFAULT_JOURNAL_SIZE_LIMIT=32768"
+    },
+    {
+      "compile_options": "DEFAULT_LOOKASIDE=1200,102"
+    },
+    {
+      "compile_options": "DEFAULT_MEMSTATUS=0"
+    },
+    {
+      "compile_options": "DEFAULT_MMAP_SIZE=0"
+    },
+    {
+      "compile_options": "DEFAULT_PAGE_SIZE=4096"
+    },
+    {
+      "compile_options": "DEFAULT_PCACHE_INITSZ=20"
+    },
+    {
+      "compile_options": "DEFAULT_RECURSIVE_TRIGGERS"
+    },
+    {
+      "compile_options": "DEFAULT_SECTOR_SIZE=4096"
+    },
+    {
+      "compile_options": "DEFAULT_SYNCHRONOUS=2"
+    },
+    {
+      "compile_options": "DEFAULT_WAL_AUTOCHECKPOINT=1000"
+    },
+    {
+      "compile_options": "DEFAULT_WAL_SYNCHRONOUS=1"
+    },
+    {
+      "compile_options": "DEFAULT_WORKER_THREADS=0"
+    },
+    {
+      "compile_options": "DIRECT_OVERFLOW_READ"
+    },
+    {
+      "compile_options": "DQS=3"
+    },
+    {
+      "compile_options": "ENABLE_API_ARMOR"
+    },
+    {
+      "compile_options": "ENABLE_BYTECODE_VTAB"
+    },
+    {
+      "compile_options": "ENABLE_COLUMN_METADATA"
+    },
+    {
+      "compile_options": "ENABLE_DBPAGE_VTAB"
+    },
+    {
+      "compile_options": "ENABLE_DBSTAT_VTAB"
+    },
+    {
+      "compile_options": "ENABLE_EXPLAIN_COMMENTS"
+    },
+    {
+      "compile_options": "ENABLE_FTS3"
+    },
+    {
+      "compile_options": "ENABLE_FTS3_PARENTHESIS"
+    },
+    {
+      "compile_options": "ENABLE_FTS3_TOKENIZER"
+    },
+    {
+      "compile_options": "ENABLE_FTS4"
+    },
+    {
+      "compile_options": "ENABLE_FTS5"
+    },
+    {
+      "compile_options": "ENABLE_LOCKING_STYLE=1"
+    },
+    {
+      "compile_options": "ENABLE_MATH_FUNCTIONS"
+    },
+    {
+      "compile_options": "ENABLE_NORMALIZE"
+    },
+    {
+      "compile_options": "ENABLE_PREUPDATE_HOOK"
+    },
+    {
+      "compile_options": "ENABLE_RTREE"
+    },
+    {
+      "compile_options": "ENABLE_SESSION"
+    },
+    {
+      "compile_options": "ENABLE_SETLK_TIMEOUT"
+    },
+    {
+      "compile_options": "ENABLE_SNAPSHOT"
+    },
+    {
+      "compile_options": "ENABLE_SQLLOG"
+    },
+    {
+      "compile_options": "ENABLE_STMT_SCANSTATUS"
+    },
+    {
+      "compile_options": "ENABLE_UNKNOWN_SQL_FUNCTION"
+    },
+    {
+      "compile_options": "ENABLE_UPDATE_DELETE_LIMIT"
+    },
+    {
+      "compile_options": "HAS_CODEC_RESTRICTED"
+    },
+    {
+      "compile_options": "HAVE_ISNAN"
+    },
+    {
+      "compile_options": "MALLOC_SOFT_LIMIT=1024"
+    },
+    {
+      "compile_options": "MAX_ATTACHED=10"
+    },
+    {
+      "compile_options": "MAX_COLUMN=2000"
+    },
+    {
+      "compile_options": "MAX_COMPOUND_SELECT=500"
+    },
+    {
+      "compile_options": "MAX_DEFAULT_PAGE_SIZE=8192"
+    },
+    {
+      "compile_options": "MAX_EXPR_DEPTH=1000"
+    },
+    {
+      "compile_options": "MAX_FUNCTION_ARG=127"
+    },
+    {
+      "compile_options": "MAX_LENGTH=2147483645"
+    },
+    {
+      "compile_options": "MAX_LIKE_PATTERN_LENGTH=50000"
+    },
+    {
+      "compile_options": "MAX_MMAP_SIZE=1073741824"
+    },
+    {
+      "compile_options": "MAX_PAGE_COUNT=1073741823"
+    },
+    {
+      "compile_options": "MAX_PAGE_SIZE=65536"
+    },
+    {
+      "compile_options": "MAX_SQL_LENGTH=1000000000"
+    },
+    {
+      "compile_options": "MAX_TRIGGER_DEPTH=1000"
+    },
+    {
+      "compile_options": "MAX_VARIABLE_NUMBER=500000"
+    },
+    {
+      "compile_options": "MAX_VDBE_OP=250000000"
+    },
+    {
+      "compile_options": "MAX_WORKER_THREADS=8"
+    },
+    {
+      "compile_options": "MUTEX_UNFAIR"
+    },
+    {
+      "compile_options": "OMIT_AUTORESET"
+    },
+    {
+      "compile_options": "OMIT_LOAD_EXTENSION"
+    },
+    {
+      "compile_options": "STMTJRNL_SPILL=131072"
+    },
+    {
+      "compile_options": "SYSTEM_MALLOC"
+    },
+    {
+      "compile_options": "TEMP_STORE=1"
+    },
+    {
+      "compile_options": "THREADSAFE=2"
+    },
+    {
+      "compile_options": "USE_URI"
+    }
+  ],
+  "schema": [
+    {
+      "type": "table",
+      "name": "init_entry",
+      "sql": "CREATE TABLE init_entry (\n operation_id INTEGER NOT NULL REFERENCES init_operation(operation_id),\n parent_position INTEGER NOT NULL CHECK(parent_position>=-1),\n name BLOB NOT NULL CHECK(length(name)<=255),\n position INTEGER CHECK(position>=0),\n kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 3),\n canonical_position INTEGER CHECK(canonical_position>0),\n metadata_root BLOB NOT NULL CHECK(length(metadata_root)=32),\n content_root BLOB CHECK(length(content_root)=32),\n native_path BLOB CHECK(length(native_path) BETWEEN 1 AND 4096),\n native BLOB CHECK(length(native)=60),\n PRIMARY KEY(operation_id,parent_position,name)\n) STRICT, WITHOUT ROWID"
+    },
+    {
+      "type": "index",
+      "name": "init_entry_directory",
+      "sql": "CREATE UNIQUE INDEX init_entry_directory ON init_entry(operation_id,position) WHERE kind=2"
+    },
+    {
+      "type": "table",
+      "name": "init_native_file",
+      "sql": "CREATE TABLE init_native_file (\n operation_id INTEGER NOT NULL REFERENCES init_operation(operation_id),\n canonical_position INTEGER NOT NULL CHECK(canonical_position>0),\n device BLOB NOT NULL CHECK(length(device)=8),\n inode BLOB NOT NULL CHECK(length(inode)=8),\n evidence BLOB NOT NULL CHECK(length(evidence)=44),\n native_path BLOB NOT NULL CHECK(length(native_path) BETWEEN 1 AND 4096),\n aliases INTEGER NOT NULL DEFAULT 0 CHECK(aliases>=0),\n file_root BLOB CHECK(length(file_root)=32),\n PRIMARY KEY(operation_id,canonical_position)\n) STRICT, WITHOUT ROWID"
+    },
+    {
+      "type": "index",
+      "name": "init_native_file_identity",
+      "sql": "CREATE UNIQUE INDEX init_native_file_identity ON init_native_file(operation_id,device,inode)"
+    },
+    {
+      "type": "table",
+      "name": "init_operation",
+      "sql": "CREATE TABLE init_operation (\n operation_id INTEGER PRIMARY KEY AUTOINCREMENT,\n owner_epoch INTEGER NOT NULL CHECK(owner_epoch>0),\n phase INTEGER NOT NULL CHECK(phase BETWEEN 1 AND 6),\n source_device BLOB NOT NULL CHECK(length(source_device)=8),\n source_inode BLOB NOT NULL CHECK(length(source_inode)=8),\n stack_id BLOB NOT NULL CHECK(length(stack_id)=16),\n scope BLOB NOT NULL CHECK(length(scope)=32),\n held_rows INTEGER NOT NULL DEFAULT 0 CHECK(held_rows>=0),\n held_bytes INTEGER NOT NULL DEFAULT 0 CHECK(held_bytes>=0),\n peak_rows INTEGER NOT NULL DEFAULT 0 CHECK(peak_rows>=held_rows),\n peak_bytes INTEGER NOT NULL DEFAULT 0 CHECK(peak_bytes>=held_bytes),\n removed_rows INTEGER NOT NULL DEFAULT 0 CHECK(removed_rows>=0),\n removed_bytes INTEGER NOT NULL DEFAULT 0 CHECK(removed_bytes>=0)\n) STRICT"
+    }
+  ],
+  "plans": [
+    {
+      "name": "jobs",
+      "shape": "native-position-range-or-owned-point-with-alias-count",
+      "sql_sha256": "b6a959486e5368a048f747dbf406a2bda1a50284746fe7fb0d8d6fe3d334a3fb",
+      "parameters": 3,
+      "binding_bytes": 24,
+      "query_plan": [
+        {
+          "id": 6,
+          "parent": 0,
+          "notused": 48,
+          "detail": "SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position>?)"
+        }
+      ],
+      "program": [
+        {
+          "addr": 0,
+          "opcode": "Init",
+          "p1": 0,
+          "p2": 23,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "Start at 23"
+        },
+        {
+          "addr": 1,
+          "opcode": "Noop",
+          "p1": 1,
+          "p2": 8,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        },
+        {
+          "addr": 2,
+          "opcode": "Add",
+          "p1": 3,
+          "p2": 2,
+          "p3": 1,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[1]=r[3]+r[2]"
+        },
+        {
+          "addr": 3,
+          "opcode": "MustBeInt",
+          "p1": 1,
+          "p2": 0,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "LIMIT counter"
+        },
+        {
+          "addr": 4,
+          "opcode": "IfNot",
+          "p1": 1,
+          "p2": 22,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        },
+        {
+          "addr": 5,
+          "opcode": "OpenRead",
+          "p1": 2,
+          "p2": 33,
+          "p3": 0,
+          "p4": "k(2,,)",
+          "p5": 0,
+          "comment": "root=33 iDb=0; sqlite_autoindex_init_native_file_1"
+        },
+        {
+          "addr": 6,
+          "opcode": "Variable",
+          "p1": 1,
+          "p2": 4,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[4]=parameter(1)"
+        },
+        {
+          "addr": 7,
+          "opcode": "IsNull",
+          "p1": 4,
+          "p2": 22,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "if r[4]==NULL goto 22"
+        },
+        {
+          "addr": 8,
+          "opcode": "Variable",
+          "p1": 2,
+          "p2": 5,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[5]=parameter(2)"
+        },
+        {
+          "addr": 9,
+          "opcode": "IsNull",
+          "p1": 5,
+          "p2": 22,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "if r[5]==NULL goto 22"
+        },
+        {
+          "addr": 10,
+          "opcode": "Affinity",
+          "p1": 4,
+          "p2": 2,
+          "p3": 0,
+          "p4": "CC",
+          "p5": 0,
+          "comment": "affinity(r[4..5])"
+        },
+        {
+          "addr": 11,
+          "opcode": "SeekGT",
+          "p1": 2,
+          "p2": 22,
+          "p3": 4,
+          "p4": "2",
+          "p5": 0,
+          "comment": "key=r[4..5]"
+        },
+        {
+          "addr": 12,
+          "opcode": "IdxGT",
+          "p1": 2,
+          "p2": 22,
+          "p3": 4,
+          "p4": "1",
+          "p5": 0,
+          "comment": "key=r[4]"
+        },
+        {
+          "addr": 13,
+          "opcode": "Column",
+          "p1": 2,
+          "p2": 1,
+          "p3": 6,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[6]= cursor 2 column 1"
+        },
+        {
+          "addr": 14,
+          "opcode": "Column",
+          "p1": 2,
+          "p2": 2,
+          "p3": 7,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[7]= cursor 2 column 2"
+        },
+        {
+          "addr": 15,
+          "opcode": "Column",
+          "p1": 2,
+          "p2": 3,
+          "p3": 8,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[8]= cursor 2 column 3"
+        },
+        {
+          "addr": 16,
+          "opcode": "Column",
+          "p1": 2,
+          "p2": 4,
+          "p3": 9,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[9]= cursor 2 column 4"
+        },
+        {
+          "addr": 17,
+          "opcode": "Column",
+          "p1": 2,
+          "p2": 5,
+          "p3": 10,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[10]= cursor 2 column 5"
+        },
+        {
+          "addr": 18,
+          "opcode": "Column",
+          "p1": 2,
+          "p2": 6,
+          "p3": 11,
+          "p4": "0",
+          "p5": 0,
+          "comment": "r[11]=init_native_file.aliases"
+        },
+        {
+          "addr": 19,
+          "opcode": "ResultRow",
+          "p1": 6,
+          "p2": 6,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "output=r[6..11]"
+        },
+        {
+          "addr": 20,
+          "opcode": "DecrJumpZero",
+          "p1": 1,
+          "p2": 22,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "if (--r[1])==0 goto 22"
+        },
+        {
+          "addr": 21,
+          "opcode": "Next",
+          "p1": 2,
+          "p2": 12,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        },
+        {
+          "addr": 22,
+          "opcode": "Halt",
+          "p1": 0,
+          "p2": 0,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        },
+        {
+          "addr": 23,
+          "opcode": "Transaction",
+          "p1": 0,
+          "p2": 0,
+          "p3": 29,
+          "p4": "1",
+          "p5": 1,
+          "comment": "usesStmtJournal=0"
+        },
+        {
+          "addr": 24,
+          "opcode": "Variable",
+          "p1": 3,
+          "p2": 2,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[2]=parameter(3)"
+        },
+        {
+          "addr": 25,
+          "opcode": "Integer",
+          "p1": 0,
+          "p2": 3,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[3]=0"
+        },
+        {
+          "addr": 26,
+          "opcode": "Goto",
+          "p1": 0,
+          "p2": 1,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        }
+      ]
+    },
+    {
+      "name": "job_sizes",
+      "shape": "native-position-range-or-owned-point-with-alias-count",
+      "sql_sha256": "9dc8a5a192f1c5a203591925e84785c4341d1460903434e12c8b1315e4a35c59",
+      "parameters": 3,
+      "binding_bytes": 24,
+      "query_plan": [
+        {
+          "id": 6,
+          "parent": 0,
+          "notused": 48,
+          "detail": "SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position>?)"
+        }
+      ],
+      "program": [
+        {
+          "addr": 0,
+          "opcode": "Init",
+          "p1": 0,
+          "p2": 20,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "Start at 20"
+        },
+        {
+          "addr": 1,
+          "opcode": "Noop",
+          "p1": 1,
+          "p2": 3,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        },
+        {
+          "addr": 2,
+          "opcode": "Add",
+          "p1": 3,
+          "p2": 2,
+          "p3": 1,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[1]=r[3]+r[2]"
+        },
+        {
+          "addr": 3,
+          "opcode": "MustBeInt",
+          "p1": 1,
+          "p2": 0,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "LIMIT counter"
+        },
+        {
+          "addr": 4,
+          "opcode": "IfNot",
+          "p1": 1,
+          "p2": 19,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        },
+        {
+          "addr": 5,
+          "opcode": "OpenRead",
+          "p1": 2,
+          "p2": 33,
+          "p3": 0,
+          "p4": "k(2,,)",
+          "p5": 0,
+          "comment": "root=33 iDb=0; sqlite_autoindex_init_native_file_1"
+        },
+        {
+          "addr": 6,
+          "opcode": "Variable",
+          "p1": 1,
+          "p2": 4,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[4]=parameter(1)"
+        },
+        {
+          "addr": 7,
+          "opcode": "IsNull",
+          "p1": 4,
+          "p2": 19,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "if r[4]==NULL goto 19"
+        },
+        {
+          "addr": 8,
+          "opcode": "Variable",
+          "p1": 2,
+          "p2": 5,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[5]=parameter(2)"
+        },
+        {
+          "addr": 9,
+          "opcode": "IsNull",
+          "p1": 5,
+          "p2": 19,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "if r[5]==NULL goto 19"
+        },
+        {
+          "addr": 10,
+          "opcode": "Affinity",
+          "p1": 4,
+          "p2": 2,
+          "p3": 0,
+          "p4": "CC",
+          "p5": 0,
+          "comment": "affinity(r[4..5])"
+        },
+        {
+          "addr": 11,
+          "opcode": "SeekGT",
+          "p1": 2,
+          "p2": 19,
+          "p3": 4,
+          "p4": "2",
+          "p5": 0,
+          "comment": "key=r[4..5]"
+        },
+        {
+          "addr": 12,
+          "opcode": "IdxGT",
+          "p1": 2,
+          "p2": 19,
+          "p3": 4,
+          "p4": "1",
+          "p5": 0,
+          "comment": "key=r[4]"
+        },
+        {
+          "addr": 13,
+          "opcode": "Column",
+          "p1": 2,
+          "p2": 5,
+          "p3": 8,
+          "p4": null,
+          "p5": 64,
+          "comment": "r[8]= cursor 2 column 5"
+        },
+        {
+          "addr": 14,
+          "opcode": "Function",
+          "p1": 0,
+          "p2": 8,
+          "p3": 7,
+          "p4": "length(1)",
+          "p5": 0,
+          "comment": "r[7]=func(r[8])"
+        },
+        {
+          "addr": 15,
+          "opcode": "Add",
+          "p1": 9,
+          "p2": 7,
+          "p3": 6,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[6]=r[9]+r[7]"
+        },
+        {
+          "addr": 16,
+          "opcode": "ResultRow",
+          "p1": 6,
+          "p2": 1,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "output=r[6]"
+        },
+        {
+          "addr": 17,
+          "opcode": "DecrJumpZero",
+          "p1": 1,
+          "p2": 19,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "if (--r[1])==0 goto 19"
+        },
+        {
+          "addr": 18,
+          "opcode": "Next",
+          "p1": 2,
+          "p2": 12,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        },
+        {
+          "addr": 19,
+          "opcode": "Halt",
+          "p1": 0,
+          "p2": 0,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        },
+        {
+          "addr": 20,
+          "opcode": "Transaction",
+          "p1": 0,
+          "p2": 0,
+          "p3": 29,
+          "p4": "1",
+          "p5": 1,
+          "comment": "usesStmtJournal=0"
+        },
+        {
+          "addr": 21,
+          "opcode": "Variable",
+          "p1": 3,
+          "p2": 2,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[2]=parameter(3)"
+        },
+        {
+          "addr": 22,
+          "opcode": "Integer",
+          "p1": 0,
+          "p2": 3,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[3]=0"
+        },
+        {
+          "addr": 23,
+          "opcode": "Integer",
+          "p1": 76,
+          "p2": 9,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[9]=76"
+        },
+        {
+          "addr": 24,
+          "opcode": "Goto",
+          "p1": 0,
+          "p2": 1,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        }
+      ]
+    },
+    {
+      "name": "job",
+      "shape": "native-position-range-or-owned-point-with-alias-count",
+      "sql_sha256": "6526f5b0bbe9a6220937948f40a8fd84f79afc2f81bcc78e0d3f9847d9455cda",
+      "parameters": 3,
+      "binding_bytes": 24,
+      "query_plan": [
+        {
+          "id": 3,
+          "parent": 0,
+          "notused": 45,
+          "detail": "SEARCH owner USING INTEGER PRIMARY KEY (rowid=?)"
+        },
+        {
+          "id": 8,
+          "parent": 0,
+          "notused": 45,
+          "detail": "SEARCH native USING PRIMARY KEY (operation_id=? AND canonical_position=?) LEFT-JOIN"
+        }
+      ],
+      "program": [
+        {
+          "addr": 0,
+          "opcode": "Init",
+          "p1": 0,
+          "p2": 27,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "Start at 27"
+        },
+        {
+          "addr": 1,
+          "opcode": "OpenRead",
+          "p1": 0,
+          "p2": 29,
+          "p3": 0,
+          "p4": "3",
+          "p5": 0,
+          "comment": "root=29 iDb=0; init_operation"
+        },
+        {
+          "addr": 2,
+          "opcode": "OpenRead",
+          "p1": 2,
+          "p2": 33,
+          "p3": 0,
+          "p4": "k(2,,)",
+          "p5": 2,
+          "comment": "root=33 iDb=0; sqlite_autoindex_init_native_file_1"
+        },
+        {
+          "addr": 3,
+          "opcode": "Variable",
+          "p1": 1,
+          "p2": 1,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[1]=parameter(1)"
+        },
+        {
+          "addr": 4,
+          "opcode": "SeekRowid",
+          "p1": 0,
+          "p2": 26,
+          "p3": 1,
+          "p4": null,
+          "p5": 0,
+          "comment": "intkey=r[1]"
+        },
+        {
+          "addr": 5,
+          "opcode": "Column",
+          "p1": 0,
+          "p2": 1,
+          "p3": 2,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[2]= cursor 0 column 1"
+        },
+        {
+          "addr": 6,
+          "opcode": "Ne",
+          "p1": 3,
+          "p2": 26,
+          "p3": 2,
+          "p4": "BINARY-8",
+          "p5": 84,
+          "comment": "if r[2]!=r[3] goto 26"
+        },
+        {
+          "addr": 7,
+          "opcode": "Integer",
+          "p1": 0,
+          "p2": 4,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[4]=0; init LEFT JOIN match flag"
+        },
+        {
+          "addr": 8,
+          "opcode": "Rowid",
+          "p1": 0,
+          "p2": 5,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[5]=init_operation.rowid"
+        },
+        {
+          "addr": 9,
+          "opcode": "Variable",
+          "p1": 3,
+          "p2": 6,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[6]=parameter(3)"
+        },
+        {
+          "addr": 10,
+          "opcode": "IsNull",
+          "p1": 6,
+          "p2": 23,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "if r[6]==NULL goto 23"
+        },
+        {
+          "addr": 11,
+          "opcode": "Affinity",
+          "p1": 6,
+          "p2": 1,
+          "p3": 0,
+          "p4": "C",
+          "p5": 0,
+          "comment": "affinity(r[6])"
+        },
+        {
+          "addr": 12,
+          "opcode": "SeekGE",
+          "p1": 2,
+          "p2": 23,
+          "p3": 5,
+          "p4": "2",
+          "p5": 0,
+          "comment": "key=r[5..6]"
+        },
+        {
+          "addr": 13,
+          "opcode": "IdxGT",
+          "p1": 2,
+          "p2": 23,
+          "p3": 5,
+          "p4": "2",
+          "p5": 0,
+          "comment": "key=r[5..6]"
+        },
+        {
+          "addr": 14,
+          "opcode": "Integer",
+          "p1": 1,
+          "p2": 4,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[4]=1; record LEFT JOIN hit"
+        },
+        {
+          "addr": 15,
+          "opcode": "Column",
+          "p1": 0,
+          "p2": 2,
+          "p3": 7,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[7]= cursor 0 column 2"
+        },
+        {
+          "addr": 16,
+          "opcode": "Column",
+          "p1": 2,
+          "p2": 1,
+          "p3": 8,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[8]= cursor 2 column 1"
+        },
+        {
+          "addr": 17,
+          "opcode": "Column",
+          "p1": 2,
+          "p2": 2,
+          "p3": 9,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[9]= cursor 2 column 2"
+        },
+        {
+          "addr": 18,
+          "opcode": "Column",
+          "p1": 2,
+          "p2": 3,
+          "p3": 10,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[10]= cursor 2 column 3"
+        },
+        {
+          "addr": 19,
+          "opcode": "Column",
+          "p1": 2,
+          "p2": 4,
+          "p3": 11,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[11]= cursor 2 column 4"
+        },
+        {
+          "addr": 20,
+          "opcode": "Column",
+          "p1": 2,
+          "p2": 5,
+          "p3": 12,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[12]= cursor 2 column 5"
+        },
+        {
+          "addr": 21,
+          "opcode": "Column",
+          "p1": 2,
+          "p2": 6,
+          "p3": 13,
+          "p4": "0",
+          "p5": 0,
+          "comment": "r[13]=init_native_file.aliases"
+        },
+        {
+          "addr": 22,
+          "opcode": "ResultRow",
+          "p1": 7,
+          "p2": 7,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "output=r[7..13]"
+        },
+        {
+          "addr": 23,
+          "opcode": "IfPos",
+          "p1": 4,
+          "p2": 26,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "if r[4]>0 then r[4]-=0, goto 26"
+        },
+        {
+          "addr": 24,
+          "opcode": "NullRow",
+          "p1": 2,
+          "p2": 0,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        },
+        {
+          "addr": 25,
+          "opcode": "Goto",
+          "p1": 0,
+          "p2": 14,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        },
+        {
+          "addr": 26,
+          "opcode": "Halt",
+          "p1": 0,
+          "p2": 0,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        },
+        {
+          "addr": 27,
+          "opcode": "Transaction",
+          "p1": 0,
+          "p2": 0,
+          "p3": 29,
+          "p4": "1",
+          "p5": 1,
+          "comment": "usesStmtJournal=0"
+        },
+        {
+          "addr": 28,
+          "opcode": "Variable",
+          "p1": 2,
+          "p2": 3,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": "r[3]=parameter(2)"
+        },
+        {
+          "addr": 29,
+          "opcode": "Goto",
+          "p1": 0,
+          "p2": 1,
+          "p3": 0,
+          "p4": null,
+          "p5": 0,
+          "comment": null
+        }
+      ]
+    }
+  ],
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe"
+}

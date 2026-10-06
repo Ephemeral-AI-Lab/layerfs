@@ -206,16 +206,31 @@ fn path_windows_use_actual_lengths_without_exceeding_column_or_row_budgets() {
             .len(),
         88
     );
+    // The added alias scalar participates in the actual output budget. This
+    // boundary selected two rows when only the former68 bytes were charged.
+    let bounded = handles
+        .acquisition
+        .jobs(
+            short,
+            None,
+            Limits {
+                rows: 512,
+                bytes: 176,
+            },
+        )
+        .unwrap();
+    assert_eq!(bounded.len(), 1);
+    assert_eq!(bounded[0].aliases, 0);
     let long = begin(&handles);
     populate(&handles, long, 600, 4096);
     let rows = handles
         .acquisition
         .jobs(long, None, Limits::MAXIMUM)
         .unwrap();
-    assert_eq!(rows.len(), (256 * 1024) / (4096 + 68));
+    assert_eq!(rows.len(), (256 * 1024) / (4096 + 76));
     assert!(
         rows.iter()
-            .map(|row| 68 + row.native_path.len())
+            .map(|row| 76 + row.native_path.len())
             .sum::<usize>()
             <= 256 * 1024
     );

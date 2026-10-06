@@ -1,0 +1,149 @@
+{
+  "method": "lossless gzip; original raw files retained locally unchanged",
+  "outputs": [
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/boundary.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/boundary.stdout.gz",
+      "bytes": 76,
+      "sha256": "7e388653598e949e0b81309f9ea02b67299f7cff41dcff12854eb6ae13a47992"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/clippy.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/clippy.stdout.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/covering-runtime.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/covering-runtime.stdout.gz",
+      "bytes": 32961,
+      "sha256": "1b9fc9910e73c0efd6224e189fba0d7d83b7ecbf3a71ce621a4ac5cfd29a3e9c"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/fmt.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/fmt.stdout.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/guard-self-tests.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/guard-self-tests.stdout.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/harness.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/harness.stdout.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/no-run.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/no-run.stdout.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/project-examples.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/project-examples.stdout.gz",
+      "bytes": 5542,
+      "sha256": "fbb5678867689b3224e7763bc82621e1346ee4d089b761cce80c33218eb47fc3"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/remaining-project.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/remaining-project.stdout.gz",
+      "bytes": 1672,
+      "sha256": "c46645a3ed3d146b223d27d59bed51fb95099a0dae0c28118c0790e9edf3963b"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/remaining-storage.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/remaining-storage.stdout.gz",
+      "bytes": 5991,
+      "sha256": "6a49c4992a12cc9a84e19d9a1b57c87fc92361cb531916912f93ae4762c74983"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/streaming-no-run.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/streaming-no-run.stdout.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/streaming-runtime-repair.stdout",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/streaming-runtime-repair.stdout.gz",
+      "bytes": 2026,
+      "sha256": "4b577553e7fd5d26379894155da100c801aeca3767b02185057264da42018971"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/boundary.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/boundary.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/clippy.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/clippy.stderr.gz",
+      "bytes": 833,
+      "sha256": "687c8f5b4f6331c461d8bf432cf54bface81a1a7c97ad84e4ef9031385b31d4f"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/covering-runtime.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/covering-runtime.stderr.gz",
+      "bytes": 6930,
+      "sha256": "9957a7a661dda502e3a661c7dc2aac65f2d68d300c20384f78304ff9f8b0150e"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/fmt.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/fmt.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/guard-self-tests.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/guard-self-tests.stderr.gz",
+      "bytes": 139,
+      "sha256": "a56de043900a9772f5998fdd2c0341ab76f6f4972f3e456ad33d311ee5a5be59"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/harness.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/harness.stderr.gz",
+      "bytes": 114,
+      "sha256": "b015ccdddec7e346fa9bdbdfd18daa73c2e579dd4ffbdcde12a7147eccaddfed"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/no-run.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/no-run.stderr.gz",
+      "bytes": 7118,
+      "sha256": "e95580abfa79e5581272dd570745769de2fbdf9e73040aa9928c918e23e3181e"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/project-examples.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/project-examples.stderr.gz",
+      "bytes": 1313,
+      "sha256": "7d7337d787bdc8775d1d710fb26b2740caca688ee1ff7d9c89fda1636f86dcb5"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/remaining-project.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/remaining-project.stderr.gz",
+      "bytes": 977,
+      "sha256": "ab7be1e306f9c521f7edd16f3e370bac890776ff029b94f9c8eb912ee6fb8519"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/remaining-storage.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/remaining-storage.stderr.gz",
+      "bytes": 2589,
+      "sha256": "4219d93a82142db1f4bc24ba69f84fb9730183367e9c8564ce99d36d6017c1f3"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/streaming-no-run.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/streaming-no-run.stderr.gz",
+      "bytes": 806,
+      "sha256": "a85c1cbdab3d657c67d4700d51940d22be8b86ffc9ef95a06a226486e668b9b4"
+    },
+    {
+      "raw": "core/docs/issues/307/checks/init-streaming-20261007/streaming-runtime-repair.stderr",
+      "gzip": "core/docs/issues/307/checks/init-streaming-20261007/streaming-runtime-repair.stderr.gz",
+      "bytes": 700,
+      "sha256": "28bc5db205dacac937997bc16490d604ff609df276514271fa255f4e2de210ba"
+    }
+  ]
+}

@@ -1,0 +1,244 @@
+{
+  "checks": [
+    {
+      "record": "boundary.json",
+      "command": [
+        "python3",
+        "-B",
+        "core/tools/check_product_boundary.py"
+      ],
+      "wall_ns": 460821459,
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "record": "clippy.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "clippy",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-project",
+        "-p",
+        "layerfs-persistence",
+        "-p",
+        "layerfs-storage",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "wall_ns": 3728063500,
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "record": "covering-runtime.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-project",
+        "-p",
+        "layerfs-persistence",
+        "-p",
+        "layerfs-storage",
+        "--all-targets",
+        "--",
+        "--nocapture"
+      ],
+      "wall_ns": 39292390250,
+      "exit_code": 101,
+      "timed_out": false
+    },
+    {
+      "record": "fmt.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "fmt",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "wall_ns": 1498059500,
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "record": "guard-self-tests.json",
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "core/tools",
+        "-p",
+        "test_*.py"
+      ],
+      "wall_ns": 295732750,
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "record": "harness.json",
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "core/benchmark/fs-bench-pro/tests",
+        "-p",
+        "test_phase7_sqlite.py"
+      ],
+      "wall_ns": 719483084,
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "record": "no-run.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-project",
+        "-p",
+        "layerfs-persistence",
+        "-p",
+        "layerfs-storage",
+        "--all-targets",
+        "--no-run"
+      ],
+      "wall_ns": 12570300042,
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "record": "project-examples.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-project",
+        "--examples"
+      ],
+      "wall_ns": 7279715208,
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "record": "remaining-project.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-project",
+        "--test",
+        "namespace_scaling",
+        "--examples",
+        "--",
+        "--nocapture"
+      ],
+      "wall_ns": 3228536125,
+      "exit_code": 101,
+      "timed_out": false
+    },
+    {
+      "record": "remaining-storage.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-storage",
+        "--all-targets",
+        "--",
+        "--nocapture"
+      ],
+      "wall_ns": 20481534875,
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "record": "streaming-no-run.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-project",
+        "--test",
+        "init_streaming",
+        "--test",
+        "namespace_scaling",
+        "--no-run"
+      ],
+      "wall_ns": 1281872917,
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "record": "streaming-runtime-repair.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-project",
+        "--test",
+        "init_streaming",
+        "--test",
+        "namespace_scaling",
+        "--",
+        "--nocapture"
+      ],
+      "wall_ns": 6419113958,
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "passed_test_bodies_per_invocation": {
+    "covering-runtime": 131,
+    "remaining-storage": 55,
+    "project-examples": 57,
+    "streaming-runtime-repair": 5
+  },
+  "retained_failures": "Initial streaming test fixture observed only final-finish WholeFile publication; repaired fixture forces assembly publication. Old scaling assertion expected4096-row completion write window; now absent, retained<=4096bound. No product failure or hang; only these affected tests rerun.",
+  "source_review": "Original Unknown cannot become Aborted via iterator None; yield typed construction refusal and retain first Unknown. Fixed admission512;>=U completionframes explicit. Native blocking read not forcibly interruptible; no deterministic native skew schedule claim.",
+  "explain": "3 exact changed job/job_sizes/jobs shapes; unchanged query/schema plans reused by exact hashes; runtime profiling separate.",
+  "local_links": "PASS"
+}

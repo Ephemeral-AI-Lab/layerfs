@@ -274,8 +274,10 @@ fn tree_under(profile: SqlitePersistenceProfile) {
     assert_eq!(jobs.len(), 2);
     assert_eq!((jobs[0].position, jobs[0].native), (2, shared));
     assert_eq!(jobs[0].native_path, b"/s/b");
+    assert_eq!(jobs[0].aliases, 1);
     assert_eq!((jobs[1].position, jobs[1].native), (5, own));
     assert_eq!(port.job(owner, 5).unwrap().unwrap().native_path, b"/s/a/y");
+    assert_eq!(port.job(owner, 2).unwrap().unwrap().aliases, 1);
     assert_eq!(port.job(owner, 4).unwrap(), None, "a later path is no job");
 
     let roots = port.file_roots(owner, None, Limits::MAXIMUM).unwrap();

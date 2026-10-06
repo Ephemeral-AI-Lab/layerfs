@@ -331,3 +331,16 @@ debt and empty acquisition tables in all final Stores. Three of eight latency
 screens pass; zero strict allocation/joint screens pass. Matched public-reference
 counts attribute essentially all extra VM work to acquisition, with immutable
 publication unchanged. Large-case latency and S7/S8/S9 acceptance remain open.
+
+
+## Streaming Init job projection, 2026-10-07
+
+The selected Project streaming path consumes roots in a fixed completion window
+and no longer invokes `complete_files` or `file_roots`. Those public units remain
+available and retain their schema4–6 behavior; no schema migration is involved.
+`Job` now projects `aliases` from the existing native row in both range and point
+reads. A consumer starts jobs after placement ends to observe final counts.
+`job_sizes` includes the extra8-byte scalar, preserving the actual-length output
+budget. Device/inode/evidence/path decoding, owner fencing, one attempt and
+stale-versus-empty semantics remain unchanged. New plan/runtime evidence and
+qualified samples are governed by the [streaming selection](../issues/307/INIT-STREAMING-PLAN-20261007.md).

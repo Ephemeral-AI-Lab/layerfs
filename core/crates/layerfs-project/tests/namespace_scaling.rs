@@ -31,7 +31,10 @@ fn backed_counts_grow_while_resident_buffers_stay_fixed() {
     // larger one. The 6000-entry root orders its 600-child directories in
     // backing and fills whole windows.
     assert_eq!((windows[0].0, windows[1].0), (10, 300));
-    assert_eq!(windows[2], (512, 512, 4096));
+    assert_eq!((windows[2].0, windows[2].1), (512, 512));
+    // File completion no longer supplies a4096-row SQL write window. The
+    // remaining writes obey the same bound without requiring it to be filled.
+    assert!(windows[2].2 > 0 && windows[2].2 <= 4096);
     assert!(windows.iter().all(|w| w.1 <= 512 && w.2 <= 4096));
     assert!(backing[0] < backing[1] && backing[1] < backing[2]);
 }

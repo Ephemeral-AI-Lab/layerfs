@@ -17,6 +17,14 @@ pub struct NamespaceWork {
     pub entries: usize,
     /// Native regular-file paths bound to an identity in backing.
     pub jobs: usize,
+    /// Most queued, constructing or completed-but-unconsumed file identities;
+    /// one fixed admission window, independent of the total file count.
+    pub file_admission_rows: usize,
+    /// Most completed roots awaiting canonical inode consumption.
+    pub file_completed_rows: usize,
+    /// Bounded output frames drained from constructors, including completion
+    /// frames and additional object-only frames for large files.
+    pub file_output_batches: u64,
     /// Most directories that were positioned in backing but not yet read.
     pub frontier: usize,
     /// Largest directory's child count.

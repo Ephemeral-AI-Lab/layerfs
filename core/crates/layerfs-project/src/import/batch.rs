@@ -5,12 +5,11 @@ use std::sync::mpsc;
 
 const BATCH_BYTES: usize = 256 * 1024;
 const BATCH_OBJECTS: usize = 512;
-const BATCH_COMPLETIONS: usize = 512;
 pub(crate) const QUEUE_SLOTS: usize = 4;
 
 pub(crate) enum Event {
     Object(FinalizedObject),
-    Done(usize, Result<ObjectId, ProjectError>),
+    Done(u64, Result<ObjectId, ProjectError>),
 }
 
 #[derive(Default)]
@@ -18,7 +17,6 @@ pub(crate) struct ImportBatch {
     pub(crate) events: Vec<Event>,
     bytes: usize,
     objects: usize,
-    completions: usize,
 }
 
 pub(crate) struct BatchProducer<'a> {
@@ -45,17 +43,17 @@ impl<'a> BatchProducer<'a> {
 
     pub(crate) fn done(
         &mut self,
-        index: usize,
+        index: u64,
         result: Result<ObjectId, ProjectError>,
     ) -> Result<(), ()> {
-        if self.pending.completions == BATCH_COMPLETIONS
-            || self.pending.events.len() == BATCH_OBJECTS + BATCH_COMPLETIONS
-        {
+        if self.pending.events.len() == BATCH_OBJECTS {
             self.flush()?;
         }
         self.pending.events.push(Event::Done(index, result));
-        self.pending.completions += 1;
-        Ok(())
+        // Successful roots and errors must be observable while the admission
+        // window is full. Every preceding object from this constructor is in
+        // this batch or an earlier batch on the same ordered channel.
+        self.flush()
     }
 }
 
@@ -76,13 +74,12 @@ impl FinalizedConsumer for BatchProducer<'_> {
                     events: vec![Event::Object(object)],
                     bytes,
                     objects: 1,
-                    completions: 0,
                 })
                 .map_err(|_| ContentError::OutputRejected);
         }
         if !self.pending.events.is_empty()
             && (self.pending.objects == BATCH_OBJECTS
-                || self.pending.events.len() == BATCH_OBJECTS + BATCH_COMPLETIONS
+                || self.pending.events.len() == BATCH_OBJECTS
                 || self.pending.bytes + bytes > BATCH_BYTES)
         {
             self.flush().map_err(|_| ContentError::OutputRejected)?;
