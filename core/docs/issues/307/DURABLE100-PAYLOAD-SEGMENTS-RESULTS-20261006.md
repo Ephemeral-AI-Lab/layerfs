@@ -91,3 +91,26 @@ acknowledgement applies. This reduces direct full-device barriers from8 to4 for
 this shape, while staging calls remain real paid work. Prove native support/order,
 reopen/crash/uncertainty, then take one new source sample under the unchanged gates.
 No unchanged performance arm is replayed and no acquisition relocation is selected.
+
+## Barrier correction and owner withdrawal
+
+The one fresh source `b1277cf1f4c64c4d8d6394fd9c4b8ed8023447a1` sample is retained:
+91,055,834ns product,2,424,742,750ns complete command,693,024,875ns independent
+proof and5,308,416B final allocation. Cold/root/proof/cleanup/caps PASS; relative
+speed against its original competitive reference FAIL, storage PASS, joint FAIL.
+The source counts four direct full-device barriers. This is a distinct source
+sample, not a best-of or replay of `fb7f3f477`. See the
+[append-only ledger](checks/durable100-barriers-results-20261006/ledger.json).
+
+Exact per-commit LOC for `b4b53789a1`: core95,150→95,150, reference65,417→65,417,
+combined160,567→160,567 (delta+0), evidence/diagnostic example only.
+For `b1277cf1f`: core95,150→95,164, reference65,417→65,417,
+combined160,567→160,581 (delta+14), coalesced durability protocol. Same exact
+first-parent/final-tree counter/scope; no reference retirement. The committed
+tree matches the [prepared comparison](checks/durable100-barriers-results-20261006/implementation-committed-loc.json).
+
+Owner direction now withdraws the payload experiment and selects a scoped return
+to retained Monolithic behavior at `9b74ac035`, with all later evidence preserved.
+A separate full eight-case regression campaign will use the actual cluster-one-end
+public Project Init source `197d2fb7d`; the old Service MEMORY/OFF competitive
+reference is not its main control. This does not relabel any historical verdict.
