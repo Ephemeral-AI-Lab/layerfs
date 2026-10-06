@@ -1,4 +1,5 @@
 //! Bounded physical persistence contract.
+pub mod acquisition;
 mod pack;
 mod persistence;
 mod read_pack;

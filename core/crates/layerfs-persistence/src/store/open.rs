@@ -1,11 +1,15 @@
 //! Explicit creation/open, binding validation and read-only authority.
 use crate::{
-    backend::Session, BackendSelection, Handles, HistoryProvider, PersistenceConfig,
-    StorageProvider,
+    backend::Session, AcquisitionProvider, BackendSelection, Handles, HistoryProvider,
+    PersistenceConfig, StorageProvider,
 };
 use layerfs_history::{CatalogId, HistoryCatalogConfig};
 use layerfs_storage::{port::PersistenceError, StoragePolicy};
-use std::{fs::OpenOptions, sync::Arc};
+use std::{
+    fs::OpenOptions,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 impl Handles {
     /// Creates a fresh combined Store, refusing existing files and unsupported engines.
     pub fn create(
@@ -35,9 +39,11 @@ impl Handles {
             true,
             config.sqlite_profile,
             config.sqlite_pack_layout,
+            config.sqlite_acquisition,
         )?);
         session.initialize(policy, history, catalog_id)?;
-        Self::validated(session, &history.binding_key, history.cursor_key)
+        let directory = config.path.parent().map(Path::to_path_buf);
+        Self::validated(session, directory, &history.binding_key, history.cursor_key)
     }
     /// Opens validated authority with the explicitly selected profile; acknowledged reservations persist.
     pub fn open_writable(
@@ -64,6 +70,7 @@ impl Handles {
         if config.backend != BackendSelection::Sqlite || !cfg!(target_os = "macos") {
             return Err(PersistenceError::BackendUnavailable);
         }
+        let directory = config.path.parent().map(Path::to_path_buf);
         Self::validated(
             Arc::new(Session::connect(
                 &config.path,
@@ -71,13 +78,16 @@ impl Handles {
                 false,
                 config.sqlite_profile,
                 config.sqlite_pack_layout,
+                config.sqlite_acquisition,
             )?),
+            directory,
             binding,
             cursor_key,
         )
     }
     fn validated(
         session: Arc<Session>,
+        directory: Option<PathBuf>,
         binding: &[u8],
         cursor_key: [u8; 32],
     ) -> Result<Self, PersistenceError> {
@@ -91,6 +101,7 @@ impl Handles {
         });
         Ok(Self {
             storage,
+            acquisition: AcquisitionProvider::new(session.clone(), directory),
             history: HistoryProvider {
                 session,
                 catalog_id,

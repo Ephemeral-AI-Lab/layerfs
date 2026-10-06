@@ -41,6 +41,23 @@ impl SqlitePackLayout {
         }
     }
 }
+/// Explicit creation-only selection of the initial-acquisition working tables.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum SqliteAcquisitionSchema {
+    /// Schema versions 1 to 3: no acquisition tables; acquisition is unavailable.
+    #[default]
+    Absent,
+    /// Schema versions 4 to 6: the same pack layouts with the acquisition tables.
+    Tables,
+}
+impl SqliteAcquisitionSchema {
+    pub(crate) const fn version_offset(self) -> i64 {
+        match self {
+            Self::Absent => 0,
+            Self::Tables => 3,
+        }
+    }
+}
 /// One complete Store database path and engine selection.
 #[derive(Clone, Debug)]
 pub struct PersistenceConfig {
@@ -52,6 +69,8 @@ pub struct PersistenceConfig {
     pub sqlite_profile: SqlitePersistenceProfile,
     /// Creation-only layout; opens select the declared supported schema version.
     pub sqlite_pack_layout: SqlitePackLayout,
+    /// Creation-only acquisition tables; opens follow the stored schema version.
+    pub sqlite_acquisition: SqliteAcquisitionSchema,
 }
 impl PersistenceConfig {
     /// Selects the embedded durable profile at an explicit path.
@@ -61,7 +80,13 @@ impl PersistenceConfig {
             path: path.into(),
             sqlite_profile: SqlitePersistenceProfile::Durable,
             sqlite_pack_layout: SqlitePackLayout::Monolithic,
+            sqlite_acquisition: SqliteAcquisitionSchema::Absent,
         }
+    }
+    /// Selects the acquisition tables explicitly for creation; never added to an open Store.
+    pub fn with_sqlite_acquisition(mut self, acquisition: SqliteAcquisitionSchema) -> Self {
+        self.sqlite_acquisition = acquisition;
+        self
     }
     /// Selects physical group rows explicitly for creation; never migrates an open Store.
     pub fn with_sqlite_pack_layout(mut self, layout: SqlitePackLayout) -> Self {

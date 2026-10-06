@@ -1,0 +1,1 @@
+INSERT INTO init_native_file(operation_id,canonical_position,device,inode,evidence,native_path) VALUES(?1,?2,?3,?4,?5,?6) ON CONFLICT(operation_id,device,inode) DO UPDATE SET aliases=aliases+1 WHERE evidence=excluded.evidence RETURNING canonical_position

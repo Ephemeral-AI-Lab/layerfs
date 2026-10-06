@@ -11,6 +11,8 @@ pub struct ConnectionProfile {
     pub persistence: SqlitePersistenceProfile,
     /// Actual physical schema selected explicitly or from the supported stored version.
     pub pack_layout: crate::SqlitePackLayout,
+    /// Whether the stored schema version carries the acquisition tables.
+    pub acquisition: crate::SqliteAcquisitionSchema,
     /// Immutable profile identity.
     pub identity: &'static str,
     /// Linked engine version.
@@ -183,6 +185,7 @@ pub(crate) struct Session {
     pub(crate) writable: bool,
     pub(crate) profile: ConnectionProfile,
     pub(crate) layout: crate::SqlitePackLayout,
+    pub(crate) acquisition: crate::SqliteAcquisitionSchema,
     #[cfg(target_os = "macos")]
     pub(crate) allocation: Option<super::allocation_owner::AllocationOwner>,
 }
@@ -193,6 +196,7 @@ impl Session {
         create: bool,
         selected: SqlitePersistenceProfile,
         creation_layout: crate::SqlitePackLayout,
+        creation_acquisition: crate::SqliteAcquisitionSchema,
     ) -> Result<Self, BackendError> {
         if !cfg!(target_os = "macos") {
             return Err(BackendError::Integrity);
@@ -211,19 +215,24 @@ impl Session {
             .set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
             .map_err(rows::error)?;
         profile::apply(&connection, create, selected, &work)?;
-        let layout = if create {
-            creation_layout
+        let (layout, acquisition) = if create {
+            (creation_layout, creation_acquisition)
         } else {
-            match query::run(&connection, "PRAGMA user_version", vec![], &work)?
+            let stored = query::run(&connection, "PRAGMA user_version", vec![], &work)?
                 .first()
                 .ok_or(BackendError::Integrity)?
-                .get::<i64>(0)?
-            {
+                .get::<i64>(0)?;
+            let acquisition = match stored {
+                1..=3 => crate::SqliteAcquisitionSchema::Absent,
+                4..=6 => crate::SqliteAcquisitionSchema::Tables,
+                _ => return Err(BackendError::Integrity),
+            };
+            let layout = match stored - acquisition.version_offset() {
                 1 => crate::SqlitePackLayout::Monolithic,
                 2 => crate::SqlitePackLayout::GroupRows,
-                3 => crate::SqlitePackLayout::GroupRowsIndexed,
-                _ => return Err(BackendError::Integrity),
-            }
+                _ => crate::SqlitePackLayout::GroupRowsIndexed,
+            };
+            (layout, acquisition)
         };
         let integer = |name| {
             query::run(&connection, &format!("PRAGMA {name}"), vec![], &work)?
@@ -242,6 +251,7 @@ impl Session {
         let profile = ConnectionProfile {
             persistence: selected,
             pack_layout: layout,
+            acquisition,
             identity: selected.identity(),
             sqlite_version: rusqlite::version().to_owned(),
             platform: "macos",
@@ -293,7 +303,12 @@ impl Session {
             writable,
             profile,
             layout,
+            acquisition,
         })
+    }
+    /// Stored schema version: the pack layout's, offset by the acquisition tables.
+    pub(crate) fn schema_version(&self) -> i64 {
+        self.layout.version() + self.acquisition.version_offset()
     }
     pub(crate) fn diagnostics(&self) -> Result<SqlWork, BackendError> {
         let s = self.state.try_lock().map_err(|_| BackendError::Busy)?;

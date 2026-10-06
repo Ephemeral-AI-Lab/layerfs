@@ -3,8 +3,8 @@
 > **Status:** Proposal; target LayerFS v0.1.7; not a released contract.
 > Design deliverable A1 of the [S7/S9 remaining plan](IMPLEMENTATION-PLAN-S7-S9-20261006.md),
 > written 2026-10-06 against source `8bd03d76243987c365a06453d83c45015f72d4a5`.
-> Nothing here is implemented. Section 9 lists two Store-format decisions that
-> are the owner's and must be resolved before A2 creates any table.
+> At writing nothing here was implemented. Section 10 records the owner's
+> decisions on section 9 and what A2 implemented and refined.
 
 ## 1. What this settles and what it does not
 
@@ -354,3 +354,34 @@ no TEMP-memory whole root; no weakened integrity check; no retry; no
 `VACUUM` or reopen in cleanup; the boundary guard is not edited to admit an
 edge. S9 stays incomplete: A2, A3 and qualification are not delivered by this
 document.
+
+## 10. Decisions and A2 refinements (2026-10-06)
+
+**Owner decisions, section 9:** the acquisition tables are **opt-in at Store
+creation** as versions 4–6; Init on a version 1–3 Store after A3 is a **typed
+refusal**, and no upgrade operation is designed now.
+
+A2 implemented sections 3–6 and 8 as
+[acquisition backing](../../architecture/44-acquisition-backing.md). It differs
+from the text above in these respects, which supersede it:
+
+- Kind codes are Content's: regular 1, directory 2, symlink 3. The directory
+  index is `WHERE kind=2`. `phase` has six values.
+- `init_entry` has one more column, `native` (60 bytes), set only on an
+  unplaced regular child so placement can bind its identity without observing
+  the source again; placement clears it. `metadata_root` is `NOT NULL`.
+- Regular entries store no path; a first path's native path lives in
+  `init_native_file`. `source`, `stack` and `scope` facts are stored; `entries`,
+  `serial_start`, `failure` and `genesis_root` columns were not needed.
+- The port's error is `AcquisitionError`, which wraps `PersistenceError` and
+  adds `Stale`, `Bounds` and `Changed`. A stale owner is `Stale`, not `Missing`.
+- The owner is matched by one point read at the start of every unit's
+  transaction rather than in each statement's `WHERE` clause, because the
+  working rows' keys carry no epoch.
+- `jobs` and `file_roots` are separate read units, and `job` and
+  `directory_path` are the point reads; there is no `native_files` unit.
+- Removal uses a row-value `IN` over a `LIMIT` subquery with `RETURNING` of the
+  removed payload, not a boundary key and range delete.
+
+Section 7's flow, including constructing attribute and target roots during the
+scan, is still the A3 design and is not implemented.

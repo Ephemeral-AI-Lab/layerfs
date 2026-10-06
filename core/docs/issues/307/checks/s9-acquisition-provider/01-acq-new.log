@@ -1,0 +1,52 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running tests/acquisition_schema.rs (core/target/cluster2-runtime-tests/debug/deps/acquisition_schema-0ff8296d6c617dcb)
+
+running 3 tests
+test a_read_only_store_refuses_to_begin ... ok
+test a_changed_acquisition_definition_is_refused_at_open ... ok
+test each_pack_layout_has_one_version_with_and_one_without_the_tables ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/acquisition_units.rs (core/target/cluster2-runtime-tests/debug/deps/acquisition_units-5fd24c91be0680f3)
+
+running 4 tests
+ACQUISITION_PLAN begin: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=?)", "SEARCH init_entry USING PRIMARY KEY (operation_id=?)"]
+ACQUISITION_PLAN claim_epoch: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)"]
+ACQUISITION_PLAN owner: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)"]
+ACQUISITION_PLAN charge: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)"]
+ACQUISITION_PLAN credit: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)"]
+ACQUISITION_PLAN advance: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)"]
+ACQUISITION_PLAN release: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)", "SEARCH init_native_file USING PRIMARY KEY (operation_id=?)", "SEARCH init_entry USING PRIMARY KEY (operation_id=?)"]
+ACQUISITION_PLAN put_entry: []
+ACQUISITION_PLAN bind_native: []
+ACQUISITION_PLAN unplaced_first: ["SEARCH init_entry USING PRIMARY KEY (operation_id=? AND parent_position=?)"]
+ACQUISITION_PLAN unplaced_next: ["SEARCH init_entry USING PRIMARY KEY (operation_id=? AND parent_position=? AND name>?)"]
+ACQUISITION_PLAN place_entry: ["SEARCH init_entry USING PRIMARY KEY (operation_id=? AND parent_position=? AND name=?)"]
+ACQUISITION_PLAN directories: ["SEARCH init_entry USING INDEX init_entry_directory (operation_id=? AND position>?)"]
+ACQUISITION_PLAN directory_path: ["SEARCH init_entry USING INDEX init_entry_directory (operation_id=? AND position=?)"]
+ACQUISITION_PLAN jobs: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position>?)"]
+ACQUISITION_PLAN job: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position=?)"]
+ACQUISITION_PLAN complete_file: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position=?)"]
+ACQUISITION_PLAN file_roots: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position>?)"]
+ACQUISITION_PLAN entries_first: ["SEARCH init_entry USING PRIMARY KEY (operation_id=?)"]
+ACQUISITION_PLAN entries_next: ["SEARCH init_entry USING PRIMARY KEY (operation_id=? AND (parent_position,name)>(?,?))"]
+ACQUISITION_PLAN set_directory_root: ["SEARCH init_entry USING INDEX init_entry_directory (operation_id=? AND position=?)"]
+ACQUISITION_PLAN discard_entries: ["SEARCH init_entry USING PRIMARY KEY (operation_id=? AND parent_position=? AND name=?)", "LIST SUBQUERY 2", "SEARCH init_entry USING PRIMARY KEY (operation_id=?)", "CREATE BLOOM FILTER"]
+ACQUISITION_PLAN discard_native: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position=?)", "LIST SUBQUERY 2", "SEARCH init_native_file USING PRIMARY KEY (operation_id=?)", "CREATE BLOOM FILTER"]
+ACQUISITION_PLAN abandoned: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid>?)"]
+ACQUISITION_PLAN release_abandoned: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)", "SEARCH init_native_file USING PRIMARY KEY (operation_id=?)", "SEARCH init_entry USING PRIMARY KEY (operation_id=?)"]
+test a_tree_streams_in_acquisition_order_with_exact_charges_and_bounded_cleanup ... ok
+test windows_owners_and_abandoned_operations_are_fenced ... ok
+ACQUISITION_PROFILE entries=2000 [statements,vm_steps,fullscan,sorts,autoindex] write=[2009, 158296, 0, 0, 0] read_window=[4, 9267, 0, 0, 0] discard_job=[6, 33434, 0, 0, 0]
+test a_wide_directory_is_placed_through_name_windows ... ok
+ACQUISITION_PROFILE entries=20000 [statements,vm_steps,fullscan,sorts,autoindex] write=[20025, 1580716, 0, 0, 0] read_window=[4, 9267, 0, 0, 0] discard_job=[6, 33434, 0, 0, 0]
+test every_statement_is_an_indexed_search_and_window_work_ignores_population ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+

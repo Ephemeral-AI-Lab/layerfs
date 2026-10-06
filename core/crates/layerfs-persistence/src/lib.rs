@@ -9,9 +9,13 @@ pub(crate) use store::handles;
 mod history;
 pub use backend::sqlite::connection::{AllocationIdentity, Checkpoint, ConnectionProfile, SqlWork};
 pub use backend::sqlite::statement_work::StatementPhaseWork;
-pub use config::{BackendSelection, PersistenceConfig, SqlitePackLayout, SqlitePersistenceProfile};
+pub use config::{
+    BackendSelection, PersistenceConfig, SqliteAcquisitionSchema, SqlitePackLayout,
+    SqlitePersistenceProfile,
+};
 pub use handles::Handles;
 pub use history::HistoryProvider;
+pub use storage::acquisition::AcquisitionProvider;
 pub(crate) use storage::provider as storage_provider;
 pub(crate) use storage::publication;
 pub use storage_provider::StorageProvider;

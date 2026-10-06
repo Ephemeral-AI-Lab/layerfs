@@ -369,6 +369,7 @@ S9 history and service: [original bound history receipts](37-runtime-history-rec
 [authenticated typed dispatch](38-authenticated-runtime-service.md) and
 [native import membership/link targets](39-native-import-links.md),
 [regular native aliases](41-native-regular-aliases.md),
-[native consumer ports](42-native-consumer-ports.md) and
-[backed initial acquisition](43-backed-initial-acquisition.md). Milestone exits
+[native consumer ports](42-native-consumer-ports.md),
+[backed initial acquisition](43-backed-initial-acquisition.md) and
+[provider-owned acquisition backing](44-acquisition-backing.md). Milestone exits
 and transport/bounded-import/resource gaps remain explicit in #307 audits.

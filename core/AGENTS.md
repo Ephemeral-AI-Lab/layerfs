@@ -74,9 +74,11 @@ an owning backend-neutral port. Concrete SQL and database ownership belong in
 Persistence/application composition along the permitted dependency direction.
 A guard refusal of Project's direct engine dependency identifies wrong placement;
 resolve that boundary before proceeding. It does not require replacing indexed
-backing with a custom sorter. The new acquisition capability and Store/open
-compatibility are implementation work, not existing APIs or permission to weaken
-the boundary guard. See the [S7/S9 remaining plan](docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md).
+backing with a custom sorter. The port and its SQLite provider now exist as an
+opt-in Store schema ([acquisition backing](docs/architecture/44-acquisition-backing.md));
+Project's import does not use them yet. Porting it is implementation work, not
+permission to weaken the boundary guard or to keep two acquisition algorithms.
+See the [S7/S9 remaining plan](docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md).
 
 ## Optimization and performance debugging
 

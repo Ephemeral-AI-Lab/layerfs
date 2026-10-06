@@ -1,5 +1,7 @@
 //! Application-owned physical and history handles over one database session.
-use crate::{Checkpoint, ConnectionProfile, HistoryProvider, SqlWork, StorageProvider};
+use crate::{
+    AcquisitionProvider, Checkpoint, ConnectionProfile, HistoryProvider, SqlWork, StorageProvider,
+};
 use layerfs_storage::port::PersistenceError;
 use std::sync::Arc;
 /// Store composition with no service bootstrap or implicit authority creation.
@@ -8,6 +10,9 @@ pub struct Handles {
     pub storage: Arc<StorageProvider>,
     /// History authority validated at explicit open.
     pub history: HistoryProvider,
+    /// Initial-acquisition working state over the same session. Every unit is
+    /// refused unless the Store was created with the acquisition tables.
+    pub acquisition: AcquisitionProvider,
 }
 impl Handles {
     /// Read-back settings from the actual shared connection.
@@ -27,6 +32,20 @@ impl Handles {
     ) -> Result<Vec<Vec<String>>, PersistenceError> {
         self.storage.session.run(false, |tx| {
             crate::backend::metadata_locations::explain(tx, ids)
+        })
+    }
+    /// Explains every shipped acquisition statement on this actual initialized
+    /// DB, by statement name. Read-only; refused when the Store was created
+    /// without the acquisition tables.
+    pub fn explain_acquisition(
+        &self,
+    ) -> Result<Vec<(&'static str, Vec<String>)>, PersistenceError> {
+        if self.profile().acquisition != crate::SqliteAcquisitionSchema::Tables {
+            return Err(PersistenceError::BackendUnavailable);
+        }
+        self.storage.session.run(false, |tx| {
+            crate::backend::sqlite::acquisition::statements::explain(tx)
+                .map_err(PersistenceError::from)
         })
     }
     /// Completes the selected profile and releases unused allocation, within caller timing.
