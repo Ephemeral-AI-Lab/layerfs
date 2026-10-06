@@ -1,0 +1,69 @@
+{
+  "candidate_commit": "9b74ac035faaf271edd01726913f63f084adaaa2",
+  "candidate_tree": "29e6b463c2cec61ee645e20ac452364426fc1494",
+  "reference_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-benchmark-20261006/raw/phase7-sqlite-init-100-acquisition-v2-baseline/receipt.json",
+  "reference_receipt_sha256": "ed8f86d81f0c8eb28802ceb7a3329786e09377df9689912c13cb12e4fb5c10d7",
+  "verified_reference_scopes": {
+    "product_seal": "783958dc877c95e4e863ce9a606ed43ba8f6a0f0f6d2ce95a79e43342aefb82f",
+    "shipped_sql_seal": "37b76b9395be055aea7aac47b81d9369774156a8af184f75e2c4fa1433e4104e",
+    "compilation_seal": "d575847a3c12c61640f3b59df6fcf0dd82a1105d6f9c9e114c7400426b205b61",
+    "dependency_seal": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+    "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+  },
+  "binaries": {
+    "sqlite_reference_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/target/phase7-baseline/layerfs/benchmark-results/fs-bench-pro/binary-archive/3c91ba5c41fc3baba8a09e07d531d8bd88b098607fb91e34eb1c15ef518d3d47/sqlite_reference_init",
+      "sha256": "3c91ba5c41fc3baba8a09e07d531d8bd88b098607fb91e34eb1c15ef518d3d47"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/target/phase7-baseline/layerfs/benchmark-results/fs-bench-pro/binary-archive/53319679c88df4bf3fc491c202d292569c89c18008cecdabe63b82f1df1734ad/verify_namespace",
+      "sha256": "53319679c88df4bf3fc491c202d292569c89c18008cecdabe63b82f1df1734ad"
+    }
+  },
+  "cold_helper": {
+    "binary": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+    "binary_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+    "build": {
+      "budget_ns": 30000000000,
+      "child": null,
+      "command": [
+        "/usr/bin/clang",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/core/benchmark/fs-bench-pro/shared/cold_native.c",
+        "-o",
+        "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold"
+      ],
+      "cpu_ns": 235742000,
+      "exit_code": 0,
+      "peak_rss_bytes": 49201152,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "timed_out": false,
+      "wall_ns": 248620417
+    },
+    "build_wall_ns": 298588250,
+    "inputs": {
+      "architecture": "arm64",
+      "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+      "flags": [
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror"
+      ],
+      "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+      "source_sha256": "cb87d6136140eaa5f99afac19db0dcf11b88413e60030009895faacdb53c8883"
+    },
+    "mode": "compiled",
+    "seal": "6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87"
+  },
+  "reuse": "previous independently byte-copied prepared masters and worktree-local build cache, recorded in init-entry-window-results-20261006/setup-reference-reuse.json; runner rebuilds changed first-party release source and cold-attests source content anew; no measured Store reused",
+  "previous_setup_receipt_sha256": "2bba47a1ce549e534feea66325cba26cfcd7531f1193103cb5cbf36a64f6d1af",
+  "fixture_manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+  "reference_product_ns": 41992917,
+  "reference_allocated_bytes": 7372800
+}

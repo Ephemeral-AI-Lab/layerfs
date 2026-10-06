@@ -1,0 +1,21 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+  Executable unittests src/lib.rs (core/target/init-acquisition-fix-20261006/debug/deps/layerfs_project-cffae0e2b52819f6)
+  Executable tests/acquisition_custody.rs (core/target/init-acquisition-fix-20261006/debug/deps/acquisition_custody-de71bfa684e1c05f)
+  Executable tests/backed_acquisition.rs (core/target/init-acquisition-fix-20261006/debug/deps/backed_acquisition-56c879d1d2910153)
+  Executable tests/complete_root.rs (core/target/init-acquisition-fix-20261006/debug/deps/complete_root-7bc313d53b4b8645)
+  Executable tests/history_proof_memo.rs (core/target/init-acquisition-fix-20261006/debug/deps/history_proof_memo-63e0a379bb7f70d8)
+  Executable tests/init_memory.rs (core/target/init-acquisition-fix-20261006/debug/deps/init_memory-4dff77e098c7527d)
+  Executable tests/init_sqlite.rs (core/target/init-acquisition-fix-20261006/debug/deps/init_sqlite-a81263fb89d61840)
+  Executable tests/namespace_scaling.rs (core/target/init-acquisition-fix-20261006/debug/deps/namespace_scaling-9ba4bcc3e4bcccd6)
+  Executable unittests examples/acquisition_profile.rs (core/target/init-acquisition-fix-20261006/debug/examples/acquisition_profile-eb1d4e8c03d2f167)
+  Executable unittests examples/benchmark_history.rs (core/target/init-acquisition-fix-20261006/debug/examples/benchmark_history-25eeb0e283ed40d5)
+  Executable unittests examples/benchmark_init.rs (core/target/init-acquisition-fix-20261006/debug/examples/benchmark_init-458c4c4d44746f69)
+  Executable unittests examples/cause_namespace.rs (core/target/init-acquisition-fix-20261006/debug/examples/cause_namespace-7aedcb121d53d725)
+  Executable unittests examples/durable_init_costs.rs (core/target/init-acquisition-fix-20261006/debug/examples/durable_init_costs-91bce26aaecd6d72)
+  Executable unittests examples/verify_history.rs (core/target/init-acquisition-fix-20261006/debug/examples/verify_history-902dc25e49e113ab)
+  Executable unittests examples/verify_namespace.rs (core/target/init-acquisition-fix-20261006/debug/examples/verify_namespace-bb9c33c4490085ee)

@@ -1,0 +1,12 @@
+{
+  "scope": "prospective locked count diagnostic, instrumented clocks ineligible",
+  "source_parent": "9b74ac035faaf271edd01726913f63f084adaaa2",
+  "init_sha256": "558a63045b5b5aa9157780a5f7e01a94eb82cce549ff933e588eac4b8351bea3",
+  "binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-runtime-tests/release/examples/durable_init_costs",
+  "binary_sha256": "c4790f7c12558c3d483a6eccf60a054efe642c3a4e79e59fbde8d3d1e45350d7",
+  "fixture_manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+  "profile": "Durable WAL/FULL/fullfsync",
+  "attempts": 1,
+  "wall_s": 15,
+  "lock": "benchmark-results/fs-bench-pro/phase7-sqlite.lock nonblocking"
+}

@@ -146,31 +146,28 @@ fn acquire<'a>(
     progress: &mut ImportProgress,
     timer: &TimingScope<'_, Active>,
 ) -> ProjectResult<(ObjectId, u64, u64, Save<'a>)> {
+    // Attributes/targets and file bodies are prerequisites of the same tree.
+    // Keep one bounded Save through both construction phases; finish it before
+    // consuming serials so their existing publication/error boundary remains.
+    let save = store.begin_save().map_err(storage)?;
     let scanned = {
         let provider = store.reader().map_err(storage)?;
-        let save = store.begin_save().map_err(storage)?;
         let built = timer.child("history.import_scan").run(|_| {
             let mut sink = save.sink();
             let mut objects = FilesystemObjects::new(&provider, &mut sink);
             scan::scan(request.source, source, backing, &mut objects, progress)
         });
-        let scanned = match save.take_failure() {
+        match save.take_failure() {
             Some(error) => Err(storage(error)),
             None => built,
-        }?;
-        progress.tick()?;
-        timer
-            .child("history.finish_prerequisite_save")
-            .run(|_| save.finish().map_err(storage))?;
-        scanned
+        }?
     };
-    let save = store.begin_save().map_err(storage)?;
     timer
         .child("history.import_files")
         .run(|_| files::save_files(backing, scanned.aliases, store, &save, progress))?;
     progress.tick()?;
     timer
-        .child("history.import_finish_save")
+        .child("history.finish_prerequisite_save")
         .run(|_| save.finish().map_err(storage))?;
     let scope = scope_for_seed(request.scope_seed);
     let reservation = timer.child("history.reserve_inodes").run(|_| {

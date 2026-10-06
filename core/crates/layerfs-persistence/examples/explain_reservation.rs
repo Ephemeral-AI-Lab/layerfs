@@ -1,4 +1,4 @@
-//! Read-only plans for the unchanged Store reservation statements.
+//! Read-only plans for unchanged Store reservation/publication statements.
 use rusqlite::{Connection, OpenFlags};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = std::env::args()
@@ -49,6 +49,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ))
         })? {
             println!("OPCODE {name} {:?}", row?);
+        }
+    }
+    for rows in [1_usize, 2, 4, 8, 16, 32] {
+        for (name, sql) in [
+            (
+                "pack",
+                format!(
+                    "INSERT INTO pack(pack_id,domain,digest,length,body) VALUES {}",
+                    std::iter::repeat_n("(?,?,?,?,?)", rows)
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ),
+            ),
+            (
+                "locations",
+                format!(
+                    "INSERT INTO object_location(object_id,role,canonical_length,pack_id,group_number,record_number) VALUES {} ON CONFLICT(object_id) DO NOTHING RETURNING object_id",
+                    std::iter::repeat_n("(?,?,?,?,?,?)", rows)
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ),
+            ),
+        ] {
+            println!("SOURCE {name} rows={rows} sql={sql}");
+            // Only the EXPLAIN programs run. No INSERT is stepped. Bound NULLs
+            // are representative bind slots, not a product publication fixture.
+            for prefix in ["EXPLAIN QUERY PLAN", "EXPLAIN"] {
+                let mut statement = database.prepare(&format!("{prefix} {sql}"))?;
+                let values = vec![rusqlite::types::Value::Null; statement.parameter_count()];
+                let count = statement.column_count();
+                for row in statement.query_map(rusqlite::params_from_iter(values), |r| {
+                    (0..count)
+                        .map(|i| r.get::<_, rusqlite::types::Value>(i))
+                        .collect::<Result<Vec<_>, _>>()
+                })? {
+                    println!("PUBLICATION {prefix} {name} rows={rows} {:?}", row?);
+                }
+            }
         }
     }
     Ok(())

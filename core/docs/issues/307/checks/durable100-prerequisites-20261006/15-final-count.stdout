@@ -1,0 +1,17 @@
+{"unit":"complete_init","calls":1,"statements":197,"vm_steps":86813,"returned_rows":1270,"fullscan_steps":155,"sorts":1,"reprepares":3,"write_commits":15,"statement_ns":39156610,"commit_ns":31815461,"unit_ns":0}
+{"unit":"begin","calls":1,"statements":4,"vm_steps":157,"returned_rows":2,"fullscan_steps":0,"sorts":0,"reprepares":1,"write_commits":1,"statement_ns":1406417,"commit_ns":1279000,"unit_ns":1439375}
+{"unit":"complete_files","calls":1,"statements":8,"vm_steps":6905,"returned_rows":102,"fullscan_steps":124,"sorts":0,"reprepares":0,"write_commits":1,"statement_ns":2541167,"commit_ns":1988793,"unit_ns":2554917}
+{"unit":"directories","calls":3,"statements":12,"vm_steps":152,"returned_rows":5,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":68335,"commit_ns":8124,"unit_ns":73958}
+{"unit":"discard","calls":1,"statements":7,"vm_steps":12025,"returned_rows":205,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":1,"statement_ns":1661126,"commit_ns":1226875,"unit_ns":1667375}
+{"unit":"entries","calls":4,"statements":16,"vm_steps":2436,"returned_rows":208,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":234164,"commit_ns":10125,"unit_ns":277375}
+{"unit":"file_roots","calls":2,"statements":8,"vm_steps":786,"returned_rows":102,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":75043,"commit_ns":3876,"unit_ns":88791}
+{"unit":"jobs","calls":3,"statements":12,"vm_steps":1028,"returned_rows":103,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":216376,"commit_ns":8208,"unit_ns":242708}
+{"unit":"put_entries","calls":3,"statements":30,"vm_steps":28763,"returned_rows":12,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":3,"statement_ns":5278245,"commit_ns":4286626,"unit_ns":5353501}
+{"unit":"release","calls":1,"statements":5,"vm_steps":97,"returned_rows":3,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":1,"statement_ns":884251,"commit_ns":842625,"unit_ns":886417}
+{"unit":"set_directory_roots","calls":1,"statements":5,"vm_steps":614,"returned_rows":4,"fullscan_steps":31,"sorts":0,"reprepares":0,"write_commits":1,"statement_ns":1128872,"commit_ns":969541,"unit_ns":1132209}
+{"unit":"storage.locate","calls":4,"statements":12,"vm_steps":5969,"returned_rows":169,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":696541,"commit_ns":15207,"unit_ns":836584}
+{"unit":"storage.policy","calls":1,"statements":3,"vm_steps":21,"returned_rows":1,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":0,"statement_ns":26873,"commit_ns":6333,"unit_ns":45292}
+{"unit":"storage.publish","calls":3,"statements":47,"vm_steps":27287,"returned_rows":346,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":3,"statement_ns":20889329,"commit_ns":17661126,"unit_ns":24397042}
+{"unit":"storage.reserve","calls":2,"statements":8,"vm_steps":108,"returned_rows":2,"fullscan_steps":0,"sorts":0,"reprepares":0,"write_commits":2,"statement_ns":2088791,"commit_ns":1995750,"unit_ns":2092708}
+{"unit":"storage.signatures","calls":1,"statements":3,"vm_steps":17,"returned_rows":0,"fullscan_steps":0,"sorts":1,"reprepares":0,"write_commits":0,"statement_ns":52665,"commit_ns":3583,"unit_ns":70292}
+{"unit":"storage.value_groups","calls":2,"statements":8,"vm_steps":50,"returned_rows":2,"fullscan_steps":0,"sorts":0,"reprepares":2,"write_commits":0,"statement_ns":88500,"commit_ns":6292,"unit_ns":93043}

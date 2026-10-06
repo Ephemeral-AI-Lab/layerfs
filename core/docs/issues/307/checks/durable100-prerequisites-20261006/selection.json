@@ -1,0 +1,17 @@
+{
+  "kind": "prospective count and functional regression; no new speed clock",
+  "before_source": "9b74ac035faaf271edd01726913f63f084adaaa2",
+  "change": "combine attributes and files in one bounded prerequisite Save finished before reserve_inodes; tree Save and cleanup order unchanged",
+  "observations": [
+    "public Storage publication count",
+    "canonical full namespace oracle",
+    "typed failure/uncertain custody",
+    "fixed provider-linked indexed EXPLAIN with per-Storage runtime SQL counters"
+  ],
+  "cache": "uncontrolled; instrumented clocks/RSS ineligible",
+  "build_cap_s": 90,
+  "test_cap_s": 110,
+  "count_run_cap_s": 15,
+  "workers_env": 1,
+  "namespace_constructors": 4
+}

@@ -1,0 +1,23 @@
+{
+  "scope": "prospective locked changed-source count diagnostic; no speed admission",
+  "parent": "9b74ac035faaf271edd01726913f63f084adaaa2",
+  "source_sha256": {
+    "core/crates/layerfs-project/src/import/init.rs": "558a63045b5b5aa9157780a5f7e01a94eb82cce549ff933e588eac4b8351bea3",
+    "core/crates/layerfs-storage/src/save/wave.rs": "e0be8a3bddad7c5fc9ec4deea9d3a337494bd446d6f8d76396c9a9574dc6ed22",
+    "core/crates/layerfs-storage/src/save/operation.rs": "54a4760c510913f4f999f23a13016d230f6cd4f8bc1275fffc65c4c3c64ee5e6"
+  },
+  "binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-runtime-tests/release/examples/durable_init_costs",
+  "binary_sha256": "f5486cc3152e4a625b78716674b385f65436ea49d87caba66e61910c9a8b461e",
+  "source_payload": "benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/payload",
+  "fixture_manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+  "changes": [
+    "one bounded prerequisite Save for scan and files",
+    "close final preparation before unchanged bounded publication partitions"
+  ],
+  "attempts": 1,
+  "profile": "Durable WAL/FULL/fullfsync",
+  "wall_cap_s": 15,
+  "cache": "uncontrolled/instrumented; clocks ineligible",
+  "lock": "normal primary phase7-sqlite.lock nonblocking",
+  "failed_prior_diagnostic": "08 used non-existent /input, refused before acquisition begin; closed output retained, no in-flight operation replay"
+}

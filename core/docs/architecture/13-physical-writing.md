@@ -350,6 +350,22 @@ every canonical object back. The separately retained Durable100 count diagnostic
 removes one reservation write unit; its instrumented clocks do not establish a
 performance verdict.
 
+The subsequent final-wave correction prepares `Save::finish`'s bounded pending
+objects without first publishing its ready subset. It then seals/closes the
+remaining bounded groups and invokes the existing reference-ordered publisher
+once. That publisher still partitions by its independent canonical bytes,
+physical bytes and row limits, and each partition has one atomic acknowledgement.
+Ordinary acceptance waves still publish as before; demanded same-Save reads keep
+their existing bounded sealing and authenticated-read behavior.
+Only the last bounded wave plus the existing fixed lane tails coexist; there is
+no import-sized retained output or transaction. A final sealing failure can now
+leave fewer orphan objects because that ready subset was not yet acknowledged;
+already acknowledged batches still survive, and unknown acknowledgement stops
+the Save with its original custody. Durability, closure, formats and capacities
+are unchanged. The public independent-charge regression covers the case where
+ready packs and the final groups fit in one publication, then reads every object
+back; larger publications retain the existing bound checks and partitions.
+
 Placement decides a pack's final length before writing it. Ordinary,
 Native and WholeFile packs close at each `select_many` flush; a newly
 created row therefore uses its exact declared `used` length as its
