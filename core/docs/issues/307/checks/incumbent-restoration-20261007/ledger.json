@@ -287,12 +287,57 @@
       "second_selection": {
         "arms": {
           "baseline": {
-            "status": "NOT_RUN"
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 33519000375,
+            "storage_bytes": 52473856,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 47592692000,
+            "command_budget_ns": 120000000000,
+            "verification_wall_ns": 3026737708,
+            "verification_budget_ns": 24000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-r2-phase7-sqlite-history-stride10-group-rows-indexed-v2-baseline",
+            "receipt_sha256": "a20d8de1cf53cbf0a2830be5ebc51ec996d4b216749c5150e2f2d2b9bc38e9dc",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-history-stride10-group-rows-indexed-v2/baseline/receipt.json"
           },
           "candidate": {
-            "status": "NOT_RUN"
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 33463455583,
+            "storage_bytes": 50724864,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 47694741292,
+            "command_budget_ns": 120000000000,
+            "verification_wall_ns": 3926516416,
+            "verification_budget_ns": 24000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-r2-phase7-sqlite-history-stride10-group-rows-indexed-v2-candidate",
+            "receipt_sha256": "006410873de824741fdc516d0af5e2e9807a52fc5377426c261838f1b2d183b9",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-history-stride10-group-rows-indexed-v2/candidate/receipt.json"
           }
-        }
+        },
+        "source": "6af972dc0a9e97111bafe97aa0627c6811f62686",
+        "speed_gate": "PASS",
+        "time_delta_percent": -0.16571136185024132,
+        "allocation_gate": "PASS",
+        "roots_equal": true
       }
     },
     {
@@ -354,12 +399,57 @@
       "second_selection": {
         "arms": {
           "baseline": {
-            "status": "NOT_RUN"
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 72226545709,
+            "storage_bytes": 65142784,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 87700822292,
+            "command_budget_ns": 340000000000,
+            "verification_wall_ns": 6942079583,
+            "verification_budget_ns": 24000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-r2-phase7-sqlite-history-stride3-group-rows-indexed-v2-baseline",
+            "receipt_sha256": "b550172315cdfcb2297d599fc32340ae66fb955c4fc40749e6834a8ddace4d2f",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-history-stride3-group-rows-indexed-v2/baseline/receipt.json"
           },
           "candidate": {
-            "status": "NOT_RUN"
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 69832602917,
+            "storage_bytes": 64278528,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 84694631708,
+            "command_budget_ns": 340000000000,
+            "verification_wall_ns": 7320803209,
+            "verification_budget_ns": 24000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-r2-phase7-sqlite-history-stride3-group-rows-indexed-v2-candidate",
+            "receipt_sha256": "9690cadb216062505458c455a1831ab2a335193be34c6654821dffdf42a0b330",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-history-stride3-group-rows-indexed-v2/candidate/receipt.json"
           }
-        }
+        },
+        "source": "6af972dc0a9e97111bafe97aa0627c6811f62686",
+        "speed_gate": "PASS",
+        "time_delta_percent": -3.3144916020837694,
+        "allocation_gate": "PASS",
+        "roots_equal": true
       }
     },
     {
@@ -380,12 +470,57 @@
       "second_selection": {
         "arms": {
           "baseline": {
-            "status": "NOT_RUN"
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 190526544250,
+            "storage_bytes": 86179840,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 205312168958,
+            "command_budget_ns": 600000000000,
+            "verification_wall_ns": 17581886167,
+            "verification_budget_ns": 60000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-r2-phase7-sqlite-history-stride1-group-rows-indexed-v2-baseline",
+            "receipt_sha256": "0de949035f8454f048685ba67b739dd1955042ea8b068cd79cc99b660e4cfcab",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-history-stride1-group-rows-indexed-v2/baseline/receipt.json"
           },
           "candidate": {
-            "status": "NOT_RUN"
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 193992185709,
+            "storage_bytes": 85204992,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 207216476542,
+            "command_budget_ns": 600000000000,
+            "verification_wall_ns": 17488460958,
+            "verification_budget_ns": 60000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-r2-phase7-sqlite-history-stride1-group-rows-indexed-v2-candidate",
+            "receipt_sha256": "0ec793fe4715ea136ef7112bdcd7a66c37f9f7bf018d050478bce87255892512",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-history-stride1-group-rows-indexed-v2/candidate/receipt.json"
           }
-        }
+        },
+        "source": "6af972dc0a9e97111bafe97aa0627c6811f62686",
+        "speed_gate": "PASS",
+        "time_delta_percent": 1.8189809050714465,
+        "allocation_gate": "PASS",
+        "roots_equal": true
       }
     },
     {
@@ -406,12 +541,57 @@
       "second_selection": {
         "arms": {
           "baseline": {
-            "status": "NOT_RUN"
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 34544042250,
+            "storage_bytes": 52473856,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 47866607500,
+            "command_budget_ns": 60000000000,
+            "verification_wall_ns": 3165924833,
+            "verification_budget_ns": 12000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-r2-phase7-sqlite-disposable-history-stride10-group-rows-indexed-v1-baseline",
+            "receipt_sha256": "ce6af979869c10f1fc2b738f8130130a51a216ef9dd96a5e972cc8177b52877f",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride10-group-rows-indexed-v1/baseline/receipt.json"
           },
           "candidate": {
-            "status": "NOT_RUN"
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 33708739000,
+            "storage_bytes": 50692096,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 46874867875,
+            "command_budget_ns": 60000000000,
+            "verification_wall_ns": 3261549375,
+            "verification_budget_ns": 12000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-r2-phase7-sqlite-disposable-history-stride10-group-rows-indexed-v1-candidate",
+            "receipt_sha256": "ae3cd6cd80f81a4c998701604fd437e95e39e3988f984e9a75b357e491b64827",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride10-group-rows-indexed-v1/candidate/receipt.json"
           }
-        }
+        },
+        "source": "6af972dc0a9e97111bafe97aa0627c6811f62686",
+        "speed_gate": "PASS",
+        "time_delta_percent": -2.418081948704194,
+        "allocation_gate": "PASS",
+        "roots_equal": true
       }
     },
     {
@@ -432,12 +612,57 @@
       "second_selection": {
         "arms": {
           "baseline": {
-            "status": "NOT_RUN"
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 72230709750,
+            "storage_bytes": 65142784,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 87422624084,
+            "command_budget_ns": 170000000000,
+            "verification_wall_ns": 6881713166,
+            "verification_budget_ns": 12000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-r2-phase7-sqlite-disposable-history-stride3-group-rows-indexed-v1-baseline",
+            "receipt_sha256": "c2f11d698af0403c1aa2a92c3980e04de91e9b05ddd4d781b3af4d8b1dadbcde",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride3-group-rows-indexed-v1/baseline/receipt.json"
           },
           "candidate": {
-            "status": "NOT_RUN"
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 66838917708,
+            "storage_bytes": 64245760,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 79753570625,
+            "command_budget_ns": 170000000000,
+            "verification_wall_ns": 6622459666,
+            "verification_budget_ns": 12000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-r2-phase7-sqlite-disposable-history-stride3-group-rows-indexed-v1-candidate",
+            "receipt_sha256": "1617663694103e86b049d2ff182208cb5aab8c7cf169fface7f86abb5c6c58af",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride3-group-rows-indexed-v1/candidate/receipt.json"
           }
-        }
+        },
+        "source": "6af972dc0a9e97111bafe97aa0627c6811f62686",
+        "speed_gate": "PASS",
+        "time_delta_percent": -7.464680965563958,
+        "allocation_gate": "PASS",
+        "roots_equal": true
       }
     },
     {
@@ -458,12 +683,57 @@
       "second_selection": {
         "arms": {
           "baseline": {
-            "status": "NOT_RUN"
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 192712692209,
+            "storage_bytes": 86179840,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 207408965750,
+            "command_budget_ns": 300000000000,
+            "verification_wall_ns": 18009315375,
+            "verification_budget_ns": 30000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-r2-phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1-baseline",
+            "receipt_sha256": "b52964747a9647f350b0ccd1267db5ed4cc071d72e30d4c09bc939442797b868",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1/baseline/receipt.json"
           },
           "candidate": {
-            "status": "NOT_RUN"
+            "status": "COMPLETE",
+            "sample_count": 1,
+            "comparison_ns": 185189368250,
+            "storage_bytes": 85172224,
+            "proof": "PASS",
+            "cache": "PASS",
+            "cleanup": "PASS",
+            "command_wall_ns": 198557270125,
+            "command_budget_ns": 300000000000,
+            "verification_wall_ns": 17628540791,
+            "verification_budget_ns": 30000000000,
+            "source_residency": {
+              "resident_first": 4,
+              "resident_after": 0,
+              "invalidated_files": 1,
+              "status": "PASS"
+            },
+            "reason": null,
+            "run": "/Users/yifanxu/.codex/worktrees/save-vfs-amplification/layerfs/benchmark-results/fs-bench-pro/incumbent-restoration-20261007-r2-phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1-candidate",
+            "receipt_sha256": "9e982606b131ae4a85f8d971172c231b9de0330076edf664825b6b9cdba812a5",
+            "compact": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1/candidate/receipt.json"
           }
-        }
+        },
+        "source": "6af972dc0a9e97111bafe97aa0627c6811f62686",
+        "speed_gate": "PASS",
+        "time_delta_percent": -3.9039068328934117,
+        "allocation_gate": "PASS",
+        "roots_equal": true
       }
     }
   ],
@@ -482,6 +752,326 @@
       "first_pass_ns": 7124530000,
       "attestation_ns": 7394353000,
       "time": "2026-10-07T01:40:09+0800",
+      "status": "READY"
+    },
+    {
+      "label": "phase7-sqlite-history-stride10-group-rows-indexed-v2 baseline",
+      "round": 0,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 0,
+      "resident_after": 0,
+      "invalidated_files": 0,
+      "first_pass_ns": 7491773000,
+      "attestation_ns": 7065963000,
+      "time": "2026-10-07T01:41:42+0800",
+      "status": "READY"
+    },
+    {
+      "label": "phase7-sqlite-history-stride10-group-rows-indexed-v2 candidate",
+      "round": 0,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 637,
+      "resident_after": 0,
+      "invalidated_files": 20,
+      "first_pass_ns": 7394027000,
+      "attestation_ns": 7537423000,
+      "time": "2026-10-07T01:43:31+0800",
+      "status": "REPEAT"
+    },
+    {
+      "label": "phase7-sqlite-history-stride10-group-rows-indexed-v2 candidate",
+      "round": 1,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 0,
+      "resident_after": 0,
+      "invalidated_files": 0,
+      "first_pass_ns": 7068920000,
+      "attestation_ns": 5567036000,
+      "time": "2026-10-07T01:44:04+0800",
+      "status": "READY"
+    },
+    {
+      "label": "phase7-sqlite-disposable-history-stride10-group-rows-indexed-v1 baseline",
+      "round": 0,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 7993,
+      "resident_after": 0,
+      "invalidated_files": 5393,
+      "first_pass_ns": 7618962000,
+      "attestation_ns": 5681553000,
+      "time": "2026-10-07T01:46:12+0800",
+      "status": "REPEAT"
+    },
+    {
+      "label": "phase7-sqlite-disposable-history-stride10-group-rows-indexed-v1 baseline",
+      "round": 1,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 0,
+      "resident_after": 0,
+      "invalidated_files": 0,
+      "first_pass_ns": 7213333000,
+      "attestation_ns": 5488775000,
+      "time": "2026-10-07T01:46:45+0800",
+      "status": "READY"
+    },
+    {
+      "label": "phase7-sqlite-disposable-history-stride10-group-rows-indexed-v1 candidate",
+      "round": 0,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 259,
+      "resident_after": 0,
+      "invalidated_files": 5,
+      "first_pass_ns": 7402731000,
+      "attestation_ns": 5852630000,
+      "time": "2026-10-07T01:48:33+0800",
+      "status": "READY"
+    },
+    {
+      "label": "phase7-sqlite-disposable-history-stride3-group-rows-indexed-v1 baseline",
+      "round": 0,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 13268,
+      "resident_after": 0,
+      "invalidated_files": 8975,
+      "first_pass_ns": 7459549000,
+      "attestation_ns": 5775832000,
+      "time": "2026-10-07T01:50:26+0800",
+      "status": "REPEAT"
+    },
+    {
+      "label": "phase7-sqlite-disposable-history-stride3-group-rows-indexed-v1 baseline",
+      "round": 1,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 0,
+      "resident_after": 0,
+      "invalidated_files": 0,
+      "first_pass_ns": 6955444000,
+      "attestation_ns": 5673692000,
+      "time": "2026-10-07T01:50:59+0800",
+      "status": "READY"
+    },
+    {
+      "label": "phase7-sqlite-disposable-history-stride3-group-rows-indexed-v1 candidate",
+      "round": 0,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 6627,
+      "resident_after": 0,
+      "invalidated_files": 4167,
+      "first_pass_ns": 7503855000,
+      "attestation_ns": 5715862000,
+      "time": "2026-10-07T01:53:30+0800",
+      "status": "REPEAT"
+    },
+    {
+      "label": "phase7-sqlite-disposable-history-stride3-group-rows-indexed-v1 candidate",
+      "round": 1,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 0,
+      "resident_after": 0,
+      "invalidated_files": 0,
+      "first_pass_ns": 7021518000,
+      "attestation_ns": 5821810000,
+      "time": "2026-10-07T01:54:03+0800",
+      "status": "READY"
+    },
+    {
+      "label": "phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1 baseline",
+      "round": 0,
+      "settle_s": 20.3,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 338,
+      "resident_after": 0,
+      "invalidated_files": 16,
+      "first_pass_ns": 7132403000,
+      "attestation_ns": 6988127000,
+      "time": "2026-10-07T01:56:39+0800",
+      "status": "READY"
+    },
+    {
+      "label": "phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1 candidate",
+      "round": 0,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 624,
+      "resident_after": 0,
+      "invalidated_files": 27,
+      "first_pass_ns": 7428883000,
+      "attestation_ns": 6817422000,
+      "time": "2026-10-07T02:01:23+0800",
+      "status": "REPEAT"
+    },
+    {
+      "label": "phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1 candidate",
+      "round": 1,
+      "settle_s": 20.3,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 0,
+      "resident_after": 0,
+      "invalidated_files": 0,
+      "first_pass_ns": 5607542000,
+      "attestation_ns": 5574072000,
+      "time": "2026-10-07T02:01:54+0800",
+      "status": "READY"
+    },
+    {
+      "label": "phase7-sqlite-history-stride3-group-rows-indexed-v2 baseline",
+      "round": 0,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 0,
+      "resident_after": 0,
+      "invalidated_files": 0,
+      "first_pass_ns": 7583170000,
+      "attestation_ns": 5831326000,
+      "time": "2026-10-07T02:06:51+0800",
+      "status": "READY"
+    },
+    {
+      "label": "phase7-sqlite-history-stride3-group-rows-indexed-v2 candidate",
+      "round": 0,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 30120,
+      "resident_after": 0,
+      "invalidated_files": 22365,
+      "first_pass_ns": 8462964000,
+      "attestation_ns": 6050570000,
+      "time": "2026-10-07T02:09:23+0800",
+      "status": "REPEAT"
+    },
+    {
+      "label": "phase7-sqlite-history-stride3-group-rows-indexed-v2 candidate",
+      "round": 1,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 0,
+      "resident_after": 0,
+      "invalidated_files": 0,
+      "first_pass_ns": 7323112000,
+      "attestation_ns": 5860933000,
+      "time": "2026-10-07T02:09:57+0800",
+      "status": "READY"
+    },
+    {
+      "label": "phase7-sqlite-history-stride1-group-rows-indexed-v2 baseline",
+      "round": 0,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 1922,
+      "resident_after": 0,
+      "invalidated_files": 659,
+      "first_pass_ns": 7749317000,
+      "attestation_ns": 7082180000,
+      "time": "2026-10-07T02:13:00+0800",
+      "status": "REPEAT"
+    },
+    {
+      "label": "phase7-sqlite-history-stride1-group-rows-indexed-v2 baseline",
+      "round": 1,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 0,
+      "resident_after": 0,
+      "invalidated_files": 0,
+      "first_pass_ns": 6500859000,
+      "attestation_ns": 7052957000,
+      "time": "2026-10-07T02:13:33+0800",
+      "status": "READY"
+    },
+    {
+      "label": "phase7-sqlite-history-stride1-group-rows-indexed-v2 candidate",
+      "round": 0,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 1279,
+      "resident_after": 0,
+      "invalidated_files": 221,
+      "first_pass_ns": 7621138000,
+      "attestation_ns": 6885875000,
+      "time": "2026-10-07T02:18:14+0800",
+      "status": "REPEAT"
+    },
+    {
+      "label": "phase7-sqlite-history-stride1-group-rows-indexed-v2 candidate",
+      "round": 1,
+      "settle_s": 20.2,
+      "helper_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+      "exit_code": 0,
+      "files": 180444,
+      "total_pages": 264706,
+      "resident_first": 0,
+      "resident_after": 0,
+      "invalidated_files": 0,
+      "first_pass_ns": 5877088000,
+      "attestation_ns": 5645790000,
+      "time": "2026-10-07T02:18:46+0800",
       "status": "READY"
     }
   ]
