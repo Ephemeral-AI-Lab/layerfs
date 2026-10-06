@@ -1,0 +1,32 @@
+{
+  "reason": "only binaries unrun after the retained fixture failure; earlier passing binaries reused",
+  "tests": [
+    "core/target/cluster2-runtime-tests/debug/deps/sqlite_publication-d1e36b64dd368bf0",
+    "core/target/cluster2-runtime-tests/debug/deps/sqlite_recovery-c8bae7a6517ff80d",
+    "core/target/cluster2-runtime-tests/debug/deps/sqlite_reference_acquisition-af4d8bac5f950aba",
+    "core/target/cluster2-runtime-tests/debug/deps/sqlite_transaction_units-677cf916d8486ca1",
+    "core/target/cluster2-runtime-tests/debug/deps/acquisition_custody-de71bfa684e1c05f",
+    "core/target/cluster2-runtime-tests/debug/deps/backed_acquisition-56c879d1d2910153",
+    "core/target/cluster2-runtime-tests/debug/deps/complete_root-7bc313d53b4b8645",
+    "core/target/cluster2-runtime-tests/debug/deps/history_proof_memo-63e0a379bb7f70d8",
+    "core/target/cluster2-runtime-tests/debug/deps/init_memory-4dff77e098c7527d",
+    "core/target/cluster2-runtime-tests/debug/deps/init_sqlite-a81263fb89d61840",
+    "core/target/cluster2-runtime-tests/debug/deps/namespace_scaling-9ba4bcc3e4bcccd6",
+    "core/target/cluster2-runtime-tests/debug/deps/codec_frames-4c026ece6c3f0ecf",
+    "core/target/cluster2-runtime-tests/debug/deps/decoded_group_retention-c30a4c9e49c06e73",
+    "core/target/cluster2-runtime-tests/debug/deps/locator_pressure-850786723554273e",
+    "core/target/cluster2-runtime-tests/debug/deps/object_key-818fe01b5ebfaf70",
+    "core/target/cluster2-runtime-tests/debug/deps/pack_cache_contract-88cca7b9685a4f6a",
+    "core/target/cluster2-runtime-tests/debug/deps/pack_range_contract-74621c8c161e9b79",
+    "core/target/cluster2-runtime-tests/debug/deps/physical_formats-ef4195a93e3eb456",
+    "core/target/cluster2-runtime-tests/debug/deps/pooled_demand_work-37763a6a440484ab",
+    "core/target/cluster2-runtime-tests/debug/deps/pooled_dependency_integrity-e88cc6cd5a2e174a",
+    "core/target/cluster2-runtime-tests/debug/deps/pooled_value_retention-f5cd11d434ed512d",
+    "core/target/cluster2-runtime-tests/debug/deps/read_demand_custody-1a1fb525d99edaa1",
+    "core/target/cluster2-runtime-tests/debug/deps/read_pack_locality-8204cf82ea5fec2e",
+    "core/target/cluster2-runtime-tests/debug/deps/save_demand_locality-568e8a85dbf5c34b",
+    "core/target/cluster2-runtime-tests/debug/deps/selected_cache_bounds-034a34927cec4b92",
+    "core/target/cluster2-runtime-tests/debug/deps/selected_group_reads-79baace56d7da732",
+    "core/target/cluster2-runtime-tests/debug/deps/verified_pack_read-fd00751c024b3b5f"
+  ]
+}

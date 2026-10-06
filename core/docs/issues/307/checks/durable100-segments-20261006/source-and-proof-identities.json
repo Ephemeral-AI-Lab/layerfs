@@ -1,0 +1,10 @@
+{
+  "native_close_library_sha256": "0a5f63ac0044b5736379a035dece22fa328d19575844e3a72629b6672121cfaf",
+  "native_close_source_sha256": "f5a3fa9c9c49d34c6c2e0f194c0c41be33d83bb5a76544775507746a91a1e339",
+  "fault_probe_binary_sha256": "2e83171dbb9349e9d3ab6babc69c2c6146a41d164df4c316866d6f0d7c2f3cce",
+  "passing_body_count_across_covering_and_scoped_completions": 269,
+  "fuser_dependency_patch": "unchanged; not in this four-package graph",
+  "power_loss_proof": "NOT_RUN; native full-sync acceptance, protocol ordering and SIGKILL proof only",
+  "remaining_host_selection": "remaining-host-selection.json",
+  "linux_portable_bodies": 128
+}

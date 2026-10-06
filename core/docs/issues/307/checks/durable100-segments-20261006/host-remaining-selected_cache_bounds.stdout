@@ -1,0 +1,10 @@
+
+running 5 tests
+test cohort_still_refuses_corruption_in_an_unrequested_directory_entry ... ok
+test selected_units_evict_selectively_under_the_same_two_mib_body_limit ... ok
+test tiny_selected_units_still_obey_the_existing_entry_count_limit ... ok
+test whole_cohort_shares_full_directory_walks_and_preserves_descriptor_checks ... ok
+test whole_promotion_replaces_units_within_same_byte_allowance ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

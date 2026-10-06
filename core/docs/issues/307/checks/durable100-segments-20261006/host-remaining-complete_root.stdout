@@ -1,0 +1,7 @@
+
+running 2 tests
+test native_import_keeps_ignored_git_dependencies_outputs_and_exact_link_targets ... ok
+test real_host_profiles_acquire_and_reuse_the_exact_complete_root ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+

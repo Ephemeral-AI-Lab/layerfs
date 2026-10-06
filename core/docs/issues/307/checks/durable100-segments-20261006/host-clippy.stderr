@@ -1,0 +1,39 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+    Checking layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+error: spawned process is not `wait()`ed on in all code paths
+   --> crates/layerfs-persistence/tests/sqlite_payload_segments.rs:500:21
+    |
+500 |       let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+    |  _____________________^
+501 | |         .args(["--exact", "segment_crash_child", "--nocapture"])
+502 | |         .env("LAYERFS_SEGMENT_CRASH_CHILD", &path)
+503 | |         .stdout(std::process::Stdio::piped())
+504 | |         .spawn()
+505 | |         .unwrap();
+    | |_________________^
+    |
+note: no `wait()` call exists on the code path to this early return
+   --> crates/layerfs-persistence/tests/sqlite_payload_segments.rs:512:17
+    |
+512 |                 return;
+    |                 ^^^^^^
+note: `wait()` call exists, but it is unreachable due to the early return
+   --> crates/layerfs-persistence/tests/sqlite_payload_segments.rs:518:16
+    |
+518 |     let exit = child.wait().unwrap();
+    |                ^^^^^
+    = help: consider calling `.wait()` in all code paths
+    = note: not doing so might leave behind zombie processes
+    = note: see https://doc.rust-lang.org/stable/std/process/struct.Child.html#warning
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#zombie_processes
+    = note: `-D clippy::zombie-processes` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::zombie_processes)]`
+
+error: could not compile `layerfs-persistence` (test "sqlite_payload_segments") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

@@ -1,0 +1,9 @@
+
+running 4 tests
+test corruption_outside_selected_ranges_is_still_refused ... ok
+test invalid_ranges_fail_without_body_scan_or_whole_strategy_fallback ... ok
+test ranges_crossing_prefix_and_scan_chunks_are_exact_and_all_bytes_are_paid_once ... ok
+test whole_selection_keeps_the_existing_carrier_and_io_failure_is_terminal ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

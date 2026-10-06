@@ -1,0 +1,12 @@
+{
+  "commit": "7399fac9941d230e0f22a3b0a5aa8a2f0ed6aac3",
+  "tree": "605307a1bad41e4c350aaa51d10e090fefba229e",
+  "matches_prepared_staged_tree": true,
+  "core_before": 94499,
+  "core_after": 94499,
+  "reference_before": 65417,
+  "reference_after": 65417,
+  "combined_before": 159916,
+  "combined_after": 159916,
+  "delta": 0
+}

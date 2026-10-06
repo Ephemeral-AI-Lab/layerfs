@@ -1,0 +1,8 @@
+
+running 3 tests
+test a_store_inside_the_source_is_refused_before_an_operation_begins ... ok
+test a_store_without_acquisition_tables_refuses_init ... ok
+test selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.23s
+

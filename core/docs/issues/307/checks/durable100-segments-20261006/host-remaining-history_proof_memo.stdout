@@ -1,0 +1,9 @@
+
+running 4 tests
+test eviction_respects_both_fixed_bounds_and_fresh_invocation_starts_empty ... ok
+test identity_and_missing_failures_are_not_cached ... ok
+test mixed_hits_misses_duplicates_and_order_keep_exact_bytes ... ok
+test short_source_batch_is_refused_before_cache_admission ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

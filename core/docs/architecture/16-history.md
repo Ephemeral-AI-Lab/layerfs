@@ -527,3 +527,11 @@ construction rules are unchanged. Typed failures stop the operation; scratch
 cleanup failure is explicit, and no payload is retried or deleted on a guess.
 The functional fixture counts and independent verification carry no timing or
 acceptance claim. The release harness/corpus/cache contract still awaits step 10.
+
+## Explicit immutable payload layout, 2026-10-06
+
+The owner-selected [PayloadSegments implementation](45-immutable-payload-segments.md)
+adds schema7/10 with immutable filesystem bodies for payload packs above64KiB.
+SQLite remains the catalogue/history/acquisition authority; existing default and
+old-version readers remain. Its custody, durability, bounded read/publication and
+failure retention contract is described there. Performance qualification is separate.

@@ -70,6 +70,9 @@ impl PackPersistence for StorageProvider {
     ) -> Result<(usize, u64), PersistenceError> {
         match self.session.layout {
             crate::SqlitePackLayout::Monolithic => Ok((1, pack.body.len() as u64)),
+            crate::SqlitePackLayout::PayloadSegments => {
+                Ok(crate::backend::sqlite::segment_layout::cost(pack))
+            }
             crate::SqlitePackLayout::GroupRows | crate::SqlitePackLayout::GroupRowsIndexed => {
                 crate::backend::sqlite::unit_layout::cost(pack)
             }
@@ -79,6 +82,9 @@ impl PackPersistence for StorageProvider {
         publication::validate(batch)?;
         if self.session.layout.uses_units() {
             crate::backend::sqlite::unit_layout::validate_batch(batch)?;
+        }
+        if self.session.layout == crate::SqlitePackLayout::PayloadSegments {
+            crate::backend::sqlite::segment_layout::validate(batch)?;
         }
         self.session.run(true, |tx| publication::publish(tx, batch))
     }

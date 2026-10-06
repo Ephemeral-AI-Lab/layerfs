@@ -1,0 +1,195 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+test directory_completion_uses_only_directory_positions_and_is_atomic ... ok
+test entry_refusal_order_and_full_unit_rollback_survive_execution_windows ... ok
+test independent_entries_share_executions_and_population_work_stays_indexed ... ok
+test missing_and_repeated_roots_roll_back_the_window_and_report_first_failure ... ok
+test root_window_index_work_ignores_unrelated_population ... ok
+test windows_amortize_execution_without_losing_aliases_or_atomic_completion ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+
+running 3 tests
+test a_changed_acquisition_definition_is_refused_at_open ... ok
+test a_read_only_store_refuses_to_begin ... ok
+test each_pack_layout_has_one_version_with_and_one_without_the_tables ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 4 tests
+test a_tree_streams_in_acquisition_order_with_exact_charges_and_bounded_cleanup ... ok
+test a_wide_directory_is_placed_through_name_windows ... ok
+test every_statement_is_an_indexed_search_and_window_work_ignores_population ... ok
+test windows_owners_and_abandoned_operations_are_fenced ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+
+running 2 tests
+test a_cold_whole_file_length_uses_only_indexed_catalogue_rows ... ok
+test mixed_lengths_preserve_order_without_fetching_chunk_payloads ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 3 tests
+test a_consumed_reservation_survives_a_later_failure ... ok
+test counts_are_checked_and_the_terminal_endpoint_is_refused ... ok
+test reservations_are_monotone_half_open_and_per_scope ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 6 tests
+test a_commit_whose_root_equals_its_base_is_no_changes ... ok
+test a_stale_loser_keeps_its_exact_stage ... ok
+test an_exact_earlier_publication_is_up_to_date_before_a_stale_head ... ok
+test an_exact_token_is_the_only_stage_a_discard_removes ... ok
+test stage_insertion_enforces_the_frozen_context ... ok
+test two_branches_commit_independently_and_one_wins_the_stack_head ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+
+running 3 tests
+test a_cursor_is_bound_to_its_range_subject_and_content ... ok
+test an_immutable_anchor_keeps_a_cursor_valid_as_the_branch_advances ... ok
+test every_bounded_list_paginates_without_gaps_or_repeats ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+
+running 3 tests
+test fork_shares_content_and_uses_the_selected_commit_base ... ok
+test genesis_is_atomic_and_unique ... ok
+test history_reads_return_the_recorded_ancestry_and_chain ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 12 tests
+test advancing_the_actual_subject_preserves_both_anchor_forms ... ok
+test all_legal_name_widths_paginate_by_identity ... ok
+test concurrent_reservations_never_overlap_and_discard_does_not_refund ... ok
+test empty_history_checks_page_and_cursor_before_returning_empty ... ok
+test exact_source_publication_revalidates_immutable_provenance ... ok
+test explicit_membership_ceiling_is_capacity_but_old_authenticated_anchor_stays_valid ... ok
+test forged_sibling_position_and_obsolete_checksum_are_refused ... ok
+test last_representable_reservation_is_consumed_and_terminal_refusal_is_atomic ... ok
+test read_only_cursor_capability_survives_reopen_and_rejects_wrong_keys ... ok
+test reopen_refuses_each_independent_schema_or_binding_corruption ... ok
+test stale_base_precedes_no_changes_and_derived_provenance_collision ... ok
+test unknown_statement_outcome_quarantines_without_implicit_rollback ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.05s
+
+
+running 3 tests
+test a_read_only_reopen_reads_every_record_and_mutates_nothing ... ok
+test a_stage_written_by_one_handle_is_visible_to_a_read_only_handle ... ok
+test an_incompatible_or_foreign_catalog_is_refused ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+
+running 1 test
+test scoped_registry_interleaves_pending_reads_finish_abort_and_slot_reuse ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 2 tests
+test admitted_complete_root_closes_and_reconstructs_through_the_real_store ... ok
+test omitted_wire_references_cannot_hide_an_inode_dependency_from_save ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 8 tests
+test checkpoint_releases_extra_extents_and_preserves_acknowledged_canonical_bytes ... ok
+test disposable_completion_refuses_new_hardlink_ownership ... ok
+test disposable_completion_refuses_replaced_path_without_touching_replacement ... ok
+test disposable_finalization_releases_extents_without_wal_and_preserves_bytes ... ok
+test obstructed_checkpoint_does_not_release_extra_extents ... ok
+test readonly_checkpoint_refuses_before_sql_or_allocation_work ... ok
+test scratch_creation_refusal_is_explicit_and_leaves_store_data_intact ... ok
+test shared_pack_headroom_is_bounded_and_final_release_preserves_canonical_bytes ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+
+running 7 tests
+test complete_reads_reassemble_exact_bytes_and_digest_for_every_lane ... ok
+test exact_physical_fanout_refuses_over_budget_batch_before_begin ... ok
+test explicit_creation_reopens_declared_units_and_keeps_sparse_canonical_order ... ok
+test late_locator_failure_rolls_back_control_and_every_unit ... ok
+test malformed_unit_extent_is_refused_before_any_unit_blob_read ... ok
+test oversized_control_is_rejected_before_group_blob_acquisition ... ok
+test unread_corruption_is_scoped_and_whole_audit_refuses_it ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 9 tests
+test covered_mapping_still_refuses_wrong_extents_before_blob_open ... ok
+test declared_layouts_reopen_without_mutating_or_promoting_their_schema ... ok
+test mapping_is_covered_and_complete_pack_reassembles_exactly ... ok
+test missing_covering_index_is_refused_at_open_without_automatic_repair ... ok
+test multigroup_read_reopens_one_cursor_and_never_retains_it_between_requests ... ok
+test typed_descriptor_rejects_invalid_domain_digest_and_length_before_blob_open ... ok
+test typed_singleton_matches_batch_results_missing_ids_and_statement_boundary ... ok
+test typed_singleton_rejects_invalid_role_and_signed_coordinates ... ok
+test wrong_reopened_body_length_is_refused_and_cursor_is_checked_closed ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+
+running 2 tests
+test a_foreign_acknowledged_reservation_is_never_recycled_by_the_plan ... ok
+test four_fresh_leaves_share_one_exact_reservation_and_deduplicate_values ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 1 test
+test sqlite_selected_ranges_scan_once_close_and_match_the_full_body ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 8 tests
+test concurrent_first_wins_publications_preserve_exact_lost_ids_and_custody ... ok
+test definite_catalogue_failure_retains_file_and_does_not_reuse_consumed_id ... ok
+test missing_short_tampered_symlink_and_hardlinked_bodies_are_refused ... ok
+test one_publication_has_one_segment_and_reopens_exact_bodies ... ok
+test physical_charge_admission_precedes_creation_and_singleton_keeps_its_bound ... ok
+test replaced_directory_and_wrong_extent_are_refused_without_repair ... ok
+test reservations_canonical_storage_and_all_old_versions_keep_their_own_layout ... FAILED
+test strict_and_scoped_ranges_preserve_pack_authentication_and_exact_bytes ... ok
+
+failures:
+
+---- reservations_canonical_storage_and_all_old_versions_keep_their_own_layout stdout ----
+
+thread 'reservations_canonical_storage_and_all_old_versions_keep_their_own_layout' panicked at crates/layerfs-persistence/tests/sqlite_payload_segments.rs:323:27:
+called `Result::unwrap()` on an `Err` value: CapacityExceeded { what: "encoding.whole_file_raw", limit: 131071, actual: 150088 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    reservations_canonical_storage_and_all_old_versions_keep_their_own_layout
+
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+

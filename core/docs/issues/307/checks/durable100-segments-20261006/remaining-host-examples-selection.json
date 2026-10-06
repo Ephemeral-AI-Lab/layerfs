@@ -1,0 +1,17 @@
+{
+  "reason": "unrun example unit tests after retained fixture failure; no product benchmark or example main execution",
+  "tests": [
+    "core/target/cluster2-runtime-tests/debug/examples/explain_reservation-5755f0660bf51db9",
+    "core/target/cluster2-runtime-tests/debug/examples/metadata_allocation_probe-a0e6a3d08857b3e4",
+    "core/target/cluster2-runtime-tests/debug/examples/segment_failure_probe-c6ce9486cb6770e3",
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_project-cffae0e2b52819f6",
+    "core/target/cluster2-runtime-tests/debug/examples/acquisition_profile-eb1d4e8c03d2f167",
+    "core/target/cluster2-runtime-tests/debug/examples/benchmark_history-25eeb0e283ed40d5",
+    "core/target/cluster2-runtime-tests/debug/examples/benchmark_init-458c4c4d44746f69",
+    "core/target/cluster2-runtime-tests/debug/examples/cause_namespace-7aedcb121d53d725",
+    "core/target/cluster2-runtime-tests/debug/examples/durable_init_costs-91bce26aaecd6d72",
+    "core/target/cluster2-runtime-tests/debug/examples/verify_history-902dc25e49e113ab",
+    "core/target/cluster2-runtime-tests/debug/examples/verify_namespace-bb9c33c4490085ee",
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_storage-5e9a8d43227e1126"
+  ]
+}

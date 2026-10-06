@@ -1,0 +1,30 @@
+
+running 7 tests
+test definite_catalogue_failure_retains_file_and_does_not_reuse_consumed_id ... ok
+test missing_short_tampered_symlink_and_hardlinked_bodies_are_refused ... ok
+test one_publication_has_one_segment_and_reopens_exact_bodies ... ok
+test physical_charge_admission_precedes_creation_and_singleton_keeps_its_bound ... FAILED
+test replaced_directory_and_wrong_extent_are_refused_without_repair ... ok
+test reservations_canonical_storage_and_all_old_versions_keep_their_own_layout ... FAILED
+test strict_and_scoped_ranges_preserve_pack_authentication_and_exact_bytes ... ok
+
+failures:
+
+---- physical_charge_admission_precedes_creation_and_singleton_keeps_its_bound stdout ----
+
+thread 'physical_charge_admission_precedes_creation_and_singleton_keeps_its_bound' panicked at crates/layerfs-persistence/tests/sqlite_payload_segments.rs:39:61:
+called `Result::unwrap()` on an `Err` value: CapacityExceeded { what: "pack.compact_group_body", limit: 262056, actual: 5242880 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- reservations_canonical_storage_and_all_old_versions_keep_their_own_layout stdout ----
+
+thread 'reservations_canonical_storage_and_all_old_versions_keep_their_own_layout' panicked at crates/layerfs-persistence/tests/sqlite_payload_segments.rs:323:27:
+called `Result::unwrap()` on an `Err` value: CapacityExceeded { what: "owner.record_body", limit: 65536, actual: 150110 }
+
+
+failures:
+    physical_charge_admission_precedes_creation_and_singleton_keeps_its_bound
+    reservations_canonical_storage_and_all_old_versions_keep_their_own_layout
+
+test result: FAILED. 5 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+

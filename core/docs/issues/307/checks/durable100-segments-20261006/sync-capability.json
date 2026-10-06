@@ -1,0 +1,20 @@
+[
+  {
+    "target": "file",
+    "fsync": true,
+    "fullfsync": true,
+    "wall_ns": 7267542
+  },
+  {
+    "target": "directory",
+    "fsync": true,
+    "fullfsync": true,
+    "wall_ns": 14333
+  },
+  {
+    "target": "parent",
+    "fsync": true,
+    "fullfsync": true,
+    "wall_ns": 2125
+  }
+]

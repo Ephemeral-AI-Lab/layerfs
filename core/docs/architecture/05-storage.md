@@ -1448,3 +1448,11 @@ Against parent b6b9b8e53: Durable additionally binds its WAL once after BEGIN IM
 ## WAL experiment withdrawn, 2026-10-05
 
 The bounded-WAL reservation experiment in a8e93276f was tested and rejected: extra reservation work did not yield a useful write-path benefit and the10k relative speed gate failed. Active product implementation is restored byte-for-byte to197d2fb7d shared main-file allocation; WAL growth is again wholly SQLite-owned, with no added descriptor, identity cache, WAL reservation counter or release path. The experiment and its custody validation remain recoverable in its commit/evidence. No broader Init/history qualification is inferred; new experimental case IDs are retired.
+
+## Explicit immutable payload layout, 2026-10-06
+
+The owner-selected [PayloadSegments implementation](45-immutable-payload-segments.md)
+adds schema7/10 with immutable filesystem bodies for payload packs above64KiB.
+SQLite remains the catalogue/history/acquisition authority; existing default and
+old-version readers remain. Its custody, durability, bounded read/publication and
+failure retention contract is described there. Performance qualification is separate.

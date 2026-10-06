@@ -1,0 +1,7 @@
+{
+  "initial_launch": "FAILED before attempted product operation: no plain example executable from test --no-run",
+  "run": "sync-refusal-proof-run",
+  "disposition": "INELIGIBLE",
+  "reason": "interposer rejected additional native fcntl commands; the PASS stdout cannot qualify exact-delegation native refusal",
+  "next_proof": "use fixed-signature close interposition, preserve every original fcntl operation"
+}

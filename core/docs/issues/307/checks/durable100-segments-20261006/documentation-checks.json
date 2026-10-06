@@ -1,0 +1,15 @@
+{
+  "relative_links": [
+    {
+      "source": "core/docs/architecture/45-immutable-payload-segments.md",
+      "target": "../../../docs/roadmap/0.1/0.1.7/durable100-payload-segments-20261006.md",
+      "exists": true
+    },
+    {
+      "source": "docs/roadmap/0.1/0.1.7/durable100-payload-segments-20261006.md",
+      "target": "../../../../core/docs/issues/307/DURABLE100-NEXT-LAYOUT-PROPOSAL-20261006.md",
+      "exists": true
+    }
+  ],
+  "status": "PASS"
+}

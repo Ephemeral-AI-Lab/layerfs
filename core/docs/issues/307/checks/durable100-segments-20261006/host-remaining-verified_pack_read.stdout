@@ -1,0 +1,7 @@
+
+running 2 tests
+test c2_still_refuses_hash_valid_pack_with_wrong_domain ... ok
+test immutable_carrier_rejects_wrong_length_digest_and_modified_consumed_bytes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

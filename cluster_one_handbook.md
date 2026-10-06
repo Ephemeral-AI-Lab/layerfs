@@ -655,8 +655,13 @@ Source: [Save lifecycle](core/crates/layerfs-storage/src/save/operation.rs),
 | Monolithic | Creation layout schema1; complete pack BLOBs |
 | GroupRows | Creation layout schema2; independently stored complete encoded units |
 | GroupRowsIndexed | Creation layout schema3; group rows with covering mapping index |
+| PayloadSegments | Explicit schema7/10; payload packs above64KiB in immutable Store-owned filesystem segments; small/metadata packs in SQLite |
 
-Opening supports deterministic schema1/2/3 selection from the Store. Layout is a
+Opening supports exact schema1–7 and10 selection (8/9 are unsupported). Schema4–6
+add acquisition to layouts1–3; schema10 adds it to PayloadSegments. The
+[segment custody/publication/read contract](core/docs/architecture/45-immutable-payload-segments.md)
+retains A1 durable acquisition and old readers; performance qualification is separate.
+Layout is a
 creation choice, not an implicit migration request. Profile/authority/policy
 compatibility is validated. Unsupported backends/platforms fail explicitly.
 The active SQLite provider currently requires macOS; portable content/storage

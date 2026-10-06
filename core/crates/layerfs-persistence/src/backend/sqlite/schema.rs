@@ -9,11 +9,13 @@ pub(crate) const METADATA: &str = include_str!("../../../sql/sqlite/metadata.sql
 pub(crate) const HISTORY: &str = include_str!("../../../sql/sqlite/history.sql");
 const UNIT_INDEX: &str = include_str!("../../../sql/sqlite/objects_units_index.sql");
 const UNITS: &str = include_str!("../../../sql/sqlite/objects_units.sql");
+const SEGMENTS: &str = include_str!("../../../sql/sqlite/objects_segments.sql");
 const ACQUISITION: &str = include_str!("../../../sql/sqlite/acquisition/schema.sql");
 type Selection = (crate::SqlitePackLayout, crate::SqliteAcquisitionSchema);
 fn scripts((layout, acquisition): Selection) -> Vec<String> {
     let objects = match layout {
         crate::SqlitePackLayout::Monolithic => OBJECTS.to_owned(),
+        crate::SqlitePackLayout::PayloadSegments => SEGMENTS.to_owned(),
         crate::SqlitePackLayout::GroupRows => UNITS.to_owned(),
         crate::SqlitePackLayout::GroupRowsIndexed => format!("{UNITS}{UNIT_INDEX}"),
     };
@@ -89,6 +91,9 @@ pub(crate) fn check(
     if layout.uses_units() {
         expected.push("pack_unit");
     }
+    if layout == crate::SqlitePackLayout::PayloadSegments {
+        expected.extend(["body_directory", "body_segment"]);
+    }
     if acquisition == crate::SqliteAcquisitionSchema::Tables {
         // `sqlite_sequence` is the engine's never-reused operation identity counter.
         expected.extend([
@@ -116,6 +121,7 @@ impl super::connection::Session {
    let version=self.schema_version();
    let selection=(self.layout,self.acquisition);
    for script in scripts(selection) { tx.bootstrap(&script)?; }
+   if self.layout==crate::SqlitePackLayout::PayloadSegments { super::segment_publish::initialize(tx)?; }
    tx.query(&format!("PRAGMA application_id={APPLICATION_ID}"),vec![])?;
    tx.query(&format!("PRAGMA user_version={version}"),vec![])?;
    tx.query(&format!("INSERT INTO store_policy(id,schema_version,format_profile,small_file_threshold_bytes,whole_file_delta_max_depth,chunk_delta_max_depth,metadata_delta_max_depth) VALUES(1,{version},?1,?2,?3,?4,?5)"),vec![Param::I64(i64::from(policy.format_profile())),Param::I64(policy.small_file_threshold_bytes() as i64),Param::I64(i64::from(policy.whole_file_delta_max_depth())),Param::I64(i64::from(policy.chunk_delta_max_depth())),Param::I64(i64::from(policy.metadata_delta_max_depth()))])?;
@@ -133,6 +139,7 @@ impl super::connection::Session {
         self.run::<_,BackendError>(false,|tx| {
    let selection=(self.layout,self.acquisition);
    check(tx.connection,tx.work,selection)?;
+   if self.layout==crate::SqlitePackLayout::PayloadSegments { super::segment_publish::check(tx)?; }
    let rows=tx.query("SELECT catalog_id,catalog_incarnation,binding_key,identity_format,schema_version,schema_source,schema_definition,next_stage_token FROM history_meta WHERE id=1",vec![])?;
    let r=rows.first().filter(|_|rows.len()==1).ok_or(BackendError::Integrity)?;
    let incarnation:i64=r.get(1)?;

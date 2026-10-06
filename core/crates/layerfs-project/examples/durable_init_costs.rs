@@ -5,7 +5,8 @@ mod vfs;
 use layerfs_content::ObjectId;
 use layerfs_history::{HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqlWork, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    Handles, PersistenceConfig, SqlWork, SqliteAcquisitionSchema, SqlitePackLayout,
+    SqlitePersistenceProfile,
 };
 use layerfs_project::{init, InitRequest};
 use layerfs_storage::{port::acquisition::*, Storage, StoragePolicy};
@@ -30,6 +31,10 @@ struct Work {
     statement_ns: u64,
     commit_ns: u64,
     unit_ns: u64,
+    segment_write_bytes: u64,
+    segment_file_syncs: u64,
+    segment_directory_syncs: u64,
+    segment_sync_ns: u64,
 }
 impl Work {
     fn add(&mut self, before: SqlWork, after: SqlWork, wall: u64) {
@@ -44,9 +49,14 @@ impl Work {
         self.statement_ns += after.statement_ns - before.statement_ns;
         self.commit_ns += after.commit_ns - before.commit_ns;
         self.unit_ns += wall;
+        self.segment_write_bytes += after.segment_write_bytes - before.segment_write_bytes;
+        self.segment_file_syncs += after.segment_file_sync_calls - before.segment_file_sync_calls;
+        self.segment_directory_syncs +=
+            after.segment_directory_sync_calls - before.segment_directory_sync_calls;
+        self.segment_sync_ns += after.segment_sync_ns - before.segment_sync_ns;
     }
     fn print(&self, name: &str) {
-        println!("{{\"unit\":\"{name}\",\"calls\":{},\"statements\":{},\"vm_steps\":{},\"returned_rows\":{},\"fullscan_steps\":{},\"sorts\":{},\"reprepares\":{},\"write_commits\":{},\"statement_ns\":{},\"commit_ns\":{},\"unit_ns\":{}}}", self.calls, self.statements, self.vm_steps, self.rows, self.fullscan, self.sorts, self.reprepares, self.write_commits, self.statement_ns, self.commit_ns, self.unit_ns);
+        println!("{{\"segment_write_bytes\":{},\"segment_file_syncs\":{},\"segment_directory_syncs\":{},\"segment_sync_ns\":{},\"unit\":\"{name}\",\"calls\":{},\"statements\":{},\"vm_steps\":{},\"returned_rows\":{},\"fullscan_steps\":{},\"sorts\":{},\"reprepares\":{},\"write_commits\":{},\"statement_ns\":{},\"commit_ns\":{},\"unit_ns\":{}}}", self.segment_write_bytes, self.segment_file_syncs, self.segment_directory_syncs, self.segment_sync_ns, self.calls, self.statements, self.vm_steps, self.rows, self.fullscan, self.sorts, self.reprepares, self.write_commits, self.statement_ns, self.commit_ns, self.unit_ns);
     }
 }
 struct Observed<'a> {
@@ -108,10 +118,21 @@ impl Acquisition for Observed<'_> {
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
-    if !matches!(args.len(), 4 | 5) || args.get(4).is_some_and(|flag| flag != "--vfs") {
-        return Err("source fresh-database durable|disposable [--vfs] required".into());
+    if !matches!(args.len(), 4..=6)
+        || args[4..]
+            .iter()
+            .any(|flag| !matches!(flag.as_str(), "--vfs" | "payload-segments"))
+    {
+        return Err(
+            "source fresh-database durable|disposable [--vfs] [payload-segments] required".into(),
+        );
     }
-    vfs::initialize(args.len() == 5)?;
+    let layout = if args[4..].iter().any(|flag| flag == "payload-segments") {
+        SqlitePackLayout::PayloadSegments
+    } else {
+        SqlitePackLayout::Monolithic
+    };
+    vfs::initialize(args[4..].iter().any(|flag| flag == "--vfs"))?;
     let selected = match args[3].as_str() {
         "durable" => SqlitePersistenceProfile::Durable,
         "disposable" => SqlitePersistenceProfile::Disposable,
@@ -122,6 +143,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let handles = Arc::new(Handles::create(
         PersistenceConfig::sqlite(&args[2])
             .with_sqlite_profile(selected)
+            .with_sqlite_pack_layout(layout)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {

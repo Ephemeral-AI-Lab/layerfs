@@ -48,6 +48,12 @@ pub(crate) fn read(
         return Err(BackendError::Capacity.into());
     }
     for info in descriptors {
+        if tx.layout() == crate::SqlitePackLayout::PayloadSegments {
+            if let Some(extent) = super::segment_read::extent(tx, info)? {
+                out.push(super::segment_read::whole(tx, info, &extent)?);
+                continue;
+            }
+        }
         if tx.layout().uses_units() {
             out.push(super::units_read::whole(tx, info)?);
             continue;

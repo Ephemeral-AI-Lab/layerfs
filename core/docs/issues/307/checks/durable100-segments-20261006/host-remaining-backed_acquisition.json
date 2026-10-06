@@ -1,0 +1,13 @@
+{
+  "command": [
+    "core/target/cluster2-runtime-tests/debug/deps/backed_acquisition-56c879d1d2910153",
+    "--test-threads=1"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+  "env_target": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-runtime-tests",
+  "wall_timeout_s": 30.0,
+  "wall_ns": 5365230500,
+  "exit_code": 0,
+  "timeout": false,
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe"
+}

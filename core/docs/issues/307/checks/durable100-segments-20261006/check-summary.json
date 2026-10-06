@@ -1,0 +1,376 @@
+{
+  "source_parent": "7399fac9941d230e0f22a3b0a5aa8a2f0ed6aac3",
+  "host_passed_bodies": 269,
+  "linux_portable_passed_bodies": 128,
+  "commands": {
+    "tooling-tests": {
+      "exit_code": 0,
+      "wall_ns": 244005500,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-read_pack_locality": {
+      "exit_code": 0,
+      "wall_ns": 719120167,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-init_memory": {
+      "exit_code": 0,
+      "wall_ns": 1052158625,
+      "wall_timeout_s": 30.0
+    },
+    "host-covering-tests": {
+      "exit_code": 101,
+      "wall_ns": 18767251500,
+      "wall_timeout_s": 90.0
+    },
+    "host-remaining-pack_cache_contract": {
+      "exit_code": 0,
+      "wall_ns": 676338083,
+      "wall_timeout_s": 30.0
+    },
+    "linux-portable-tests": {
+      "exit_code": 0,
+      "wall_ns": 4017212291,
+      "wall_timeout_s": 120.0
+    },
+    "host-remaining-read_demand_custody": {
+      "exit_code": 0,
+      "wall_ns": 660685000,
+      "wall_timeout_s": 30.0
+    },
+    "host-example-explain_reservation": {
+      "exit_code": 0,
+      "wall_ns": 1272255417,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-pooled_demand_work": {
+      "exit_code": 0,
+      "wall_ns": 735405250,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-backed_acquisition": {
+      "exit_code": 0,
+      "wall_ns": 5365230500,
+      "wall_timeout_s": 30.0
+    },
+    "host-clippy": {
+      "exit_code": 101,
+      "wall_ns": 2023707000,
+      "wall_timeout_s": 120.0
+    },
+    "host-sdk-tests": {
+      "exit_code": 0,
+      "wall_ns": 3003254875,
+      "wall_timeout_s": 110.0
+    },
+    "linux-clippy": {
+      "exit_code": 0,
+      "wall_ns": 5879258916,
+      "wall_timeout_s": 120.0
+    },
+    "host-example-benchmark_init": {
+      "exit_code": 0,
+      "wall_ns": 724311875,
+      "wall_timeout_s": 30.0
+    },
+    "close-refusal-library": {
+      "exit_code": 0,
+      "wall_ns": 129138583,
+      "wall_timeout_s": 30.0
+    },
+    "payload-harness-tests": {
+      "exit_code": 0,
+      "wall_ns": 134180000,
+      "wall_timeout_s": 30.0
+    },
+    "host-sdk-no-run": {
+      "exit_code": 0,
+      "wall_ns": 4486598542,
+      "wall_timeout_s": 120.0
+    },
+    "layout-smoke": {
+      "exit_code": 0,
+      "wall_ns": 2925546834,
+      "wall_timeout_s": 30.0
+    },
+    "repaired-fixtures-no-run": {
+      "exit_code": 0,
+      "wall_ns": 1103044625,
+      "wall_timeout_s": 120.0
+    },
+    "host-example-verify_history": {
+      "exit_code": 0,
+      "wall_ns": 768114917,
+      "wall_timeout_s": 30.0
+    },
+    "host-example-acquisition_profile": {
+      "exit_code": 0,
+      "wall_ns": 613218875,
+      "wall_timeout_s": 30.0
+    },
+    "host-example-layerfs_storage": {
+      "exit_code": 0,
+      "wall_ns": 675029167,
+      "wall_timeout_s": 30.0
+    },
+    "sync-probe-bin-build": {
+      "exit_code": 0,
+      "wall_ns": 2709764000,
+      "wall_timeout_s": 30.0
+    },
+    "linux-all-no-run": {
+      "exit_code": 0,
+      "wall_ns": 32396952125,
+      "wall_timeout_s": 120.0
+    },
+    "host-remaining-selected_cache_bounds": {
+      "exit_code": 0,
+      "wall_ns": 937695709,
+      "wall_timeout_s": 30.0
+    },
+    "crash-proof-no-run": {
+      "exit_code": 0,
+      "wall_ns": 1654549375,
+      "wall_timeout_s": 120.0
+    },
+    "host-remaining-verified_pack_read": {
+      "exit_code": 0,
+      "wall_ns": 732278500,
+      "wall_timeout_s": 30.0
+    },
+    "fmt": {
+      "exit_code": 0,
+      "wall_ns": 1485560083,
+      "wall_timeout_s": 30.0
+    },
+    "final-fixture-no-run": {
+      "exit_code": 0,
+      "wall_ns": 1003618167,
+      "wall_timeout_s": 120.0
+    },
+    "host-remaining-pack_range_contract": {
+      "exit_code": 0,
+      "wall_ns": 723761750,
+      "wall_timeout_s": 30.0
+    },
+    "host-example-segment_failure_probe": {
+      "exit_code": 0,
+      "wall_ns": 925790458,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-complete_root": {
+      "exit_code": 0,
+      "wall_ns": 936215417,
+      "wall_timeout_s": 30.0
+    },
+    "sync-refusal-proof-run": {
+      "exit_code": 0,
+      "wall_ns": 781657625,
+      "wall_timeout_s": 9.0
+    },
+    "harness-tests": {
+      "exit_code": 0,
+      "wall_ns": 774821708,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-namespace_scaling": {
+      "exit_code": 0,
+      "wall_ns": 2647823750,
+      "wall_timeout_s": 30.0
+    },
+    "host-clippy-repaired": {
+      "exit_code": 0,
+      "wall_ns": 351036458,
+      "wall_timeout_s": 120.0
+    },
+    "host-example-durable_init_costs": {
+      "exit_code": 0,
+      "wall_ns": 621518959,
+      "wall_timeout_s": 30.0
+    },
+    "host-all-no-run": {
+      "exit_code": 0,
+      "wall_ns": 6410352583,
+      "wall_timeout_s": 120.0
+    },
+    "layout-full-tests": {
+      "exit_code": 101,
+      "wall_ns": 3628503125,
+      "wall_timeout_s": 60.0
+    },
+    "host-example-verify_namespace": {
+      "exit_code": 0,
+      "wall_ns": 557143667,
+      "wall_timeout_s": 30.0
+    },
+    "linux-sdk-clippy": {
+      "exit_code": 0,
+      "wall_ns": 3996916042,
+      "wall_timeout_s": 120.0
+    },
+    "host-remaining-codec_frames": {
+      "exit_code": 0,
+      "wall_ns": 671647459,
+      "wall_timeout_s": 30.0
+    },
+    "host-example-benchmark_history": {
+      "exit_code": 0,
+      "wall_ns": 671418250,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-selected_group_reads": {
+      "exit_code": 0,
+      "wall_ns": 608655458,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-sqlite_transaction_units": {
+      "exit_code": 0,
+      "wall_ns": 1458446334,
+      "wall_timeout_s": 30.0
+    },
+    "red-layout-no-run": {
+      "exit_code": 101,
+      "wall_ns": 3815581250,
+      "wall_timeout_s": 120.0
+    },
+    "layout-full-no-run": {
+      "exit_code": 0,
+      "wall_ns": 3007455083,
+      "wall_timeout_s": 120.0
+    },
+    "crash-proof": {
+      "exit_code": 0,
+      "wall_ns": 819271458,
+      "wall_timeout_s": 9.0
+    },
+    "final-fixture-test": {
+      "exit_code": 0,
+      "wall_ns": 1726955125,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-save_demand_locality": {
+      "exit_code": 0,
+      "wall_ns": 673364875,
+      "wall_timeout_s": 30.0
+    },
+    "host-example-metadata_allocation_probe": {
+      "exit_code": 0,
+      "wall_ns": 949238625,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-physical_formats": {
+      "exit_code": 0,
+      "wall_ns": 669184458,
+      "wall_timeout_s": 30.0
+    },
+    "sync-refusal-library": {
+      "exit_code": 0,
+      "wall_ns": 132099334,
+      "wall_timeout_s": 30.0
+    },
+    "layout-no-run": {
+      "exit_code": 0,
+      "wall_ns": 3600023250,
+      "wall_timeout_s": 120.0
+    },
+    "host-remaining-object_key": {
+      "exit_code": 0,
+      "wall_ns": 618916333,
+      "wall_timeout_s": 30.0
+    },
+    "host-adapter-clippy": {
+      "exit_code": 0,
+      "wall_ns": 986635000,
+      "wall_timeout_s": 120.0
+    },
+    "boundary-guard": {
+      "exit_code": 0,
+      "wall_ns": 454265750,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-locator_pressure": {
+      "exit_code": 0,
+      "wall_ns": 773873792,
+      "wall_timeout_s": 30.0
+    },
+    "host-example-cause_namespace": {
+      "exit_code": 0,
+      "wall_ns": 899856792,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-sqlite_publication": {
+      "exit_code": 0,
+      "wall_ns": 1207092542,
+      "wall_timeout_s": 30.0
+    },
+    "close-refusal-proof": {
+      "exit_code": 0,
+      "wall_ns": 1426747250,
+      "wall_timeout_s": 9.0
+    },
+    "host-example-layerfs_project": {
+      "exit_code": 0,
+      "wall_ns": 614246417,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-init_sqlite": {
+      "exit_code": 0,
+      "wall_ns": 1915245666,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-history_proof_memo": {
+      "exit_code": 0,
+      "wall_ns": 669052083,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-sqlite_recovery": {
+      "exit_code": 0,
+      "wall_ns": 781654167,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-pooled_value_retention": {
+      "exit_code": 0,
+      "wall_ns": 666305708,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-acquisition_custody": {
+      "exit_code": 0,
+      "wall_ns": 1908692792,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-decoded_group_retention": {
+      "exit_code": 0,
+      "wall_ns": 665381708,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-sqlite_reference_acquisition": {
+      "exit_code": 0,
+      "wall_ns": 871295375,
+      "wall_timeout_s": 30.0
+    },
+    "host-remaining-pooled_dependency_integrity": {
+      "exit_code": 0,
+      "wall_ns": 1151484333,
+      "wall_timeout_s": 30.0
+    },
+    "fmt-final": {
+      "exit_code": 0,
+      "wall_ns": 1581541458,
+      "wall_timeout_s": 30.0
+    }
+  },
+  "known_failures": [
+    "unsupported layout red compile",
+    "two invalid new fixtures",
+    "whole-file fixture exceeded existing raw limit",
+    "native sync observer unsupported command classes; result ineligible",
+    "initial example launch missing plain executable",
+    "Clippy false positive on thread closure return; changed to break"
+  ],
+  "final_status": "PASS via covering plus only unrun/failed scoped completions; native checked-close and SIGKILL PASS",
+  "reused_earlier_passing_checks": "all earlier passing test bodies reused; no unchanged suite replay",
+  "native_sync_refusal": "INELIGIBLE; replaced by fixed-signature close-uncertainty proof",
+  "native_crash": "SIGKILL only; physical power-loss experiment NOT_RUN",
+  "platform": "macOS global provider; Linux compilation/Clippy and portable Storage/Project runtime only",
+  "counter_scope": "production including shipped SQL, old source retained; per-commit comparison prepared separately"
+}
