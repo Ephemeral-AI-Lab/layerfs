@@ -63,9 +63,14 @@ impl SegmentOwner {
             durable: profile == SqlitePersistenceProfile::Durable,
         };
         if create && owner.durable {
-            owner.with_directory(work, |directory| io::synchronize(directory, true, work))?;
+            owner.with_directory(work, |directory| io::stage_directory(directory, work))?;
             let parent = directory(&parent)?;
-            let result = io::synchronize(&parent, true, work);
+            let result = (|| {
+                if parent.metadata().map_err(io::filesystem)?.dev() != device as u64 {
+                    return Err(BackendError::Integrity);
+                }
+                io::synchronize(&parent, true, work)
+            })();
             io::finish(result, parent, work)?;
         }
         Ok(owner)
@@ -144,8 +149,8 @@ impl SegmentOwner {
                     .map_err(io::filesystem)?;
                 io::custody(directory, &name, &file, device, inode, length)?;
                 if self.durable {
+                    io::stage_directory(directory, work)?;
                     io::synchronize(&file, false, work)?;
-                    io::synchronize(directory, true, work)?;
                 }
                 io::custody(directory, &name, &file, device, inode, length)?;
                 Ok(Segment {

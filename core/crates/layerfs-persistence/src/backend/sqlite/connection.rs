@@ -135,8 +135,10 @@ pub struct SqlWork {
     pub segment_write_ns: u64,
     /// Attempted F_FULLFSYNC calls on segment files.
     pub segment_file_sync_calls: u64,
-    /// Attempted F_FULLFSYNC calls on payload directories.
+    /// Attempted directory fsync and parent full-sync calls.
     pub segment_directory_sync_calls: u64,
+    /// Attempted F_FULLFSYNC barriers, including Store directory creation.
+    pub segment_full_sync_calls: u64,
     /// Inclusive direct synchronization wall, nested in publication.
     pub segment_sync_ns: u64,
     /// Attempted exact segment reads.

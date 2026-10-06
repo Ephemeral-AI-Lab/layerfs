@@ -59,6 +59,7 @@ pub(crate) fn synchronize(
     let start = Instant::now();
     {
         let mut w = work.borrow_mut();
+        w.segment_full_sync_calls += 1;
         if directory {
             w.segment_directory_sync_calls += 1;
         } else {
@@ -69,6 +70,15 @@ pub(crate) fn synchronize(
     let result = fcntl(file, FcntlArg::F_FULLFSYNC).map_err(|_| BackendError::Unknown);
     work.borrow_mut().segment_sync_ns += start.elapsed().as_nanos() as u64;
     result.map(|_| ())
+}
+pub(crate) fn stage_directory(file: &File, work: &RefCell<SqlWork>) -> Result<(), BackendError> {
+    let start = Instant::now();
+    work.borrow_mut().segment_directory_sync_calls += 1;
+    // Stage directory metadata first. A same-device F_FULLFSYNC follows before
+    // catalogue publication, draining these already submitted metadata writes.
+    let result = nix::unistd::fsync(file).map_err(|_| BackendError::Unknown);
+    work.borrow_mut().segment_sync_ns += start.elapsed().as_nanos() as u64;
+    result
 }
 pub(crate) fn finish<T>(
     result: Result<T, BackendError>,

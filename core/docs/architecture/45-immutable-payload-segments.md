@@ -27,8 +27,13 @@ are set read-only after writing. This is checked local Store custody, not protec
 against an administrator rewriting the database or filesystem.
 
 In a Durable publication, a single producer writes sealed Arc-backed slices without
-a concatenated body copy, then calls `F_FULLFSYNC` on the file and its directory.
-Both directory and parent full synchronization are paid during fresh creation.
+a concatenated body copy, stages its directory with `fsync`, then calls
+`F_FULLFSYNC` on the same-device body file. The final full-device barrier drains
+the directory metadata staged first as well as the file's bytes. Fresh creation
+similarly stages the payload directory then full-synchronizes its checked
+same-device parent. All staging and barrier calls are paid work; a directory
+fsync alone never acknowledges durability. This supersedes `fb7f3f477`'s two
+full-device barriers per segment/creation after its retained speed failure.
 Every temporary descriptor is checked closed before acknowledgement. Only then does
 the same short `BEGIN IMMEDIATE` job insert segment/pack/locator/value/signature
 rows and `COMMIT`. Payload durability precedes the catalogue acknowledgement.
@@ -70,7 +75,8 @@ pays the bytes its existing plan requests. No global segment enumeration occurs 
 product publication, open, read or checkpoint. Final benchmark allocation inventory
 does enumerate all retained bodies outside the operation and charges directory,
 segments, database, WAL and SHM. Native direct-write/read/sync/close observations
-are separate `SqlWork.segment_*` counters; write/read counters describe complete
+are separate `SqlWork.segment_*` counters, including full-device barrier attempts;
+write/read counters describe complete
 safe calls and successful bytes, not exclusive device traffic or syscall count.
 
 The owning prospective selection is

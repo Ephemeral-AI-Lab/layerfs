@@ -1,0 +1,14 @@
+{
+  "source_parent": "b4b53789a1a2c0c7dba469ac0c346cdfad87c54b",
+  "correction": "directory fsync, then same-device full flush before SQL publication; no additional barriers or retry",
+  "unchanged": "schema7/10, A1, canonical bytes, profile, fixture, clocks, gates, worker and all row/body bounds",
+  "scoped_proof": "10 payload test bodies including one inactive child; 9 meaningful behavior bodies, native close-uncertainty and SIGKILL included",
+  "earlier_reuse": "other269-host/128-portable and owning harness checks from fb7 source; public SQL and old-layout behavior unaffected",
+  "explicit_gaps": [
+    "physical power-loss NOT_RUN",
+    "Linux global persistence unavailable",
+    "lifetime RSS not phase peak"
+  ],
+  "native_probe_sha256": "a52ef3d539eb58e5ebda3faf5bf0535227d18e8b8b0874105af351880e4da0e3",
+  "close_library_sha256": "0a5f63ac0044b5736379a035dece22fa328d19575844e3a72629b6672121cfaf"
+}

@@ -1,0 +1,15 @@
+
+running 10 tests
+test concurrent_first_wins_publications_preserve_exact_lost_ids_and_custody ... ok
+test definite_catalogue_failure_retains_file_and_does_not_reuse_consumed_id ... ok
+test killed_live_owner_preserves_acknowledged_segment_catalogue_and_ids ... ok
+test missing_short_tampered_symlink_and_hardlinked_bodies_are_refused ... ok
+test one_publication_has_one_segment_and_reopens_exact_bodies ... ok
+test physical_charge_admission_precedes_creation_and_singleton_keeps_its_bound ... ok
+test replaced_directory_and_wrong_extent_are_refused_without_repair ... ok
+test reservations_canonical_storage_and_all_old_versions_keep_their_own_layout ... ok
+test segment_crash_child ... ok
+test strict_and_scoped_ranges_preserve_pack_authentication_and_exact_bytes ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
