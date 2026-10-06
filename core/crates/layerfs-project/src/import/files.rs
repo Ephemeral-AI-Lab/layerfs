@@ -1,44 +1,63 @@
 //! Constructs each native regular-file identity once into the single Save owner.
 //!
-//! The owning thread alone reads the scratch runs and accepts objects. It feeds
-//! a fixed job queue from the backed identity stream; constructors return
-//! bounded ordered batches, and each constructed root is ordered by position in
-//! backing. Neither queue grows with the acquired root.
+//! The owning thread alone reads the backing and accepts objects. It feeds a
+//! fixed job queue from the backed identity stream; constructors return bounded
+//! ordered batches, and each constructed root is recorded against its identity
+//! in bounded write windows. Neither queue grows with the acquired root.
+use crate::backing::{Backing, Stamp, WINDOW_ROWS};
 use crate::error::ProjectError as Failure;
 use crate::error::{content, storage};
 use crate::{
     batch::{BatchProducer, Event, ImportBatch, QUEUE_SLOTS},
     namespace::ImportProgress,
-    runs::{Cursor, Run, Sorter},
-    scan::Identities,
-    scratch::{by_position, Job, Rooted, Scratch, WINDOW_ROWS},
 };
 use layerfs_content::{construct_stream, ObjectId};
+use layerfs_storage::port::acquisition::{self, WRITE_WINDOW_ROWS};
 use layerfs_storage::{Save, Storage};
 use layerfs_telemetry::timer::Timing;
 use std::{
+    ffi::{OsStr, OsString},
     fs::{self, File},
+    os::unix::ffi::{OsStrExt, OsStringExt},
+    path::PathBuf,
     sync::{mpsc, Mutex},
     time::{Duration, Instant},
 };
 
 const INIT_WORKERS: usize = 4;
 
-/// Returns every constructed regular-file root in position order.
+/// The first path of one native identity with the evidence it must keep matching.
+struct Job {
+    /// Canonical position, shared by every later path of the identity.
+    id: u64,
+    path: PathBuf,
+    stamp: Stamp,
+}
+impl Job {
+    fn of(job: acquisition::Job) -> Self {
+        Self {
+            id: job.position,
+            stamp: Stamp::from_identity(&job.native),
+            path: PathBuf::from(OsString::from_vec(job.native_path)),
+        }
+    }
+}
+
+/// Constructs every native identity once and records its root in backing.
 pub(crate) fn save_files(
-    identities: &Identities,
-    scratch: &mut Scratch,
+    backing: &Backing<'_>,
+    aliases: usize,
     store: &Storage,
     save: &Save<'_>,
     progress: &mut ImportProgress,
-) -> Result<Run, Failure> {
+) -> Result<(), Failure> {
     let policy = store.policy().construction();
     let capacities = policy.capacities();
     let deadline = progress.deadline();
     let (feed, jobs) = mpsc::sync_channel::<Job>(WINDOW_ROWS);
     let jobs = Mutex::new(jobs);
-    let mut natives = Cursor::new(&identities.jobs, Job::native);
-    let mut roots = Sorter::new(by_position, deadline);
+    let mut natives = backing.jobs();
+    let mut roots: Vec<(u64, ObjectId)> = Vec::new();
     std::thread::scope(|workers| -> Result<(), Failure> {
         let mut feed = Some(feed);
         let (sender, receiver) = mpsc::sync_channel::<ImportBatch>(QUEUE_SLOTS);
@@ -58,18 +77,25 @@ pub(crate) fn save_files(
         }
         drop(sender);
         let (mut sent, mut finished) = (0usize, 0usize);
+        // The one job the full queue handed back, offered again before the next.
+        let mut held: Option<Job> = None;
         loop {
             progress.tick()?;
             while let Some(sender) = &feed {
-                if natives.peek()?.is_none() {
-                    feed = None;
-                    break;
-                }
-                let job = natives.take().ok_or(Failure::InvalidInput)?;
+                let job = match held.take() {
+                    Some(job) => job,
+                    None => match natives.next()? {
+                        Some(job) => Job::of(job),
+                        None => {
+                            feed = None;
+                            break;
+                        }
+                    },
+                };
                 match sender.try_send(job) {
                     Ok(()) => sent += 1,
                     Err(mpsc::TrySendError::Full(job)) => {
-                        natives.restore(job);
+                        held = Some(job);
                         break;
                     }
                     Err(mpsc::TrySendError::Disconnected(_)) => {
@@ -91,22 +117,21 @@ pub(crate) fn save_files(
                 match event {
                     Event::Object(object) => save.accept(object).map_err(storage)?,
                     Event::Done(id, result) => {
-                        let root = Rooted::record(id as u64, result?);
-                        roots.push(scratch.backing(), &root)?;
+                        roots.push((id as u64, result?));
                         finished += 1;
+                        if roots.len() == WRITE_WINDOW_ROWS {
+                            backing.complete_files(&mut roots)?;
+                        }
                     }
                 }
             }
         }
     })?;
-    let work = &mut progress.work;
-    work.job_capacity_bytes = work
-        .job_capacity_bytes
-        .max(natives.resident_bytes() + WINDOW_ROWS * std::mem::size_of::<Job>());
-    let contents = roots.finish(scratch.backing())?;
-    work.sort_capacity_bytes = work.sort_capacity_bytes.max(roots.resident_bytes());
-    check_aliases(&identities.aliases, progress)?;
-    Ok(contents)
+    backing.complete_files(&mut roots)?;
+    if aliases > 0 {
+        check_aliases(backing, progress)?;
+    }
+    Ok(())
 }
 
 /// Takes one job. A constructor hands over its pending batch before it waits
@@ -125,14 +150,32 @@ fn next_job(jobs: &Mutex<mpsc::Receiver<Job>>, producer: &mut BatchProducer<'_>)
 }
 
 /// Every later path of a constructed identity must still name that same file.
-fn check_aliases(aliases: &Run, progress: &mut ImportProgress) -> Result<(), Failure> {
-    let mut aliases = Cursor::new(aliases, Job::alias);
-    while let Some(alias) = aliases.next()? {
+///
+/// Entries stream in acquisition order, so later paths of one directory share
+/// one path read and adjacent later paths of one identity share one evidence read.
+fn check_aliases(backing: &Backing<'_>, progress: &mut ImportProgress) -> Result<(), Failure> {
+    let mut entries = backing.entries();
+    let mut directory: Option<(u64, PathBuf)> = None;
+    let mut first: Option<(u64, Stamp)> = None;
+    while let Some(entry) = entries.next()? {
         progress.tick()?;
-        if !alias
-            .stamp
-            .matches_file(&fs::symlink_metadata(&alias.path)?)
-        {
+        let Some(canonical) = entry.canonical.filter(|first| *first != entry.position) else {
+            continue;
+        };
+        let parent = entry.key.parent.ok_or(Failure::InvalidInput)?;
+        if directory.as_ref().is_none_or(|(held, _)| *held != parent) {
+            let path = OsString::from_vec(backing.directory_path(parent)?);
+            directory = Some((parent, PathBuf::from(path)));
+        }
+        if first.is_none_or(|(held, _)| held != canonical) {
+            let job = backing.job(canonical)?;
+            first = Some((canonical, Stamp::from_identity(&job.native)));
+        }
+        let (Some((_, directory)), Some((_, stamp))) = (&directory, &first) else {
+            return Err(Failure::InvalidInput);
+        };
+        let path = directory.join(OsStr::from_bytes(&entry.key.name));
+        if !stamp.matches_file(&fs::symlink_metadata(&path)?) {
             return Err(Failure::InvalidInput);
         }
     }

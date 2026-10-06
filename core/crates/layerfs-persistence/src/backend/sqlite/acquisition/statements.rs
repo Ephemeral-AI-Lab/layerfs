@@ -1,4 +1,9 @@
 //! Closed statement set and the failure type its units share.
+//!
+//! Every window bound is written `LIMIT ?n+0`. The engine's planner reads a
+//! plainly bound LIMIT, which re-prepares the statement on each execution and
+//! lets the plan follow the value. The expression keeps one generic plan: the
+//! one `explain` reports.
 use crate::backend::records::{BackendError, OutcomeError};
 use layerfs_storage::port::{acquisition::AcquisitionError, PersistenceError};
 

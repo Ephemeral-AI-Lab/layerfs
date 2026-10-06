@@ -1,14 +1,13 @@
 # Provider-owned acquisition backing
 
-> **Status:** Current general guide. S9/A2 checkpoint; S9 remains open. Project does
-> not use this port yet, and no speed, RSS, page or cold-cache claim is made.
+> **Status:** Current general guide. S9/A3 checkpoint; S9 remains open, and no
+> speed, RSS, page or cold-cache claim is made.
 
 The global Store can hold the working state of an initial root acquisition in
 three operation-scoped tables, reached through one backend-neutral port. This
 is the capability [A1](../issues/307/A1-ACQUISITION-CONTRACT.md) designed.
-Project's import still runs on file ordering runs
-([backed initial acquisition](43-backed-initial-acquisition.md)); moving it onto
-this port and removing the run code is A3.
+Project's import is its one consumer and has no other acquisition algorithm
+([backed initial acquisition](43-backed-initial-acquisition.md)).
 
 ## Boundary
 
@@ -75,12 +74,18 @@ maxima or a malformed row, and `Changed { position }` when evidence differs or
 an addressed row is not in the required state. A failed unit changes nothing.
 
 - **Write windows** are at most 4096 rows and 1 MiB of payload: `put_entries`,
-  `place_children`, `complete_files`, `set_directory_roots`.
+  `place_children`, `complete_files`, `set_directory_roots`. The port fixes the
+  payload a caller is charged per entry or placed row, `WRITE_ROW_BYTES` plus its
+  name and native path bytes, so a caller sizing a window by that charge is
+  never refused by the provider's own.
 - **Read windows** are at most 512 rows and 256 KiB, resumed from the last key:
   `entries`, `unplaced_children`, `directories`, `jobs`, `file_roots`. The row
   count is derived from the byte limit and the largest row the statement can
   return, so the byte bound holds without fetching past it. Path-bearing
-  windows are therefore at most 62 rows.
+  windows are therefore at most 62 rows. Every window bound is written
+  `LIMIT ?n+0`: the engine's planner reads a plainly bound LIMIT, which
+  re-prepared the statement on every execution and let its plan follow the
+  value. The expression keeps the one generic plan that `explain` reports.
 - **Lifecycle:** `begin`, `advance`, `discard` (a budgeted job deleting the
   operation's lowest remaining keys, entries first), `release` (refused while
   rows remain), `work`.
@@ -116,10 +121,24 @@ statements and 9267 VM steps, and the same 512-row removal job 6 statements and
 and automatic-index rows were zero throughout. Receipts are under
 [checks](../issues/307/checks/s9-acquisition-provider/identity.json).
 
+A3 ran Project's Init over the provider and correlated the whole Session's
+profile. That showed one automatic re-prepare per window statement execution,
+which the provider-only profile had not counted. With the `+0` bound the plans
+are textually identical, the window costs 4 statements and 9271 VM steps, the
+removal job 6 statements and 33438 VM steps at both populations, and
+re-prepares are zero for write, read and removal units; the profile test now
+asserts that. Creating a Store with the acquisition tables costs 5 more
+statements, 18 more full-scan steps and 2 more sorts than one without, once, in
+schema creation and validation. For 1000 files in 10 directories one Init made
+30 read units, 5 write units, 1 removal job and 1 release, and the Session
+executed about 3160 more statements and 391 000 more VM steps than the
+run-backed import did on the same source. Receipts are under
+[A3 checks](../issues/307/checks/s9-acquisition-port/identity.json).
+
 Not established: time, page writes, file growth, journal or synchronization
 cost under either profile; row growth when positions and roots are filled
 after insertion; behaviour at capacity or under an uncertain engine outcome
-(neither was induced); the frozen window values, which remain the proposed
-ones; and the unit multiplicity of a real acquisition, which exists only once
-A3 ports Project. The Store is macOS-only, so these tests execute no body on
-Linux.
+(neither was induced); and the frozen window values, which remain the
+proposed ones. The unit multiplicity above is one small shape, not a
+qualification workload. The Store is macOS-only, so these tests execute no body
+on Linux.

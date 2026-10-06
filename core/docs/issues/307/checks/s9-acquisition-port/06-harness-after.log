@@ -1,0 +1,29 @@
+...........E........F..............
+======================================================================
+ERROR: setUpClass (test_phase7_cold_native.ColdNative)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_phase7_cold_native.py", line 21, in setUpClass
+    cls.scratch = tempfile.TemporaryDirectory(dir=runner.ROOT / 'target/phase7-agent')
+                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py", line 907, in __init__
+    self.name = mkdtemp(suffix, prefix, dir)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py", line 385, in mkdtemp
+    _os.mkdir(file, 0o700)
+    ~~~~~~~~~^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase7-agent/tmpv6b84bv0'
+
+======================================================================
+FAIL: test_complete_proof_rejects_missing_pins_bad_roots_profile_and_census_before_io (test_phase7_history_vehicle.HistoryVehicle.test_complete_proof_rejects_missing_pins_bad_roots_profile_and_census_before_io)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_phase7_history_vehicle.py", line 25, in test_complete_proof_rejects_missing_pins_bad_roots_profile_and_census_before_io
+    self.assertTrue(binary.is_file(), 'build the needed release/locked verifier first')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : build the needed release/locked verifier first
+
+----------------------------------------------------------------------
+Ran 34 tests in 0.578s
+
+FAILED (failures=1, errors=1)

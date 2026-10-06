@@ -1,18 +1,22 @@
 //! Scan, construct/save, consume inode identities and publish one genesis stack.
 #[cfg(unix)]
 use crate::{
+    backing::Backing,
+    error::{acquisition, storage},
     files,
     namespace::{self, ImportProgress},
     scan,
-    scratch::Scratch,
 };
 use crate::{ProjectError, ProjectResult};
 #[cfg(unix)]
-use layerfs_content::filesystem::{profile_id, scope_for_seed};
+use layerfs_content::filesystem::{profile_id, scope_for_seed, FilesystemObjects};
 use layerfs_content::ObjectId;
 use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId, LayerStackRecord};
 #[cfg(unix)]
 use layerfs_history::{ReserveRequest, StackInitialization};
+use layerfs_storage::port::acquisition::Acquisition;
+#[cfg(unix)]
+use layerfs_storage::port::acquisition::Begin;
 #[cfg(unix)]
 use layerfs_storage::Save;
 use layerfs_storage::{read::Diagnostics, Storage};
@@ -22,11 +26,12 @@ use std::{path::Path, time::Instant};
 pub struct InitRequest<'a> {
     /// Host-visible regular directory, checked before construction.
     pub source: &'a Path,
-    /// Existing writable parent for the operation-owned backed acquisition scratch.
+    /// Provider-owned working state for the acquisition's input-sized rows.
     ///
-    /// It must lie outside `source` through every path alias; a parent that is
-    /// the source or inside it is refused before anything is created.
-    pub scratch_parent: &'a Path,
+    /// Where the provider reports a native placement, that directory must lie
+    /// outside `source` through every path alias; one that is the source or
+    /// inside it is refused before the operation begins.
+    pub acquisition: &'a dyn Acquisition,
     /// LayerStack authority identity selected by the application.
     pub stack: LayerStackId,
     /// Checked portable name for the new LayerStack.
@@ -49,52 +54,64 @@ pub struct Initialized {
     pub entries: u64,
     /// Cumulative actual storage counts for the supplied handle; diagnostics.
     pub diagnostics: Diagnostics,
-    /// Backed row counts and resident window capacities; not a whole-importer bound.
+    /// Backed row and unit counts with resident window high-water marks; not a
+    /// whole-importer bound.
     pub namespace_work: crate::NamespaceWork,
 }
 /// Initializes one directory through the supplied ports, without an engine dependency.
 ///
-/// Input-sized acquisition state is held in one operation-owned scratch
-/// directory under `scratch_parent`. It is removed, with a checked result,
-/// before the tree save is finished or any history is published.
+/// Input-sized acquisition state is held as one operation's rows behind
+/// `acquisition`. Those rows and the operation record are removed, with a
+/// checked result, before the tree save is finished or any history is
+/// published. A failure of that removal is [`ProjectError::Cleanup`]; an
+/// unknown Store, history or backing outcome is [`ProjectError::Uncertain`]
+/// and leaves the operation untouched for its owner.
 #[cfg(unix)]
 pub fn init(
-    storage: &Storage,
+    store: &Storage,
     catalog: &dyn HistoryCatalog,
     request: InitRequest<'_>,
     timer: &TimingScope<'_, Active>,
 ) -> ProjectResult<Initialized> {
+    use std::os::unix::fs::MetadataExt;
     let mut progress = ImportProgress::new(request.deadline);
     progress.tick()?;
     let source = scan::check_root(request.source)?;
-    super::source::outside_source(&source, request.scratch_parent)?;
+    if let Some(placement) = request.acquisition.placement() {
+        super::source::outside_source(&source, &placement)?;
+    }
     let scope = scope_for_seed(request.scope_seed);
-    let mut scratch = Scratch::create(request.scratch_parent)?;
+    let mut stack = [0; 16];
+    stack.copy_from_slice(&request.stack.to_bytes()[1..]);
+    let begun = request.acquisition.begin(&Begin {
+        source_device: source.dev(),
+        source_inode: source.ino(),
+        stack,
+        scope: scope.object(),
+    });
+    let backing = Backing::new(request.acquisition, begun.map_err(acquisition)?);
     let acquired = acquire(
-        storage,
+        store,
         catalog,
         &request,
         &source,
-        &mut scratch,
+        &backing,
         &mut progress,
         timer,
     );
-    progress.work.backing_bytes = scratch.peak_bytes();
-    let (root, root_serial, entries, save) = match (acquired, scratch.finish()) {
-        (Ok(value), Ok(())) => value,
-        (Err(error), Ok(())) => return Err(error),
-        (result, Err((error, retained))) => {
-            return Err(ProjectError::Cleanup {
-                cause: result.err().map(Box::new),
-                error,
-                retained,
-            })
-        }
+    let (root, root_serial, entries, save) = match acquired {
+        Ok(value) => value,
+        Err(error) => return Err(backing.settle(error, &mut progress.work)),
     };
+    // Nothing final exists until the working rows and their record are gone.
+    timer
+        .child("history.discard_acquisition")
+        .run(|_| backing.finish(&mut progress.work))
+        .map_err(|cleanup| cleanup.after(None))?;
     progress.tick()?;
     timer
         .child("history.finish_tree_save")
-        .run(|_| save.finish().map_err(crate::error::storage))?;
+        .run(|_| save.finish().map_err(storage))?;
     progress.tick()?;
     let stack = timer.child("history.initialize_layerstack").run(|_| {
         catalog
@@ -112,36 +129,49 @@ pub fn init(
         root,
         root_serial,
         entries,
-        diagnostics: storage.diagnostics(),
+        diagnostics: store.diagnostics(),
         namespace_work: progress.work,
     })
 }
 
-/// Scans, constructs each file once, consumes serials and builds the tree. The
-/// returned tree save is unfinished: nothing final exists until scratch is gone.
+/// Scans with attributes, constructs each file once, consumes serials and
+/// builds the tree. The returned tree save is unfinished.
 #[cfg(unix)]
 fn acquire<'a>(
-    storage: &'a Storage,
+    store: &'a Storage,
     catalog: &dyn HistoryCatalog,
     request: &InitRequest<'_>,
     source: &std::fs::Metadata,
-    scratch: &mut Scratch,
+    backing: &Backing<'_>,
     progress: &mut ImportProgress,
     timer: &TimingScope<'_, Active>,
 ) -> ProjectResult<(ObjectId, u64, u64, Save<'a>)> {
-    let (scanned, identities) = timer.child("history.import_scan").run(|_| {
-        let (scanned, natives) = scan::scan(request.source, source, scratch, progress)?;
-        let identities = scan::group_aliases(natives, scratch, progress)?;
-        Ok::<_, ProjectError>((scanned, identities))
-    })?;
-    let save = storage.begin_save().map_err(crate::error::storage)?;
-    let contents = timer
+    let scanned = {
+        let provider = store.reader().map_err(storage)?;
+        let save = store.begin_save().map_err(storage)?;
+        let built = timer.child("history.import_scan").run(|_| {
+            let mut sink = save.sink();
+            let mut objects = FilesystemObjects::new(&provider, &mut sink);
+            scan::scan(request.source, source, backing, &mut objects, progress)
+        });
+        let scanned = match save.take_failure() {
+            Some(error) => Err(storage(error)),
+            None => built,
+        }?;
+        progress.tick()?;
+        timer
+            .child("history.finish_prerequisite_save")
+            .run(|_| save.finish().map_err(storage))?;
+        scanned
+    };
+    let save = store.begin_save().map_err(storage)?;
+    timer
         .child("history.import_files")
-        .run(|_| files::save_files(&identities, scratch, storage, &save, progress))?;
+        .run(|_| files::save_files(backing, scanned.aliases, store, &save, progress))?;
     progress.tick()?;
     timer
         .child("history.import_finish_save")
-        .run(|_| save.finish().map_err(crate::error::storage))?;
+        .run(|_| save.finish().map_err(storage))?;
     let scope = scope_for_seed(request.scope_seed);
     let reservation = timer.child("history.reserve_inodes").run(|_| {
         catalog
@@ -151,21 +181,18 @@ fn acquire<'a>(
             })
             .map_err(ProjectError::History)
     })?;
-    let provider = storage.reader().map_err(crate::error::storage)?;
-    let (root, save) = namespace::build_namespace(
-        storage,
-        &provider,
-        scope,
-        reservation.start,
-        &namespace::Acquired {
-            scanned: &scanned,
-            identities: &identities,
-            contents: &contents,
-        },
-        scratch,
-        progress,
-        timer,
-    )?;
+    let provider = store.reader().map_err(storage)?;
+    let (root, save) = timer.child("history.import_tree").run(|_| {
+        namespace::build_namespace(
+            store,
+            &provider,
+            scope,
+            reservation.start,
+            &scanned,
+            backing,
+            progress,
+        )
+    })?;
     Ok((root, reservation.start, scanned.entries, save))
 }
 

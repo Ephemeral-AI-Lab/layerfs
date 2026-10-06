@@ -1,0 +1,24 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-telemetry v0.1.6 (/work/core/crates/layerfs-telemetry)
+    Checking layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Checking layerfs-history v0.1.6 (/work/core/crates/layerfs-history)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Checking layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+    Checking layerfs-project v0.1.6 (/work/core/crates/layerfs-project)
+    Checking layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+error: unused import: `SqliteAcquisitionSchema`
+ --> crates/layerfs-project/tests/init_sqlite.rs:8:33
+  |
+8 |     Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+  |                                 ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `-D unused-imports` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(unused_imports)]`
+
+error: could not compile `layerfs-project` (test "init_sqlite") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

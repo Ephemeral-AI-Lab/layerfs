@@ -2,7 +2,9 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 mod import;
-pub use error::{ProjectError, ProjectResult, RetainedScratch};
+pub use error::{ProjectError, ProjectResult, RetainedAcquisition};
+#[cfg(unix)]
+pub(crate) use import::backing;
 #[cfg(unix)]
 pub(crate) use import::batch;
 pub(crate) use import::error;
@@ -14,11 +16,7 @@ pub(crate) use import::metadata;
 #[cfg(unix)]
 pub(crate) use import::namespace;
 #[cfg(unix)]
-pub(crate) use import::runs;
-#[cfg(unix)]
 pub(crate) use import::scan;
-#[cfg(unix)]
-pub(crate) use import::scratch;
 pub use init::{init, InitRequest, Initialized};
 
 pub(crate) use import::work as namespace_work;

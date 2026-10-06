@@ -16,6 +16,9 @@ pub const READ_WINDOW_BYTES: usize = 256 * 1024;
 pub const WRITE_WINDOW_ROWS: usize = 4096;
 /// Payload bytes one write window carries at most.
 pub const WRITE_WINDOW_BYTES: usize = 1024 * 1024;
+/// Payload bytes one written row is charged beside its name and native path.
+/// A caller sizing a window with this charge stays within the provider's.
+pub const WRITE_ROW_BYTES: usize = 160;
 
 /// Caller-selected read window, never above the port maxima.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

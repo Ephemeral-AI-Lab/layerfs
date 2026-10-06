@@ -7,7 +7,10 @@ use layerfs_history::HistoryCatalog;
 #[cfg(target_os = "macos")]
 use layerfs_history::HistoryCatalogConfig;
 #[cfg(target_os = "macos")]
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{
+    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+};
+use layerfs_storage::port::acquisition::Acquisition;
 use layerfs_storage::Storage;
 #[cfg(target_os = "macos")]
 use layerfs_storage::StoragePolicy;
@@ -19,9 +22,17 @@ use std::{
     os::unix::{ffi::OsStrExt, fs::symlink},
     sync::Arc,
 };
-use support::{memory_history::MemoryHistory, memory_metadata::MemoryMetadata, Fixture};
+use support::{
+    memory_acquisition::MemoryAcquisition, memory_history::MemoryHistory,
+    memory_metadata::MemoryMetadata, Fixture,
+};
 
-fn acquire_and_verify(fixture: &Fixture, store: &Storage, history: &dyn HistoryCatalog) {
+fn acquire_and_verify(
+    fixture: &Fixture,
+    store: &Storage,
+    history: &dyn HistoryCatalog,
+    acquisition: &dyn Acquisition,
+) {
     let mut files = BTreeMap::from([
         (
             ".gitignore",
@@ -70,7 +81,7 @@ fn acquire_and_verify(fixture: &Fixture, store: &Storage, history: &dyn HistoryC
     for (name, target) in &links {
         symlink(OsStr::from_bytes(target), fixture.source.join(name)).unwrap();
     }
-    let initialized = fixture.run(store, history);
+    let initialized = fixture.run_with(store, history, acquisition);
     assert_eq!(initialized.namespace_work.regular_aliases, 1);
     assert_eq!(initialized.namespace_work.unique_files, files.len() - 1);
     // All later reads use the published complete root, with no native fallback.
@@ -178,7 +189,9 @@ fn acquire_and_verify(fixture: &Fixture, store: &Storage, history: &dyn HistoryC
 fn native_import_keeps_ignored_git_dependencies_outputs_and_exact_link_targets() {
     let fixture = Fixture::new(0);
     let store = support::storage(Arc::new(MemoryMetadata::default()));
-    acquire_and_verify(&fixture, &store, &MemoryHistory::default());
+    let acquisition = MemoryAcquisition::default();
+    acquire_and_verify(&fixture, &store, &MemoryHistory::default(), &acquisition);
+    assert!(acquisition.operations().is_empty());
 }
 
 #[test]
@@ -191,7 +204,8 @@ fn real_host_profiles_acquire_and_reuse_the_exact_complete_root() {
         let fixture = Fixture::new(0);
         let handles = Handles::create(
             PersistenceConfig::sqlite(fixture.path.join("store.sqlite"))
-                .with_sqlite_profile(profile),
+                .with_sqlite_profile(profile)
+                .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),
             StoragePolicy::frozen_default(),
             &HistoryCatalogConfig {
                 binding_key: b"complete-root".to_vec(),
@@ -201,6 +215,8 @@ fn real_host_profiles_acquire_and_reuse_the_exact_complete_root() {
         )
         .unwrap();
         let store = support::storage(handles.storage.clone());
-        acquire_and_verify(&fixture, &store, &handles.history);
+        acquire_and_verify(&fixture, &store, &handles.history, &handles.acquisition);
+        use layerfs_storage::port::acquisition::Acquisition as _;
+        assert!(handles.acquisition.abandoned(None, 8).unwrap().is_empty());
     }
 }

@@ -5,7 +5,10 @@ use layerfs_content::{
 };
 use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId};
 use layerfs_project::{init, InitRequest, Initialized};
-use layerfs_storage::{port::PackPersistence, Storage};
+use layerfs_storage::{
+    port::{acquisition::Acquisition, PackPersistence},
+    Storage,
+};
 use layerfs_telemetry::timer::Timing;
 use std::{
     collections::BTreeMap,
@@ -18,6 +21,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
+pub mod memory_acquisition;
 pub mod memory_history;
 #[path = "../../../layerfs-storage/tests/support/memory_metadata.rs"]
 pub mod memory_metadata;
@@ -56,14 +60,27 @@ impl Fixture {
             expected,
         }
     }
+    /// Init over a fresh memory acquisition backing, which must end empty.
     pub fn run(&self, storage: &Storage, history: &dyn HistoryCatalog) -> Initialized {
+        let acquisition = memory_acquisition::MemoryAcquisition::default();
+        let initialized = self.run_with(storage, history, &acquisition);
+        assert_eq!(acquisition.issued(), 1);
+        assert!(acquisition.operations().is_empty());
+        initialized
+    }
+    pub fn run_with(
+        &self,
+        storage: &Storage,
+        history: &dyn HistoryCatalog,
+        acquisition: &dyn Acquisition,
+    ) -> Initialized {
         Timing::disabled("project.init", |scope| {
             init(
                 storage,
                 history,
                 InitRequest {
                     source: &self.source,
-                    scratch_parent: &self.path,
+                    acquisition,
                     stack: LayerStackId::from_authority([19; 16]),
                     name: HistoryName::new("main").unwrap(),
                     scope_seed: [29; 32],

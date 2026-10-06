@@ -411,15 +411,24 @@ Source: [history requests/outcomes](core/crates/layerfs-history/src/contract/rec
 `layerfs_project::init(&storage, &catalog, InitRequest, &timer)` orchestrates:
 
 ```text
-  directory scan -> file construction + file Save.finish()
+  begin acquisition operation (provider rows, not scratch files)
+         -> directory scan + attribute/target Save.finish()
+         -> file construction + file Save.finish()
          -> reserve scope-wide inode serials
-         -> build namespace + namespace Save.finish()
+         -> build namespace (tree Save left open)
+         -> discard working rows + release operation
+         -> tree Save.finish()
          -> initialize_layerstack(genesis root)
          -> Initialized { stack, root, entries, diagnostics, namespace_work, ... }
 ```
 
-`InitRequest` supplies `source`, writable `scratch_parent`, explicit stack ID and
-name, `scope_seed`, and a fixed `Instant` deadline. The result acknowledges the
+`InitRequest` supplies `source`, an `acquisition` backing
+(`&dyn layerfs_storage::port::acquisition::Acquisition`, normally the Store's
+`Handles::acquisition`), explicit stack ID and name, `scope_seed`, and a fixed
+`Instant` deadline. The Store must have been created with
+`with_sqlite_acquisition(SqliteAcquisitionSchema::Tables)` (schema versions 4–6);
+on a version 1–3 Store Init is a typed `BackendUnavailable` refusal, and there is
+no upgrade operation. The Store's directory must lie outside `source`. The result acknowledges the
 genesis LayerStack, not just file payload storage. The deadline is shared with
 workers; it is not a rollback boundary. Checkpoint is a separate handle lifecycle
 operation, not a substitute for either Save finish.

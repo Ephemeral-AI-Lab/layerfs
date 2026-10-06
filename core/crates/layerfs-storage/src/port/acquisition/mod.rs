@@ -8,7 +8,7 @@ mod rows;
 mod work;
 pub use contract::{
     Acquisition, AcquisitionError, AcquisitionResult, Limits, READ_WINDOW_BYTES, READ_WINDOW_ROWS,
-    WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
+    WRITE_ROW_BYTES, WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
 };
 pub use rows::{
     Abandoned, Begin, Directory, Entry, EntryKey, FileRoot, Job, NativeIdentity, NewEntry, Owner,

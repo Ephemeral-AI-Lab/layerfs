@@ -1,0 +1,49 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running tests/zz_reprepare_probe.rs (core/target/cluster2-runtime-tests/debug/deps/zz_reprepare_probe-8aef8bd3e2c8b974)
+
+running 1 test
+PROBE put root: reprepares +0
+PROBE put 2 dirs: reprepares +0
+PROBE directories(None) #0: reprepares +0
+PROBE directories(Some) #0: reprepares +0
+PROBE entries(None) #0: reprepares +0
+PROBE entries(Some) #0: reprepares +0
+PROBE jobs #0: reprepares +0
+PROBE file_roots #0: reprepares +0
+PROBE unplaced #0: reprepares +0
+PROBE directory_path #0: reprepares +0
+PROBE job #0: reprepares +0
+PROBE work #0: reprepares +0
+PROBE directories(None) #1: reprepares +0
+PROBE directories(Some) #1: reprepares +0
+PROBE entries(None) #1: reprepares +0
+PROBE entries(Some) #1: reprepares +0
+PROBE jobs #1: reprepares +0
+PROBE file_roots #1: reprepares +0
+PROBE unplaced #1: reprepares +0
+PROBE directory_path #1: reprepares +0
+PROBE job #1: reprepares +0
+PROBE work #1: reprepares +0
+PROBE directories(None) #2: reprepares +0
+PROBE directories(Some) #2: reprepares +0
+PROBE entries(None) #2: reprepares +0
+PROBE entries(Some) #2: reprepares +0
+PROBE jobs #2: reprepares +0
+PROBE file_roots #2: reprepares +0
+PROBE unplaced #2: reprepares +0
+PROBE directory_path #2: reprepares +0
+PROBE job #2: reprepares +0
+PROBE work #2: reprepares +0
+PROBE set_directory_roots: reprepares +0
+PROBE set_directory_roots 2: reprepares +0
+PROBE discard: reprepares +0
+PROBE release: reprepares +0
+test probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

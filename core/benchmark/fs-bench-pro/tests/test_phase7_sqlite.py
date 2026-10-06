@@ -76,6 +76,28 @@ class SqliteStep10(unittest.TestCase):
             self.assertIn(new,f.REQUIRED_BY_PROFILE[f.CASES[new].profile])
             with self.assertRaisesRegex(ValueError,'historical history selection'):
                 f.run(old,None,'baseline',None,None)
+    def test_acquisition_vehicle_is_a_new_identity_and_run_backed_init_is_retired(self):
+        self.assertEqual(len(f.RETIRED_RUN_BACKED_INIT),32)
+        self.assertTrue(all(f.CASES[name].fixture for name in f.RETIRED_RUN_BACKED_INIT))
+        for profile,names in f.ACQUISITION_CASES_BY_PROFILE.items():
+            cases=[f.CASES[name] for name in names];self.assertEqual(len(cases),4)
+            self.assertEqual([f.init.CASES[x.fixture].files for x in cases],[100,1000,10000,100000])
+            self.assertTrue(all(x.profile==profile and x.states is None and x.storage_ceiling is None for x in cases))
+            self.assertTrue(all((x.command_budget_ns,x.verification_budget_ns)==(15_000_000_000,9_500_000_000) for x in cases))
+            self.assertTrue(all(name.endswith('-acquisition-v1') and name not in f.RETIRED_RUN_BACKED_INIT for name in names))
+        self.assertEqual(len(set(sum(f.ACQUISITION_CASES_BY_PROFILE.values(),[]))),8)
+        self.assertNotIn('scratch',f.ACQUISITION_VEHICLE)
+        for old in f.RETIRED_RUN_BACKED_INIT:
+            for arm in ('candidate','baseline'):
+                with self.assertRaisesRegex(ValueError,'retired'):
+                    f.run(old,None,arm,None,None)
+    def test_candidate_driver_takes_no_scratch_and_creates_the_acquisition_schema(self):
+        text=(Path(__file__).resolve().parents[3]/'crates/layerfs-project/examples/benchmark_init.rs').read_text()
+        self.assertIn('with_sqlite_acquisition(SqliteAcquisitionSchema::Tables)',text)
+        self.assertIn('acquisition: &handles.acquisition',text)
+        self.assertIn('HistoryName::new(&args[3])',text)
+        self.assertIn('args.get(4)',text)
+        self.assertNotIn('scratch',text)
     def test_margin_is_integer_total_bound_and_joint_gate_cannot_waive_missing_proof(self):
         self.assertEqual(c.gate(self.row(110),self.row(100),100),'PASS')
         self.assertEqual(c.gate(self.row(111),self.row(100),100),'FAIL')

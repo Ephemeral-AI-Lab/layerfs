@@ -1,1 +1,1 @@
-SELECT parent_position,name,position,kind,canonical_position,metadata_root,content_root FROM init_entry WHERE operation_id=?1 AND (parent_position,name)>(?2,?3) ORDER BY parent_position,name LIMIT ?4
+SELECT parent_position,name,position,kind,canonical_position,metadata_root,content_root FROM init_entry WHERE operation_id=?1 AND (parent_position,name)>(?2,?3) ORDER BY parent_position,name LIMIT ?4+0

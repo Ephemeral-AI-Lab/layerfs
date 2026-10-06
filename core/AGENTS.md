@@ -34,7 +34,8 @@ product mental model or campaign-specific benchmark procedures.
   restart custody, control integration and full runtime acceptance remain
   unfinished. Project native import preserves opaque symlink targets and complete
   path membership and regular hard-link identity, and holds input-sized acquisition
-  state in charged ordering-run scratch; its speed and S9 acceptance remain unqualified.
+  state as operation rows behind the acquisition port; its speed and S9 acceptance
+  remain unqualified.
   Bridge now builds pinned native KK channels, checked logical fragmentation,
   aggregate partial/result credits and explicit independent socket fences. Its old protocol source is excluded at
   `layerfs-bridge-legacy`; complete transport/runtime/restart and resource
@@ -75,9 +76,11 @@ Persistence/application composition along the permitted dependency direction.
 A guard refusal of Project's direct engine dependency identifies wrong placement;
 resolve that boundary before proceeding. It does not require replacing indexed
 backing with a custom sorter. The port and its SQLite provider now exist as an
-opt-in Store schema ([acquisition backing](docs/architecture/44-acquisition-backing.md));
-Project's import does not use them yet. Porting it is implementation work, not
-permission to weaken the boundary guard or to keep two acquisition algorithms.
+opt-in Store schema ([acquisition backing](docs/architecture/44-acquisition-backing.md)),
+and Project's import runs on that port alone
+([backed acquisition](docs/architecture/43-backed-initial-acquisition.md)). Do not
+weaken the boundary guard, give Project an engine dependency or reintroduce a
+second acquisition algorithm.
 See the [S7/S9 remaining plan](docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md).
 
 ## Optimization and performance debugging

@@ -1,0 +1,57 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_persistence-b5f09de8656694d5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/acquisition_schema.rs (core/target/cluster2-linux/debug/deps/acquisition_schema-db5089c68eb5e9b7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/acquisition_units.rs (core/target/cluster2-linux/debug/deps/acquisition_units-6ee8a152d17333da)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/file_lengths.rs (core/target/cluster2-linux/debug/deps/file_lengths-9f28362614110c3c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/history_allocation.rs (core/target/cluster2-linux/debug/deps/history_allocation-14df83f52d7d05fa)
+
+running 3 tests
+
+thread 'reservations_are_monotone_half_open_and_per_scope' panicked at crates/layerfs-persistence/tests/support/mod.rs:63:6:
+catalog creation: Integrity("persistence open")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'counts_are_checked_and_the_terminal_endpoint_is_refused' panicked at crates/layerfs-persistence/tests/support/mod.rs:63:6:
+catalog creation: Integrity("persistence open")
+
+thread 'a_consumed_reservation_survives_a_later_failure' panicked at crates/layerfs-persistence/tests/support/mod.rs:63:6:
+catalog creation: Integrity("persistence open")
+test reservations_are_monotone_half_open_and_per_scope ... FAILED
+test counts_are_checked_and_the_terminal_endpoint_is_refused ... FAILED
+test a_consumed_reservation_survives_a_later_failure ... FAILED
+
+failures:
+
+failures:
+    a_consumed_reservation_survives_a_later_failure
+    counts_are_checked_and_the_terminal_endpoint_is_refused
+    reservations_are_monotone_half_open_and_per_scope
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p layerfs-persistence --test history_allocation`

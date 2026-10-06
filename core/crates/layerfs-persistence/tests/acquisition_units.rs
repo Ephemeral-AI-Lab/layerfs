@@ -571,13 +571,14 @@ fn windows_owners_and_abandoned_operations_are_fenced() {
     port.release(live).unwrap();
 }
 
-fn delta(before: SqlWork, after: SqlWork) -> [u64; 5] {
+fn delta(before: SqlWork, after: SqlWork) -> [u64; 6] {
     [
         after.statements - before.statements,
         after.vm_steps - before.vm_steps,
         after.fullscan_steps - before.fullscan_steps,
         after.sorts - before.sorts,
         after.autoindex_rows - before.autoindex_rows,
+        after.reprepares - before.reprepares,
     ]
 }
 
@@ -631,11 +632,18 @@ fn every_statement_is_an_indexed_search_and_window_work_ignores_population() {
         assert_eq!(port.discard(owner, 512).unwrap().rows, 512);
         let removed = delta(before, handles.diagnostics().unwrap());
         println!(
-            "ACQUISITION_PROFILE entries={count} [statements,vm_steps,fullscan,sorts,autoindex] \
+            "ACQUISITION_PROFILE entries={count} \
+             [statements,vm_steps,fullscan,sorts,autoindex,reprepares] \
              write={written:?} read_window={read:?} discard_job={removed:?}"
         );
+        // A bound LIMIT the planner could read would re-prepare its statement
+        // on every execution and let the plan follow the value.
         for work in [written, read, removed] {
-            assert_eq!(&work[2..], [0, 0, 0], "no scan, sort or automatic index");
+            assert_eq!(
+                &work[2..],
+                [0, 0, 0, 0],
+                "no scan, sort, automatic index or reprepare"
+            );
         }
         observed.push((read, removed));
         let mut remaining = 1;

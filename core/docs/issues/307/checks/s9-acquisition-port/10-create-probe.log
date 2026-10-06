@@ -1,0 +1,15 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running tests/zz_create_probe.rs (core/target/cluster2-runtime-tests/debug/deps/zz_create_probe-11b0f08df6025556)
+
+running 1 test
+PROBE Absent statements=62 fullscan=72 sorts=13 reprepares=0
+PROBE Tables statements=67 fullscan=90 sorts=15 reprepares=0
+test probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

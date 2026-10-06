@@ -1,6 +1,8 @@
 //! One complete selected-profile Init; fresh database creation belongs to work.
 use layerfs_history::{HistoryCatalogConfig, HistoryName, LayerStackId};
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{
+    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+};
 use layerfs_project::{init, InitRequest};
 use layerfs_storage::{Storage, StoragePolicy};
 use layerfs_telemetry::timer::Timing;
@@ -37,19 +39,18 @@ fn allocated(_path: &Path) -> Result<u64, Box<dyn std::error::Error>> {
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Vec<_>>();
-    if !matches!(args.len(), 5..=7) {
+    if !matches!(args.len(), 4..=6) {
         return Err(
-            "source fresh-database scratch name [durable|disposable] [deadline-seconds] required"
-                .into(),
+            "source fresh-database name [durable|disposable] [deadline-seconds] required".into(),
         );
     }
-    let selected = match args.get(5).map(String::as_str).unwrap_or("durable") {
+    let selected = match args.get(4).map(String::as_str).unwrap_or("durable") {
         "durable" => SqlitePersistenceProfile::Durable,
         "disposable" => SqlitePersistenceProfile::Disposable,
         _ => return Err("explicit durable/disposable profile required".into()),
     };
     let deadline_seconds = args
-        .get(6)
+        .get(5)
         .map(|s| s.parse::<u64>())
         .transpose()?
         .unwrap_or(15);
@@ -58,7 +59,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let start = Instant::now();
     let handles = Handles::create(
-        PersistenceConfig::sqlite(&args[2]).with_sqlite_profile(selected),
+        PersistenceConfig::sqlite(&args[2])
+            .with_sqlite_profile(selected)
+            .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: b"layerfs-bench-pro".to_vec(),
@@ -75,9 +78,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &handles.history,
             InitRequest {
                 source: Path::new(&args[1]),
-                scratch_parent: Path::new(&args[3]),
+                acquisition: &handles.acquisition,
                 stack: LayerStackId::from_authority([0x41; 16]),
-                name: HistoryName::new(&args[4]).unwrap(),
+                name: HistoryName::new(&args[3]).unwrap(),
                 scope_seed: [0x42; 32],
                 deadline: start + Duration::from_secs(deadline_seconds),
             },

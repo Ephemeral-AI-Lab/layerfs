@@ -7,21 +7,20 @@ use layerfs_content::{
     build_filesystem, DirectoryUpdate, DiscardingConsumer, FilesystemInput, FilesystemObjects,
     FilesystemRead, FilesystemResources, InodeUpdate, LogicalPath,
 };
-use layerfs_history::{HistoryName, LayerStackId};
-use layerfs_project::{init, InitRequest, ProjectError};
-use layerfs_telemetry::timer::Timing;
 use std::{
     collections::{BTreeMap, VecDeque},
     fs,
     os::unix::{
         ffi::OsStrExt,
-        fs::{symlink, MetadataExt, PermissionsExt},
+        fs::{symlink, MetadataExt},
     },
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
-    time::{Duration, Instant},
 };
-use support::{memory_history::MemoryHistory, memory_metadata::MemoryMetadata, Fixture};
+use support::{
+    memory_acquisition::MemoryAcquisition, memory_history::MemoryHistory,
+    memory_metadata::MemoryMetadata, Fixture,
+};
 
 const WIDE: usize = 1300;
 
@@ -73,7 +72,7 @@ fn wide_nested_aliased_root_equals_the_whole_namespace_constructor() {
     for directory in ["wide/zz-dir", "empty", "a/b/c", "a/empty-too"] {
         fs::create_dir_all(source.join(directory)).unwrap();
     }
-    // Created in descending order: name order is the scratch's, not the host's.
+    // Created in descending order: name order is the backing's, not the host's.
     for n in (0..WIDE).rev() {
         let body = vec![(n % 251) as u8; n % 97 + 1];
         fs::write(source.join(format!("wide/n{n:05}")), body).unwrap();
@@ -96,12 +95,26 @@ fn wide_nested_aliased_root_equals_the_whole_namespace_constructor() {
     assert_eq!(work.regular_aliases, 2);
     assert_eq!(work.unique_files, WIDE + 2);
     assert_eq!(work.directory_bindings, expected.len() - 1);
+    assert_eq!(work.wide_directories, 1);
+    assert_eq!(work.child_window_rows, 512);
+    // One working row per entry and one per native identity, all removed.
+    assert_eq!(work.backing_rows, (expected.len() + WIDE + 2) as u64);
     assert!(work.backing_bytes > 0);
-    assert!(fs::read_dir(&fixture.path).unwrap().all(|entry| {
-        let name = entry.unwrap().file_name();
-        let name = name.to_string_lossy();
-        !name.starts_with("import-") && !name.starts_with("ordering-")
-    }));
+    let left: Vec<_> = fs::read_dir(&fixture.path)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(left, [std::ffi::OsString::from("input")]);
+
+    // The same source through read windows of 37 rows resumes every stream
+    // many times and derives the identical root.
+    let narrow = MemoryAcquisition::with_read_rows(37);
+    let other = support::storage(Arc::new(MemoryMetadata::default()));
+    let again = fixture.run_with(&other, &MemoryHistory::default(), &narrow);
+    assert_eq!(again.root, initialized.root);
+    assert_eq!(narrow.largest_windows().0, 37);
+    assert!(narrow.operations().is_empty());
+    assert!(again.namespace_work.read_units > 5 * work.read_units);
 
     // Read the published tree back and restate it as one whole-namespace input.
     let reader = store.reader().unwrap();
@@ -196,12 +209,12 @@ fn wide_nested_aliased_root_equals_the_whole_namespace_constructor() {
     );
 }
 
-/// Children whose records fill many sort chunks, so ordered runs are merged
-/// through more than one level before the directory is placed.
+/// Children that fill many read and write windows before the one directory
+/// is placed, with target bytes far larger than any window could hold.
 const VERY_WIDE: usize = 17_000;
 
 #[test]
-fn very_wide_directory_is_ordered_through_merged_runs() {
+fn very_wide_directory_is_ordered_through_many_windows() {
     let fixture = Fixture::new(0);
     let wide = fixture.source.join("wide");
     fs::create_dir(&wide).unwrap();
@@ -219,6 +232,10 @@ fn very_wide_directory_is_ordered_through_merged_runs() {
     assert_eq!(work.directory_children, VERY_WIDE);
     assert_eq!(work.directory_bindings, VERY_WIDE + 1);
     assert_eq!((work.jobs, work.unique_files), (0, 0));
+    assert_eq!(work.wide_directories, 1);
+    assert_eq!(work.backing_rows, VERY_WIDE as u64 + 2);
+    assert!(work.read_window_rows <= 512 && work.write_window_rows <= 4096);
+    assert!(work.write_window_bytes <= 1024 * 1024);
 
     let reader = store.reader().unwrap();
     let mut view = FilesystemRead::new(&reader, FilesystemRootId(initialized.root)).unwrap();
@@ -244,50 +261,4 @@ fn very_wide_directory_is_ordered_through_merged_runs() {
     let last = view.resolve(&LogicalPath::new(&last).unwrap()).unwrap();
     assert_eq!(last.value.kind, InodeKind::Symlink);
     println!("S9_BACKED_ACQUISITION_WIDE work={work:?}");
-}
-
-fn attempt(fixture: &Fixture, scratch_parent: &Path, history: &MemoryHistory) -> ProjectError {
-    let store = support::storage(Arc::new(MemoryMetadata::default()));
-    Timing::disabled("project.init", |scope| {
-        init(
-            &store,
-            history,
-            InitRequest {
-                source: &fixture.source,
-                scratch_parent,
-                stack: LayerStackId::from_authority([19; 16]),
-                name: HistoryName::new("main").unwrap(),
-                scope_seed: [29; 32],
-                deadline: Instant::now() + Duration::from_secs(60),
-            },
-            scope,
-        )
-    })
-    .0
-    .unwrap_err()
-}
-
-#[test]
-fn refused_source_removes_scratch_and_publishes_no_history() {
-    use layerfs_history::HistoryCatalog;
-    let fixture = Fixture::new(20);
-    // The portable regular-file grammar has no set-id bits; acquisition refuses
-    // the entry after earlier rows are already in backing.
-    let refused = fixture.source.join("d9/f0019");
-    fs::set_permissions(&refused, fs::Permissions::from_mode(0o4644)).unwrap();
-    let history = MemoryHistory::default();
-    let error = attempt(&fixture, &fixture.path, &history);
-    assert!(matches!(error, ProjectError::InvalidInput), "{error:?}");
-    let left: Vec<_> = fs::read_dir(&fixture.path)
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name())
-        .collect();
-    assert_eq!(left, [std::ffi::OsString::from("input")]);
-    let stack = LayerStackId::from_authority([19; 16]);
-    assert!(history.layer_stack(stack).unwrap().is_none());
-
-    // A missing scratch parent is one host failure before any source is read.
-    let error = attempt(&fixture, &fixture.path.join("absent"), &history);
-    assert!(matches!(error, ProjectError::Io(_)), "{error:?}");
-    assert!(history.layer_stack(stack).unwrap().is_none());
 }

@@ -137,6 +137,23 @@ for profile,names in SHARED_ALLOCATION_CASES_BY_PROFILE.items():
 # Rejected WAL-headroom experiment: immutable registry retained, no replay.
 RETIRED_WAL_RESERVATION_CASES=tuple(name for names in WAL_RESERVATION_CASES_BY_PROFILE.values() for name in names)
 
+# S9 A3 (2026-10-06): Init's input-sized working state moved from ordering-run
+# scratch files to provider rows in the measured Store. The driver takes no
+# scratch argument and creates a Store with the acquisition tables. That is a
+# different operation and Store format, so it has its own prospective
+# identities at the default 15s command and 9.5s proof budgets. Every earlier
+# Init identity keeps its receipts and cannot be sampled again in either arm:
+# its candidate vehicle no longer exists in source.
+ACQUISITION_VEHICLE='provider-sqlite-acquisition-rows-v1'
+ACQUISITION_STORE_SCHEMA='monolithic-with-acquisition-tables-user-version-4'
+RETIRED_RUN_BACKED_INIT=tuple(name for name,c in CASES.items() if c.fixture is not None)
+ACQUISITION_CASES_BY_PROFILE={'durable':[], 'disposable':[]}
+for profile in ACQUISITION_CASES_BY_PROFILE:
+    for n,fixture in zip((100,1000,10000,100000),init.CASES.values()):
+        new=f'phase7-sqlite-init-{n}-acquisition-v1' if profile=='durable' else f'phase7-sqlite-disposable-init-{n}-acquisition-v1'
+        CASES[new]=Case(new,fixture.id,None,None,15_000_000_000,9_500_000_000,profile)
+        ACQUISITION_CASES_BY_PROFILE[profile].append(new)
+
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"
@@ -203,12 +220,14 @@ def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pin
         return phase7_history.run(case,output,arm,baseline_root,common,corpus_root,reference_pins)
     if INIT_ALLOCATION_RULE is None:
         raise ValueError('prospective Init allocation contract is pending; no admission arm is authorized under a guessed gate')
+    if selection in RETIRED_RUN_BACKED_INIT:
+        raise ValueError('run-backed Init selection retired with its scratch vehicle; original receipts retained; use the acquisition case')
     if os.uname().sysname!='Darwin':raise ValueError('required SQLite full-sync profile and wait4 accounting are macOS-only')
     root=common.ROOT if arm=='candidate' else Path(baseline_root).resolve()
     if arm=='baseline' and (not root.is_relative_to(common.ROOT/'target/phase7-baseline') or subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()!=BASE or subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True)):
         raise ValueError('reference requires clean pinned owned checkout')
     out=common.owned(output);out.mkdir(parents=True)
-    record={'schema':'phase7-sqlite-step10-v2','case':case.id,'arm':arm,'status':'NOT_RUN','sample_count':0,'verification_status':'NOT_RUN','cache_status':'INCOMPLETE','cleanup':{'status':'NOT_RUN'},'comparison_scope':'inner complete product clock including fresh database create/open, real Init, required checkpoint and final close; external child wall reported separately','margin_arithmetic':'10*candidate_ns<=11*baseline_ns','cache_contract':contract.CACHE,'requested_profile':case.profile,'profile':PROFILE_IDS[case.profile] if arm=='candidate' else 'Phase4.5 MEMORY/OFF disclosed','command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'construction_workers':4,'environment_workers':1,'required_case_ids':WAL_RESERVATION_CASES_BY_PROFILE[case.profile] if case.id in WAL_RESERVATION_CASES_BY_PROFILE[case.profile] else SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] if case.id in SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] else OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] if case.id in OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] else REQUIRED_BY_PROFILE[case.profile],'allocation_rule':INIT_ALLOCATION_RULE}
+    record={'schema':'phase7-sqlite-step10-v2','case':case.id,'arm':arm,'status':'NOT_RUN','sample_count':0,'verification_status':'NOT_RUN','cache_status':'INCOMPLETE','cleanup':{'status':'NOT_RUN'},'comparison_scope':'inner complete product clock including fresh database create/open, real Init, required checkpoint and final close; external child wall reported separately','margin_arithmetic':'10*candidate_ns<=11*baseline_ns','cache_contract':contract.CACHE,'requested_profile':case.profile,'profile':PROFILE_IDS[case.profile] if arm=='candidate' else 'Phase4.5 MEMORY/OFF disclosed','command_budget_ns':case.command_budget_ns,'verification_budget_ns':case.verification_budget_ns,'construction_workers':4,'environment_workers':1,'acquisition_vehicle':ACQUISITION_VEHICLE if arm=='candidate' else 'reference driver at pinned base; no provider acquisition','store_schema':ACQUISITION_STORE_SCHEMA if arm=='candidate' else 'reference','required_case_ids':ACQUISITION_CASES_BY_PROFILE[case.profile] if case.id in ACQUISITION_CASES_BY_PROFILE[case.profile] else WAL_RESERVATION_CASES_BY_PROFILE[case.profile] if case.id in WAL_RESERVATION_CASES_BY_PROFILE[case.profile] else SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] if case.id in SHARED_ALLOCATION_CASES_BY_PROFILE[case.profile] else OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] if case.id in OWNER_CLOSURE_CASES_BY_PROFILE[case.profile] else REQUIRED_BY_PROFILE[case.profile],'allocation_rule':INIT_ALLOCATION_RULE}
     locks=[]
     try:
         for p in [common.RESULTS/'phase7-sqlite.lock']+([root/'target/phase7-sqlite.lock'] if arm=='baseline' else []):
@@ -237,7 +256,8 @@ def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pin
         scratch=out/'scratch';scratch.mkdir();env={**os.environ,'LAYERFS_CONSTRUCTION_WORKERS':'1','LAYERFS_HISTORY_CURSOR_KEY':'28'*32,'TMPDIR':str(scratch)}
         db=out/'store.sqlite';history=out/'history.sqlite'
         binaries=record['build']['binaries'];driver=binaries['benchmark_init' if arm=='candidate' else 'sqlite_reference_init']['path']
-        command=[driver,fixture['source'],str(db),str(scratch if arm=='candidate' else history),case.id]+([case.profile] if arm=='candidate' else [])
+        # The candidate holds acquisition rows in the measured Store; TMPDIR stays an empty observed directory.
+        command=[driver,fixture['source'],str(db),case.id,case.profile] if arm=='candidate' else [driver,fixture['source'],str(db),str(history),case.id]
         if case.command_budget_ns == 30_000_000_000: command.append(str(case.command_budget_ns//1_000_000_000))
         claim=common.RESULTS/'phase7-sqlite-sample-claims'/hashlib.sha256(json.dumps([case.id,arm,identity['source_tree'],identity['harness_seal'],record['measured_source_commit'],fixture['manifest_sha256']],sort_keys=True).encode()).hexdigest()
         claim.parent.mkdir(parents=True,exist_ok=True)
@@ -247,7 +267,7 @@ def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pin
         remaining=case.command_budget_ns-(time.monotonic_ns()-perf_start)
         if remaining<=0:record['status']='NOT_RUN';record['reason']='cold attestation exhausted complete performance command budget';return out
         sample=invoke(command,out,'driver',remaining,env,root);record['sample_count']=1;record['performance']=sample;record['comparison_ns']=sample['child'].get('operation_ns') if isinstance(sample['child'],dict) else None
-        record['storage']=contract.allocations([db] if arm=='candidate' else [db,history]);record['storage_bytes']=record['storage']['total_bytes'];record['cleanup']={'status':'PASS' if not list(scratch.iterdir()) and not list(out.glob('.layerfs-allocation-*')) else 'FAIL','scope':'measured child exited, ordering/allocation scratch empty, database evidence retained'};record['command_wall_ns']=time.monotonic_ns()-perf_start
+        record['storage']=contract.allocations([db] if arm=='candidate' else [db,history]);record['storage_bytes']=record['storage']['total_bytes'];record['cleanup']={'status':'PASS' if not list(scratch.iterdir()) and not list(out.glob('.layerfs-allocation-*')) else 'FAIL','scope':'measured child exited, TMPDIR and allocation scratch empty, database evidence retained'};record['command_wall_ns']=time.monotonic_ns()-perf_start
         child=sample['child']
         if sample['exit_code']!=0 or sample['timed_out'] or not isinstance(child,dict) or child.get('status')!='COMPLETE':record['status']='FAIL';return out
         record['status']='COMPLETE'

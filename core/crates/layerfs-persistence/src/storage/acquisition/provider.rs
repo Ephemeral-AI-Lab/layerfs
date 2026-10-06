@@ -13,7 +13,7 @@ use layerfs_content::ObjectId;
 use layerfs_storage::port::acquisition::{
     Abandoned, Acquisition, AcquisitionResult, AcquisitionWork, Begin, Directory, Discarded, Entry,
     EntryKey, FileRoot, Job, Limits, NewEntry, Owner, Phase, Placed, Unplaced, READ_WINDOW_ROWS,
-    WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
+    WRITE_ROW_BYTES, WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
 };
 use std::{
     path::PathBuf,
@@ -110,7 +110,7 @@ impl Acquisition for AcquisitionProvider {
 
     fn put_entries(&self, owner: Owner, entries: &[NewEntry]) -> AcquisitionResult<Vec<u64>> {
         let bytes = entries.iter().map(|entry| {
-            entry.key.name.len() + entry.native_path.as_ref().map_or(0, Vec::len) + 160
+            entry.key.name.len() + entry.native_path.as_ref().map_or(0, Vec::len) + WRITE_ROW_BYTES
         });
         bounded(entries.len(), bytes.sum())?;
         self.unit(owner, true, |tx| writes::put_entries(tx, owner, entries))
@@ -135,7 +135,9 @@ impl Acquisition for AcquisitionProvider {
         placed: &[Placed],
     ) -> AcquisitionResult<Vec<u64>> {
         let bytes = placed.iter().map(|child| {
-            child.name.len() + child.native.as_ref().map_or(0, |(_, path)| path.len()) + 96
+            child.name.len()
+                + child.native.as_ref().map_or(0, |(_, path)| path.len())
+                + WRITE_ROW_BYTES
         });
         bounded(placed.len(), bytes.sum())?;
         self.unit(owner, true, |tx| {

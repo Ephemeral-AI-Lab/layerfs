@@ -1,0 +1,187 @@
+{
+ "state": "S9 CHECKPOINT; incomplete. Plan package A3: Project's import runs on the acquisition port; run machinery removed. No cost is measured.",
+ "parent": "abdb322f42befdbaca9e4fc6d4592f3b39fecbc7",
+ "staged_crates_tree": "4f2b47d71fd87646870b37dcbe27c9f8ddb65d13",
+ "staged_harness_tree": "60237676704b0171fd264e68f1e822338395159a",
+ "toolchain": "host cargo +1.85.1; Docker linux/arm64 image sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6; rusqlite 0.40.2 bundled SQLite as locked",
+ "rustflags": "root .cargo/config.toml discovered from the repository root; no override",
+ "workers": "LAYERFS_CONSTRUCTION_WORKERS=1",
+ "cache": "uncontrolled; functional and count evidence only",
+ "wall_ceiling": "every test command under an explicit ceiling: 118 s or less on the host, 110 s inside Docker; none reached it",
+ "results": {
+  "host_project": "76 bodies pass (23-host-project-final), after one earlier failing invocation (01)",
+  "host_persistence": "96 bodies pass (07)",
+  "host_storage": "55 bodies pass (08)",
+  "host_sdk": "26 bodies pass (09)",
+  "host_workspace_test_build": "pass (22)",
+  "host_clippy_deny_warnings": "pass (21)",
+  "host_fmt_check": "pass (20)",
+  "boundary_guard": "pass, 646 production Rust/SQL files (24)",
+  "tooling_tests": "40 pass (25)",
+  "harness_phase7_tests": "34 run; 32 pass including the 2 added; 1 error and 1 failure from absent local prerequisites, identical before the edit (05, 06)",
+  "linux_clippy_deny_warnings": "pass (12) after one failure (11)",
+  "linux_test_build": "Project, Persistence, Storage pass (13)",
+  "linux_project": "73 bodies pass (14)",
+  "linux_persistence_whole_package": "FAILED, 3 bodies of history_allocation; not corrected, not shown to predate this change (15)"
+ },
+ "counts": {
+  "source": "[before, after] from Project init_sqlite DIAGNOSTIC lines: after from 23-host-project-final.log, before from checks/s9-acquisition-custody/11-host-final.log at the run-backed import. One run each; the 1000-file statement count differed by up to 12 between this checkpoint's own runs.",
+  "durable_1000_files_10_directories": {
+   "statements": [
+    15510,
+    18670
+   ],
+   "vm_steps": [
+    555981,
+    946888
+   ],
+   "fullscan_steps": [
+    72,
+    90
+   ],
+   "sorts": [
+    34,
+    36
+   ],
+   "autoindex_rows": [
+    0,
+    0
+   ],
+   "reprepares": [
+    3,
+    3
+   ]
+  },
+  "durable_100_files_10_directories": {
+   "statements": [
+    1883,
+    2297
+   ],
+   "vm_steps": [
+    64857,
+    107817
+   ],
+   "fullscan_steps": [
+    72,
+    90
+   ],
+   "sorts": [
+    16,
+    18
+   ],
+   "autoindex_rows": [
+    0,
+    0
+   ],
+   "reprepares": [
+    3,
+    3
+   ]
+  },
+  "init_1000_files_namespace_work": {
+   "entries": 1011,
+   "read_units": 30,
+   "write_units": 5,
+   "discard_units": 1,
+   "backing_rows": 2011,
+   "backing_bytes": 237832,
+   "read_window_rows": 512,
+   "write_window_rows": 1000,
+   "write_window_bytes": 272000
+  },
+  "provider_profile_statements_vm_steps": {
+   "write_2000": [
+    2009,
+    158296
+   ],
+   "write_20000": [
+    20025,
+    1580716
+   ],
+   "read_window_512": [
+    4,
+    9271
+   ],
+   "discard_job_512": [
+    6,
+    33438
+   ],
+   "fullscan_sorts_autoindex_reprepares": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  "fullscan_and_sort_increase": "constant 18 and 2; equal to the Store-creation difference in 10-create-probe, not to any Init unit",
+  "plans": "25 statements; EXPLAIN text identical to checks/s9-acquisition-provider/12-persistence-final.log"
+ },
+ "harness_registration": {
+  "family": "core/benchmark/fs-bench-pro/families/phase7_sqlite.py",
+  "vehicle": "provider-sqlite-acquisition-rows-v1",
+  "store_schema": "monolithic-with-acquisition-tables-user-version-4",
+  "new_cases": [
+   "phase7-sqlite-disposable-init-100-acquisition-v1",
+   "phase7-sqlite-disposable-init-1000-acquisition-v1",
+   "phase7-sqlite-disposable-init-10000-acquisition-v1",
+   "phase7-sqlite-disposable-init-100000-acquisition-v1",
+   "phase7-sqlite-init-100-acquisition-v1",
+   "phase7-sqlite-init-1000-acquisition-v1",
+   "phase7-sqlite-init-10000-acquisition-v1",
+   "phase7-sqlite-init-100000-acquisition-v1"
+  ],
+  "budgets_ns": {
+   "command": 15000000000,
+   "verification": 9500000000
+  },
+  "retired": "all 32 earlier Init selections, both arms; receipts retained",
+  "sampled": "none",
+  "not_touched": "runner.py init_namespace (retained SDK family) and families/init_namespace.py: they drive the SDK example, not Project's Init example"
+ },
+ "not_established": [
+  "time, pages, journal, synchronization, file growth, RSS or cold-cache behaviour",
+  "capacity failure and a quarantined SQLite Session through Init",
+  "greater-than-4 GiB native proof",
+  "host fencing and disposal of retained or abandoned operations (R3)",
+  "S9 qualification"
+ ],
+ "changed_sha256": {
+  "core/benchmark/fs-bench-pro/families/phase7_sqlite.py": "c83eda8f7f4729dc09aa557d64de0d80e2a25952a654ec11ea54007237f59557",
+  "core/benchmark/fs-bench-pro/tests/test_phase7_sqlite.py": "e8e6e9cea67600a262ab3f962ba60f47237d42904351bc435991f8f5cd93b87e",
+  "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/abandoned.sql": "56a6ed9517acc9dedd640246c0d20c4c3bcbdf5945e76de9496df993fec3422b",
+  "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/directories.sql": "7ffa33be48102fd2da35ebee960fd7b88d6e01cd7df8517d0c4491834cf1485b",
+  "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_entries.sql": "47c47bab0cde01e2d410be71624a1e924705354ad27800b9ba2f26f095e766dc",
+  "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_native.sql": "ea6ad40a4ed2efc5cbece8d204b02dab93b4859e67785329b137f146b988b33b",
+  "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/entries_first.sql": "317895b99aa141e54ad2d10e42e0c3bd4134da90c3e09fadc28938258e359daa",
+  "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/entries_next.sql": "26bc228b4033ac9f929bc4d0a1f1ab30c02864c03a8fc1c4bc8cab2e57ad54e2",
+  "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/file_roots.sql": "687d8e7cda397f536d613496b9c10355afa7addf5feb503e6146726a209bfad5",
+  "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/jobs.sql": "cf7e7546388e20ed0ac4a266899c1b5ad825267f293aeac6fbe0a6ab854abb8a",
+  "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/unplaced_first.sql": "a1d31c008c087f5ea9c077656ed57cdc235388a9c8abcdc7b0ca5319cfc5fee0",
+  "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/unplaced_next.sql": "0c322941cd5b66f7e650b185485d066b94b62efce61086e2ea7fc6c043a7edb8",
+  "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/statements.rs": "afe19c532d37bc889f733a69eb6937f3def3dd4efdaf81d180b1725f33327e12",
+  "core/crates/layerfs-persistence/src/storage/acquisition/provider.rs": "de8dafcb59c69f15be07ce2da7e23619c481ecb80e3ae0395bb15501161b3e73",
+  "core/crates/layerfs-persistence/tests/acquisition_units.rs": "e5a2af9ac95eee85fed8b8c4d86e508738783b90a0e6fbedeb5600c5a19ebf73",
+  "core/crates/layerfs-project/examples/benchmark_init.rs": "834c803e54943b9e8516bb6412712e07b3b6cda79d904db632a2bcad5d2702a7",
+  "core/crates/layerfs-project/src/import/backing.rs": "b5c493344c2562aefd01d4595f34d3c24bdfb9b443a05aedb16352e0ea5d1a51",
+  "core/crates/layerfs-project/src/import/error.rs": "1dbe21b6a9f27a32da110fed8fea1323185c59e298477016390b2a2bbfce308b",
+  "core/crates/layerfs-project/src/import/files.rs": "446baca2bf7cbc669253f7770ba35b7a321da40a548510bcac2dfe09e75e6ca8",
+  "core/crates/layerfs-project/src/import/init.rs": "ef3b8be1d19c40a198ea29522b9cacfbdc7ab8a4bd09761ad6b8ab223fafadcc",
+  "core/crates/layerfs-project/src/import/mod.rs": "f76b4d96e4ebc98cee9b2c47faba0e9061abb9973aa30d713e395cac288245af",
+  "core/crates/layerfs-project/src/import/namespace.rs": "c023283aef23011393042cffeaec3790c38429b4a29d4124d0192f4f872cdd80",
+  "core/crates/layerfs-project/src/import/runs.rs": "deleted",
+  "core/crates/layerfs-project/src/import/scan.rs": "439647932028718349c4cf4a874f7ab35df5af2d4c09de35bf163586a5a86b4a",
+  "core/crates/layerfs-project/src/import/scratch.rs": "deleted",
+  "core/crates/layerfs-project/src/import/source.rs": "baa6ec7fa49235dbad4060dd05bbe59000feb32cfa719b8fc16a29a02d30b18a",
+  "core/crates/layerfs-project/src/import/work.rs": "0f84d0d23bde8c969584d621674f3b5dc4268e5282609957ee1cee09465b8f79",
+  "core/crates/layerfs-project/src/lib.rs": "8cbed4e9b6a3c87e17fc251dcc80e380e7fa9a87cdfd8250fc8b30c20b1ad42d",
+  "core/crates/layerfs-project/tests/acquisition_custody.rs": "13be46c1871e719537a8c344140d4b608f32e7ba3baf6dc16dd4b7f44c8e0511",
+  "core/crates/layerfs-project/tests/backed_acquisition.rs": "1d9561856ea2cfcfe7fa8e9f2d75c3bd40ef7a7286665825a8f0e5c529793dd1",
+  "core/crates/layerfs-project/tests/complete_root.rs": "a7953d33e9115f8ff8e0dfb0e45916b6ad89be1defa30f928cc6aab35ebffa2a",
+  "core/crates/layerfs-project/tests/init_sqlite.rs": "f397afb667264be92745b08695c5dcc229e5308575d225b4abc6567805c7424f",
+  "core/crates/layerfs-project/tests/namespace_scaling.rs": "4b9288aae0f390acee11e1d4dd97abdc457349f027ad7f71c1f15deccb166202",
+  "core/crates/layerfs-project/tests/support/memory_acquisition.rs": "5974f9b0c48446daf4b6c44a692f2dec0f7e1626ebefd4b265bb638fd151cbda",
+  "core/crates/layerfs-project/tests/support/mod.rs": "d0f8b4952f986214759f39cef0ae405a18deb2072665819b0da0dcfba8b08ec8",
+  "core/crates/layerfs-storage/src/port/acquisition/contract.rs": "c448ea6d2eb78a8396a00424b8e20b6b6e440a5a0697ed8e234caf2b5f10779e",
+  "core/crates/layerfs-storage/src/port/acquisition/mod.rs": "a699ee14aad8a0b309086dec0f7f5c01cace5cc1d7475ef81d6f1cfb49fd0c64"
+ }
+}

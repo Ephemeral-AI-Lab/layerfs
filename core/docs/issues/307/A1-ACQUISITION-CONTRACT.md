@@ -384,4 +384,47 @@ from the text above in these respects, which supersede it:
   removed payload, not a boundary key and range delete.
 
 Section 7's flow, including constructing attribute and target roots during the
-scan, is still the A3 design and is not implemented.
+scan, was the A3 design at this point; section 11 records how A3 implemented it.
+
+## 11. A3 refinements (2026-10-06)
+
+A3 ported Project's import to the port and removed the run code. It is described
+in [backed initial acquisition](../../architecture/43-backed-initial-acquisition.md).
+It follows section 7 except in these respects, which supersede it:
+
+- **Release precedes publication.** Section 7 step 6 released the operation
+  record after `initialize_layerstack`. A3 releases it in step 5, directly after
+  the last removal job and before the tree Save is finished. Every backing unit
+  then precedes anything final, a successful Init leaves no row and no record,
+  and no failure can be reported for an Init whose stack is already published.
+  No consumer needed the record to outlive publication: a host that restarts
+  decides from history whether the stack exists.
+- **No routine phase record.** Init does not call `advance` on the success path.
+  Each call is a synchronized commit under Durable and nothing reads the value
+  while the owner lives. The phase stays `Scanning` until release. On a definite
+  failure Init records `Failed` once before removing its rows, so an operation
+  whose cleanup then fails is distinguishable from one whose owner vanished.
+- **Unknown outcomes are a separate result.** `ProjectError::Uncertain` carries
+  the cause and the owner and is returned without any further unit, including
+  the charge read. `ProjectError::Cleanup` is only a cleanup unit that failed.
+  Both carry `RetainedAcquisition` in place of the retired `RetainedScratch`.
+- **Old Stores.** Init on a version 1–3 Store is
+  `ProjectError::Acquisition(Persistence(BackendUnavailable))` from `begin`.
+- **Later-path recheck.** It streams `entries` once, with one `directory_path`
+  read per directory holding a later path and one `job` read per run of adjacent
+  later paths of one identity. It is skipped when the scan bound no later path.
+- **Wide directories construct attributes in host order.** Rows of a directory
+  wider than the child window are written as they are read, so their attribute
+  objects are accepted in `read_dir` order. Identities and the root do not
+  depend on that order; the physical order of those objects inside the
+  prerequisite Save does.
+- **Port additions.** `WRITE_ROW_BYTES` fixes the payload a caller is charged
+  per entry or placed row, and the provider charges placed rows the same
+  amount. Every window statement binds `LIMIT ?n+0`; see
+  [acquisition backing](../../architecture/44-acquisition-backing.md).
+- **Diagnostics.** `NamespaceWork` reports row, unit and window counts and the
+  charges cleanup removed. Its file-run capacity fields are gone.
+
+Not done by A3: capacity failure and a real quarantined Session through Init;
+any measurement; the host component that fences and disposes of a retained or
+abandoned operation (R3).

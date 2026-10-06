@@ -1,0 +1,44 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (core/target/cluster2-runtime-tests/debug/deps/layerfs_project-cffae0e2b52819f6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/acquisition_custody.rs (core/target/cluster2-runtime-tests/debug/deps/acquisition_custody-de71bfa684e1c05f)
+
+running 6 tests
+test backing_inside_source_is_refused_before_an_operation_begins ... ok
+test a_failed_cleanup_after_a_failure_keeps_both_causes ... ok
+test a_definite_failure_removes_its_rows_and_its_record ... ok
+test an_unknown_outcome_leaves_the_operation_untouched ... ok
+test a_backing_read_failure_is_definite_and_is_cleaned_up ... ok
+ACQUISITION_CUSTODY cleanup error=Persistence(Refused { status: "injected" }) retained=RetainedAcquisition { owner: Owner { operation: 1, epoch: 1 }, work: Some(AcquisitionWork { held_rows: 1915, held_bytes: 381085, peak_rows: 6011, peak_bytes: 1151272, removed_rows: 4096, removed_bytes: 770187 }) }
+test a_failed_cleanup_reports_its_cause_and_the_rows_still_held ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+
+     Running tests/backed_acquisition.rs (core/target/cluster2-runtime-tests/debug/deps/backed_acquisition-56c879d1d2910153)
+
+running 2 tests
+
+thread 'wide_nested_aliased_root_equals_the_whole_namespace_constructor' panicked at crates/layerfs-project/tests/backed_acquisition.rs:117:5:
+assertion failed: again.namespace_work.read_units > 10 * work.read_units
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test wide_nested_aliased_root_equals_the_whole_namespace_constructor ... FAILED
+S9_BACKED_ACQUISITION_WIDE work=NamespaceWork { unique_files: 0, regular_aliases: 0, entries: 17002, jobs: 0, frontier: 1, directory_children: 17000, wide_directories: 1, child_window_rows: 512, directory_bindings: 17001, read_units: 110, write_units: 13, read_window_rows: 512, write_window_rows: 4096, write_window_bytes: 679936, discard_units: 5, backing_rows: 17002, backing_bytes: 1326413 }
+test very_wide_directory_is_ordered_through_many_windows ... ok
+
+failures:
+
+failures:
+    wide_nested_aliased_root_equals_the_whole_namespace_constructor
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.26s
+
+error: test failed, to rerun pass `-p layerfs-project --test backed_acquisition`

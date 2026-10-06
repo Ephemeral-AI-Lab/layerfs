@@ -1,24 +1,26 @@
-//! One operator-bound directory scan into backed acquisition order.
+//! One operator-bound directory scan into the acquisition backing.
 //!
 //! Positions are assigned breadth first with each directory's children in name
-//! byte order, so a parent's children are contiguous and ordered. Entries, the
-//! directory frontier and regular-file identities are written to scratch runs;
-//! one directory stream and one fixed child buffer are resident, and a directory
-//! wider than that buffer is ordered by the backed sorter.
+//! byte order, so a parent's children are contiguous and ordered. Each observed
+//! child has its attribute root, and a symlink its target root, constructed as
+//! it is placed, so its row is written complete. One directory stream, one
+//! fixed child buffer and one write window are resident; a directory wider than
+//! the child buffer is written unpositioned and ordered by the backing.
+use crate::backing::{placed_bytes, window_full, Backing, Bound, Pending, Stamp, WINDOW_ROWS};
 use crate::error::content;
 use crate::error::ProjectError as Failure;
+use crate::metadata::build_metadata;
 use crate::namespace::ImportProgress;
-use crate::runs::{Cursor, Run, Sorter, Writer};
-use crate::scratch::{
-    by_identity, by_name, by_position, decode_frontier, frontier_record, pair_record, Child, Job,
-    Scratch, Stamp, WINDOW_ROWS,
-};
-use layerfs_content::{inode_leaf::InodeKind, PathName};
+use layerfs_content::filesystem::attributes::PortableMetadata;
+use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
+use layerfs_content::filesystem::FilesystemObjects;
+use layerfs_content::{inode_leaf::InodeKind, ObjectId, PathName};
+use layerfs_storage::port::acquisition::{EntryKey, NewEntry, Placed};
 use std::{
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     fs::{self, Metadata},
-    os::unix::ffi::OsStrExt,
-    path::Path,
+    os::unix::ffi::{OsStrExt, OsStringExt},
+    path::{Path, PathBuf},
 };
 
 /// What one completed scan placed in backing.
@@ -27,18 +29,8 @@ pub(crate) struct Scanned {
     pub entries: u64,
     /// True when at least one directory bound no child.
     pub childless: bool,
-    /// Every entry in position order.
-    pub entry_run: Run,
-}
-
-/// Regular-file identities after later paths were bound to their first.
-pub(crate) struct Identities {
-    /// First path of every native identity, in identity order.
-    pub jobs: Run,
-    /// Every later path with its first position, in position order.
-    pub aliases: Run,
-    /// First position and later-path count of each shared identity, by position.
-    pub counts: Run,
+    /// Later native paths that share an earlier path's regular-file identity.
+    pub aliases: usize,
 }
 
 /// Refuses a source that is not itself one real directory.
@@ -50,140 +42,258 @@ pub(crate) fn check_root(source: &Path) -> Result<Metadata, Failure> {
     Ok(metadata)
 }
 
-/// Positions being assigned while one directory's children are placed.
-struct Placement {
-    next: u64,
-    frontier: usize,
-    files: usize,
-    entries: Writer,
-    natives: Sorter,
+/// One observed directory child before it receives its acquisition position.
+struct Child {
+    name: Vec<u8>,
+    kind: InodeKind,
+    target: Option<Vec<u8>>,
+    stamp: Stamp,
 }
-impl Placement {
-    fn place(
-        &mut self,
-        scratch: &mut Scratch,
-        level: &mut Writer,
-        parent: u64,
-        directory: &Path,
-        child: &Child,
-    ) -> Result<(), Failure> {
-        let id = self.next;
-        self.next = id.checked_add(1).ok_or(Failure::Capacity)?;
-        self.entries.push(&child.entry(id, parent)?)?;
-        let path = directory.join(OsStr::from_bytes(&child.name));
-        match child.kind {
-            InodeKind::Directory => {
-                self.frontier += 1;
-                level.push(&frontier_record(id, &path))
-            }
-            InodeKind::RegularFile => {
-                self.files += 1;
-                let job = Job {
-                    id,
-                    canonical: id,
-                    path,
-                    stamp: child.stamp,
-                };
-                self.natives.push(scratch.backing(), &job.native_record())
-            }
-            InodeKind::Symlink => Ok(()),
+impl Child {
+    /// Portable mode: the symlink grammar fixes 0777; other kinds stay exact.
+    fn portable_mode(&self) -> Result<u32, Failure> {
+        let (mode, mask) = match self.kind {
+            InodeKind::Symlink => (0o777, 0o777),
+            InodeKind::Directory => (self.stamp.mode & 0o7777, 0o1777),
+            InodeKind::RegularFile => (self.stamp.mode & 0o7777, 0o777),
+        };
+        if mode & !mask != 0 || !(0..1_000_000_000).contains(&self.stamp.mtime_nsec) {
+            return Err(Failure::InvalidInput);
         }
+        Ok(mode)
     }
 }
 
-/// Returns the entries and the regular-file identities in identity order.
+/// Attribute and symlink-target construction into the prerequisite save.
+struct Roots<'o, 'p> {
+    objects: &'o mut FilesystemObjects<'p>,
+    // Adjacent equal portable fields have the same canonical metadata root.
+    // One slot avoids an entry-count-sized cache on heterogeneous imports.
+    previous: Option<((u8, u32, i64, u32), ObjectId)>,
+}
+impl Roots<'_, '_> {
+    /// The complete backing row of `child` under `directory`; refuses a
+    /// nonportable mode.
+    fn entry(
+        &mut self,
+        child: Child,
+        parent: Option<u64>,
+        position: Option<u64>,
+        directory: &Path,
+    ) -> Result<NewEntry, Failure> {
+        let nanos = child.stamp.mtime_nsec as u32;
+        let key = (
+            child.kind.code(),
+            child.portable_mode()?,
+            child.stamp.mtime,
+            nanos,
+        );
+        let metadata_root = match self.previous {
+            Some((previous, root)) if previous == key => root,
+            _ => {
+                let value = PortableMetadata {
+                    mode: key.1,
+                    mtime_seconds: key.2,
+                    mtime_nanoseconds: nanos,
+                };
+                let root = build_metadata(self.objects, child.kind, value)?;
+                self.previous = Some((key, root));
+                root
+            }
+        };
+        let target_root = match child.target {
+            Some(target) => {
+                let target = SymlinkTarget::new(target).map_err(content)?;
+                Some(emit_symlink(self.objects, target).map_err(content)?)
+            }
+            None => None,
+        };
+        let path = || match parent {
+            Some(_) => child_path(directory, &child.name),
+            None => directory.as_os_str().as_bytes().to_vec(),
+        };
+        let (native_path, native) = match child.kind {
+            InodeKind::Directory => (Some(path()), None),
+            InodeKind::RegularFile => (Some(path()), Some(child.stamp.identity())),
+            InodeKind::Symlink => (None, None),
+        };
+        Ok(NewEntry {
+            key: EntryKey {
+                parent,
+                name: child.name,
+            },
+            position,
+            kind: child.kind,
+            metadata_root,
+            target_root,
+            native_path,
+            native,
+        })
+    }
+}
+
+fn child_path(directory: &Path, name: &[u8]) -> Vec<u8> {
+    directory
+        .join(OsStr::from_bytes(name))
+        .into_os_string()
+        .into_vec()
+}
+
+/// Positions being assigned while directories are read.
+struct Placement {
+    next: u64,
+    frontier: usize,
+    bound: Bound,
+    pending: Pending,
+}
+impl Placement {
+    /// The next position, counted against the frontier when it is a directory.
+    fn assign(&mut self, kind: InodeKind) -> Result<u64, Failure> {
+        let id = self.next;
+        self.next = id.checked_add(1).ok_or(Failure::Capacity)?;
+        if kind == InodeKind::Directory {
+            self.frontier += 1;
+        }
+        Ok(id)
+    }
+}
+
+/// Places every entry of `source` in backing through the open prerequisite save.
 pub(crate) fn scan(
     source: &Path,
     root: &Metadata,
-    scratch: &mut Scratch,
+    backing: &Backing<'_>,
+    objects: &mut FilesystemObjects<'_>,
     progress: &mut ImportProgress,
-) -> Result<(Scanned, Run), Failure> {
+) -> Result<Scanned, Failure> {
+    let mut roots = Roots {
+        objects,
+        previous: None,
+    };
+    let mut placement = Placement {
+        next: 1,
+        frontier: 1,
+        bound: Bound::default(),
+        pending: Pending::default(),
+    };
     let root = Child {
         name: Vec::new(),
         kind: InodeKind::Directory,
         target: None,
         stamp: Stamp::of(root),
     };
-    let mut placement = Placement {
-        next: 1,
-        frontier: 1,
-        files: 0,
-        entries: Writer::new(scratch.backing())?,
-        natives: Sorter::new(by_identity, progress.deadline()),
-    };
-    placement.entries.push(&root.entry(0, 0)?)?;
-    let mut level = Writer::new(scratch.backing())?;
-    level.push(&frontier_record(0, source))?;
-    let mut level = level.finish()?;
-    let mut wide = Sorter::new(by_name, progress.deadline());
+    let root = roots.entry(root, None, Some(0), source)?;
+    placement
+        .pending
+        .push(backing, root, &mut placement.bound)?;
+    let mut directories = backing.directories();
     let mut childless = false;
     let mut buffer: Vec<Child> = Vec::new();
-    // One frontier run per depth: read to its end while the next is written.
-    while !level.is_empty() {
-        let mut deeper = Writer::new(scratch.backing())?;
-        let mut pending = Cursor::new(&level, decode_frontier);
-        while let Some((parent, directory)) = pending.next()? {
-            progress.work.frontier = progress.work.frontier.max(placement.frontier);
-            placement.frontier -= 1;
+    loop {
+        // A directory window is read only after every placed entry is written.
+        if directories.exhausted_window() {
+            placement.pending.flush(backing, &mut placement.bound)?;
+        }
+        let Some(directory) = directories.next()? else {
+            break;
+        };
+        progress.work.frontier = progress.work.frontier.max(placement.frontier);
+        placement.frontier -= 1;
+        progress.tick()?;
+        let parent = directory.position;
+        let path = PathBuf::from(OsString::from_vec(directory.native_path));
+        let (mut count, mut wide) = (0usize, false);
+        for child in fs::read_dir(&path)? {
             progress.tick()?;
-            let (mut count, mut spilled) = (0usize, false);
-            for child in fs::read_dir(&directory)? {
-                progress.tick()?;
-                let child = child?;
-                buffer.push(observe(&child.path(), child.file_name().as_bytes())?);
-                count += 1;
-                if buffer.len() == WINDOW_ROWS {
-                    // A wide directory is ordered in backing, not by a resident sort.
-                    for child in buffer.drain(..) {
-                        wide.push(scratch.backing(), &child.record()?)?;
-                    }
-                    spilled = true;
-                }
-            }
-            progress.work.directory_children = progress.work.directory_children.max(count);
-            progress.work.child_vector_bytes = progress
-                .work
-                .child_vector_bytes
-                .max(buffer.capacity() * std::mem::size_of::<Child>());
-            childless |= count == 0;
-            if spilled {
+            let child = child?;
+            buffer.push(observe(&child.path(), child.file_name().as_bytes())?);
+            count += 1;
+            if buffer.len() == WINDOW_ROWS {
+                // A wide directory is ordered by the backing, not by a resident sort.
+                wide = true;
+                progress.work.child_window_rows = WINDOW_ROWS;
                 for child in buffer.drain(..) {
-                    wide.push(scratch.backing(), &child.record()?)?;
-                }
-                let ordered = wide.finish(scratch.backing())?;
-                let mut children = Cursor::new(&ordered, Child::decode);
-                while let Some(child) = children.next()? {
-                    progress.tick()?;
-                    placement.place(scratch, &mut deeper, parent, &directory, &child)?;
-                }
-            } else {
-                buffer.sort_unstable_by(|a, b| a.name.cmp(&b.name));
-                for child in buffer.drain(..) {
-                    placement.place(scratch, &mut deeper, parent, &directory, &child)?;
+                    let entry = roots.entry(child, Some(parent), None, &path)?;
+                    placement
+                        .pending
+                        .push(backing, entry, &mut placement.bound)?;
                 }
             }
         }
-        progress.work.frontier_capacity_bytes = progress
-            .work
-            .frontier_capacity_bytes
-            .max(pending.resident_bytes());
-        drop(pending);
-        level = deeper.finish()?;
+        let work = &mut progress.work;
+        work.directory_children = work.directory_children.max(count);
+        work.child_window_rows = work.child_window_rows.max(buffer.len());
+        childless |= count == 0;
+        if wide {
+            work.wide_directories += 1;
+            for child in buffer.drain(..) {
+                let entry = roots.entry(child, Some(parent), None, &path)?;
+                placement
+                    .pending
+                    .push(backing, entry, &mut placement.bound)?;
+            }
+            placement.pending.flush(backing, &mut placement.bound)?;
+            place_wide(backing, parent, &path, &mut placement, progress)?;
+        } else {
+            buffer.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+            for child in buffer.drain(..) {
+                let id = placement.assign(child.kind)?;
+                let entry = roots.entry(child, Some(parent), Some(id), &path)?;
+                placement
+                    .pending
+                    .push(backing, entry, &mut placement.bound)?;
+            }
+        }
     }
     let work = &mut progress.work;
     work.entries = usize::try_from(placement.next).map_err(|_| Failure::Capacity)?;
-    work.jobs = placement.files;
-    let natives = placement.natives.finish(scratch.backing())?;
-    work.sort_capacity_bytes = work
-        .sort_capacity_bytes
-        .max(wide.resident_bytes())
-        .max(placement.natives.resident_bytes());
-    let scanned = Scanned {
+    work.unique_files = placement.bound.unique;
+    work.regular_aliases = placement.bound.aliases;
+    work.jobs = placement.bound.unique + placement.bound.aliases;
+    Ok(Scanned {
         entries: placement.next,
         childless,
-        entry_run: placement.entries.finish()?,
-    };
-    Ok((scanned, natives))
+        aliases: placement.bound.aliases,
+    })
+}
+
+/// Gives a wide directory's children their positions in name order, one
+/// bounded read window and one bounded write window at a time.
+fn place_wide(
+    backing: &Backing<'_>,
+    parent: u64,
+    directory: &Path,
+    placement: &mut Placement,
+    progress: &mut ImportProgress,
+) -> Result<(), Failure> {
+    let mut after: Option<Vec<u8>> = None;
+    let mut placed: Vec<Placed> = Vec::new();
+    let mut held = 0usize;
+    loop {
+        let window = backing.unplaced(parent, after.as_deref())?;
+        let Some(last) = window.last() else {
+            return backing.place(parent, &mut placed, &mut placement.bound);
+        };
+        after = Some(last.name.clone());
+        for child in window {
+            progress.tick()?;
+            let native = child
+                .native
+                .map(|identity| (identity, child_path(directory, &child.name)));
+            let child = Placed {
+                position: placement.assign(child.kind)?,
+                name: child.name,
+                native,
+            };
+            let bytes = placed_bytes(&child);
+            if window_full(placed.len(), held, bytes) {
+                backing.place(parent, &mut placed, &mut placement.bound)?;
+                held = 0;
+            }
+            held += bytes;
+            placed.push(child);
+        }
+    }
 }
 
 /// Observes one child without following it; an unsupported kind is refused.
@@ -206,67 +316,4 @@ fn observe(path: &Path, name: &[u8]) -> Result<Child, Failure> {
         target,
         stamp: Stamp::of(&metadata),
     })
-}
-
-/// Binds every later path of one native identity to its first entry, leaving
-/// one constructed regular file per `(dev, ino)`.
-pub(crate) fn group_aliases(
-    natives: Run,
-    scratch: &mut Scratch,
-    progress: &mut ImportProgress,
-) -> Result<Identities, Failure> {
-    let mut ordered = Cursor::new(&natives, Job::native);
-    let mut jobs = Writer::new(scratch.backing())?;
-    let mut aliases = Sorter::new(by_position, progress.deadline());
-    let mut counts = Sorter::new(by_position, progress.deadline());
-    // First position, its evidence and the later paths seen for it so far.
-    let mut first: Option<(u64, Stamp, u64)> = None;
-    let mut groups = 0;
-    loop {
-        let job = ordered.next()?;
-        progress.tick()?;
-        match (&mut first, &job) {
-            (Some((canonical, stamp, later)), Some(job))
-                if stamp.dev == job.stamp.dev && stamp.ino == job.stamp.ino =>
-            {
-                if *stamp != job.stamp {
-                    return Err(Failure::InvalidInput);
-                }
-                let alias = Job {
-                    id: job.id,
-                    canonical: *canonical,
-                    path: job.path.clone(),
-                    stamp: job.stamp,
-                };
-                aliases.push(scratch.backing(), &alias.alias_record())?;
-                *later += 1;
-                continue;
-            }
-            (Some((canonical, _, later)), _) if *later > 0 => {
-                counts.push(scratch.backing(), &pair_record(*canonical, *later))?;
-            }
-            _ => (),
-        }
-        let Some(job) = job else {
-            break;
-        };
-        jobs.push(&job.native_record())?;
-        first = Some((job.id, job.stamp, 0));
-        groups += 1;
-    }
-    let work = &mut progress.work;
-    work.unique_files = groups;
-    work.regular_aliases = work.jobs - groups;
-    work.job_capacity_bytes = ordered.resident_bytes();
-    drop(ordered);
-    let identities = Identities {
-        jobs: jobs.finish()?,
-        aliases: aliases.finish(scratch.backing())?,
-        counts: counts.finish(scratch.backing())?,
-    };
-    work.sort_capacity_bytes = work
-        .sort_capacity_bytes
-        .max(aliases.resident_bytes())
-        .max(counts.resident_bytes());
-    Ok(identities)
 }

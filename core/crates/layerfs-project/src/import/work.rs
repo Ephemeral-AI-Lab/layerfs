@@ -1,10 +1,12 @@
 //! Count-driven acquisition diagnostics; excludes opaque allocator/OS state.
-/// Backed row counts and high-water resident buffer capacities.
+/// Backed row counts, port unit counts and resident window high-water marks.
 ///
-/// Counts grow with the acquired root because they describe rows held in the
-/// operation's backed scratch. Capacity fields describe resident read buffers,
-/// queues and sort chunks. They exclude the owned names, targets and paths of
-/// rows being processed and do not establish a total importer memory bound.
+/// Counts grow with the acquired root because they describe rows held by the
+/// acquisition backing. Window fields describe the single resident read and
+/// write windows. They exclude the owned names and paths of rows being
+/// processed and do not establish a total importer memory bound. Backing
+/// charges are the provider's exact logical row and payload-byte charges; they
+/// are not pages, file growth or resident memory.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NamespaceWork {
     /// Distinct native regular-file identities constructed once.
@@ -13,32 +15,32 @@ pub struct NamespaceWork {
     pub regular_aliases: usize,
     /// Namespace entries placed in backing, including the root directory.
     pub entries: usize,
-    /// Largest resident read-buffer capacity of the entry and alias streams.
-    pub entry_capacity_bytes: usize,
-    /// Native regular-file paths placed in backing before alias grouping.
+    /// Native regular-file paths bound to an identity in backing.
     pub jobs: usize,
-    /// Job stream read-buffer capacity plus the fixed worker queue's slot bytes.
-    pub job_capacity_bytes: usize,
-    /// Maximum backed directory frontier length.
+    /// Most directories that were positioned in backing but not yet read.
     pub frontier: usize,
-    /// Read-buffer capacity of the one frontier depth being scanned.
-    pub frontier_capacity_bytes: usize,
-    /// Largest directory's child count; wide directories are ordered in backing.
+    /// Largest directory's child count.
     pub directory_children: usize,
-    /// Resident child buffer capacity bytes, at most one window of children.
-    pub child_vector_bytes: usize,
-    /// Always zero: serials are derived from backed order, never collected.
-    pub serial_capacity_bytes: usize,
-    /// Read-buffer capacities of the streams merged into the inode table.
-    pub inode_capacity_bytes: usize,
+    /// Directories wider than the resident child window, ordered in backing.
+    pub wide_directories: usize,
+    /// Most children resident at once while one directory was read.
+    pub child_window_rows: usize,
     /// Directory binding rows streamed into the sorted constructors.
     pub directory_bindings: usize,
-    /// Always zero: no directory update collection is resident.
-    pub directory_capacity_bytes: usize,
-    /// Always zero: bindings are streamed from backing, never collected.
-    pub change_capacity_bytes: usize,
-    /// Largest resident sort chunk plus merge buffers of any backed ordering.
-    pub sort_capacity_bytes: usize,
-    /// Largest simultaneous scratch run bytes the operation owned.
+    /// Read units made on the backing, each one bounded window.
+    pub read_units: u64,
+    /// Write units made on the backing before cleanup, each one bounded window.
+    pub write_units: u64,
+    /// Most rows any one read window returned.
+    pub read_window_rows: usize,
+    /// Most rows any one write window carried.
+    pub write_window_rows: usize,
+    /// Most charged payload bytes any one write window carried.
+    pub write_window_bytes: usize,
+    /// Budgeted removal units cleanup made.
+    pub discard_units: u64,
+    /// Working rows cleanup removed: every row the operation held.
+    pub backing_rows: u64,
+    /// Payload bytes of those rows, as the backing charged them.
     pub backing_bytes: u64,
 }
