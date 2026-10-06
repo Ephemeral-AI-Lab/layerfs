@@ -63,9 +63,7 @@ unused and are never recycled.
    Adjacent equal portable fields reuse one attribute root. A positioned regular
    file is bound to its native identity in the same unit; a later path whose
    evidence differs from the first is `InvalidInput`. The prerequisite Save is
-   kept open for the file construction phase. The Save's existing object/byte
-   waves publish normally and remain bounded; the whole scan is never retained
-   as one publication or one transaction.
+   finished after the scan.
 3. **Files.** The owning thread feeds the 512-slot queue from the identity stream
    to the four Namespace Init constructors and alone accepts objects into the
    Save. A constructor hands over its pending batch before it waits. Completed
@@ -74,13 +72,6 @@ unused and are never recycled.
    When the scan bound at least one later path, entries are streamed once and
    each later path is rechecked against its identity's evidence; later paths of
    one directory share one path read. A root with no later path makes no such pass.
-   The shared prerequisite Save is then finished before inode reservation or tree
-   construction. This 2026-10-06 correction removes the small scan-only final
-   publication when its objects fit in the next ordinary wave. It preserves
-   per-wave rollback/unknown custody, the single accepting owner, file checks and
-   bounded construction queues. On an earlier file failure, unflushed scan
-   objects may now be discarded with that Save; already published objects remain
-   valid. No history exists in either case, and backing settlement is unchanged.
 4. **Tree.** After `reserve_inodes`, entries stream by key: each parent's group
    goes into `build_directory` and its root is recorded in write windows.
    Directories that bound nothing share one `empty_directory` root. A second

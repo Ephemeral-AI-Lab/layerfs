@@ -1,0 +1,51 @@
+{
+  "rejected_experiment": "3d40600be7654d08e737b43058d62247e108dc73",
+  "restore_product": "9b74ac035faaf271edd01726913f63f084adaaa2",
+  "reason": "single qualified experimental checkpoint did not improve complete product latency/allocation; all outcomes retained, no causal/repeatability claim",
+  "files": [
+    {
+      "path": "core/crates/layerfs-project/src/import/init.rs",
+      "experimental_sha256": "558a63045b5b5aa9157780a5f7e01a94eb82cce549ff933e588eac4b8351bea3",
+      "restored_sha256": "ef3b8be1d19c40a198ea29522b9cacfbdc7ab8a4bd09761ad6b8ab223fafadcc",
+      "exact_snapshot": "9b74ac035faaf271edd01726913f63f084adaaa2"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/save/operation.rs",
+      "experimental_sha256": "54a4760c510913f4f999f23a13016d230f6cd4f8bc1275fffc65c4c3c64ee5e6",
+      "restored_sha256": "587226e762a8a3761bdcb0754f5043b37b640b9378cc3ff7bafc7f8faeb39632",
+      "exact_snapshot": "9b74ac035faaf271edd01726913f63f084adaaa2"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/save/wave.rs",
+      "experimental_sha256": "678c90d017c6cb2357898e1170522590bc7a541f81726e21be204edd880ada6a",
+      "restored_sha256": "d2563eb7d573d9e27206c70ebb0b4efc4402fd4c0c16c525dec54173ac91afba",
+      "exact_snapshot": "9b74ac035faaf271edd01726913f63f084adaaa2"
+    },
+    {
+      "path": "core/crates/layerfs-project/tests/init_memory.rs",
+      "experimental_sha256": "bea9ee8307dc7654021d48add2ae447391975a93858727bb1dddd0f805657db9",
+      "restored_sha256": "6dab2be1b935bade97ea1f11a8cb09baafd820061df2e66012098365c76dd407",
+      "exact_snapshot": "9b74ac035faaf271edd01726913f63f084adaaa2"
+    },
+    {
+      "path": "core/crates/layerfs-persistence/tests/sqlite_transaction_units.rs",
+      "experimental_sha256": "bfe52d9b5c06db3a9e2fe1461bf4d63f89a2a00e0aab9528d13eb23fa3181e14",
+      "restored_sha256": "c93e7048cdd4d4f501e53ca98e97818bfd9672ddaa7f5e49c2368ee7982279ca",
+      "exact_snapshot": "9b74ac035faaf271edd01726913f63f084adaaa2"
+    },
+    {
+      "path": "core/docs/architecture/13-physical-writing.md",
+      "experimental_sha256": "5bb1306a7f7659a1de425ad23cf0f4f6eb4076bfff44dad1a5d34a54941ac378",
+      "restored_sha256": "d039a67390004bc0bbe4bf34cd9a66375c5f818b6e20248b2c7ecad9875b021c",
+      "exact_snapshot": "9b74ac035faaf271edd01726913f63f084adaaa2"
+    },
+    {
+      "path": "core/docs/architecture/43-backed-initial-acquisition.md",
+      "experimental_sha256": "d31b16d46a8f6251f1e01e4cd4c0a65eff4e6a546d30ba151a55e22c3224573d",
+      "restored_sha256": "991e9cbb6d3bb5f4e8905d29cb5368744946c05ed4e75a1a2bcc443ebfc0316f",
+      "exact_snapshot": "9b74ac035faaf271edd01726913f63f084adaaa2"
+    }
+  ],
+  "unchanged_passing_evidence_reuse": "9b74ac035 host260/Linux128, Clippy/fmt/guard; exact restored product/test snapshots, no unchanged test or performance rerun",
+  "kept_diagnostic_example": "extended read-only publication EXPLAIN example is outside production and does not alter benchmark driver or libraries"
+}

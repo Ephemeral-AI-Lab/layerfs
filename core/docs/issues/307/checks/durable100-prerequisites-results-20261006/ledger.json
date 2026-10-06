@@ -1,0 +1,148 @@
+{
+  "source_commit": "3d40600be7654d08e737b43058d62247e108dc73",
+  "source_tree": "a95e76c6279080746faac8039c79d3fa09935974",
+  "gate": "10*candidate_product_ns <= 11*reference_product_ns; final allocation <= reference",
+  "budgets_ns": {
+    "performance": 30000000000,
+    "proof": 19000000000,
+    "build": 30000000000
+  },
+  "reference_reuse": "original eligible7edddbdb8 reference, unchanged and reverified; no resample",
+  "pairs": [
+    {
+      "case": "phase7-sqlite-init-100-acquisition-v2",
+      "profile": "durable",
+      "joint_gate": "FAIL",
+      "speed_gate": "FAIL",
+      "storage_gate": "PASS",
+      "root_equal": true,
+      "reference_product_ns": 41992917,
+      "candidate_product_ns": 104343333,
+      "candidate_reference_ratio": 2.48478411252069,
+      "speed_operands": [
+        1043433330,
+        461922087
+      ],
+      "reference_allocation_bytes": 7372800,
+      "candidate_allocation_bytes": 5304320,
+      "allocation_breakdown": {
+        "files": [
+          {
+            "allocated_bytes": 5271552,
+            "length_bytes": 5271552,
+            "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-prerequisites-20261006-phase7-sqlite-init-100-acquisition-v2-candidate/store.sqlite"
+          },
+          {
+            "allocated_bytes": 0,
+            "length_bytes": 0,
+            "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-prerequisites-20261006-phase7-sqlite-init-100-acquisition-v2-candidate/store.sqlite-wal"
+          },
+          {
+            "allocated_bytes": 32768,
+            "length_bytes": 32768,
+            "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/durable100-prerequisites-20261006-phase7-sqlite-init-100-acquisition-v2-candidate/store.sqlite-shm"
+          }
+        ],
+        "scope": "database/WAL/SHM at this observation; not an unobserved peak",
+        "total_bytes": 5304320
+      },
+      "complete_performance_ns": 1508155583,
+      "proof_ns": 663214250,
+      "build_ns": 5433663667,
+      "driver_cpu_ns": 78925000,
+      "driver_lifetime_rss_bytes": 39895040,
+      "bootstrap_ns": 27879125,
+      "init_ns": 73418000,
+      "checkpoint_ns": 2704875,
+      "close_ns": 309375,
+      "oracle": {
+        "directories": 2,
+        "discovered_files": 100,
+        "manifest_bytes": 5000000,
+        "manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+        "metadata_attribute_waves": 5,
+        "paths": 102,
+        "root": "ca1c20f806277e3fb0447ef526a5ca8d298753d01667f501e8b58b6350cd86f1",
+        "sample_policy": "stride64-size-log2-endpoints-v1",
+        "sampled_bytes": 3354003,
+        "sampled_files": 53,
+        "status": "PASS",
+        "workers": 4
+      },
+      "sql": {
+        "statements": 265,
+        "vm_steps": 89285,
+        "fullscan_steps": 245,
+        "sorts": 16,
+        "autoindex_rows": 0,
+        "reprepares": 3,
+        "write_transactions": 16,
+        "statement_ns": 71441164,
+        "commit_ns": 58336547
+      },
+      "binaries": {
+        "benchmark_init": {
+          "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/cc2eedf2fb120d00a07448e231cbd45b75b0aebb2089826d305fda788a17bb3b/benchmark_init",
+          "sha256": "cc2eedf2fb120d00a07448e231cbd45b75b0aebb2089826d305fda788a17bb3b"
+        },
+        "verify_namespace": {
+          "path": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/28450befc347013a434f8b68c2e6df2f92abec80ad1ff9e8313c568df1b1dec8/verify_namespace",
+          "sha256": "28450befc347013a434f8b68c2e6df2f92abec80ad1ff9e8313c568df1b1dec8"
+        }
+      },
+      "candidate_seals": {
+        "product_seal": "27850ff17a1b22c4bf166946d3e9c6023623565b8f9b4f61e0e308f3fbcc5434",
+        "shipped_sql_seal": "d264d873afb975aa682397b807efc4145e799370e7abab3c0868da28c084d2a1",
+        "compilation_seal": "623ebe785d09a3c89649a3bf0fee875eed546e6856ba3bb72a99f791f9feca0b",
+        "dependency_seal": "04db4f6e7264765d6c069ab71fbb49099c19f83385839cc35c6991cb7158ebb9",
+        "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+      },
+      "effective_profile": {
+        "cache_size": -2048,
+        "checkpoint_fullfsync": 1,
+        "foreign_keys": 1,
+        "fullfsync": 1,
+        "identity": "sqlite-wal-full-macos-fullfsync-v1",
+        "journal_mode": "wal",
+        "mmap_size": 0,
+        "page_size": 4096,
+        "synchronous": 2,
+        "temp_store": 2,
+        "wal_checkpoint_performed": true
+      },
+      "competing_work": [
+        "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+        "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+        "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+        "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+        "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+        "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+      ],
+      "reference_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/init-acquisition-benchmark-20261006/raw/phase7-sqlite-init-100-acquisition-v2-baseline/receipt.json",
+      "candidate_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/durable100-prerequisites-results-20261006/raw/phase7-sqlite-init-100-acquisition-v2/receipt.json"
+    }
+  ],
+  "NOT_RUN": [
+    "phase7-sqlite-init-1000-acquisition-v2",
+    "phase7-sqlite-init-10000-acquisition-v2",
+    "phase7-sqlite-init-100000-acquisition-v2",
+    "phase7-sqlite-disposable-init-100-acquisition-v2",
+    "phase7-sqlite-disposable-init-1000-acquisition-v2",
+    "phase7-sqlite-disposable-init-10000-acquisition-v2",
+    "phase7-sqlite-disposable-init-100000-acquisition-v2"
+  ],
+  "v1": "all eight unsampled, original15/9.5s limits retained",
+  "limits": [
+    "distinct competitive MEMORY/OFF split reference versus Monolithic Durable WAL/FULL/fullfsync candidate",
+    "metadata residency unobserved",
+    "lifetime RSS not phase/system peak",
+    "final allocation not peak",
+    "independent verifier sampled payload",
+    "no S7/S9 runtime/resource closure"
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "files": {
+    "build.stderr": {
+      "bytes": 915,
+      "sha256": "41a33aeec62d6253cce07d904b51b4d1777b71fe46b121b64707a06931e8c6ae"
+    },
+    "build.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cold.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cold.stdout": {
+      "bytes": 332,
+      "sha256": "981341c82a53dd6879b082412174e665055084bb5b8b8a28604c104dd3bc0515"
+    },
+    "driver.stderr": {
+      "bytes": 8641,
+      "sha256": "6b2e8bcd76eaab90fb07d75710b7ffbfd291c8a5d1e73f28028b724e9ec5d128"
+    },
+    "driver.stdout": {
+      "bytes": 279,
+      "sha256": "19f1df3812debcd2599f8024303d670b6c00e00d740d8a7fa3dbe7afebb7088c"
+    },
+    "receipt.json": {
+      "bytes": 14341,
+      "sha256": "73569dc72619c9304e7deb4ff9ef64cc08c220592ceb72d3db73b8a54b487a92"
+    },
+    "store.sqlite": {
+      "bytes": 5271552,
+      "sha256": "b583f9bce599e3dfb346d5e177592d08dcdc49b639a95df32cf56f0cefc15940"
+    },
+    "store.sqlite-shm": {
+      "bytes": 32768,
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+    },
+    "store.sqlite-wal": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "verifier.stderr": {
+      "bytes": 120,
+      "sha256": "d76aa0600bacac5be5dd103f3f51e98c13cad82e15cd068cb60eca2835ad6fa6"
+    },
+    "verifier.stdout": {
+      "bytes": 387,
+      "sha256": "a32c8277e8abc04390ebba2847145307753df7d2bb376059fff0cc0f153b3763"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

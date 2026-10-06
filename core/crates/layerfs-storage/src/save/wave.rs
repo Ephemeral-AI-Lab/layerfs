@@ -33,12 +33,6 @@ impl State<'_> {
         Ok(())
     }
     pub(super) fn wave(&mut self, objects: Vec<FinalizedObject>) -> StorageResult<()> {
-        self.prepare_wave(objects)?;
-        self.register_ready()
-    }
-    /// Prepares one bounded wave. The final drain closes its remaining groups
-    /// before publication; ordinary acceptance waves publish immediately.
-    pub(super) fn prepare_wave(&mut self, objects: Vec<FinalizedObject>) -> StorageResult<()> {
         if objects.is_empty() {
             return Ok(());
         }
@@ -117,7 +111,7 @@ impl State<'_> {
         // closure or finish requires them. Ready packs still publish this wave.
         self.flush_signatures()?;
         drop(flush);
-        Ok(())
+        self.register_ready()
     }
     pub(super) fn flush_signatures(&mut self) -> StorageResult<()> {
         let view = WaveSource {

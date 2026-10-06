@@ -59,7 +59,7 @@ impl<'a> Save<'a> {
         }
         let mut state = self.state.borrow_mut();
         let objects = state.pending.drain();
-        state.prepare_wave(objects)?;
+        state.wave(objects)?;
         let closing = state.storage.work.span(super::Stage::FinishClose);
         state.finishing = true;
         if state.packer.unfinished() {

@@ -1,0 +1,6 @@
+{
+  "product_seal": "44f07dd216a13d3103440b15b6d295a026ee80878f6e572e468855f27e2e74c5",
+  "exact_match_to_measured_9b74ac035": true,
+  "scope": "same unchanged phase7 runner product scope; all production Rust and shipped SQL including application adapters",
+  "compilation_scope_difference": "retained extended diagnostic EXPLAIN example only; no new performance qualification inferred"
+}
