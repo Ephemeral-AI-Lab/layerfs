@@ -1,0 +1,107 @@
+{
+  "parent": "4090cb9a2d5fa1cd899d63c7a44537ff3f23e3cd",
+  "source_tree": "821aafb81824801e4f0744d24168744a0ab10533",
+  "root_reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+  "product_trees_equal": true,
+  "before_receipt": "../r4-upstream-20261007/38-committed-verification.json",
+  "before_counts": {
+    "combined": 162906,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/tmprztc5t8e",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 6880,
+          "layerfs-bridge": 1259,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 14561,
+          "layerfs-daemon": 2296,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 817,
+          "layerfs-overlay": 6567,
+          "layerfs-persistence": 6706,
+          "layerfs-project": 1562,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9336,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 2369,
+          "layerfs-workspace-legacy": 26835
+        },
+        "files": 685,
+        "lines": 97489
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "staged_counts": {
+    "combined": 162906,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/tmper0f95n_",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 6880,
+          "layerfs-bridge": 1259,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 14561,
+          "layerfs-daemon": 2296,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 817,
+          "layerfs-overlay": 6567,
+          "layerfs-persistence": 6706,
+          "layerfs-project": 1562,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9336,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 2369,
+          "layerfs-workspace-legacy": 26835
+        },
+        "files": 685,
+        "lines": 97489
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "exact same product roots as first parent; reused immutable committed before count; git archive final staged crates core/crates and unchanged tools/production_loc.py --root ARCHIVE --json",
+  "comparison": {
+    "before": 162906,
+    "after": 162906,
+    "delta": 0
+  },
+  "scope": "product Rust and shipped SQL including excluded predecessors; tests/inline tests/docs/tools/harness/third-party excluded"
+}

@@ -1,6 +1,6 @@
 # Provisioned upstream and bounded page-cache checkpoint
 
-> Status: component checkpoint prepared against `86f766750029ab7f4224b587e0f20a7779813e89`.
+> Status: component checkpoint committed at `4090cb9a2d5fa1cd899d63c7a44537ff3f23e3cd`, first parent `86f766750029ab7f4224b587e0f20a7779813e89`.
 > S0/S7–S13 remain incomplete. Functional evidence only; no performance sample.
 
 This continues the [S7–S13 plan](IMPLEMENTATION-PLAN-S7-S13-20261007.md) through
@@ -130,3 +130,13 @@ resampling/waiver. Next ready work is lazy Plan, indexed Content backing in exis
 Overlay, sparse/captured normalization and native F0/F1. Pinned fuser INTERRUPT is
 an exact public-interface gap; timestamp-only exception is not extended.
 S0/S7–S13 stay unchecked and the active full goal continues.
+
+## Post-commit confirmation
+
+[Verification](checks/r4-upstream-20261007/38-committed-verification.json) confirms
+root tree `e86ff6f6d91a2707fe59bdf4d7187a9514678ed3`, exact staged source and
+recomputed committed counts. Separate [S7 comment](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6025181756)
+and [S9 comment](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6025188711)
+record the boundary; [comment-body receipts](checks/r4-upstream-20261007/39-tracker-receipts.json)
+confirm the issue checklist is unchanged. These later receipts will be retained
+by the next checkpoint without altering this committed evidence identity.

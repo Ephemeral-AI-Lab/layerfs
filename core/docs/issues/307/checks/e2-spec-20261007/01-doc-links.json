@@ -1,0 +1,13 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/target/cluster2-307/check_e2_spec_docs.py"
+  ],
+  "wall_timeout_s": 60,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 82290542,
+  "kind": "E2 prospective specification and R4 postcommit receipt local links",
+  "workers": 1
+}

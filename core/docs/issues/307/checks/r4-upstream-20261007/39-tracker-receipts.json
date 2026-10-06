@@ -1,0 +1,23 @@
+{
+  "source_commit": "4090cb9a2d5fa1cd899d63c7a44537ff3f23e3cd",
+  "source_tree": "821aafb81824801e4f0744d24168744a0ab10533",
+  "issue": 307,
+  "comments": [
+    {
+      "scope": "s7",
+      "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6025181756",
+      "body_sha256": "9846b4b27e2913e7806248db684a03fc0f23e7be2e7b6b7699fb1af8adea8dbd",
+      "attempts": 1
+    },
+    {
+      "scope": "s9",
+      "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6025188711",
+      "body_sha256": "1d0e58504164ca510e5786674a58f376d5b1212068db4a38422ab99ceda1f897",
+      "attempts": 1
+    }
+  ],
+  "issue_body_unchanged": true,
+  "issue_body_sha256": "60eaa1dd5fcbb7ad7fc3a64bb2d754ba25feb25aa7b3971fa91a4529b474e412",
+  "checklist": "S1-S6 checked; S0/S7-S13 unchecked",
+  "push_release_deploy": "not performed"
+}
