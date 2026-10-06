@@ -688,3 +688,31 @@ name)`, selects new schema versions 4–6 rather than changing 1–3, and keeps
 working-row cleanup before publication. Its section 9 holds two owner decisions
 that gate A2. The current baseline is core 92797 + reference 65417 = combined
 158214. A2, A3, R1–R4, E1–E4, Q1 and C1 remain open; S7/S9 remain incomplete.
+
+## 11. A2 delivered (2026-10-06)
+
+Owner decisions: acquisition tables opt-in at Store creation (versions 4–6);
+Init on a version 1–3 Store after A3 is a typed refusal; no upgrade operation.
+
+A2 source: `18ac1d9e52fb51d12509235cdc2aa5c241674cb1`, tree
+`129e9cf46cb21acd0d679d5635aa12faa9817b6e`, first parent
+`bc91285ac5f2625db9b876e682d13b61f5978a47`. Production LOC core 92797 → 94156
+(+1359), reference 65417 → 65417 (+0), combined 158214 → 159573 (+1359), verified
+against the staged tree; [receipt](checks/s9-acquisition-provider/committed-loc.json).
+The Storage port, the three shared tables, 25 shipped statements, the provider
+and the plan diagnostic exist and are covered through the public API on real
+Stores; see [acquisition backing](../../architecture/44-acquisition-backing.md)
+and the [receipts](checks/s9-acquisition-provider/identity.json).
+
+A2's acceptance row is met for the provider itself: the initialized database
+and shared tables are reused, jobs are bounded keyset windows, cleanup removes
+operation rows without dropping tables, original errors are typed, and every
+statement has a product-build plan with a correlated count profile. It is not
+met for Project, which does not call the port yet, and no cost beyond statement
+and VM-step counts is measured. The current baseline is core 94156 + reference
+65417 = combined 159573.
+
+Next ready: A3 (port scan, jobs, aliases and roots to the port following A1
+section 7; add the external memory port for Project's tests; remove
+`import/runs.rs` and the file-run parts of `import/scratch.rs`; replace
+`InitRequest::scratch_parent`), then R1 and E1. S7/S9 remain incomplete.

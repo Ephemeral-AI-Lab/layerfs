@@ -294,3 +294,39 @@ no speed, RSS or cold claim. [Identity](checks/s9-acquisition-custody/identity.j
 compatibility and cleanup design. It is a proposal: no port, table or provider
 exists. Two Store-format decisions in its section 9 are the owner's and gate A2.
 A2, A3, R1–R4, E1–E4 and Q1 are not started. S9 remains CHECKPOINT/unchecked.
+
+## Provider-owned acquisition backing, A2 (2026-10-06)
+
+Source `18ac1d9e52fb51d12509235cdc2aa5c241674cb1`, tree
+`129e9cf46cb21acd0d679d5635aa12faa9817b6e`, first parent `bc91285ac`. Production LOC
+core 92797 → 94156 (+1359: Persistence +1120 including shipped SQL, Storage
++239), reference 65417 → 65417 (+0), combined 158214 → 159573 (+1359);
+[committed LOC receipt](checks/s9-acquisition-provider/committed-loc.json).
+
+Owner decisions of 2026-10-06 are applied: the acquisition tables are opt-in at
+Store creation as schema versions 4–6, versions 1–3 are unchanged, and there is
+no migration. The port, tables, statements, provider and plan diagnostic are
+described in [acquisition backing](../../architecture/44-acquisition-backing.md),
+and A2's departures from the A1 text are listed in
+[A1 section 10](A1-ACQUISITION-CONTRACT.md).
+
+Host: Persistence 96, Storage 55, Project 71 and SDK 26 bodies pass; whole-
+workspace test build, Clippy, fmt, boundary guard (647 files) and 40 tooling
+tests pass. Docker Linux: Storage/Persistence/Project Clippy and test build
+pass; the acquisition tests execute **0 bodies** there because the global Store
+is macOS-only. No test reached its ≤118 s ceiling and none failed in this
+package. [Identity, plans and profile counts](checks/s9-acquisition-provider/identity.json).
+
+Established: exact version/table/definition validation with tamper refusal;
+acquisition order, identity sharing and wide-directory placement through the
+public port; charges equal to the engine's own sums; budgeted cleanup to zero;
+owner fencing; explicit abandoned-operation handling; all 25 product-build
+plans are key or index searches; window statement and VM-step counts do not
+change between 2000 and 20000 stored entries.
+
+Not established: any time, page, journal or synchronization cost; capacity and
+uncertain-outcome behaviour; frozen window values; cross-thread contention;
+anything about a real acquisition, because **Project still runs on file
+ordering runs**. Review finding 1 is therefore not yet corrected. A3 (port
+Project, remove run machinery, retire `scratch_parent`), R1–R4, E1–E4, Q1 and
+C1 remain open. S9 remains CHECKPOINT/unchecked.
