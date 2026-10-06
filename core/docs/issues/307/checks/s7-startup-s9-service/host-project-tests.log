@@ -1,0 +1,35 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.57s
+     Running unittests src/lib.rs (core/target/cluster2-runtime-tests/debug/deps/layerfs_project-cffae0e2b52819f6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/complete_root.rs (core/target/cluster2-runtime-tests/debug/deps/complete_root-7bc313d53b4b8645)
+
+running 2 tests
+
+thread 'native_import_keeps_ignored_git_dependencies_outputs_and_exact_link_targets' panicked at crates/layerfs-project/tests/support/mod.rs:76:10:
+called `Result::unwrap()` on an `Err` value: Content(InvalidRecord("portable metadata"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test native_import_keeps_ignored_git_dependencies_outputs_and_exact_link_targets ... FAILED
+
+thread 'real_host_profiles_acquire_and_reuse_the_exact_complete_root' panicked at crates/layerfs-project/tests/support/mod.rs:76:10:
+called `Result::unwrap()` on an `Err` value: Content(InvalidRecord("portable metadata"))
+test real_host_profiles_acquire_and_reuse_the_exact_complete_root ... FAILED
+
+failures:
+
+failures:
+    native_import_keeps_ignored_git_dependencies_outputs_and_exact_link_targets
+    real_host_profiles_acquire_and_reuse_the_exact_complete_root
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `-p layerfs-project --test complete_root`

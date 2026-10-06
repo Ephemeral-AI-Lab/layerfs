@@ -1,0 +1,6 @@
+{
+  "failed_receipt": "host-project-tests-receipt.json",
+  "cause": "macOS native symlink creation under umask022 reports lstat mode0755. C1 PortableMetadata requires exact0777 for symlinks, so directly copying native link permissions fails portable metadata validation. Canonical grammar remains unchanged.",
+  "evidence": "Native lstat observation0755; content attributes/portable.rs validate InodeKind::Symlink mode==0777.",
+  "repair": "Project emits the existing canonical fixed0777 symlink mode, retaining original native identity/mode for post-read change detection and exact mtime/opaque target. Document this portable representation; no third-party or content-format change. Original failures retained."
+}

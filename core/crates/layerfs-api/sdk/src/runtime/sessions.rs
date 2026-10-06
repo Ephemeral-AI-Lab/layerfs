@@ -30,8 +30,17 @@ pub struct Sessions<'a> {
     owner: [u8; 32],
     next_serial: &'a mut u64,
     pub(super) slots: Vec<Slot<'a>>,
+    pub(super) service_owners: std::rc::Rc<std::cell::Cell<usize>>,
 }
 impl<'a> Sessions<'a> {
+    pub(super) fn capability_serial(&mut self) -> RuntimeResult<u64> {
+        let serial = *self.next_serial;
+        *self.next_serial = serial
+            .checked_add(1)
+            .ok_or(RuntimeError::Invalid("runtime capability exhaustion"))?;
+        Ok(serial)
+    }
+
     pub(super) fn new(runtime: &'a mut Runtime) -> Self {
         let slots = runtime
             .owners
@@ -52,6 +61,7 @@ impl<'a> Sessions<'a> {
             owner: runtime.incarnation,
             next_serial: &mut runtime.next_serial,
             slots,
+            service_owners: std::rc::Rc::new(std::cell::Cell::new(0)),
         }
     }
 

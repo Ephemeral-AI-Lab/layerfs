@@ -2,26 +2,27 @@
 
 > **Status:** Current SQLite-only replacement workspace under qualification.
 
-The active workspace has six packages: layerfs-content, layerfs-storage,
-layerfs-history, layerfs-persistence, layerfs-project and layerfs-telemetry.
-Storage and history are engine-independent domains. The persistence adapter
-owns the host-local SQLite connection, SQL, BLOB and durability mechanics;
-Objects/Metadata and History share one Store with separate bounded transaction
-acknowledgements. PostgreSQL is unavailable. MinIO/S3 is retired from active
-composition.
+The active workspace has eleven packages: six cluster-one libraries (content,
+storage, history, persistence, Project Init and telemetry), plus Overlay,
+Workspace, Daemon, SDK and Bridge. Storage/history are engine-independent domains.
+The global persistence adapter owns the current host-local macOS SQLite Store;
+Objects/Metadata and History share it with separate bounded acknowledgements.
+Daemon Overlay owns separate disposable backing with no synchronization guarantee.
 
-The excluded API/runtime/server/S3 directories retain reference source. They are
-not functioning active application adapters or fallback dependencies; the sealed
-Phase 4.5 tree supplies historical comparison. A sandbox host endpoint remains
-an explicit application-adapter decision. The legacy product snapshot, archived
-tests and prior failed receipts are preserved.
+The [cluster-two design](docs/issues/303/README.md), current
+[implementation tracker](docs/issues/307/PROGRESS.md) and separate S7/S8/S9 audits
+own unfinished integration. SDK now supplies authenticated local object/Save/history
+handlers and a bounded fair typed service. Native Bridge authentication is active;
+logical runtime/control codecs, complete client delivery and owning Sandbox/API-core
+assembly remain open. Native FUSE replacement is excluded. Excluded predecessors,
+server and root reference are retained source, without dependency or fallback use.
 
-See [the current design and plan](docs/issues/302/SQLITE-DESIGN-AND-PLAN.md) and
-[the persistence API/profile](crates/layerfs-persistence/README.md). The goal is
-all seven revised Step 10 selections under a frozen 10% Phase 4.5 time margin,
-with correctness/accounting/storage gates. Compilation and unit tests are not
-terminal success. Namespace-count retention is instrumented, not yet proven
-bounded for the whole importer.
+Project Init includes ignored/dependency/cache/output/.git paths and opaque symlink
+targets, and has removed the inherited4GiB refusal. Collection diagnostics still
+expose input-sized retention and native hard-link identity remains incomplete;
+complete bounded import acceptance is open. Component checks do not complete S7
+resource gates or integrated qualification. Historical cluster-one evidence below
+retains its source/profile/cache pins and original verdicts.
 
 The source/LOC, locked dependency and verification rules remain in
 [AGENTS.md](AGENTS.md). No CI or aggregate preflight gate is used.
@@ -42,16 +43,20 @@ different product with different identifiers and formats.
 
 ## Commands
 
+Build selected packages first using `cargo +1.85.1 test --manifest-path
+core/Cargo.toml --locked -p <package> --all-targets --no-run`. Run each selected
+actual test command with an explicit wall timeout at most120s; retain/diagnose
+any timeout as FAILED before a source-driven repair. Package/target selection
+keeps unrelated campaigns separate. Required changed-scope checks also include:
+
 ```sh
-python3 core/tools/check_product_boundary.py
-python3 -m unittest discover -s core/tools -p 'test_*.py'
-python3 -m unittest discover -s tools -p 'test_production_loc.py'
-cargo +1.96.0 fmt --manifest-path core/Cargo.toml --all --check
-cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked
-cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-content --tests
-cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --tests
-cargo +1.96.0 clippy --manifest-path core/Cargo.toml --workspace --locked --all-targets -- -D warnings
+cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked -p <package> --all-targets -- -D warnings
+cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check
+python3 -B core/tools/check_product_boundary.py
 ```
+
+Core/tool self-tests require the same explicit wall timeout. See the current
+[check contract](AGENTS.md#checks-and-completion) for exact scope and ARM64 flags.
 
 ### Real component runs
 

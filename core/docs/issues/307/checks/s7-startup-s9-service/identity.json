@@ -1,0 +1,709 @@
+{
+  "parent": "b9f3a8dc9ffcf78c9e625c86be8b4bb2f661ae6c",
+  "scope": "Final changed production source hashes; each individual functional check retains selected command/source fingerprint. No sealed performance arm.",
+  "production_sha256": {
+    "core/crates/layerfs-api/sdk/src/runtime/mod.rs": "b6123fab26178f7f8de0f9e9b276d412538e5facf38a83fcb5c1d402970186f2",
+    "core/crates/layerfs-api/sdk/src/runtime/service/credits.rs": "2578148efc524448a60bfd5a74bb2c100a662c7489c8d8925941e8bc383e50f7",
+    "core/crates/layerfs-api/sdk/src/runtime/service/execution.rs": "cecd5bb5c74299ff422915d51e4217bd67b1711400d9d63bcd7ed9f4d90c46fd",
+    "core/crates/layerfs-api/sdk/src/runtime/service/mod.rs": "1950d67c0b41d9cd24237afbb7101a69013ebcb45b5123ff4292313395a2aa89",
+    "core/crates/layerfs-api/sdk/src/runtime/service/owner.rs": "f5e30069077cd7962c6eed914abf51856d08b564d14cfaff00e08550245e2715",
+    "core/crates/layerfs-api/sdk/src/runtime/service/queue.rs": "f314850fbe874f05dd1486dcba8d0d4b191d26bfdf11432b8b67caa10170f9ca",
+    "core/crates/layerfs-api/sdk/src/runtime/service/receipts.rs": "09cb78dc88577a8dcdf12951bd04b86c576d47c10d06729cef058b384de4874c",
+    "core/crates/layerfs-api/sdk/src/runtime/service/types.rs": "875743da272e260c4e16cff8637c5d1ecdeb123e95976f3616b89bd2a0463beb",
+    "core/crates/layerfs-api/sdk/src/runtime/sessions.rs": "eef2acacf90eee7ee6cea76a88170a70b9d08aef61c3e7c71f3d7ba1f4e43dee",
+    "core/crates/layerfs-api/sdk/src/runtime/types.rs": "ab726d843f69c42fc817e8b328d88f93bdac005f4eff0a1c11ff430b5811684f",
+    "core/crates/layerfs-daemon/src/lib.rs": "4bae976a7391d70efd256d9b9e960d0b5a4566f71498bd3a59e6629124658538",
+    "core/crates/layerfs-daemon/src/overlay/owner.rs": "27c9df42fe1c966586f90898d5e0283f4293fed4a185c08f6ef59b3a05a47bca",
+    "core/crates/layerfs-daemon/src/service/mod.rs": "890be614529a1877826de02eb1c031cbc1f2c57911a33f999b396aaf0cd01cda",
+    "core/crates/layerfs-daemon/src/service/startup.rs": "145f93f92611311f8a25bf49b79faf8c58407839863a3560bb4dd0f2d7fb3b0f",
+    "core/crates/layerfs-overlay/src/database/connection.rs": "f28fbd904a720b0cfa1f55806e9e7682c3311e70fe724e677931f97a7905a253",
+    "core/crates/layerfs-overlay/src/database/mod.rs": "15961d35273fa5d42a677a85ff41319befbea89dfbf09de02d2ca5bfd207f06f",
+    "core/crates/layerfs-overlay/src/database/profile.rs": "c65f5c3132314a2fb5f782c1473e6adeacc5c70e320511cf76165f9656c28dab",
+    "core/crates/layerfs-overlay/src/database/startup.rs": "ca13aed9f2930e841f86244762b4ee9744f0865b0e940cf25e6303e3444f00aa",
+    "core/crates/layerfs-overlay/src/diagnostics/metrics.rs": "036c4b4886758f062e61cb476a0d6a0ae656d766ac43fa7a0d52d6d094cd0a46",
+    "core/crates/layerfs-overlay/src/diagnostics/mod.rs": "0a4e519ec709436beb9a03b4880691a9600e85435ee4641b37357d4e5ccedc06",
+    "core/crates/layerfs-overlay/src/diagnostics/startup.rs": "5e1f32b4e6502567075c506e6579055299f130ec676f4bdfa8212a1dec01b279",
+    "core/crates/layerfs-overlay/src/lib.rs": "001044ea2b6e23b02f54478fc515a852b1526c7da24c261e751e189f825adfe8",
+    "core/crates/layerfs-persistence/src/backend/records.rs": "45bf4db76b5f2fdbd148a31d3e112924166ed8b25809f287f246fc81f9ba99b7",
+    "core/crates/layerfs-project/src/import/error.rs": "b8c60442a44c8e26dbbc31f132a2a93c2fc21c4603bc1d4cea717b7aeccfce6d",
+    "core/crates/layerfs-project/src/import/mod.rs": "1136c190c9e6ac1360496c554519d454dab1c0ab1448ed204cdf3d67dbd5d13f",
+    "core/crates/layerfs-project/src/import/namespace.rs": "d1422a61b8634db8e0f95436997969826403d148cdb50355c10efc7598497b60",
+    "core/crates/layerfs-project/src/import/scan.rs": "99b83232dddd722cdc444fb749b7122065bea14015e9e0a2be88c008e72ad98a",
+    "core/crates/layerfs-project/src/import/source.rs": "c9d412c12950f304a49e275ae4a3fd351acc4921e49a9108657864594b440923"
+  },
+  "build_inputs_sha256": {
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "core/Cargo.lock": "04db4f6e7264765d6c069ab71fbb49099c19f83385839cc35c6991cb7158ebb9",
+    "core/Cargo.toml": "7b9f341f9b091ec20e7f6634d60b9269c528c997de01cc5fb933def6cfd03461",
+    "tools/production_loc.py": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb"
+  },
+  "host": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc_host": "rustc 1.85.1 (4eb161250 2025-03-15)\nbinary: rustc\ncommit-hash: 4eb161250e340c8f48f66e2b929ef4a5bed7c181\ncommit-date: 2025-03-15\nhost: aarch64-apple-darwin\nrelease: 1.85.1\nLLVM version: 19.1.7\n",
+  "workers": "1; native Namespace Init retains prior4-constructor exemption",
+  "flags": "--cfg aes_armv8 --cfg polyval_armv8 --cfg chacha20_force_neon -C target-feature=+aes,+sha2; root Cargo config discovered; locked builds",
+  "cache": "Uncontrolled; no cold speed/RSS/rate eligibility",
+  "targets": {
+    "host": "core/target/cluster2-runtime-tests",
+    "linux": "core/target/cluster2-linux",
+    "linux_cargo_home": "core/target/cluster2-linux-cargo"
+  },
+  "images": [
+    "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6"
+  ],
+  "binaries": {
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_sdk-a9ac2f7b76117cf8": {
+      "sha256_at_final_capture": "909f10a663a18a8ee06570f1bdee5f8421acdd3f306c18c04e9e760b41f5df7b",
+      "bytes": 1027376
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/runtime-0693fe70d77b0de3": {
+      "sha256_at_final_capture": "c78a0060c53343527c75cbfd3321fa6ec7f34b731834123470320421196d898a",
+      "bytes": 5266856
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_daemon-7c8da4bc9c2f62c2": {
+      "sha256_at_final_capture": "603b7e436b811e25d95a0e20991d886da015866cbf9e6ebb9555a83689a1bb0b",
+      "bytes": 1027392
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/device_capacity-4a9b042db44a4be9": {
+      "sha256_at_final_capture": "4cf62a0b0bfaa0d3650b103bc1b7ecf111f6a5ed0bb763fafd57925e4b349aa9",
+      "bytes": 1027408
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/job_cost-7c87b3815e040dfc": {
+      "sha256_at_final_capture": "46cb04c59aa379229d35fdb527ba73294d0ff3892625bab5c0be71a627179502",
+      "bytes": 2632280
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/owner-406c93a1462f09e2": {
+      "sha256_at_final_capture": "848c31871f6e09822a97f87cd7b23b401565afc94b2a970ded8569bf70c00d69",
+      "bytes": 2734888
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/startup_cost-59e19671c57f07a5": {
+      "sha256_at_final_capture": "c46585c6f8ff1c9538bb9ca56b1ae8631cba8632798ecc6650a9d2bcc32dd9b2",
+      "bytes": 2608400
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_overlay-7af2ec524cfae021": {
+      "sha256_at_final_capture": "b0208769e3f566b0b0a4641c9b10982fa3bee84cea419d665ea1d07c9a00e3c7",
+      "bytes": 1027392
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/compound-f27037c54631a7cf": {
+      "sha256_at_final_capture": "bff48a6dbe03da24805e85f7ff0595207d95a21d72ef8ef868eaa3aa28f9c802",
+      "bytes": 1667224
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/costs-f1b14bc809c7fae2": {
+      "sha256_at_final_capture": "a2344c475645c3277eb9aa35f3cef9ddb9be9e345f53fb8dd02eed9123d6f62f",
+      "bytes": 1567288
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/device_capacity-9fc393ba6f0e8794": {
+      "sha256_at_final_capture": "9304125ecc8726e00a750a74a40dbe6f628a2c68f9f9edaa2f4a17073c1d3c80",
+      "bytes": 1027440
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/engine-b4fac0808988bc6c": {
+      "sha256_at_final_capture": "3bc6a1492f3227ba1db484ecb28010f4aa2614152a2a02959c3a95e8375a9f16",
+      "bytes": 1830312
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/frontier-0725703cc71f2a91": {
+      "sha256_at_final_capture": "a6739ad500e012e47f30f933966bc0205a046af49ec81f5e7c7286396353179d",
+      "bytes": 1641032
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/lifetimes-9bdeccb2fc8d6202": {
+      "sha256_at_final_capture": "a6eb2f493447fee0434aec23bf36257334a3b1977d325ef5bd80612df495730c",
+      "bytes": 1774232
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/orphans-7a988e93ca86f715": {
+      "sha256_at_final_capture": "71ce3d16d2b9ea708ac7d3165ca29d75c147c3af2770ef15bcafc215cca7c9de",
+      "bytes": 2056616
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/payload-68ae5eb9eeaeeafc": {
+      "sha256_at_final_capture": "a1796dc2961e8ee2499ca551be3eb896e369765bb37d01f1fc970343762c8423",
+      "bytes": 1600840
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/payload_fragmentation-3cfdcf30996bed04": {
+      "sha256_at_final_capture": "28e3f79be6ce53c0a8811847842a4123d94b2969c0e4f9e1fe31680955a61057",
+      "bytes": 1544248
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/resources-85eaf02848d9fc65": {
+      "sha256_at_final_capture": "62c976b9afa2b95cfd6404bd79dd88a8e4cf460635c64bd074fa4968c24213ce",
+      "bytes": 1971944
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/source-bbe134429b700afa": {
+      "sha256_at_final_capture": "8693e89b42955d70ea6dfec8af5b391e8ddec5e1885423889556d58110269951",
+      "bytes": 1675864
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/startup_cost-edd0e558182d3325": {
+      "sha256_at_final_capture": "c648dce32120f41c0ed0fe06c7c79dfb174f037c067015d28b292b3415434dd7",
+      "bytes": 1312016
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_project-cffae0e2b52819f6": {
+      "sha256_at_final_capture": "b914b8dca35b59a9c7d9f1c24ffda133513d8ed83a88cc1a03345f3d5b1d8c91",
+      "bytes": 1027392
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/complete_root-7bc313d53b4b8645": {
+      "sha256_at_final_capture": "d2be818a01303fb23037a76efac492bc54da8b38e11155d7ffcb967162f4ff6e",
+      "bytes": 5056416
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/history_proof_memo-63e0a379bb7f70d8": {
+      "sha256_at_final_capture": "dc12780ba5607816be8b6194038081970a2a7a5349b16992e896e4326fba44ad",
+      "bytes": 1191504
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/init_memory-4dff77e098c7527d": {
+      "sha256_at_final_capture": "042cbc0cff90265e99c43ec485cef70b65129487892a43772ba0ca2e119fdb9f",
+      "bytes": 4207216
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/init_sqlite-a81263fb89d61840": {
+      "sha256_at_final_capture": "531e547288679133a0e85b628f6d5242f8dc835eb724b3d812ef6567d03e1863",
+      "bytes": 4847872
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/namespace_scaling-9ba4bcc3e4bcccd6": {
+      "sha256_at_final_capture": "6f4839e1da7149fd38959b119009556c31232ba7d01f2e2779914bfae422f422",
+      "bytes": 4073168
+    },
+    "core/target/cluster2-runtime-tests/debug/examples/benchmark_history-25eeb0e283ed40d5": {
+      "sha256_at_final_capture": "26efc63362a2216fb77b693d7667da1fd80d1cc4beb9e22babb5d07b4f93ecc2",
+      "bytes": 1480784
+    },
+    "core/target/cluster2-runtime-tests/debug/examples/benchmark_init-458c4c4d44746f69": {
+      "sha256_at_final_capture": "4e5d84e03c839ce72b830c5a30bf11f13bb7f8f2c5f769c43d54a9d0cbe133af",
+      "bytes": 1027456
+    },
+    "core/target/cluster2-runtime-tests/debug/examples/cause_namespace-7aedcb121d53d725": {
+      "sha256_at_final_capture": "07765961d1f2c5e4736722fa62dfed986bb7b144f091bb1b677a6fd06cd092db",
+      "bytes": 1027456
+    },
+    "core/target/cluster2-runtime-tests/debug/examples/verify_history-902dc25e49e113ab": {
+      "sha256_at_final_capture": "b51b5e28e0a27bc7ca789cdccdac46c75a8d714571c36d8df0640626ff4bf9be",
+      "bytes": 1480048
+    },
+    "core/target/cluster2-runtime-tests/debug/examples/verify_namespace-bb9c33c4490085ee": {
+      "sha256_at_final_capture": "5d856b033017cc52b657f2286428ef7ee603a7e8aa7feaabec7c62e329975066",
+      "bytes": 1062496
+    },
+    "core/target/cluster2-linux/debug/deps/layerfs_overlay-265a84d6aa048e96": {
+      "sha256_at_final_capture": "39414749145f3c58cf53281d73397c0b3348d04fa9ee08908c606919a4ef1d19",
+      "bytes": 6777288
+    },
+    "core/target/cluster2-linux/debug/deps/compound-25731f3365e30104": {
+      "sha256_at_final_capture": "6fbf2f3ef40b997376bb28f5a859a6331b74626841257aff1800c62c7d16b9f5",
+      "bytes": 24812248
+    },
+    "core/target/cluster2-linux/debug/deps/costs-893e557d5aed5d1d": {
+      "sha256_at_final_capture": "a73765262afb38c5a07c8c52ef795eeef4cca30a2ac56f4b06a1ceee12a57288",
+      "bytes": 24417160
+    },
+    "core/target/cluster2-linux/debug/deps/device_capacity-7071dfaa290c647a": {
+      "sha256_at_final_capture": "59cdb13ba16d7a6a294c7f0dcdc3267daa2314708d1c4204f6c328bf34c1ad61",
+      "bytes": 24553152
+    },
+    "core/target/cluster2-linux/debug/deps/engine-bbb4c0e497ee6bef": {
+      "sha256_at_final_capture": "6a0d9cf7492047dece975fdacd60ba25b87f17df180060786a6b523fa79ba426",
+      "bytes": 24829936
+    },
+    "core/target/cluster2-linux/debug/deps/frontier-89ec8d35e46344c3": {
+      "sha256_at_final_capture": "a5b1bed0dfe71e385602afaecd5ad397c51b28b6258e7c00b3afc94dea45319c",
+      "bytes": 24452816
+    },
+    "core/target/cluster2-linux/debug/deps/lifetimes-e42cda054b91563c": {
+      "sha256_at_final_capture": "993a3db1bc9b1deb38f22a0c5ecd7a974e770836a2c3caf91b49ed6b72260d24",
+      "bytes": 24618600
+    },
+    "core/target/cluster2-linux/debug/deps/orphans-922ee475fed5c318": {
+      "sha256_at_final_capture": "c82a9b085c0f79438204ae093d045939a731f478d88ba2323737b4851cc7cc7d",
+      "bytes": 25167976
+    },
+    "core/target/cluster2-linux/debug/deps/payload-ba87b3c1e61f7d14": {
+      "sha256_at_final_capture": "288eb26916011b7d4ee8c386fc06221b511815ca50da44cf532b8f81b916001f",
+      "bytes": 24640480
+    },
+    "core/target/cluster2-linux/debug/deps/payload_fragmentation-33476d2eba4b3e49": {
+      "sha256_at_final_capture": "a60049b50e96bcb9f42d763d19b26e9bda31872733f86ee0304b6615276d7572",
+      "bytes": 24414512
+    },
+    "core/target/cluster2-linux/debug/deps/resources-02edd44b56461e54": {
+      "sha256_at_final_capture": "96c92f46fe68d0ccedecfd7818ed0f7334627183ef3ba140dea77f8213aa97de",
+      "bytes": 24957520
+    },
+    "core/target/cluster2-linux/debug/deps/source-e28f76f78d13ba7c": {
+      "sha256_at_final_capture": "9631008a0423f1c9afb49264983a54f24f4e6ef49c28d0ed6d6164eb23b19046",
+      "bytes": 24506912
+    },
+    "core/target/cluster2-linux/debug/deps/startup_cost-e4a18ceb2f497472": {
+      "sha256_at_final_capture": "15645260190371fd94d1434afb86b79b9d913a0bdf5c946ed6bd4d658b9a5302",
+      "bytes": 23981608
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_persistence-cc89418160e6b6ac": {
+      "sha256_at_final_capture": "1d59991308debc48d1d6e338c2dca81fa9c0c7ceeb4ae7b1786ee941973b9fde",
+      "bytes": 1027400
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/file_lengths-8885c06688acdf7c": {
+      "sha256_at_final_capture": "5ae1e63e45a4958b6f9e56faaba386ed4f615389aa0e9a54c1b5c98fffc9a5da",
+      "bytes": 3326528
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/history_allocation-ae289dce51ef3650": {
+      "sha256_at_final_capture": "786695ada5cf1e162553dd6102ff6ab90e989567e3704ab1c214b29669d0600d",
+      "bytes": 1460400
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/history_conditional_updates-9c31e21dc51693c4": {
+      "sha256_at_final_capture": "e6fd2be0a0046c538af92853413d73463ebd144f33ffe03a7bf8a0b39e8e202a",
+      "bytes": 1603392
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/history_history_pages-5b41b6d5300cfdd2": {
+      "sha256_at_final_capture": "e3c23820edd9f2c3abc3ec0ff8530972afae4c320eb0110b500def95560f2fee",
+      "bytes": 1634520
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/history_lifecycle-068f9bc1d8f21ef0": {
+      "sha256_at_final_capture": "9a9c0da23ca637ade1c1fb585b4f627d5a0d4731ae2968387e3f9d3c118d7f77",
+      "bytes": 1653744
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/history_remediation-eac8f9d9018c6819": {
+      "sha256_at_final_capture": "ca6c51c351fd02461741bf636cc1c849943c7c5629f3f0c942a81af052f9caec",
+      "bytes": 1836600
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/history_reopen-4f5e99953bc52c4a": {
+      "sha256_at_final_capture": "7e41efd090453dfc88296c8b3b67b0b6255de4a1d8417d373227612928622d40",
+      "bytes": 1614080
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/interleaved_saves-ff8a0bbba23f38cc": {
+      "sha256_at_final_capture": "136bc0a4601fdbbec77f861bcb4e336cbabcf8f44783a40be50b2d99f45cb9a4",
+      "bytes": 3376816
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/semantic_admission-41991402795bdc3d": {
+      "sha256_at_final_capture": "e76ecf2f734cc8df2d8317d89bb91115c451f7273dc2fa31ddae405a38db175f",
+      "bytes": 3432992
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/sqlite_allocation_release-38c16b717c74d776": {
+      "sha256_at_final_capture": "0e5664ff1c11c0af22b52f41343a5256f9faaae4212fc6b4000ea475ec01b27b",
+      "bytes": 3289992
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/sqlite_group_rows-ba50d433ea251e0d": {
+      "sha256_at_final_capture": "5b36f438974471597ceb422b27cc2b9e1047fdcb7f5cd5af2c14fa85e89d4b09",
+      "bytes": 2902016
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/sqlite_group_rows_indexed-1c6c464933e45739": {
+      "sha256_at_final_capture": "a6daf22d487bc9e93d515a3e40fb14669f87494708587f441a1a321374c4728e",
+      "bytes": 2931992
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/sqlite_ordinal_lookahead-d52323a5420a04b5": {
+      "sha256_at_final_capture": "119cace8e35c128a5de25b06af679d5938e303b3ca33f889120140c8c7fab2b6",
+      "bytes": 3253640
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/sqlite_pack_selection-fb7d337033d0043c": {
+      "sha256_at_final_capture": "43f9d6ab60f33f709264a53fd22b2aabd707016f4b1ce48e3aaa70ae13b5d700",
+      "bytes": 3233672
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/sqlite_publication-d1e36b64dd368bf0": {
+      "sha256_at_final_capture": "402d81f27787fb3eb78eb3f4efca8a11ef8c8ac3f4fb6c4ebd37dbb8d721431b",
+      "bytes": 3413952
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/sqlite_recovery-c8bae7a6517ff80d": {
+      "sha256_at_final_capture": "c2f23ddc968bb2fa8764e89e8011fe8c1bd1a9ec0aa4f116377324ca9a703434",
+      "bytes": 3282320
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/sqlite_reference_acquisition-af4d8bac5f950aba": {
+      "sha256_at_final_capture": "8b8ac945646c2c5cb15bd11a86f4f1468019bfa2efa3f8b3bbf7e2273faae7b3",
+      "bytes": 3227200
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/sqlite_transaction_units-677cf916d8486ca1": {
+      "sha256_at_final_capture": "d42736d4c31525ee2e76c229d426f349b7ee112251b035c9bc48bd66e4efe474",
+      "bytes": 3289640
+    },
+    "core/target/cluster2-runtime-tests/debug/examples/metadata_allocation_probe-a0e6a3d08857b3e4": {
+      "sha256_at_final_capture": "5adebf7395492cc3c897f1cd2df427f4e2763dd527e74ebaedc989921a3fb6a1",
+      "bytes": 1027768
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_workspace-c06ba861b861d9ba": {
+      "sha256_at_final_capture": "06d04f5afca6fdfe4d4c560f909819fcca96cb2a28e85a4ecb2e25acc862b9a3",
+      "bytes": 1027376
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/base-97c8a8cf9206582d": {
+      "sha256_at_final_capture": "1d83c8b3beb27599562a6bea023cc43e16e7ef7e3d27442f593a4f9e23af3d8b",
+      "bytes": 4070104
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/namespace-91a1b01a058faf32": {
+      "sha256_at_final_capture": "b361bcd8a53c1313bd4df72e094c1dfa502df1a3df3fbcd32381d884a799d52b",
+      "bytes": 2954280
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/namespace_daemon-0be34967c443f228": {
+      "sha256_at_final_capture": "a9459024d0a7fba1a46ac646fa77622904c43f6600020330896c279f615720ad",
+      "bytes": 4285104
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/namespace_profile-64dbb2874ac11305": {
+      "sha256_at_final_capture": "d151fd586ac5b65740ab9941c7e3225350909b5faf1f67bce6ab6b343bc0ebb0",
+      "bytes": 2904592
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/namespace_view-2400757db4703c00": {
+      "sha256_at_final_capture": "81193e38f8f549cb340322e555414b468b22d3e781a991728387850c8347f432",
+      "bytes": 2983328
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/nonfile-dd4e5ce33ffc6b19": {
+      "sha256_at_final_capture": "6e33c7a57cd3f428c63c612e3f1911a74dfa66a7319b2dd2b06424e4e678505f",
+      "bytes": 3228120
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/payload-fb6f82f595bd0d85": {
+      "sha256_at_final_capture": "fb5f118023be0d12c7508ab89350b0550ef494fb1d29ee927fa6305563dbe520",
+      "bytes": 2934440
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_daemon-47f548aae36a989c": {
+      "sha256_at_final_capture": "515d5345f3e49e95784ea58c3fba443569bff49000ba50cbda4efff9aecbef06",
+      "bytes": 1027360
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/device_capacity-f888f3ea77cbdd1e": {
+      "sha256_at_final_capture": "b94cc0bd63446db99422c611b22208fe178e853288f21d90612f4f3bac926bfb",
+      "bytes": 1027408
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/job_cost-2a6ef4d8d01be501": {
+      "sha256_at_final_capture": "8467ac9cf6400536f19fa8ca759794afefbcaacdad354e600aaba6c1933b9cb6",
+      "bytes": 2632056
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/owner-8b8ad3fd29ec700d": {
+      "sha256_at_final_capture": "4a18ba5a967f36f17e98cb3eb98a6bb24a3025a23cc0722f07314b08938e0148",
+      "bytes": 2734696
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/startup_cost-23c70e2d8e3e7705": {
+      "sha256_at_final_capture": "46dcb036d974e060c533941fdea907b4bb8c51b3b2419756908974e2d4e0bc56",
+      "bytes": 2608224
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_workspace-b4aa1a18d8144248": {
+      "sha256_at_final_capture": "b9326f900269abad98ec143c6cf17fa2dd118f64ca1280e12aa044f827e07e2f",
+      "bytes": 1027376
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/base-56522fdabff97444": {
+      "sha256_at_final_capture": "c1a00f80b00d74f38c4712ad1a48e9813848417aba1185f13bb7550a21819c66",
+      "bytes": 4069768
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/namespace-3f6b5538aa89f73b": {
+      "sha256_at_final_capture": "3acf8281ee7995d7d55d1bb3da32f4b94793293d1d71f4924a92e6a2750dbd4c",
+      "bytes": 2954072
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/namespace_daemon-eed9217828e81811": {
+      "sha256_at_final_capture": "bd23e148184575212f3c8fdc4a6063e261f7d7a3fecf3eec12059a55a936ed52",
+      "bytes": 4284880
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/namespace_profile-ed7a88f05c5776ea": {
+      "sha256_at_final_capture": "be86259c993bf241081ec9fbc06701f98837707234f3a5dccf8fa76752b18155",
+      "bytes": 2904400
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/namespace_view-3905efa98280bf25": {
+      "sha256_at_final_capture": "29e9ffdfb8cab9dce7c416b10b1ebd6ca67c69f510a013e17cf97a93deb1d2e0",
+      "bytes": 2983104
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/nonfile-c494fe00e50bf252": {
+      "sha256_at_final_capture": "bc0cdc2ca2def59bb047247ba1125a2f716dc2cba999a9b9c3f429f96a32e62f",
+      "bytes": 3227864
+    },
+    "core/target/cluster2-runtime-tests/debug/deps/payload-f91f5f5552e23d60": {
+      "sha256_at_final_capture": "35481b066fc8405e6f05fe8a38f722e138106a43590940292623baf26463d454",
+      "bytes": 2934024
+    },
+    "core/target/cluster2-linux/debug/deps/layerfs_sdk-04569cca95583b09": {
+      "sha256_at_final_capture": "f2884d94d8964cdf5957eb4104c0adc8c41661190f228476f935db9307ae0c8b",
+      "bytes": 7508432
+    },
+    "core/target/cluster2-linux/debug/deps/runtime-2ea06079303783d8": {
+      "sha256_at_final_capture": "8357dcac206a77d3fb6adb234bb5c270324e9dccb0fdb39421e57be7f0a19f2e",
+      "bytes": 6777280
+    },
+    "core/target/cluster2-linux/debug/deps/layerfs_daemon-14707b6ca2c9a271": {
+      "sha256_at_final_capture": "997af541e06eac110e30a1e2cf9580ee9adf842d81abce1d5bfb7775777504f9",
+      "bytes": 7508432
+    },
+    "core/target/cluster2-linux/debug/deps/device_capacity-23506cbbe50b7d30": {
+      "sha256_at_final_capture": "9c272964d8370ede79a6254968ec246fccaa23bc35447b6d2089e6b299925fae",
+      "bytes": 50461224
+    },
+    "core/target/cluster2-linux/debug/deps/job_cost-6bdca9a03c6ad148": {
+      "sha256_at_final_capture": "d11a68f1304151c4dcc6dcfe66d3f76da94b9c1a5f28f5d9a723b1a0d5efbb73",
+      "bytes": 50273960
+    },
+    "core/target/cluster2-linux/debug/deps/owner-e99e9fc3bb067fe0": {
+      "sha256_at_final_capture": "1d01f128ba67aee7b2b6e1a65f5998c709d5b23518771f362835e4c99e4bf898",
+      "bytes": 50511008
+    },
+    "core/target/cluster2-linux/debug/deps/startup_cost-ab13a7d13651afb8": {
+      "sha256_at_final_capture": "62739be9d8d4e1dc8b0e33a54d8c039058114c20a6e4d1075e9de83791036cbc",
+      "bytes": 50300856
+    },
+    "core/target/cluster2-linux/debug/deps/layerfs_overlay-5dfea7f5c2eb3001": {
+      "sha256_at_final_capture": "88301536e3b5d6e1fd088ae64fae6266a10e7545acc40bf25e46dc0c2973747f",
+      "bytes": 6777288
+    },
+    "core/target/cluster2-linux/debug/deps/compound-a00d0f6b629b0b25": {
+      "sha256_at_final_capture": "c73c3f5866b9dd2b1caa1badf48e8793e9d3fac005cc64da31df19a340f8a456",
+      "bytes": 24812232
+    },
+    "core/target/cluster2-linux/debug/deps/costs-ef1f53a2643cdf85": {
+      "sha256_at_final_capture": "6b3496189e5f60c1a51b51a1e95009ebd1d7ace67ef8bf7e167a93212980f287",
+      "bytes": 24417088
+    },
+    "core/target/cluster2-linux/debug/deps/device_capacity-785ea92e537f2d9b": {
+      "sha256_at_final_capture": "358f1261dd4c9bd5c34beb49ae5403c604be9273e95a554e10108038afff074c",
+      "bytes": 24553168
+    },
+    "core/target/cluster2-linux/debug/deps/engine-2fa85df857faac64": {
+      "sha256_at_final_capture": "58d5be3dcc96ec51caf8cc680a47e7abeee7f09ee524d098615b2bcc3586a8cf",
+      "bytes": 24830112
+    },
+    "core/target/cluster2-linux/debug/deps/frontier-8ebd7811674db89f": {
+      "sha256_at_final_capture": "bb111b69c87bf151708f8791f0a7ded1d5c7dc079352b88ccd673d21f6beafc0",
+      "bytes": 24452848
+    },
+    "core/target/cluster2-linux/debug/deps/lifetimes-7198dc9af91f2969": {
+      "sha256_at_final_capture": "f7bd3f6316b54fd7ccbd4784f85681c6e2a739a5c60529f32ba7adb3e19cefde",
+      "bytes": 24618536
+    },
+    "core/target/cluster2-linux/debug/deps/orphans-e68196a2ef4f9a30": {
+      "sha256_at_final_capture": "84fec5df88295d062cbbcb6d90ac87f248890801fb5c6fc7475a67f2c03b7eaa",
+      "bytes": 25167968
+    },
+    "core/target/cluster2-linux/debug/deps/payload-2e39ef49bedee8ea": {
+      "sha256_at_final_capture": "bb866838bd575ddac28025ec9cfbea38e0da4c2e1b84a40838c4fe920fd4ee48",
+      "bytes": 24640416
+    },
+    "core/target/cluster2-linux/debug/deps/payload_fragmentation-4a4244b58577194b": {
+      "sha256_at_final_capture": "361b7f66068bf8bee98709d80af04abf39af220b7690fc2c4896c56843a32d09",
+      "bytes": 24414640
+    },
+    "core/target/cluster2-linux/debug/deps/resources-e9afc396897a0447": {
+      "sha256_at_final_capture": "8d108216329f4472fa201fac5b2a513f5d18468622fa9f6964d8bbb9da099008",
+      "bytes": 24957080
+    },
+    "core/target/cluster2-linux/debug/deps/source-e0890071018a2f0d": {
+      "sha256_at_final_capture": "713cafa621c660782789f1453dcf0bd192a717e75862748be1799c0ace9f310f",
+      "bytes": 24506944
+    },
+    "core/target/cluster2-linux/debug/deps/startup_cost-b31f6e2e84780a1c": {
+      "sha256_at_final_capture": "9a39b8957be6aff6137e6699f226bb63b258e1046a79d255100c7d0319a8a076",
+      "bytes": 23981696
+    },
+    "core/target/cluster2-linux/debug/deps/layerfs_persistence-333ea3c8849f5ab0": {
+      "sha256_at_final_capture": "84a60bae0d30b9df26e79011af2e464deb5cdfa3a6859ee756f46ebd9daf7019",
+      "bytes": 7508472
+    },
+    "core/target/cluster2-linux/debug/deps/file_lengths-72f530ac76b4be7b": {
+      "sha256_at_final_capture": "d94386978f263488d9ea556814091f86a74c37ef8062204a3f075a95f787aca3",
+      "bytes": 6777344
+    },
+    "core/target/cluster2-linux/debug/deps/history_allocation-6424738547199c12": {
+      "sha256_at_final_capture": "729497569ea8ffea0b2709ac8eaba6993584c78023c674e11a04387c3acad9f8",
+      "bytes": 61880024
+    },
+    "core/target/cluster2-linux/debug/deps/history_conditional_updates-7447a989e828b9f9": {
+      "sha256_at_final_capture": "85cc84e044ca331e36b6fdd8dda1854198865db212afe750cf0450fd40024559",
+      "bytes": 62107056
+    },
+    "core/target/cluster2-linux/debug/deps/history_history_pages-65e12d2d8bb32f7a": {
+      "sha256_at_final_capture": "f1e28b06a1e34c496af1ab5e307802a66af781ea2898c0dc5541ac75d6921940",
+      "bytes": 62271192
+    },
+    "core/target/cluster2-linux/debug/deps/history_lifecycle-39f414ab737fa78b": {
+      "sha256_at_final_capture": "cade642500f676fe1fbd0d27f70a124ebb51e872e1b33b2b4367ba7603c9e1a5",
+      "bytes": 62199296
+    },
+    "core/target/cluster2-linux/debug/deps/history_remediation-e1162bc87cbc011a": {
+      "sha256_at_final_capture": "85669b9ea73711aae916440b82241b28dee836eae496d9e8cda91e18996305f9",
+      "bytes": 63752144
+    },
+    "core/target/cluster2-linux/debug/deps/history_reopen-db28ea4027fdc96b": {
+      "sha256_at_final_capture": "1b40c1e6b4ca7eaecf5ac5df361b1d56d186fb76d2e895b767e80f8158448314",
+      "bytes": 62144312
+    },
+    "core/target/cluster2-linux/debug/deps/interleaved_saves-d038b4c6ca2e4fcf": {
+      "sha256_at_final_capture": "84fb7ed713381e1bc38330aeda56a9ad454fca4c266682380ad290ad13314696",
+      "bytes": 6777384
+    },
+    "core/target/cluster2-linux/debug/deps/semantic_admission-6055ebe117c156f2": {
+      "sha256_at_final_capture": "8ddb348d468366b9739c4ae5b32d7fc80eaf7a440e5828f20ef23f9b75e291f2",
+      "bytes": 6777392
+    },
+    "core/target/cluster2-linux/debug/deps/sqlite_allocation_release-6729f73328585164": {
+      "sha256_at_final_capture": "bacfba99048186cbc47bd895937519907d2a2fbc1ffb6b1cce9613c27c14c250",
+      "bytes": 6777440
+    },
+    "core/target/cluster2-linux/debug/deps/sqlite_group_rows-7180486b8ccc83cd": {
+      "sha256_at_final_capture": "da041ae2241d11a04069b310f6963e40134af6ea481bba8899e3be7a78464586",
+      "bytes": 63983720
+    },
+    "core/target/cluster2-linux/debug/deps/sqlite_group_rows_indexed-078869e6695e3069": {
+      "sha256_at_final_capture": "ea3b0358251f1b8ef66426f3b184cb87037a8dd6bb44c0fb8b968d3757dc26f9",
+      "bytes": 64267672
+    },
+    "core/target/cluster2-linux/debug/deps/sqlite_ordinal_lookahead-0d9822c5b1a720f7": {
+      "sha256_at_final_capture": "5b9d7aab5809603f0adbda47125700208f0fe3d589a2101c48147cc9c1ec5f92",
+      "bytes": 64182696
+    },
+    "core/target/cluster2-linux/debug/deps/sqlite_pack_selection-b52287083e11da64": {
+      "sha256_at_final_capture": "54e11fc1b2fcf117b54f4ca5cf70457ba5f1d77fc8ff51d6dab68ad42c84d676",
+      "bytes": 64048024
+    },
+    "core/target/cluster2-linux/debug/deps/sqlite_publication-231aada80dbee3e2": {
+      "sha256_at_final_capture": "b63d1310a1e1faa85080ad4ea0feaba0890349b0a773173d64fc781c06fe75a8",
+      "bytes": 64945224
+    },
+    "core/target/cluster2-linux/debug/deps/sqlite_recovery-8eacddc5616da27d": {
+      "sha256_at_final_capture": "fdc08024139943debd3c6d02ad372d7c87180d82af160ed319c058d13b2f757b",
+      "bytes": 64180032
+    },
+    "core/target/cluster2-linux/debug/deps/sqlite_reference_acquisition-5f8f98cba99dcc93": {
+      "sha256_at_final_capture": "716bd37f9770c3fecb15c23eaff95895678fa9729e7d56fc82a5797639179e46",
+      "bytes": 64022864
+    },
+    "core/target/cluster2-linux/debug/deps/sqlite_transaction_units-0d8c92981962a4c7": {
+      "sha256_at_final_capture": "7ae9191d28efa625b0af4e2a1151bd72f73707fa04544289dd541de8986bcb8b",
+      "bytes": 64636120
+    },
+    "core/target/cluster2-linux/debug/examples/metadata_allocation_probe-de9936fdfe82a9eb": {
+      "sha256_at_final_capture": "bf49c6da18336fcdbd7ed4a7ed826cd30f659815c28625de5f42c3b007834faa",
+      "bytes": 7520784
+    },
+    "core/target/cluster2-linux/debug/deps/layerfs_project-08f18dc081988182": {
+      "sha256_at_final_capture": "970ffa3805ab73f345c4da0e2f76827b2f27b36e09e5baeda02072eae24186a8",
+      "bytes": 7508440
+    },
+    "core/target/cluster2-linux/debug/deps/complete_root-a75ff5715e38d161": {
+      "sha256_at_final_capture": "046c6bd8898ea28e10c32ba5aeb006767c706c9947a6c25880a67177d8e0c019",
+      "bytes": 58368648
+    },
+    "core/target/cluster2-linux/debug/deps/history_proof_memo-cef5642397bba458": {
+      "sha256_at_final_capture": "d291a4d4611cc74e8a2d9a720e3437be96dc42b948fa3a55be166e89d9c6203e",
+      "bytes": 22177512
+    },
+    "core/target/cluster2-linux/debug/deps/init_memory-3f8eb672885ba3cf": {
+      "sha256_at_final_capture": "b294f304bf46fd1e382713478929d877745ea7b0ca7f954001a1ece8b5ca65ae",
+      "bytes": 57482752
+    },
+    "core/target/cluster2-linux/debug/deps/init_sqlite-472754699f5c7028": {
+      "sha256_at_final_capture": "4803eaa6026129f8f4a25f893a08d490695229bc57554bc65772c6ae7feac3f0",
+      "bytes": 69160008
+    },
+    "core/target/cluster2-linux/debug/deps/namespace_scaling-407ecf230c850e06": {
+      "sha256_at_final_capture": "2eef4f58c35a30e293e9f3f1d5ba9866734de522d4d886747b4c09ef70cd5524",
+      "bytes": 56899368
+    },
+    "core/target/cluster2-linux/debug/examples/benchmark_history-fc6af7d08c327cee": {
+      "sha256_at_final_capture": "52b3751ac93a06a68d3bbb1f6c1004b86de286b26a589b0caec2e96ae8d73bfa",
+      "bytes": 61068616
+    },
+    "core/target/cluster2-linux/debug/examples/benchmark_init-da1791ce265ef670": {
+      "sha256_at_final_capture": "031c4d0b0ba7218576d8776accfc2e471a23105722aa118b380b60378b650d4d",
+      "bytes": 7508496
+    },
+    "core/target/cluster2-linux/debug/examples/cause_namespace-2bc51cc3437ba225": {
+      "sha256_at_final_capture": "23ed804cd8a5926d44da836c5d9a4e214e738c0706282f48d104d78689c9fb89",
+      "bytes": 7508504
+    },
+    "core/target/cluster2-linux/debug/examples/verify_history-a9b5bd1523ff90a8": {
+      "sha256_at_final_capture": "bd25099332c639d24877f8a5f8610e5380c5139b9497c3f28503701ec851eb7f",
+      "bytes": 61060888
+    },
+    "core/target/cluster2-linux/debug/examples/verify_namespace-1651d6dc4f677800": {
+      "sha256_at_final_capture": "542cea8aff84998f1414d80a16d2afe21c450f7d8e3ef6d233f7731728d267b8",
+      "bytes": 21225504
+    },
+    "core/target/cluster2-linux/debug/deps/layerfs_workspace-ab012cb384fbf9c1": {
+      "sha256_at_final_capture": "e10e49a8a0f9693b78217a08586b92066ac518b94e1a8e8f325fb483faa1a910",
+      "bytes": 7508456
+    },
+    "core/target/cluster2-linux/debug/deps/base-6414365735afbf27": {
+      "sha256_at_final_capture": "dd67934b36b9b5fab3091a29178eda5b34aed5ee9480e3e039297411d96963de",
+      "bytes": 54094184
+    },
+    "core/target/cluster2-linux/debug/deps/namespace-d55d7646664a5b60": {
+      "sha256_at_final_capture": "1258a5ed8190d2d63b36cbb2d665c425379a55a4e578790955b1f03ade48528f",
+      "bytes": 48195920
+    },
+    "core/target/cluster2-linux/debug/deps/namespace_daemon-fd747f7efc71a0c3": {
+      "sha256_at_final_capture": "724196882664dd6f47f6d7a04ae360272809679d6cebdf4f68cac45d0466888a",
+      "bytes": 55332392
+    },
+    "core/target/cluster2-linux/debug/deps/namespace_profile-1541b0183fc86d03": {
+      "sha256_at_final_capture": "c9d1cfd056f5a2cf6c7a277c3fe855e8f8c72878838e8bb9d4f8d9a4e11722a4",
+      "bytes": 47986760
+    },
+    "core/target/cluster2-linux/debug/deps/namespace_view-e8943b7f1cca099a": {
+      "sha256_at_final_capture": "b669b7eb30220df6aa6cdef45688db7b3c8d749bcf9c4fdf153c4ddff9b04a76",
+      "bytes": 48845072
+    },
+    "core/target/cluster2-linux/debug/deps/nonfile-16d5c0357fe9f8f6": {
+      "sha256_at_final_capture": "7bce6fce652827eb43194e275f2c5f490985aea167ca002c81d836a7b354301e",
+      "bytes": 47963992
+    },
+    "core/target/cluster2-linux/debug/deps/payload-0212b8a8086a0309": {
+      "sha256_at_final_capture": "cfd8424d28377a60eb395b585418751785abd8d4e52c8c89b68790383a146b1a",
+      "bytes": 47804736
+    },
+    "core/target/cluster2-linux/debug/deps/layerfs_daemon-baffbc37804b7d4d": {
+      "sha256_at_final_capture": "069f049f6497aa0c8001800b208f570f21081d86fedc505c6511abde1caf8f47",
+      "bytes": 7508432
+    },
+    "core/target/cluster2-linux/debug/deps/device_capacity-febdf05a59cb464b": {
+      "sha256_at_final_capture": "51a4f29e9118d9a498b1ab4a0b7fed2d02d6d454cda9a2c8539cf8070a793186",
+      "bytes": 50456480
+    },
+    "core/target/cluster2-linux/debug/deps/job_cost-eb7a384f754eaf65": {
+      "sha256_at_final_capture": "f860e16a8edfdf09d98bc6b20440490e1a3c1c501548f148c2ece186ea2d1b48",
+      "bytes": 50268800
+    },
+    "core/target/cluster2-linux/debug/deps/owner-c04146a84cc8b100": {
+      "sha256_at_final_capture": "4f19be090918d1cb9de8dcebc3496e9b10b9b339eb6e79556ca64cacc5deb30d",
+      "bytes": 50505656
+    },
+    "core/target/cluster2-linux/debug/deps/startup_cost-22accfb23883215a": {
+      "sha256_at_final_capture": "94200e008c82bc3d5b8074166f532061a44a12f837e6d2f9a0e31b4f0e64bfb1",
+      "bytes": 50295616
+    },
+    "core/target/cluster2-linux/debug/deps/complete_root-cf3c82a49ea1d8cf": {
+      "sha256_at_final_capture": "81a1f8718d544d2a37fe6f4c7da0b5b959df552bb2759cbbea7c50164dea661a",
+      "bytes": 58346464
+    },
+    "core/target/cluster2-linux/debug/deps/init_memory-2378e72a99440190": {
+      "sha256_at_final_capture": "e8b3c49965f0e240cedf2c14453c27eedfcf794769704ca62db53bd2da6acf3e",
+      "bytes": 57460568
+    },
+    "core/target/cluster2-linux/debug/deps/namespace_scaling-354acd30e90eb5c9": {
+      "sha256_at_final_capture": "fad9946bb6aa0badc8a21dabacfa2c672eb0e97f676a64bd1382d3b96c81b23d",
+      "bytes": 56877040
+    },
+    "core/target/cluster2-linux/debug/deps/layerfs_workspace-ccdc8b2b5a696f00": {
+      "sha256_at_final_capture": "d885a9367f9dcf745366a2bb2a017f6310e4a4cbddc4ba687d007a2e7dcc9200",
+      "bytes": 7508448
+    },
+    "core/target/cluster2-linux/debug/deps/base-cbe2afcb55ec61a8": {
+      "sha256_at_final_capture": "9db4bca72aa3563fba206d0795bcc2ff48d24263fe1b61c6c0759bdc5c250e4b",
+      "bytes": 54089872
+    },
+    "core/target/cluster2-linux/debug/deps/namespace-32a648c61fec7dc9": {
+      "sha256_at_final_capture": "1036e907dbf12298980dc4b392f7620ca2efa0eb1814cefda690e72f7de56a45",
+      "bytes": 48193704
+    },
+    "core/target/cluster2-linux/debug/deps/namespace_daemon-21b449d941a2170b": {
+      "sha256_at_final_capture": "7c29728d4f538abe189c569b9441b159c4ba77e79e74db3e25f7b1018786252a",
+      "bytes": 55328016
+    },
+    "core/target/cluster2-linux/debug/deps/namespace_profile-6811fdab8a550887": {
+      "sha256_at_final_capture": "e39b9f6201340956e7aa78eeb961acfd63335d744b448e8ebeefbfc960231c0d",
+      "bytes": 47984568
+    },
+    "core/target/cluster2-linux/debug/deps/namespace_view-dfac5499eaf8fd2e": {
+      "sha256_at_final_capture": "83c142af5599409e2b16f9a5dde57e94a96475e230f7d82f41d09d160a285d12",
+      "bytes": 48842864
+    },
+    "core/target/cluster2-linux/debug/deps/nonfile-2256afd7fb44c8e8": {
+      "sha256_at_final_capture": "4f8f843fe7eb8e7ef480e9046b8147edc3216c72a6cf63a3e45a60f63476bf7b",
+      "bytes": 47961648
+    },
+    "core/target/cluster2-linux/debug/deps/payload-8d0ca108a7069576": {
+      "sha256_at_final_capture": "5a78510644883555c2eb8c6f22007991bbcd50c3f9b96426e90bf53d541db327",
+      "bytes": 47802320
+    }
+  },
+  "binary_capture_note": "Capture after final no-run builds. Earlier functional outputs preserve original artifact paths, but repeated builds may overwrite same path. These late hashes authenticate final binaries, not retroactive execution hashes. No historical artifact is relabeled.",
+  "early_diagnostic_note": "First three compilation-only receipts precede comprehensive source hashing and are raw diagnostics, not qualified frozen proof. Their outputs/diagnoses remain retained.",
+  "unchanged_protected_documents": [
+    "core/docs/issues/307/HANDOFF-S7-S13.md",
+    "core/docs/issues/307/SOURCE-ORGANIZATION-S7-S13.md",
+    "core/docs/issues/307/WORKSPACE-EFFICIENCY-ANALYSIS.md"
+  ],
+  "unrelated_containers": "9cf2fe345496 layerfs-experiment-305-dev\nce75ac504df9 layerfs-4c8cde9ee1cf49f8049298b3377d4927\nd2433851ea59 layerfs-dbd59ea75fdc62de0a1f6d9d099609ab\nd2550144998b layerfs-76b116dc9d984679f5802e2ec9c0798d\n",
+  "milestones": {
+    "S7": "CHECKPOINT incomplete",
+    "S9": "CHECKPOINT incomplete"
+  },
+  "reuse": "Host code is unchanged by macOS-only error cfg. SDK fourteen bodies are unaffected by the added history test. Prior S6 device proofs and S7 operation shapes stay at original identity. No unchanged timing arm was rerun."
+}

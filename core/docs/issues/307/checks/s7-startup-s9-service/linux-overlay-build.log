@@ -1,0 +1,20 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+    Finished `test` profile [optimized + debuginfo] target(s) in 17.26s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_overlay-265a84d6aa048e96)
+  Executable tests/compound.rs (core/target/cluster2-linux/debug/deps/compound-25731f3365e30104)
+  Executable tests/costs.rs (core/target/cluster2-linux/debug/deps/costs-893e557d5aed5d1d)
+  Executable tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-7071dfaa290c647a)
+  Executable tests/engine.rs (core/target/cluster2-linux/debug/deps/engine-bbb4c0e497ee6bef)
+  Executable tests/frontier.rs (core/target/cluster2-linux/debug/deps/frontier-89ec8d35e46344c3)
+  Executable tests/lifetimes.rs (core/target/cluster2-linux/debug/deps/lifetimes-e42cda054b91563c)
+  Executable tests/orphans.rs (core/target/cluster2-linux/debug/deps/orphans-922ee475fed5c318)
+  Executable tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-ba87b3c1e61f7d14)
+  Executable tests/payload_fragmentation.rs (core/target/cluster2-linux/debug/deps/payload_fragmentation-33476d2eba4b3e49)
+  Executable tests/resources.rs (core/target/cluster2-linux/debug/deps/resources-02edd44b56461e54)
+  Executable tests/source.rs (core/target/cluster2-linux/debug/deps/source-e28f76f78d13ba7c)
+  Executable tests/startup_cost.rs (core/target/cluster2-linux/debug/deps/startup_cost-e4a18ceb2f497472)

@@ -1,0 +1,35 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (core/target/cluster2-runtime-tests/debug/deps/layerfs_sdk-a9ac2f7b76117cf8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/runtime.rs (core/target/cluster2-runtime-tests/debug/deps/runtime-0693fe70d77b0de3)
+
+running 14 tests
+S4_OWNING_SERIALS first=1 refill=1024 next=1031 scope_allocator=history_catalog
+test workspace_serials_come_from_the_owning_scope_allocator_under_authority ... ok
+test missing_dependency_finish_is_retained_as_the_original_storage_error ... ok
+test disconnect_retains_completed_save_and_reconnect_reads_without_finish_replay ... ok
+test history_up_to_date_retains_exact_stage_and_transition_without_replay ... ok
+test refused_admission_retains_the_exact_phase_without_replay ... ok
+S3_OWNING_STAT logical=131071 namespace_refs=2 owning_payload_bytes=0 owning_pack_bytes=0 locate=1
+test workspace_stat_uses_authenticated_scoped_owning_lengths_without_payload_or_fallback ... ok
+test service_orders_one_save_across_classes_and_protects_retained_receipts ... ok
+test disconnect_cancels_only_unattempted_and_promotes_another_connection_save_head ... ok
+test capability_scope_authority_and_read_window_are_checked_before_service ... ok
+test service_revalidates_queued_authority_and_fences_retained_results_across_rewrap ... ok
+S9_FAIR_SERVICE ServiceWork { admitted: 5, refused: 1, dispatched: [0, 4, 1, 0, 0, 0], cancelled: 0, credited_bytes: 0, peak_credited_bytes: 6096, outstanding: 0, copied_bytes: 0, queue_wait_ns: [0, 175542, 1875, 0, 0, 0], service_ns: [0, 376, 166917, 0, 0, 0], registry_capacity_bytes: 18240 }
+test fair_service_rotates_workspace_and_class_and_retains_result_credit ... ok
+test history_conflict_retains_deciding_stage_and_only_exact_discard_releases_it ... ok
+test history_candidate_authority_and_grammar_refusals_preserve_save_and_stage_custody ... ok
+test independent_saves_pending_reads_retained_finish_and_slot_reuse ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

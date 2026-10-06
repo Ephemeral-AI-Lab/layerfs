@@ -1,0 +1,479 @@
+{
+  "rows": [
+    {
+      "receipt": "boundary-receipt.json",
+      "exit": 0,
+      "kind": "boundary",
+      "wall_ns": 456730833,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "environment-receipt.json",
+      "exit": 0,
+      "kind": "environment",
+      "wall_ns": 439687083,
+      "limit_s": 60,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "final-boundary-receipt.json",
+      "exit": 0,
+      "kind": "boundary",
+      "wall_ns": 449096375,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "final-fmt-receipt.json",
+      "exit": 0,
+      "kind": "format",
+      "wall_ns": 1371040417,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-build-repaired-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 3251590334,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-build-service-initial-receipt.json",
+      "exit": 0,
+      "kind": "Compilation only --no-run; no tests",
+      "wall_ns": 3716654792,
+      "limit_s": null,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-build-tests-final-receipt.json",
+      "exit": 101,
+      "kind": "Compilation only --no-run; no tests",
+      "wall_ns": 12520214875,
+      "limit_s": null,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-clippy-receipt.json",
+      "exit": 101,
+      "kind": "clippy",
+      "wall_ns": 9665269125,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-clippy-repaired-receipt.json",
+      "exit": 0,
+      "kind": "clippy",
+      "wall_ns": 784392500,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-daemon-tests-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 5802304000,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 12,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-engine-build-initial-receipt.json",
+      "exit": 101,
+      "kind": "Compilation only --no-run; no test invoked",
+      "wall_ns": 12432694916,
+      "limit_s": null,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-final-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 5189079333,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-final-clippy-receipt.json",
+      "exit": 0,
+      "kind": "clippy",
+      "wall_ns": 1697922416,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-frozen-proof-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 448880875,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-frozen-proof-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 34902881292,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 173,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-overlay-tests-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 22640717750,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 48,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-platform-clippy-receipt.json",
+      "exit": 0,
+      "kind": "clippy",
+      "wall_ns": 1313370875,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-project-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 3759586292,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-project-repaired-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 1848841167,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-project-repaired-tests-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 9486164833,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 66,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-project-tests-receipt.json",
+      "exit": 101,
+      "kind": "test",
+      "wall_ns": 2336362375,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-sdk-final-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 2509400416,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-sdk-final-tests-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 1272044084,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 14,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-sdk-history-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 1974193125,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-sdk-history-test-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 884302834,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 1,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-sdk-tests-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 1261009167,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 14,
+      "ignored": 0
+    },
+    {
+      "receipt": "host-workspace-tests-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 14182088000,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 32,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-clippy-final-receipt.json",
+      "exit": 0,
+      "kind": "clippy",
+      "wall_ns": 2637076708,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-clippy-receipt.json",
+      "exit": 101,
+      "kind": "clippy",
+      "wall_ns": 9370863625,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-clippy-repaired-receipt.json",
+      "exit": 101,
+      "kind": "clippy",
+      "wall_ns": 3722775125,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-daemon-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 5704788917,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-daemon-tests-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 715885250,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 12,
+      "ignored": 1
+    },
+    {
+      "receipt": "linux-final-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 32173678000,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-frozen-proof-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 2326963917,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-frozen-proof-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 11687125417,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 92,
+      "ignored": 2
+    },
+    {
+      "receipt": "linux-overlay-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 17777013583,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-overlay-tests-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 7676884833,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 48,
+      "ignored": 1
+    },
+    {
+      "receipt": "linux-project-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 10319415459,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-project-tests-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 874038417,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 3,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-root-frozen-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 5916681958,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-root-frozen-proof-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 937094625,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 3,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-sdk-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 12725604000,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-workspace-build-receipt.json",
+      "exit": 0,
+      "kind": "build",
+      "wall_ns": 7355737833,
+      "limit_s": 240,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "linux-workspace-tests-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 4349746208,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 32,
+      "ignored": 0
+    },
+    {
+      "receipt": "platform-final-boundary-receipt.json",
+      "exit": 0,
+      "kind": "boundary",
+      "wall_ns": 400876542,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "platform-final-fmt-receipt.json",
+      "exit": 0,
+      "kind": "format",
+      "wall_ns": 1321135834,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "receipt": "tool-self-tests-receipt.json",
+      "exit": 0,
+      "kind": "test",
+      "wall_ns": 342580708,
+      "limit_s": 120,
+      "timeout_failed": false,
+      "passed": 0,
+      "ignored": 0
+    }
+  ],
+  "final_host": "173 pass;39 pinned binaries unchanged",
+  "final_linux": "92 engine/owner/Workspace pass,2 device cases ignored;3 native root/import/scaling pass;26+3 pinned binaries unchanged",
+  "earlier_scope": "Raw diagnostic/component outputs retained without relabeling",
+  "tool_tests": "39 pass, unchanged tool sources reused",
+  "eligibility": "Functional/count only; uncontrolled caches, no cold/speed/RSS/rate qualification"
+}

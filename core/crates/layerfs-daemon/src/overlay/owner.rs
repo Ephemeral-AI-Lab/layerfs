@@ -79,6 +79,7 @@ pub struct Owner {
     client: OwnerClient,
     worker: Option<JoinHandle<()>>,
     profile: DatabaseProfile,
+    startup: Arc<layerfs_overlay::CreationWork>,
 }
 #[derive(Clone)]
 pub struct OwnerClient {
@@ -127,61 +128,94 @@ impl Owner {
         profile: ProfileConfig,
         config: OwnerConfig,
     ) -> Result<Self, OwnerError> {
-        if config.bytes <= config.lifecycle_reserve
-            || config.namespaces == 0
-            || config.jobs_per_namespace == 0
-            || config.lifecycle_jobs_per_namespace == 0
-        {
-            return Err(OwnerError::InvalidAdmission);
-        }
-        let reserved = config
-            .namespaces
-            .checked_mul(config.lifecycle_jobs_per_namespace)
-            .and_then(|slots| {
-                slots.checked_mul(
-                    std::mem::size_of::<Command>() + std::mem::size_of::<crate::JobWork>() + 768,
-                )
-            })
-            .ok_or(OwnerError::InvalidAdmission)?;
-        if config.lifecycle_reserve < reserved {
-            return Err(OwnerError::InvalidAdmission);
-        }
-        let shared = Arc::new(Shared::new(config));
-        let owner_shared = shared.clone();
-        let path = path.to_owned();
-        let (ready, receiver) = mpsc::sync_channel(1);
-        let worker = thread::Builder::new()
-            .name("layerfs-overlay-owner".into())
-            .spawn(move || {
-                let db = match Overlay::create(&path, profile) {
-                    Ok(db) => db,
-                    Err(error) => {
-                        let _ = ready.send(Err(OwnerError::Overlay(error)));
+        Self::start_observed(path, profile, config).result
+    }
+
+    /// Retains original initialization work even when startup fails. This does
+    /// not retry creation or remove the failed database artifact.
+    pub fn start_observed(
+        path: &Path,
+        profile: ProfileConfig,
+        config: OwnerConfig,
+    ) -> crate::OwnerStart {
+        let started = Instant::now();
+        let mut startup = Arc::new(layerfs_overlay::CreationWork::default());
+        let result = (|| {
+            if config.bytes <= config.lifecycle_reserve
+                || config.namespaces == 0
+                || config.jobs_per_namespace == 0
+                || config.lifecycle_jobs_per_namespace == 0
+            {
+                return Err(OwnerError::InvalidAdmission);
+            }
+            let reserved = config
+                .namespaces
+                .checked_mul(config.lifecycle_jobs_per_namespace)
+                .and_then(|slots| {
+                    slots.checked_mul(
+                        std::mem::size_of::<Command>()
+                            + std::mem::size_of::<crate::JobWork>()
+                            + 768,
+                    )
+                })
+                .ok_or(OwnerError::InvalidAdmission)?;
+            if config.lifecycle_reserve < reserved {
+                return Err(OwnerError::InvalidAdmission);
+            }
+            let shared = Arc::new(Shared::new(config));
+            let owner_shared = shared.clone();
+            let path = path.to_owned();
+            let (ready, receiver) = mpsc::sync_channel(1);
+            let worker = thread::Builder::new()
+                .name("layerfs-overlay-owner".into())
+                .spawn(move || {
+                    let created = Overlay::create_observed(&path, profile);
+                    let startup = Arc::new(created.work);
+                    let db = match created.result {
+                        Ok(db) => db,
+                        Err(error) => {
+                            let _ = ready.send((Err(OwnerError::Overlay(error)), startup));
+                            return;
+                        }
+                    };
+                    if ready.send((Ok(db.profile().clone()), startup)).is_err() {
                         return;
                     }
-                };
-                if ready.send(Ok(db.profile().clone())).is_err() {
-                    return;
+                    run(&owner_shared, &db);
+                })
+                .map_err(OwnerError::Io)?;
+            let profile = match receiver.recv() {
+                Ok((Ok(profile), observed)) => {
+                    startup = observed;
+                    profile
                 }
-                run(&owner_shared, &db);
+                Ok((Err(error), observed)) => {
+                    startup = observed;
+                    worker.join().map_err(|_| OwnerError::WorkerPanicked)?;
+                    return Err(error);
+                }
+                Err(_) => {
+                    worker.join().map_err(|_| OwnerError::WorkerPanicked)?;
+                    return Err(OwnerError::Disconnected);
+                }
+            };
+            Ok(Self {
+                client: OwnerClient { shared },
+                worker: Some(worker),
+                profile,
+                startup: startup.clone(),
             })
-            .map_err(OwnerError::Io)?;
-        let profile = match receiver.recv() {
-            Ok(Ok(profile)) => profile,
-            Ok(Err(error)) => {
-                worker.join().map_err(|_| OwnerError::WorkerPanicked)?;
-                return Err(error);
-            }
-            Err(_) => {
-                worker.join().map_err(|_| OwnerError::WorkerPanicked)?;
-                return Err(OwnerError::Disconnected);
-            }
-        };
-        Ok(Self {
-            client: OwnerClient { shared },
-            worker: Some(worker),
-            profile,
-        })
+        })();
+        crate::OwnerStart {
+            result,
+            startup,
+            elapsed_ns: started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+        }
+    }
+
+    /// Finite creation receipt, separate from all foreground/maintenance jobs.
+    pub fn startup_work(&self) -> &layerfs_overlay::CreationWork {
+        &self.startup
     }
     pub fn client(&self) -> OwnerClient {
         self.client.clone()

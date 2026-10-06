@@ -3,15 +3,11 @@ use crate::{
     metrics, DatabaseProfile, DatabaseWork, OverlayError, OverlayResult, ProfileConfig,
     StatementKind,
 };
-use rusqlite::{Connection, OpenFlags, ToSql};
+use rusqlite::{Connection, ToSql};
 use std::{
     cell::{Cell, RefCell},
-    fs::OpenOptions,
     path::Path,
-    sync::atomic::{AtomicU64, Ordering},
 };
-
-static NEXT_ENGINE: AtomicU64 = AtomicU64::new(1);
 
 /// Daemon-local engine. The daemon schedules short jobs on its owning thread.
 pub struct Overlay {
@@ -25,70 +21,19 @@ pub struct Overlay {
     /// possible work. A rolled-back enqueue can leave only a false positive.
     pub(crate) maintenance_ready: Cell<bool>,
     pub(crate) closed_ready: Cell<bool>,
-    profile: DatabaseProfile,
-    allocation: crate::database::allocation::Allocation,
+    pub(super) profile: DatabaseProfile,
+    pub(super) allocation: crate::database::allocation::Allocation,
 }
 impl Overlay {
     /// Creates fresh disposable state once. An existing path is refused.
     /// Failed startup leaves its created artifact in custody; no implicit replay.
     pub fn create(path: &Path, config: ProfileConfig) -> OverlayResult<Self> {
-        if !cfg!(any(target_os = "macos", target_os = "linux")) {
-            return Err(OverlayError::UnsupportedPlatform);
-        }
-        let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        let file = options.open(path)?;
-        let allocation = crate::database::allocation::Allocation::new(file, path)?;
-        allocation.admit(false, 0)?;
-        let connection = Connection::open_with_flags(
-            path,
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-        )?;
-        let mut profile = crate::profile::initialize(&connection, config)?;
-        let work = RefCell::new(DatabaseWork::default());
-        // Startup DDL is finite schema work, independently recorded from jobs.
-        use rusqlite::fallible_iterator::FallibleIterator;
-        let mut batch = rusqlite::Batch::new(&connection, include_str!("../../sql/schema.sql"));
-        while let Some(mut statement) = batch.next()? {
-            statement.execute([])?;
-        }
-        let mut accounting =
-            rusqlite::Batch::new(&connection, include_str!("../../sql/accounting.sql"));
-        while let Some(mut statement) = accounting.next()? {
-            statement.execute([])?;
-        }
-        profile.schema_version =
-            connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-        let application: i64 =
-            connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
-        if profile.schema_version != 14 || application != 1279676210 {
-            return Err(OverlayError::Invalid("overlay schema readback"));
-        }
-        connection.set_prepared_statement_cache_capacity(48);
-        // A process-local capability cannot cross daemon owners even when their
-        // local namespace/incarnation numbers happen to match. Remote routing
-        // still requires the authenticated runtime's daemon incarnation.
-        let identity = NEXT_ENGINE
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
-                next.checked_add(1)
-            })
-            .map_err(|_| OverlayError::Invalid("engine identity exhausted"))?;
-        Ok(Self {
-            identity,
-            connection,
-            work,
-            payload_work: Cell::new(crate::PayloadWork::default()),
-            quarantined: Cell::new(false),
-            maintenance_ready: Cell::new(false),
-            closed_ready: Cell::new(false),
-            profile,
-            allocation,
-        })
+        Self::create_observed(path, config).result
+    }
+
+    /// Creates one engine while retaining startup work on success or failure.
+    pub fn create_observed(path: &Path, config: ProfileConfig) -> crate::Creation {
+        crate::database::startup::create(path, config)
     }
     /// Selected settings actually read back from this initialized connection.
     pub fn profile(&self) -> &DatabaseProfile {

@@ -16,3 +16,4 @@ pub use commands::{Command, Response, ServiceClass};
 pub use owner::{Completion, Owner, OwnerClient, OwnerConfig, OwnerError, Pending};
 pub use queue::OwnerWork;
 pub use service::observations::JobWork;
+pub use service::startup::OwnerStart;

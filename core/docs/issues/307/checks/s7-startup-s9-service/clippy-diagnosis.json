@@ -1,0 +1,5 @@
+{
+  "failed_receipt": "host-clippy-receipt.json",
+  "cause": "Queue::push performed contains_key plus insert on the same bounded BTreeMap. Clippy map_entry rejects this redundant lookup.",
+  "repair": "Use Vacant entry insertion, preserving one ready Workspace entry and class rotation. Rebuild and repeat SDK only because this production queue changed."
+}

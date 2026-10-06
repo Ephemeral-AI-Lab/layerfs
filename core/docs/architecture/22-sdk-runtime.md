@@ -104,3 +104,9 @@ Branch's allocation scope through the owning history catalog, at most 65,536
 serials per call. Workspace consumes the range locally. A failed or unknown
 call is never repeated for the same range; a consumed range is simply unused.
 Logical transport, fair network service and disconnect fences remain S9.
+
+S9 adds [bound history handlers/receipts](37-runtime-history-receipts.md) and
+[bounded fair typed dispatch](38-authenticated-runtime-service.md). These current
+local mechanisms preserve the initial public APIs and exact authority/custody;
+logical transport, actual network/restart fences and full acceptance remain open.
+Earlier limitations above retain their original checkpoint identity.

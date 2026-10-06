@@ -1,0 +1,15 @@
+{
+  "kind": "Functional/count checks only; no speed/residency/rate eligibility",
+  "cache": "Uncontrolled host/Docker caches; no cold claim, no setup warmth credit",
+  "interference": "Host overlay and SDK functional commands overlapped briefly; Workspace functional command overlapped Clippy. These are not timed treatment arms. Later Docker functional checks run serially. Other four unrelated running containers remain untouched.",
+  "build_notes": "Initial combined no-run built all changed packages. Per-package feature unification caused a2.94s Workspace rebuild during its functional command; small test-only import edits caused0.57s Project rebuild. Both actual test ceilings included compilation. Subsequent repaired/added bodies use individual no-run first. No hang or performance result is inferred.",
+  "unrun": [
+    "Cold speed",
+    "Phase RSS and whole-system residency",
+    "Sustained arrival/service-rate qualification",
+    "Greater-than4GiB native stream",
+    "Logical authenticated transport/client",
+    "Native FUSE product acceptance"
+  ],
+  "reuse": "Existing S6 physical/device receipts and prior S7 operation query plans remain at their original identity. Final count/functional outputs cover modified startup instrumentation. SDK fourteen passing bodies are unaffected by the added queued-history body; only the new body needs execution after its no-run build."
+}

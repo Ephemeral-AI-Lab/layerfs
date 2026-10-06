@@ -1,0 +1,17 @@
+# Retained checkpoint failures and outcomes
+
+> **Status:** Dated planning checkpoint; not release evidence or a product contract.
+
+- Initial engine no-run compilation failed101: new external tests named `OverlayError::Sqlite` instead of public `Sql`, and moved code left an unused import. [Original output](host-engine-build-initial.log), [diagnosis](engine-build-diagnosis.json).
+- Combined new-test no-run compilation failed101: two external SDK tests named nonexistent `ObjectRole::FileRoot`; whole-file canonical bodies require `WholeFile`. [Original output](host-build-tests-final.log), [diagnosis](test-build-diagnosis.json).
+- Initial warning-denying Clippy failed101: service Queue used `contains_key` followed by `insert`. Use Vacant entry once without changing rotation. [Original output](host-clippy.log), [diagnosis](clippy-diagnosis.json). Only affected SDK bodies repeated after that production correction.
+- Initial Project functional command failed101 with2 failed complete-root bodies: native macOS link mode0755 failed the canonical fixed0777 grammar. Keep canonical mode0777 and native change-detection metadata. [Original output](host-project-tests.log), [diagnosis](import-link-diagnosis.json). No third-party or canonical-format change. Repaired Project covering check includes previously unrun targets.
+- Every actual test command had an explicit120s wall ceiling; none reached it. Original compiler failures invoked no tests. Build compilation limits are separate from test limits.
+- Two Linux owned-device integration cases (one Overlay, one Daemon) remain IGNORED in this checkpoint. Original unchanged S6 ext4/device-full proof retains its identity; no new device campaign was selected.
+- Linux global Store execution remains unavailable: SDK provider bodies are macOS cfg. Docker compiles SDK and runs native importer through memory ports. Existing persistence BackendError::Filesystem unused warning is retained. Active graph's unused fuser patch warning is expected because replacement FUSE remains excluded; no native qualification is claimed here.
+- Cache state is uncontrolled and functional commands had declared interference in [scope notes](check-scope-notes.json). No wall is a performance/cold/RSS/rate result. Initial Workspace per-package feature unification and test-only Project edits rebuilt during functional commands; notes preserve the deviation rather than treating compilation as slow test work.
+- Cold speed, phase/whole-system residency, page/journal/device-I/O and sustained rate acceptance, greater-than4GiB native stream, complete logical transport/restart custody and native FUSE product proofs remain NOT_RUN. Existing fuser timestamp/kernel failures remain unchanged in their own append-only campaign.
+
+- Linux warning-denying Clippy failed101 on the pre-existing private `BackendError::Filesystem` variant, constructed only in macOS-cfg allocation owners. The same cfg now covers the variant and conversion arm; macOS behavior and unsupported Linux provider refusal remain unchanged. [Original output](linux-clippy.log), [diagnosis](linux-clippy-diagnosis.json). No blanket lint suppression or provider substitution was used.
+
+- Next Linux Clippy pass reached an existing Linux-only ignored device fixture and failed101 for cloning `Copy` WorkspaceState. Dereference the state; no product change or device workload replay. [Output](linux-clippy-repaired.log), [diagnosis](linux-device-clippy-diagnosis.json).

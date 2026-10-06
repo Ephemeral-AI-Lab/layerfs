@@ -1,0 +1,6 @@
+{
+  "failed_receipt": "linux-clippy-receipt.json",
+  "cause": "Existing private BackendError::Filesystem is constructed only by macOS-cfg global allocation/owner modules. Linux compiles the unused enum variant; warning-denying Clippy makes the prior warning an error.",
+  "repair": "Apply the same macOS cfg to that private variant and its HistoryError conversion arm. Preserve exact macOS behavior and unsupported Linux global-provider refusal; no lint suppression, new provider, third-party change or public API change.",
+  "affected_verification": "Linux warning-denying Clippy; host compile/Clippy. Existing host provider tests are reused because macOS selected code is identical."
+}

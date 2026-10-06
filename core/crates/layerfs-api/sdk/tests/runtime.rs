@@ -913,3 +913,378 @@ fn history_conflict_retains_deciding_stage_and_only_exact_discard_releases_it() 
     assert_eq!(fresh.snapshot().effective_root, rb);
     assert_eq!(a.snapshot().branch.head_commit, None);
 }
+
+fn service_job(
+    service: &mut layerfs_sdk::runtime::service::Service<'_, '_>,
+    connection: layerfs_sdk::runtime::service::ConnectionId,
+    request: layerfs_sdk::runtime::service::Request,
+) -> layerfs_sdk::runtime::service::ServiceCompletion {
+    let ticket = service
+        .try_submit(connection, request)
+        .map_err(|(e, _)| e)
+        .unwrap();
+    assert_eq!(service.step(), Some(ticket));
+    service.take_completion(ticket).unwrap().unwrap()
+}
+
+fn service_begin(
+    service: &mut layerfs_sdk::runtime::service::Service<'_, '_>,
+    connection: layerfs_sdk::runtime::service::ConnectionId,
+) -> SaveId {
+    use layerfs_sdk::runtime::service::{Request, Response, ServiceOutcome};
+    let done = service_job(service, connection, Request::Begin);
+    match done.outcome() {
+        ServiceOutcome::Dispatched(Ok(Response::Begun(save))) => *save,
+        other => panic!("begin: {other:?}"),
+    }
+}
+
+#[test]
+fn fair_service_rotates_workspace_and_class_and_retains_result_credit() {
+    use layerfs_sdk::runtime::service::{
+        Request, Response, Service, ServiceConfig, ServiceOutcome,
+    };
+    let mut fixture = Fixture::new();
+    let branch = fixture.branch;
+    let mut sessions = fixture.runtime.sessions();
+    let a = binding(&sessions, branch, 141, 1);
+    let b = binding(&sessions, branch, 142, 2);
+    let mut service = Service::new(
+        &mut sessions,
+        ServiceConfig {
+            jobs: 4,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let ca = service.connect(&verified(1), a.clone()).unwrap();
+    let ca_alias = service.connect(&verified(1), a).unwrap();
+    let cb = service.connect(&verified(2), b).unwrap();
+    let a1 = service.try_submit(ca, Request::Policy).unwrap();
+    let a2 = service.try_submit(ca_alias, Request::Policy).unwrap();
+    let b1 = service.try_submit(cb, Request::Policy).unwrap();
+    let serial = service
+        .try_submit(ca_alias, Request::ReserveInodes { count: 1 })
+        .unwrap();
+    assert!(service.take_completion(a1).unwrap().is_none());
+    let mut retained = Vec::new();
+    for expected in [a1, b1, serial, a2] {
+        assert_eq!(service.step(), Some(expected));
+        retained.push(service.take_completion(expected).unwrap().unwrap());
+    }
+    assert!(matches!(
+        retained[2].outcome(),
+        ServiceOutcome::Dispatched(Ok(Response::Serials { count: 1, .. }))
+    ));
+    assert_eq!(service.work().outstanding, 4);
+    assert!(matches!(
+        service.try_submit(cb, Request::Policy),
+        Err((RuntimeError::AdmissionUnavailable, Request::Policy))
+    ));
+    drop(retained.pop());
+    let last = service_job(&mut service, cb, Request::Policy);
+    assert_eq!(service.work().outstanding, 4);
+    drop(last);
+    drop(retained);
+    assert_eq!(service.work().outstanding, 0);
+    assert_eq!(service.work().credited_bytes, 0);
+    println!("S9_FAIR_SERVICE {:?}", service.work());
+}
+
+#[test]
+fn service_orders_one_save_across_classes_and_protects_retained_receipts() {
+    use layerfs_sdk::runtime::service::{
+        Request, Response, Service, ServiceConfig, ServiceOutcome,
+    };
+    let mut fixture = Fixture::new();
+    let branch = fixture.branch;
+    let mut sessions = fixture.runtime.sessions();
+    let a = binding(&sessions, branch, 151, 1);
+    let b = binding(&sessions, branch, 152, 2);
+    let mut service = Service::new(&mut sessions, ServiceConfig::default()).unwrap();
+    let ca = service.connect(&verified(1), a).unwrap();
+    let cb = service.connect(&verified(2), b).unwrap();
+    let save = service_begin(&mut service, ca);
+    let canonical = encode_whole_file_payload(b"ordered same-Save bytes").unwrap();
+    let id = ObjectId::for_bytes(&canonical);
+    let accept = service
+        .try_submit(
+            ca,
+            Request::Accept {
+                save,
+                id,
+                role: ObjectRole::WholeFile,
+                canonical: canonical.clone(),
+            },
+        )
+        .unwrap();
+    let read = service
+        .try_submit(
+            ca,
+            Request::Objects {
+                save: Some(save),
+                ids: vec![id],
+            },
+        )
+        .unwrap();
+    let finish = service.try_submit(ca, Request::Finish { save }).unwrap();
+    let policy = service.try_submit(cb, Request::Policy).unwrap();
+    for expected in [accept, policy, read, finish] {
+        assert_eq!(service.step(), Some(expected));
+    }
+    let accepted = service.take_completion(accept).unwrap().unwrap();
+    let delivered = service.take_completion(read).unwrap().unwrap();
+    let finished = service.take_completion(finish).unwrap().unwrap();
+    drop(service.take_completion(policy).unwrap().unwrap());
+    match delivered.outcome() {
+        ServiceOutcome::Dispatched(Ok(Response::Objects(values))) => {
+            assert_eq!(values.len(), 1);
+            assert_eq!(values[0].id, id);
+            assert_eq!(values[0].canonical, canonical);
+        }
+        other => panic!("read: {other:?}"),
+    }
+    assert!(service
+        .save_completion(&finished)
+        .unwrap()
+        .outcome()
+        .is_ok());
+    assert_eq!(service.work().copied_bytes, canonical.len() as u64);
+    let refusal = service_job(&mut service, ca, Request::Release { save });
+    assert!(matches!(
+        refusal.outcome(),
+        ServiceOutcome::Dispatched(Err(RuntimeError::RetainedCustody))
+    ));
+    assert!(service
+        .save_completion(&finished)
+        .unwrap()
+        .outcome()
+        .is_ok());
+    drop(refusal);
+    drop(accepted);
+    drop(delivered);
+    drop(finished);
+    // New explicit acknowledgement after all earlier reply owners are released.
+    let released = service_job(&mut service, ca, Request::Release { save });
+    assert!(matches!(
+        released.outcome(),
+        ServiceOutcome::Dispatched(Ok(Response::Released))
+    ));
+    drop(released);
+    assert_eq!(service.work().outstanding, 0);
+}
+
+#[test]
+fn disconnect_cancels_only_unattempted_and_promotes_another_connection_save_head() {
+    use layerfs_sdk::runtime::service::{
+        Request, Response, Service, ServiceConfig, ServiceOutcome,
+    };
+    let mut fixture = Fixture::new();
+    let branch = fixture.branch;
+    let mut sessions = fixture.runtime.sessions();
+    let bound = binding(&sessions, branch, 161, 1);
+    let mut service = Service::new(&mut sessions, ServiceConfig::default()).unwrap();
+    let a = service.connect(&verified(1), bound.clone()).unwrap();
+    let b = service.connect(&verified(1), bound).unwrap();
+    let save = service_begin(&mut service, a);
+    let canonical = encode_whole_file_payload(b"cancelled before admission").unwrap();
+    let accept = service
+        .try_submit(
+            a,
+            Request::Accept {
+                save,
+                id: ObjectId::for_bytes(&canonical),
+                role: ObjectRole::WholeFile,
+                canonical: canonical.clone(),
+            },
+        )
+        .unwrap();
+    let finish = service.try_submit(a, Request::Finish { save }).unwrap();
+    let abort = service.try_submit(b, Request::Abort { save }).unwrap();
+    let fence = service.disconnect(a).unwrap();
+    assert_eq!(fence.cancelled, 2);
+    assert_eq!(fence.completed, 0);
+    assert!(matches!(
+        service.try_submit(a, Request::Policy),
+        Err((RuntimeError::StaleCapability, Request::Policy))
+    ));
+    assert_eq!(service.step(), Some(abort));
+    let unattempted = service.take_completion(accept).unwrap().unwrap();
+    assert!(
+        matches!(unattempted.outcome(), ServiceOutcome::Unattempted(Request::Accept { canonical: bytes, .. }) if bytes == &canonical)
+    );
+    let not_finished = service.take_completion(finish).unwrap().unwrap();
+    assert!(matches!(
+        not_finished.outcome(),
+        ServiceOutcome::Unattempted(Request::Finish { .. })
+    ));
+    let aborted = service.take_completion(abort).unwrap().unwrap();
+    assert!(matches!(
+        aborted.outcome(),
+        ServiceOutcome::Dispatched(Ok(Response::Completion(_)))
+    ));
+    assert!(
+        matches!(service.save_completion(&aborted).unwrap().outcome(), Err(RuntimeError::Storage(e)) if matches!(e.as_ref(), StorageError::Aborted))
+    );
+    assert_eq!(service.work().cancelled, 2);
+    drop(unattempted);
+    drop(not_finished);
+    drop(aborted);
+    drop(service_job(&mut service, b, Request::Release { save }));
+}
+
+#[test]
+fn disconnect_retains_completed_save_and_reconnect_reads_without_finish_replay() {
+    use layerfs_sdk::runtime::service::{
+        Request, Response, Service, ServiceConfig, ServiceOutcome,
+    };
+    let mut fixture = Fixture::new();
+    let branch = fixture.branch;
+    let mut sessions = fixture.runtime.sessions();
+    let bound = binding(&sessions, branch, 171, 1);
+    let mut service = Service::new(&mut sessions, ServiceConfig::default()).unwrap();
+    let a = service.connect(&verified(1), bound.clone()).unwrap();
+    let save = service_begin(&mut service, a);
+    let ticket = service.try_submit(a, Request::Finish { save }).unwrap();
+    assert_eq!(service.step(), Some(ticket));
+    let fence = service.disconnect(a).unwrap();
+    assert_eq!(fence.completed, 1);
+    assert_eq!(fence.cancelled, 0);
+    let original = service.take_completion(ticket).unwrap().unwrap();
+    assert!(service
+        .save_completion(&original)
+        .unwrap()
+        .outcome()
+        .is_ok());
+    let b = service.connect(&verified(1), bound).unwrap();
+    assert_ne!(a, b);
+    let receipt = service_job(&mut service, b, Request::Completion { save });
+    assert!(service.save_completion(&receipt).unwrap().outcome().is_ok());
+    let duplicate = service_job(&mut service, b, Request::Finish { save });
+    assert!(matches!(
+        duplicate.outcome(),
+        ServiceOutcome::Dispatched(Err(RuntimeError::AlreadyAttempted))
+    ));
+    drop(duplicate);
+    drop(original);
+    drop(receipt);
+    let released = service_job(&mut service, b, Request::Release { save });
+    assert!(matches!(
+        released.outcome(),
+        ServiceOutcome::Dispatched(Ok(Response::Released))
+    ));
+}
+
+#[test]
+fn service_revalidates_queued_authority_and_fences_retained_results_across_rewrap() {
+    use layerfs_sdk::runtime::service::{Request, Service, ServiceConfig, ServiceOutcome};
+    let mut fixture = Fixture::new();
+    let branch = fixture.branch;
+    let revoked = fixture.revoked.clone();
+    let mut sessions = fixture.runtime.sessions();
+    let bound = binding(&sessions, branch, 181, 1);
+    let mut service = Service::new(&mut sessions, ServiceConfig::default()).unwrap();
+    assert!(matches!(
+        service.connect(&verified(2), bound.clone()),
+        Err(RuntimeError::Denied)
+    ));
+    let connection = service.connect(&verified(1), bound.clone()).unwrap();
+    let ticket = service.try_submit(connection, Request::Policy).unwrap();
+    revoked.set(true);
+    assert_eq!(service.step(), Some(ticket));
+    let refused = service.take_completion(ticket).unwrap().unwrap();
+    assert!(matches!(
+        refused.outcome(),
+        ServiceOutcome::Dispatched(Err(RuntimeError::Denied))
+    ));
+    drop(service);
+    assert!(matches!(
+        Service::new(&mut sessions, ServiceConfig::default()),
+        Err(RuntimeError::RetainedCustody)
+    ));
+    drop(refused);
+    revoked.set(false);
+    let mut next = Service::new(&mut sessions, ServiceConfig::default()).unwrap();
+    let new_connection = next.connect(&verified(1), bound).unwrap();
+    assert_ne!(connection, new_connection);
+    assert!(matches!(
+        next.try_submit(connection, Request::Policy),
+        Err((RuntimeError::StaleCapability, Request::Policy))
+    ));
+}
+
+#[test]
+fn queued_history_retains_exact_stage_transition_and_explicit_release_ownership() {
+    use layerfs_sdk::runtime::service::{
+        Request, Response, Service, ServiceConfig, ServiceOutcome,
+    };
+    let mut fixture = Fixture::new();
+    let branch = fixture.branch;
+    let mut sessions = fixture.runtime.sessions();
+    let bound = binding(&sessions, branch, 191, 1);
+    let root = bound.snapshot().effective_root;
+    let mut service = Service::new(&mut sessions, ServiceConfig::default()).unwrap();
+    let connection = service.connect(&verified(1), bound.clone()).unwrap();
+    let save = service_begin(&mut service, connection);
+    let finish = service_job(&mut service, connection, Request::Finish { save });
+    assert!(service.save_completion(&finish).unwrap().outcome().is_ok());
+    drop(finish);
+    let staged = service
+        .try_submit(
+            connection,
+            Request::Stage {
+                save,
+                root,
+                generation: 1,
+            },
+        )
+        .unwrap();
+    let committed = service
+        .try_submit(connection, Request::Commit { save })
+        .unwrap();
+    assert_eq!(service.step(), Some(staged));
+    let stage = service.take_completion(staged).unwrap().unwrap();
+    let token = service
+        .history_receipts(&stage)
+        .unwrap()
+        .stage()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .token;
+    assert_eq!(service.step(), Some(committed));
+    let commit = service.take_completion(committed).unwrap().unwrap();
+    assert!(
+        matches!(service.history_receipts(&commit).unwrap().commit().unwrap(), Ok(layerfs_history::CommitStagedOutcome::UpToDate { root: actual, .. }) if *actual == root)
+    );
+    service.disconnect(connection).unwrap();
+    let reconnect = service.connect(&verified(1), bound).unwrap();
+    let observed = service_job(&mut service, reconnect, Request::History { save });
+    assert_eq!(
+        service
+            .history_receipts(&observed)
+            .unwrap()
+            .stage()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .token,
+        token
+    );
+    let duplicate = service_job(&mut service, reconnect, Request::Commit { save });
+    assert!(matches!(
+        duplicate.outcome(),
+        ServiceOutcome::Dispatched(Err(RuntimeError::AlreadyAttempted))
+    ));
+    let blocked = service_job(&mut service, reconnect, Request::Release { save });
+    assert!(matches!(
+        blocked.outcome(),
+        ServiceOutcome::Dispatched(Err(RuntimeError::RetainedCustody))
+    ));
+    drop((stage, commit, observed, duplicate, blocked));
+    let released = service_job(&mut service, reconnect, Request::Release { save });
+    assert!(matches!(
+        released.outcome(),
+        ServiceOutcome::Dispatched(Ok(Response::Released))
+    ));
+}

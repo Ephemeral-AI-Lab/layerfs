@@ -363,3 +363,9 @@ See [shared physical capacity](35-shared-physical-capacity.md) and the
 [S6 exit audit](../issues/307/S6-EXIT-AUDIT.md) for current scope/evidence. Earlier
 checkpoint limitations and numbers above retain their original source identity.
 Native/runtime/kernel and integrated qualification remain later milestones.
+
+S7 startup and operation costs: [complete creation/job observations](36-operation-cost-observations.md).
+S9 history and service: [original bound history receipts](37-runtime-history-receipts.md),
+[authenticated typed dispatch](38-authenticated-runtime-service.md) and
+[native import membership/link targets](39-native-import-links.md). Milestone exits
+and transport/bounded-import/resource gaps remain explicit in #307 audits.

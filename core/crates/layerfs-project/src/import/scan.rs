@@ -1,6 +1,6 @@
 //! One operator-bound directory import into a single C2 save.
+use crate::error::ProjectError as Failure;
 use crate::error::{content, storage};
-use crate::error::{ProjectError as Failure, MAX_FILE};
 use crate::{
     batch::{BatchProducer, Event, ImportBatch, QUEUE_SLOTS},
     namespace::{ImportProgress, PreparedEntry},
@@ -73,10 +73,9 @@ pub(crate) fn scan_and_save(
                 let name = child.file_name().as_bytes().to_vec();
                 PathName::from_bytes(&name).map_err(content)?;
                 let metadata = fs::symlink_metadata(&path)?;
-                if metadata.file_type().is_symlink() {
-                    return Err(Failure::Unsupported);
-                }
-                let kind = if metadata.is_dir() {
+                let kind = if metadata.file_type().is_symlink() {
+                    RecordKind::Symlink
+                } else if metadata.is_dir() {
                     RecordKind::Directory
                 } else if metadata.is_file() {
                     RecordKind::RegularFile
@@ -84,9 +83,6 @@ pub(crate) fn scan_and_save(
                     return Err(Failure::Unsupported);
                 };
                 if kind == RecordKind::RegularFile {
-                    if metadata.len() > MAX_FILE {
-                        return Err(Failure::Capacity);
-                    }
                     jobs.push(Job {
                         index: entries.len(),
                         path: path.clone(),
@@ -98,7 +94,11 @@ pub(crate) fn scan_and_save(
                     });
                 }
                 let index = entries.len();
-                entries.push(entry(parent, name, kind, &metadata, None)?);
+                let mut prepared = entry(parent, name, kind, &metadata, None)?;
+                if kind == RecordKind::Symlink {
+                    prepared.target = Some(super::source::read_link(&path, &metadata)?);
+                }
+                entries.push(prepared);
                 if kind == RecordKind::Directory {
                     pending.push_back((path, index));
                 }
@@ -236,7 +236,14 @@ fn entry(
     metadata: &Metadata,
     content: Option<ObjectId>,
 ) -> Result<PreparedEntry, Failure> {
-    let mode = metadata.mode() & 0o7777;
+    // The existing portable symlink grammar fixes mode0777, including on hosts
+    // whose lstat exposes umask-dependent link bits. Regular/directory bits stay
+    // exact; read_link still compares the native link's original metadata.
+    let mode = if kind == RecordKind::Symlink {
+        0o777
+    } else {
+        metadata.mode() & 0o7777
+    };
     let mask = if kind == RecordKind::Directory {
         0o1777
     } else {

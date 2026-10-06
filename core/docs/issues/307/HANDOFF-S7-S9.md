@@ -1,8 +1,8 @@
 # S7–S9 continuation prompt
 
 > **Status:** Current planning checklist; no release candidate exists.
-> Updated 2026-10-06 after the owner-authorized fuser correction and instruction
-> to commit all remaining working-tree documents and generated graphics.
+> Updated 2026-10-06 with S7 startup accounting, typed S9 service and native-import
+> path/link acquisition. S7/S8/S9 remain incomplete.
 
 Use the prompt below to continue the remaining batch in a fresh local chat.
 The [fuser stopping receipt](HANDOFF-FUSER-PATCH-S7-S9.md) and earlier audits retain
@@ -34,7 +34,9 @@ Completed/checkpoint identities:
   344d992a8a31c89b25f76fce713bab8b148a1a29.
 - All-state documents/assets checkpoint: ba9304e4960a229de908f9ff3f19edcbc6285db2,
   tree5e3e271a3ace6c42e0f1392e9c1d4a9a67186278. The subsequent Docker acceptance
-  update follows that snapshot; use actual current HEAD.
+  update is b9f3a8dc9ffcf78c9e625c86be8b4bb2f661ae6c, tree
+  2a55aa86c2d0ca88c5a6b2059d8f506092dc7ab5. The new S7/S9 implementation
+  checkpoint follows it; see checks/s7-startup-s9-service and actual current HEAD.
 S1–S6 are checked. S0/S7/S8/S9 remain incomplete and unchecked. Never infer
 milestone completion from a prerequisite proof, source existence or this prompt.
 
@@ -55,7 +57,11 @@ production files within999 lines. Excluded packages are not built replacements.
 S7 — close the complete engine cost gate:
 Current receipts already cover original-job SQL/direct-versus-trigger changes,
 returned BLOBs, payload copies, allocation/freelist/high-water and queue/parking
-observations. Extend the owning overlay diagnostics/database and daemon service
+observations. New create_observed/start_observed receipts also include finite
+profile/schema/accounting SQL, startup failure and separate allocation observation.
+Logical column delivery and supplied SQL bytes are explicit; approximate statement
+memory samples are not cumulative allocation, pager/RSS or phase peaks. Extend the
+owning overlay diagnostics/database and daemon service
 boundaries to complete-operation SQL/request/page/byte/copy/queue/residency/debt
 accounting, including startup/preparation, dirty/index/overflow/journal/device-I/O,
 retained results, maintenance and whole-system phase residency. Include the entire
@@ -130,7 +136,11 @@ needs its own scope/evidence; do not guess the removed fraction or relabel the F
 
 S9 — complete authenticated host adapters and full roots:
 The active SDK has local authenticated binding, object/policy/serial/Save boundaries
-and successful-SaveFinish-bound stage/commit/discard history receipts. Complete
+and successful-SaveFinish-bound stage/commit/discard history receipts. Typed
+runtime/service now provides fair Workspace/class rotation, same-Save ordering,
+retained byte/job/receipt credits and local disconnect/owner-epoch fences. Preserve
+original queued cancellation bodies and completed outcomes. Those local fences do
+not establish socket/process-restart custody or unknown resolution. Complete
 SDK client/runtime/handlers/service, Bridge contract/codec/native, Project import
 and owning Sandbox/API-core integration. Implement bounded fair authenticated
 object/policy/serial/Save/history delivery, same-Save reads and exact disconnect/
@@ -139,7 +149,13 @@ refused/conflicted/uncertain outcomes, one attempt and retained custody. No gues
 resend, Branch refresh/re-stage, automatic conflict discard or unfenced install.
 Fix faithful initial full-root acquisition: include ignored files, dependencies,
 caches, outputs, symlinks and .git/index; Git ignore rules do not filter state.
-Resolve P12 import symlink/scan/job/4GiB-cap gaps in their owning implementation.
+Project native Init now preserves opaque symlink targets without traversal, uses
+the existing canonical0777 symlink mode and removes inherited4GiB rejection.
+Saved-root proofs cover ignored/dependency/cache/output/.git/index paths and exact
+targets after deleting native source. Resolve remaining P12 backed scan/job/frontier/
+child/namespace collections and regular hard-link identity in their owners;
+greater-than4GiB native streaming proof remains NOT_RUN. No whole-importer bound
+or complete P12 acceptance follows from the small membership fixture.
 Repeated binding to an acquired root performs no whole-root scan/copy/materialization,
 dependency restoration or new database. Demand loading pays actual metadata/content I/O.
 
@@ -177,7 +193,9 @@ c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb.
 Include all first-party shipped source/SQL and application adapters, including
 excluded predecessors; exclude tests/docs/tools/harnesses/manifests/builds/third-party.
 Prepare comparison before commit and verify the committed tree against its receipt.
-Baseline: core86379, reference65417, combined151796. Recompute actual snapshots;
+Prior baseline: core86379, reference65417, combined151796 before this new
+implementation checkpoint. Use its exact LOC receipt/commit message and actual
+HEAD for updated totals. Recompute actual snapshots;
 do not treat this baseline as an estimate or a source-size/performance gate.
 
 Maintain separate milestone audits and tracker receipts, with blockers and gaps
@@ -211,3 +229,24 @@ complete solely because the dependency patch or prerequisite smoke proofs pass.
 Docker-only verification and the retained platform investigation are recorded in
 [the boundary clarification](LINUX-TIMESTAMP-DOCKER-20261006.md). This clarification
 does not advance S0/S8 or authorize an unrecorded shared-backend change.
+
+The latest S7/S9 checkpoint is described in [startup/typed-service/import checks](checks/s7-startup-s9-service/README.md).
+It continues implementation with S7/S9 unchecked; no external fuser verification
+blocker remains. Concrete next work is bounded logical authenticated runtime/client
+transport and its real disconnect/restart custody, backed faithful Init (including
+hard-link aliases), and complete engine page/I/O/residency/service-debt acceptance.
+P3/P6/P7/P13/P14 remain S10 prerequisites. Unaffected S6/device and earlier handler
+proofs retain their original identity; all new failure/unrun rows are preserved.
+
+## This implementation checkpoint's exact source-size comparison
+
+First parent b9f3a8dc9ffcf78c9e625c86be8b4bb2f661ae6c to final staged product:
+core86379 ->87552 (delta+1173), reference65417 ->65417 (delta+0),
+combined151796 ->152969 (delta+1173). Counted from exact Git archives using
+unchanged tools/production_loc.py SHA256
+c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb.
+New service/startup/source modules are first-party production; external tests,
+receipts/docs/tools/examples/third-party remain excluded. Existing moved creation
+code and all excluded predecessors stay in scope. No reference retirement,
+algorithmic shrink or performance inference is claimed. Final staged tree and
+committed-tree correspondence are recorded in the commit and following receipt.

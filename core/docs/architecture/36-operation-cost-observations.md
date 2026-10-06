@@ -6,10 +6,32 @@
 [Overlay statement observations](../../crates/layerfs-overlay/src/diagnostics/metrics.rs)
 now distinguish host statement attempts, SQLite executions (including trigger
 subprogram runs), all changed rows, direct changes reported by SQLite and returned
-BLOB-column bytes. Returned bytes count values exposed before mapping; they are
+BLOB-column bytes and all logical SQL-column delivery bytes. Integer/real values
+charge8 bytes, TEXT/BLOB charge their length and NULL charges0. Returned bytes
+count values exposed before mapping; they are
 not exclusive physical I/O, internal SQLite copies or a residency observation.
 Attempted changes remain counted after rollback. BEGIN/COMMIT and read-only
 statements do not inherit the preceding DML's direct-change count.
+
+Each attempt also charges supplied SQL bytes, including cached-statement lookups.
+Approximate prepared-statement `SQLITE_STMTSTATUS_MEMUSED` samples are recorded
+with their sample count and summed bytes. SQLite defines this as a current
+statement estimate, not a counter: summing samples does not measure resident
+allocation, pager memory, RSS or a phase peak. The owning diagnostic is explicit.
+
+[CreationWork](../../crates/layerfs-overlay/src/database/startup.rs) observes real
+finite startup: exclusive artifact create, allocation, SQLite open, connection
+configuration, profile PRAGMAs/readbacks, schema/accounting DDL and cache setup.
+The former unobserved SQL batches now consume each actual prepared statement
+once, including pragma rows and prepare/step failure. Batch input bytes are
+charged once; final end-of-batch is not a phantom attempt. `create_observed`
+retains original failure and an independent allocation observation; no failed
+artifact is deleted or startup retried. Existing `create` forwards unchanged.
+Daemon `start_observed` retains this receipt through worker readiness/failure;
+`startup_work` remains separate from foreground and maintenance aggregates.
+Finite schema startup is O(S + V) for supplied SQL bytes S and executed VM/row
+work V, with fixed-schema resident state, plus the whole physical reservation.
+It is initialized once per daemon rather than on each Workspace bind.
 
 [Payload observations](../../crates/layerfs-overlay/src/diagnostics/payload.rs)
 record actual cell input, intersected/partial cells, codec/merge copies and zeroed

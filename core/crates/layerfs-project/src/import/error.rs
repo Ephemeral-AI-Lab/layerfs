@@ -3,9 +3,6 @@ use layerfs_content::ContentError;
 use layerfs_history::HistoryError;
 use layerfs_storage::StorageError;
 use std::{fmt, io};
-/// The existing native import's per-file bound, unchanged.
-#[cfg(unix)]
-pub(crate) const MAX_FILE: u64 = 4 * 1024 * 1024 * 1024;
 /// Result of a namespace initialization operation.
 pub type ProjectResult<T> = Result<T, ProjectError>;
 /// A refused or failed initialization. Previously registered objects remain valid.

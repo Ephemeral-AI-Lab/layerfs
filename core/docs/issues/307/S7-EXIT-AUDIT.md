@@ -94,5 +94,48 @@ No source retirement or algorithmic shrink is claimed.
 S7 requires actual complete-operation page/journal/IO/residency and sustained
 service/debt observations under a prospective admissible cache/workload contract.
 The new receipts supply causal attribution for that work. S9's local bound history
-checkpoint is independent. S8 native acceptance requires the corrected published
-fuser package and native requalification recorded in its separate audit.
+checkpoint is independent. S8 continues from the owner-authorized fuser0.18.0 correction and accepted Docker
+verification recorded in its separate audit; it is not waiting for a release or
+QEMU/custom-kernel qualification.
+
+## Startup-accounting checkpoint (2026-10-06)
+
+Startup SQL is now observed through the same real statement driver: profile
+PRAGMAs/readbacks, schema/index/accounting DDL, cache initialization and original
+prepare/step failures. `Overlay::create_observed` and daemon `start_observed`
+retain separate startup work and exact original success/failure without cleanup
+or replay. SQL input bytes and all logical column delivery bytes are explicit;
+approximate prepared-statement memory samples are neither cumulative allocation
+nor pager/RSS measurements. [Architecture](../../architecture/36-operation-cost-observations.md)
+and [new receipts](checks/s7-startup-s9-service/) own this checkpoint.
+
+Host SQLite3.51.0 successful startup:101 attempts/executions,2002 VM steps,
+88 rows,1519 logical value bytes,21230 supplied SQL bytes,101 statement-memory
+samples summing398496 bytes. Linux bundled SQLite3.53.2:101 attempts/executions,
+1918 VM,68 rows,1137 value bytes,21230 SQL bytes,101 samples summing301176 bytes.
+Both include one changed initial global-accounting row and9 index-building sorts. These are
+finite real schema/profile counts, distinct platform builds rather than pooled
+performance. One allocation requests268435456 bytes;3 identity observations
+use6 metadata calls, including the separate final receipt observation. Successful
+logical188416 bytes sits within full high-water268435456 host/268439552 Linux
+reservation. Failed real32-page schema creation retains prior SQL work, original
+SQLite-full error and the allocated artifact. Existing-artifact refusal performs
+one create_new attempt, zero SQL/open/allocation, and preserves prior bytes.
+
+The host and Docker covering checks retain success/refusal/failure and unchanged
+operation EXPLAIN/runtime profiles. Cold speed, phase residency, exact page/journal/
+device I/O and sustained service/debt acceptance remain open and NOT_RUN; statement
+samples and credit gauges do not close them. S7 stays unchecked. This adds finite
+startup attribution without changing schema, profile, quota, reservation or algorithms.
+
+Final-source functional attribution pins selected no-run binaries before and
+after execution and compares production hashes, resolving earlier incomplete
+execution-hash attribution. These are covering functional tests with120s ceilings,
+not cold performance samples or performance proof-budget exceptions. Original
+component outputs retain their diagnostic scope, failures and actual walls.
+
+Final frozen functional coverage:173 host checks and92 Docker engine/owner/
+Workspace checks pass;2 owned-device cases stay ignored. Native importer adds3
+selected Docker passes.39 host and26+3 Docker binaries match their pre/post hashes.
+All production source hashes match the frozen identity. Host functional wall
+34.902881292s and Docker engine wall11.687125417s remain nonperformance facts.

@@ -36,12 +36,22 @@ pub struct StatementWork {
     /// BLOB column bytes returned by SQLite before row decoding. This counts
     /// delivered values, not SQLite internal copies or process residency.
     pub returned_blob_bytes: u64,
+    /// Logical SQLite column delivery: BLOB/TEXT lengths, eight bytes per
+    /// INTEGER/REAL, zero per NULL. Not VFS I/O or internal-copy attribution.
+    pub returned_value_bytes: u64,
     pub vm_steps: u64,
     pub fullscan_steps: u64,
     pub sorts: u64,
     pub autoindex_rows: u64,
     pub reprepares: u64,
     pub bound_bytes: u64,
+    /// SQL bytes supplied to statement checkout; repeated cached lookups count.
+    pub sql_bytes: u64,
+    /// Samples of SQLITE_STMTSTATUS_MEMUSED, not pager/process residency.
+    pub statement_memory_samples: u64,
+    /// Sum of approximate prepared-statement heap samples. Repeated sampling
+    /// counts the same cached statement again; this is not resident allocation.
+    pub statement_memory_sample_bytes: u64,
     pub elapsed_ns: u64,
 }
 /// Connection-scoped counters. Snapshot around one exclusive owner job for scope.
@@ -73,6 +83,7 @@ pub(crate) fn query<T>(
     let mut observed = StatementWork {
         attempts: 1,
         bound_bytes,
+        sql_bytes: sql.len() as u64,
         ..Default::default()
     };
     let result = (|| {
@@ -101,13 +112,7 @@ pub(crate) fn query<T>(
             let mut result = Vec::new();
             while let Some(row) = rows.next()? {
                 observed.rows_returned = observed.rows_returned.saturating_add(1);
-                for column in 0..row.as_ref().column_count() {
-                    if let rusqlite::types::ValueRef::Blob(bytes) = row.get_ref(column)? {
-                        observed.returned_blob_bytes = observed
-                            .returned_blob_bytes
-                            .saturating_add(bytes.len() as u64);
-                    }
-                }
+                observe_row(&mut observed, row)?;
                 result.push(decode(row)?);
             }
             Ok(result)
@@ -119,6 +124,8 @@ pub(crate) fn query<T>(
         observed.sorts = count(StatementStatus::Sort);
         observed.autoindex_rows = count(StatementStatus::AutoIndex);
         observed.reprepares = count(StatementStatus::RePrepare);
+        observed.statement_memory_samples = 1;
+        observed.statement_memory_sample_bytes = count(StatementStatus::MemUsed);
         observed.rows_changed = connection.total_changes().saturating_sub(before_changes);
         if observed.rows_changed != 0 {
             observed.direct_rows_changed = connection.changes();
@@ -141,12 +148,22 @@ impl StatementWork {
         self.returned_blob_bytes = self
             .returned_blob_bytes
             .saturating_add(other.returned_blob_bytes);
+        self.returned_value_bytes = self
+            .returned_value_bytes
+            .saturating_add(other.returned_value_bytes);
         self.vm_steps = self.vm_steps.saturating_add(other.vm_steps);
         self.fullscan_steps = self.fullscan_steps.saturating_add(other.fullscan_steps);
         self.sorts = self.sorts.saturating_add(other.sorts);
         self.autoindex_rows = self.autoindex_rows.saturating_add(other.autoindex_rows);
         self.reprepares = self.reprepares.saturating_add(other.reprepares);
         self.bound_bytes = self.bound_bytes.saturating_add(other.bound_bytes);
+        self.sql_bytes = self.sql_bytes.saturating_add(other.sql_bytes);
+        self.statement_memory_samples = self
+            .statement_memory_samples
+            .saturating_add(other.statement_memory_samples);
+        self.statement_memory_sample_bytes = self
+            .statement_memory_sample_bytes
+            .saturating_add(other.statement_memory_sample_bytes);
         self.elapsed_ns = self.elapsed_ns.saturating_add(other.elapsed_ns);
     }
 }
@@ -179,12 +196,22 @@ impl DatabaseWork {
                 rows_changed: a.rows_changed.saturating_sub(b.rows_changed),
                 direct_rows_changed: a.direct_rows_changed.saturating_sub(b.direct_rows_changed),
                 returned_blob_bytes: a.returned_blob_bytes.saturating_sub(b.returned_blob_bytes),
+                returned_value_bytes: a
+                    .returned_value_bytes
+                    .saturating_sub(b.returned_value_bytes),
                 vm_steps: a.vm_steps.saturating_sub(b.vm_steps),
                 fullscan_steps: a.fullscan_steps.saturating_sub(b.fullscan_steps),
                 sorts: a.sorts.saturating_sub(b.sorts),
                 autoindex_rows: a.autoindex_rows.saturating_sub(b.autoindex_rows),
                 reprepares: a.reprepares.saturating_sub(b.reprepares),
                 bound_bytes: a.bound_bytes.saturating_sub(b.bound_bytes),
+                sql_bytes: a.sql_bytes.saturating_sub(b.sql_bytes),
+                statement_memory_samples: a
+                    .statement_memory_samples
+                    .saturating_sub(b.statement_memory_samples),
+                statement_memory_sample_bytes: a
+                    .statement_memory_sample_bytes
+                    .saturating_sub(b.statement_memory_sample_bytes),
                 elapsed_ns: a.elapsed_ns.saturating_sub(b.elapsed_ns),
             };
         }
@@ -196,4 +223,25 @@ impl DatabaseWork {
             to.accumulate(from);
         }
     }
+}
+
+pub(crate) fn observe_row(
+    work: &mut StatementWork,
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<()> {
+    use rusqlite::types::ValueRef;
+    for column in 0..row.as_ref().column_count() {
+        let bytes = match row.get_ref(column)? {
+            ValueRef::Blob(bytes) => {
+                work.returned_blob_bytes =
+                    work.returned_blob_bytes.saturating_add(bytes.len() as u64);
+                bytes.len() as u64
+            }
+            ValueRef::Text(bytes) => bytes.len() as u64,
+            ValueRef::Integer(_) | ValueRef::Real(_) => 8,
+            ValueRef::Null => 0,
+        };
+        work.returned_value_bytes = work.returned_value_bytes.saturating_add(bytes);
+    }
+    Ok(())
 }

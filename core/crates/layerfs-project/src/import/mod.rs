@@ -9,4 +9,6 @@ pub(crate) mod metadata;
 pub(crate) mod namespace;
 #[cfg(unix)]
 pub(crate) mod scan;
+#[cfg(unix)]
+pub(crate) mod source;
 pub(crate) mod work;

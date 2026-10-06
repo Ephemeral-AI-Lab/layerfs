@@ -1,0 +1,54 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling libc v0.2.189
+    Checking layerfs-telemetry v0.1.6 (/work/core/crates/layerfs-telemetry)
+   Compiling nix v0.31.3
+   Compiling libsqlite3-sys v0.38.2
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+    Checking layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+    Checking getrandom v0.2.17
+    Checking cpufeatures v0.3.1
+    Checking sha2 v0.11.0
+    Checking rand_core v0.6.4
+    Checking crypto-common v0.1.7
+    Checking universal-hash v0.5.1
+    Checking cipher v0.4.4
+    Checking cpufeatures v0.2.17
+    Checking aead v0.5.2
+    Checking polyval v0.6.2
+    Checking digest v0.10.7
+    Checking aes v0.8.4
+    Checking chacha20 v0.9.1
+    Checking ghash v0.5.1
+    Checking ctr v0.9.2
+    Checking poly1305 v0.8.0
+    Checking blake2 v0.10.6
+    Checking chacha20poly1305 v0.10.1
+    Checking sha2 v0.10.9
+    Checking aes-gcm v0.10.3
+    Checking snow v0.9.6
+    Checking layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+    Checking layerfs-history v0.1.6 (/work/core/crates/layerfs-history)
+    Checking layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+    Checking rusqlite v0.40.2
+    Checking layerfs-project v0.1.6 (/work/core/crates/layerfs-project)
+    Checking layerfs-overlay v0.1.6 (/work/core/crates/layerfs-overlay)
+    Checking layerfs-persistence v0.1.6 (/work/core/crates/layerfs-persistence)
+error: variant `Filesystem` is never constructed
+  --> crates/layerfs-persistence/src/backend/records.rs:81:5
+   |
+76 | pub(crate) enum BackendError {
+   |                 ------------ variant in this enum
+...
+81 |     Filesystem(std::io::ErrorKind),
+   |     ^^^^^^^^^^
+   |
+   = note: `BackendError` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `-D dead-code` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(dead_code)]`
+
+error: could not compile `layerfs-persistence` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

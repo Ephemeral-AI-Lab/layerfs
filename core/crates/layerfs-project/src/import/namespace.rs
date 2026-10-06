@@ -15,8 +15,8 @@
 //! consumed before this function was called. No caller supplies a serial, and no
 //! scope is imported: the scope arrives as a checked C1 value.
 
+use crate::error::ProjectError as Failure;
 use crate::error::{content, storage};
-use crate::error::{ProjectError as Failure, MAX_FILE};
 use crate::metadata::build_metadata;
 use layerfs_content::filesystem::attributes::PortableMetadata;
 use layerfs_content::filesystem::references::FileBacking;
@@ -215,14 +215,11 @@ fn prerequisites(
                     RecordKind::RegularFile => {
                         let root = entry.content.ok_or(Failure::InvalidInput)?;
                         if !files_just_imported {
-                            let view = Timing::disabled("history.role", |scope| {
+                            Timing::disabled("history.role", |scope| {
                                 FileView::open(provider, root, scope.child("file"))
                             })
                             .0
                             .map_err(content)?;
-                            if view.logical_len() > MAX_FILE {
-                                return Err(Failure::Capacity);
-                            }
                         }
                         root
                     }

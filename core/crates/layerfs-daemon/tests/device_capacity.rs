@@ -102,7 +102,7 @@ fn real_owner_reclaims_at_device_full_after_last_owner_without_a_cleanup_job() {
         .result()
         .is_ok());
     let other_state = match run(&client, Some(other), Command::State).result() {
-        Ok(Response::State(s)) => s.clone(),
+        Ok(Response::State(s)) => *s,
         x => panic!("{x:?}"),
     };
     // Filling the owned fixture is preparation, outside the product. The first

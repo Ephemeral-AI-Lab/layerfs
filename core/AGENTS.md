@@ -26,9 +26,12 @@ product mental model or campaign-specific benchmark procedures.
   excluded.
   Daemon now exposes an initial fair SQL owner library; its relocated predecessor
   remains excluded, and native executable/control/Exec integration is unfinished.
-  SDK now embeds an initial host object/Save runtime with scoped sessions. Its
-  predecessor is preserved in excluded `layerfs-sdk-legacy`; authenticated
-  transport/history/control and full runtime acceptance remain unfinished.
+  SDK now embeds host object/Save/history handlers, scoped sessions and a bounded
+  fair typed authenticated service with local attachment/result fences. Its
+  predecessor is preserved in excluded `layerfs-sdk-legacy`; logical transport,
+  restart custody, client/control integration and full runtime acceptance remain
+  unfinished. Project native import preserves opaque symlink targets and complete
+  path membership, but backed collections and hard-link identity remain open.
   Bridge now builds initial pinned native KK channels and authenticates typed
   peers for SDK binding. Its old protocol source is excluded at
   `layerfs-bridge-legacy`; logical framing/multiplexing and complete transport/

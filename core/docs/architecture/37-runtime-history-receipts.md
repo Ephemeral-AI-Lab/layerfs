@@ -43,7 +43,9 @@ Public real-host proofs cover two interleaved candidates, a same-Branch winner
 and exact retained conflict, UpToDate, explicit discard, stale/cross-peer IDs,
 authority denial, wrong object role and stage-before-finish refusal. They exercise
 native KK authentication for binding and the real macOS Store/catalog. They do not
-supply logical RPC framing, fair queued host dispatch, delivery/disconnect/restart
-fences, complete native acquisition or an unknown-history resolver. Those remain
+supply logical RPC framing, transport delivery/restart fences, complete native
+acquisition or an unknown-history resolver. The subsequent
+[typed service](38-authenticated-runtime-service.md) adds bounded fair local
+dispatch and local attachment/result fences. The remaining obligations are
 [S9 prerequisites](../issues/307/S9-EXIT-AUDIT.md); S10 Commit/install integration
 and P3/P6/P7/P13/P14 are outside this batch.

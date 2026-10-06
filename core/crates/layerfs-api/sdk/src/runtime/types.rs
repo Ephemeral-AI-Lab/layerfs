@@ -4,7 +4,7 @@ use layerfs_content::ObjectId;
 use layerfs_storage::save::WriteOutcome;
 
 /// Typed local Save capability; no public untrusted-field constructor.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct SaveId {
     pub(super) owner: [u8; 32],
     pub(super) slot: usize,

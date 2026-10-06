@@ -1,6 +1,7 @@
 //! Selected disposable profile, startup readback and physical observations.
-use crate::{OverlayError, OverlayResult};
+use crate::{DatabaseWork, OverlayError, OverlayResult, StatementKind};
 use rusqlite::Connection;
+use std::cell::RefCell;
 
 /// Daemon-wide resource settings selected before open.
 #[derive(Clone, Copy, Debug)]
@@ -39,28 +40,47 @@ pub struct DatabaseProfile {
     pub temp_store: i64,
     pub auto_vacuum: i64,
 }
-pub(crate) fn initialize(c: &Connection, config: ProfileConfig) -> OverlayResult<DatabaseProfile> {
+pub(crate) fn initialize(
+    c: &Connection,
+    config: ProfileConfig,
+    work: &RefCell<DatabaseWork>,
+    configuration_calls: &mut u64,
+) -> OverlayResult<DatabaseProfile> {
     let max_pages = config.max_pages.unwrap_or(u32::MAX - 1);
     if config.pager_kib == 0 || max_pages < 32 || max_pages == u32::MAX {
         return Err(OverlayError::Invalid("profile resource settings"));
     }
+    *configuration_calls += 1;
     c.busy_timeout(std::time::Duration::ZERO)?;
+    *configuration_calls += 1;
     c.set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)?;
-    c.execute_batch(&format!(
+    crate::diagnostics::startup::batch(c, work, &format!(
         "PRAGMA page_size=4096; PRAGMA auto_vacuum=NONE; PRAGMA journal_mode=MEMORY; PRAGMA synchronous=OFF;
          PRAGMA locking_mode=EXCLUSIVE; PRAGMA mmap_size=0; PRAGMA foreign_keys=ON;
          PRAGMA temp_store=FILE; PRAGMA cache_size=-{}; PRAGMA max_page_count={};",
         config.pager_kib, max_pages
     ))?;
-    let integer = |name: &str| c.query_row(&format!("PRAGMA {name}"), [], |r| r.get(0));
-    let text = |name: &str| c.query_row(&format!("PRAGMA {name}"), [], |r| r.get(0));
+    let integer = |name: &str| readback(c, work, &format!("PRAGMA {name}"), |r| r.get::<_, i64>(0));
+    let text = |name: &str| {
+        readback(c, work, &format!("PRAGMA {name}"), |r| {
+            r.get::<_, String>(0)
+        })
+    };
     let p = DatabaseProfile {
         schema_version: 0,
         sqlite_version: rusqlite::version().to_owned(),
-        compile_options: c
-            .prepare("PRAGMA compile_options")?
-            .query_map([], |r| r.get(0))?
-            .collect::<rusqlite::Result<_>>()?,
+        compile_options: crate::metrics::query(
+            c,
+            work,
+            StatementKind::Startup,
+            crate::metrics::Query {
+                sql: "PRAGMA compile_options",
+                params: &[],
+                bound_bytes: 0,
+                cached: false,
+            },
+            |r| r.get(0),
+        )?,
         journal_mode: text("journal_mode")?,
         locking_mode: text("locking_mode")?,
         synchronous: integer("synchronous")?,
@@ -96,4 +116,28 @@ pub(crate) fn initialize(c: &Connection, config: ProfileConfig) -> OverlayResult
         return Err(OverlayError::Invalid("profile readback differs"));
     }
     Ok(p)
+}
+
+pub(crate) fn readback<T>(
+    connection: &Connection,
+    work: &RefCell<DatabaseWork>,
+    sql: &str,
+    decode: impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>,
+) -> OverlayResult<T> {
+    let mut values = crate::metrics::query(
+        connection,
+        work,
+        StatementKind::Startup,
+        crate::metrics::Query {
+            sql,
+            params: &[],
+            bound_bytes: 0,
+            cached: false,
+        },
+        decode,
+    )?;
+    if values.len() != 1 {
+        return Err(OverlayError::Invalid("startup readback cardinality"));
+    }
+    Ok(values.remove(0))
 }

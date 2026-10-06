@@ -1,0 +1,6 @@
+{
+  "initial_build_exit": 101,
+  "test_invoked": false,
+  "cause": "New external tests used Sqlite instead of the public OverlayError::Sql variant; moved creation also left an unused OpenFlags import.",
+  "repair": "Use the existing error variant and remove the moved import. Startup implementation compiled; no operation was replayed."
+}

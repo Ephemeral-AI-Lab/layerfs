@@ -1,0 +1,7 @@
+{
+  "reason_for_final_covering_check": "Earlier passing component commands lacked binary hashes at execution, and source/test/cfg changes accumulated. One final covering functional check at frozen production bytes pins build binaries before/after. It is not a performance arm or timing resample. Earlier scope notes/outcomes remain immutable.",
+  "host_coverage": "48 Overlay +12 Daemon +32 Workspace +15 SDK +66 Project=173 total checks; selected39 build binaries pinned and unchanged.",
+  "host_wall_ns": 34902881292,
+  "cache": "Uncontrolled, including binary pre-hashing; no cold or residency/rate/speed claim",
+  "remaining_unrun": "S6 ext4 owned-device proof reused, current device cases ignored; Linux global-provider execution unsupported; native FUSE/runtime-wire/full bounded acquisition/resource qualification incomplete."
+}

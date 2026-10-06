@@ -34,6 +34,7 @@ pub use database::accounting::{Resources, StoredCounts};
 pub use database::allocation::{
     AllocationState, AllocationWork, CLEANUP_HEADROOM, MUTATION_GROWTH,
 };
+pub use database::startup::{Creation, CreationWork};
 pub use db::Overlay;
 pub use diagnostics::payload::PayloadWork;
 pub use error::{OverlayError, OverlayResult};

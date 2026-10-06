@@ -1,0 +1,5 @@
+{
+  "failed_receipt": "host-build-tests-final-receipt.json",
+  "cause": "Two new external tests named nonexistent ObjectRole::FileRoot; actual canonical byte object uses ObjectRole::WholeFile, as existing public tests and enum establish. Production library compiled.",
+  "repair": "Correct those two test role names; no production change, no test invocation or replay occurred."
+}

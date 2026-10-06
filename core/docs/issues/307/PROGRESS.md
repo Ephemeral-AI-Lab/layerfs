@@ -241,3 +241,24 @@ path/vendor and unapproved Git overrides and can verify all installed files.
 The extreme fractional native failure is retained separately from Linux VFS
 canonicalization and successful parser cases. No S0/S8/S12 item is advanced.
 Independent S7/S9 work remains authorized and ready; this ruling does not stop it.
+
+
+## S7 startup / S9 fair service and native-import checkpoint (2026-10-06)
+
+Continues from local main b9f3a8dc9 after owner-accepted Docker verification.
+[New implementation/evidence](checks/s7-startup-s9-service/README.md) includes
+finite startup SQL and complete creation/readiness receipts, SQL/column/sample
+observations, bounded authenticated typed service with same-Save ordering and
+local disconnect/result/epoch fences, and native opaque-link/full-path acquisition
+without the inherited4GiB rejection. No logical transport/restart custody, backed
+importer/hard-link identity, phase residency or sustained-rate gate is claimed.
+S7 and S9 remain unchecked with separate audits and tracker receipts. S8 remains
+unfinished product integration; the owner-authorized fuser correction and Docker
+verification are accepted and do not block this independent work.
+
+Every local checkpoint records exact production LOC; source/API architecture is
+updated and failures/unrun outcomes remain append-only. Root reference, prior
+S5/S6 stopping handoff, two side-conversation documents, all retained assets and
+four unrelated containers remain preserved. No push/release/deployment or aggregate
+CI/pre-push wrapper is involved. [Current continuation](HANDOFF-S7-S9.md) owns
+next-ready work; older dated pending lists above retain their historical scope.

@@ -1,0 +1,12 @@
+{
+  "purpose": "One final covering functional proof at frozen production source with selected binaries pinned before/after. Resolves missing original execution hashes and accumulated source/test/cfg changes. Earlier exploratory functional counts and failures remain retained without relabeling.",
+  "identity": "identity.json production_sha256, individual source fingerprints and matching --no-run build commands",
+  "selection": {
+    "host": "Overlay/Daemon/Workspace/SDK/Project all-targets; no legacy/source fallback",
+    "linux": "Overlay/Daemon/Workspace all-targets plus Project complete_root/init_memory/namespace_scaling; SDK compiles but real host provider bodies are macOS cfg"
+  },
+  "reuse": "Unchanged S6 device and cluster-one handler/history proof remains at original identity; no new owning-device campaign or global-provider Linux execution.",
+  "limits": "Every actual functional invocation has120s explicit wall timeout. No background/repeat loop. No performance samples, cache manipulation or speed/RSS/rate claims.",
+  "workers": "LAYERFS_CONSTRUCTION_WORKERS=1; native Namespace Init retains original4-worker exemption",
+  "source_changes_after_selection": "None permitted in product/tests until proof complete; documentation/receipts only."
+}

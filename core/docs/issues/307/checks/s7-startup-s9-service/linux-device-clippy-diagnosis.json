@@ -1,0 +1,5 @@
+{
+  "failed_receipt": "linux-clippy-repaired-receipt.json",
+  "cause": "The pre-existing Linux-only ignored device fixture cloned WorkspaceState, which is Copy. Its cfg excludes it from host lint.",
+  "repair": "Dereference the borrowed Copy value. No product code/algorithm change, no device workload rerun; qualification stays reused at prior S6 identity and this checkpoint test stays explicitly ignored."
+}
