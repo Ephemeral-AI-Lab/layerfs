@@ -65,3 +65,23 @@ carriers remain; no retry/re-stage/refresh/implicit abort or discard is added.
 authenticated transport/client delivery, restart/unknown fences, faithful backed
 initial acquisition and owning Sandbox/API-core assembly explicit. This service
 checkpoint does not complete S9 or S10 incremental Commit prerequisites.
+
+[Logical wire ownership](40-runtime-wire-ownership.md) now supplies real client and
+handler codecs plus independent native input/output workers, header authorization
+before body allocation, grants, exact typed receipts and socket/partial-input fences.
+Each service job separately credits64KiB for control/error/header reply encoding.
+The new Binding request inspects the original captured context without refreshing
+its Branch; the response is boxed to keep ordinary fixed job entries small. The
+existing provider/Save scope stays on its host service thread. Application/consumer
+assembly, process restart and backed full-root acceptance remain incomplete.
+
+Service also protects the first live demand/control job slots from other groups;
+its job window must contain at least3 slots. Caller-held completions keep those
+class counts, so their credit cannot disappear during reply delivery. Default
+control byte reserve is128KiB, covering the new64KiB reply allowance plus fixed
+job/result ownership. Known terminal Accept/Finish/Abort headers refuse before
+receive body allocation. Pending same-Save ordering is still checked at dispatch.
+Framing counts encoding/copies at the actual encoding step, including a subsequent
+native send failure; completed sends remain separate. Fixed frame allocation/
+initialization and header bytes are explicitly observed. A dedicated regression
+checks those costs after a quarantined-channel refusal without socket I/O.

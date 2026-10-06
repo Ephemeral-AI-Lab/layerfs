@@ -290,3 +290,36 @@ These are unfinished implementation/qualification requirements; the accepted
 fuser correction is not an external wait. Greater-than4GiB native stream and all
 cold speed/RSS/sustained-rate selections remain NOT_RUN/ineligible as recorded.
 Keep S10–S13 and P3/P6/P7/P13/P14 outside this batch unless the owner changes scope.
+
+## Active continuation: logical runtime wire (2026-10-06)
+
+The next checkpoint adds real Bridge contract/codec/native framing and SDK client/
+handler/input/output ownership, original Binding delivery, pre-body authority/Save
+admission, demand/control service-slot protection and exact typed retained receipts.
+Architecture40 and checks/s9-runtime-wire pin source/build/workload/cache/binary
+identities and retain every failure/repair. Host37 and Docker19 bodies cover the
+final custody source; global Store/provider remains macOS. New copy/crypto/I/O/
+queue gauges do not close page/journal/RSS/cold/sustained gates.
+
+This is active work, not a completed S7–S9 stopping boundary. S7/S8/S9 remain
+unchecked. Next independent implementation is daemon-facing consumer adapters and
+owning application control/connection/custody wiring, then backed complete native
+acquisition and regular hard-link identity using the existing canonical public
+streamed directory/table constructors. Do not treat its resident scan/input gaps
+as an external fuser wait. Preserve the completed S5/S6 stopping record, root
+reference, both side documents and four unrelated containers. Continue useful
+independent work; S10–S13/P3/P6/P7/P13/P14 remain outside this batch.
+
+The implementation commit records exact parent/staged/committed core/reference/
+combined production LOC with unchanged tools/production_loc.py. A subsequent
+receipt-only record pins its actual commit/tree and tracker comments without
+repeating unchanged Rust checks or changing milestone verdicts.
+
+Runtime wire checkpoint production LOC: core87578 ->91262(delta+3684), reference
+65417 ->65417(delta0), combined152995 ->156679(delta+3684). Exact first-parent/
+final staged archives use unchanged counter SHA256
+c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb.
+New runtime adapters/framing are implementation growth; excluded predecessors and
+root reference are counted, with no retirement/relocation or shrink claim. The
+final prepared-tree receipt is in core/target/cluster2-307/loc and must match the
+committed tree before its post-commit evidence record is adopted.

@@ -34,6 +34,7 @@ pub(super) struct Credit {
     workspace: WorkspaceId,
     bytes: usize,
     save: Option<SaveId>,
+    group: usize,
 }
 impl Credit {
     pub fn acquire(
@@ -52,9 +53,16 @@ impl Credit {
             _ => state.config.bytes,
         };
         let jobs = state.workspaces.get(&workspace).copied().unwrap_or(0);
+        let group = match class {
+            ServiceClass::Demand => 0,
+            ServiceClass::Accept => 1,
+            _ => 2,
+        };
+        let reserved_jobs = usize::from(group != 0 && state.work.live_class_jobs[0] == 0)
+            + usize::from(group != 2 && state.work.live_class_jobs[2] == 0);
         if bytes > limit
             || state.work.credited_bytes > limit - bytes
-            || state.work.outstanding >= state.config.jobs
+            || state.work.outstanding >= state.config.jobs - reserved_jobs
             || jobs >= state.config.jobs_per_workspace
         {
             state.work.refused = state.work.refused.saturating_add(1);
@@ -66,6 +74,7 @@ impl Credit {
             .peak_credited_bytes
             .max(state.work.credited_bytes);
         state.work.outstanding += 1;
+        state.work.live_class_jobs[group] += 1;
         state.work.admitted = state.work.admitted.saturating_add(1);
         *state.workspaces.entry(workspace).or_default() += 1;
         if let Some(save) = save {
@@ -78,6 +87,7 @@ impl Credit {
             workspace,
             bytes,
             save,
+            group,
         })
     }
     pub fn bind_save(&mut self, save: SaveId) {
@@ -93,6 +103,7 @@ impl Drop for Credit {
         state.owners.set(state.owners.get() - 1);
         state.work.credited_bytes -= self.bytes;
         state.work.outstanding -= 1;
+        state.work.live_class_jobs[self.group] -= 1;
         let count = state
             .workspaces
             .get_mut(&self.workspace)

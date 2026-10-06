@@ -1,0 +1,13 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.06s
+  Executable unittests src/lib.rs (core/target/cluster2-runtime-tests/debug/deps/layerfs_bridge-d6d40251613ee3c5)
+  Executable tests/logical_frames.rs (core/target/cluster2-runtime-tests/debug/deps/logical_frames-aaea643fd77a51c5)
+  Executable tests/native.rs (core/target/cluster2-runtime-tests/debug/deps/native-f22a6908121b7872)
+  Executable tests/native_framing.rs (core/target/cluster2-runtime-tests/debug/deps/native_framing-0e29a25f02e3f76d)
+  Executable unittests src/lib.rs (core/target/cluster2-runtime-tests/debug/deps/layerfs_sdk-a9ac2f7b76117cf8)
+  Executable tests/runtime.rs (core/target/cluster2-runtime-tests/debug/deps/runtime-0693fe70d77b0de3)
+  Executable tests/wire.rs (core/target/cluster2-runtime-tests/debug/deps/wire-23c7eeaa14dddada)

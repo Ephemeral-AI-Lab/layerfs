@@ -1,0 +1,7 @@
+{
+  "failure": "bridge-tests-initial.log",
+  "cause": "The bounded nonblocking listener on macOS yields accepted sockets retaining nonblocking mode. New fixture socket() set timeout but did not clear O_NONBLOCK. Immediate WouldBlock caused reader worker failure, then peer EOF/NotConnected. Existing blocking-listener native tests and logical codec tests passed.",
+  "repair": "Explicit set_nonblocking(false) in the external accepted/client socket fixture before selecting2s read/write limits. Product channel/framing IO still attempts once and preserves WouldBlock, no automatic IO retry.",
+  "independent_source_change": "Review also adds reserved demand/control message counts and original message lease transfer, because byte reserve alone cannot preserve progress when partial Saves occupy all slots. New source identity gets its own covering functional check, not old result relabeling.",
+  "timeout": "No120s ceiling reached; original native failures retained."
+}

@@ -1,0 +1,61 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (core/target/cluster2-runtime-tests/debug/deps/layerfs_bridge-11a65a9ad9813a8d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/logical_frames.rs (core/target/cluster2-runtime-tests/debug/deps/logical_frames-b77a28e24eed98da)
+
+running 5 tests
+test aggregate_budget_spans_receivers_and_keeps_control_demand_reserves ... ok
+test completed_body_credit_survives_reassembly_owner_drop ... ok
+test interleaved_messages_finish_out_of_order_with_exact_correlation_and_credit ... ok
+test header_is_exact_borrowed_and_refuses_invalid_wire_without_body_allocation ... ok
+test malformed_continuation_retains_original_partial_bytes_until_explicit_fence ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/native.rs (core/target/cluster2-runtime-tests/debug/deps/native-9f0e32919917494c)
+
+running 5 tests
+test wrong_static_identity_fails_the_actual_handshake ... ok
+test corrupted_authenticated_record_retains_the_crypto_failure_without_replay ... ok
+test malformed_record_quarantines_both_directions_before_body_allocation ... ok
+test oversized_unattempted_record_does_not_consume_a_nonce ... ok
+NATIVE suite=Noise_KK_25519_AESGCM_SHA256 server_receive=ChannelWork { records: 5, plaintext_bytes: 196564, io_calls: 14, wire_bytes: 196654, plain_capacity: 65519, sealed_capacity: 65535 } server_send=ChannelWork { records: 5, plaintext_bytes: 196564, io_calls: 10, wire_bytes: 196654, plain_capacity: 0, sealed_capacity: 65535 } handshake=ChannelWork { records: 0, plaintext_bytes: 0, io_calls: 4, wire_bytes: 100, plain_capacity: 0, sealed_capacity: 0 }
+NATIVE client_send=ChannelWork { records: 5, plaintext_bytes: 196564, io_calls: 10, wire_bytes: 196654, plain_capacity: 0, sealed_capacity: 65535 } client_receive=ChannelWork { records: 5, plaintext_bytes: 196564, io_calls: 16, wire_bytes: 196654, plain_capacity: 65519, sealed_capacity: 65535 }
+test authenticated_duplex_records_stream_beyond_one_window_with_fixed_buffers ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/native_framing.rs (core/target/cluster2-runtime-tests/debug/deps/native_framing-8d4f54a519bb64c5)
+
+running 2 tests
+
+thread '<unnamed>' panicked at crates/layerfs-bridge/tests/native_framing.rs:63:38:
+called `Result::unwrap()` on an `Err` value: Native(Io(Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" }))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'authenticated_bad_header_fences_both_directions_and_retains_partial_body' panicked at crates/layerfs-bridge/tests/native_framing.rs:141:31:
+called `Result::unwrap()` on an `Err` value: Native(Io(Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" }))
+
+thread 'native_fragments_interleave_and_reply_correlations_keep_original_requests' panicked at crates/layerfs-bridge/tests/native_framing.rs:121:40:
+called `Result::unwrap()` on an `Err` value: Native(CloseFailed { original: Io(Kind(UnexpectedEof)), close: Os { code: 57, kind: NotConnected, message: "Socket is not connected" } })
+test authenticated_bad_header_fences_both_directions_and_retains_partial_body ... FAILED
+test native_fragments_interleave_and_reply_correlations_keep_original_requests ... FAILED
+
+failures:
+
+failures:
+    authenticated_bad_header_fences_both_directions_and_retains_partial_body
+    native_fragments_interleave_and_reply_correlations_keep_original_requests
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p layerfs-bridge --test native_framing`

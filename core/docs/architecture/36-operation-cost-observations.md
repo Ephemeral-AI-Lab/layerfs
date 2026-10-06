@@ -80,3 +80,12 @@ their owning APIs. This does not establish constant SQLite/journal/kernel reside
 from missing page/journal/IO, complete request/transport accounting, residency and
 sustained-rate evidence. No cold speed, RSS, native capability, milestone completion
 or release claim follows from these observations.
+
+[Native runtime wire observations](40-runtime-wire-ownership.md) now include actual
+socket attempts/partial bytes, cryptographic input/output attempts, fixed scratch
+requests/capacities/zero initialization, fragment copies, shared receive/result credits
+and separate fair output ownership. Observed failed handshakes retain original costs.
+A real Store-backed11-operation native path reports those scopes alongside typed
+Service work. These are functional diagnostics with uncontrolled caches, not complete
+SQLite-page/journal/kernel residency or cold/sustained acceptance. The whole256MiB
+reservation and unchanged earlier allocation/SQL/EXPLAIN evidence retain their scope.

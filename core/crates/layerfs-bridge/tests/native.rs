@@ -1,7 +1,8 @@
 //! Owning native TCP/Noise proofs, through the public product API.
 #![cfg(feature = "native")]
 use layerfs_bridge::native::{
-    accept, initiate, public_key, ChannelError, Connection, MAX_PLAINTEXT_BYTES, NOISE,
+    accept, accept_observed, initiate, initiate_observed, public_key, ChannelError, Connection,
+    MAX_PLAINTEXT_BYTES, NOISE,
 };
 use std::{
     io::Write,
@@ -12,6 +13,7 @@ use std::{
 
 // Fixed independent proof stop fence only; no product socket/Exec timeout exists.
 fn socket(stream: TcpStream) -> TcpStream {
+    stream.set_nonblocking(false).unwrap();
     stream
         .set_read_timeout(Some(Duration::from_secs(2)))
         .unwrap();
@@ -20,6 +22,23 @@ fn socket(stream: TcpStream) -> TcpStream {
         .unwrap();
     stream
 }
+fn accepted(listener: TcpListener) -> TcpStream {
+    listener.set_nonblocking(true).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(3);
+    loop {
+        match listener.accept() {
+            Ok((stream, _)) => return socket(stream),
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "accept readiness fence"
+                );
+                thread::sleep(Duration::from_millis(1));
+            }
+            Err(error) => panic!("accept: {error}"),
+        }
+    }
+}
 fn pair() -> (Connection, Connection, TcpStream) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
@@ -27,14 +46,8 @@ fn pair() -> (Connection, Connection, TcpStream) {
     let server_private = [2; 32];
     let client_public = public_key(&client_private).unwrap();
     let server_public = public_key(&server_private).unwrap();
-    let worker = thread::spawn(move || {
-        accept(
-            socket(listener.accept().unwrap().0),
-            &server_private,
-            client_public,
-        )
-        .unwrap()
-    });
+    let worker =
+        thread::spawn(move || accept(accepted(listener), &server_private, client_public).unwrap());
     let stream = socket(TcpStream::connect(address).unwrap());
     let raw = stream.try_clone().unwrap();
     let client = initiate(stream, &client_private, server_public).unwrap();
@@ -80,6 +93,18 @@ fn authenticated_duplex_records_stream_beyond_one_window_with_fixed_buffers() {
     assert_eq!(send.plaintext_bytes, (3 * MAX_PLAINTEXT_BYTES + 7) as u64);
     assert_eq!(send.sealed_capacity, u16::MAX as usize);
     assert_eq!(send.wire_bytes, send.plaintext_bytes + 5 * 18);
+    assert_eq!(send.crypto_attempts, 5);
+    assert_eq!(send.crypto_input_bytes, send.plaintext_bytes);
+    assert_eq!(send.crypto_output_bytes, send.plaintext_bytes + 5 * 16);
+    assert_eq!(send.record_io_attempts, 5);
+    assert_eq!(send.io_attempts, send.io_calls);
+    assert_eq!(send.zeroed_bytes, 131054);
+    let receive = client.receive.work();
+    assert_eq!(receive.crypto_attempts, 5);
+    assert_eq!(receive.crypto_input_bytes, send.crypto_output_bytes);
+    assert_eq!(receive.crypto_output_bytes, send.plaintext_bytes);
+    assert_eq!(receive.zeroed_bytes, 262102);
+    assert_eq!(receive.buffer_allocation_attempts, 2);
     println!(
         "NATIVE client_send={send:?} client_receive={:?}",
         client.receive.work()
@@ -105,6 +130,9 @@ fn oversized_unattempted_record_does_not_consume_a_nonce() {
         client.send.close(),
         Err(ChannelError::Quarantined)
     ));
+    assert_eq!(client.send.work().channel_calls, 3);
+    assert_eq!(client.send.work().crypto_attempts, 1);
+    assert_eq!(client.send.work().record_io_attempts, 1);
 }
 
 #[test]
@@ -113,22 +141,27 @@ fn wrong_static_identity_fails_the_actual_handshake() {
     let address = listener.local_addr().unwrap();
     let expected_wrong = public_key(&[3; 32]).unwrap();
     let server_public = public_key(&[2; 32]).unwrap();
-    let worker = thread::spawn(move || {
-        accept(
-            socket(listener.accept().unwrap().0),
-            &[2; 32],
-            expected_wrong,
-        )
-        .err()
-        .unwrap()
-    });
-    let client = initiate(
+    let worker =
+        thread::spawn(move || accept_observed(accepted(listener), &[2; 32], expected_wrong));
+    let client = initiate_observed(
         socket(TcpStream::connect(address).unwrap()),
         &[1; 32],
         server_public,
     );
-    assert!(client.is_err());
-    assert!(matches!(worker.join().unwrap(), ChannelError::Noise(_)));
+    assert!(client.result.is_err());
+    assert_eq!(client.work.crypto_attempts, 1);
+    assert_eq!(client.work.record_io_attempts, 2);
+    assert_eq!(client.work.io_attempts, client.work.io_calls + 1);
+    let server = worker.join().unwrap();
+    assert!(matches!(server.result, Err(ChannelError::Noise(_))));
+    assert_eq!(server.work.crypto_attempts, 1);
+    assert_eq!(server.work.record_io_attempts, 1);
+    assert!(server.work.crypto_input_bytes > 0);
+    assert_eq!(server.work.crypto_output_bytes, 0);
+    println!(
+        "S7_FAILED_HANDSHAKE client={:?} server={:?}",
+        client.work, server.work
+    );
 }
 
 #[test]

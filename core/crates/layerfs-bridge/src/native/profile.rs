@@ -11,7 +11,7 @@ pub const NOISE: &str = "Noise_KK_25519_AESGCM_SHA256";
 #[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64")))]
 pub const NOISE: &str = "Noise_KK_25519_ChaChaPoly_BLAKE2s";
 /// Fixed plaintext processing window: Noise's u16 record minus its authentication tag.
-pub const MAX_PLAINTEXT_BYTES: usize = u16::MAX as usize - 16;
+pub const MAX_PLAINTEXT_BYTES: usize = crate::contract::MAX_RECORD_BYTES;
 pub(super) const PROLOGUE: &[u8] = b"layerfs/cluster-two/native-channel/v1\0";
 
 /// Application-owned static keys; provisioning/rotation remain application work.

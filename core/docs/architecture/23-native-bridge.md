@@ -63,3 +63,11 @@ The predecessor is preserved intact in excluded layerfs-bridge-legacy, with only
 manifest identity changed. Its 6,834 production LOC remain counted. Retired
 deadlines, timeout retry loop and prepared-construction routes are no active
 dependency/fallback. S11 removes it after replacement coverage.
+
+The subsequent [runtime wire ownership](40-runtime-wire-ownership.md) checkpoint
+adds actual contract/codec/native fragmentation and shared partial/result credits,
+separate message/correlation identities, explicit worker close handles and observed
+failed handshake/record costs. SDK owns operation/receipt codecs and input/output
+workers. Original native APIs remain usable. Full S7/S9 resource/restart/root exits
+remain open; the owner-accepted fuser correction and Docker proof supersede the old
+published-package wait recorded above.

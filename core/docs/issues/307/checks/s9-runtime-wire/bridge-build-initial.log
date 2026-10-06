@@ -1,0 +1,34 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling libc v0.2.189
+   Compiling typenum v1.20.1
+   Compiling generic-array v0.14.7
+   Compiling inout v0.1.4
+   Compiling block-buffer v0.10.4
+   Compiling getrandom v0.2.17
+   Compiling cpufeatures v0.2.17
+   Compiling rand_core v0.6.4
+   Compiling crypto-common v0.1.7
+   Compiling cipher v0.4.4
+   Compiling universal-hash v0.5.1
+   Compiling aead v0.5.2
+   Compiling digest v0.10.7
+   Compiling polyval v0.6.2
+   Compiling poly1305 v0.8.0
+   Compiling ctr v0.9.2
+   Compiling aes v0.8.4
+   Compiling chacha20 v0.9.1
+   Compiling blake2 v0.10.6
+   Compiling sha2 v0.10.9
+   Compiling ghash v0.5.1
+   Compiling chacha20poly1305 v0.10.1
+   Compiling aes-gcm v0.10.3
+   Compiling snow v0.9.6
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.42s
+  Executable unittests src/lib.rs (core/target/cluster2-runtime-tests/debug/deps/layerfs_bridge-11a65a9ad9813a8d)
+  Executable tests/logical_frames.rs (core/target/cluster2-runtime-tests/debug/deps/logical_frames-b77a28e24eed98da)
+  Executable tests/native.rs (core/target/cluster2-runtime-tests/debug/deps/native-9f0e32919917494c)

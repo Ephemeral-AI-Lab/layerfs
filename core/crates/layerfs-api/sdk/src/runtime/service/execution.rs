@@ -11,7 +11,7 @@ impl Request {
     pub(super) fn class(&self) -> ServiceClass {
         match self {
             Self::Objects { .. } | Self::Lengths { .. } => ServiceClass::Demand,
-            Self::Policy => ServiceClass::Policy,
+            Self::Policy | Self::Binding => ServiceClass::Policy,
             Self::ReserveInodes { .. } => ServiceClass::Serial,
             Self::Accept { .. } => ServiceClass::Accept,
             Self::Begin
@@ -72,7 +72,9 @@ impl Request {
             }
             _ => 0,
         };
-        base.checked_add(extra)
+        // The logical result/error/header window is separately credited before
+        // native reply encoding. Output owns actual Vec capacity until its receipt.
+        base.checked_add(extra)?.checked_add(64 << 10)
     }
 }
 struct Objects {
@@ -109,6 +111,9 @@ pub(super) fn invoke(
 ) -> (RuntimeResult<Response>, u64) {
     let mut copied = 0;
     let result = (|| match request {
+        Request::Binding => sessions
+            .bound_snapshot(binding)
+            .map(|binding| Response::Binding(Box::new(binding))),
         Request::Policy => sessions.policy(binding).map(Response::Policy),
         Request::ReserveInodes { count } => sessions
             .reserve_serials(binding, count)

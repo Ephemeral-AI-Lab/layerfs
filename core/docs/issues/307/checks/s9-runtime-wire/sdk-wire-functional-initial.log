@@ -1,0 +1,29 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.06s
+     Running tests/wire.rs (core/target/cluster2-runtime-tests/debug/deps/wire-23c7eeaa14dddada)
+
+running 5 tests
+test fixed_headers_validate_every_operation_and_refuse_wrong_envelope_before_allocation ... ok
+test typed_refusal_preserves_nested_unknown_original_cleanup_and_opaque_io ... ok
+
+thread 'output_rotates_ready_classes_and_caller_receipts_hold_real_shared_credit' panicked at crates/layerfs-api/sdk/tests/wire.rs:106:47:
+assertion `left == right` failed
+  left: 4
+ right: 5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test output_rotates_ready_classes_and_caller_receipts_hold_real_shared_credit ... FAILED
+test refused_native_header_never_allocates_or_copies_declared_canonical_body ... ok
+test actual_grant_streams_canonical_input_and_disconnect_returns_partial_original ... ok
+
+failures:
+
+failures:
+    output_rotates_ready_classes_and_caller_receipts_hold_real_shared_credit
+
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-sdk --test wire`

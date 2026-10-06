@@ -27,7 +27,7 @@ impl Default for ServiceConfig {
             jobs_per_workspace: 16,
             bytes: 128 << 20,
             read_reserve: 66 << 20,
-            control_reserve: 64 << 10,
+            control_reserve: 128 << 10,
         }
     }
 }
@@ -65,6 +65,8 @@ pub struct Ticket {
 /// Owned input for one bounded host adapter invocation.
 #[derive(Debug)]
 pub enum Request {
+    /// Inspect the original authenticated binding, without a Branch refresh.
+    Binding,
     /// Persisted policy under the attached binding.
     Policy,
     /// One authority-owned inode range.
@@ -153,6 +155,8 @@ pub struct ObjectValue {
 /// Result data or a capability for an exact registry-retained receipt.
 #[derive(Debug)]
 pub enum Response {
+    /// Exact original authenticated binding and coherent captured snapshot.
+    Binding(Box<crate::Binding>),
     /// Persisted policy.
     Policy(StoragePolicy),
     /// Half-open authority-owned range.
@@ -182,6 +186,9 @@ pub enum Response {
 /// Fixed cumulative observations and actual first-party admission ownership.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ServiceWork {
+    /// Live Demand/Accept/Control job owners, including caller-held completions.
+    /// First demand/control slots cannot be consumed by other groups.
+    pub live_class_jobs: [usize; 3],
     /// Every submission by original request class, including pre-credit refusals.
     pub submission_attempts: [u64; 6],
     /// Submission refusals by class; original typed error/body are returned.

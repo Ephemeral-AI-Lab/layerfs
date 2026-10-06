@@ -101,3 +101,30 @@ Follow-up service accounting includes every submission attempt/refusal by class,
 including authority/stale/slot failure before credit acquisition. A queued authority
 refusal remains a dispatched original adapter outcome rather than being relabeled
 as unattempted admission. This adds no provider call, retry or flow cap.
+
+## Authenticated logical delivery checkpoint (2026-10-06)
+
+[Architecture40](../../architecture/40-runtime-wire-ownership.md) describes real
+versioned header/fragment and operation/reply/error codecs, opaque remote Save
+identity, independent native client directions and bounded input/output workers.
+The host authorizes fixed facts before body allocation, and the client waits for
+its exact header grant. Existing Sessions and fair Service retain provider/Save
+ownership; no whole Save lock is transferred to socket threads. Shared count/byte
+credits include partial and caller-held input/results. First demand/control service
+slots survive ordinary Save pressure. Known terminal Accept/Finish/Abort headers
+refuse before body allocation. Original binding inspection never refreshes Branch.
+
+Native real Store delivery proves binding/policy/serial/Begin/Accept/same-Save demand/
+Finish/length/Stage/UpToDate/Release. Exact deciding conflict stage/context and
+original/cleanup/persistence causes survive typed wire encoding. Receipt access
+refusal is distinct from the original Finish/history outcome. Original partial
+input and stopped output return after explicit worker fences; no replay, guessed
+cleanup, implicit Bash timeout/Commit/unmount or unknown-history resolver is added.
+
+Host37 and Docker19 functional bodies cover the final custody source; seven selected
+executables per platform are pinned before/after. Existing earlier checks retain
+scope, not performance eligibility. Complete-root native scan/hard-link/backing,
+full contextual authority/topology, consumer/application assembly and process-
+restart custody are still unfinished. S9 remains CHECKPOINT/unchecked; S10–S13 and
+P3/P6/P7/P13/P14 remain later Commit prerequisites. The accepted fuser correction
+and Docker verification are unchanged and do not require QEMU or a release wait.

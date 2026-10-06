@@ -11,6 +11,7 @@ pub(super) fn read(
     work: &mut ChannelWork,
 ) -> ChannelResult<()> {
     while !bytes.is_empty() {
+        work.io_attempts = work.io_attempts.saturating_add(1);
         let n = stream.read(bytes)?;
         if n == 0 {
             return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
@@ -27,6 +28,7 @@ pub(super) fn write(
     work: &mut ChannelWork,
 ) -> ChannelResult<()> {
     while !bytes.is_empty() {
+        work.io_attempts = work.io_attempts.saturating_add(1);
         let n = stream.write(bytes)?;
         if n == 0 {
             return Err(io::Error::from(io::ErrorKind::WriteZero).into());
@@ -43,12 +45,17 @@ pub(super) fn read_record(
     sealed: &mut Vec<u8>,
     work: &mut ChannelWork,
 ) -> ChannelResult<()> {
+    work.record_io_attempts = work.record_io_attempts.saturating_add(1);
+    work.zeroed_bytes = work.zeroed_bytes.saturating_add(2);
     let mut header = [0; 2];
     read(stream, &mut header, work)?;
     let length = usize::from(u16::from_be_bytes(header));
     if length < 16 || length > limit {
         return Err(ChannelError::Invalid("encrypted record length"));
     }
+    work.zeroed_bytes = work
+        .zeroed_bytes
+        .saturating_add(length.saturating_sub(sealed.len()) as u64);
     sealed.resize(length, 0);
     read(stream, sealed, work)
 }
@@ -57,6 +64,7 @@ pub(super) fn write_record(
     sealed: &[u8],
     work: &mut ChannelWork,
 ) -> ChannelResult<()> {
+    work.record_io_attempts = work.record_io_attempts.saturating_add(1);
     let length = u16::try_from(sealed.len()).map_err(|_| ChannelError::RecordLimit)?;
     write(stream, &length.to_be_bytes(), work)?;
     write(stream, sealed, work)

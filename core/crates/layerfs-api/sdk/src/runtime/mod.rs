@@ -2,6 +2,8 @@
 mod binding;
 mod handlers;
 pub use handlers::history::HistoryReceipts;
+pub use handlers::reply::{encode_grant, encode_refusal, encode_reply, WireReply};
+pub use handlers::wire::{check_header, decode_request, WireRequest};
 mod error;
 mod ports;
 pub(crate) use ports::lengths as length_port;

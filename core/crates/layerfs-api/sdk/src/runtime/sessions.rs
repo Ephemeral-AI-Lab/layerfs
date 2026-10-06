@@ -112,6 +112,12 @@ impl<'a> Sessions<'a> {
         self.check_binding(binding)?;
         Ok(self.demand.policy())
     }
+    /// Returns the original captured binding under current authority. This does
+    /// not reread a Branch, reopen a provider or change construction expectations.
+    pub fn bound_snapshot(&self, binding: &Binding) -> RuntimeResult<Binding> {
+        self.check_binding(binding)?;
+        Ok(binding.clone())
+    }
 
     /// One authorized saved-file length window, without whole-file payload reads.
     /// Trusts owning Store metadata; this does not attest payload integrity.

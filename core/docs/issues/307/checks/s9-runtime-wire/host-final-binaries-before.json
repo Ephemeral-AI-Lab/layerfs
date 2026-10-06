@@ -1,0 +1,12 @@
+{
+  "build": "host-final-no-run",
+  "sha256": {
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_bridge-d6d40251613ee3c5": "507f3e57f10e0b699be439189450263337f23f792c589455ec5fc6ac5f42cd3c",
+    "core/target/cluster2-runtime-tests/debug/deps/logical_frames-aaea643fd77a51c5": "4c95594e0dbd6f8a161dd8d5ed42019c9018d25bf59c15904770cea7b5ba3ef7",
+    "core/target/cluster2-runtime-tests/debug/deps/native-f22a6908121b7872": "5b6cd22b025f08153352e0758950218b9ea3a262f6c2d15639853f684cf1870d",
+    "core/target/cluster2-runtime-tests/debug/deps/native_framing-0e29a25f02e3f76d": "5e842d1b0bffb71e93cbe7c865aee4e41ff87355b5810fe814d8167a6f2abd59",
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_sdk-a9ac2f7b76117cf8": "c3be6c9ecf18a50e7b2b2a72799444cedb350b601557b21aaa499d4ddd351385",
+    "core/target/cluster2-runtime-tests/debug/deps/runtime-0693fe70d77b0de3": "60e27d32e4710524048e59b43332520e063e101d2a2069ca00819518c7ded548",
+    "core/target/cluster2-runtime-tests/debug/deps/wire-23c7eeaa14dddada": "945f959ee939387169aebf566011419f507ec63084b0b3e5633bb0f58c1894dd"
+  }
+}

@@ -952,7 +952,7 @@ fn fair_service_rotates_workspace_and_class_and_retains_result_credit() {
     let mut service = Service::new(
         &mut sessions,
         ServiceConfig {
-            jobs: 4,
+            jobs: 5,
             ..Default::default()
         },
     )
@@ -1299,6 +1299,461 @@ fn queued_history_retains_exact_stage_transition_and_explicit_release_ownership(
     let released = service_job(&mut service, reconnect, Request::Release { save });
     assert!(matches!(
         released.outcome(),
+        ServiceOutcome::Dispatched(Ok(Response::Released))
+    ));
+}
+
+#[path = "support/native.rs"]
+mod wire_sockets;
+#[test]
+fn authenticated_native_runtime_delivers_binding_policy_serial_save_and_history_once() {
+    use layerfs_bridge::{
+        codec::{ReassemblyConfig, ReceiveBudget},
+        contract::*,
+    };
+    use layerfs_sdk::{
+        client::*,
+        runtime::{self, service::*},
+    };
+    let mut fixture = Fixture::new();
+    let branch = fixture.branch;
+    let (client, server) = wire_sockets::pair();
+    let mut sessions = fixture.runtime.sessions();
+    let binding = sessions
+        .bind(
+            &server.peer,
+            WorkspaceId::from_authority([201; 32]).unwrap(),
+            branch,
+        )
+        .unwrap();
+    let root = binding.snapshot().effective_root;
+    let mut service = Service::new(&mut sessions, ServiceConfig::default()).unwrap();
+    let connection = service.connect(&server.peer, binding.clone()).unwrap();
+    let cfg = |kind| ReassemblyConfig {
+        kind,
+        messages: 8,
+        demand_messages: 1,
+        control_messages: 1,
+        message_bytes: 34 << 20,
+        bytes: 96 << 20,
+        demand_reserve: 34 << 20,
+        control_reserve: 64 << 10,
+    };
+    let input_budget = ReceiveBudget::new(cfg(MessageKind::Request)).unwrap();
+    let input_pool = InputPool::new(1, input_budget.clone()).unwrap();
+    let (mut input, send, _) = input_pool.start(server).map_err(|_| "input owner").unwrap();
+    let output_pool = OutputPool::new(OutputConfig {
+        owners: 1,
+        messages: 8,
+        demand_messages: 1,
+        control_messages: 1,
+        bytes: 96 << 20,
+        demand_reserve: 34 << 20,
+        control_reserve: 64 << 10,
+    })
+    .unwrap();
+    let mut output = output_pool.start(send).map_err(|(e, _)| e).unwrap();
+    let client_worker = std::thread::spawn(move || {
+        let mut send = ClientSender::new(client.send).map_err(|(e, _)| e).unwrap();
+        let mut receive = ClientReceiver::new(
+            client.receive,
+            ReceiveBudget::new(cfg(MessageKind::Reply)).unwrap(),
+        )
+        .map_err(|(e, _)| e)
+        .unwrap();
+        fn call(
+            send: &mut ClientSender,
+            receive: &mut ClientReceiver,
+            request: ClientRequest<'_>,
+        ) -> layerfs_bridge::codec::Message {
+            let mut pending = send.begin(request).unwrap();
+            let grant = receive.receive().map_err(|_| "grant").unwrap();
+            send.send_body(&mut pending, &grant).unwrap();
+            drop(grant);
+            let reply = receive.receive().map_err(|_| "reply").unwrap();
+            assert_eq!(reply.envelope().correlation, pending.correlation());
+            reply
+        }
+        let control = |op, save, value| ClientRequest::control(op, save, value).unwrap();
+        let reply = call(
+            &mut send,
+            &mut receive,
+            control(Operation::Binding, None, 0),
+        );
+        match ReplyView::decode(reply.bytes()).unwrap() {
+            ReplyView::Binding(remote) => {
+                assert_eq!(remote.snapshot.effective_root, root);
+                assert_eq!(remote.root_serial, 1);
+            }
+            _ => panic!("binding"),
+        };
+        drop(reply);
+        let reply = call(&mut send, &mut receive, control(Operation::Policy, None, 0));
+        assert!(matches!(
+            ReplyView::decode(reply.bytes()).unwrap(),
+            ReplyView::Policy(_)
+        ));
+        drop(reply);
+        let reply = call(
+            &mut send,
+            &mut receive,
+            control(Operation::ReserveInodes, None, 2),
+        );
+        assert!(matches!(
+            ReplyView::decode(reply.bytes()).unwrap(),
+            ReplyView::Serials { count: 2, .. }
+        ));
+        drop(reply);
+        let reply = call(&mut send, &mut receive, control(Operation::Begin, None, 0));
+        let save = match ReplyView::decode(reply.bytes()).unwrap() {
+            ReplyView::Begun(save) => save,
+            _ => panic!("Save"),
+        };
+        drop(reply);
+        let canonical = encode_whole_file_payload(&vec![0x61; 70000]).unwrap();
+        let id = ObjectId::for_bytes(&canonical);
+        let reply = call(
+            &mut send,
+            &mut receive,
+            ClientRequest::accept(save, id, ObjectRole::WholeFile, &canonical),
+        );
+        assert!(
+            matches!(ReplyView::decode(reply.bytes()).unwrap(),ReplyView::Accepted(got) if got == id)
+        );
+        drop(reply);
+        let reply = call(
+            &mut send,
+            &mut receive,
+            ClientRequest::objects(Some(save), &[id]),
+        );
+        match ReplyView::decode(reply.bytes()).unwrap() {
+            ReplyView::Objects(mut values) => {
+                assert_eq!(values.next(), Some((id, canonical.as_slice())));
+                assert!(values.next().is_none())
+            }
+            _ => panic!("same-Save read"),
+        };
+        drop(reply);
+        let reply = call(
+            &mut send,
+            &mut receive,
+            control(Operation::Finish, Some(save), 0),
+        );
+        match ReplyView::decode(reply.bytes()).unwrap() {
+            ReplyView::Completion {
+                save: original,
+                receipt: Ok(receipt),
+            } => {
+                assert_eq!(original, save);
+                assert_eq!(receipt.phase, CompletionPhase::Finish);
+                assert!(receipt.outcome.is_ok());
+            }
+            _ => panic!("Finish receipt"),
+        };
+        drop(reply);
+        let reply = call(&mut send, &mut receive, ClientRequest::lengths(&[id]));
+        match ReplyView::decode(reply.bytes()).unwrap() {
+            ReplyView::Lengths(mut lengths) => assert_eq!(lengths.next(), Some((id, 70000))),
+            _ => panic!("length"),
+        };
+        drop(reply);
+        let reply = call(&mut send, &mut receive, ClientRequest::stage(save, root, 1));
+        match ReplyView::decode(reply.bytes()).unwrap() {
+            ReplyView::History {
+                receipt: Ok(history),
+                ..
+            } => {
+                assert!(history.stage.unwrap().is_ok());
+                assert!(history.commit.is_none());
+            }
+            _ => panic!("stage"),
+        };
+        drop(reply);
+        let reply = call(
+            &mut send,
+            &mut receive,
+            control(Operation::Commit, Some(save), 0),
+        );
+        match ReplyView::decode(reply.bytes()).unwrap() {
+            ReplyView::History {
+                receipt: Ok(history),
+                ..
+            } => assert!(
+                matches!(history.commit.unwrap().unwrap(),layerfs_history::CommitStagedOutcome::UpToDate {root:got,..} if got == root)
+            ),
+            _ => panic!("transition"),
+        };
+        drop(reply);
+        let reply = call(
+            &mut send,
+            &mut receive,
+            control(Operation::Release, Some(save), 0),
+        );
+        assert!(matches!(
+            ReplyView::decode(reply.bytes()).unwrap(),
+            ReplyView::Released
+        ));
+        drop(reply);
+        send.close().unwrap();
+        (send.work(), receive.work())
+    });
+    for _ in 0..11 {
+        let event = wire_sockets::poll(|| input.try_event().ok());
+        let (envelope, header) = match event {
+            InputEvent::Admission { envelope, header } => (envelope, header),
+            _ => panic!("admission first"),
+        };
+        service.authorize_header(connection, &header).unwrap();
+        let grant = runtime::encode_grant();
+        output
+            .try_submit(OutputPacket {
+                correlation: envelope.correlation,
+                class: MessageClass::Control,
+                bytes: grant.bytes,
+            })
+            .map_err(|(e, _)| e)
+            .unwrap();
+        input.decide(envelope, true).unwrap();
+        let message = match wire_sockets::poll(|| input.try_event().ok()) {
+            InputEvent::Ready(message) => message,
+            _ => panic!("complete input"),
+        };
+        let runtime::WireRequest { request, lease, .. } = runtime::decode_request(message)
+            .map_err(|(e, _)| e)
+            .unwrap();
+        let ticket = service
+            .try_submit(connection, request)
+            .map_err(|(e, _)| e)
+            .unwrap();
+        drop(lease);
+        assert_eq!(service.step(), Some(ticket));
+        let completion = service.take_completion(ticket).unwrap().unwrap();
+        let reply = runtime::encode_reply(&service, &completion, 34 << 20).unwrap();
+        output
+            .try_submit(OutputPacket {
+                correlation: envelope.correlation,
+                class: header.operation.class(),
+                bytes: reply.bytes,
+            })
+            .map_err(|(e, _)| e)
+            .unwrap();
+        // Retain the typed receipt credit through both original socket sends.
+        for _ in 0..2 {
+            let sent = wire_sockets::poll(|| output.try_receipt().ok());
+            assert!(sent.complete);
+            assert_eq!(sent.packet.correlation, envelope.correlation);
+            drop(sent);
+        }
+        drop(completion);
+    }
+    let (send_work, receive_work) = client_worker.join().unwrap();
+    let fence = service.disconnect(connection).unwrap();
+    assert_eq!(fence.cancelled, 0);
+    assert_eq!(service.work().outstanding, 0);
+    input.fence();
+    let queued = input.detach_events();
+    assert!(queued.is_empty());
+    let input_report = wire_sockets::poll(|| input.try_join())
+        .worker
+        .map_err(|_| "input panic")
+        .unwrap();
+    assert!(input_report.partial.is_empty());
+    output.fence();
+    let queued = output.detach_receipts();
+    assert!(queued.is_empty());
+    let output_report = wire_sockets::poll(|| output.try_join())
+        .worker
+        .map_err(|_| "output panic")
+        .unwrap();
+    assert!(output_report.retained.is_empty());
+    println!("S7_S9_NATIVE_RUNTIME input={:?} body={:?} output={:?} output_body={:?} service={:?} client_send={send_work:?} client_receive={receive_work:?}",input_report.native,input_budget.work().unwrap(),output_report.native,output_pool.work().unwrap(),service.work());
+}
+
+#[test]
+fn wire_receipts_preserve_deciding_stage_conflict_and_distinct_inspection_denial() {
+    use layerfs_sdk::{
+        client::*,
+        runtime::{self, service::*},
+    };
+    let mut fixture = Fixture::new();
+    let revoked = fixture.revoked.clone();
+    let branch = fixture.branch;
+    let mut sessions = fixture.runtime.sessions();
+    let a = binding(&sessions, branch, 202, 1);
+    let b = binding(&sessions, branch, 203, 2);
+    let sa = sessions.begin(&a).unwrap();
+    let sb = sessions.begin(&b).unwrap();
+    let ra = candidate(&mut sessions, &a, sa, b"original A");
+    let rb = candidate(&mut sessions, &b, sb, b"original B");
+    sessions.finish(&a, sa).unwrap();
+    sessions.finish(&b, sb).unwrap();
+    let expected = sessions
+        .stage_saved(&a, sa, ra, 1)
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .clone();
+    sessions.stage_saved(&b, sb, rb, 1).unwrap();
+    sessions.commit_saved(&b, sb).unwrap();
+    assert!(sessions.commit_saved(&a, sa).unwrap().is_err());
+    let mut service = Service::new(&mut sessions, ServiceConfig::default()).unwrap();
+    let ca = service.connect(&verified(1), a).unwrap();
+    let cb = service.connect(&verified(2), b).unwrap();
+    let history = service_job(&mut service, ca, Request::History { save: sa });
+    let encoded = runtime::encode_reply(&service, &history, 64 << 10).unwrap();
+    let failure = match ReplyView::decode(&encoded.bytes).unwrap() {
+        ReplyView::History {
+            receipt: Ok(history),
+            ..
+        } => {
+            assert_eq!(history.stage.unwrap().unwrap(), expected);
+            history.commit.unwrap().unwrap_err()
+        }
+        _ => panic!("exact history"),
+    };
+    fn child(node: RemoteFailure<'_>, tag: u8) -> RemoteFailure<'_> {
+        match node.field(tag).unwrap().unwrap().value {
+            FailureValue::Node(bytes) => RemoteFailure::decode(bytes).unwrap(),
+            _ => panic!("typed cause"),
+        }
+    }
+    assert_eq!(failure.domain(), FailureDomain::Runtime);
+    assert_eq!(failure.code(), 9);
+    let observed = child(failure, 1);
+    assert_eq!(observed.domain(), FailureDomain::History);
+    assert_eq!(observed.code(), 1);
+    assert!(matches!(
+        observed.field(1).unwrap().unwrap().value,
+        FailureValue::Unsigned(2)
+    ));
+    let stage = match observed.field(2).unwrap().unwrap().value {
+        FailureValue::Stage(bytes) => decode_stage(bytes).unwrap(),
+        _ => panic!("deciding stage"),
+    };
+    assert_eq!(stage, expected);
+    let moved = child(observed, 3);
+    assert_eq!(moved.domain(), FailureDomain::History);
+    assert_eq!(moved.code(), 9);
+    let repeat = service_job(&mut service, ca, Request::Commit { save: sa });
+    let reply = runtime::encode_reply(&service, &repeat, 64 << 10).unwrap();
+    assert!(
+        matches!(ReplyView::decode(&reply.bytes).unwrap(),ReplyView::Failure {origin:FailureOrigin::Dispatched,error} if error.domain() == FailureDomain::Runtime && error.code() == 5)
+    );
+    let finished = service_job(&mut service, cb, Request::Completion { save: sb });
+    revoked.set(true);
+    let reply = runtime::encode_reply(&service, &finished, 64 << 10).unwrap();
+    assert!(
+        matches!(ReplyView::decode(&reply.bytes).unwrap(),ReplyView::Completion {receipt:Err(error),..} if error.domain() == FailureDomain::Runtime && error.code() == 1)
+    );
+    revoked.set(false);
+    let reply = runtime::encode_reply(&service, &finished, 64 << 10).unwrap();
+    assert!(
+        matches!(ReplyView::decode(&reply.bytes).unwrap(),ReplyView::Completion {receipt:Ok(receipt),..} if receipt.phase == CompletionPhase::Finish && receipt.outcome.is_ok())
+    );
+    let header = ClientRequest::control(Operation::Completion, Some(sa.token()), 0)
+        .unwrap()
+        .header;
+    assert!(service.authorize_header(ca, &header).is_ok());
+    assert!(matches!(
+        service.authorize_header(cb, &header),
+        Err(RuntimeError::StaleCapability)
+    ));
+    let mut token = sa.token().bytes();
+    token[0] ^= 1;
+    let forged =
+        ClientRequest::control(Operation::Completion, Some(SaveToken::from_bytes(token)), 0)
+            .unwrap()
+            .header;
+    assert!(matches!(
+        service.authorize_header(ca, &forged),
+        Err(RuntimeError::StaleCapability)
+    ));
+    revoked.set(true);
+    assert!(matches!(
+        service.authorize_header(ca, &header),
+        Err(RuntimeError::Denied)
+    ));
+    revoked.set(false);
+    drop(finished);
+    drop(repeat);
+    drop(history);
+    let discard = service_job(&mut service, ca, Request::Discard { save: sa });
+    drop(discard);
+    let release = service_job(&mut service, ca, Request::Release { save: sa });
+    assert!(matches!(
+        release.outcome(),
+        ServiceOutcome::Dispatched(Ok(Response::Released))
+    ));
+}
+
+#[test]
+fn service_save_jobs_leave_first_demand_and_control_slots_and_finished_headers_refuse_early() {
+    use layerfs_sdk::{client::*, runtime::service::*};
+    let mut fixture = Fixture::new();
+    let branch = fixture.branch;
+    let mut sessions = fixture.runtime.sessions();
+    let bound = binding(&sessions, branch, 204, 1);
+    let save = sessions.begin(&bound).unwrap();
+    let mut service = Service::new(
+        &mut sessions,
+        ServiceConfig {
+            jobs: 5,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let connection = service.connect(&verified(1), bound).unwrap();
+    let canonical = encode_whole_file_payload(b"slot reservation").unwrap();
+    let id = ObjectId::for_bytes(&canonical);
+    let request = || Request::Accept {
+        save,
+        id,
+        role: ObjectRole::WholeFile,
+        canonical: canonical.clone(),
+    };
+    for _ in 0..3 {
+        service
+            .try_submit(connection, request())
+            .map_err(|(e, _)| e)
+            .unwrap();
+    }
+    assert!(matches!(
+        service.try_submit(connection, request()),
+        Err((RuntimeError::AdmissionUnavailable, Request::Accept { .. }))
+    ));
+    service
+        .try_submit(
+            connection,
+            Request::Objects {
+                save: None,
+                ids: vec![],
+            },
+        )
+        .map_err(|(e, _)| e)
+        .unwrap();
+    service
+        .try_submit(connection, Request::Policy)
+        .map_err(|(e, _)| e)
+        .unwrap();
+    assert_eq!(service.work().live_class_jobs, [1, 3, 1]);
+    let mut held = Vec::new();
+    while let Some(ticket) = service.step() {
+        held.push(service.take_completion(ticket).unwrap().unwrap());
+    }
+    assert_eq!(held.len(), 5);
+    assert_eq!(service.work().live_class_jobs, [1, 3, 1]);
+    drop(held);
+    assert_eq!(service.work().live_class_jobs, [0, 0, 0]);
+    let finish = service_job(&mut service, connection, Request::Finish { save });
+    let header = ClientRequest::accept(save.token(), id, ObjectRole::WholeFile, &canonical).header;
+    assert!(matches!(
+        service.authorize_header(connection, &header),
+        Err(RuntimeError::AlreadyAttempted)
+    ));
+    drop(finish);
+    let release = service_job(&mut service, connection, Request::Release { save });
+    assert!(matches!(
+        release.outcome(),
         ServiceOutcome::Dispatched(Ok(Response::Released))
     ));
 }

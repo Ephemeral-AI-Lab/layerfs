@@ -59,7 +59,7 @@ impl<'s, 'a> Service<'s, 'a> {
             .checked_add(config.control_reserve)
             .ok_or(RuntimeError::Invalid("service byte reserves"))?;
         if config.connections == 0
-            || config.jobs == 0
+            || config.jobs < 3
             || config.jobs_per_workspace == 0
             || config.bytes <= reserved
             || config.control_reserve < std::mem::size_of::<Job>()
@@ -109,6 +109,37 @@ impl<'s, 'a> Service<'s, 'a> {
         branch: BranchId,
     ) -> RuntimeResult<Binding> {
         self.sessions.bind(peer, workspace, branch)
+    }
+
+    /// Revalidates a parsed fixed wire header before body receive allocation.
+    /// This grants only input admission, never operation/publication success.
+    /// The dispatched handler revalidates authority and semantic closure later.
+    pub fn authorize_header(
+        &self,
+        connection: ConnectionId,
+        header: &crate::client::RequestHeader,
+    ) -> RuntimeResult<()> {
+        header
+            .payload_bytes()
+            .map_err(|_| RuntimeError::Invalid("wire header"))?;
+        let client = self.client(connection)?;
+        self.sessions.check_binding(&client.binding)?;
+        if let Some(save) = header.save {
+            let slot = self
+                .sessions
+                .slot(&client.binding, crate::SaveId::from_token(save)?)?;
+            if slot.completion.is_some()
+                && matches!(
+                    header.operation,
+                    crate::client::Operation::Accept
+                        | crate::client::Operation::Finish
+                        | crate::client::Operation::Abort
+                )
+            {
+                return Err(RuntimeError::AlreadyAttempted);
+            }
+        }
+        Ok(())
     }
 
     /// Attaches an authenticated peer to an existing exact binding. Reconnection

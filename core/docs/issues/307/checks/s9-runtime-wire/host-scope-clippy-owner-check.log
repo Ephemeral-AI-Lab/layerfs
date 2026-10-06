@@ -1,0 +1,90 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+error: useless use of `vec!`
+   --> crates/layerfs-bridge/tests/logical_frames.rs:207:20
+    |
+207 |             bytes: &vec![5; 100],
+    |                    ^^^^^^^^^^^^^ help: you can use a slice directly: `&[5; 100]`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#useless_vec
+    = note: `-D clippy::useless-vec` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::useless_vec)]`
+
+error: could not compile `layerfs-bridge` (test "logical_frames") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: the `Err`-variant returned from this function is very large
+  --> crates/layerfs-api/sdk/src/client/native.rs:75:35
+   |
+75 |     pub fn new(sender: Sender) -> Result<Self, (FrameError, Sender)> {
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the `Err`-variant is at least 200 bytes
+   |
+   = help: try reducing the size of `(layerfs_bridge::contract::FrameError, layerfs_bridge::native::Sender)`, for example by boxing large elements or replacing it with `Box<(layerfs_bridge::contract::FrameError, layerfs_bridge::native::Sender)>`
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#result_large_err
+   = note: `-D clippy::result-large-err` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::result_large_err)]`
+
+error: the `Err`-variant returned from this function is very large
+   --> crates/layerfs-api/sdk/src/client/native.rs:187:62
+    |
+187 |     pub fn new(receiver: Receiver, budget: ReceiveBudget) -> Result<Self, (FrameError, Receiver)> {
+    |                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the `Err`-variant is at least 224 bytes
+    |
+    = help: try reducing the size of `(layerfs_bridge::contract::FrameError, layerfs_bridge::native::Receiver)`, for example by boxing large elements or replacing it with `Box<(layerfs_bridge::contract::FrameError, layerfs_bridge::native::Receiver)>`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#result_large_err
+
+error: for loop over a single element
+   --> crates/layerfs-api/sdk/src/runtime/handlers/reply.rs:126:13
+    |
+126 | /             for head in [snapshot.branch.head_commit] {
+127 | |                 w.byte(u8::from(head.is_some()))?;
+128 | |                 if let Some(id) = head {
+129 | |                     w.raw(&id.to_bytes())?;
+130 | |                 }
+131 | |             }
+    | |_____________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#single_element_loop
+    = note: `-D clippy::single-element-loop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::single_element_loop)]`
+help: try
+    |
+126 ~             {
+127 +                 let head = snapshot.branch.head_commit;
+128 +                 w.byte(u8::from(head.is_some()))?;
+129 +                 if let Some(id) = head {
+130 +                     w.raw(&id.to_bytes())?;
+131 +                 }
+132 +             }
+    |
+
+error: large size difference between variants
+   --> crates/layerfs-api/sdk/src/runtime/service/types.rs:157:1
+    |
+157 | / pub enum Response {
+158 | |     /// Exact original authenticated binding and coherent captured snapshot.
+159 | |     Binding(crate::Binding),
+    | |     ----------------------- the largest variant contains at least 440 bytes
+160 | |     /// Persisted policy.
+...   |
+170 | |     Begun(SaveId),
+    | |     ------------- the second-largest variant contains at least 48 bytes
+...   |
+184 | |     Released,
+185 | | }
+    | |_^ the entire enum is at least 440 bytes
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#large_enum_variant
+    = note: `-D clippy::large-enum-variant` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::large_enum_variant)]`
+help: consider boxing the large fields to reduce the total size of the enum
+    |
+159 |     Binding(Box<crate::Binding>),
+    |             ~~~~~~~~~~~~~~~~~~~
+
+error: could not compile `layerfs-sdk` (lib test) due to 4 previous errors
+error: could not compile `layerfs-sdk` (lib) due to 4 previous errors

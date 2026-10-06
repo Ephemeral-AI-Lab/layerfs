@@ -145,3 +145,39 @@ pre-receipt worker failure has unavailable creation work rather than an observed
 zero. Service request accounting also includes all pre-credit submission refusals
 by original class, separate from dispatched adapter error and credit-window counts.
 These corrections preserve original outcomes and bounded fixed counters.
+
+## Native wire cost checkpoint (2026-10-06)
+
+Bridge contract/codec/native and SDK client/runtime/handlers/service now account
+actual bounded fragment/body copies, header writes, first-party scratch requests/
+capacities/initialization, native API/record/socket/crypto attempts and partial bytes,
+shared body/output credits and fair service class ownership. Failed handshakes and
+failed native sends preserve attempted work, including copies before failure.
+[Architecture40](../../architecture/40-runtime-wire-ownership.md) and
+[append-only checks](checks/s9-runtime-wire/) define exact scopes. No changed SQL,
+profile, allocation algorithm or counter-version changes the earlier qualified
+S6 reservation/freelist/range proofs or S7 EXPLAIN/runtime SQL receipts.
+
+The real host11-operation runtime path observes15 request records,71231 copied
+logical body bytes,600 frame-header bytes and72101 transferred encrypted/prefix
+bytes. It observes23 reply records,71659 body bytes and72993 wire bytes, including
+11 grants. All body/output/service credits return to zero; the service's actual
+registry capacity is124416 bytes at that source. Native EOF/partial-call attempts
+remain counted separately from positive transfers. A failed handshake retains its
+original crypto/I/O work; a quarantined send retains7 framing-copy bytes,40 header
+bytes and65519 initialized frame bytes despite zero record I/O. These finite counts
+are not whole-system residency, exclusive I/O/copy or a cold/sustained-rate claim.
+
+Host custody coverage has37 bodies: Bridge14, SDK18 owning-provider plus5 wire.
+Docker has19 native/portable bodies; global provider bodies are macOS cfg, not
+Linux capability. Each source builds with --no-run first; tests have120-second
+outer ceilings and Docker also110-second in-container termination plus1-second
+kill fence. No hang or unchanged performance resampling occurred. Seven binaries
+per platform are hashed before/after. Clippy/fmt/boundary/tool outcomes and all
+failures are retained, with exact final source/build/environment identities.
+
+S7 remains CHECKPOINT/unchecked: exact engine page/dirty/journal/device I/O,
+whole-system phase residency and sustained numerical service/debt gates remain
+open. Full268435456-byte daemon reservation/high-water and backed count-trigger/
+freelist/range costs retain earlier identities; S6 diagnostics receive no cold
+speed/RSS/rate credit. Native product request frontiers still need S8 integration.

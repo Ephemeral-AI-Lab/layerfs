@@ -1,0 +1,12 @@
+{
+  "build": "linux-custody-no-run",
+  "sha256": {
+    "core/target/cluster2-linux/debug/deps/layerfs_bridge-7578cad8abc469c6": "10770f510b7fc68e962bae8ca940b4e6f0797c636930b26eeae3f583f91e1182",
+    "core/target/cluster2-linux/debug/deps/logical_frames-2dd12783f7698f5b": "541ec8fecf81763cb823b69af08ce63f45bcf872635aa4e16cd1b63a2cfe6a94",
+    "core/target/cluster2-linux/debug/deps/native-855a46c73a380a7a": "2205c7b3881a935cb591a2d66d407e4d25ccf46196b4a6717a0f310135c5a60c",
+    "core/target/cluster2-linux/debug/deps/native_framing-0c62ce8c68043889": "612bb3b7747108341b95d53549ee8be0dd4c17806b15136bce46378b6be5c021",
+    "core/target/cluster2-linux/debug/deps/layerfs_sdk-04569cca95583b09": "f2884d94d8964cdf5957eb4104c0adc8c41661190f228476f935db9307ae0c8b",
+    "core/target/cluster2-linux/debug/deps/runtime-2ea06079303783d8": "8357dcac206a77d3fb6adb234bb5c270324e9dccb0fdb39421e57be7f0a19f2e",
+    "core/target/cluster2-linux/debug/deps/wire-9d2d1e92d334f131": "aa3ce55b4cd77253bed73b6f2112a6f822a6ddd4790dd8ae86c465c881dc2c40"
+  }
+}
