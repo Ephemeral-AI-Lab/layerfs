@@ -1,0 +1,13 @@
+{
+  "source": "ec109e3969bb867281f8273940cbe9196a608750",
+  "findings": [
+    "OwnerStart returned default-zero startup work for pre-receipt worker failures without explicit availability, allowing unobserved creation work to be mistaken for zero.",
+    "ServiceWork counted credit-window refusals but not other pre-credit submission failures such as stale capability, authority/format or unavailable registry slot."
+  ],
+  "changes": [
+    "Explicit creation_reported flag is set only after receiving original worker creation result/work. False means placeholder/unavailable on pre-receipt worker failure, preserving original error.",
+    "Fixed per-class submission attempts/refusals count every try_submit path before invocation. Existing credit-window refusal and dispatched counters keep their original separate scopes."
+  ],
+  "verification": "Public admission refusal leaves artifact absent; creation success/real SQLite-full both report receipt. Service tests distinguish retained-credit refusal, pre-admission Denied/stale rejection, and queued Denied dispatch without provider replay. No panic injection, worker retry or provider policy change.",
+  "reuse": "Overlay/Workspace/Project/physical algorithms and first source checkpoint proofs remain unchanged. Only daemon/SDK changed-scope proof is repeated at new source identity."
+}

@@ -1,0 +1,12 @@
+{
+  "build": "attribution-host-build",
+  "sha256": {
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_daemon-7c8da4bc9c2f62c2": "603b7e436b811e25d95a0e20991d886da015866cbf9e6ebb9555a83689a1bb0b",
+    "core/target/cluster2-runtime-tests/debug/deps/device_capacity-4a9b042db44a4be9": "4cf62a0b0bfaa0d3650b103bc1b7ecf111f6a5ed0bb763fafd57925e4b349aa9",
+    "core/target/cluster2-runtime-tests/debug/deps/job_cost-7c87b3815e040dfc": "63f42adba58a36e94a6f85db7d152ddb9103f5916a61637d2be127241f7024e2",
+    "core/target/cluster2-runtime-tests/debug/deps/owner-406c93a1462f09e2": "0621b77d1e2f9c037be2483c24cc6ef9082f51fa8c775b141d0123755411ddfe",
+    "core/target/cluster2-runtime-tests/debug/deps/startup_cost-59e19671c57f07a5": "0c77b802b82563f331e344318a095d857b8425092d775425e87440f5b1790243",
+    "core/target/cluster2-runtime-tests/debug/deps/layerfs_sdk-a9ac2f7b76117cf8": "909f10a663a18a8ee06570f1bdee5f8421acdd3f306c18c04e9e760b41f5df7b",
+    "core/target/cluster2-runtime-tests/debug/deps/runtime-0693fe70d77b0de3": "9f9c36a4011db0795a4312b2f12065304846aa58d81d25d881d65964ff464116"
+  }
+}

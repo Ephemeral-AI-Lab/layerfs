@@ -28,6 +28,9 @@ credit remains held while queued, executing, inside the service or with the call
 they are not publication-success assertions. Access reads original typed knowledge.
 Save release refuses while another queued/result owner references its receipt.
 Local explicit acknowledgement is separate from delivery and publication.
+Fixed per-class submission attempt/refusal counters include all pre-credit
+failures, not only byte/job-credit refusals. Queued adapter errors remain counted
+as dispatched work, keeping original refusal phase and body/error distinct.
 
 Disconnect requires exclusive access to the synchronous dispatch owner, so invoked
 adapter work has returned. It revokes only the attachment, converts only its queued

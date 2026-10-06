@@ -31,6 +31,7 @@ fn readiness_retains_startup_separately_from_foreground_and_maintenance() {
         ProfileConfig::default(),
         OwnerConfig::default(),
     );
+    assert!(started.creation_reported);
     let owner = started.result.unwrap();
     assert!(started.startup.sql.total().attempts > 40);
     assert_eq!(started.startup.sql, owner.startup_work().sql);
@@ -55,6 +56,7 @@ fn failed_owner_start_exposes_original_creation_receipt_without_retry() {
         },
         OwnerConfig::default(),
     );
+    assert!(started.creation_reported);
     assert!(matches!(
         &started.result,
         Err(OwnerError::Overlay(OverlayError::Sql(_)))
@@ -67,4 +69,23 @@ fn failed_owner_start_exposes_original_creation_receipt_without_retry() {
         started.result.err(),
         started.startup
     );
+}
+
+#[test]
+fn admission_refusal_has_no_creation_receipt_or_artifact_effect() {
+    let temp = Temp::new();
+    let path = temp.0.join("not-created.sqlite");
+    let started = Owner::start_observed(
+        &path,
+        ProfileConfig::default(),
+        OwnerConfig {
+            bytes: 1,
+            ..Default::default()
+        },
+    );
+    assert!(matches!(started.result, Err(OwnerError::InvalidAdmission)));
+    assert!(!started.creation_reported);
+    assert!(!path.exists());
+    assert_eq!(started.startup.file_create_calls, 0);
+    assert_eq!(started.startup.sql.total().attempts, 0);
 }

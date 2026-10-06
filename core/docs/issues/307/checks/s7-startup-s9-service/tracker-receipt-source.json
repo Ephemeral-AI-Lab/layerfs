@@ -1,0 +1,8 @@
+{
+  "source_commit": "ec109e3969bb867281f8273940cbe9196a608750",
+  "source_tree": "6f6cab43bdb3e277cdeb70f35f99f36de52bc66c",
+  "s7_comment": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6008261712",
+  "s9_comment": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6008268044",
+  "state": "Separate checkpoint comments; S7/S9 unchecked; no milestone completion, no push/release/deployment",
+  "source_LOC": "core86379->87552(+1173); reference65417->65417(+0); combined151796->152969(+1173)"
+}

@@ -139,3 +139,9 @@ Workspace checks pass;2 owned-device cases stay ignored. Native importer adds3
 selected Docker passes.39 host and26+3 Docker binaries match their pre/post hashes.
 All production source hashes match the frozen identity. Host functional wall
 34.902881292s and Docker engine wall11.687125417s remain nonperformance facts.
+
+A follow-up source correction makes startup receipt availability explicit: a
+pre-receipt worker failure has unavailable creation work rather than an observed
+zero. Service request accounting also includes all pre-credit submission refusals
+by original class, separate from dispatched adapter error and credit-window counts.
+These corrections preserve original outcomes and bounded fixed counters.

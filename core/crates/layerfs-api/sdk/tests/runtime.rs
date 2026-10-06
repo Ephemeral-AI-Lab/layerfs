@@ -988,7 +988,11 @@ fn fair_service_rotates_workspace_and_class_and_retains_result_credit() {
     drop(retained);
     assert_eq!(service.work().outstanding, 0);
     assert_eq!(service.work().credited_bytes, 0);
-    println!("S9_FAIR_SERVICE {:?}", service.work());
+    let work = service.work();
+    assert_eq!(work.submission_attempts.iter().sum::<u64>(), 6);
+    assert_eq!(work.submission_refusals.iter().sum::<u64>(), 1);
+    assert_eq!(work.admitted, 5);
+    println!("S9_FAIR_SERVICE {work:?}");
 }
 
 #[test]
@@ -1197,6 +1201,13 @@ fn service_revalidates_queued_authority_and_fences_retained_results_across_rewra
         refused.outcome(),
         ServiceOutcome::Dispatched(Err(RuntimeError::Denied))
     ));
+    assert!(matches!(
+        service.try_submit(connection, Request::Policy),
+        Err((RuntimeError::Denied, Request::Policy))
+    ));
+    assert_eq!(service.work().submission_attempts[1], 2);
+    assert_eq!(service.work().submission_refusals[1], 1);
+    assert_eq!(service.work().dispatched[1], 1);
     drop(service);
     assert!(matches!(
         Service::new(&mut sessions, ServiceConfig::default()),
@@ -1211,6 +1222,9 @@ fn service_revalidates_queued_authority_and_fences_retained_results_across_rewra
         next.try_submit(connection, Request::Policy),
         Err((RuntimeError::StaleCapability, Request::Policy))
     ));
+    assert_eq!(next.work().submission_attempts[1], 1);
+    assert_eq!(next.work().submission_refusals[1], 1);
+    assert_eq!(next.work().admitted, 0);
 }
 
 #[test]

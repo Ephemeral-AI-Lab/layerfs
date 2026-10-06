@@ -140,6 +140,7 @@ impl Owner {
     ) -> crate::OwnerStart {
         let started = Instant::now();
         let mut startup = Arc::new(layerfs_overlay::CreationWork::default());
+        let mut creation_reported = false;
         let result = (|| {
             if config.bytes <= config.lifecycle_reserve
                 || config.namespaces == 0
@@ -187,10 +188,12 @@ impl Owner {
             let profile = match receiver.recv() {
                 Ok((Ok(profile), observed)) => {
                     startup = observed;
+                    creation_reported = true;
                     profile
                 }
                 Ok((Err(error), observed)) => {
                     startup = observed;
+                    creation_reported = true;
                     worker.join().map_err(|_| OwnerError::WorkerPanicked)?;
                     return Err(error);
                 }
@@ -209,6 +212,7 @@ impl Owner {
         crate::OwnerStart {
             result,
             startup,
+            creation_reported,
             elapsed_ns: started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
         }
     }

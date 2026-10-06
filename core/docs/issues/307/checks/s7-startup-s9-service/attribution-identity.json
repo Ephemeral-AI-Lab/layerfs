@@ -1,0 +1,18 @@
+{
+  "first_parent": "ec109e3969bb867281f8273940cbe9196a608750",
+  "production_sha256": {
+    "core/crates/layerfs-api/sdk/src/runtime/service/owner.rs": "698b0d4ccda319eca18f652fbfb57dc5186141a4a9b3652ecd26499390b39d60",
+    "core/crates/layerfs-api/sdk/src/runtime/service/types.rs": "a6427cd55dc7de7e2ca792c0c8b284c7ef030a0c2170929ecac73c82546dff75",
+    "core/crates/layerfs-daemon/src/overlay/owner.rs": "7e990870b4c8aa2825c147cf19f40df373bec0afd90cfa0c3ba51ff9e71e426c",
+    "core/crates/layerfs-daemon/src/service/startup.rs": "0087f730f5244c53d3287a25613f3170374e871d4af62222e9d7b87341da6902"
+  },
+  "proof": "attribution-host-proof and attribution-linux-proof,7 selected binaries each pinned before/after unchanged",
+  "host": "13 daemon +15 SDK pass",
+  "linux": "13 daemon pass,1 device ignored; SDK provider bodies macOS cfg",
+  "checks": "Host/Linux all-target Clippy -D warnings; fmt; boundary579 pass.39 unchanged tool tests reused. No new hang/failure.",
+  "reuse": "First source checkpoint Overlay/Workspace/Project/device proofs unchanged and retained at their identity; no unchanged performance arm rerun.",
+  "workers": "LAYERFS_CONSTRUCTION_WORKERS=1",
+  "cache": "Uncontrolled; functional/count scope only",
+  "unreported": "creation_reported=false marks unavailable worker receipt, not observed zero; no panic injection/claim",
+  "bounds": "Fixed boolean and6-class cumulative counters; no operational limit/state/algorithm changes"
+}

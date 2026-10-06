@@ -1,0 +1,15 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+   Compiling layerfs-sdk v0.1.6 (/work/core/crates/layerfs-api/sdk)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.61s
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_daemon-14707b6ca2c9a271)
+  Executable tests/device_capacity.rs (core/target/cluster2-linux/debug/deps/device_capacity-23506cbbe50b7d30)
+  Executable tests/job_cost.rs (core/target/cluster2-linux/debug/deps/job_cost-6bdca9a03c6ad148)
+  Executable tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-e99e9fc3bb067fe0)
+  Executable tests/startup_cost.rs (core/target/cluster2-linux/debug/deps/startup_cost-ab13a7d13651afb8)
+  Executable unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_sdk-04569cca95583b09)
+  Executable tests/runtime.rs (core/target/cluster2-linux/debug/deps/runtime-2ea06079303783d8)

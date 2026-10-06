@@ -96,3 +96,23 @@ receipts/docs/tools/examples/third-party remain excluded. Existing moved creatio
 code and all excluded predecessors stay in scope. No reference retirement,
 algorithmic shrink or performance inference is claimed. Final staged tree and
 committed-tree correspondence are recorded in the commit and following receipt.
+
+
+## Attribution follow-up
+
+The follow-up adds explicit daemon creation-receipt availability and complete
+pre-credit request attempt/refusal counts by class. [Source diagnosis](attribution-diagnosis.json)
+and [identity](attribution-identity.json) preserve the distinction between unavailable
+creation work, original pre-admission refusal and an attempted queued adapter error.
+Host13 Daemon+15 SDK and Linux13 Daemon pass with7 pre/post-hashed binaries in each
+scope; Linux's device case stays ignored and SDK provider bodies stay macOS-only.
+Host/Linux Clippy, fmt and579-file boundary pass. Unaffected earlier component/
+device/tool proofs are reused, with no source relabeling or new performance result.
+
+
+Follow-up attribution source comparison (first parent ec109e3969bb867281f8273940cbe9196a608750):
+core87552 ->87578(delta+26), reference65417 ->65417(delta+0),
+combined152969 ->152995(delta+26). Same unchanged counter and exact first-parent/
+final staged archives, verified again after staging documentation. This growth
+adds explicit receipt availability and fixed submission observations. The prior
++1173 source checkpoint remains separately recorded; combined batch growth is+1199.

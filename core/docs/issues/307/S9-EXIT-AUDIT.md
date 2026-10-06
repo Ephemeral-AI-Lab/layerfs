@@ -96,3 +96,8 @@ Docker's final3 native acquisition/scaling checks also pass with3 binaries
 unchanged across execution; global-provider tests remain macOS-only. The six
 changed/dependent packages pass locked Linux all-target no-run build and warning-
 denying Clippy. No owning-platform/global-provider substitution was introduced.
+
+Follow-up service accounting includes every submission attempt/refusal by class,
+including authority/stale/slot failure before credit acquisition. A queued authority
+refusal remains a dispatched original adapter outcome rather than being relabeled
+as unattempted admission. This adds no provider call, retry or flow cap.

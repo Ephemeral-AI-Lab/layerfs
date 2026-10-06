@@ -29,6 +29,9 @@ retains original failure and an independent allocation observation; no failed
 artifact is deleted or startup retried. Existing `create` forwards unchanged.
 Daemon `start_observed` retains this receipt through worker readiness/failure;
 `startup_work` remains separate from foreground and maintenance aggregates.
+`OwnerStart::creation_reported` distinguishes received creation work from a
+default placeholder on admission/spawn/pre-receipt worker failure. Unreported
+worker creation cost is unavailable, not observed zero; original error remains.
 Finite schema startup is O(S + V) for supplied SQL bytes S and executed VM/row
 work V, with fixed-schema resident state, plus the whole physical reservation.
 It is initialized once per daemon rather than on each Workspace bind.

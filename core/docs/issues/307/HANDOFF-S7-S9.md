@@ -36,7 +36,10 @@ Completed/checkpoint identities:
   tree5e3e271a3ace6c42e0f1392e9c1d4a9a67186278. The subsequent Docker acceptance
   update is b9f3a8dc9ffcf78c9e625c86be8b4bb2f661ae6c, tree
   2a55aa86c2d0ca88c5a6b2059d8f506092dc7ab5. The new S7/S9 implementation
-  checkpoint follows it; see checks/s7-startup-s9-service and actual current HEAD.
+  checkpoint is ec109e3969bb867281f8273940cbe9196a608750, tree
+  6f6cab43bdb3e277cdeb70f35f99f36de52bc66c. The follow-up availability/submission
+  attribution correction follows it; see exact source/LOC/tracker receipts under
+  checks/s7-startup-s9-service and actual current HEAD.
 S1–S6 are checked. S0/S7/S8/S9 remain incomplete and unchecked. Never infer
 milestone completion from a prerequisite proof, source existence or this prompt.
 
@@ -59,7 +62,9 @@ Current receipts already cover original-job SQL/direct-versus-trigger changes,
 returned BLOBs, payload copies, allocation/freelist/high-water and queue/parking
 observations. New create_observed/start_observed receipts also include finite
 profile/schema/accounting SQL, startup failure and separate allocation observation.
-Logical column delivery and supplied SQL bytes are explicit; approximate statement
+OwnerStart::creation_reported marks whether actual worker creation work arrived;
+pre-receipt worker costs are unavailable rather than observed zero. Logical
+column delivery and supplied SQL bytes are explicit; approximate statement
 memory samples are not cumulative allocation, pager/RSS or phase peaks. Extend the
 owning overlay diagnostics/database and daemon service
 boundaries to complete-operation SQL/request/page/byte/copy/queue/residency/debt
@@ -140,7 +145,9 @@ and successful-SaveFinish-bound stage/commit/discard history receipts. Typed
 runtime/service now provides fair Workspace/class rotation, same-Save ordering,
 retained byte/job/receipt credits and local disconnect/owner-epoch fences. Preserve
 original queued cancellation bodies and completed outcomes. Those local fences do
-not establish socket/process-restart custody or unknown resolution. Complete
+not establish socket/process-restart custody or unknown resolution. Per-class
+submission attempts/refusals include errors before credit admission, separate
+from dispatched adapter failures and the credit-window refusal counter. Complete
 SDK client/runtime/handlers/service, Bridge contract/codec/native, Project import
 and owning Sandbox/API-core integration. Implement bounded fair authenticated
 object/policy/serial/Save/history delivery, same-Save reads and exact disconnect/
@@ -250,3 +257,11 @@ receipts/docs/tools/examples/third-party remain excluded. Existing moved creatio
 code and all excluded predecessors stay in scope. No reference retirement,
 algorithmic shrink or performance inference is claimed. Final staged tree and
 committed-tree correspondence are recorded in the commit and following receipt.
+
+
+Follow-up attribution source comparison (first parent ec109e3969bb867281f8273940cbe9196a608750):
+core87552 ->87578(delta+26), reference65417 ->65417(delta+0),
+combined152969 ->152995(delta+26). Same unchanged counter and exact first-parent/
+final staged archives, verified again after staging documentation. This growth
+adds explicit receipt availability and fixed submission observations. The prior
++1173 source checkpoint remains separately recorded; combined batch growth is+1199.

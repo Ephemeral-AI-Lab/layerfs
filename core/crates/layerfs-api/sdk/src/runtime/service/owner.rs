@@ -145,6 +145,26 @@ impl<'s, 'a> Service<'s, 'a> {
         connection: ConnectionId,
         request: Request,
     ) -> Result<Ticket, (RuntimeError, Request)> {
+        let class = request.class() as usize;
+        {
+            let mut ledger = self.ledger.borrow_mut();
+            ledger.work.submission_attempts[class] =
+                ledger.work.submission_attempts[class].saturating_add(1);
+        }
+        let result = self.admit(connection, request);
+        if result.is_err() {
+            let mut ledger = self.ledger.borrow_mut();
+            ledger.work.submission_refusals[class] =
+                ledger.work.submission_refusals[class].saturating_add(1);
+        }
+        result
+    }
+
+    fn admit(
+        &mut self,
+        connection: ConnectionId,
+        request: Request,
+    ) -> Result<Ticket, (RuntimeError, Request)> {
         let prepared = (|| {
             let client = self.client(connection)?;
             self.sessions.check_binding(&client.binding)?;

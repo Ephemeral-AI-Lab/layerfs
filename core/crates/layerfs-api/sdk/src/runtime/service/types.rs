@@ -182,6 +182,11 @@ pub enum Response {
 /// Fixed cumulative observations and actual first-party admission ownership.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ServiceWork {
+    /// Every submission by original request class, including pre-credit refusals.
+    pub submission_attempts: [u64; 6],
+    /// Submission refusals by class; original typed error/body are returned.
+    /// Queued adapter errors are counted separately as dispatched jobs.
+    pub submission_refusals: [u64; 6],
     /// Successfully admitted jobs.
     pub admitted: u64,
     /// Byte/job credit-window refusals, with no provider work.
