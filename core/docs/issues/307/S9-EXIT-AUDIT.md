@@ -151,3 +151,39 @@ and require backing; new grouping isO(N log N)+actual unique payload bytes, not
 bounded complete-root acceptance. Greater-than4GiB native proof remains NOT_RUN.
 S9 remains unchecked; remaining application/consumer/restart/context and backing
 work is active, with P3/P6/P7/P13/P14 still S10 prerequisites.
+
+## Native consumer ports checkpoint (2026-10-06)
+
+[Architecture42](../../architecture/42-native-consumer-ports.md) adds SDK client
+`Calls`, one bounded exchange owner over an existing authenticated connection, and
+`RemoteObjects`/`RemoteLengths`/`RemoteSerials` implementing the public
+AuthenticatedObjects, FileLengths and InodeSerials ports. Each exchange checks its
+original grant/reply correlation, class, operation, object/Save identity, demand
+cardinality/order, serial count and attempted receipt phase. Transport/protocol
+failure is retained and terminal for that owner; no reconnect, refresh or replay
+is added. Independent CloseHandle stays outside the call mutex; partial drain is
+nonblocking and never claims an in-progress call joined. Only typed owning
+MissingObject/ObjectMissing becomes content absence. Canonical hash failure is
+`FrameError::IdentityMismatch`. The mutex spans one adapter unit, not a Save/Commit.
+
+Host40 functional bodies (Bridge14, SDK runtime19, wire7) and Docker21 portable
+bodies (Bridge14, wire7) pass; owning global-provider cases are macOS cfg and are
+not claimed on Linux. Seven compiled executables per platform have unchanged
+pre/post hashes. Both-platform all-target Clippy with warnings denied, fmt and the
+606-file boundary guard cover the source. Every receipt carries the same888-input
+source map; its cohort digest is recorded in [identity](checks/s9-consumer-ports/identity.json).
+All tests have explicit<=120s stops; Docker inner110s+1s fence. No timeout occurred.
+The original E0433 fixture import failure and the command-order mistake that
+launched a functional command after a failed no-run (zero bodies executed) remain
+in [failures](checks/s9-consumer-ports/FAILURES.md). Unchanged tool self-tests are
+reused at their original identity. Caches are uncontrolled: no cold speed, RSS or
+sustained-rate claim.
+
+Remaining S9 exits are unchanged in kind: backed initial acquisition (scan/job/
+frontier/child/inode/directory collections stay resident), owning application/
+daemon runtime assembly and supervision of these ports, contextual authority/
+topology/provenance, exact disconnect/process-restart custody including the P10
+completion-fenced unknown-history resolver obligation, and public-API/real-Store
+qualification of interleaved Saves, fairness and repeated bound use. Greater-than
+4GiB native proof remains NOT_RUN. S9 remains CHECKPOINT/unchecked; S8 is a later
+batch; S10–S13 and P3/P6/P7/P13/P14 remain later Commit prerequisites.

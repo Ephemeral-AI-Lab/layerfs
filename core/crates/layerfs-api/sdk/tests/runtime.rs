@@ -1757,3 +1757,142 @@ fn service_save_jobs_leave_first_demand_and_control_slots_and_finished_headers_r
         ServiceOutcome::Dispatched(Ok(Response::Released))
     ));
 }
+
+#[test]
+fn native_consumer_ports_serve_real_saved_objects_lengths_and_serials_without_replay() {
+    use layerfs_bridge::{
+        codec::{ReassemblyConfig, ReceiveBudget},
+        contract::*,
+    };
+    use layerfs_content::AuthenticatedObjects;
+    use layerfs_sdk::{
+        client::*,
+        runtime::{self, service::*},
+    };
+    use layerfs_workspace::{FileLengths, InodeSerials};
+    let mut fixture = Fixture::new();
+    let branch = fixture.branch;
+    let (client, server) = wire_sockets::pair();
+    let mut sessions = fixture.runtime.sessions();
+    let binding = sessions
+        .bind(
+            &server.peer,
+            WorkspaceId::from_authority([205; 32]).unwrap(),
+            branch,
+        )
+        .unwrap();
+    let save = sessions.begin(&binding).unwrap();
+    let id = accept(&mut sessions, &binding, save, b"native adapter data");
+    sessions.finish(&binding, save).unwrap();
+    let mut service = Service::new(&mut sessions, ServiceConfig::default()).unwrap();
+    let connection = service.connect(&server.peer, binding).unwrap();
+    let cfg = |kind| ReassemblyConfig {
+        kind,
+        messages: 8,
+        demand_messages: 1,
+        control_messages: 1,
+        message_bytes: 34 << 20,
+        bytes: 96 << 20,
+        demand_reserve: 34 << 20,
+        control_reserve: 64 << 10,
+    };
+    let pool = InputPool::new(1, ReceiveBudget::new(cfg(MessageKind::Request)).unwrap()).unwrap();
+    let (mut input, send, _) = pool.start(server).map_err(|_| "input").unwrap();
+    let output_pool = OutputPool::new(OutputConfig {
+        owners: 1,
+        messages: 8,
+        demand_messages: 1,
+        control_messages: 1,
+        bytes: 96 << 20,
+        demand_reserve: 34 << 20,
+        control_reserve: 128 << 10,
+    })
+    .unwrap();
+    let mut output = output_pool.start(send).map_err(|(e, _)| e).unwrap();
+    let caller = std::thread::spawn(move || {
+        let fence = client.close_handle().unwrap();
+        let peer = client.peer;
+        let send = ClientSender::new(client.send).map_err(|(e, _)| e).unwrap();
+        let receive = ClientReceiver::new(
+            client.receive,
+            ReceiveBudget::new(cfg(MessageKind::Reply)).unwrap(),
+        )
+        .map_err(|(e, _)| e)
+        .unwrap();
+        let calls = std::sync::Arc::new(Calls::new(send, receive, peer, fence));
+        let objects = RemoteObjects::new(calls.clone(), None);
+        let values = objects.read_canonical_batch(&[id]).unwrap();
+        assert_eq!(ObjectId::for_bytes(&values[0]), id);
+        assert_eq!(
+            RemoteLengths::new(calls.clone()).file_length(id).unwrap(),
+            19
+        );
+        let (start, count) = RemoteSerials::new(calls.clone()).reserve(3).unwrap();
+        assert!(start > 0);
+        assert_eq!(count, 3);
+        assert!(matches!(
+            objects.read_canonical_batch(&[ObjectId::for_bytes(b"absent object")]),
+            Err(layerfs_content::ContentError::MissingObject)
+        ));
+        assert!(objects.failure().unwrap().is_some());
+        assert!(matches!(
+            objects.read_canonical_batch(&[id]),
+            Err(layerfs_content::ContentError::ResourceUnavailable { .. })
+        ));
+        calls.close().unwrap();
+    });
+    for _ in 0..4 {
+        let (envelope, header) = match wire_sockets::poll(|| input.try_event().ok()) {
+            InputEvent::Admission { envelope, header } => (envelope, header),
+            _ => panic!("header"),
+        };
+        service.authorize_header(connection, &header).unwrap();
+        let grant = runtime::encode_grant();
+        output
+            .try_submit(OutputPacket {
+                correlation: envelope.correlation,
+                class: MessageClass::Control,
+                bytes: grant.bytes,
+            })
+            .map_err(|(e, _)| e)
+            .unwrap();
+        input.decide(envelope, true).unwrap();
+        let message = match wire_sockets::poll(|| input.try_event().ok()) {
+            InputEvent::Ready(message) => message,
+            _ => panic!("body"),
+        };
+        let runtime::WireRequest { request, lease, .. } = runtime::decode_request(message)
+            .map_err(|(e, _)| e)
+            .unwrap();
+        let ticket = service
+            .try_submit(connection, request)
+            .map_err(|(e, _)| e)
+            .unwrap();
+        drop(lease);
+        assert_eq!(service.step(), Some(ticket));
+        let completion = service.take_completion(ticket).unwrap().unwrap();
+        let reply = runtime::encode_reply(&service, &completion, 34 << 20).unwrap();
+        output
+            .try_submit(OutputPacket {
+                correlation: envelope.correlation,
+                class: header.operation.class(),
+                bytes: reply.bytes,
+            })
+            .map_err(|(e, _)| e)
+            .unwrap();
+        for _ in 0..2 {
+            assert!(wire_sockets::poll(|| output.try_receipt().ok()).complete);
+        }
+        drop(completion);
+    }
+    caller.join().unwrap();
+    assert_eq!(service.work().admitted, 4);
+    assert_eq!(service.work().outstanding, 0);
+    service.disconnect(connection).unwrap();
+    input.fence();
+    input.detach_events();
+    assert!(wire_sockets::poll(|| input.try_join()).worker.is_ok());
+    output.fence();
+    output.detach_receipts();
+    assert!(wire_sockets::poll(|| output.try_join()).worker.is_ok());
+}

@@ -410,3 +410,78 @@ fn child(node: RemoteFailure<'_>, tag: u8) -> RemoteFailure<'_> {
         _ => panic!("nested node"),
     }
 }
+fn calls(client: layerfs_bridge::native::Connection) -> std::sync::Arc<Calls> {
+    let fence = client.close_handle().unwrap();
+    let peer = client.peer;
+    let send = ClientSender::new(client.send).map_err(|(e, _)| e).unwrap();
+    let receive = ClientReceiver::new(
+        client.receive,
+        ReceiveBudget::new(config(MessageKind::Reply)).unwrap(),
+    )
+    .map_err(|(e, _)| e)
+    .unwrap();
+    std::sync::Arc::new(Calls::new(send, receive, peer, fence))
+}
+#[test]
+fn consumer_close_fences_a_blocked_call_without_waiting_for_its_mutex_or_replay() {
+    let (client, server) = sockets::pair();
+    let calls = calls(client);
+    let worker_calls = calls.clone();
+    let worker = std::thread::spawn(move || {
+        worker_calls.call(ClientRequest::control(Operation::Policy, None, 0).unwrap())
+    });
+    let mut receive = RecordReceiver::new(server.receive);
+    let header = receive.receive().unwrap();
+    assert_eq!(header.envelope.correlation, 1);
+    calls.close().unwrap();
+    let failure = worker.join().unwrap().err().unwrap();
+    assert_eq!(failure.phase, CallPhase::Grant);
+    assert_eq!(failure.correlation, Some(1));
+    let again = calls
+        .call(ClientRequest::control(Operation::Policy, None, 0).unwrap())
+        .err()
+        .unwrap();
+    assert_eq!(again.phase, CallPhase::Admission);
+    assert_eq!(receive.work().records, 1);
+    assert!(calls.drain_partial().unwrap().is_empty());
+}
+#[test]
+fn consumer_wrong_result_retains_original_body_and_stops_before_another_call() {
+    let (client, server) = sockets::pair();
+    let calls = calls(client);
+    let worker_calls = calls.clone();
+    let worker = std::thread::spawn(move || {
+        worker_calls.call(ClientRequest::control(Operation::Policy, None, 0).unwrap())
+    });
+    let mut receive = RecordReceiver::new(server.receive);
+    let mut send = RecordSender::new(server.send).map_err(|(e, _)| e).unwrap();
+    let header = receive.receive().unwrap();
+    let correlation = header.envelope.correlation;
+    let grant = runtime::encode_grant();
+    send.begin(
+        MessageKind::Reply,
+        MessageClass::Control,
+        correlation,
+        grant.bytes.len() as u64,
+        &grant.bytes,
+    )
+    .unwrap();
+    let mut wrong = b"LRP1\x00\x02\x00\x00".to_vec();
+    wrong.extend_from_slice(&1u64.to_be_bytes());
+    wrong.extend_from_slice(&1u64.to_be_bytes());
+    send.begin(
+        MessageKind::Reply,
+        MessageClass::Control,
+        correlation,
+        wrong.len() as u64,
+        &wrong,
+    )
+    .unwrap();
+    let failure = worker.join().unwrap().err().unwrap();
+    assert_eq!(failure.phase, CallPhase::Reply);
+    assert_eq!(failure.received.as_ref().unwrap().bytes(), wrong);
+    assert!(calls
+        .call(ClientRequest::control(Operation::Policy, None, 0).unwrap())
+        .is_err());
+    assert_eq!(receive.work().records, 1);
+}

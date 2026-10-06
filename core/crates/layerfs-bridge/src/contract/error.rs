@@ -18,6 +18,8 @@ pub enum FrameError {
     IdentityExhausted,
     /// A transport ownership mutex was poisoned; it is not repaired/retried.
     Poisoned,
+    /// Canonical reply bytes do not match their authenticated claimed identity.
+    IdentityMismatch,
 }
 impl fmt::Display for FrameError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

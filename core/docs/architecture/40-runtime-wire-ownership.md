@@ -167,3 +167,8 @@ Framing counts encoding/copies at the actual encoding step, including a subseque
 native send failure; completed sends remain separate. Fixed frame allocation/
 initialization and header bytes are explicitly observed. A dedicated regression
 checks those costs after a quarantined-channel refusal without socket I/O.
+
+[Native consumer ports](42-native-consumer-ports.md) now connect existing authenticated
+calls to the public object/length/serial interfaces, preserving first failure and
+independent close while a call holds its mutex. Original publication/custody knowledge
+stays typed and fenced; S8 and complete S7/S9 acceptance remain separate/open.

@@ -28,7 +28,9 @@ product mental model or campaign-specific benchmark procedures.
   remains excluded, and native executable/control/Exec integration is unfinished.
   SDK now embeds host object/Save/history handlers, scoped sessions, bounded
   fair authenticated service and native logical codecs/client/input/output ownership. Its
-  predecessor is preserved in excluded `layerfs-sdk-legacy`; consumer/application integration,
+  predecessor is preserved in excluded `layerfs-sdk-legacy`. Native consumer ports now connect
+  one bounded authenticated exchange owner to the object/length/serial interfaces;
+  owning application/daemon assembly and supervision,
   restart custody, control integration and full runtime acceptance remain
   unfinished. Project native import preserves opaque symlink targets and complete
   path membership and regular hard-link identity, but backed collections remain open.

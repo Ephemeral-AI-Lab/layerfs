@@ -1,0 +1,19 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+error[E0433]: failed to resolve: use of undeclared type `Arc`
+    --> crates/layerfs-api/sdk/tests/runtime.rs:1822:21
+     |
+1822 |         let calls = Arc::new(Calls::new(send, receive, peer, fence));
+     |                     ^^^ use of undeclared type `Arc`
+     |
+help: consider importing this struct
+     |
+4    + use std::sync::Arc;
+     |
+
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `layerfs-sdk` (test "runtime") due to 1 previous error

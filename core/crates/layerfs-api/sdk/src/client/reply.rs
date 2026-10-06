@@ -158,11 +158,11 @@ impl<'a> ReplyView<'a> {
                         bytes = bytes
                             .checked_add(canonical.len())
                             .ok_or(FrameError::Invalid("reply canonical size"))?;
-                        if canonical.len() > CANONICAL_LIMIT
-                            || bytes > READ_CANONICAL_BYTES_LIMIT
-                            || ObjectId::for_bytes(canonical) != id
-                        {
-                            return Err(FrameError::Invalid("reply canonical identity/window"));
+                        if canonical.len() > CANONICAL_LIMIT || bytes > READ_CANONICAL_BYTES_LIMIT {
+                            return Err(FrameError::Invalid("reply canonical window"));
+                        }
+                        if ObjectId::for_bytes(canonical) != id {
+                            return Err(FrameError::IdentityMismatch);
                         }
                     }
                     Self::Objects(ObjectValues { bytes: body, count })
