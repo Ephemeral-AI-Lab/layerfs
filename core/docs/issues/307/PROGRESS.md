@@ -19,7 +19,7 @@ S9 local bound history handlers; it does not complete S7/S8/S9.
 | Milestone | Current state / owning audit |
 | --- | --- |
 | S7 | [CHECKPOINT](S7-EXIT-AUDIT.md): per-original-job SQL/payload/allocation/queue receipts, high-water and trigger accounting; full page/journal/residency/sustained-service gate remains |
-| S8 | [BLOCKED native capability](S8-EXIT-AUDIT.md): registry still ends at fuser0.18.0; native replacement/control/ordinary Bash lifecycle also remains unimplemented |
+| S8 | [Incomplete native milestone](S8-EXIT-AUDIT.md): owner now authorizes the [crates.io0.18.0 timestamp patch](FUSER-REGISTRY-PATCH-20261006.md); full native timestamp/platform gate and replacement/control/ordinary Bash lifecycle remain |
 | S9 | [CHECKPOINT](S9-EXIT-AUDIT.md): stage/transition/discard receipts tied to authenticated binding and successful SaveFinish; logical transport/fair delivery/disconnect fences/complete import remain |
 
 Product checkpoint ae03d22e7 and [batch handoff](HANDOFF-S7-S9-BLOCKED.md)
@@ -27,6 +27,11 @@ record this stopping boundary. Separate [tracker receipts](checks/s7-s9-boundary
 are posted. No checklist item is advanced. S0 stays open; S10–S13 and P3/P6/P7/P13/P14 remain
 outside the requested batch. Root reference, four unrelated containers and both
 307 side documents are preserved. No push/release/deployment occurs.
+
+The subsequent fuser patch checkpoint is recorded separately in
+[its qualification and handoff](FUSER-REGISTRY-PATCH-20261006.md). It supersedes
+the earlier wait-for-published-release ruling for this dependency correction.
+No S0/S7/S8/S9 checklist item advances solely from the patch.
 
 ## Earlier checkpoint history (before S6 completion)
 

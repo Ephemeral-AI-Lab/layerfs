@@ -1,0 +1,5 @@
+   Compiling layerfs-cluster2-platform-proof v0.0.0 (/work/core/benchmark/cluster2-platform)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.86s
+  Executable unittests platform.rs (core/target/cluster2-fuser-registry-patch/debug/deps/platform_proof-c8e8c8a20dfc9e18)
+  Executable unittests request-time.rs (core/target/cluster2-fuser-registry-patch/debug/deps/request_time_proof-b1130e31c3f41dd6)
+  Executable unittests timestamp.rs (core/target/cluster2-fuser-registry-patch/debug/deps/timestamp_proof-e9b4b8f34fc1fccb)

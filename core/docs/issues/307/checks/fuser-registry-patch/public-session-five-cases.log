@@ -1,0 +1,6 @@
+REQUEST_TIME seconds=-2 nanos=800000000 received=SystemTime { tv_sec: -2, tv_nsec: 800000000 } returned=(-2,800000000)
+REQUEST_TIME seconds=-9223372036854775808 nanos=0 received=SystemTime { tv_sec: -9223372036854775808, tv_nsec: 0 } returned=(-9223372036854775808,0)
+REQUEST_TIME seconds=-9223372036854775808 nanos=200000000 received=SystemTime { tv_sec: -9223372036854775808, tv_nsec: 200000000 } returned=(-9223372036854775808,200000000)
+REQUEST_TIME seconds=-9223372036854775807 nanos=200000000 received=SystemTime { tv_sec: -9223372036854775807, tv_nsec: 200000000 } returned=(-9223372036854775807,200000000)
+REQUEST_TIME seconds=9223372036854775807 nanos=999999999 received=SystemTime { tv_sec: 9223372036854775807, tv_nsec: 999999999 } returned=(9223372036854775807,999999999)
+Public Session parser and reply timestamp cases PASS; no kernel/native-mount substitution claimed

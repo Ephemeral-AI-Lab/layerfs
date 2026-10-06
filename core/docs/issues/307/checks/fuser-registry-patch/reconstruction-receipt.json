@@ -1,0 +1,15 @@
+{
+  "command": [
+    "patch",
+    "--batch",
+    "--forward",
+    "-p1",
+    "-i",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/patches/fuser-0.18.0/signed-timestamps.patch"
+  ],
+  "archive_sha256": "b82b6597d216503555ead6b358f341ef748869bf5c6fbae6a0cb9dd231baecfd",
+  "exit": 0,
+  "all85_result_files_match_checked_in_package": true,
+  "applications": 1,
+  "shared_registry_edited": false
+}

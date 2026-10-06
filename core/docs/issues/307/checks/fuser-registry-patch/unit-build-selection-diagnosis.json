@@ -1,0 +1,4 @@
+{
+  "source": "Cargo requires dev-dependencies for unit testing fuser and cannot select dependency unit tests from the unrelated harness workspace. The retained build-fuser-unit-no-run exit101 ran no tests.",
+  "repair": "Select the archived package own Cargo.toml and immutable own Cargo.lock, which includes its dev-dependencies; --locked forbids changes to the copied package."
+}

@@ -19,3 +19,11 @@ path = "platform.rs"
 [[bin]]
 name = "timestamp-proof"
 path = "timestamp.rs"
+
+# Owner-authorized signed-timestamp correction to the crates.io 0.18.0 archive.
+[patch.crates-io]
+fuser = { version = "=0.18.0", path = "../../vendor/fuser-0.18.0" }
+
+[[bin]]
+name = "request-time-proof"
+path = "request-time.rs"

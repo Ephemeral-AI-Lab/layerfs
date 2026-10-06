@@ -1,0 +1,17 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "core/tools",
+    "-p",
+    "test_*.py"
+  ],
+  "exit": 0,
+  "wall_timeout_s": 120,
+  "wall_ns": 288815500,
+  "verdict": "PASS"
+}

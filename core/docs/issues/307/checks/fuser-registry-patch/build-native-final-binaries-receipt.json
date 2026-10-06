@@ -1,0 +1,31 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-307-fuser-patch-final-build",
+    "--platform",
+    "linux/arm64",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work",
+    "-w",
+    "/work",
+    "-e",
+    "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+    "-e",
+    "CARGO_TARGET_DIR=/work/core/target/cluster2-fuser-registry-patch",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "cargo",
+    "build",
+    "--manifest-path",
+    "core/benchmark/cluster2-platform/Cargo.toml",
+    "--locked",
+    "--bins"
+  ],
+  "exit": 0,
+  "wall_ns": 1804445042,
+  "kind": "Final fixture compilation only, changed boolean expression; no tests/measurement"
+}

@@ -1,0 +1,20 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 146B done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for docker.io/library/sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#2 ERROR: docker.io/library/sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4: not found
+------
+ > [internal] load metadata for docker.io/library/sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4:
+------
+Dockerfile:1
+--------------------
+   1 | >>> FROM sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+   2 |     RUN rustup component add clippy
+   3 |     
+--------------------
+ERROR: failed to build: failed to solve: sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4: failed to resolve source metadata for docker.io/library/sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4: docker.io/library/sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4: not found
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/sp0t64zgd6o8vivp3rgagy2rb

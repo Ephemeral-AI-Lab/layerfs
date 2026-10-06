@@ -1,0 +1,14 @@
+{
+  "checked_local_links": 110,
+  "errors": [],
+  "scope": [
+    "AGENTS.md",
+    "core/AGENTS.md",
+    "core/benchmark/cluster2-platform/README.md",
+    "core/patches/fuser-0.18.0/README.md",
+    "core/docs/issues/307/FUSER-REGISTRY-PATCH-20261006.md",
+    "core/docs/issues/307/FUSER-OFFICIAL-CANDIDATE-20261006.md",
+    "core/docs/issues/307/S8-EXIT-AUDIT.md",
+    "core/docs/issues/307/PROGRESS.md"
+  ]
+}

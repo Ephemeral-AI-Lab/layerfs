@@ -1,0 +1,11 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/tools/check_product_boundary.py"
+  ],
+  "exit": 0,
+  "output": "PASS: scanned568 production Rust/SQL files; semantic review still required",
+  "scope": "actual core product boundary unchanged; third-party package explicitly excluded from first-party product source",
+  "source_product_changes": []
+}

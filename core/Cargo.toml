@@ -22,6 +22,7 @@ members = [
     "crates/layerfs-bridge",
 ]
 exclude = [
+    "vendor/fuser-0.18.0",
     "crates/layerfs-api/core",
     "crates/layerfs-sdk-legacy",
     "crates/layerfs-sandbox",
@@ -45,3 +46,7 @@ opt-level = 1
 
 [profile.test.package.zstd-sys]
 opt-level = 3
+
+# Owner-authorized signed-timestamp correction to the crates.io 0.18.0 archive.
+[patch.crates-io]
+fuser = { version = "=0.18.0", path = "vendor/fuser-0.18.0" }

@@ -1,0 +1,9 @@
+
+running 4 tests
+test time::test::test_time_from_system_time_negative ... ok
+test time::test::test_time_from_system_time_i64_min_boundary ... ok
+test time::test::test_system_time_from_time_negative ... ok
+test time::test::test_time_round_trip ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 51 filtered out; finished in 0.00s
+

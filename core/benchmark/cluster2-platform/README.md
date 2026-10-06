@@ -2,6 +2,20 @@
 
 > **Status:** Dated planning checkpoint; not release evidence or a product contract.
 
+Current dependency selection2026-10-06: the owner-authorized
+[fuser0.18.0 timestamp patch](../../patches/fuser-0.18.0/README.md) is applied via
+this independent harness root's `[patch.crates-io]`. The historical results below
+used the unmodified published crate; the new qualification is recorded separately
+in [the patch record](../../docs/issues/307/FUSER-REGISTRY-PATCH-20261006.md).
+`timestamp-proof` exercises native negative, minimum-whole and minimum-fractional
+cases. `request-time-proof` verifies five exact public Session parser/reply inputs,
+including fractional signed minimum, with explicit DESTROY/join and bounded socket
+waits. It is an external fixture, not a product proxy or native-mount substitution.
+Build tests first with `--no-run`; every actual proof/test invocation needs an
+explicit wall bound (native/parser cases8s, all tests at most120s). Preserve failed
+cases and the owning Linux boundary normalization; do not credit these correctness
+proofs as cold speed, RSS or sustained service results.
+
 This external harness proves the required published dependencies/toolchain and
 native mount/read/detach/join path. It is neither a replacement Workspace nor a
 performance arm. Its own locked graph includes fuser 0.18.0, rusqlite 0.40.2

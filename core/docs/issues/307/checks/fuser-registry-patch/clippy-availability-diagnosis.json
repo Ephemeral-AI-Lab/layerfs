@@ -1,0 +1,5 @@
+{
+  "original_check_exit": 1,
+  "cause": "The pinned base Rust image lacks cargo-clippy; no compiler lint was executed.",
+  "next": "Build an owned derivative with the official Clippy component for the same Rust1.85.1 toolchain, retain base native-proof binary/build identities."
+}

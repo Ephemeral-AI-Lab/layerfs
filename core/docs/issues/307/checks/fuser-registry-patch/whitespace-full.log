@@ -1,0 +1,24 @@
+core/docs/issues/307/checks/fuser-registry-patch/clippy-image-build.log:16: trailing whitespace.
++   3 |     
+core/patches/fuser-0.18.0/signed-timestamps.patch:4: trailing whitespace.
++ 
+core/patches/fuser-0.18.0/signed-timestamps.patch:27: trailing whitespace.
++ 
+core/patches/fuser-0.18.0/signed-timestamps.patch:31: trailing whitespace.
++ 
+core/patches/fuser-0.18.0/signed-timestamps.patch:34: trailing whitespace.
++ 
+core/patches/fuser-0.18.0/signed-timestamps.patch:82: trailing whitespace.
++ 
+core/vendor/fuser-0.18.0/CHANGELOG.md:16: trailing whitespace.
++* Change many integer-based public API parameters to strongly-typed newtypes and bitflags. 
+core/vendor/fuser-0.18.0/deny.toml:35: trailing whitespace.
++#severity-threshold = 
+core/vendor/fuser-0.18.0/deny.toml:120: trailing whitespace.
++# Similarly to `skip` allows you to skip certain crates during duplicate 
+core/vendor/fuser-0.18.0/deny.toml:121: trailing whitespace.
++# detection. Unlike skip, it also includes the entire tree of transitive 
+core/vendor/fuser-0.18.0/src/lib.rs:251: trailing whitespace.
++    /// On success, returns the previous value.  
+core/vendor/fuser-0.18.0/src/lib.rs:271: trailing whitespace.
++    /// On success returns the previous value.  

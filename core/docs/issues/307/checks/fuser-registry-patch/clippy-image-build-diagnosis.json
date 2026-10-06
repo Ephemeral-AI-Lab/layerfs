@@ -1,0 +1,4 @@
+{
+  "cause": "Dockerfile FROM interpreted the bare local image ID as docker.io/library/sha256, so no component installation ran.",
+  "repair": "Give the exact preverified local base ID an owned local tag and build with --pull=false; verify tag resolves to the original immutable base ID."
+}

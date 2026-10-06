@@ -1,0 +1,22 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling libc v0.2.190
+   Compiling parking_lot_core v0.9.12
+   Compiling ref-cast v1.0.27
+   Compiling blake3 v1.8.5
+   Compiling libsqlite3-sys v0.38.2
+   Compiling fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)
+   Compiling syn v2.0.119
+   Compiling syn v3.0.6
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+   Compiling nix v0.31.3
+   Compiling page_size v0.6.0
+   Compiling parking_lot v0.12.5
+   Compiling ref-cast-impl v1.0.27
+   Compiling zerocopy-derive v0.8.59
+   Compiling num_enum_derive v0.7.6
+   Compiling num_enum v0.7.6
+   Compiling zerocopy v0.8.59
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-cluster2-platform-proof v0.0.0 (/work/core/benchmark/cluster2-platform)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.78s

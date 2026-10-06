@@ -3,6 +3,12 @@
 > **Status:** Dated planning checkpoint; not release evidence or a product contract.
 > Owner chose crates.io releases only; the official Git candidate is not adopted.
 
+**Subsequent owner direction:** "use fuser 0.18.0 from crates io and apply patch".
+The [authorized registry patch record](FUSER-REGISTRY-PATCH-20261006.md) supersedes
+this investigation's no-patch/published-release-only next step. The Git candidate
+remains unadopted. All original receipts and verdicts below are historical evidence
+and remain unchanged; they are not qualification of the subsequently patched crate.
+
 Owner request2026-10-06: make a permanent fix and allow no patch to fuser;
 re-downloading is allowed. This investigation implements no third-party patch,
 fork, vendoring, registry edit, raw-wire product proxy, overflow/profile bypass

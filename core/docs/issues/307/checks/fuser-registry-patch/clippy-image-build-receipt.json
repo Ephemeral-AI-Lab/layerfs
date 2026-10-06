@@ -1,0 +1,14 @@
+{
+  "command": [
+    "docker",
+    "build",
+    "--platform",
+    "linux/arm64",
+    "-t",
+    "layerfs-307-fuser-patch-clippy:1.85.1",
+    "core/target/cluster2-307/fuser-patch-clippy-image"
+  ],
+  "exit": 1,
+  "wall_ns": 10703400875,
+  "kind": "Toolchain component installation only; unmodified official Rust1.85.1 Clippy"
+}

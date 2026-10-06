@@ -1,0 +1,48 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-307-fuser-patch-build",
+    "--platform",
+    "linux/arm64",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work",
+    "-w",
+    "/work",
+    "-e",
+    "CARGO_HOME=/work/core/target/cluster2-linux-cargo",
+    "-e",
+    "CARGO_TARGET_DIR=/work/core/target/cluster2-fuser-registry-patch",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "cargo",
+    "test",
+    "--manifest-path",
+    "core/benchmark/cluster2-platform/Cargo.toml",
+    "--locked",
+    "--all-targets",
+    "--no-run"
+  ],
+  "exit": 0,
+  "wall_ns": 17080024916,
+  "kind": "Compilation only --no-run; not a test invocation or measurement",
+  "config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "environment": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "CARGO_HOME": "core/target/cluster2-linux-cargo",
+    "CARGO_TARGET_DIR": "core/target/cluster2-fuser-registry-patch"
+  },
+  "arm64_rustflags": [
+    "--cfg",
+    "aes_armv8",
+    "--cfg",
+    "polyval_armv8",
+    "--cfg",
+    "chacha20_force_neon",
+    "-C",
+    "target-feature=+aes,+sha2"
+  ]
+}

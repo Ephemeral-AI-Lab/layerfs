@@ -1,0 +1,2 @@
+error: 'cargo-clippy' is not installed for the toolchain '1.85.1-aarch64-unknown-linux-gnu'.
+To install, run `rustup component add clippy`

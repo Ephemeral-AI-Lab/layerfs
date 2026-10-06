@@ -1,0 +1,29 @@
+{
+  "case": "public-session-five-cases",
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-307-patch-public-session-five-cases",
+    "--platform",
+    "linux/arm64",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-fuser-registry-patch/debug/request-time-proof:/usr/local/bin/proof:ro",
+    "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "timeout",
+    "8s",
+    "/usr/local/bin/proof"
+  ],
+  "exit": 0,
+  "wall_ns": 343899375,
+  "wall_limit_s": 8,
+  "binary_sha256": "a61385f2a5ec72728f0a989d5cfa5aeaf511bc1f41f4cc4f893e6e4dc7cf7b69",
+  "binary_size_bytes": 13417832,
+  "verdict": "PASS",
+  "cache_eligibility": "INELIGIBLE for performance; correctness only",
+  "cleanup": "See retained explicit native umount/join or Session DESTROY/join output",
+  "sample_count": 1
+}

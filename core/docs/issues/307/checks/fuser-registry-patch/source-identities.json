@@ -1,0 +1,22 @@
+{
+  "base_commit": "37f31a8345e6683d6853e281ad9d8af00325d1fa",
+  "source_form": "Working candidate exact source hashes, no sealed performance comparison; committed-tree correspondence checked at commit.",
+  "files": {
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "core/benchmark/cluster2-platform/Cargo.toml": "70b71ca8eea6eeefe30b60a21c1dabfa26d0bc70aad42a6450323ff9d2fe8352",
+    "core/benchmark/cluster2-platform/Cargo.lock": "73c2164450a2f0ffb2c5df04c7756f21195043947436728f53ff3c97efcba4ae",
+    "core/benchmark/cluster2-platform/platform.rs": "82a4ec6f408ca75870953c487b6850b20a902f367071e4691f97464ccbc46780",
+    "core/benchmark/cluster2-platform/timestamp.rs": "fd1149024c8825eeaced361aa8fabe0312f4047a9454a0d465394274e9745e10",
+    "core/benchmark/cluster2-platform/request-time.rs": "6a6ea480f1f08b6fc61ee4c9bd023efeeac23ed06ede2afc44cde37013145c80",
+    "core/patches/fuser-0.18.0/provenance.json": "0b31522ec62aff6bc87def615e19386598b63f1ce6d9acedf0fc2d0e26ad1643",
+    "core/patches/fuser-0.18.0/signed-timestamps.patch": "854e35c1cdabc8fbe78d5293c947f66130e1c137e88438f2dfe64bf9c2cc804d",
+    "core/vendor/fuser-0.18.0/src/time.rs": "a333dba1c186c022eb55b950ec8895fb767c63e8ca156150b605d31d6876287d"
+  },
+  "patched_package_inventory": "core/patches/fuser-0.18.0/provenance.json",
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "toolchain": "Rust1.85.1 ARM64 Linux, GNU; .cargo/config.toml ARM64 flags preserved",
+  "cache": "Correctness only; reused Cargo registry/build caches declared; no cold speed/RSS/sustained-rate eligibility",
+  "workers": 1,
+  "setup": "fresh synthetic request socket or fresh mount directory per selected case; no whole-root/bootstrap performance claim",
+  "interference": "four unrelated owner containers preserved; no same-worktree simultaneous test/measurement; no comparative timing claim"
+}

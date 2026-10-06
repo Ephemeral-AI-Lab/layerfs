@@ -1,0 +1,216 @@
+name: CI
+
+on:
+  pull_request:
+  push: # required for actions/cache to work
+    branches:
+      - master
+
+jobs:
+  compile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        libfuse: [libfuse-dev, libfuse3-dev]
+        features: [ '' ]
+
+    env:
+      RUSTFLAGS: --deny warnings
+      RUSTDOCFLAGS: --deny warnings
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache
+        id: rust-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ~/.rustup/toolchains/
+            target/
+          key: ${{ runner.os }}-cargo-compile-v1-${{ matrix.libfuse }}-${{ matrix.features }}-${{ hashFiles('**/Cargo.toml', '.github/workflows/*.yml') }}
+
+      - name: Non ASCII characters
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          if grep -P -n "[^\x00-\x7F]" -r --include="*.rs" --include="*.toml" .; then
+          echo "Non-ASCII characters detected"
+          exit 1
+          fi
+
+      - name: Install packages
+        run: |
+          sudo apt update
+          sudo apt install -y ${{ matrix.libfuse }} build-essential
+
+      - name: Install Rust
+        if: steps.rust-cache.outputs.cache-hit != 'true'
+        run: |
+          rustup target add x86_64-unknown-linux-musl
+
+      - name: Run tests
+        run: |
+          cargo build --all --all-targets --features=libfuse,${{ matrix.features }}
+          cargo build --all --all-targets --features=${{ matrix.features }}
+          cargo build --target=x86_64-unknown-linux-musl
+          cargo test --all --features=libfuse,${{ matrix.features }}
+          cargo test --all --features=${{ matrix.features }}
+          cargo doc --all --no-deps --features=${{ matrix.features }}
+          make test_passthrough
+
+  ci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      RUSTFLAGS: --deny warnings
+      RUSTDOCFLAGS: --deny warnings
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache
+        id: rust-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ~/.rustup/toolchains/
+            target/
+          key: ${{ runner.os }}-cargo-ci-v1-${{ hashFiles('**/Cargo.toml', '.github/workflows/*.yml') }}
+
+      - name: Install packages
+        run: |
+          sudo apt update
+          sudo apt install -y libfuse-dev libfuse3-dev build-essential
+
+      - name: Install Rust
+        run: |
+          rustup component add rustfmt
+          rustup component add clippy
+          rustc --version
+          cargo --version
+
+      - name: Install cargo-deny
+        if: steps.rust-cache.outputs.cache-hit != 'true'
+        run: cargo install --force --version 0.16.2 cargo-deny --locked
+
+      - name: Run tests
+        run: INTERACTIVE="" make pre
+
+  mac-ci:
+    runs-on: macos-26
+    env:
+      RUSTFLAGS: --deny warnings
+      RUSTDOCFLAGS: --deny warnings
+      PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache
+        id: rust-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ~/.rustup/toolchains/
+            target/
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-compile-v1-${{ hashFiles('**/Cargo.toml', '.github/workflows/*.yml') }}
+
+      - name: Install packages
+        run: |
+          brew update > /dev/null && brew install autoconf automake
+          brew install --cask macfuse
+
+      - name: Install Rust
+        run: |
+          rustup component add rustfmt
+          rustup component add clippy
+          rustc --version
+          cargo --version
+
+      - name: Install cargo-deny
+        if: steps.rust-cache.outputs.cache-hit != 'true'
+        run: cargo install --force --version 0.16.2 cargo-deny --locked
+
+      - name: Build
+        run: |
+          cargo check --features=macos-no-mount
+          cargo build --all --all-targets
+          cargo build --all --all-targets --all-features
+
+      - name: Docs
+        run: cargo doc --all --no-deps --all-features
+
+      - name: Lint
+        run: INTERACTIVE="" make pre
+
+  freebsd-ci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: FreeBSD CI
+        uses: cross-platform-actions/action@v1.0.0
+        with:
+          operating_system: freebsd
+          version: '14.3'
+          shell: bash
+          run: |
+            sudo kldload fusefs
+            sudo pkg install -y rust bash
+            # PJDFS setup
+            # /etc/fuse.conf isn't used on FreeBSD, but simple.rs uses it
+            echo user_allow_other | sudo tee /etc/fuse.conf
+            sudo pkg install -y automake autoconf git
+            cd /tmp
+            git clone https://github.com/fleetfs/pjdfstest
+            cd pjdfstest
+            git checkout d3beed6f5f15c204a8af3df2f518241931a42e94
+            autoreconf -ifs
+            ./configure
+            make pjdfstest
+            cd $GITHUB_WORKSPACE
+            cargo build --all --all-targets
+            cargo doc --all --no-deps
+            cargo test --all --all-targets -- --skip=mnt::test::mount_unmount
+            sudo cargo run -p fuser-tests -- bsd-mount
+            sudo ./tests/bsd_pjdfs.sh
+            # Clean up root-owned files so cross-platform-actions rsync teardown doesn't fail
+            sudo rm -rf target
+
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      matrix:
+        test_group: [mount_tests, pjdfs_tests, xfstests]
+
+    steps:
+      # https://github.com/marketplace/actions/maximize-build-disk-space-only-remove-unwanted-software
+      - name: Maximize build space
+        uses: AdityaGarg8/remove-unwanted-software@v5
+        with:
+          remove-android: 'true'
+          remove-dotnet: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          # remove-docker-images: 'true'
+          remove-large-packages: 'true'
+          remove-cached-tools: 'true'
+          # verbose: 'true'
+
+      - uses: actions/checkout@v4
+
+      - name: Run tests
+        run: INTERACTIVE="" make ${{ matrix.test_group }}

@@ -1,0 +1,58 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling find-msvc-tools v0.1.14
+   Compiling shlex v2.0.1
+   Compiling libc v0.2.190
+   Compiling pkg-config v0.3.34
+   Compiling winnow v1.0.4
+   Compiling cfg-if v1.0.5
+   Compiling cc v1.6.0
+   Compiling hashbrown v0.17.1
+   Compiling equivalent v1.0.2
+   Compiling autocfg v1.5.1
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling smallvec v1.16.2
+   Compiling vcpkg v0.2.15
+   Compiling memoffset v0.9.1
+   Compiling rustversion v1.0.23
+   Compiling indexmap v2.14.2
+   Compiling toml_parser v1.1.3+spec-1.1.0
+   Compiling syn v2.0.119
+   Compiling parking_lot_core v0.9.12
+   Compiling cfg_aliases v0.2.2
+   Compiling syn v3.0.6
+   Compiling nix v0.31.3
+   Compiling zerocopy v0.8.59
+   Compiling toml_edit v0.25.15+spec-1.1.0
+   Compiling blake3 v1.8.5
+   Compiling libsqlite3-sys v0.38.2
+   Compiling ref-cast v1.0.27
+   Compiling foldhash v0.2.0
+   Compiling proc-macro-crate v3.5.0
+   Compiling scopeguard v1.2.0
+   Compiling bitflags v2.13.2
+   Compiling lock_api v0.4.14
+   Compiling fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)
+   Compiling arrayvec v0.7.8
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayref v0.3.9
+   Compiling hashlink v0.12.2
+   Compiling parking_lot v0.12.5
+   Compiling page_size v0.6.0
+   Compiling layerfs-telemetry v0.1.6 (/work/core/crates/layerfs-telemetry)
+   Compiling log v0.4.34
+   Compiling fallible-iterator v0.3.0
+   Compiling ref-cast-impl v1.0.27
+   Compiling memchr v2.8.3
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+   Compiling zerocopy-derive v0.8.59
+   Compiling num_enum_derive v0.7.6
+   Compiling num_enum v0.7.6
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-cluster2-platform-proof v0.0.0 (/work/core/benchmark/cluster2-platform)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.66s
+  Executable unittests platform.rs (core/target/cluster2-fuser-registry-patch/debug/deps/platform_proof-c8e8c8a20dfc9e18)
+  Executable unittests request-time.rs (core/target/cluster2-fuser-registry-patch/debug/deps/request_time_proof-b1130e31c3f41dd6)
+  Executable unittests timestamp.rs (core/target/cluster2-fuser-registry-patch/debug/deps/timestamp_proof-e9b4b8f34fc1fccb)

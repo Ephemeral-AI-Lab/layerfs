@@ -1,0 +1,23 @@
+{
+  "full_command": [
+    "git",
+    "diff",
+    "--cached",
+    "--check"
+  ],
+  "full_exit": 2,
+  "full_findings": "Preserved published-package whitespace, unified-diff blank context markers, raw failed Docker build output. Immutable bytes deliberately retained.",
+  "scoped_command": [
+    "git",
+    "diff",
+    "--cached",
+    "--check",
+    "--",
+    ".",
+    ":(exclude)core/vendor/fuser-0.18.0",
+    ":(exclude)core/patches/fuser-0.18.0/signed-timestamps.patch",
+    ":(exclude)core/docs/issues/307/checks/fuser-registry-patch/*.log"
+  ],
+  "scoped_exit": 0,
+  "scoped_output": ""
+}

@@ -1,0 +1,31 @@
+{
+  "case": "fuser-time-unit",
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-307-patch-fuser-time-unit",
+    "--platform",
+    "linux/arm64",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-fuser-registry-patch-unit/debug/deps/fuser-7cceeb1ce0e27b60:/usr/local/bin/proof:ro",
+    "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "timeout",
+    "8s",
+    "/usr/local/bin/proof",
+    "time::test::",
+    "--nocapture"
+  ],
+  "exit": 0,
+  "wall_ns": 279783750,
+  "wall_limit_s": 8,
+  "binary_sha256": "daa8ee3d3dd9480c596668ffef414d7b45d5f6c89f46baedd6a9c7233e0a2e4f",
+  "binary_size_bytes": 15805104,
+  "verdict": "PASS",
+  "cache_eligibility": "INELIGIBLE for performance; correctness only",
+  "cleanup": "See retained explicit native umount/join or Session DESTROY/join output",
+  "sample_count": 1
+}

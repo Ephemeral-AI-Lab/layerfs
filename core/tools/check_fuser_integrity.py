@@ -3,8 +3,8 @@
 
 This is a focused dependency check, not an aggregate pre-push/CI wrapper.
 Registry packages are checked against their locked archive checksum and every
-archived file. Git sources must use the official repository and an explicitly
-approved full revision. No Cargo patch/replace/path override is accepted.
+archived file. The owner-authorized 0.18.0 timestamp patch has a separate pinned
+archive/file/patch identity; all other fuser overrides remain rejected.
 """
 from __future__ import annotations
 
@@ -19,6 +19,18 @@ import tomllib
 
 OFFICIAL_GIT = "https://github.com/cberner/fuser.git"
 APPROVED_REVISIONS: tuple[str, ...] = ()
+PATCH_PACKAGE = Path("core/vendor/fuser-0.18.0")
+PATCH_RECORD = Path("core/patches/fuser-0.18.0")
+BASE_CHECKSUM = "b82b6597d216503555ead6b358f341ef748869bf5c6fbae6a0cb9dd231baecfd"
+PATCH_CHECKSUM = "854e35c1cdabc8fbe78d5293c947f66130e1c137e88438f2dfe64bf9c2cc804d"
+TIME_CHECKSUM = "a333dba1c186c022eb55b950ec8895fb767c63e8ca156150b605d31d6876287d"
+PROVENANCE_CHECKSUM = "0b31522ec62aff6bc87def615e19386598b63f1ce6d9acedf0fc2d0e26ad1643"
+PATCH_MANIFESTS = {
+    "core/Cargo.toml": "vendor/fuser-0.18.0",
+    "core/benchmark/cluster2-platform/Cargo.toml": "../../vendor/fuser-0.18.0",
+}
+PATCH_LOCKS = {"core/Cargo.lock", "core/benchmark/cluster2-platform/Cargo.lock",
+               "core/vendor/fuser-0.18.0/Cargo.lock"}
 
 
 def is_fuser(name, value):
@@ -27,16 +39,20 @@ def is_fuser(name, value):
     )
 
 
-def manifest_errors(document, approved=APPROVED_REVISIONS):
+def manifest_errors(document, approved=APPROVED_REVISIONS, patch_path=None):
     errors = []
     for section in ("patch", "replace"):
         entries = document.get(section, {})
-        groups = entries.values() if section == "patch" else (entries,)
-        for group in groups:
+        groups = entries.items() if section == "patch" else (("replace", entries),)
+        for registry, group in groups:
             if isinstance(group, dict):
                 for name, value in group.items():
                     if is_fuser(name, value):
-                        errors.append(f"{section} override of fuser is forbidden")
+                        permitted = (section == "patch" and registry == "crates-io"
+                                     and name == "fuser" and patch_path is not None
+                                     and value == {"version": "=0.18.0", "path": patch_path})
+                        if not permitted:
+                            errors.append(f"{section} override of fuser is not the authorized timestamp patch")
 
     def visit(table):
         if not isinstance(table, dict):
@@ -66,15 +82,21 @@ def manifest_errors(document, approved=APPROVED_REVISIONS):
                 visit(values)
 
     visit(document)
+    if patch_path is not None and document.get("patch", {}).get("crates-io", {}).get("fuser") != {
+        "version": "=0.18.0", "path": patch_path
+    }:
+        errors.append("owning manifest is missing its exact fuser timestamp patch")
     return errors
 
 
-def lock_errors(document, approved=APPROVED_REVISIONS):
+def lock_errors(document, approved=APPROVED_REVISIONS, patched=False):
     errors = []
     for package in document.get("package", []):
         if package.get("name") != "fuser":
             continue
         source = package.get("source", "")
+        if patched and package.get("version") == "0.18.0" and source:
+            errors.append("owning fuser 0.18.0 lock bypasses its authorized patch")
         if source == "registry+https://github.com/rust-lang/crates.io-index":
             if not re.fullmatch(r"[0-9a-f]{64}", package.get("checksum", "")):
                 errors.append("registry fuser requires its locked checksum")
@@ -88,9 +110,50 @@ def lock_errors(document, approved=APPROVED_REVISIONS):
             )
             if not valid:
                 errors.append("locked fuser Git source/revision is not approved")
+        elif (patched and not source and package.get("version") == "0.18.0"
+              and "checksum" not in package):
+            pass  # Local patched bytes have a separate checked provenance record.
         else:
             errors.append("locked fuser has a local/replacement source")
     return errors
+
+
+def patched_package_errors(root: Path):
+    """Verify the entire checked-in archive copy and the one authorized diff."""
+    record = root / PATCH_RECORD
+    source = root / PATCH_PACKAGE
+    try:
+        raw = (record / "provenance.json").read_bytes()
+        if hashlib.sha256(raw).hexdigest() != PROVENANCE_CHECKSUM:
+            return ["fuser published inventory/provenance changed"]
+        metadata = json.loads(raw)
+        if source.is_symlink():
+            return ["patched fuser package directory is redirected"]
+        if metadata["archive_sha256"] != BASE_CHECKSUM:
+            return ["patched fuser has the wrong published archive identity"]
+        if metadata["patch_sha256"] != PATCH_CHECKSUM or hashlib.sha256(
+            (record / "signed-timestamps.patch").read_bytes()
+        ).hexdigest() != PATCH_CHECKSUM:
+            return ["fuser timestamp diff changed"]
+        if metadata["modified_files"] != {"src/time.rs": TIME_CHECKSUM}:
+            return ["fuser patch changes files beyond the authorized timestamp correction"]
+        expected = metadata["published_files"] | metadata["modified_files"]
+        if len(expected) != 85:
+            return ["fuser published file inventory is incomplete"]
+        errors = []
+        actual = set()
+        for path in source.rglob("*"):
+            relative = path.relative_to(source).as_posix()
+            if path.is_symlink():
+                errors.append(f"redirected patched package path: {relative}")
+            elif path.is_file():
+                actual.add(relative)
+                if hashlib.sha256(path.read_bytes()).hexdigest() != expected.get(relative):
+                    errors.append(f"unexpected patched package bytes: {relative}")
+        errors.extend(f"missing patched package file: {path}" for path in expected.keys() - actual)
+        return errors
+    except (OSError, ValueError, KeyError) as error:
+        return [f"cannot verify fuser timestamp patch: {error}"]
 
 
 def config_errors(document):
@@ -151,13 +214,13 @@ def repository_errors(root: Path):
         checked += 1
         try:
             document = tomllib.loads(path.read_text())
-            findings = (manifest_errors(document) if path.name == "Cargo.toml"
-                        else lock_errors(document) if path.name == "Cargo.lock"
+            findings = (manifest_errors(document, patch_path=PATCH_MANIFESTS.get(name)) if path.name == "Cargo.toml"
+                        else lock_errors(document, patched=name in PATCH_LOCKS) if path.name == "Cargo.lock"
                         else config_errors(document))
             errors.extend(f"{name}: {error}" for error in findings)
         except (OSError, ValueError) as error:
             errors.append(f"{name}: cannot verify: {error}")
-    return checked, errors
+    return checked, errors + patched_package_errors(root)
 
 
 def main():
@@ -174,7 +237,8 @@ def main():
     if all(supplied):
         errors.extend(package_errors(*supplied))
     print(json.dumps({"checked_manifests_locks_configs": checked, "errors": errors,
-                      "package_verified": bool(all(supplied)) and not errors}, indent=2))
+                      "authorized_patch_verified": not errors,
+                      "registry_package_verified": bool(all(supplied)) and not errors}, indent=2))
     return 1 if errors else 0
 
 

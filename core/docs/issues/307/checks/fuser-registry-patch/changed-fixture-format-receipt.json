@@ -1,0 +1,16 @@
+{
+  "command": [
+    "rustfmt",
+    "+1.85.1",
+    "--edition",
+    "2021",
+    "--check",
+    "core/benchmark/cluster2-platform/timestamp.rs",
+    "core/benchmark/cluster2-platform/request-time.rs"
+  ],
+  "exit": 0,
+  "wall_ns": 186137833,
+  "wall_limit_s": 120,
+  "kind": "Compilation/format only; no test invocation",
+  "workers": 1
+}

@@ -79,7 +79,19 @@ impl Filesystem for Probe {
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = std::env::args().nth(1).ok_or("mount path")?;
-    let mode = std::env::args().nth(2).ok_or("negative/minimum mode")?;
+    let mode = std::env::args().nth(2).ok_or("timestamp mode")?;
+    let desired = match mode.as_str() {
+        "negative" => UNIX_EPOCH - Duration::new(1, 200_000_000),
+        "minimum-whole" => UNIX_EPOCH
+            .checked_sub(Duration::new(i64::MIN.unsigned_abs(), 0))
+            .ok_or("platform min")?,
+        "minimum" => UNIX_EPOCH
+            .checked_sub(Duration::new(i64::MIN.unsigned_abs(), 0))
+            .ok_or("platform min")?
+            .checked_add(Duration::new(0, 200_000_000))
+            .ok_or("platform min+fraction")?,
+        _ => return Err("unknown timestamp case".into()),
+    };
     std::fs::create_dir(&path)?;
     let mut config = Config::default();
     config.n_threads = Some(2);
@@ -94,26 +106,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &path,
         &config,
     )?;
-    let desired = if mode == "negative" {
-        UNIX_EPOCH - Duration::new(1, 200_000_000)
-    } else {
-        UNIX_EPOCH
-            .checked_sub(Duration::new(i64::MAX as u64 + 1, 0))
-            .ok_or("platform min")?
-            .checked_add(Duration::new(0, 200_000_000))
-            .ok_or("platform min+fraction")?
-    };
     println!("requested mtime={desired:?}");
-    let file = std::fs::File::open(std::path::Path::new(&path).join("probe"))?;
-    let outcome = file.set_times(std::fs::FileTimes::new().set_modified(desired));
-    println!("set_times outcome={outcome:?}");
-    let observed = file.metadata().and_then(|m| m.modified());
-    println!("observed mtime={observed:?}");
-    drop(file);
+    let operation = (|| -> std::io::Result<bool> {
+        let file = std::fs::File::open(std::path::Path::new(&path).join("probe"))?;
+        let outcome = file.set_times(std::fs::FileTimes::new().set_modified(desired));
+        println!("set_times outcome={outcome:?}");
+        let observed = file.metadata().and_then(|m| m.modified());
+        println!("observed mtime={observed:?}");
+        Ok(outcome.is_ok() && observed.as_ref().ok() == Some(&desired))
+    })();
     let cleanup = session.umount_and_join();
     println!("native cleanup={cleanup:?}");
     std::fs::remove_dir(path)?;
-    if outcome.is_err() || observed.as_ref().ok() != Some(&desired) || cleanup.is_err() {
+    if !operation? || cleanup.is_err() {
         return Err("pinned FUSE timestamp capability FAILED".into());
     }
     Ok(())

@@ -3,6 +3,18 @@
 > **Status:** Dated planning checkpoint; not release evidence or a product contract.
 > Milestone state: BLOCKED for required native timestamp capability; incomplete.
 
+## Subsequent authorized dependency correction
+
+The owner subsequently requested "use fuser 0.18.0 from crates io and apply patch".
+The [registry patch record](FUSER-REGISTRY-PATCH-20261006.md) owns the new source,
+qualification and retained Linux boundary limitation. The earlier prerequisite of
+waiting for a corrected published release is superseded for this one patch. S8
+remains unchecked: correcting the dependency does not implement native FUSE,
+daemon/control/ordinary Bash lifecycle or close the complete timestamp contract.
+The earlier source/build/decision evidence below remains a dated checkpoint.
+
+## Earlier checkpoint under the no-patch ruling
+
 S8 remains unchecked. No replacement native FUSE, mount/control registry, ordinary
 Bash runner or complete detach/join lifecycle was introduced in this batch.
 The active daemon owner remains independently built and verified. Kernel request,

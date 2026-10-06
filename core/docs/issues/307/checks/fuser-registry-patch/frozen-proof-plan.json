@@ -1,0 +1,15 @@
+{
+  "order": [
+    "fuser-time-unit",
+    "native-negative",
+    "native-minimum-whole",
+    "native-minimum-fractional",
+    "public-session-five-cases",
+    "native-platform-smoke"
+  ],
+  "complete_command_limit_s": 8,
+  "sample_count_per_selection": 1,
+  "purpose": "Timestamp source/parser/reply/native correctness, exact original failures retained",
+  "numeric_cache_eligibility": "INELIGIBLE for performance, correctness only",
+  "expected_requirement": "Exact signed timestamps including fractional minimum; native fractional-minimum is known to FAIL on pinned Linux boundary and is not converted to PASS."
+}

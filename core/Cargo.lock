@@ -1047,3 +1047,7 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "fuser"
+version = "0.18.0"

@@ -1,0 +1,5 @@
+{
+  "diagnosis": "The offline core Cargo update selected 13 unrelated compatible dependency upgrades. They were discarded before any build/test. Only the unused fuser patch metadata is retained because fuser is not an active core workspace member yet.",
+  "core_lock_change": "Exact HEAD lock bytes plus patch.unused fuser 0.18.0 metadata; all package entries remain identical.",
+  "proof_lock_change": "Only registry source/checksum removed for the authorized local fuser 0.18.0 patch; all other package entries identical."
+}

@@ -1,0 +1,83 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling libc v0.2.189
+   Compiling cfg-if v1.0.4
+   Compiling typenum v1.20.1
+   Compiling version_check v0.9.5
+   Compiling find-msvc-tools v0.1.12
+   Compiling shlex v2.0.1
+   Compiling pkg-config v0.3.34
+   Compiling subtle v2.6.1
+   Compiling vcpkg v0.2.15
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayvec v0.7.8
+   Compiling foldhash v0.2.0
+   Compiling arrayref v0.3.9
+   Compiling cfg_aliases v0.2.2
+   Compiling bitflags v2.13.1
+   Compiling nix v0.31.3
+   Compiling hashbrown v0.17.1
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry)
+   Compiling zeroize v1.9.0
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling fallible-iterator v0.3.0
+   Compiling generic-array v0.14.7
+   Compiling smallvec v1.16.0
+   Compiling semver v1.0.28
+   Compiling opaque-debug v0.3.1
+   Compiling const-oid v0.10.2
+   Compiling rustc_version v0.4.1
+   Compiling libsqlite3-sys v0.38.2
+   Compiling hashlink v0.12.2
+   Compiling hybrid-array v0.4.15
+   Compiling curve25519-dalek v4.1.3
+   Compiling snow v0.9.6
+   Compiling crypto-common v0.2.2
+   Compiling block-buffer v0.12.1
+   Compiling digest v0.11.3
+   Compiling jobserver v0.1.35
+   Compiling cc v1.4.5
+   Compiling getrandom v0.2.17
+   Compiling cpufeatures v0.2.17
+   Compiling cpufeatures v0.3.1
+   Compiling sha2 v0.11.0
+   Compiling blake3 v1.8.5
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling rand_core v0.6.4
+   Compiling crypto-common v0.1.7
+   Compiling inout v0.1.4
+   Compiling block-buffer v0.10.4
+   Compiling universal-hash v0.5.1
+   Compiling aead v0.5.2
+   Compiling cipher v0.4.4
+   Compiling digest v0.10.7
+   Compiling polyval v0.6.2
+   Compiling poly1305 v0.8.0
+   Compiling aes v0.8.4
+   Compiling ctr v0.9.2
+   Compiling chacha20 v0.9.1
+   Compiling ghash v0.5.1
+   Compiling blake2 v0.10.6
+   Compiling sha2 v0.10.9
+   Compiling chacha20poly1305 v0.10.1
+   Compiling aes-gcm v0.10.3
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Finished `test` profile [optimized + debuginfo] target(s) in 16.95s
+  Executable unittests src/lib.rs (core/target/cluster2-runtime-tests/debug/deps/layerfs_daemon-7c8da4bc9c2f62c2)
+  Executable tests/device_capacity.rs (core/target/cluster2-runtime-tests/debug/deps/device_capacity-4a9b042db44a4be9)
+  Executable tests/job_cost.rs (core/target/cluster2-runtime-tests/debug/deps/job_cost-7c87b3815e040dfc)
+  Executable tests/owner.rs (core/target/cluster2-runtime-tests/debug/deps/owner-406c93a1462f09e2)
+  Executable unittests src/lib.rs (core/target/cluster2-runtime-tests/debug/deps/layerfs_sdk-a9ac2f7b76117cf8)
+  Executable tests/runtime.rs (core/target/cluster2-runtime-tests/debug/deps/runtime-0693fe70d77b0de3)

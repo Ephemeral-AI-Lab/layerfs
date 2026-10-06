@@ -150,7 +150,8 @@ fixtures, examples and tools do not contribute to production LOC.
 - WAL/sync are permitted for a declared global Store profile. Do not add
   fsync/fdatasync/sync_data/sync_all on disposable Workspace backing. Memory
   hints do not prove bounds. Claim only actual completion/durability contracts.
-- No third-party patch, fork, vendor, registry edit or replacement dependency.
+- No third-party patch, fork, vendor, registry edit or replacement dependency,
+  except the owner's fuser 0.18.0 signed-timestamp correction below.
   Use existing capabilities and locked builds; report an incompatible required
   dependency with source evidence. Unsupported required platforms/capabilities
   fail explicitly, not via a silent no-op or fallback.
@@ -206,14 +207,22 @@ Measurement work additionally follows the
 [owning core harness guide](benchmark/fs-bench-pro/AGENTS.md). Frozen identities,
 cache states and budgets are evidence contracts, not product runtime limits.
 
-### Fuser provenance and no-patch checks
+### Fuser provenance and authorized-patch checks
 
-Owner direction2026-10-06: fuser remains a crates.io dependency. Do not adopt an
-unreleased Git revision, local patch, fork, vendor/path dependency, Cargo
-patch/replace override or floating source. Re-downloading can restore corrupted
-packages; it does not repair a defect in a checksum-identical published package.
-Required timestamp capability still needs a corrected published release and owning
-qualification. Independent S7/S9 work continues while that gate remains.
+Latest owner direction2026-10-06: "use fuser 0.18.0 from crates io and apply patch".
+This supersedes the earlier registry-only/no-patch ruling for this one correction.
+Keep the dependency version exactly0.18.0; use the checked-in copy of its official
+crates.io archive with only `src/time.rs` changed by the recorded upstream timestamp
+fix and regression tests. Both owning workspace roots use the exact path/version
+`[patch.crates-io]` entry. Do not edit shared Cargo registry packages, adopt a Git
+dependency, or extend this exception to unrelated source/dependency changes.
+
+The original archive checksum, all85 published file hashes, exact diff and patched
+time.rs hash are pinned in `patches/fuser-0.18.0/provenance.json` and checked by the
+focused guard. A patched Cargo.lock entry has no registry checksum; the explicit
+provenance record authenticates its modified bytes. See
+[the authorized patch record](docs/issues/307/FUSER-REGISTRY-PATCH-20261006.md).
+Native qualification and the complete S8 contract remain separate requirements.
 
 Before a native fuser build, run the focused provenance check:
 
@@ -226,5 +235,5 @@ checksum taken from the owning Cargo.lock with `--archive`, `--package-directory
 and `--locked-checksum`. This reads and verifies package files without modifying
 them. Run scoped self-tests when changing the check. It is not an aggregate
 pre-push/CI wrapper or a timestamp-capability proof. Current evidence and the
-rejected unmodified Git candidate are in
+historically rejected unmodified Git candidate are in
 [the fuser verification record](docs/issues/307/FUSER-OFFICIAL-CANDIDATE-20261006.md).

@@ -1,0 +1,34 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 109B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/layerfs-307-fuser-patch-base:exact
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/2] FROM docker.io/library/layerfs-307-fuser-patch-base:exact@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#4 resolve docker.io/library/layerfs-307-fuser-patch-base:exact@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4 0.0s done
+#4 CACHED
+
+#5 [2/2] RUN rustup component add clippy
+#5 0.253 info: downloading component 'clippy'
+#5 2.316 info: installing component 'clippy'
+#5 DONE 2.7s
+
+#6 exporting to image
+#6 exporting layers
+#6 exporting layers 0.5s done
+#6 exporting manifest sha256:a3e35be406fa88cdf84e3fbb8e170e57a321d6331061cd6e92b528de0e43d3a9 done
+#6 exporting config sha256:b4a212434770e2935dac38be76f9446bacc8660c5c9aa7f1d997aa3f1841fbf5 done
+#6 exporting attestation manifest sha256:2e8c5db1dc14ce5259adb0f720b678c7c9b62403fad3b19554028956e201f33b 0.0s done
+#6 exporting manifest list sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6 done
+#6 naming to docker.io/library/layerfs-307-fuser-patch-clippy:1.85.1 done
+#6 unpacking to docker.io/library/layerfs-307-fuser-patch-clippy:1.85.1 0.1s done
+#6 DONE 0.6s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/jfphd4puvj5gjunfas3gix9cg

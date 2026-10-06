@@ -1,0 +1,9 @@
+{
+  "verdict": "FAILED",
+  "receipt": "native-minimum-fractional-receipt.json",
+  "observed": "requested signed minimum nanos200000000; callback and return nanos0; native cleanupOk; no fuser panic",
+  "primary_source": "https://github.com/gregkh/linux/blob/v6.12.76/fs/inode.c#L2455",
+  "call_site": "https://github.com/gregkh/linux/blob/v6.12.76/fs/attr.c#L358",
+  "cause": "Pinned Linux timestamp_truncate zeros nanoseconds at filesystem minimum/maximum before setattr. Public Session::from_fd receives and replies exact minimum with200M nanos when those bytes are actually supplied.",
+  "disposition": "Full native timestamp contract remains open; no smaller contract, kernel patch, retry or failure relabeling."
+}
