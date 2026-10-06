@@ -330,3 +330,63 @@ anything about a real acquisition, because **Project still runs on file
 ordering runs**. Review finding 1 is therefore not yet corrected. A3 (port
 Project, remove run machinery, retire `scratch_parent`), R1–R4, E1–E4, Q1 and
 C1 remain open. S9 remains CHECKPOINT/unchecked.
+
+## Project on the acquisition port, A3 (2026-10-06)
+
+Source `0d84badef97f468a7269f9991ab920a8f7077a83`, tree
+`1f720b5ea731fabcf0c18e541d4fae4c8d3f5fad`, first parent `abdb322f4`. Production LOC
+core 94156 → 93991 (−165: Project −168, Persistence +2, Storage +1), reference
+65417 → 65417 (+0), combined 159573 → 159408 (−165);
+[committed LOC receipt](checks/s9-acquisition-port/committed-loc.json). The
+reduction is the removed file-run code; the working state moved into the
+provider A2 added, so this is relocation, not an algorithmic saving.
+
+Project's import now runs on the acquisition port alone. `import/runs.rs` and
+`import/scratch.rs` are removed and `InitRequest::scratch_parent` is replaced by
+`InitRequest::acquisition`. The flow, failure disposition and evidence are in
+[backed initial acquisition](../../architecture/43-backed-initial-acquisition.md);
+its departures from A1 section 7 are in
+[A1 section 11](A1-ACQUISITION-CONTRACT.md). **Review finding 1 is corrected in
+source:** Init reuses the Store's initialized database and shared tables, makes
+no per-operation database, attach, table or run file, and has no second
+algorithm. It is not qualified.
+
+Host: Project 76, Persistence 96, Storage 55 and SDK 26 bodies pass; whole-
+workspace test build, Clippy, fmt, boundary guard (646 files) and 40 tooling
+tests pass. Docker Linux: Clippy and the Project/Persistence/Storage test build
+pass and Project's 73 bodies pass, now including the whole acquisition flow on
+the memory port. No test reached its ceiling.
+[Identity and counts](checks/s9-acquisition-port/identity.json);
+[retained failures](checks/s9-acquisition-port/FAILURES.md): one wrong new test
+expectation, one ungated test import, and two uncorrected failures outside this
+change (the whole Persistence package on Linux, and two harness tests needing
+local prerequisites).
+
+Established: the provider-backed root equals the memory-port root under both
+macOS profiles and passes the namespace oracle; the wide, nested, aliased root
+equals the whole-namespace constructor's, also through 37-row windows; windows
+stay within the port maxima for a 17 000-child directory; a successful Init
+leaves no operation record or row; placement inside the source and a Store
+without acquisition tables are typed refusals; failed cleanup, definite failure
+and unknown outcome each return the typed result and leave exactly the stated
+state on the memory backing.
+
+Found and corrected here: every window statement A2 shipped re-prepared on each
+execution because the engine reads a plainly bound `LIMIT`. A2's profile had
+not counted re-prepares. The statements now bind `LIMIT ?n+0`; plans are
+textually identical and the profile test asserts zero re-prepares.
+
+Count evidence only, one small shape: for 1000 files in 10 directories one Init
+made 30 read units, 5 write units, 1 removal job and 1 release, and the Session
+executed about 3160 more statements and 391 000 more VM steps than the
+run-backed import. Under Durable each write unit is a synchronized commit.
+
+Not established: any time, page, journal, synchronization, file-growth, RSS or
+cold-cache cost; capacity failure or a quarantined Session through Init;
+greater-than-4 GiB native proof; frozen window values. The eight Init
+identities registered for the new vehicle in the SQLite comparison family are
+unsampled, and the earlier Init selections are retired with their receipts.
+A3's acceptance row is met functionally (root equivalence, membership, native
+identity, serial gaps, no input-sized resident collection in source); it has no
+resident-memory measurement. R1–R4, E1–E4, Q1 and C1 remain open. S9 remains
+CHECKPOINT/unchecked.

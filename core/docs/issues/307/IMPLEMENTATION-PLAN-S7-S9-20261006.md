@@ -716,3 +716,49 @@ Next ready: A3 (port scan, jobs, aliases and roots to the port following A1
 section 7; add the external memory port for Project's tests; remove
 `import/runs.rs` and the file-run parts of `import/scratch.rs`; replace
 `InitRequest::scratch_parent`), then R1 and E1. S7/S9 remain incomplete.
+
+## 12. A3 delivered (2026-10-06)
+
+Owner decision for this package: the Init vehicle is re-registered as part of A3
+with a new frozen identity. Tracker receipts for S7/S9 checkpoints are posted
+on #307 without asking again in this session.
+
+A3 source: `0d84badef97f468a7269f9991ab920a8f7077a83`, tree
+`1f720b5ea731fabcf0c18e541d4fae4c8d3f5fad`, first parent
+`abdb322f42befdbaca9e4fc6d4592f3b39fecbc7`. Production LOC core 94156 → 93991
+(−165), reference 65417 → 65417 (+0), combined 159573 → 159408 (−165), verified
+against the committed tree; [receipt](checks/s9-acquisition-port/committed-loc.json).
+
+Project's scan, jobs, later-path recheck and roots run on the acquisition port;
+the run reader, writer, sorter and record grammar are removed; attribute and
+target roots are constructed during the scan; working rows and the operation
+record are removed before publication. See
+[backed initial acquisition](../../architecture/43-backed-initial-acquisition.md),
+[A1 section 11](A1-ACQUISITION-CONTRACT.md) and the
+[receipts](checks/s9-acquisition-port/identity.json).
+
+Harness: the vehicle that drives Project's Init example is
+`families/phase7_sqlite.py`, not the retained SDK `init_namespace` runner, which
+drives the SDK example and was left untouched. `phase7_sqlite.py` now registers
+`phase7-sqlite-init-{100,1000,10000,100000}-acquisition-v1` and the matching
+`phase7-sqlite-disposable-init-…-acquisition-v1` identities at the default 15 s
+command and 9.5 s proof budgets, and refuses every earlier Init selection in
+both arms. None is sampled. The earlier Init identities used owner-doubled
+30 s/19 s caps; carrying those to a new identity is an owner decision for E1,
+not something this package assumed.
+
+A3's acceptance row is met functionally and by count evidence. It is not a
+qualification: no time, page, journal, synchronization or resident-memory cost
+is measured, and Durable now pays a synchronized commit per write unit that the
+scratch files did not. E2/E3 own that measurement.
+
+Two issues outside this package were flagged, not fixed: an older pooled
+value-group statement in Persistence binds `LIMIT` plainly and re-prepares per
+execution, and 14 Persistence test files are not gated for the macOS-only
+Store, so the whole package fails on Linux.
+
+The current baseline is core 93991 + reference 65417 = combined 159408.
+Next ready: R1 (host service supervisor and consumer attachment) and E1
+(register the S7/S9 workload, cache, observer and verifier contract with a thin
+runner). R2 needs R1 and A3's acquired-root witnesses, now available. S7/S9
+remain incomplete.
