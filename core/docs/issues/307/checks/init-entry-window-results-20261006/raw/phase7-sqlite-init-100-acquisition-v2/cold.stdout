@@ -1,0 +1,1 @@
+{"files":100,"length_bytes":5000000,"total_pages":390,"resident_first":390,"resident_after":0,"invalidated_files":99,"page_size_bytes":16384,"first_pass_ns":11530000,"attestation_ns":2945000,"opens":299,"fstats":299,"mmap_calls":198,"mincore_calls":297,"munmap_calls":198,"msync_calls":99,"inventory_entries":208,"vector_peak_bytes":62}

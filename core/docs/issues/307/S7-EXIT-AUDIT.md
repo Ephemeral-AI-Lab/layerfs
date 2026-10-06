@@ -246,3 +246,19 @@ freelist/range-allocation, queue/debt and sustained acceptance remain open.
 S7 stays CHECKPOINT/unchecked; E1–E4 remain open.
 
 [Exact comparison and next correction candidates](PROJECT-OLD-CURRENT-DIAGNOSTIC-20261006.md).
+
+## Independent entry execution checkpoint (2026-10-06)
+
+Sourcea6bd6860c batches independent entry/native inserts behind indexed dependency
+checks; aliases/refusal boundaries retain original ordered executions and whole-unit
+rollback/charge/owner/quarantine rules. At32 fresh files the unit changes68→7 SQL
+executions and5353→7828 VM, with identical work at2000/20000 stored rows. Whole
+compact acquisition changes2200→291 executions,394041→475628 VM, eight writes
+unchanged. Added preflight VM stays explicit. Disposable100/1000 now PASS the
+unchanged speed/storage gate; Durable100/1000 remain FAIL. All selected cold-content,
+sampled proof/root/cleanup/absolute checks pass. Diagnostics have uncontrolled
+cache and no speed/RSS/rate admission. Full page/journal/device/copy/queue/debt,
+reservation/high-water/freelist/range and sustained engine acceptance remain open;
+S7 stays CHECKPOINT/unchecked. E1–E4 remain open at their full required scopes.
+
+[Exact result, source/checks/LOC, retained outcomes and next-ready work](INIT-ENTRY-WINDOW-RESULTS-20261006.md).

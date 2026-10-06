@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/target/release/examples/acquisition_profile",
+    "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9/payload",
+    "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/entry-window-count-diagnostic-20261006/store.sqlite",
+    "disposable"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs",
+  "wall_timeout_s": 15,
+  "wall_ns": 2006720625,
+  "exit_code": 0,
+  "timed_out": false,
+  "scope": "DIAGNOSTIC ONLY uncontrolled cache, counters not performance",
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe"
+}

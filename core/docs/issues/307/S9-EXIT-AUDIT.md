@@ -433,3 +433,20 @@ qualified speed FAILs or establish full-root/runtime/resource acceptance.
 R1–R4/E1–E4/Q1/C1 remain open. S9 stays CHECKPOINT/unchecked, with R1/E1 next ready.
 
 [Exact comparison, identities, source proof reuse and next work](PROJECT-OLD-CURRENT-DIAGNOSTIC-20261006.md).
+
+## Independent entry execution checkpoint (2026-10-06)
+
+Sourcea6bd6860c preserves the neutral Project acquisition port and existing Store,
+profiles/schema/bounds while grouping independent entry/native rows. Canonical
+first identity, exact evidence/aliases, input-order refusal, full-unit rollback,
+logical charge, stale/abandoned and unknown fences remain covered. Host102 provider
+and157 consumer bodies, changed-scope host/Linux builds/Clippy and guard/tooling/fmt
+pass. Four new component cases complete with cold-content, equal roots, independent
+sampled proof and cleanup: both Disposable cases PASS, both Durable cases FAIL.
+Older matched-profile Project clocks remain ineligible; overall parity is not
+established. Full payload/huge-root/>4GiB/runtime/supervision/contextual authority/
+disconnect/restart/resource/rate qualification remains open. R1–R4/E1–E4/Q1/C1,
+S7/S8/S9 and later Commit prerequisites stay incomplete. The earlier stopping
+record and unrelated documents/worktrees/containers/reference remain preserved.
+
+[Exact result, retained evidence and next-ready work](INIT-ENTRY-WINDOW-RESULTS-20261006.md).

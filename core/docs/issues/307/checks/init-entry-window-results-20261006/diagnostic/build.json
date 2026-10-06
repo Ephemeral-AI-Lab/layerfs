@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--release",
+    "--locked",
+    "-p",
+    "layerfs-project",
+    "--example",
+    "acquisition_profile"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs",
+  "wall_timeout_s": 30,
+  "wall_ns": 831397625,
+  "exit_code": 0,
+  "timed_out": false,
+  "scope": "DIAGNOSTIC ONLY uncontrolled cache, counters not performance",
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe"
+}

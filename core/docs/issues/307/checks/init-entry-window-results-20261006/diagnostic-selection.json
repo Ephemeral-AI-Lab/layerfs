@@ -1,0 +1,17 @@
+{
+ "scope":"DIAGNOSTIC ONLY; no new speed sample",
+ "question":"attribute changed-source complete Init acquisition units after independent entry grouping",
+ "source":"a6bd6860c5061e03c4803c8962d847eb348d6069",
+ "tree":"91ba0a4867426cab042e0e4fdf5bb681e16c09e0",
+ "example":"public Project/acquisition_profile, unchanged observer source",
+ "case":"namespace-1000-compact-v3",
+ "profile":"Disposable MEMORY/OFF, Monolithic schema4",
+ "cache":"uncontrolled; no numerical speed/RSS/rate admission",
+ "build_wall_s":30,
+ "run_wall_s":15,
+ "sample_count":1,
+ "construction_workers_env":1,
+ "namespace_constructors":4,
+ "observers":["per-acquisition-method SQL executions/VM/returned rows/write commits/fullscan/sorts/reprepares", "whole Init counters", "same canonical root and namespace counts", "checked profile completion"],
+ "proof":"reuse source-qualified covering public tests and independent measured-case verifier; no new full-payload proof"
+}

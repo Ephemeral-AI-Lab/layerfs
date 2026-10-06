@@ -1,0 +1,7 @@
+{
+  "source_commit": "a6bd6860c5061e03c4803c8962d847eb348d6069",
+  "source_tree": "91ba0a4867426cab042e0e4fdf5bb681e16c09e0",
+  "binary_sha256_pre_post": "94ae55c8140f5b9c0714380daedf256c524910803ba5e5d32caefcbea946e25d",
+  "observer_sha256": "9447b73aaf5c3f5d5466907311f897503a42f69b9c743bd0e2668bd033e948aa",
+  "closed_store": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/entry-window-count-diagnostic-20261006/store.sqlite"
+}

@@ -1,0 +1,20 @@
+{
+  "source": "/Users/yifanxu/.codex/worktrees/namespace-init-benchmark/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+  "independent_copy": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+  "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+  "inputs": {
+    "architecture": "arm64",
+    "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+    "flags": [
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror"
+    ],
+    "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "source_sha256": "cb87d6136140eaa5f99afac19db0dcf11b88413e60030009895faacdb53c8883"
+  },
+  "seal": "6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87",
+  "mode": "independent ordinary byte copy of sealed helper; local metadata path only rebased"
+}

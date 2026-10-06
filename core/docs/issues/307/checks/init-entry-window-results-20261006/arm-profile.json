@@ -1,0 +1,80 @@
+[
+  {
+    "file": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/target/release/.fingerprint/layerfs-storage-21ae65245f0baaee/lib-layerfs_storage.json",
+    "rustflags": [
+      "--cfg",
+      "aes_armv8",
+      "--cfg",
+      "polyval_armv8",
+      "--cfg",
+      "chacha20_force_neon",
+      "-C",
+      "target-feature=+aes,+sha2"
+    ]
+  },
+  {
+    "file": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/target/release/.fingerprint/layerfs-persistence-4b86b9f88c938ae5/lib-layerfs_persistence.json",
+    "rustflags": [
+      "--cfg",
+      "aes_armv8",
+      "--cfg",
+      "polyval_armv8",
+      "--cfg",
+      "chacha20_force_neon",
+      "-C",
+      "target-feature=+aes,+sha2"
+    ]
+  },
+  {
+    "file": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/target/release/.fingerprint/layerfs-project-d86cd4eae437a767/lib-layerfs_project.json",
+    "rustflags": [
+      "--cfg",
+      "aes_armv8",
+      "--cfg",
+      "polyval_armv8",
+      "--cfg",
+      "chacha20_force_neon",
+      "-C",
+      "target-feature=+aes,+sha2"
+    ]
+  },
+  {
+    "file": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/target/release/.fingerprint/layerfs-content-097404c5f7749e0d/lib-layerfs_content.json",
+    "rustflags": [
+      "--cfg",
+      "aes_armv8",
+      "--cfg",
+      "polyval_armv8",
+      "--cfg",
+      "chacha20_force_neon",
+      "-C",
+      "target-feature=+aes,+sha2"
+    ]
+  },
+  {
+    "file": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/target/release/.fingerprint/layerfs-telemetry-6ab039ab906dcf9b/lib-layerfs_telemetry.json",
+    "rustflags": [
+      "--cfg",
+      "aes_armv8",
+      "--cfg",
+      "polyval_armv8",
+      "--cfg",
+      "chacha20_force_neon",
+      "-C",
+      "target-feature=+aes,+sha2"
+    ]
+  },
+  {
+    "file": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/target/release/.fingerprint/layerfs-history-0871b9ca62c94660/lib-layerfs_history.json",
+    "rustflags": [
+      "--cfg",
+      "aes_armv8",
+      "--cfg",
+      "polyval_armv8",
+      "--cfg",
+      "chacha20_force_neon",
+      "-C",
+      "target-feature=+aes,+sha2"
+    ]
+  }
+]
