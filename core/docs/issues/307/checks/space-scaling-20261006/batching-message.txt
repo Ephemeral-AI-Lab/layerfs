@@ -1,0 +1,16 @@
+Batch free-page reclamation to reduce repeated statement expiration
+
+Accumulate less than one 512-page job during cleanup, reclaim a full job at
+that threshold, and drain a smaller tail at release or explicit maintenance.
+The page budget, selected durability, ownership and physical accounting stay
+unchanged. Preserve the completed v1 campaign; freeze matching v2 cases.
+
+Validation: scoped acquisition/reclamation tests, locked all-targets Clippy
+-D warnings, owning harness tests, formatting. v2 performance remains pending.
+
+Production LOC: 160062 -> 160073 (delta +11)
+Scope: core 94645 -> 94656; root reference 65417 -> 65417.
+Method: tools/production_loc.py SHA256 c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb, on git archives
+of the exact first parent and final staged tree; product Rust/shipped SQL,
+nonblank/non-comment lines, tests/inline tests/examples/docs/tools excluded.
+No relocation or legacy retirement.

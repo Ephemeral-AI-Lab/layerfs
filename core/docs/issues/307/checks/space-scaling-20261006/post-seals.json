@@ -1,0 +1,283 @@
+{
+  "status": "PASS",
+  "product_seal": "8bb0fc53b8828fdf158c793f980894825e85c0a9549817bc30a20f42f2de3c25",
+  "candidate_source": "dd43af598440847834d86fd10bbb7589e0e2cd62",
+  "candidate_dirty": false,
+  "binary_helper_seals": [
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130",
+      "sha256": "b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f",
+      "sha256": "9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130",
+      "sha256": "b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f",
+      "sha256": "9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130",
+      "sha256": "b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f",
+      "sha256": "9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130",
+      "sha256": "b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f",
+      "sha256": "9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130",
+      "sha256": "b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f",
+      "sha256": "9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130",
+      "sha256": "b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f",
+      "sha256": "9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130",
+      "sha256": "b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f",
+      "sha256": "9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130",
+      "sha256": "b303fd332f8a3916f6e5b94680f3a746455d2353fb4e17ff1a2df47501e0f130"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f",
+      "sha256": "9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721",
+      "sha256": "028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d",
+      "sha256": "82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721",
+      "sha256": "028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d",
+      "sha256": "82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721",
+      "sha256": "028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d",
+      "sha256": "82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721",
+      "sha256": "028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d",
+      "sha256": "82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721",
+      "sha256": "028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d",
+      "sha256": "82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721",
+      "sha256": "028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d",
+      "sha256": "82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721",
+      "sha256": "028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d",
+      "sha256": "82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    },
+    {
+      "kind": "benchmark_init",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721/benchmark_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721",
+      "sha256": "028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721"
+    },
+    {
+      "kind": "verify_namespace",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d",
+      "sha256": "82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d"
+    },
+    {
+      "kind": "cold_helper",
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+      "sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15"
+    }
+  ],
+  "fixture_manifests": "unchanged recorded fixture manifests; each measured row has zero content residency",
+  "unrelated_owner_notes": "untouched",
+  "platform": "host macOS only; global persistence remains unavailable on Linux"
+}

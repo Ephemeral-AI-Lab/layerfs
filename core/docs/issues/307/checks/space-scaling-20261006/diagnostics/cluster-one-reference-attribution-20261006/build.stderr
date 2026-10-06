@@ -1,0 +1,105 @@
+   Compiling libc v0.2.189
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.12
+   Compiling pkg-config v0.3.34
+   Compiling cfg-if v1.0.4
+   Compiling typenum v1.20.1
+   Compiling arrayref v0.3.9
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayvec v0.7.8
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/core/crates/layerfs-telemetry)
+   Compiling const-oid v0.10.2
+   Compiling vcpkg v0.2.15
+   Compiling cfg_aliases v0.2.2
+   Compiling foldhash v0.2.0
+   Compiling nix v0.31.3
+   Compiling bitflags v2.13.1
+   Compiling hashbrown v0.17.1
+   Compiling fallible-iterator v0.3.0
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling smallvec v1.16.0
+   Compiling libsqlite3-sys v0.38.2
+   Compiling hybrid-array v0.4.15
+   Compiling hashlink v0.12.2
+   Compiling crypto-common v0.2.2
+   Compiling block-buffer v0.12.1
+   Compiling digest v0.11.3
+   Compiling cpufeatures v0.3.1
+   Compiling sha2 v0.11.0
+   Compiling jobserver v0.1.35
+   Compiling cc v1.4.5
+   Compiling rusqlite v0.40.2
+   Compiling blake3 v1.8.5
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/core/crates/layerfs-project)
+error[E0609]: no field `returned_rows` on type `SqlWork`
+  --> crates/layerfs-project/examples/attribution_init.rs:30:28
+   |
+30 |         self.rows += after.returned_rows - before.returned_rows;
+   |                            ^^^^^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `statements`, `vm_steps`, `bound_bytes`, `statement_ns`, `statement_phases` ... and 22 others
+
+error[E0609]: no field `returned_rows` on type `SqlWork`
+  --> crates/layerfs-project/examples/attribution_init.rs:30:51
+   |
+30 |         self.rows += after.returned_rows - before.returned_rows;
+   |                                                   ^^^^^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `statements`, `vm_steps`, `bound_bytes`, `statement_ns`, `statement_phases` ... and 22 others
+
+error[E0609]: no field `fullscan_steps` on type `SqlWork`
+  --> crates/layerfs-project/examples/attribution_init.rs:31:32
+   |
+31 |         self.fullscan += after.fullscan_steps - before.fullscan_steps;
+   |                                ^^^^^^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `statements`, `vm_steps`, `bound_bytes`, `statement_ns`, `statement_phases` ... and 22 others
+
+error[E0609]: no field `fullscan_steps` on type `SqlWork`
+  --> crates/layerfs-project/examples/attribution_init.rs:31:56
+   |
+31 |         self.fullscan += after.fullscan_steps - before.fullscan_steps;
+   |                                                        ^^^^^^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `statements`, `vm_steps`, `bound_bytes`, `statement_ns`, `statement_phases` ... and 22 others
+
+error[E0609]: no field `sorts` on type `SqlWork`
+  --> crates/layerfs-project/examples/attribution_init.rs:32:29
+   |
+32 |         self.sorts += after.sorts - before.sorts;
+   |                             ^^^^^ unknown field
+   |
+   = note: available fields are: `statements`, `vm_steps`, `bound_bytes`, `statement_ns`, `statement_phases` ... and 22 others
+
+error[E0609]: no field `sorts` on type `SqlWork`
+  --> crates/layerfs-project/examples/attribution_init.rs:32:44
+   |
+32 |         self.sorts += after.sorts - before.sorts;
+   |                                            ^^^^^ unknown field
+   |
+   = note: available fields are: `statements`, `vm_steps`, `bound_bytes`, `statement_ns`, `statement_phases` ... and 22 others
+
+error[E0609]: no field `reprepares` on type `SqlWork`
+  --> crates/layerfs-project/examples/attribution_init.rs:33:34
+   |
+33 |         self.reprepares += after.reprepares - before.reprepares;
+   |                                  ^^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `statements`, `vm_steps`, `bound_bytes`, `statement_ns`, `statement_phases` ... and 22 others
+
+error[E0609]: no field `reprepares` on type `SqlWork`
+  --> crates/layerfs-project/examples/attribution_init.rs:33:54
+   |
+33 |         self.reprepares += after.reprepares - before.reprepares;
+   |                                                      ^^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `statements`, `vm_steps`, `bound_bytes`, `statement_ns`, `statement_phases` ... and 22 others
+
+For more information about this error, try `rustc --explain E0609`.
+error: could not compile `layerfs-project` (example "attribution_init") due to 8 previous errors
+warning: build failed, waiting for other jobs to finish...

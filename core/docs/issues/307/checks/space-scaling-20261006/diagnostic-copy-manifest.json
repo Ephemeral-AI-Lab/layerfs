@@ -1,0 +1,473 @@
+{
+  "status": "PASS",
+  "files": [
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before-20261006/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before-20261006/receipt.json",
+      "sha256": "81fcddaa890bb7a4eff62a93a059d2885d7d20a960ec3ca527d82517b2c4b1ed",
+      "bytes": 205
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-20261006/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-20261006/verifier.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-20261006/driver.stdout",
+      "sha256": "23e033644e772b25e465e5f5bac8e64d1134bcdda88c2025fae50a4f87aabbb7",
+      "bytes": 4086
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-20261006/driver.stderr",
+      "sha256": "82c61ecb67af0c85a253078166f648ecf5c5f2633a505f1e84686b7eb4c9c0cf",
+      "bytes": 47033
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-20261006/verifier.stderr",
+      "sha256": "7e0ec04fad0a87bb281688331258f6fc350a6a4296ab67ff60e0e9d1f0290f94",
+      "bytes": 18
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-20261006/build.stderr",
+      "sha256": "238916dec0b7e5c7f8716a6f236a47b0aa0259e939d07d0c38ed1afdcb59e0ea",
+      "bytes": 649
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-20261006/store.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-20261006/store.sqlite-shm",
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "bytes": 32768
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-20261006/manifest.json",
+      "sha256": "c8dd8949107b31be46d59b3b04efde1778830d84396a724818a0feb6f4d297c4",
+      "bytes": 1407
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-20261006/store.sqlite",
+      "sha256": "776df609438ed1a81a936d6b418aec607a1caa4fbcd2b23978f69c38a45803cb",
+      "bytes": 551333888
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-20261006/receipt.json",
+      "sha256": "843dac00eafe505507440f13d0aaf5c25e0244e7cc922fcd5603760d2222790c",
+      "bytes": 11859
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-proof-20261006/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-proof-20261006/verifier.stdout",
+      "sha256": "9df738af867a71c17004ffe56f91743897901d86bcc122fd13da21da83cbca55",
+      "bytes": 400
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-proof-20261006/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-proof-20261006/verifier.stderr",
+      "sha256": "bd9c312560fddaac4362737cdb149be7381d9814349093c9f172da42c5007c72",
+      "bytes": 129
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-proof-20261006/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-before2-proof-20261006/receipt.json",
+      "sha256": "e74fedf89d4ce8603869d27c7ebf46c080731da87875eeab909164d43690eba0",
+      "bytes": 1873
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-after-20261006/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-after-20261006/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-after-20261006/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-after-20261006/verifier.stdout",
+      "sha256": "9df738af867a71c17004ffe56f91743897901d86bcc122fd13da21da83cbca55",
+      "bytes": 400
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-after-20261006/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-after-20261006/driver.stdout",
+      "sha256": "9a75b7751cdbb7d51aed33b4ce8d1c97fff3852f7bcd07f1fb5979f50266c597",
+      "bytes": 4083
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-after-20261006/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-after-20261006/driver.stderr",
+      "sha256": "42226be16fa3ae89d6d5666849cf766704a45f024c5d6baec935a7d79cb9f81c",
+      "bytes": 46913
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-after-20261006/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-after-20261006/verifier.stderr",
+      "sha256": "bd9c312560fddaac4362737cdb149be7381d9814349093c9f172da42c5007c72",
+      "bytes": 129
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-after-20261006/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-after-20261006/build.stderr",
+      "sha256": "16c958da6e898dfa8227c65b73833698e74e97737884c0f4ab93714fb742f1ef",
+      "bytes": 649
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-after-20261006/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-after-20261006/store.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-after-20261006/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-after-20261006/store.sqlite-shm",
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "bytes": 32768
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-after-20261006/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-after-20261006/manifest.json",
+      "sha256": "eb1ee45b5ba2b1f715c429e2c78d9af84fbf40c0812a42b877229e8edbc4703a",
+      "bytes": 1410
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-after-20261006/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-after-20261006/store.sqlite",
+      "sha256": "d86319e01fcac93fa3881d23f9ee5f7445d6a3ca86e028ad4e49f516df38b488",
+      "bytes": 515584000
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-after-20261006/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-after-20261006/receipt.json",
+      "sha256": "b1216e42f741a4fe5bc452cb860aa6dcdef79f14b0cd56fec50e8cf8b814a066",
+      "bytes": 12349
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-batched-after-20261006/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-batched-after-20261006/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-batched-after-20261006/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-batched-after-20261006/verifier.stdout",
+      "sha256": "9df738af867a71c17004ffe56f91743897901d86bcc122fd13da21da83cbca55",
+      "bytes": 400
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-batched-after-20261006/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-batched-after-20261006/driver.stdout",
+      "sha256": "85b10946fecd062e0691f0a11472b0650621e757e981cb4bb18f58131fe036d5",
+      "bytes": 4083
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-batched-after-20261006/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-batched-after-20261006/driver.stderr",
+      "sha256": "c913de08a8160c37c568ed40465a03ce246cdf68f5590dcc42e695b4b5671429",
+      "bytes": 46794
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-batched-after-20261006/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-batched-after-20261006/verifier.stderr",
+      "sha256": "bd9c312560fddaac4362737cdb149be7381d9814349093c9f172da42c5007c72",
+      "bytes": 129
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-batched-after-20261006/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-batched-after-20261006/build.stderr",
+      "sha256": "408fcac6879fdfa9dc7d3d3c9470fc2872a8bcda4aa2f006afd3126d53cd5a76",
+      "bytes": 649
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-batched-after-20261006/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-batched-after-20261006/store.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-batched-after-20261006/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-batched-after-20261006/store.sqlite-shm",
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "bytes": 32768
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-batched-after-20261006/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-batched-after-20261006/manifest.json",
+      "sha256": "61106cd826315b6608ab3bf4ff9941641d05bf39ee329a086be1087502372c6d",
+      "bytes": 1410
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-batched-after-20261006/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-batched-after-20261006/store.sqlite",
+      "sha256": "a28017729b76aece668f39c5c78d788874b92bc96f16c9a7f8ff2af8abce373b",
+      "bytes": 515571712
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-batched-after-20261006/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/acquisition-scaling-batched-after-20261006/receipt.json",
+      "sha256": "841de830762e7e3d3a0379c0800aded389bf1094d8c39e138f35429eb68e6665",
+      "bytes": 12373
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-20261006/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-20261006/verifier.stdout",
+      "sha256": "9df738af867a71c17004ffe56f91743897901d86bcc122fd13da21da83cbca55",
+      "bytes": 400
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-20261006/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-20261006/driver.stdout",
+      "sha256": "f1fab642ed9115cb2385455fa2922c5c8f16ce48483083caa03fd1f5fa9a6ffd",
+      "bytes": 353
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-20261006/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-20261006/driver.stderr",
+      "sha256": "785f4ddc3bee1cecb970d2308fd3fd52c2a19803a40c7657f00f37ca0acae5b2",
+      "bytes": 9038
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-20261006/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-20261006/verifier.stderr",
+      "sha256": "bd9c312560fddaac4362737cdb149be7381d9814349093c9f172da42c5007c72",
+      "bytes": 129
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-20261006/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-20261006/store.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-20261006/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-20261006/store.sqlite-shm",
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "bytes": 32768
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-20261006/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-20261006/store.sqlite",
+      "sha256": "d4f2d215ba0dfbc91d14ffbfba7c3e1b72a218ca9053d534db575357ed81e476",
+      "bytes": 515555328
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-20261006/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-20261006/receipt.json",
+      "sha256": "c09e7225c4509b8633989184c1d1dbbce01e621efab36ce7f2b92604c3a0b96a",
+      "bytes": 3907
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-enabled-20261006/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-enabled-20261006/driver.stdout",
+      "sha256": "365985c70d88ecc431005ea652fb456f225a883b7447a8e395374e57fdc4e29b",
+      "bytes": 159581
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-enabled-20261006/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-enabled-20261006/driver.stderr",
+      "sha256": "293488627b56ec5dd7ec4274cb7bb2ab637d5294563684409479fd00de082d01",
+      "bytes": 31610
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-enabled-20261006/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-enabled-20261006/store.sqlite-wal",
+      "sha256": "429e71f6fca7249efda6186f00d42adce4f5e6752f5e6a999dc7dff7517e5041",
+      "bytes": 4194304
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-enabled-20261006/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-enabled-20261006/store.sqlite-shm",
+      "sha256": "7ca2027852d997b66f18454ca47ffe512306c32be18da5a098216352069a5103",
+      "bytes": 32768
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-enabled-20261006/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-enabled-20261006/store.sqlite",
+      "sha256": "9b6edc202f4f7a4bf699fc4588397bbbf50f38d5294a0be3855bc6a9f2aac0b9",
+      "bytes": 540508160
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-enabled-20261006/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/space-scaling-v2-physical-io-enabled-20261006/receipt.json",
+      "sha256": "56c35d3affcb88f31b713bcb08646179d142ad3520b79eb8672e590323d907f7",
+      "bytes": 1564
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-20261006/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-20261006/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-20261006/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-20261006/build.stderr",
+      "sha256": "0028d352d8d948f72c099e900a4fa2077bc42e1556fb7b9b60c9d98e2264c468",
+      "bytes": 5210
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-20261006/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-20261006/receipt.json",
+      "sha256": "ab5a90f5297c5d6220c1af4edefca62fbfcc4931c20566c069038a1e183c405a",
+      "bytes": 2181
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-corrected-20261006/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-corrected-20261006/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-corrected-20261006/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-corrected-20261006/verifier.stdout",
+      "sha256": "9df738af867a71c17004ffe56f91743897901d86bcc122fd13da21da83cbca55",
+      "bytes": 400
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-corrected-20261006/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-corrected-20261006/driver.stdout",
+      "sha256": "03bf8a24ca5706a0e3a133dae934bc249d01cd3aedb22ce4b508d0527b43d502",
+      "bytes": 142405
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-corrected-20261006/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-corrected-20261006/driver.stderr",
+      "sha256": "5a3be736058566408539b75dab639de101f83080705a5a329bd32c51d974f698",
+      "bytes": 45415
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-corrected-20261006/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-corrected-20261006/verifier.stderr",
+      "sha256": "bd9c312560fddaac4362737cdb149be7381d9814349093c9f172da42c5007c72",
+      "bytes": 129
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-corrected-20261006/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-corrected-20261006/build.stderr",
+      "sha256": "2fa09870064c179d4cb93c08053414d9fa4357a52b181e4693b8fbb5c50952e3",
+      "bytes": 198
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-corrected-20261006/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-corrected-20261006/store.sqlite-wal",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-corrected-20261006/observer-build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-corrected-20261006/observer-build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-corrected-20261006/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-corrected-20261006/store.sqlite-shm",
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+      "bytes": 32768
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-corrected-20261006/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-corrected-20261006/store.sqlite",
+      "sha256": "f780fb25fc9d67761e2c3136b35e79afb7ee38c0c4abcde5708565d0fe5424a9",
+      "bytes": 514920448
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-corrected-20261006/vfs.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-corrected-20261006/vfs.json",
+      "sha256": "d907caba6e183005c4c7ac3bda86f4fa538fc9db1297b2321538f2123deebd81",
+      "bytes": 3728
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-corrected-20261006/observer-build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-corrected-20261006/observer-build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/benchmark-results/fs-bench-pro/cluster-one-reference-attribution-corrected-20261006/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/diagnostics/cluster-one-reference-attribution-corrected-20261006/receipt.json",
+      "sha256": "98c4214ba59a0b1077d3b29e23626862ad65f1de4aefe89eade40283b98fdf81",
+      "bytes": 8690
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/74b2cc2b61d5b9525892898ac851eb4899bb0090cffa22fdf01c0e5078b7fe0a/durable_init_costs",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/74b2cc2b61d5b9525892898ac851eb4899bb0090cffa22fdf01c0e5078b7fe0a",
+      "sha256": "74b2cc2b61d5b9525892898ac851eb4899bb0090cffa22fdf01c0e5078b7fe0a",
+      "bytes": 2804976
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/539bfca1fbdf9096856a7aa8a68a44d365d3a0c6bf2efefd060e1b1455c4d317/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/539bfca1fbdf9096856a7aa8a68a44d365d3a0c6bf2efefd060e1b1455c4d317",
+      "sha256": "539bfca1fbdf9096856a7aa8a68a44d365d3a0c6bf2efefd060e1b1455c4d317",
+      "bytes": 1485248
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/aa3c85d69049e300854371ee689494ce2d6d6d743396ca43f05a22dd078cc22c/durable_init_costs",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/aa3c85d69049e300854371ee689494ce2d6d6d743396ca43f05a22dd078cc22c",
+      "sha256": "aa3c85d69049e300854371ee689494ce2d6d6d743396ca43f05a22dd078cc22c",
+      "bytes": 2806288
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f",
+      "sha256": "9fe8a982add51b1771229a663bdc8b988747b400801a9ba802334c7c136e2e8f",
+      "bytes": 1485856
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/12529d34894392b86234f61260395a493e65b81eb46b00067664e6539d201c7c/durable_init_costs",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/12529d34894392b86234f61260395a493e65b81eb46b00067664e6539d201c7c",
+      "sha256": "12529d34894392b86234f61260395a493e65b81eb46b00067664e6539d201c7c",
+      "bytes": 2806288
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d",
+      "sha256": "82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d",
+      "bytes": 1485856
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/core/target/ref-attribution-vfs.dylib",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/8863e4f4c70cb70c6a09fae1c97796efeafc50af9c67c4c57e6be5fd702a9930",
+      "sha256": "8863e4f4c70cb70c6a09fae1c97796efeafc50af9c67c4c57e6be5fd702a9930",
+      "bytes": 53144
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/core/target/ref-attribution-vfs.dylib",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/8863e4f4c70cb70c6a09fae1c97796efeafc50af9c67c4c57e6be5fd702a9930",
+      "sha256": "8863e4f4c70cb70c6a09fae1c97796efeafc50af9c67c4c57e6be5fd702a9930",
+      "bytes": 53144
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/core/target/release/examples/attribution_init",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/43a383061018b104224ede4a373bde34c640b642d6cd7c6c2322694b3d36387d",
+      "sha256": "43a383061018b104224ede4a373bde34c640b642d6cd7c6c2322694b3d36387d",
+      "bytes": 2867088
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/core/target/release/examples/verify_namespace",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/34ae09e99b03d12f6d4c8bff2881a35c6aab34da9a34c67c71d6b9a1134aaf8f",
+      "sha256": "34ae09e99b03d12f6d4c8bff2881a35c6aab34da9a34c67c71d6b9a1134aaf8f",
+      "bytes": 1463504
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/core/target/ref-attribution-vfs.dylib",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/space-scaling-retained-20261006/binaries/8863e4f4c70cb70c6a09fae1c97796efeafc50af9c67c4c57e6be5fd702a9930",
+      "sha256": "8863e4f4c70cb70c6a09fae1c97796efeafc50af9c67c4c57e6be5fd702a9930",
+      "bytes": 53144
+    }
+  ]
+}

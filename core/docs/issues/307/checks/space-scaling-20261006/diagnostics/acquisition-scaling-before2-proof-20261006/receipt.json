@@ -1,0 +1,35 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/539bfca1fbdf9096856a7aa8a68a44d365d3a0c6bf2efefd060e1b1455c4d317/verify_namespace",
+    "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/store.sqlite",
+    "6401f9bdd86784b9992ab4c3ce7f5e8984c2c6271d13e4e5af6cb8913f62d0ef",
+    "41414141414141414141414141414141",
+    "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/manifest.tsv",
+    "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+    "durable"
+  ],
+  "wall_ns": 1204101666,
+  "budget_ns": 19000000000,
+  "exit_code": 0,
+  "timed_out": false,
+  "child": {
+    "status": "PASS",
+    "paths": 101001,
+    "discovered_files": 100000,
+    "directories": 1001,
+    "manifest_bytes": 500000000,
+    "sampled_files": 73,
+    "sampled_bytes": 200286236,
+    "sample_policy": "stride64-size-log2-endpoints-v1",
+    "workers": 4,
+    "metadata_attribute_waves": 5,
+    "root": "6401f9bdd86784b9992ab4c3ce7f5e8984c2c6271d13e4e5af6cb8913f62d0ef",
+    "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5"
+  },
+  "cpu_ns": 1168260000,
+  "peak_rss_bytes": 88637440,
+  "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+  "kind": "corrected independent proof only; initial NotPresent retained; no new Init",
+  "source_receipt": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/acquisition-scaling-before2-20261006/receipt.json"
+}

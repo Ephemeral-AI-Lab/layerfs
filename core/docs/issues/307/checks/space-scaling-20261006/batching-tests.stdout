@@ -1,0 +1,70 @@
+
+running 6 tests
+test directory_completion_uses_only_directory_positions_and_is_atomic ... ok
+test entry_refusal_order_and_full_unit_rollback_survive_execution_windows ... ok
+test missing_and_repeated_roots_roll_back_the_window_and_report_first_failure ... ok
+ROOT_WINDOW_PROFILE population=2000 [statements,vm_steps,fullscan,sorts,autoindex,reprepares]=[5, 2176, 31, 0, 0, 0]
+ENTRY_WINDOW_PROFILE population=2000 [statements,vm_steps,fullscan,sorts,autoindex,reprepares]=[7, 7828, 0, 0, 0, 0]
+test windows_amortize_execution_without_losing_aliases_or_atomic_completion ... ok
+ROOT_WINDOW_PROFILE population=20000 [statements,vm_steps,fullscan,sorts,autoindex,reprepares]=[5, 2176, 31, 0, 0, 0]
+test root_window_index_work_ignores_unrelated_population ... ok
+ENTRY_WINDOW_PROFILE population=20000 [statements,vm_steps,fullscan,sorts,autoindex,reprepares]=[7, 7828, 0, 0, 0, 0]
+test independent_entries_share_executions_and_population_work_stays_indexed ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+
+running 4 tests
+ACQUISITION_PLAN begin: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=?)", "SEARCH init_entry USING PRIMARY KEY (operation_id=?)"]
+ACQUISITION_PLAN claim_epoch: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)"]
+ACQUISITION_PLAN owner: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)"]
+ACQUISITION_PLAN charge: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)"]
+ACQUISITION_PLAN credit: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)"]
+ACQUISITION_PLAN advance: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)"]
+ACQUISITION_PLAN release: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)", "SEARCH init_native_file USING PRIMARY KEY (operation_id=?)", "SEARCH init_entry USING PRIMARY KEY (operation_id=?)"]
+ACQUISITION_PLAN put_entry: []
+ACQUISITION_PLAN bind_native: []
+ACQUISITION_PLAN entry_dependencies: ["CO-ROUTINE input", "SCAN 32 CONSTANT ROWS", "SEARCH source", "CORRELATED SCALAR SUBQUERY 33", "SEARCH init_entry USING PRIMARY KEY (operation_id=? AND parent_position=? AND name=?)", "CORRELATED SCALAR SUBQUERY 34", "SEARCH init_entry USING COVERING INDEX init_entry_directory (operation_id=? AND position=?)", "CORRELATED SCALAR SUBQUERY 35", "SEARCH init_native_file USING COVERING INDEX init_native_file_identity (operation_id=? AND device=? AND inode=?)", "CORRELATED SCALAR SUBQUERY 36", "SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position=?)"]
+ACQUISITION_PLAN put_entries: ["CO-ROUTINE input", "SCAN 32 CONSTANT ROWS", "SCAN input"]
+ACQUISITION_PLAN put_native: ["CO-ROUTINE input", "SCAN 32 CONSTANT ROWS", "SCAN input"]
+ACQUISITION_PLAN unplaced_first: ["SEARCH init_entry USING PRIMARY KEY (operation_id=? AND parent_position=?)"]
+ACQUISITION_PLAN unplaced_next: ["SEARCH init_entry USING PRIMARY KEY (operation_id=? AND parent_position=? AND name>?)"]
+ACQUISITION_PLAN place_entry: ["SEARCH init_entry USING PRIMARY KEY (operation_id=? AND parent_position=? AND name=?)"]
+ACQUISITION_PLAN directories: ["SEARCH init_entry USING INDEX init_entry_directory (operation_id=? AND position>?)"]
+ACQUISITION_PLAN directory_sizes: ["SEARCH init_entry USING INDEX init_entry_directory (operation_id=? AND position>?)"]
+ACQUISITION_PLAN directory_path: ["SEARCH init_entry USING INDEX init_entry_directory (operation_id=? AND position=?)"]
+ACQUISITION_PLAN jobs: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position>?)"]
+ACQUISITION_PLAN job_sizes: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position>?)"]
+ACQUISITION_PLAN job: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position=?)"]
+ACQUISITION_PLAN complete_file: ["MATERIALIZE roots", "SCAN 32 CONSTANT ROWS", "SCAN roots", "SEARCH target USING PRIMARY KEY (operation_id=? AND canonical_position=?)"]
+ACQUISITION_PLAN file_roots: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position>?)"]
+ACQUISITION_PLAN entries_first: ["SEARCH init_entry USING PRIMARY KEY (operation_id=?)"]
+ACQUISITION_PLAN entries_next: ["SEARCH init_entry USING PRIMARY KEY (operation_id=? AND (parent_position,name)>(?,?))"]
+ACQUISITION_PLAN set_directory_root: ["MATERIALIZE roots", "SCAN 32 CONSTANT ROWS", "SCAN roots", "SEARCH target USING INDEX init_entry_directory (operation_id=? AND position=?)"]
+ACQUISITION_PLAN discard_entries: ["SEARCH init_entry USING PRIMARY KEY (operation_id=? AND (parent_position,name)<(?,?))"]
+ACQUISITION_PLAN discard_native: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position<?)"]
+ACQUISITION_PLAN discard_entry_keys: ["SEARCH init_entry USING PRIMARY KEY (operation_id=?)"]
+ACQUISITION_PLAN discard_native_keys: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=?)"]
+ACQUISITION_PLAN discard_entry_tail: ["SEARCH init_entry USING PRIMARY KEY (operation_id=?)"]
+ACQUISITION_PLAN discard_native_tail: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=?)"]
+ACQUISITION_PLAN abandoned: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid>?)"]
+ACQUISITION_PLAN release_abandoned: ["SEARCH init_operation USING INTEGER PRIMARY KEY (rowid=?)", "SEARCH init_native_file USING PRIMARY KEY (operation_id=?)", "SEARCH init_entry USING PRIMARY KEY (operation_id=?)"]
+test windows_owners_and_abandoned_operations_are_fenced ... ok
+ACQUISITION_PROFILE entries=2000 [statements,vm_steps,fullscan,sorts,autoindex,reprepares] write=[200, 277143, 0, 0, 0, 0] read_window=[4, 9271, 0, 0, 0, 0] discard_job=[9, 30389, 0, 0, 0, 0]
+test a_tree_streams_in_acquisition_order_with_exact_charges_and_bounded_cleanup ... ok
+test a_wide_directory_is_placed_through_name_windows ... ok
+ACQUISITION_PROFILE entries=20000 [statements,vm_steps,fullscan,sorts,autoindex,reprepares] write=[1902, 2749041, 0, 0, 0, 0] read_window=[4, 9271, 0, 0, 0, 0] discard_job=[9, 30389, 0, 0, 0, 0]
+test every_statement_is_an_indexed_search_and_window_work_ignores_population ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+
+running 3 tests
+test old_non_reclaimable_stores_are_opened_without_implicit_conversion ... ok
+SIZING_PLAN directory_sizes: ["SEARCH init_entry USING INDEX init_entry_directory (operation_id=? AND position>?)"]
+SIZING_PLAN job_sizes: ["SEARCH init_native_file USING PRIMARY KEY (operation_id=? AND canonical_position>?)"]
+test path_windows_use_actual_lengths_without_exceeding_column_or_row_budgets ... ok
+test bounded_reclamation_preserves_another_live_operation_and_survives_reopen ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+

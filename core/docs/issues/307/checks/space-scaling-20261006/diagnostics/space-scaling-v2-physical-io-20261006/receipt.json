@@ -1,0 +1,78 @@
+{
+  "kind": "physical-I/O cause diagnostic of exact qualified v2 public Init binary",
+  "admission_eligible": false,
+  "cache": "uncontrolled/instrumented; no timing claim",
+  "source_receipt": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-20261006-phase7-sqlite-init-100000-space-scaling-v2-candidate/receipt.json",
+  "library": {
+    "path": "/Users/yifanxu/.codex/worktrees/cluster-one-scaling-reference/layerfs/core/target/ref-attribution-vfs.dylib",
+    "sha256": "8863e4f4c70cb70c6a09fae1c97796efeafc50af9c67c4c57e6be5fd702a9930"
+  },
+  "sample_count": 1,
+  "run": {
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/028cf0cadb8865d949566f83cad9f5452598b2898086fa1558daed30e164a721/benchmark_init",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/payload",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-20261006/store.sqlite",
+      "phase7-sqlite-init-100000-space-scaling-v2",
+      "durable",
+      "30"
+    ],
+    "wall_ns": 12844295000,
+    "budget_ns": 30000000000,
+    "exit_code": 0,
+    "timed_out": false,
+    "child": {
+      "status": "COMPLETE",
+      "operation_ns": 12747239875,
+      "bootstrap_ns": 10604125,
+      "init_ns": 12715489458,
+      "reclamation_ns": 18667,
+      "reclaimed_pages": 0,
+      "reclamation_jobs": 1,
+      "checkpoint_ns": 19937291,
+      "close_ns": 1139125,
+      "root": "6401f9bdd86784b9992ab4c3ce7f5e8984c2c6271d13e4e5af6cb8913f62d0ef",
+      "stack": "41414141414141414141414141414141",
+      "root_serial": 1,
+      "entries": 101001
+    },
+    "cpu_ns": 14849348000,
+    "peak_rss_bytes": 81149952,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution"
+  },
+  "proof": {
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/binary-archive/82344b0071727257965f109b9bd841dd4634efd2949cbd90eb1fe84631bb665d/verify_namespace",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-20261006/store.sqlite",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-20261006/store.sqlite",
+      "6401f9bdd86784b9992ab4c3ce7f5e8984c2c6271d13e4e5af6cb8913f62d0ef",
+      "41414141414141414141414141414141",
+      "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/manifest.tsv",
+      "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+      "durable"
+    ],
+    "wall_ns": 1164031209,
+    "budget_ns": 19000000000,
+    "exit_code": 0,
+    "timed_out": false,
+    "child": {
+      "status": "PASS",
+      "paths": 101001,
+      "discovered_files": 100000,
+      "directories": 1001,
+      "manifest_bytes": 500000000,
+      "sampled_files": 73,
+      "sampled_bytes": 200286236,
+      "sample_policy": "stride64-size-log2-endpoints-v1",
+      "workers": 4,
+      "metadata_attribute_waves": 5,
+      "root": "6401f9bdd86784b9992ab4c3ce7f5e8984c2c6271d13e4e5af6cb8913f62d0ef",
+      "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5"
+    },
+    "cpu_ns": 1219687000,
+    "peak_rss_bytes": 88358912,
+    "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution"
+  },
+  "status": "FAIL",
+  "reason": "[Errno 2] No such file or directory: '/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-v2-physical-io-20261006/vfs.json'"
+}

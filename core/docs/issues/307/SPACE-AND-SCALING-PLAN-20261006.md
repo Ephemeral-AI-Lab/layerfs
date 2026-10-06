@@ -82,3 +82,10 @@ maintenance. This reduces repeated SQLite statement expiration/repreparation;
 its source and runtime counters determine the actual effect. The v1 campaign
 is retained, including all gate failures. The prospective final source uses
 space-scaling-v2 cases with identical inputs, cold state,30/19s caps and gates.
+
+
+The final measured [space/scaling checkpoint](SPACE-AND-SCALING-RESULTS-20261006.md) retains zero free-page
+debt and empty acquisition tables in all final Stores. Three of eight latency
+screens pass; zero strict allocation/joint screens pass. Matched public-reference
+counts attribute essentially all extra VM work to acquisition, with immutable
+publication unchanged. Large-case latency and S7/S8/S9 acceptance remain open.

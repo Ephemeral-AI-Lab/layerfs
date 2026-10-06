@@ -1,0 +1,1 @@
+{"status":"COMPLETE","operation_ns":168017459,"bootstrap_ns":4325000,"init_ns":157893625,"reclamation_ns":24500,"reclaimed_pages":0,"reclamation_jobs":1,"checkpoint_ns":255958,"close_ns":5466917,"root":"a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c","stack":"41414141414141414141414141414141","root_serial":1,"entries":1011}

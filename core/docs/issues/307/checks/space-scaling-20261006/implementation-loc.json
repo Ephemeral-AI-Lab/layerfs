@@ -1,0 +1,128 @@
+{
+  "parent": "29255c196ac780b96b180c9cb2e6a16148542719",
+  "staged_tree": "fe380988d08dc3d41b1bc41e5f1d03dcfd65d3c8",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "git archive exact first parent and staged tree core/crates + crates; tools/production_loc.py --root snapshot --json; Rust-aware comment stripping and legacy inline-test exclusion; shipped SQL included",
+  "before": {
+    "combined": 159916,
+    "root": "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-space-loc-l_zen0_x/tree",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 5433,
+          "layerfs-bridge": 1258,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 14093,
+          "layerfs-daemon": 1831,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 817,
+          "layerfs-overlay": 6567,
+          "layerfs-persistence": 6195,
+          "layerfs-project": 1550,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9302,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 2317,
+          "layerfs-workspace-legacy": 26835
+        },
+        "files": 652,
+        "lines": 94499
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "after": {
+    "combined": 160062,
+    "root": "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-space-loc-sqp2x_8i/tree",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 5433,
+          "layerfs-bridge": 1258,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 14093,
+          "layerfs-daemon": 1831,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 817,
+          "layerfs-overlay": 6567,
+          "layerfs-persistence": 6341,
+          "layerfs-project": 1550,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9302,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 2317,
+          "layerfs-workspace-legacy": 26835
+        },
+        "files": 659,
+        "lines": 94645
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "staged_paths": [
+    "cluster_one_handbook.md",
+    "core/benchmark/fs-bench-pro/families/phase7_sqlite.py",
+    "core/benchmark/fs-bench-pro/tests/test_cluster_one_regression.py",
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_entries.sql",
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_native.sql",
+    "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/cleanup.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/reads.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/acquisition/statements.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/connection.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/mod.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/profile.rs",
+    "core/crates/layerfs-persistence/src/backend/sqlite/transaction.rs",
+    "core/crates/layerfs-persistence/src/lib.rs",
+    "core/crates/layerfs-persistence/src/store/handles.rs",
+    "core/crates/layerfs-project/examples/benchmark_init.rs",
+    "core/docs/architecture/05-storage.md",
+    "core/docs/architecture/13-physical-writing.md",
+    "core/docs/architecture/44-acquisition-backing.md",
+    "core/docs/issues/307/A1-ACQUISITION-CONTRACT.md",
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/directory_sizes.sql",
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_entry_keys.sql",
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_entry_tail.sql",
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_native_keys.sql",
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/discard_native_tail.sql",
+    "core/crates/layerfs-persistence/sql/sqlite/acquisition/queries/job_sizes.sql",
+    "core/crates/layerfs-persistence/src/backend/sqlite/reclamation.rs",
+    "core/crates/layerfs-persistence/tests/space_reclamation.rs",
+    "core/docs/issues/307/SPACE-AND-SCALING-PLAN-20261006.md"
+  ]
+}

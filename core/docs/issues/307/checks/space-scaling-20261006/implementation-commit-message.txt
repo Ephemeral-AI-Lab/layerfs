@@ -1,0 +1,18 @@
+Reclaim acquisition free pages in bounded SQLite jobs and reduce window work
+
+New acquisition Stores support incremental reclamation; ordinary cleanup and
+explicit maintenance preserve selected durability and one-attempt ownership.
+Use actual path lengths for bounded reads and a bounded endpoint for cleanup.
+Register fresh space/scaling cases with unchanged workload, cache and gates.
+
+Validation: host public Persistence/Project tests, final acquisition proofs,
+locked all-targets Clippy -D warnings, fmt, 659-file boundary guard, 40 guard
+self-tests and 17 harness tests. Qualified cold measurement remains pending.
+Existing mode0 Stores open without implicit migration; maintenance is refused.
+
+Production LOC: 159916 -> 160062 (delta +146)
+Scope: core 94499 -> 94645 (+146); root reference 65417 -> 65417 (0).
+Method: tools/production_loc.py, SHA256 c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb,
+run on git archives of exact first parent and final staged tree; nonblank,
+non-comment product Rust and shipped SQL, excluding tests/inline tests,
+examples, harnesses, docs and tools. No relocation or legacy retirement.

@@ -1,0 +1,39 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-persistence/tests/space_reclamation.rs:70:48
+    |
+70  |     connection.query_row(pragma, [], |row| row.get(0)).unwrap()
+    |                                                ^^^ the trait `FromSql` is not implemented for `u64`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0599]: no variant or associated item named `ReadOnly` found for enum `PersistenceError` in the current scope
+   --> crates/layerfs-persistence/tests/space_reclamation.rs:133:67
+    |
+133 |         assert_eq!(opened.reclaim_space(1), Err(PersistenceError::ReadOnly));
+    |                                                                   ^^^^^^^^ variant or associated item not found in `PersistenceError`
+
+Some errors have detailed explanations: E0277, E0599.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `layerfs-persistence` (test "space_reclamation") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

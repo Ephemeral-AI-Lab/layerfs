@@ -1,0 +1,7 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/core/crates/layerfs-project)
+    Finished `release` profile [optimized] target(s) in 1.59s

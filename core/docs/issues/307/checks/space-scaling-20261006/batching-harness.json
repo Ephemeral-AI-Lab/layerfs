@@ -1,0 +1,31 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "core/benchmark/fs-bench-pro/tests",
+    "-p",
+    "test_cluster_one_regression.py"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+  "wall_timeout_s": 120,
+  "source": "85a4e96711fe38ced4d09cc7f38bf205748f447c",
+  "dirty": [
+    " M cluster_one_handbook.md",
+    " M core/benchmark/fs-bench-pro/families/phase7_sqlite.py",
+    " M core/crates/layerfs-persistence/src/backend/sqlite/acquisition/cleanup.rs",
+    " M core/crates/layerfs-persistence/src/backend/sqlite/reclamation.rs",
+    " M core/docs/architecture/05-storage.md",
+    " M core/docs/architecture/13-physical-writing.md",
+    " M core/docs/architecture/44-acquisition-backing.md",
+    " M core/docs/issues/307/SPACE-AND-SCALING-PLAN-20261006.md",
+    "?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+    "?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md"
+  ],
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 130700709
+}

@@ -1,0 +1,23 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/benchmark/fs-bench-pro/runner.py",
+    "run",
+    "--case",
+    "phase7-sqlite-init-10000-space-scaling-v2",
+    "--arm",
+    "candidate",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-20261006-phase7-sqlite-init-10000-space-scaling-v2-candidate"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs",
+  "wall_timeout_s": 120,
+  "wall_ns": 4796892500,
+  "exit_code": 0,
+  "timed_out": false,
+  "output": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/space-scaling-20261006-phase7-sqlite-init-10000-space-scaling-v2-candidate",
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe",
+  "source": "dd43af598440847834d86fd10bbb7589e0e2cd62",
+  "dirty_after": []
+}

@@ -1,0 +1,435 @@
+CREATE_DIAGNOSTIC wall_ns=16938875 sql=SqlWork { statements: 69, vm_steps: 2423, fullscan_steps: 90, sorts: 15, autoindex_rows: 0, reprepares: 0, returned_rows: 165, bound_bytes: 26641, statement_ns: 12975670, statement_phases: [StatementPhaseWork { calls: 40, wall_ns: 483037 }, StatementPhaseWork { calls: 40, wall_ns: 6542 }, StatementPhaseWork { calls: 205, wall_ns: 11032588 }, StatementPhaseWork { calls: 165, wall_ns: 51540 }, StatementPhaseWork { calls: 40, wall_ns: 48750 }, StatementPhaseWork { calls: 40, wall_ns: 3790 }, StatementPhaseWork { calls: 40, wall_ns: 131373 }], commit_phases: [StatementPhaseWork { calls: 2, wall_ns: 1124 }, StatementPhaseWork { calls: 2, wall_ns: 83 }, StatementPhaseWork { calls: 2, wall_ns: 9436083 }, StatementPhaseWork { calls: 0, wall_ns: 0 }, StatementPhaseWork { calls: 2, wall_ns: 333 }, StatementPhaseWork { calls: 2, wall_ns: 1126 }, StatementPhaseWork { calls: 2, wall_ns: 6208 }], commit_ns: 9445876, transactions: 2, write_transactions: 1, write_commits: 1, commits: 2, rollbacks: 0, transaction_ns: 11726793, sealed_inserts: 0, sealed_body_bytes: 0, blob_open_calls: 0, blob_reopen_calls: 0, blob_read_calls: 0, blob_requested_bytes: 0, blob_read_bytes: 0, blob_read_ns: 0, blob_close_calls: 0, preallocation_calls: 0, preallocation_bytes: 0, preallocation_ns: 0, preallocation_close_ns: 0, checkpoint_ns: 0 }
+RESERVE_DIAGNOSTIC Reserve { packs: 33, ordinals: 0 }
+PUBLICATION_DIAGNOSTIC packs=2 body_bytes=1134 objects=11 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4101415 objects=206 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1477282 objects=75 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=414 objects=2 value_groups=0 signatures=0 release=None
+RESERVE_DIAGNOSTIC Reserve { packs: 601, ordinals: 0 }
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4125886 objects=210 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1471796 objects=77 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=258204 objects=12 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4166489 objects=208 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1442514 objects=73 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4141560 objects=209 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=9 body_bytes=1840707 objects=873 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=12 body_bytes=2593683 objects=912 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=5 body_bytes=1209035 objects=65 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=3951615 objects=53 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=252312 objects=170 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=8 body_bytes=1716132 objects=868 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=15 body_bytes=3648497 objects=183 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=9 body_bytes=1927703 objects=875 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=3 body_bytes=531894 objects=807 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=2 body_bytes=495108 objects=27 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4060335 objects=40 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=236134 objects=183 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=9 body_bytes=1797435 objects=872 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=18 body_bytes=4181964 objects=989 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=5 body_bytes=1247197 objects=67 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=2 body_bytes=157935 objects=786 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=18 body_bytes=4126363 objects=220 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1674590 objects=89 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=8 body_bytes=1568325 objects=856 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=3 body_bytes=337313 objects=796 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=14 body_bytes=3358362 objects=177 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=8 body_bytes=1704132 objects=866 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3912557 objects=201 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=3 body_bytes=690841 objects=36 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=5 body_bytes=938003 objects=824 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=14 body_bytes=3333670 objects=169 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=12 body_bytes=2262487 objects=903 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1701020 objects=87 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4129802 objects=213 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=9 body_bytes=1749427 objects=867 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=5 body_bytes=1222047 objects=62 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4121063 objects=216 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=8 body_bytes=1742645 objects=867 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=5 body_bytes=1004768 objects=829 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=12 body_bytes=2912627 objects=155 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1413279 objects=849 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1440613 objects=75 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=19 body_bytes=3981695 objects=196 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=261461 objects=808 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1666604 objects=85 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1100596 objects=835 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1463910 objects=75 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4125966 objects=207 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=8 body_bytes=1764779 objects=868 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=8 body_bytes=1890849 objects=99 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=10 body_bytes=2030974 objects=881 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=15 body_bytes=3639532 objects=180 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=10 body_bytes=1902248 objects=879 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1416698 objects=72 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4106179 objects=216 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=9 body_bytes=1820976 objects=872 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=5 body_bytes=1181909 objects=61 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4120830 objects=216 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=9 body_bytes=1828455 objects=870 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=11 body_bytes=2654646 objects=135 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=9 body_bytes=1909855 objects=873 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+RESERVE_DIAGNOSTIC Reserve { packs: 1029, ordinals: 0 }
+PUBLICATION_DIAGNOSTIC packs=13 body_bytes=2931040 objects=154 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=8 body_bytes=1705770 objects=862 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1445995 objects=75 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=5 body_bytes=809175 objects=818 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1707057 objects=86 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3569141 objects=957 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1400707 objects=75 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=10 body_bytes=2196002 objects=889 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1446993 objects=78 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=15 body_bytes=3396729 objects=951 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1672188 objects=83 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=8 body_bytes=1698465 objects=864 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1628870 objects=83 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1396468 objects=848 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=10 body_bytes=1894039 objects=880 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4100445 objects=211 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=8 body_bytes=1742749 objects=867 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4056888 objects=208 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1429237 objects=73 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=2 body_bytes=278816 objects=792 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4094889 objects=209 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=8 body_bytes=1742254 objects=871 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1043576 objects=832 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=18 body_bytes=4132655 objects=219 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=8 body_bytes=1735976 objects=871 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=4157126 objects=212 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=8 body_bytes=1697508 objects=863 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=14 body_bytes=3227540 objects=942 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=2 body_bytes=468220 objects=26 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=2 body_bytes=196701 objects=788 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=2 body_bytes=192967 objects=788 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42992 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42955 objects=780 value_groups=0 signatures=780 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42873 objects=789 value_groups=0 signatures=789 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=42860 objects=792 value_groups=0 signatures=792 release=None
+PUBLICATION_DIAGNOSTIC packs=5 body_bytes=979514 objects=1085 value_groups=0 signatures=1085 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1405548 objects=450 value_groups=0 signatures=450 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1405548 objects=450 value_groups=0 signatures=450 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1405548 objects=450 value_groups=0 signatures=450 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=6 body_bytes=1405548 objects=450 value_groups=0 signatures=450 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=7 body_bytes=1639806 objects=525 value_groups=0 signatures=525 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3930356 objects=360 value_groups=0 signatures=360 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=46 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=39 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=41 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=44 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=33 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=52 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=39 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=46 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=80 value_groups=0 signatures=80 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=40 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=45 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=28 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=57 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=45 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=40 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=37 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=48 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=80 value_groups=0 signatures=80 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=52 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=33 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=43 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=42 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=61 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=24 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=49 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=36 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=80 value_groups=0 signatures=80 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=37 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=48 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=44 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=41 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=40 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=45 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=50 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=35 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=80 value_groups=0 signatures=80 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=57 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=28 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=46 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=39 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=42 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=43 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=43 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=42 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=80 value_groups=0 signatures=80 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=29 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=56 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=40 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=45 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=37 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=48 value_groups=0 signatures=85 release=None
+RESERVE_DIAGNOSTIC Reserve { packs: 173, ordinals: 0 }
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=35 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=50 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=80 value_groups=0 signatures=80 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=33 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=52 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=39 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=46 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=33 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=52 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=35 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=50 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=80 value_groups=0 signatures=80 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=27 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=58 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=37 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=48 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=37 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=48 value_groups=0 signatures=85 release=None
+RESERVE_DIAGNOSTIC Reserve { packs: 173, ordinals: 0 }
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=28 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=57 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=80 value_groups=0 signatures=80 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=33 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=52 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=35 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=50 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=39 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=46 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=43 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=42 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=80 value_groups=0 signatures=80 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=65 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=20 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=39 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=46 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=43 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=42 value_groups=0 signatures=85 release=None
+RESERVE_DIAGNOSTIC Reserve { packs: 173, ordinals: 0 }
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=40 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=45 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=80 value_groups=0 signatures=80 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=53 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=32 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=38 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=47 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=36 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=49 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=33 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=52 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=80 value_groups=0 signatures=80 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=28 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=57 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=39 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=46 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=16 body_bytes=3991088 objects=62 value_groups=0 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=1 body_bytes=249443 objects=23 value_groups=0 signatures=85 release=None
+PUBLICATION_DIAGNOSTIC packs=12 body_bytes=2993316 objects=60 value_groups=0 signatures=60 release=None
+PUBLICATION_DIAGNOSTIC packs=4 body_bytes=324916 objects=21 value_groups=0 signatures=5 release=None
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 200 }
+RESERVE_DIAGNOSTIC Reserve { packs: 1029, ordinals: 0 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+PUBLICATION_DIAGNOSTIC packs=2 body_bytes=142033 objects=499 value_groups=0 signatures=0 release=None
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 752 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+PUBLICATION_DIAGNOSTIC packs=18 body_bytes=1164226 objects=504 value_groups=481 signatures=0 release=None
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+PUBLICATION_DIAGNOSTIC packs=18 body_bytes=1205323 objects=512 value_groups=510 signatures=0 release=None
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+PUBLICATION_DIAGNOSTIC packs=18 body_bytes=1212533 objects=501 value_groups=510 signatures=0 release=None
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+RESERVE_DIAGNOSTIC Reserve { packs: 0, ordinals: 800 }
+PUBLICATION_DIAGNOSTIC packs=17 body_bytes=1148639 objects=501 value_groups=480 signatures=0 release=None
+PUBLICATION_DIAGNOSTIC packs=3 body_bytes=190440 objects=540 value_groups=20 signatures=0 release=Some((100054, 99))
+TIMING_DIAGNOSTIC TimingReport { root: Some(TimingNode { name: "project.init", elapsed: 9.812400417s, outcome: Ok, incomplete: false, children: [TimingNode { name: "history.import_scan", elapsed: 1.155421959s, outcome: Ok, incomplete: false, children: [], nodes: 1, height: 1 }, TimingNode { name: "history.finish_prerequisite_save", elapsed: 3.204542ms, outcome: Ok, incomplete: false, children: [], nodes: 1, height: 1 }, TimingNode { name: "history.import_files", elapsed: 7.407267584s, outcome: Ok, incomplete: false, children: [], nodes: 1, height: 1 }, TimingNode { name: "history.import_finish_save", elapsed: 36.632ms, outcome: Ok, incomplete: false, children: [], nodes: 1, height: 1 }, TimingNode { name: "history.reserve_inodes", elapsed: 1.02ms, outcome: Ok, incomplete: false, children: [], nodes: 1, height: 1 }, TimingNode { name: "history.import_tree", elapsed: 549.211833ms, outcome: Ok, incomplete: false, children: [], nodes: 1, height: 1 }, TimingNode { name: "history.discard_acquisition", elapsed: 540.803ms, outcome: Ok, incomplete: false, children: [], nodes: 1, height: 1 }, TimingNode { name: "history.finish_tree_save", elapsed: 111.348042ms, outcome: Ok, incomplete: false, children: [], nodes: 1, height: 1 }, TimingNode { name: "history.initialize_layerstack", elapsed: 3.90125ms, outcome: Ok, incomplete: false, children: [], nodes: 1, height: 1 }], nodes: 10, height: 2 }) }
+DIAGNOSTIC_ONLY cache=uncontrolled scopes=per-acquisition-unit,complete-Init; instrumentation overhead included; no speed gate or phase-residency claim
+profile=ConnectionProfile { persistence: Durable, pack_layout: Monolithic, acquisition: Tables, identity: "sqlite-wal-full-macos-fullfsync-v1", sqlite_version: "3.51.0", platform: "macos", vfs_selection: "SQLite default; name not directly observed", compile_options: ["ATOMIC_INTRINSICS=1", "BUG_COMPATIBLE_20160819", "CCCRYPT256", "CODEC=see-cccrypt", "COMPILER=clang-21.0.0", "DEFAULT_AUTOVACUUM", "DEFAULT_CACHE_SIZE=2000", "DEFAULT_CKPTFULLFSYNC", "DEFAULT_FILE_FORMAT=4", "DEFAULT_JOURNAL_SIZE_LIMIT=32768", "DEFAULT_LOOKASIDE=1200,102", "DEFAULT_MEMSTATUS=0", "DEFAULT_MMAP_SIZE=0", "DEFAULT_PAGE_SIZE=4096", "DEFAULT_PCACHE_INITSZ=20", "DEFAULT_RECURSIVE_TRIGGERS", "DEFAULT_SECTOR_SIZE=4096", "DEFAULT_SYNCHRONOUS=2", "DEFAULT_WAL_AUTOCHECKPOINT=1000", "DEFAULT_WAL_SYNCHRONOUS=1", "DEFAULT_WORKER_THREADS=0", "DIRECT_OVERFLOW_READ", "DQS=3", "ENABLE_API_ARMOR", "ENABLE_BYTECODE_VTAB", "ENABLE_COLUMN_METADATA", "ENABLE_DBSTAT_VTAB", "ENABLE_FTS3", "ENABLE_FTS3_PARENTHESIS", "ENABLE_FTS3_TOKENIZER", "ENABLE_FTS4", "ENABLE_FTS5", "ENABLE_LOCKING_STYLE=1", "ENABLE_MATH_FUNCTIONS", "ENABLE_NORMALIZE", "ENABLE_PREUPDATE_HOOK", "ENABLE_RTREE", "ENABLE_SESSION", "ENABLE_SETLK_TIMEOUT", "ENABLE_SNAPSHOT", "ENABLE_SQLLOG", "ENABLE_STMT_SCANSTATUS", "ENABLE_UNKNOWN_SQL_FUNCTION", "ENABLE_UPDATE_DELETE_LIMIT", "HAS_CODEC_RESTRICTED", "HAVE_ISNAN", "MALLOC_SOFT_LIMIT=1024", "MAX_ATTACHED=10", "MAX_COLUMN=2000", "MAX_COMPOUND_SELECT=500", "MAX_DEFAULT_PAGE_SIZE=8192", "MAX_EXPR_DEPTH=1000", "MAX_FUNCTION_ARG=127", "MAX_LENGTH=2147483645", "MAX_LIKE_PATTERN_LENGTH=50000", "MAX_MMAP_SIZE=1073741824", "MAX_PAGE_COUNT=1073741823", "MAX_PAGE_SIZE=65536", "MAX_SQL_LENGTH=1000000000", "MAX_TRIGGER_DEPTH=1000", "MAX_VARIABLE_NUMBER=500000", "MAX_VDBE_OP=250000000", "MAX_WORKER_THREADS=8", "MUTEX_UNFAIR", "OMIT_AUTORESET", "OMIT_LOAD_EXTENSION", "STMTJRNL_SPILL=131072", "SYSTEM_MALLOC", "TEMP_STORE=1", "THREADSAFE=2", "USE_URI"], journal_mode: "wal", synchronous: 2, foreign_keys: 1, fullfsync: 1, checkpoint_fullfsync: 1, page_size: 4096, auto_vacuum: 2, wal_autocheckpoint: 1000, journal_size_limit: 4194304, cache_size: -2048, busy_timeout: 0, mmap_size: 0, temp_store: 2, variable_limit: 500000, sql_length_limit: 1000000000, length_limit: 2147483645, column_limit: 2000 } root=ObjectId("6401f9bdd86784b9992ab4c3ce7f5e8984c2c6271d13e4e5af6cb8913f62d0ef") entries=101001 namespace=NamespaceWork { unique_files: 100000, regular_aliases: 0, entries: 101001, jobs: 100000, frontier: 1000, directory_children: 1000, wide_directories: 1, child_window_rows: 512, directory_bindings: 101000, read_units: 799, write_units: 62, read_window_rows: 512, write_window_rows: 4096, write_window_bytes: 1048523, discard_units: 50, backing_rows: 201001, backing_bytes: 29523212 } saves=SaveHistory { total: SaveWork { stages: [StageWork { calls: 3, wall_ns: 2186000 }, StageWork { calls: 281, wall_ns: 289942837 }, StageWork { calls: 281, wall_ns: 1838146208 }, StageWork { calls: 281, wall_ns: 8080129 }, StageWork { calls: 284, wall_ns: 4269549425 }, StageWork { calls: 298, wall_ns: 4147782039 }, StageWork { calls: 7, wall_ns: 7933042 }, StageWork { calls: 126, wall_ns: 97115044 }, StageWork { calls: 3, wall_ns: 925292 }], selection: SaveProfile { full_ns: 163057712, delta_ns: 0, group_ns: 73409604, stored_records: 109271, resolve: ResolveProfile { cost_ns: 0, eligible_ns: 0, acquire_ns: 0 }, diag: DiagnosticProfile { probe_ns: 85722169 } } }, completed: 3, recent: [SaveWork { stages: [StageWork { calls: 1, wall_ns: 1961292 }, StageWork { calls: 1, wall_ns: 639875 }, StageWork { calls: 1, wall_ns: 1074042 }, StageWork { calls: 1, wall_ns: 209 }, StageWork { calls: 2, wall_ns: 1436959 }, StageWork { calls: 1, wall_ns: 1383208 }, StageWork { calls: 1, wall_ns: 906417 }, StageWork { calls: 0, wall_ns: 0 }, StageWork { calls: 1, wall_ns: 48042 }], selection: SaveProfile { full_ns: 137917, delta_ns: 0, group_ns: 40958, stored_records: 3, resolve: ResolveProfile { cost_ns: 0, eligible_ns: 0, acquire_ns: 0 }, diag: DiagnosticProfile { probe_ns: 125 } } }, SaveWork { stages: [StageWork { calls: 1, wall_ns: 112958 }, StageWork { calls: 274, wall_ns: 276038336 }, StageWork { calls: 274, wall_ns: 1563982374 }, StageWork { calls: 274, wall_ns: 8078546 }, StageWork { calls: 275, wall_ns: 4161122174 }, StageWork { calls: 291, wall_ns: 4047589915 }, StageWork { calls: 5, wall_ns: 5850333 }, StageWork { calls: 0, wall_ns: 0 }, StageWork { calls: 1, wall_ns: 360583 }], selection: SaveProfile { full_ns: 162118209, delta_ns: 0, group_ns: 20828836, stored_records: 109268, resolve: ResolveProfile { cost_ns: 0, eligible_ns: 0, acquire_ns: 0 }, diag: DiagnosticProfile { probe_ns: 85722044 } } }, SaveWork { stages: [StageWork { calls: 1, wall_ns: 111750 }, StageWork { calls: 6, wall_ns: 13264626 }, StageWork { calls: 6, wall_ns: 273089792 }, StageWork { calls: 6, wall_ns: 1374 }, StageWork { calls: 7, wall_ns: 106990292 }, StageWork { calls: 6, wall_ns: 98808916 }, StageWork { calls: 1, wall_ns: 1176292 }, StageWork { calls: 126, wall_ns: 97115044 }, StageWork { calls: 1, wall_ns: 516667 }], selection: SaveProfile { full_ns: 801586, delta_ns: 0, group_ns: 52539810, stored_records: 0, resolve: ResolveProfile { cost_ns: 0, eligible_ns: 0, acquire_ns: 0 }, diag: DiagnosticProfile { probe_ns: 0 } } }, SaveWork { stages: [StageWork { calls: 0, wall_ns: 0 }, StageWork { calls: 0, wall_ns: 0 }, StageWork { calls: 0, wall_ns: 0 }, StageWork { calls: 0, wall_ns: 0 }, StageWork { calls: 0, wall_ns: 0 }, StageWork { calls: 0, wall_ns: 0 }, StageWork { calls: 0, wall_ns: 0 }, StageWork { calls: 0, wall_ns: 0 }, StageWork { calls: 0, wall_ns: 0 }], selection: SaveProfile { full_ns: 0, delta_ns: 0, group_ns: 0, stored_records: 0, resolve: ResolveProfile { cost_ns: 0, eligible_ns: 0, acquire_ns: 0 }, diag: DiagnosticProfile { probe_ns: 0 } } }] }
