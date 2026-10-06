@@ -1,0 +1,201 @@
+{
+  "source": "5a97046108f4f158839afbc180625130f32cf3fc",
+  "rows": [
+    {
+      "case": "phase7-sqlite-init-100-streaming-v1",
+      "profile": "durable",
+      "control_ns": 79759708,
+      "candidate_ns": 80311208,
+      "control_bytes": 5255168,
+      "candidate_bytes": 5279744,
+      "speed_gate": "PASS",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "page_freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-20261007/raw/phase7-sqlite-init-100-streaming-v1/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-init-1000-streaming-v1",
+      "profile": "durable",
+      "control_ns": 201566000,
+      "candidate_ns": 263183667,
+      "control_bytes": 20545536,
+      "candidate_bytes": 20623360,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "page_freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-20261007/raw/phase7-sqlite-init-1000-streaming-v1/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-init-10000-streaming-v1",
+      "profile": "durable",
+      "control_ns": 2492429625,
+      "candidate_ns": 3270636083,
+      "control_bytes": 305070080,
+      "candidate_bytes": 305397760,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "page_freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-20261007/raw/phase7-sqlite-init-10000-streaming-v1/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-init-100000-streaming-v1",
+      "profile": "durable",
+      "control_ns": 7724523333,
+      "candidate_ns": 12798146625,
+      "control_bytes": 514965504,
+      "candidate_bytes": 515702784,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "page_freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-20261007/raw/phase7-sqlite-init-100000-streaming-v1/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-100-streaming-v1",
+      "profile": "disposable",
+      "control_ns": 38747750,
+      "candidate_ns": 44959000,
+      "control_bytes": 5222400,
+      "candidate_bytes": 5251072,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "page_freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-20261007/raw/phase7-sqlite-disposable-init-100-streaming-v1/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-1000-streaming-v1",
+      "profile": "disposable",
+      "control_ns": 129258375,
+      "candidate_ns": 184723875,
+      "control_bytes": 20537344,
+      "candidate_bytes": 20574208,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "page_freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-20261007/raw/phase7-sqlite-disposable-init-1000-streaming-v1/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-10000-streaming-v1",
+      "profile": "disposable",
+      "control_ns": 1645276292,
+      "candidate_ns": 2211625000,
+      "control_bytes": 305074176,
+      "candidate_bytes": 305410048,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "page_freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-20261007/raw/phase7-sqlite-disposable-init-10000-streaming-v1/receipt.json"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-100000-streaming-v1",
+      "profile": "disposable",
+      "control_ns": 5558569958,
+      "candidate_ns": 9513790500,
+      "control_bytes": 514940928,
+      "candidate_bytes": 515678208,
+      "speed_gate": "FAIL",
+      "allocation_gate": "FAIL",
+      "complete": "COMPLETE",
+      "proof": "PASS",
+      "cache": "PASS",
+      "cleanup": "PASS",
+      "page_freelist": 0,
+      "acquisition_rows": {
+        "init_operation": 0,
+        "init_entry": 0,
+        "init_native_file": 0
+      },
+      "receipt": "core/docs/issues/307/checks/init-streaming-20261007/raw/phase7-sqlite-disposable-init-100000-streaming-v1/receipt.json"
+    }
+  ],
+  "diagnostic": {
+    "receipt": "diagnostics/receipt.json",
+    "status": "DIAGNOSTIC_COMPLETE",
+    "whole": {
+      "calls": 1,
+      "commit_ns": 3735861773,
+      "fullscan_steps": 992,
+      "read_snapshot_ns": 89542039,
+      "read_snapshots": 401,
+      "reprepares": 20,
+      "returned_rows": 745907,
+      "sorts": 1,
+      "statement_ns": 5842841425,
+      "statements": 22286,
+      "unit": "complete_init",
+      "unit_ns": 0,
+      "vm_steps": 53079086,
+      "write_commits": 536
+    },
+    "acquisition": {
+      "calls": 690,
+      "statements": 12544,
+      "vm_steps": 38310695,
+      "write_commits": 88,
+      "read_snapshots": 401
+    }
+  },
+  "interference": "No own builds/test/copy overlapped performance in measurementworktree. After Durable100000, three subagents readsmallretainedlogs/editprimaryV2source; no builds/measurements byagents. Competing hostprocess/container snapshots remain in receipts. Originalstores and independentcopies retained."
+}

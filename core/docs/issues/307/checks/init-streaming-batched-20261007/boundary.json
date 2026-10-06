@@ -1,0 +1,32 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/tools/check_product_boundary.py"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+  "wall_timeout_s": 120,
+  "source": "5a97046108f4f158839afbc180625130f32cf3fc",
+  "dirty": [
+    " M core/benchmark/fs-bench-pro/families/phase7_sqlite.py",
+    " M core/benchmark/fs-bench-pro/tests/test_phase7_sqlite.py",
+    " M core/crates/layerfs-project/src/import/batch.rs",
+    " M core/crates/layerfs-project/src/import/files.rs",
+    " M core/crates/layerfs-project/src/import/files/completion.rs",
+    " M core/crates/layerfs-project/tests/init_streaming.rs",
+    " M core/docs/architecture/43-backed-initial-acquisition.md",
+    " M core/docs/issues/307/A1-ACQUISITION-CONTRACT.md",
+    "?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+    "?? core/docs/issues/307/INIT-STREAMING-BATCHED-PLAN-20261007.md",
+    "?? core/docs/issues/307/INIT-STREAMING-RESULTS-20261007.md",
+    "?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md",
+    "?? core/docs/issues/307/checks/init-streaming-20261007/closed-copy-manifest.json",
+    "?? core/docs/issues/307/checks/init-streaming-20261007/diagnostics/",
+    "?? core/docs/issues/307/checks/init-streaming-20261007/ledger.json",
+    "?? core/docs/issues/307/checks/init-streaming-20261007/raw/",
+    "?? core/docs/issues/307/checks/init-streaming-batched-20261007/"
+  ],
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 456919250
+}

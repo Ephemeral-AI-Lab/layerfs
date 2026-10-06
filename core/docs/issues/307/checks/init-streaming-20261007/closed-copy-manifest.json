@@ -1,0 +1,647 @@
+{
+  "method": "independent ordinary file byte copies of all closedoutputs; original+copySHA checked, no replay",
+  "copies": [
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100-streaming-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100-streaming-v1/build.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100-streaming-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100-streaming-v1/verifier.stdout",
+      "bytes": 387,
+      "sha256": "a32c8277e8abc04390ebba2847145307753df7d2bb376059fff0cc0f153b3763"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100-streaming-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100-streaming-v1/driver.stdout",
+      "bytes": 342,
+      "sha256": "62642727d4366ef8e370c0f7341765b0447584d7ae1da84b3390849b73627fe1"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100-streaming-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100-streaming-v1/cold.stdout",
+      "bytes": 332,
+      "sha256": "f8b9d6a65d697982ff47efa2b9b85613a2f77d933c4fe80ecdd0b7c65bd32943"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100-streaming-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100-streaming-v1/driver.stderr",
+      "bytes": 8867,
+      "sha256": "56a475a2aa274d85eea799196c722672f285eb5d5f095848caecd779601bc5e3"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100-streaming-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100-streaming-v1/cold.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100-streaming-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100-streaming-v1/verifier.stderr",
+      "bytes": 120,
+      "sha256": "d76aa0600bacac5be5dd103f3f51e98c13cad82e15cd068cb60eca2835ad6fa6"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100-streaming-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100-streaming-v1/build.stderr",
+      "bytes": 915,
+      "sha256": "bd2c3f50d033f49ba10b8b9ebfafec0cef9730e3cfbcef78f76520345a99dee1"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100-streaming-v1-candidate/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100-streaming-v1/store.sqlite-wal",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100-streaming-v1-candidate/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100-streaming-v1/store.sqlite-shm",
+      "bytes": 32768,
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100-streaming-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100-streaming-v1/manifest.json",
+      "bytes": 1666,
+      "sha256": "a0dce170dc9545554927a52bc2c6c431effd70f46831f0503ef61f58992ee595"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100-streaming-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100-streaming-v1/store.sqlite",
+      "bytes": 5246976,
+      "sha256": "3f9fdab58ded49910aed503fd76543afd297aee07a9533df3f8f0f2c330fade5"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100-streaming-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100-streaming-v1/receipt.json",
+      "bytes": 18801,
+      "sha256": "0264aac6ace84e37e9b76de62fb6717e7d15253414626b9fd930bbac6c61ba92"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-1000-streaming-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-1000-streaming-v1/build.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-1000-streaming-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-1000-streaming-v1/verifier.stdout",
+      "bytes": 391,
+      "sha256": "3e4cfe2f97847d03108054027d8db8a4260436c8e5d6844ea33e69b10a576c4d"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-1000-streaming-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-1000-streaming-v1/driver.stdout",
+      "bytes": 344,
+      "sha256": "f3d6ffbc02f5b886f68df28e15b7c2cae64c39c178ac6f229c85721d7c6e0f71"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-1000-streaming-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-1000-streaming-v1/cold.stdout",
+      "bytes": 344,
+      "sha256": "5d9514a16234ccf2647db0d622c499fdf429a2b90035912908bbec715966abac"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-1000-streaming-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-1000-streaming-v1/driver.stderr",
+      "bytes": 8916,
+      "sha256": "a5d35e367e29136efd4abb18cb1c3cb32b40779f0811a8c8f09d31d19ed75e7e"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-1000-streaming-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-1000-streaming-v1/cold.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-1000-streaming-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-1000-streaming-v1/verifier.stderr",
+      "bytes": 123,
+      "sha256": "a5d84a2491c400d84e9113a6a31366efcf23b1cb110c2056b3ee5f7d56b79add"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-1000-streaming-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-1000-streaming-v1/build.stderr",
+      "bytes": 520,
+      "sha256": "86327fdacd71bb540a0ddfc6c68c4468659de128c9b684a7508b56c65eb24454"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-1000-streaming-v1-candidate/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-1000-streaming-v1/store.sqlite-wal",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-1000-streaming-v1-candidate/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-1000-streaming-v1/store.sqlite-shm",
+      "bytes": 32768,
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-1000-streaming-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-1000-streaming-v1/manifest.json",
+      "bytes": 1667,
+      "sha256": "3dfe01613d795c583d030c5dbf56f392aab6fae725aeaf912b86f8674b340548"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-1000-streaming-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-1000-streaming-v1/store.sqlite",
+      "bytes": 20590592,
+      "sha256": "5e435c6d3c3b9e0fcb52d48a5d9814b94a99d8ea9cc132b3653f286ff477a3a8"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-1000-streaming-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-1000-streaming-v1/receipt.json",
+      "bytes": 18858,
+      "sha256": "d1bc5462065d87d33e96e53e86e4ef55a355223e536474dfb14c79982265dc3f"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-10000-streaming-v1/build.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-10000-streaming-v1/verifier.stdout",
+      "bytes": 397,
+      "sha256": "ac928e20282f29b9d9395f85b6cdc23e77c798331a40e638e03c84efe6797f65"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-10000-streaming-v1/driver.stdout",
+      "bytes": 347,
+      "sha256": "e01e075a6a150dfc7e53fca43f6ba68acde081e50eeb669bbce83e43ace22a55"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-10000-streaming-v1/cold.stdout",
+      "bytes": 356,
+      "sha256": "7e298e660974a3bebe7bc7a2f98eb1c61399e8c857974ff357581415bed30285"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-10000-streaming-v1/driver.stderr",
+      "bytes": 9037,
+      "sha256": "5473e5c30c8784549ac10d5c8b2a67d5f223d522352e322c1f769b30f3d7bcfa"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-10000-streaming-v1/cold.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-10000-streaming-v1/verifier.stderr",
+      "bytes": 126,
+      "sha256": "3b02fd4b1f2831e300c7abd39fe1e742cd03921f43ff3f4f153f34e63c32de91"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-10000-streaming-v1/build.stderr",
+      "bytes": 520,
+      "sha256": "b3710dee11bd1d4e6e8a385b9b80909cde3c959249e9ba435bbce5f1f945aef0"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-10000-streaming-v1/store.sqlite-wal",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-10000-streaming-v1/store.sqlite-shm",
+      "bytes": 32768,
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-10000-streaming-v1/manifest.json",
+      "bytes": 1668,
+      "sha256": "597f3e4b88075cad284a5fc2b1b76d1b8a41f41a8c54c423e16ff3b47ac71b98"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-10000-streaming-v1/store.sqlite",
+      "bytes": 305364992,
+      "sha256": "3331496a03c66dc99af8d8612e478f467fc0abde1cce832f04bd4d7a17e396cc"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-10000-streaming-v1/receipt.json",
+      "bytes": 18838,
+      "sha256": "03c67d123c254effede0bec939d095b5584f1ea9f42bbbc3b53101f0d90d50ca"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100000-streaming-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100000-streaming-v1/build.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100000-streaming-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100000-streaming-v1/verifier.stdout",
+      "bytes": 400,
+      "sha256": "9df738af867a71c17004ffe56f91743897901d86bcc122fd13da21da83cbca55"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100000-streaming-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100000-streaming-v1/driver.stdout",
+      "bytes": 352,
+      "sha256": "5ae4292b74a9e0fe0198284637adff279fa5d4441dc89fba7b115b500501fb81"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100000-streaming-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100000-streaming-v1/cold.stdout",
+      "bytes": 366,
+      "sha256": "42c8fe4f504375ecf565fd1323181e17ab905212e4e66ce5771f7efde27524e2"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100000-streaming-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100000-streaming-v1/driver.stderr",
+      "bytes": 9105,
+      "sha256": "1afd71eefa8bcd739a4620fa0de33616fd2fd8d41212bc13a64be15b1ed81499"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100000-streaming-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100000-streaming-v1/cold.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100000-streaming-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100000-streaming-v1/verifier.stderr",
+      "bytes": 129,
+      "sha256": "bd9c312560fddaac4362737cdb149be7381d9814349093c9f172da42c5007c72"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100000-streaming-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100000-streaming-v1/build.stderr",
+      "bytes": 520,
+      "sha256": "13b7e9605a7803dfdaa018ebc06fd687a2675c67165b3f17e8cf75f4b5ba483c"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100000-streaming-v1-candidate/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100000-streaming-v1/store.sqlite-wal",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100000-streaming-v1-candidate/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100000-streaming-v1/store.sqlite-shm",
+      "bytes": 32768,
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100000-streaming-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100000-streaming-v1/manifest.json",
+      "bytes": 1668,
+      "sha256": "6b1120ba71d65b330c331bed0396ed40f655d5e8cbcfdc152b26880ba60210df"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100000-streaming-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100000-streaming-v1/store.sqlite",
+      "bytes": 515670016,
+      "sha256": "ff9496fa95daab755e93686ccbfb723090e8c7183bf40b166272f76cd0ff7fb9"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-100000-streaming-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-init-100000-streaming-v1/receipt.json",
+      "bytes": 18898,
+      "sha256": "62ca5b5f8cb982fb9568e4a071d42ef3a84e607ff778c0fcd1036cf3400b41c0"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100-streaming-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100-streaming-v1/build.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100-streaming-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100-streaming-v1/verifier.stdout",
+      "bytes": 387,
+      "sha256": "a32c8277e8abc04390ebba2847145307753df7d2bb376059fff0cc0f153b3763"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100-streaming-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100-streaming-v1/driver.stdout",
+      "bytes": 340,
+      "sha256": "5fd343cab2b5a527c2bd37771c569351a5e1e0f5d519381328c4e8b6001c4483"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100-streaming-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100-streaming-v1/cold.stdout",
+      "bytes": 332,
+      "sha256": "0077e725d644fdd8647045d19c929c8af31f926ba34af163a9b4283f6bfe0540"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100-streaming-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100-streaming-v1/driver.stderr",
+      "bytes": 8851,
+      "sha256": "1e8be0b991e43ac8dbadf87066ee4d53917871173964449d3d6a61d9bc21a253"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100-streaming-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100-streaming-v1/cold.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100-streaming-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100-streaming-v1/verifier.stderr",
+      "bytes": 120,
+      "sha256": "d76aa0600bacac5be5dd103f3f51e98c13cad82e15cd068cb60eca2835ad6fa6"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100-streaming-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100-streaming-v1/build.stderr",
+      "bytes": 520,
+      "sha256": "af653ff53ffcdccb1212e7d1a70d01ef26ef29e62d17ceb78ba5533206db368f"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100-streaming-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100-streaming-v1/manifest.json",
+      "bytes": 1394,
+      "sha256": "d168f64b25e21d3166c4a90a71c049d1b2bef2c5a2981f3886b412be988a4d86"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100-streaming-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100-streaming-v1/store.sqlite",
+      "bytes": 5251072,
+      "sha256": "3f3ebf59954f310f0de9efa89bc03ef79fa7b5944b7fa1b6fa993e2d38bdfa28"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100-streaming-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100-streaming-v1/receipt.json",
+      "bytes": 18309,
+      "sha256": "81297d1cfd9d5c3a192cf14ddc86a15716adb8e9027f0bc2c1f910c231263b42"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-1000-streaming-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-1000-streaming-v1/build.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-1000-streaming-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-1000-streaming-v1/verifier.stdout",
+      "bytes": 391,
+      "sha256": "3e4cfe2f97847d03108054027d8db8a4260436c8e5d6844ea33e69b10a576c4d"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-1000-streaming-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-1000-streaming-v1/driver.stdout",
+      "bytes": 345,
+      "sha256": "f93f554dd8d20bec03f1a16c09dc29ebcdd7d02c3d0add4fba6feb1afea37399"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-1000-streaming-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-1000-streaming-v1/cold.stdout",
+      "bytes": 344,
+      "sha256": "7c7671519c7cfcada60fb2bc51abb2e89bebc7751836c47ec7b4704d7963b1cd"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-1000-streaming-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-1000-streaming-v1/driver.stderr",
+      "bytes": 8904,
+      "sha256": "9de5fc22c025623a50d4956f804fc14e74c36d04edfeeaf08a496622db4c196c"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-1000-streaming-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-1000-streaming-v1/cold.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-1000-streaming-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-1000-streaming-v1/verifier.stderr",
+      "bytes": 123,
+      "sha256": "a5d84a2491c400d84e9113a6a31366efcf23b1cb110c2056b3ee5f7d56b79add"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-1000-streaming-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-1000-streaming-v1/build.stderr",
+      "bytes": 520,
+      "sha256": "b3710dee11bd1d4e6e8a385b9b80909cde3c959249e9ba435bbce5f1f945aef0"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-1000-streaming-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-1000-streaming-v1/manifest.json",
+      "bytes": 1395,
+      "sha256": "8d25f492afe7a60d8f6e7397b9ab605448daf39ace1f1c469a87af6b5f29bfbe"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-1000-streaming-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-1000-streaming-v1/store.sqlite",
+      "bytes": 20574208,
+      "sha256": "54ca7d5958fb131a515a204959beb9ed9e6ebb28aa2cc23237aba1823e7b57ac"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-1000-streaming-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-1000-streaming-v1/receipt.json",
+      "bytes": 18378,
+      "sha256": "08a09e577bed06486410278d6332d28c30f5dd954f0f945ed8bbe32d2bd9b30e"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-10000-streaming-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-10000-streaming-v1/build.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-10000-streaming-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-10000-streaming-v1/verifier.stdout",
+      "bytes": 397,
+      "sha256": "ac928e20282f29b9d9395f85b6cdc23e77c798331a40e638e03c84efe6797f65"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-10000-streaming-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-10000-streaming-v1/driver.stdout",
+      "bytes": 349,
+      "sha256": "e88986bfb84a5061b4b4af84416062ea054077268fc50db5e889908d3062c72e"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-10000-streaming-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-10000-streaming-v1/cold.stdout",
+      "bytes": 356,
+      "sha256": "57228de6220947d5695d5223323b41d24ac655c11a86fe1049110f4178ada4d4"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-10000-streaming-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-10000-streaming-v1/driver.stderr",
+      "bytes": 9026,
+      "sha256": "e9983d9de341522cdf10ab346da384f4d895c61d7962a424387fa3aafc3a6c48"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-10000-streaming-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-10000-streaming-v1/cold.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-10000-streaming-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-10000-streaming-v1/verifier.stderr",
+      "bytes": 126,
+      "sha256": "3b02fd4b1f2831e300c7abd39fe1e742cd03921f43ff3f4f153f34e63c32de91"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-10000-streaming-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-10000-streaming-v1/build.stderr",
+      "bytes": 520,
+      "sha256": "86327fdacd71bb540a0ddfc6c68c4468659de128c9b684a7508b56c65eb24454"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-10000-streaming-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-10000-streaming-v1/manifest.json",
+      "bytes": 1396,
+      "sha256": "d32ff68f2043b4ed7953c257fde2526a47fd2c418fa9bcd3da0c0b9ed9b2f418"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-10000-streaming-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-10000-streaming-v1/store.sqlite",
+      "bytes": 305410048,
+      "sha256": "52798b1e89f2935272907700cb59bc2d65fa51b89c70d71f837b39705e3019a6"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-10000-streaming-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-10000-streaming-v1/receipt.json",
+      "bytes": 18353,
+      "sha256": "0663944123704c43642364f27ad16781749985256b4e9ac9acf5af46ff98f892"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100000-streaming-v1-candidate/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100000-streaming-v1/build.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100000-streaming-v1-candidate/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100000-streaming-v1/verifier.stdout",
+      "bytes": 400,
+      "sha256": "9df738af867a71c17004ffe56f91743897901d86bcc122fd13da21da83cbca55"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100000-streaming-v1-candidate/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100000-streaming-v1/driver.stdout",
+      "bytes": 350,
+      "sha256": "83a18f348fb55894276ef84ecd43d275c97df4e520af1fe2b2e6fd6586ee52a8"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100000-streaming-v1-candidate/cold.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100000-streaming-v1/cold.stdout",
+      "bytes": 366,
+      "sha256": "b343e797cececd79d33c0e310b335a3fe4a468d6530912e4f35099304c26d608"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100000-streaming-v1-candidate/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100000-streaming-v1/driver.stderr",
+      "bytes": 9099,
+      "sha256": "7c1727362b39c872cfd286890cce45e0cff097721ab84771b6aff54351edad85"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100000-streaming-v1-candidate/cold.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100000-streaming-v1/cold.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100000-streaming-v1-candidate/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100000-streaming-v1/verifier.stderr",
+      "bytes": 129,
+      "sha256": "bd9c312560fddaac4362737cdb149be7381d9814349093c9f172da42c5007c72"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100000-streaming-v1-candidate/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100000-streaming-v1/build.stderr",
+      "bytes": 520,
+      "sha256": "4ee85ca06a89f9b112b0005220b010308f32cab38d45d66acf4ae822094aecc8"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100000-streaming-v1-candidate/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100000-streaming-v1/manifest.json",
+      "bytes": 1396,
+      "sha256": "ae3cae6350698d3a55f7e1f1be11206d3a0db7a5c571ca2080c695b802100421"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100000-streaming-v1-candidate/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100000-streaming-v1/store.sqlite",
+      "bytes": 515678208,
+      "sha256": "8cb713e0ff0be58adddd2d7c093f45e5db9531fad17d19e07ff26ea0bc3fa5d9"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-disposable-init-100000-streaming-v1-candidate/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/phase7-sqlite-disposable-init-100000-streaming-v1/receipt.json",
+      "bytes": 18408,
+      "sha256": "f7877b814eb7d13ff77b2b662f225d4449c48de7db007d06aae9a93aba87f18b"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-counts-20261007/build.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/diagnostic/build.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-counts-20261007/verifier.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/diagnostic/verifier.stdout",
+      "bytes": 400,
+      "sha256": "9df738af867a71c17004ffe56f91743897901d86bcc122fd13da21da83cbca55"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-counts-20261007/driver.stdout",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/diagnostic/driver.stdout",
+      "bytes": 4354,
+      "sha256": "5445068a56d05d3972909a0ddff9084b5178d71d0a3b05d83da2688ec05bcadb"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-counts-20261007/driver.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/diagnostic/driver.stderr",
+      "bytes": 48334,
+      "sha256": "80bfe5a9308d67a3fff57c25a4916ba9b100c3730133b98626880338ad1a9f75"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-counts-20261007/verifier.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/diagnostic/verifier.stderr",
+      "bytes": 129,
+      "sha256": "bd9c312560fddaac4362737cdb149be7381d9814349093c9f172da42c5007c72"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-counts-20261007/build.stderr",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/diagnostic/build.stderr",
+      "bytes": 649,
+      "sha256": "8f643648b5bea09582f0e2ef12887dd0076b87064bf1f274ff8daff9780d1194"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-counts-20261007/store.sqlite-wal",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/diagnostic/store.sqlite-wal",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-counts-20261007/store.sqlite-shm",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/diagnostic/store.sqlite-shm",
+      "bytes": 32768,
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-counts-20261007/manifest.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/diagnostic/manifest.json",
+      "bytes": 1410,
+      "sha256": "70a0edd7bba3171a95004096987ad79ee10365cffb5c961356ea34d85045b907"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-counts-20261007/store.sqlite",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/diagnostic/store.sqlite",
+      "bytes": 515674112,
+      "sha256": "afafb46d1082e26956550f5b0f59ca8efff056e94deecdef9c7e566c50fccaf9"
+    },
+    {
+      "original": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-counts-20261007/receipt.json",
+      "copy": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/init-streaming-retained-20261007/diagnostic/receipt.json",
+      "bytes": 12711,
+      "sha256": "009e0e45f5c11a39df97a463138a58667026e76bdf3df55e8d8bf853ff93be0e"
+    }
+  ]
+}

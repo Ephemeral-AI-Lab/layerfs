@@ -1,0 +1,23 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/benchmark/fs-bench-pro/runner.py",
+    "run",
+    "--case",
+    "phase7-sqlite-init-10000-streaming-v1",
+    "--arm",
+    "candidate",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs",
+  "wall_timeout_s": 120,
+  "wall_ns": 6213978042,
+  "exit_code": 0,
+  "timed_out": false,
+  "output": "/Users/yifanxu/.codex/worktrees/init-entry-performance/layerfs/benchmark-results/fs-bench-pro/init-streaming-20261007-phase7-sqlite-init-10000-streaming-v1-candidate",
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe",
+  "source": "5a97046108f4f158839afbc180625130f32cf3fc",
+  "dirty_after": []
+}

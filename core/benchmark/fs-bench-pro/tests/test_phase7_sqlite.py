@@ -137,6 +137,16 @@ class SqliteStep10(unittest.TestCase):
                               before.profile,before.proof_policy,before.pack_layout,before.proof_envelope),
                              (after.fixture,after.command_budget_ns,after.verification_budget_ns,
                               after.profile,after.proof_policy,after.pack_layout,after.proof_envelope))
+    def test_batched_streaming_preserves_all_frozen_gates_at_new_identity(self):
+        self.assertEqual(len(f.STREAMING_BATCHED_CASES),8)
+        self.assertEqual(len(set(f.STREAMING_BATCHED_CASES)),8)
+        for old,new in zip(f.STREAMING_CASES,f.STREAMING_BATCHED_CASES):
+            self.assertEqual(new,old.rsplit('-v',1)[0]+'-v2')
+            before,after=f.CASES[old],f.CASES[new]
+            self.assertEqual((before.fixture,before.command_budget_ns,before.verification_budget_ns,
+                              before.profile,before.proof_policy,before.pack_layout,before.proof_envelope),
+                             (after.fixture,after.command_budget_ns,after.verification_budget_ns,
+                              after.profile,after.proof_policy,after.pack_layout,after.proof_envelope))
     def test_margin_is_integer_total_bound_and_joint_gate_cannot_waive_missing_proof(self):
         self.assertEqual(c.gate(self.row(110),self.row(100),100),'PASS')
         self.assertEqual(c.gate(self.row(111),self.row(100),100),'FAIL')

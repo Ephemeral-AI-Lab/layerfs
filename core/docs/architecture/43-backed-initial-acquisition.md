@@ -137,9 +137,14 @@ Resident state includes one read window per stream, a write window, the512-child
 buffer and at most512 admitted file identities. A slot retains final alias count
 and optional root; queued/active jobs retain their bounded paths/evidence. The
 four-slot output channel and four producer frames retain the existing byte/object
-limits and canonical oversized-singleton exception. Each successful Done flushes
-its preceding events immediately, creating at least U received frames; extra
-object-only frames serve large files. This replacement transport cost is explicit.
+limits and canonical oversized-singleton exception. Successful completions share bounded frames unless canonical demand requires a
+flush. Errors flush immediately. The owner publishes its next demand before a
+job offer/root wait and after consumption; workers poll at job/object/read
+boundaries and flush before idle or a known large file. One first-pending-Done
+scalar is sufficient because each worker's IDs increase. A worker-local RefCell
+shares producer access with the reader and releases each borrow before native
+reads. Demand can still require O(U) frames in the worst case; actual counts
+and allocation/queue cost remain explicit.
 Skew can stall new admission behind a slow earlier file and leave workers idle;
 the owner still drains the earlier file's output and memory does not grow with U.
 
@@ -163,7 +168,8 @@ synchronization-call attribution. The [window execution correction](44-acquisiti
 retains its original source identity. The new streaming flow changes Project orchestration
 and the Job projection; schema scripts, canonical constructors and persistence
 profiles remain unchanged. Its candidate and evidence are separately recorded in
-[the streaming selection](../issues/307/INIT-STREAMING-PLAN-20261007.md).
+[the streaming V1selection](../issues/307/INIT-STREAMING-PLAN-20261007.md) and
+[bounded coalescing](../issues/307/INIT-STREAMING-BATCHED-PLAN-20261007.md).
 
 ## Evidence and limits
 

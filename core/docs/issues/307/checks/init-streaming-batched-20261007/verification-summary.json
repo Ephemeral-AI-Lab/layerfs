@@ -1,0 +1,129 @@
+{
+  "Project_test_bodies": 81,
+  "checks": [
+    {
+      "record": "boundary.json",
+      "command": [
+        "python3",
+        "-B",
+        "core/tools/check_product_boundary.py"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 456919250
+    },
+    {
+      "record": "clippy.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "clippy",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-project",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 1904527583
+    },
+    {
+      "record": "fmt.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "fmt",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 1638589500
+    },
+    {
+      "record": "guard-self-tests.json",
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "core/tools",
+        "-p",
+        "test_*.py"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 292075042
+    },
+    {
+      "record": "harness.json",
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "core/benchmark/fs-bench-pro/tests",
+        "-p",
+        "test_phase7_sqlite.py"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 725467792
+    },
+    {
+      "record": "no-run.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-project",
+        "--all-targets",
+        "--no-run"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 4971058958
+    },
+    {
+      "record": "runtime.json",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-project",
+        "--all-targets",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 22943119667
+    }
+  ],
+  "unchanged_scope_reuse": "V1Storage/Persistence production unchanged at5a9704610; their affected all-targetpublicproofs reused; V1actual3queryplans sameSHA revalidated; V2runtimecountprofile selectedseparately. Canonical content/history source unchanged acrossbothcandidates.",
+  "sql_plan_reuse": {
+    "path": "core/docs/issues/307/checks/init-streaming-20261007/prospective-sql-plans.json",
+    "sha256": "3d6474072b3f09eac153ab8e7bdcaa0c99c9877d682204a2d1130c2480da7fe1"
+  },
+  "limits": "No testwall>120s; no testtimeout/failure atV2; nativealreadyblockedOSread notinterruptible; fixedcounts do notprove wholeRSS."
+}

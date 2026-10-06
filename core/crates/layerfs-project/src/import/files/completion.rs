@@ -9,7 +9,10 @@ use layerfs_storage::port::acquisition;
 use layerfs_storage::Save;
 use std::{
     collections::BTreeMap,
-    sync::mpsc,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        mpsc, Arc,
+    },
     time::{Duration, Instant},
 };
 
@@ -26,6 +29,7 @@ pub(crate) struct FileCompletions<'b, 'p, 's> {
     receiver: Option<mpsc::Receiver<ImportBatch>>,
     slots: BTreeMap<u64, Slot>,
     save: &'b Save<'s>,
+    demand: Arc<AtomicU64>,
     deadline: Instant,
     last_admitted: Option<u64>,
     admitted_peak: usize,
@@ -41,6 +45,7 @@ impl<'b, 'p, 's> FileCompletions<'b, 'p, 's> {
         deadline: Instant,
         feed: mpsc::SyncSender<Job>,
         receiver: mpsc::Receiver<ImportBatch>,
+        demand: Arc<AtomicU64>,
     ) -> Self {
         Self {
             jobs: backing.jobs(),
@@ -48,6 +53,7 @@ impl<'b, 'p, 's> FileCompletions<'b, 'p, 's> {
             receiver: Some(receiver),
             slots: BTreeMap::new(),
             save,
+            demand,
             deadline,
             last_admitted: None,
             admitted_peak: 0,
@@ -78,6 +84,9 @@ impl<'b, 'p, 's> FileCompletions<'b, 'p, 's> {
                 return Err(malformed());
             }
             let id = job.position;
+            if self.slots.is_empty() {
+                self.demand.store(id, Ordering::Release);
+            }
             let previous = self.slots.insert(
                 id,
                 Slot {
@@ -145,6 +154,7 @@ impl<'b, 'p, 's> FileCompletions<'b, 'p, 's> {
     /// Consumes the next canonical identity, releasing exactly its one slot.
     /// A slow earliest file does not stop Object or later Done/error draining.
     pub(crate) fn root(&mut self, position: u64) -> Result<(ObjectId, u64), Failure> {
+        self.demand.store(position, Ordering::Release);
         self.admit()?;
         if self.slots.first_key_value().map(|(id, _)| *id) != Some(position) {
             return Err(malformed());
@@ -158,6 +168,8 @@ impl<'b, 'p, 's> FileCompletions<'b, 'p, 's> {
             {
                 let slot = self.slots.remove(&position).ok_or_else(malformed)?;
                 self.completed -= 1;
+                let next = self.slots.first_key_value().map_or(u64::MAX, |(id, _)| *id);
+                self.demand.store(next, Ordering::Release);
                 return Ok((slot.root.ok_or_else(malformed)?, slot.aliases));
             }
             self.tick()?;

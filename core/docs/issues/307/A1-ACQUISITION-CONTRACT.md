@@ -568,3 +568,17 @@ completion commits in the prior100000 diagnostic are targets, not promised net
 savings. [Selection, limits and required proofs](INIT-STREAMING-PLAN-20261007.md)
 keep the existing cold/speed/allocation gates. Merged acquisition rows and a host
 operational owner remain distinct proposals and are not implemented here.
+
+
+### Bounded completion coalescing refinement
+
+The V1immediate-successful-Done flush above is superseded by the current
+[bounded coalescing selection](INIT-STREAMING-BATCHED-PLAN-20261007.md). Successes
+share the existing256KiB/512object/512completion frames; canonical demand forces
+pending required completions out. Errors, queue idle and a known>256KiB next file
+flush immediately. Demand is checked on each native read and object callback,
+preventing a pending required Done from waiting for an entire later file under
+ordinary read progress. Canonical demand is one atomic scalar; worker-local
+producer access does not add a growing index or helper. Final publication,
+ownership, durability and bounds remain. V1regressions and its separate counts
+are retained at5a9704610; V2must establish its own time/allocation/counter result.

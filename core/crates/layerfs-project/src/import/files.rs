@@ -13,19 +13,22 @@ use crate::{
     namespace::ImportProgress,
 };
 pub(crate) use completion::FileCompletions;
-use layerfs_content::{construct_stream, ObjectId};
+use layerfs_content::{
+    construct_stream, ContentError, FinalizedConsumer, FinalizedObject, ObjectId,
+};
 use layerfs_storage::port::acquisition;
 use layerfs_storage::{Save, Storage};
 use layerfs_telemetry::timer::Timing;
 use std::{
+    cell::RefCell,
     ffi::{OsStr, OsString},
     fs::{self, File},
     io::{self, Read},
     os::unix::ffi::{OsStrExt, OsStringExt},
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc, Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        mpsc, Arc, Mutex,
     },
     time::Instant,
 };
@@ -66,6 +69,7 @@ pub(crate) fn with_completions<'b, 'p, 's, T>(
     let (feed, jobs) = mpsc::sync_channel::<Job>(WINDOW_ROWS);
     let jobs = Mutex::new(jobs);
     let cancelled = AtomicBool::new(false);
+    let demand = Arc::new(AtomicU64::new(u64::MAX));
     std::thread::scope(|workers| -> Result<T, Failure> {
         let (sender, receiver) = mpsc::sync_channel::<ImportBatch>(QUEUE_SLOTS);
         let mut handles = Vec::with_capacity(INIT_WORKERS);
@@ -73,27 +77,22 @@ pub(crate) fn with_completions<'b, 'p, 's, T>(
             let sender = sender.clone();
             let jobs = &jobs;
             let cancelled = &cancelled;
+            let demand = Arc::clone(&demand);
             handles.push(workers.spawn(move || {
-                let mut producer = BatchProducer::new(&sender);
-                while let Some(job) = next_job(jobs, &mut producer, cancelled) {
-                    let result = construct_file(
-                        &job,
-                        policy,
-                        &capacities,
-                        &mut producer,
-                        deadline,
-                        cancelled,
-                    );
+                let producer = RefCell::new(BatchProducer::new(&sender, &demand));
+                while let Some(job) = next_job(jobs, &producer, cancelled) {
+                    let result =
+                        construct_file(&job, policy, &capacities, &producer, deadline, cancelled);
                     let failed = result.is_err();
-                    if producer.done(job.id, result).is_err() || failed {
+                    if producer.borrow_mut().done(job.id, result).is_err() || failed {
                         return;
                     }
                 }
-                let _ = producer.flush();
+                let _ = producer.borrow_mut().flush();
             }));
         }
         drop(sender);
-        let mut completed = FileCompletions::new(backing, save, deadline, feed, receiver);
+        let mut completed = FileCompletions::new(backing, save, deadline, feed, receiver, demand);
         let mut result = (|| {
             completed.admit()?;
             let result = consume(&mut completed, progress)?;
@@ -120,12 +119,13 @@ pub(crate) fn with_completions<'b, 'p, 's, T>(
 /// that let it refill the queue.
 fn next_job(
     jobs: &Mutex<mpsc::Receiver<Job>>,
-    producer: &mut BatchProducer<'_>,
+    producer: &RefCell<BatchProducer<'_>>,
     cancelled: &AtomicBool,
 ) -> Option<Job> {
     if cancelled.load(Ordering::Acquire) {
         return None;
     }
+    producer.borrow_mut().flush_demanded().ok()?;
     if let Ok(queue) = jobs.try_lock() {
         match queue.try_recv() {
             Ok(job) => return Some(job),
@@ -133,7 +133,7 @@ fn next_job(
             Err(mpsc::TryRecvError::Empty) => (),
         }
     }
-    producer.flush().ok()?;
+    producer.borrow_mut().flush().ok()?;
     let queue = jobs.lock().ok()?;
     if cancelled.load(Ordering::Acquire) {
         None
@@ -179,13 +179,17 @@ fn construct_file(
     job: &Job,
     policy: layerfs_content::ConstructionPolicy,
     capacities: &layerfs_content::ConstructionCapacities,
-    producer: &mut BatchProducer<'_>,
+    producer: &RefCell<BatchProducer<'_>>,
     deadline: Instant,
     cancelled: &AtomicBool,
 ) -> Result<ObjectId, Failure> {
     if Instant::now() >= deadline {
         return Err(Failure::Deadline);
     }
+    producer
+        .borrow_mut()
+        .before_file(job.stamp.len)
+        .map_err(content)?;
     let file = File::open(&job.path)?;
     if !job.stamp.matches_file(&file.metadata()?) {
         return Err(Failure::InvalidInput);
@@ -195,13 +199,15 @@ fn construct_file(
         cancelled,
         deadline,
         deadline_expired: false,
+        producer,
     };
+    let mut sink = SharedProducer { producer };
     let (result, _) = Timing::disabled("history.import_file", |scope| {
         construct_stream(
             policy,
             capacities,
             &mut source,
-            producer,
+            &mut sink,
             scope.child("content.construct"),
         )
     });
@@ -226,13 +232,14 @@ fn construct_file(
 
 /// Cancellation is checked between real reads, so a failed consumer does not
 /// require another worker's entire file to finish before the scoped join.
-struct Source<'a> {
+struct Source<'a, 's> {
     file: File,
     cancelled: &'a AtomicBool,
     deadline: Instant,
     deadline_expired: bool,
+    producer: &'a RefCell<BatchProducer<'s>>,
 }
-impl Read for Source<'_> {
+impl Read for Source<'_, '_> {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
         if self.cancelled.load(Ordering::Acquire) {
             return Err(io::Error::other("namespace file construction stopped"));
@@ -241,6 +248,24 @@ impl Read for Source<'_> {
             self.deadline_expired = true;
             return Err(io::Error::other("namespace file construction deadline"));
         }
+        // Demand may change while this constructor starts a later large file.
+        // Flush a previously completed requested root before each actual read;
+        // the worker-local mutable borrow ends before entering host I/O.
+        let flushed = self.producer.borrow_mut().flush_demanded();
+        if flushed.is_err() {
+            return Err(io::Error::other("namespace file handoff stopped"));
+        }
         self.file.read(buffer)
+    }
+}
+
+/// The reader and output consumer share one worker-local producer. Calls are
+/// sequential, and no borrow survives an accept or read callback.
+struct SharedProducer<'a, 's> {
+    producer: &'a RefCell<BatchProducer<'s>>,
+}
+impl FinalizedConsumer for SharedProducer<'_, '_> {
+    fn accept(&mut self, object: FinalizedObject) -> Result<(), ContentError> {
+        self.producer.borrow_mut().accept(object)
     }
 }
