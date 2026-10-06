@@ -1,0 +1,78 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-overlay",
+      "--all-targets"
+    ],
+    "limit_s": 120,
+    "wall_ns": 22017095417,
+    "exit": 0,
+    "log": "core/docs/issues/307/checks/s7-costs/layerfs-overlay-covering.log",
+    "cache": "uncontrolled; functional/count only",
+    "workers": 1
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-workspace",
+      "--all-targets"
+    ],
+    "limit_s": 120,
+    "wall_ns": 14561191375,
+    "exit": 0,
+    "log": "core/docs/issues/307/checks/s7-costs/layerfs-workspace-covering.log",
+    "cache": "uncontrolled; functional/count only",
+    "workers": 1
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-daemon",
+      "--all-targets"
+    ],
+    "limit_s": 120,
+    "wall_ns": 3852804041,
+    "exit": 0,
+    "log": "core/docs/issues/307/checks/s7-costs/layerfs-daemon-covering.log",
+    "cache": "uncontrolled; functional/count only",
+    "workers": 1
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "-p",
+      "layerfs-sdk",
+      "--all-targets"
+    ],
+    "limit_s": 120,
+    "wall_ns": 1406897209,
+    "exit": 0,
+    "log": "core/docs/issues/307/checks/s9-history/layerfs-sdk-covering.log",
+    "cache": "uncontrolled; functional/count only",
+    "workers": 1
+  }
+]

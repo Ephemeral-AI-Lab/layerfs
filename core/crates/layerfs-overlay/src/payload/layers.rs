@@ -154,9 +154,9 @@ impl Overlay {
                 let kept = if self.stale(ns, serial, layer, cell, stored.epoch)? {
                     None
                 } else {
-                    let mut window = stored.expand()?;
+                    let mut window = stored.expand(&self.payload_work)?;
                     window.cut(inside as usize);
-                    window.trim()
+                    window.trim(&self.payload_work)
                 };
                 self.store(ns, serial, layer.gen, cell, stored.epoch, kept)?;
             }

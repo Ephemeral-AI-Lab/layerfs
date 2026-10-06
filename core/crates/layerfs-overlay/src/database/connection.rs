@@ -18,6 +18,7 @@ pub struct Overlay {
     pub(crate) identity: u64,
     pub(crate) connection: Connection,
     pub(crate) work: RefCell<DatabaseWork>,
+    pub(crate) payload_work: Cell<crate::PayloadWork>,
     pub(crate) quarantined: Cell<bool>,
     /// Connection-local readiness hints, never namespace/owner data. False is
     /// established only by an exact empty ready query; enqueue/release marks
@@ -81,6 +82,7 @@ impl Overlay {
             identity,
             connection,
             work,
+            payload_work: Cell::new(crate::PayloadWork::default()),
             quarantined: Cell::new(false),
             maintenance_ready: Cell::new(false),
             closed_ready: Cell::new(false),
@@ -95,6 +97,10 @@ impl Overlay {
     /// Bounded cumulative statement-family observations, not phase-local memory.
     pub fn diagnostics(&self) -> DatabaseWork {
         *self.work.borrow()
+    }
+    /// Codec/composed-window copies from the same exclusive owner scope.
+    pub fn payload_work(&self) -> crate::PayloadWork {
+        self.payload_work.get()
     }
     /// Physical page-count and freelist observations; not exclusive Workspace bytes.
     pub fn pages(&self) -> OverlayResult<(u64, u64)> {
@@ -194,6 +200,10 @@ impl Overlay {
     ) -> OverlayResult<T> {
         self.transaction(true, job)
     }
+    /// Allocation-call counters without performing filesystem or SQL I/O.
+    pub fn allocation_work(&self) -> crate::AllocationWork {
+        self.allocation.work()
+    }
     pub fn allocation(&self) -> OverlayResult<crate::AllocationState> {
         self.available()?;
         self.allocation.state()
@@ -207,6 +217,7 @@ impl Overlay {
         // page_count includes Expire in the supported SQLite VM. Keep it out
         // of the hot admission path; committed dense descriptor length supplies
         // the physical bound, and freelist_count reads one nonexpiring cookie.
+        self.allocation.freelist_query();
         let free = self.query(
             StatementKind::Startup,
             "PRAGMA main.freelist_count",

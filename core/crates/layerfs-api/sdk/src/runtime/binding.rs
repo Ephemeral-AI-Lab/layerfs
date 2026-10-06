@@ -34,8 +34,13 @@ pub struct Binding {
     pub(super) catalog: CatalogId,
     pub(super) incarnation: u64,
     pub(super) snapshot: BranchSnapshot,
+    pub(super) root_serial: u64,
 }
 impl Binding {
+    /// Checked immutable root inode serial, acquired during binding only.
+    pub const fn root_serial(&self) -> u64 {
+        self.root_serial
+    }
     /// Coherent Branch snapshot at bind, retained as construction expectations.
     pub fn snapshot(&self) -> &BranchSnapshot {
         &self.snapshot

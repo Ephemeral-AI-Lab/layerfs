@@ -1,0 +1,17 @@
+   Compiling layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+error[E0432]: unresolved import `layerfs_history::StageDisposition`
+ --> crates/layerfs-api/sdk/src/runtime/handlers/history.rs:6:5
+  |
+6 |     StageDisposition, StageRecord, StageRequest,
+  |     ^^^^^^^^^^^^^^^^ no `StageDisposition` in the root
+  |
+  = help: consider importing this enum instead:
+          layerfs_history::error::StageDisposition
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `layerfs-sdk` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-sdk` (lib test) due to 1 previous error

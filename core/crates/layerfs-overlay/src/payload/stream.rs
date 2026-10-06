@@ -27,6 +27,11 @@ impl Overlay {
             .checked_add(bytes.len() as u64)
             .filter(|end| integer(*end).is_ok())
             .ok_or(OverlayError::Invalid("SQLite signed identity/offset"))?;
+        let mut observed = self.payload_work.get();
+        observed.write_input_bytes = observed
+            .write_input_bytes
+            .saturating_add(bytes.len() as u64);
+        self.payload_work.set(observed);
         let mut cell = offset - offset % CELL;
         while cell < end {
             let from = offset.max(cell);
@@ -34,16 +39,25 @@ impl Overlay {
             let source = &bytes[(from - offset) as usize..(to - offset) as usize];
             let (low, high) = ((from - cell) as usize, (to - cell) as usize);
             let key = cell as i64;
+            let mut observed = self.payload_work.get();
+            observed.write_cells = observed.write_cells.saturating_add(1);
+            observed.cell_copy_bytes = observed.cell_copy_bytes.saturating_add(source.len() as u64);
+            observed.partial_write_cells = observed
+                .partial_write_cells
+                .saturating_add(u64::from(low != 0 || high != CELL_BYTES));
+            self.payload_work.set(observed);
             let stored = if low == 0 && high == CELL_BYTES {
                 Some((source.to_vec(), None))
             } else {
                 let mut window = match self.stored(ns, serial, layer.gen, key)? {
-                    Some(old) if !self.stale(ns, serial, layer, key, old.epoch)? => old.expand()?,
-                    _ => Window::empty(),
+                    Some(old) if !self.stale(ns, serial, layer, key, old.epoch)? => {
+                        old.expand(&self.payload_work)?
+                    }
+                    _ => Window::empty(&self.payload_work),
                 };
                 window.data[low..high].copy_from_slice(source);
                 window.set(low, high);
-                window.trim()
+                window.trim(&self.payload_work)
             };
             self.store(ns, serial, layer.gen, key, layer.epoch, stored)?;
             cell += CELL;
@@ -150,6 +164,12 @@ impl Overlay {
         }
         // 0: undecided, 1: decided locally (a written byte or a zero).
         let mut decided = vec![0_u8; read.data.len()];
+        let mut observed = self.payload_work.get();
+        observed.read_window_zeroed_bytes = observed
+            .read_window_zeroed_bytes
+            .saturating_add((read.data.len() + decided.len()) as u64);
+        self.payload_work.set(observed);
+        let mut copied = 0_u64;
         let mut open = decided.len();
         let settle = |decided: &mut [u8], open: &mut usize, from: u64, to: u64| {
             for slot in &mut decided
@@ -191,6 +211,7 @@ impl Overlay {
                     let (slot, index) = ((at - start) as usize, (at - cell) as usize);
                     if decided[slot] == 0 && stored.valid(index) {
                         read.data[slot] = stored.data[index];
+                        copied += 1;
                         decided[slot] = 1;
                         open -= 1;
                     }
@@ -214,6 +235,12 @@ impl Overlay {
             }
             read.span = Some((start + low as u64, start + high as u64));
         }
+        let mut observed = self.payload_work.get();
+        observed.read_local_copy_bytes = observed.read_local_copy_bytes.saturating_add(copied);
+        observed.read_window_zeroed_bytes = observed
+            .read_window_zeroed_bytes
+            .saturating_add(read.inherited.len() as u64);
+        self.payload_work.set(observed);
         Ok(Some(read))
     }
 }

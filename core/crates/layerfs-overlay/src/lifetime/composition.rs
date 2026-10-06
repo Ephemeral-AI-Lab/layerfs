@@ -262,9 +262,9 @@ impl Overlay {
         };
         let mut window = match self.stored(ns, serial, upper.gen, cell)? {
             Some(current) if !self.stale(ns, serial, upper, cell, current.epoch)? => {
-                current.expand()?
+                current.expand(&self.payload_work)?
             }
-            _ => Window::empty(),
+            _ => Window::empty(&self.payload_work),
         };
         let end = old.data.len().min(
             lower
@@ -273,13 +273,25 @@ impl Overlay {
                 .saturating_sub(cell as u64)
                 .min(CELL_BYTES as u64) as usize,
         );
+        let mut copied = 0_u64;
         for at in 0..end {
             if old.valid(at) && window.mask[at / 8] & (1 << (at % 8)) == 0 {
                 window.data[at] = old.data[at];
+                copied += 1;
                 window.set(at, at + 1);
             }
         }
-        self.store(ns, serial, upper.gen, cell, upper.epoch, window.trim())?;
+        let mut observed = self.payload_work.get();
+        observed.cell_copy_bytes = observed.cell_copy_bytes.saturating_add(copied);
+        self.payload_work.set(observed);
+        self.store(
+            ns,
+            serial,
+            upper.gen,
+            cell,
+            upper.epoch,
+            window.trim(&self.payload_work),
+        )?;
         Ok(end as u64)
     }
 }

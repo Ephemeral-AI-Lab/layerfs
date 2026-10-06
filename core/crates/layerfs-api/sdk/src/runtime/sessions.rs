@@ -9,11 +9,12 @@ use layerfs_persistence::HistoryProvider;
 use layerfs_storage::{save::Save, Storage, StoragePolicy};
 use layerfs_telemetry::timer::TimingScope;
 
-struct Slot<'a> {
-    serial: u64,
-    binding: Option<Binding>,
-    save: Option<Save<'a>>,
-    completion: Option<Completion>,
+pub(super) struct Slot<'a> {
+    pub(super) serial: u64,
+    pub(super) binding: Option<Binding>,
+    pub(super) save: Option<Save<'a>>,
+    pub(super) completion: Option<Completion>,
+    pub(super) history: super::handlers::history::HistoryReceipts,
 }
 
 /// One live host serving scope, independent of connection or command duration.
@@ -28,7 +29,7 @@ pub struct Sessions<'a> {
     authority: &'a dyn Authorization,
     owner: [u8; 32],
     next_serial: &'a mut u64,
-    slots: Vec<Slot<'a>>,
+    pub(super) slots: Vec<Slot<'a>>,
 }
 impl<'a> Sessions<'a> {
     pub(super) fn new(runtime: &'a mut Runtime) -> Self {
@@ -40,6 +41,7 @@ impl<'a> Sessions<'a> {
                 binding: None,
                 save: None,
                 completion: None,
+                history: Default::default(),
             })
             .collect();
         Self {
@@ -90,6 +92,7 @@ impl<'a> Sessions<'a> {
             workspace,
             catalog: self.history.catalog_id(),
             incarnation: self.history.incarnation(),
+            root_serial: root.root_inode().serial(),
             snapshot,
         })
     }
@@ -148,6 +151,7 @@ impl<'a> Sessions<'a> {
             binding: Some(binding.clone()),
             save: Some(save),
             completion: None,
+            history: Default::default(),
         };
         Ok(SaveId {
             owner: self.owner,
@@ -298,7 +302,7 @@ impl<'a> Sessions<'a> {
             .completion
             .as_ref()
             .ok_or(RuntimeError::Invalid("active Save release"))?;
-        if completion.retains_custody() {
+        if completion.retains_custody() || self.slots[id.slot].history.retains_custody() {
             return Err(RuntimeError::RetainedCustody);
         }
         self.slots[id.slot] = Slot {
@@ -306,6 +310,7 @@ impl<'a> Sessions<'a> {
             binding: None,
             save: None,
             completion: None,
+            history: Default::default(),
         };
         Ok(())
     }
@@ -320,7 +325,7 @@ impl<'a> Sessions<'a> {
         self.authority
             .workspace(binding.peer, binding.workspace, binding.snapshot.branch.id)
     }
-    fn slot(&self, binding: &Binding, id: SaveId) -> RuntimeResult<&Slot<'a>> {
+    pub(super) fn slot(&self, binding: &Binding, id: SaveId) -> RuntimeResult<&Slot<'a>> {
         let slot = self
             .slots
             .get(id.slot)

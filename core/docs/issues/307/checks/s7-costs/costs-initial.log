@@ -1,0 +1,25 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.03s
+     Running tests/costs.rs (core/target/debug/deps/costs-f1b14bc809c7fae2)
+
+running 2 tests
+
+thread 'complete_mutation_reports_triggers_blob_delivery_and_physical_reservation' panicked at crates/layerfs-overlay/tests/costs.rs:33:5:
+assertion `left == right` failed
+  left: 32
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'failed_atomic_job_retains_attempted_cost_and_rolls_back_logical_counts' panicked at crates/layerfs-overlay/tests/costs.rs:77:10:
+called `Result::unwrap_err()` on an `Ok` value: Publication { route: Route { engine: 2, ns: 1, incarnation: [233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233, 233] }, revision: 1, generation: Generation(1) }
+test complete_mutation_reports_triggers_blob_delivery_and_physical_reservation ... FAILED
+test failed_atomic_job_retains_attempted_cost_and_rolls_back_logical_counts ... FAILED
+
+failures:
+
+failures:
+    complete_mutation_reports_triggers_blob_delivery_and_physical_reservation
+    failed_atomic_job_retains_attempted_cost_and_rolls_back_logical_counts
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+error: test failed, to rerun pass `-p layerfs-overlay --test costs`

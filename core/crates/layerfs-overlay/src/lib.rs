@@ -35,6 +35,7 @@ pub use database::allocation::{
     AllocationState, AllocationWork, CLEANUP_HEADROOM, MUTATION_GROWTH,
 };
 pub use db::Overlay;
+pub use diagnostics::payload::PayloadWork;
 pub use error::{OverlayError, OverlayResult};
 pub use maintenance::{MaintenanceCursor, MaintenanceStep};
 pub use metrics::{DatabaseWork, StatementKind, StatementWork};

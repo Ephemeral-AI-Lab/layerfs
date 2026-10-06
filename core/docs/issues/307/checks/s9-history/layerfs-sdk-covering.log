@@ -1,0 +1,22 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_sdk-a9ac2f7b76117cf8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/runtime.rs (core/target/debug/deps/runtime-0693fe70d77b0de3)
+
+running 9 tests
+test workspace_serials_come_from_the_owning_scope_allocator_under_authority ... ok
+test refused_admission_retains_the_exact_phase_without_replay ... ok
+test missing_dependency_finish_is_retained_as_the_original_storage_error ... ok
+test history_up_to_date_retains_exact_stage_and_transition_without_replay ... ok
+test capability_scope_authority_and_read_window_are_checked_before_service ... ok
+test workspace_stat_uses_authenticated_scoped_owning_lengths_without_payload_or_fallback ... ok
+test history_candidate_authority_and_grammar_refusals_preserve_save_and_stage_custody ... ok
+test independent_saves_pending_reads_retained_finish_and_slot_reuse ... ok
+test history_conflict_retains_deciding_stage_and_only_exact_discard_releases_it ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

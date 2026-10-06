@@ -16,6 +16,10 @@ pub struct OwnerWork {
     /// Exclusive command jobs; automatic maintenance is accounted separately.
     pub sql_foreground: layerfs_overlay::DatabaseWork,
     pub sql_maintenance: layerfs_overlay::DatabaseWork,
+    pub payload_foreground: layerfs_overlay::PayloadWork,
+    pub payload_maintenance: layerfs_overlay::PayloadWork,
+    pub allocation_foreground: layerfs_overlay::AllocationWork,
+    pub allocation_maintenance: layerfs_overlay::AllocationWork,
     pub admitted: u64,
     pub completed: [u64; 6],
     pub queue_wait_ns: [u64; 6],
@@ -30,6 +34,7 @@ pub struct OwnerWork {
 }
 pub(crate) struct Envelope {
     pub result: Result<Response, OwnerError>,
+    pub work: crate::JobWork,
     pub _credit: Arc<Credit>,
 }
 pub(crate) struct Job {
@@ -41,6 +46,7 @@ pub(crate) struct Job {
     pub admitted: Instant,
     pub blocked: bool,
     pub wait_consolidation: bool,
+    pub work: crate::JobWork,
 }
 pub(crate) struct Lane {
     pub queues: [VecDeque<Job>; 6],
@@ -124,12 +130,22 @@ pub(crate) struct Shared {
     pub config: crate::owner::OwnerConfig,
 }
 impl Shared {
-    pub fn sql_progress(&self, work: layerfs_overlay::DatabaseWork, maintenance: bool) {
+    pub fn sql_progress(
+        &self,
+        work: layerfs_overlay::DatabaseWork,
+        allocation: layerfs_overlay::AllocationWork,
+        payload: layerfs_overlay::PayloadWork,
+        maintenance: bool,
+    ) {
         if let Ok(mut state) = self.state.lock() {
             if maintenance {
-                state.work.sql_maintenance.accumulate(work)
+                state.work.sql_maintenance.accumulate(work);
+                state.work.payload_maintenance.accumulate(payload);
+                state.work.allocation_maintenance.accumulate(allocation);
             } else {
-                state.work.sql_foreground.accumulate(work)
+                state.work.sql_foreground.accumulate(work);
+                state.work.payload_foreground.accumulate(payload);
+                state.work.allocation_foreground.accumulate(allocation);
             }
         }
     }
@@ -208,6 +224,7 @@ impl Shared {
                         cause: Box::new(OwnerError::Stopped),
                         command: Box::new(job.command),
                     }),
+                    work: job.work,
                     _credit: job.credit,
                 });
                 return;
@@ -220,6 +237,7 @@ impl Shared {
                     cause: Box::new(OwnerError::Stopped),
                     command: Box::new(job.command),
                 }),
+                work: job.work,
                 _credit: job.credit,
             });
             return;
@@ -231,10 +249,12 @@ impl Shared {
                     cause: Box::new(OwnerError::Stopped),
                     command: Box::new(job.command),
                 }),
+                work: job.work,
                 _credit: job.credit,
             });
             return;
         };
+        job.work.parked_turns = job.work.parked_turns.saturating_add(1);
         job.blocked = true;
         lane.queues[job.command.class() as usize].push_front(job);
     }
@@ -276,6 +296,7 @@ impl Shared {
                     cause: Box::new(OwnerError::Stopped),
                     command: Box::new(job.command),
                 }),
+                work: job.work,
                 _credit: job.credit,
             });
         }

@@ -1,5 +1,7 @@
 //! Scoped host object/Save service; transport and Workspace control are separate.
 mod binding;
+mod handlers;
+pub use handlers::history::HistoryReceipts;
 mod error;
 mod ports;
 pub(crate) use ports::lengths as length_port;

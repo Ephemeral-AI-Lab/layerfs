@@ -21,6 +21,11 @@ impl Overlay {
         layer: &Layer,
         cell: &Cell,
     ) -> OverlayResult<()> {
+        let mut observed = self.payload_work.get();
+        observed.cell_copy_bytes = observed
+            .cell_copy_bytes
+            .saturating_add((CELL_BYTES + crate::MASK_BYTES) as u64);
+        self.payload_work.set(observed);
         let window = crate::cells::Window {
             data: cell.data.clone(),
             mask: cell.validity.clone(),
@@ -31,7 +36,7 @@ impl Overlay {
             layer.gen,
             integer(cell.offset)?,
             layer.epoch,
-            window.trim(),
+            window.trim(&self.payload_work),
         )
     }
     /// Reads exactly one stored physical cell of a live generation, expanded to
@@ -90,7 +95,7 @@ impl Overlay {
         else {
             return Ok(None);
         };
-        let window = stored.expand()?;
+        let window = stored.expand(&self.payload_work)?;
         Ok(Some(Cell {
             offset,
             data: window.data,

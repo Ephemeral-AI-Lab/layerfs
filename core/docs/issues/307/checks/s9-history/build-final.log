@@ -1,0 +1,4 @@
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.71s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_sdk-a9ac2f7b76117cf8)
+  Executable tests/runtime.rs (core/target/debug/deps/runtime-0693fe70d77b0de3)

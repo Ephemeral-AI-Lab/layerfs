@@ -1,0 +1,11 @@
+{
+  "files": [
+    "core/docs/architecture/36-operation-cost-observations.md",
+    "core/docs/architecture/37-runtime-history-receipts.md",
+    "core/docs/issues/307/S7-EXIT-AUDIT.md",
+    "core/docs/issues/307/S8-EXIT-AUDIT.md",
+    "core/docs/issues/307/S9-EXIT-AUDIT.md",
+    "core/docs/issues/307/PROGRESS.md"
+  ],
+  "errors": []
+}

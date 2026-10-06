@@ -16,11 +16,18 @@ pub struct AllocationWork {
     pub requested_bytes: u64,
     pub admitted_jobs: u64,
     pub refusals: u64,
+    /// Calls reading descriptor and path identity; each uses two metadata calls.
+    pub observations: u64,
+    /// Committed freelist cookies read for pre-BEGIN admission.
+    pub freelist_queries: u64,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AllocationState {
     pub logical_bytes: u64,
     pub allocated_bytes: u64,
+    /// Largest st_blocks allocation observed since daemon startup. It includes
+    /// the full reservation and is not a phase-local residency peak.
+    pub high_water_allocated_bytes: u64,
     pub reserved_tail_bytes: u64,
     pub cleanup_headroom_bytes: u64,
     pub work: AllocationWork,
@@ -33,6 +40,7 @@ pub(crate) struct Allocation {
     work: Cell<AllocationWork>,
     guaranteed_end: Cell<u64>,
     observed: Cell<(u64, u64)>,
+    high_water: Cell<u64>,
 }
 impl Allocation {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -49,10 +57,14 @@ impl Allocation {
             work: Cell::new(AllocationWork::default()),
             guaranteed_end: Cell::new(0),
             observed: Cell::new((meta.len(), meta.blocks())),
+            high_water: Cell::new(meta.blocks().saturating_mul(512)),
         })
     }
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     pub(crate) fn state(&self) -> OverlayResult<AllocationState> {
+        let mut work = self.work.get();
+        work.observations = work.observations.saturating_add(1);
+        self.work.set(work);
         let meta = self.file.metadata()?;
         let path = std::fs::symlink_metadata(&self.path)?;
         if !path.is_file() || path.dev() != meta.dev() || path.ino() != meta.ino() {
@@ -65,6 +77,7 @@ impl Allocation {
             .blocks()
             .checked_mul(512)
             .ok_or(OverlayError::Invalid("allocation size"))?;
+        self.high_water.set(self.high_water.get().max(allocated));
         let previous = self.observed.replace((meta.len(), meta.blocks()));
         if meta.len() < previous.0 || meta.blocks() < previous.1 {
             // Rollback/truncation may discard preallocation. Never infer its
@@ -75,6 +88,7 @@ impl Allocation {
         Ok(AllocationState {
             logical_bytes: meta.len(),
             allocated_bytes: allocated,
+            high_water_allocated_bytes: self.high_water.get(),
             reserved_tail_bytes: self
                 .guaranteed_end
                 .get()
@@ -91,6 +105,14 @@ impl Allocation {
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     pub(crate) fn state(&self) -> OverlayResult<AllocationState> {
         Err(OverlayError::UnsupportedPlatform)
+    }
+    pub(crate) fn work(&self) -> AllocationWork {
+        self.work.get()
+    }
+    pub(crate) fn freelist_query(&self) {
+        let mut work = self.work.get();
+        work.freelist_queries = work.freelist_queries.saturating_add(1);
+        self.work.set(work);
     }
     /// Failed admission changes no logical bytes or SQL state. Preserve exact
     /// original allocation failure; never zero-fill, retry or estimate free disk.
@@ -143,6 +165,7 @@ impl Allocation {
                 return Err(OverlayError::Invalid("physical allocation short readback"));
             }
         }
+        work = self.work.get();
         work.admitted_jobs = work.admitted_jobs.saturating_add(1);
         self.work.set(work);
         Ok(())
@@ -181,5 +204,29 @@ impl Allocation {
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     fn allocate(&self, _logical: u64, _need: u64, _required: u64) -> OverlayResult<()> {
         Err(OverlayError::UnsupportedPlatform)
+    }
+}
+
+impl AllocationWork {
+    /// Cumulative observations since a prior snapshot of the same owner.
+    pub fn since(self, before: Self) -> Self {
+        Self {
+            attempts: self.attempts.saturating_sub(before.attempts),
+            requested_bytes: self.requested_bytes.saturating_sub(before.requested_bytes),
+            admitted_jobs: self.admitted_jobs.saturating_sub(before.admitted_jobs),
+            refusals: self.refusals.saturating_sub(before.refusals),
+            observations: self.observations.saturating_sub(before.observations),
+            freelist_queries: self
+                .freelist_queries
+                .saturating_sub(before.freelist_queries),
+        }
+    }
+    pub fn accumulate(&mut self, delta: Self) {
+        self.attempts = self.attempts.saturating_add(delta.attempts);
+        self.requested_bytes = self.requested_bytes.saturating_add(delta.requested_bytes);
+        self.admitted_jobs = self.admitted_jobs.saturating_add(delta.admitted_jobs);
+        self.refusals = self.refusals.saturating_add(delta.refusals);
+        self.observations = self.observations.saturating_add(delta.observations);
+        self.freelist_queries = self.freelist_queries.saturating_add(delta.freelist_queries);
     }
 }

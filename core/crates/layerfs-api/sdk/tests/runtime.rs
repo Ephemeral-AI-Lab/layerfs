@@ -226,8 +226,23 @@ fn verified(peer: u8) -> layerfs_bridge::native::VerifiedPeer {
     let address = listener.local_addr().unwrap();
     let client_public = public_key(&[peer; 32]).unwrap();
     let server_public = public_key(&[33; 32]).unwrap();
+    listener.set_nonblocking(true).unwrap();
     let worker = thread::spawn(move || {
-        let stream = listener.accept().unwrap().0;
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        let stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "handshake accept deadline"
+                    );
+                    thread::yield_now();
+                }
+                Err(error) => panic!("handshake accept: {error}"),
+            }
+        };
+        stream.set_nonblocking(false).unwrap();
         stream
             .set_read_timeout(Some(Duration::from_secs(2)))
             .unwrap();
@@ -659,4 +674,242 @@ fn workspace_serials_come_from_the_owning_scope_allocator_under_authority() {
         "S4_OWNING_SERIALS first={first} refill={count} next={} scope_allocator=history_catalog",
         second + 6
     );
+}
+
+#[test]
+fn history_up_to_date_retains_exact_stage_and_transition_without_replay() {
+    let mut f = Fixture::new();
+    let branch = f.branch;
+    let mut s = f.runtime.sessions();
+    let a = binding(&s, branch, 71, 1);
+    assert_eq!(a.root_serial(), 1);
+    let save = s.begin(&a).unwrap();
+    let root = a.snapshot().effective_root;
+    assert!(matches!(
+        s.stage_saved(&a, save, root, 1),
+        Err(RuntimeError::Invalid(_))
+    ));
+    assert!(s.finish(&a, save).unwrap().outcome().is_ok());
+    let stage = s
+        .stage_saved(&a, save, root, 1)
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .clone();
+    assert_eq!(stage.workspace, a.workspace());
+    assert_eq!(stage.branch, a.snapshot().branch.id);
+    assert_eq!(stage.expected_root, root);
+    assert!(matches!(
+        s.release(&a, save),
+        Err(RuntimeError::RetainedCustody)
+    ));
+    assert!(matches!(
+        s.stage_saved(&a, save, root, 1),
+        Err(RuntimeError::AlreadyAttempted)
+    ));
+    assert!(
+        matches!(s.commit_saved(&a, save).unwrap(), Ok(layerfs_history::CommitStagedOutcome::UpToDate { root: actual, .. }) if *actual == root)
+    );
+    assert!(matches!(
+        s.commit_saved(&a, save),
+        Err(RuntimeError::AlreadyAttempted)
+    ));
+    assert!(s
+        .history_receipts(&a, save)
+        .unwrap()
+        .commit()
+        .unwrap()
+        .is_ok());
+    assert!(matches!(
+        s.discard_saved(&a, save),
+        Err(RuntimeError::RetainedCustody)
+    ));
+    s.release(&a, save).unwrap();
+    assert!(matches!(
+        s.history_receipts(&a, save),
+        Err(RuntimeError::StaleCapability)
+    ));
+}
+
+#[test]
+fn history_candidate_authority_and_grammar_refusals_preserve_save_and_stage_custody() {
+    let mut f = Fixture::new();
+    let branch = f.branch;
+    let deny = f.deny.clone();
+    let mut s = f.runtime.sessions();
+    let a = binding(&s, branch, 72, 1);
+    let b = binding(&s, branch, 73, 2);
+    let sa = s.begin(&a).unwrap();
+    let sb = s.begin(&b).unwrap();
+    let wrong = accept(&mut s, &a, sa, b"saved file is not a namespace");
+    assert!(s.finish(&a, sa).unwrap().outcome().is_ok());
+    assert!(s.finish(&b, sb).unwrap().outcome().is_ok());
+    assert!(matches!(
+        s.stage_saved(&b, sa, wrong, 1),
+        Err(RuntimeError::StaleCapability)
+    ));
+    assert!(matches!(
+        s.stage_saved(&a, sa, wrong, 1).unwrap(),
+        Err(RuntimeError::Content(_))
+    ));
+    assert!(matches!(
+        s.stage_saved(&a, sa, a.snapshot().effective_root, 1),
+        Err(RuntimeError::AlreadyAttempted)
+    ));
+    s.release(&a, sa).unwrap();
+    deny.set(Some(b.snapshot().effective_root));
+    assert!(matches!(
+        s.stage_saved(&b, sb, b.snapshot().effective_root, 1)
+            .unwrap(),
+        Err(RuntimeError::Denied)
+    ));
+    deny.set(None);
+    assert!(matches!(
+        s.stage_saved(&b, sb, b.snapshot().effective_root, 1),
+        Err(RuntimeError::AlreadyAttempted)
+    ));
+    s.release(&b, sb).unwrap();
+    let fresh = s.begin(&a).unwrap();
+    assert!(s.finish(&a, fresh).unwrap().outcome().is_ok());
+    assert!(s
+        .stage_saved(&a, fresh, a.snapshot().effective_root, 1)
+        .unwrap()
+        .is_ok());
+    assert!(matches!(
+        s.discard_saved(&b, fresh),
+        Err(RuntimeError::StaleCapability)
+    ));
+    assert_eq!(
+        s.discard_saved(&a, fresh).unwrap().as_ref().unwrap(),
+        &layerfs_history::DiscardOutcome::Removed
+    );
+    assert!(matches!(
+        s.discard_saved(&a, fresh),
+        Err(RuntimeError::AlreadyAttempted)
+    ));
+    assert!(matches!(
+        s.commit_saved(&a, fresh),
+        Err(RuntimeError::AlreadyAttempted)
+    ));
+    s.release(&a, fresh).unwrap();
+}
+
+fn candidate(s: &mut Sessions<'_>, b: &Binding, save: SaveId, payload: &[u8]) -> ObjectId {
+    use layerfs_content::filesystem::PathName;
+    let file = accept(s, b, save, payload);
+    let (start, _) = s.reserve_serials(b, 2).unwrap();
+    let serial = start + 1;
+    let mut base = Reply::default();
+    s.read_objects(b, None, &[b.snapshot().effective_root], &mut base)
+        .unwrap();
+    let root = FilesystemRoot::decode(&base.0[0].1).unwrap();
+    base.0.clear();
+    s.read_objects(b, None, &[root.inode_table()], &mut base)
+        .unwrap();
+    let layerfs_content::filesystem::inode::InodePage::Leaf { entries } =
+        layerfs_content::filesystem::inode::decode_inode_page(&base.0[0].1).unwrap()
+    else {
+        panic!("fixture leaf")
+    };
+    let meta = entries[0].1.metadata_root;
+    let mut emit = |role, canonical: Vec<u8>| {
+        let claimed = ObjectId::for_bytes(&canonical);
+        Timing::disabled("candidate", |timing| {
+            s.accept(b, save, claimed, role, canonical, timing.child("admit"))
+        })
+        .0
+        .unwrap()
+    };
+    let dir = emit(
+        ObjectRole::DirectoryLeaf,
+        encode_directory_page(&DirectoryPage::Leaf {
+            entries: vec![(PathName::new("new").unwrap(), serial)],
+        })
+        .unwrap(),
+    );
+    let table = emit(
+        ObjectRole::InodeLeaf,
+        encode_inode_page(&InodePage::Leaf {
+            entries: vec![
+                (
+                    1,
+                    InodeValue {
+                        kind: InodeKind::Directory,
+                        namespace_ref_count: 0,
+                        content_root: dir,
+                        metadata_root: meta,
+                    },
+                ),
+                (
+                    serial,
+                    InodeValue {
+                        kind: InodeKind::RegularFile,
+                        namespace_ref_count: 1,
+                        content_root: file,
+                        metadata_root: meta,
+                    },
+                ),
+            ],
+        })
+        .unwrap(),
+    );
+    emit(
+        ObjectRole::FilesystemRoot,
+        root.with_inode_table(table).encode().unwrap(),
+    )
+}
+
+#[test]
+fn history_conflict_retains_deciding_stage_and_only_exact_discard_releases_it() {
+    use layerfs_history::{error::StageDisposition, CommitStagedOutcome, HistoryError};
+    let mut f = Fixture::new();
+    let branch = f.branch;
+    let mut s = f.runtime.sessions();
+    let a = binding(&s, branch, 74, 1);
+    let b = binding(&s, branch, 75, 2);
+    let sa = s.begin(&a).unwrap();
+    let sb = s.begin(&b).unwrap();
+    let ra = candidate(&mut s, &a, sa, b"A candidate");
+    let rb = candidate(&mut s, &b, sb, b"B candidate");
+    assert!(s.finish(&a, sa).unwrap().outcome().is_ok());
+    assert!(s.finish(&b, sb).unwrap().outcome().is_ok());
+    let stage_a = s
+        .stage_saved(&a, sa, ra, 1)
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .clone();
+    let stage_b = s
+        .stage_saved(&b, sb, rb, 1)
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .clone();
+    assert_ne!(stage_a.token, stage_b.token);
+    let winner = s.commit_saved(&b, sb).unwrap().as_ref().unwrap().clone();
+    assert!(matches!(&winner, CommitStagedOutcome::Committed(record) if record.root == rb));
+    assert!(
+        matches!(s.commit_saved(&a, sa).unwrap(), Err(RuntimeError::History(HistoryError::WithStage { cause, stage:StageDisposition::Retained(stage) })) if matches!(cause.as_ref(),HistoryError::HeadMoved(_)) && stage.token == stage_a.token)
+    );
+    assert!(matches!(
+        s.release(&a, sa),
+        Err(RuntimeError::RetainedCustody)
+    ));
+    assert!(matches!(
+        s.commit_saved(&a, sa),
+        Err(RuntimeError::AlreadyAttempted)
+    ));
+    assert!(matches!(
+        s.discard_saved(&b, sa),
+        Err(RuntimeError::StaleCapability)
+    ));
+    assert_eq!(
+        s.discard_saved(&a, sa).unwrap().as_ref().unwrap(),
+        &layerfs_history::DiscardOutcome::Removed
+    );
+    s.release(&a, sa).unwrap();
+    s.release(&b, sb).unwrap();
+    let fresh = binding(&s, branch, 76, 1);
+    assert_eq!(fresh.snapshot().effective_root, rb);
+    assert_eq!(a.snapshot().branch.head_commit, None);
 }

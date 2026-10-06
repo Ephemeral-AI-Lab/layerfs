@@ -291,7 +291,9 @@ impl Command {
         }
     }
     pub(crate) fn charge(&self) -> Option<usize> {
-        let base = std::mem::size_of::<Self>().checked_add(512)?;
+        let base = std::mem::size_of::<Self>()
+            .checked_add(std::mem::size_of::<crate::JobWork>())?
+            .checked_add(512)?;
         let (input, reply) = match self {
             Self::Resources { .. } => (0, std::mem::size_of::<layerfs_overlay::Resources>()),
             Self::DatabaseWork => (0, std::mem::size_of::<layerfs_overlay::DatabaseWork>()),

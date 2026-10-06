@@ -1,0 +1,77 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.11s
+     Running tests/runtime.rs (core/target/debug/deps/runtime-0693fe70d77b0de3)
+
+running 8 tests
+
+thread '<unnamed>' panicked at crates/layerfs-api/sdk/tests/runtime.rs:251:50:
+called `Result::unwrap()` on an `Err` value: Io(Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread '<unnamed>' panicked at crates/layerfs-api/sdk/tests/runtime.rs:251:50:
+called `Result::unwrap()` on an `Err` value: Io(Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" })
+
+thread '<unnamed>' panicked at crates/layerfs-api/sdk/tests/runtime.rs:251:50:
+called `Result::unwrap()` on an `Err` value: Io(Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" })
+
+thread '<unnamed>' panicked at crates/layerfs-api/sdk/tests/runtime.rs:251:50:
+called `Result::unwrap()` on an `Err` value: Io(Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" })
+
+thread '<unnamed>' panicked at crates/layerfs-api/sdk/tests/runtime.rs:251:50:
+called `Result::unwrap()` on an `Err` value: Io(Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" })
+
+thread 'independent_saves_pending_reads_retained_finish_and_slot_reuse' panicked at crates/layerfs-api/sdk/tests/runtime.rs:260:68:
+called `Result::unwrap()` on an `Err` value: Io(Kind(UnexpectedEof))
+
+thread 'workspace_stat_uses_authenticated_scoped_owning_lengths_without_payload_or_fallback' panicked at crates/layerfs-api/sdk/tests/runtime.rs:260:68:
+called `Result::unwrap()` on an `Err` value: Io(Kind(UnexpectedEof))
+
+thread 'workspace_serials_come_from_the_owning_scope_allocator_under_authority' panicked at crates/layerfs-api/sdk/tests/runtime.rs:260:68:
+called `Result::unwrap()` on an `Err` value: Io(Kind(UnexpectedEof))
+
+thread '<unnamed>' panicked at crates/layerfs-api/sdk/tests/runtime.rs:251:50:
+called `Result::unwrap()` on an `Err` value: Io(Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" })
+
+thread 'capability_scope_authority_and_read_window_are_checked_before_service' panicked at crates/layerfs-api/sdk/tests/runtime.rs:260:68:
+called `Result::unwrap()` on an `Err` value: Io(Kind(UnexpectedEof))
+
+thread 'refused_admission_retains_the_exact_phase_without_replay' panicked at crates/layerfs-api/sdk/tests/runtime.rs:260:68:
+called `Result::unwrap()` on an `Err` value: Io(Kind(UnexpectedEof))
+
+thread 'history_candidate_authority_and_grammar_refusals_preserve_save_and_stage_custody' panicked at crates/layerfs-api/sdk/tests/runtime.rs:260:68:
+called `Result::unwrap()` on an `Err` value: Io(Kind(UnexpectedEof))
+
+thread '<unnamed>' panicked at crates/layerfs-api/sdk/tests/runtime.rs:251:50:
+called `Result::unwrap()` on an `Err` value: Io(Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" })
+
+thread '<unnamed>' panicked at crates/layerfs-api/sdk/tests/runtime.rs:251:50:
+called `Result::unwrap()` on an `Err` value: Io(Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" })
+
+thread 'missing_dependency_finish_is_retained_as_the_original_storage_error' panicked at crates/layerfs-api/sdk/tests/runtime.rs:260:68:
+called `Result::unwrap()` on an `Err` value: Io(Kind(UnexpectedEof))
+
+thread 'history_up_to_date_retains_exact_stage_and_transition_without_replay' panicked at crates/layerfs-api/sdk/tests/runtime.rs:260:68:
+called `Result::unwrap()` on an `Err` value: Io(Kind(UnexpectedEof))
+test workspace_serials_come_from_the_owning_scope_allocator_under_authority ... FAILED
+test independent_saves_pending_reads_retained_finish_and_slot_reuse ... FAILED
+test missing_dependency_finish_is_retained_as_the_original_storage_error ... FAILED
+test history_candidate_authority_and_grammar_refusals_preserve_save_and_stage_custody ... FAILED
+test history_up_to_date_retains_exact_stage_and_transition_without_replay ... FAILED
+test refused_admission_retains_the_exact_phase_without_replay ... FAILED
+test capability_scope_authority_and_read_window_are_checked_before_service ... FAILED
+test workspace_stat_uses_authenticated_scoped_owning_lengths_without_payload_or_fallback ... FAILED
+
+failures:
+
+failures:
+    capability_scope_authority_and_read_window_are_checked_before_service
+    history_candidate_authority_and_grammar_refusals_preserve_save_and_stage_custody
+    history_up_to_date_retains_exact_stage_and_transition_without_replay
+    independent_saves_pending_reads_retained_finish_and_slot_reuse
+    missing_dependency_finish_is_retained_as_the_original_storage_error
+    refused_admission_retains_the_exact_phase_without_replay
+    workspace_serials_come_from_the_owning_scope_allocator_under_authority
+    workspace_stat_uses_authenticated_scoped_owning_lengths_without_payload_or_fallback
+
+test result: FAILED. 0 passed; 8 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p layerfs-sdk --test runtime`

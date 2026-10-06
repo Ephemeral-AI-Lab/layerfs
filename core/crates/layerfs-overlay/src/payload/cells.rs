@@ -1,5 +1,6 @@
 //! Stored cell codec: bytes trimmed to the last valid one, optional validity.
-use crate::{OverlayError, OverlayResult, CELL_BYTES, MASK_BYTES};
+use crate::{OverlayError, OverlayResult, PayloadWork, CELL_BYTES, MASK_BYTES};
+use std::cell::Cell;
 
 /// One cell row as stored. `validity` absent means every stored byte is valid.
 pub(crate) struct Stored {
@@ -29,7 +30,7 @@ impl Stored {
                 .is_some_and(|b| b & (1 << (index % 8)) != 0),
         }
     }
-    pub fn expand(&self) -> OverlayResult<Window> {
+    pub fn expand(&self, work: &Cell<PayloadWork>) -> OverlayResult<Window> {
         if self.data.is_empty()
             || self.data.len() > CELL_BYTES
             || self
@@ -39,17 +40,27 @@ impl Stored {
         {
             return Err(OverlayError::Invalid("stored cell"));
         }
-        let mut window = Window::empty();
+        let mut window = Window::empty(work);
         window.data[..self.data.len()].copy_from_slice(&self.data);
         match &self.validity {
             Some(mask) => window.mask[..mask.len()].copy_from_slice(mask),
             None => window.set(0, self.data.len()),
         }
+        let mut observed = work.get();
+        observed.cell_copy_bytes = observed.cell_copy_bytes.saturating_add(
+            self.data.len() as u64 + self.validity.as_ref().map_or(0, |m| m.len() as u64),
+        );
+        work.set(observed);
         Ok(window)
     }
 }
 impl Window {
-    pub fn empty() -> Self {
+    pub fn empty(work: &Cell<PayloadWork>) -> Self {
+        let mut observed = work.get();
+        observed.cell_zeroed_bytes = observed
+            .cell_zeroed_bytes
+            .saturating_add((CELL_BYTES + MASK_BYTES) as u64);
+        work.set(observed);
         Self {
             data: Box::new([0; CELL_BYTES]),
             mask: Box::new([0; MASK_BYTES]),
@@ -69,7 +80,7 @@ impl Window {
     }
     /// Stored form, or None when no byte is valid. Unwritten bytes inside the
     /// stored prefix are zeroed so a row never carries stale data.
-    pub fn trim(&self) -> Option<(Vec<u8>, Option<Vec<u8>>)> {
+    pub fn trim(&self, work: &Cell<PayloadWork>) -> Option<(Vec<u8>, Option<Vec<u8>>)> {
         let last = (0..CELL_BYTES)
             .rev()
             .find(|bit| self.mask[bit / 8] & (1 << (bit % 8)) != 0)?;
@@ -90,6 +101,11 @@ impl Window {
             }
             mask
         });
+        let mut observed = work.get();
+        observed.cell_copy_bytes = observed
+            .cell_copy_bytes
+            .saturating_add(length as u64 + validity.as_ref().map_or(0, |m| m.len() as u64));
+        work.set(observed);
         Some((data, validity))
     }
 }

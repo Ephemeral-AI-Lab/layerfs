@@ -1,0 +1,38 @@
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+error[E0308]: mismatched types
+   --> crates/layerfs-api/sdk/tests/runtime.rs:818:57
+    |
+818 |             s.accept(b, save, claimed, role, canonical, timing)
+    |               ------                                    ^^^^^^ expected `TimingScope<'_>`, found `&TimingScope<'_, Active>`
+    |               |
+    |               arguments to this method are incorrect
+    |
+    = note: expected struct `TimingScope<'_, layerfs_telemetry::timer::Pending>`
+            found reference `&TimingScope<'_, Active>`
+note: method defined here
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk/src/runtime/sessions.rs:164:12
+    |
+164 |     pub fn accept(
+    |            ^^^^^^
+
+error[E0308]: mismatched types
+   --> crates/layerfs-api/sdk/tests/runtime.rs:826:42
+    |
+826 |             entries: vec![(PathName::new("new".to_owned()).unwrap(), serial)],
+    |                            ------------- ^^^^^^^^^^^^^^^^ expected `&str`, found `String`
+    |                            |
+    |                            arguments to this function are incorrect
+    |
+note: associated function defined here
+   --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/src/filesystem/path.rs:22:12
+    |
+22  |     pub fn new(value: &str) -> ContentResult<Self> {
+    |            ^^^
+help: try removing the method call
+    |
+826 -             entries: vec![(PathName::new("new".to_owned()).unwrap(), serial)],
+826 +             entries: vec![(PathName::new("new").unwrap(), serial)],
+    |
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `layerfs-sdk` (test "runtime") due to 2 previous errors

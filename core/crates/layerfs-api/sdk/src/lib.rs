@@ -5,6 +5,6 @@
 pub mod runtime;
 pub use runtime::{
     Authorization, Binding, BoundLengths, BoundSerials, Completion, CompletionPhase, Config,
-    LengthReply, ObjectReply, Runtime, RuntimeError, RuntimeResult, SaveId, Sessions,
-    SERIAL_WINDOW,
+    HistoryReceipts, LengthReply, ObjectReply, Runtime, RuntimeError, RuntimeResult, SaveId,
+    Sessions, SERIAL_WINDOW,
 };

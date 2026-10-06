@@ -95,6 +95,11 @@ pub struct Completion {
     envelope: Envelope,
 }
 impl Completion {
+    /// Complete exclusive SQL/allocation work, including readiness turns which
+    /// parked this original job. Queue/service spans are diagnostic wall.
+    pub fn work(&self) -> &crate::JobWork {
+        &self.envelope.work
+    }
     pub fn result(&self) -> &Result<Response, OwnerError> {
         &self.envelope.result
     }
@@ -132,7 +137,11 @@ impl Owner {
         let reserved = config
             .namespaces
             .checked_mul(config.lifecycle_jobs_per_namespace)
-            .and_then(|slots| slots.checked_mul(std::mem::size_of::<Command>() + 768))
+            .and_then(|slots| {
+                slots.checked_mul(
+                    std::mem::size_of::<Command>() + std::mem::size_of::<crate::JobWork>() + 768,
+                )
+            })
             .ok_or(OwnerError::InvalidAdmission)?;
         if config.lifecycle_reserve < reserved {
             return Err(OwnerError::InvalidAdmission);
@@ -271,6 +280,7 @@ impl OwnerClient {
             admitted: Instant::now(),
             blocked: false,
             wait_consolidation: false,
+            work: crate::JobWork::default(),
         });
         if new {
             state.rotation.push_back(namespace);
@@ -313,11 +323,17 @@ struct SqlObservation<'a> {
     shared: &'a Shared,
     before: layerfs_overlay::DatabaseWork,
     maintenance: bool,
+    allocation_before: layerfs_overlay::AllocationWork,
+    payload_before: layerfs_overlay::PayloadWork,
 }
 impl Drop for SqlObservation<'_> {
     fn drop(&mut self) {
-        self.shared
-            .sql_progress(self.db.diagnostics().since(&self.before), self.maintenance);
+        self.shared.sql_progress(
+            self.db.diagnostics().since(&self.before),
+            self.db.allocation_work().since(self.allocation_before),
+            self.db.payload_work().since(self.payload_before),
+            self.maintenance,
+        );
     }
 }
 fn run(shared: &Shared, db: &Overlay) {
@@ -334,6 +350,8 @@ fn run(shared: &Shared, db: &Overlay) {
                 shared,
                 before: db.diagnostics(),
                 maintenance: true,
+                allocation_before: db.allocation_work(),
+                payload_before: db.payload_work(),
             };
             let start = Instant::now();
             let maintenance = maintenance_turn(db, &mut live_cursor, &mut cursor, &mut live_turn);
@@ -364,6 +382,7 @@ fn run(shared: &Shared, db: &Overlay) {
                     cause: Box::new(OwnerError::Stopped),
                     command: Box::new(job.command),
                 }),
+                work: job.work,
                 _credit: job.credit,
             });
             continue;
@@ -373,7 +392,12 @@ fn run(shared: &Shared, db: &Overlay) {
             shared,
             before: db.diagnostics(),
             maintenance: false,
+            allocation_before: db.allocation_work(),
+            payload_before: db.payload_work(),
         };
+        let before = db.diagnostics();
+        let allocation_before = db.allocation_work();
+        let payload_before = db.payload_work();
         if matches!(job.command, Command::Capture) {
             if let Some(route) = job.route {
                 match db.capture_ready(route) {
@@ -381,27 +405,38 @@ fn run(shared: &Shared, db: &Overlay) {
                         match db.state(route) {
                             Ok(state) => job.wait_consolidation = state.consolidating.is_some(),
                             Err(error) => {
+                                record_job_work(
+                                    &mut job,
+                                    db,
+                                    before,
+                                    allocation_before,
+                                    payload_before,
+                                );
                                 let _ = job.reply.send(Envelope {
                                     result: Err(OwnerError::Unattempted {
                                         cause: Box::new(OwnerError::Overlay(error)),
                                         command: Box::new(job.command),
                                     }),
+                                    work: job.work,
                                     _credit: job.credit,
                                 });
                                 continue;
                             }
                         }
+                        record_job_work(&mut job, db, before, allocation_before, payload_before);
                         shared.park(job);
                         continue;
                     }
                     Err(error) => {
                         let class = job.command.class();
                         shared.progress(ns(job.route), class, elapsed(job.admitted), 0);
+                        record_job_work(&mut job, db, before, allocation_before, payload_before);
                         let _ = job.reply.send(Envelope {
                             result: Err(OwnerError::Unattempted {
                                 cause: Box::new(OwnerError::Overlay(error)),
                                 command: Box::new(job.command),
                             }),
+                            work: job.work,
                             _credit: job.credit,
                         });
                         continue;
@@ -418,17 +453,20 @@ fn run(shared: &Shared, db: &Overlay) {
             };
             match ready {
                 Ok(false) => {
+                    record_job_work(&mut job, db, before, allocation_before, payload_before);
                     shared.park(job);
                     continue;
                 }
                 Err(error) => {
                     let class = job.command.class();
                     shared.progress(ns(job.route), class, elapsed(job.admitted), 0);
+                    record_job_work(&mut job, db, before, allocation_before, payload_before);
                     let _ = job.reply.send(Envelope {
                         result: Err(OwnerError::Unattempted {
                             cause: Box::new(OwnerError::Overlay(error)),
                             command: Box::new(job.command),
                         }),
+                        work: job.work,
                         _credit: job.credit,
                     });
                     continue;
@@ -441,10 +479,22 @@ fn run(shared: &Shared, db: &Overlay) {
         let wait = elapsed(job.admitted);
         let start = Instant::now();
         let result = job.command.perform(db, job.route);
+        job.work
+            .sql
+            .accumulate(db.diagnostics().since(&before).total());
+        job.work
+            .allocation
+            .accumulate(db.allocation_work().since(allocation_before));
+        job.work
+            .payload
+            .accumulate(db.payload_work().since(payload_before));
+        job.work.queue_wait_ns = wait;
+        job.work.service_ns = elapsed(start);
         drop(_sql);
-        shared.progress(namespace, class, wait, elapsed(start));
+        shared.progress(namespace, class, wait, job.work.service_ns);
         let _ = job.reply.send(Envelope {
             result,
+            work: job.work,
             _credit: job.credit,
         });
     }
@@ -490,4 +540,23 @@ impl std::error::Error for Completion {
             .err()
             .map(|error| error as &dyn std::error::Error)
     }
+}
+
+fn record_job_work(
+    job: &mut Job,
+    db: &Overlay,
+    before: layerfs_overlay::DatabaseWork,
+    allocation: layerfs_overlay::AllocationWork,
+    payload: layerfs_overlay::PayloadWork,
+) {
+    job.work
+        .sql
+        .accumulate(db.diagnostics().since(&before).total());
+    job.work
+        .allocation
+        .accumulate(db.allocation_work().since(allocation));
+    job.work
+        .payload
+        .accumulate(db.payload_work().since(payload));
+    job.work.queue_wait_ns = elapsed(job.admitted);
 }

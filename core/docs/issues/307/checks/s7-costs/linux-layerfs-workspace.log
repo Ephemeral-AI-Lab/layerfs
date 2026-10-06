@@ -1,0 +1,225 @@
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 9.27s
+     Running unittests src/lib.rs (core/target/cluster2-linux/debug/deps/layerfs_workspace-ccdc8b2b5a696f00)
+
+running 0 tests
+
+successes:
+
+successes:
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/base.rs (core/target/cluster2-linux/debug/deps/base-cbe2afcb55ec61a8)
+
+running 7 tests
+test retained_old_plan_and_new_root_use_exact_immutable_cache_identities ... ok
+test full_root_binding_aliases_metadata_symlinks_and_eof_use_content_apis ... ok
+test logical_workspace_open_binds_real_root_without_schema_or_namespace_import ... ok
+test source_errors_and_unattempted_actor_install_preserve_exact_custody ... ok
+test known_install_advances_selected_base_and_preserves_retained_plans_and_later_rows ... ok
+test actual_provider_wait_allows_shared_progress_and_actor_install_pairs_the_selected_base ... ok
+test effective_alias_metadata_whiteouts_and_three_way_pages_advance_with_bounded_hidden_work ... ok
+
+successes:
+
+---- effective_alias_metadata_whiteouts_and_three_way_pages_advance_with_bounded_hidden_work stdout ----
+S3_MERGE visited=507 visible=377 empty_progress_pages=1
+
+
+successes:
+    actual_provider_wait_allows_shared_progress_and_actor_install_pairs_the_selected_base
+    effective_alias_metadata_whiteouts_and_three_way_pages_advance_with_bounded_hidden_work
+    full_root_binding_aliases_metadata_symlinks_and_eof_use_content_apis
+    known_install_advances_selected_base_and_preserves_retained_plans_and_later_rows
+    logical_workspace_open_binds_real_root_without_schema_or_namespace_import
+    retained_old_plan_and_new_root_use_exact_immutable_cache_identities
+    source_errors_and_unattempted_actor_install_preserve_exact_custody
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/namespace.rs (core/target/cluster2-linux/debug/deps/namespace-32a648c61fec7dc9)
+
+running 5 tests
+test unrepresentable_names_targets_and_reservations_are_refused_before_any_job ... ok
+test chmod_and_utimens_follow_the_portable_grammar_and_keep_one_mtime ... ok
+test create_mkdir_symlink_and_link_publish_parent_and_reference_effects_atomically ... ok
+test unlink_and_rmdir_remove_one_reference_and_keep_directory_counts_exact ... ok
+test rename_moves_replaces_and_refuses_cycles_without_descendant_rows ... ok
+
+successes:
+
+successes:
+    chmod_and_utimens_follow_the_portable_grammar_and_keep_one_mtime
+    create_mkdir_symlink_and_link_publish_parent_and_reference_effects_atomically
+    rename_moves_replaces_and_refuses_cycles_without_descendant_rows
+    unlink_and_rmdir_remove_one_reference_and_keep_directory_counts_exact
+    unrepresentable_names_targets_and_reservations_are_refused_before_any_job
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/namespace_daemon.rs (core/target/cluster2-linux/debug/deps/namespace_daemon-21b449d941a2170b)
+
+running 8 tests
+test closed_and_stopped_services_return_exact_outcomes_without_effect ... ok
+test a_blocked_base_fact_leaves_the_owner_free_and_publishes_after_a_capture ... ok
+test orphans::non_file_lookup_custody_survives_real_owner_installs_and_a_last_consumer ... ok
+test orphans::inherited_open_unlinked_log_keeps_bytes_through_owner_installs_failures_and_idle_cleanup ... ok
+test opposing_directory_moves_from_real_threads_never_form_a_cycle ... ok
+test concurrent_operations_through_real_owner_jobs_keep_counts_and_references_exact ... ok
+test concurrent_appenders_and_a_tail_reader_see_whole_records_through_real_owner_jobs ... ok
+test payload_complete_operations_have_indexed_work_through_the_real_owner ... ok
+
+successes:
+
+---- orphans::non_file_lookup_custody_survives_real_owner_installs_and_a_last_consumer stdout ----
+S6_NONFILE_OWNER captures=12 success=6 failures=6 directory_metadata=true inherited_symlink_bytes=true lookup_release_before_last_request=true idle_terminal_cleanup=true
+
+---- orphans::inherited_open_unlinked_log_keeps_bytes_through_owner_installs_failures_and_idle_cleanup stdout ----
+S6_CUSTODY_PLANS ["orphan: SEARCH orphan USING PRIMARY KEY (ns=? AND serial=?)", "file-owners: SEARCH file_custody USING PRIMARY KEY (ns=? AND serial=?)", "operation: SEARCH operation_owner USING PRIMARY KEY (ns=? AND owner=?)", "generation-held: SEARCH lease USING COVERING INDEX lease_resource (ns=? AND kind=? AND resource=?)"]
+S6_ORPHAN_OWNER captures=24 success=12 failed=12 inherited_bytes=10 orphan_bytes=9180 truncate_regrow=true last_read_outlives_close=true idle_cleanup=true
+
+---- payload_complete_operations_have_indexed_work_through_the_real_owner stdout ----
+S5_OWNER_PLANS ["layers: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)", "active-layer: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "lower-layer: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen>? AND gen<?)", "cell: SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)", "cell-window: SEARCH payload USING INDEX payload_generation (ns=? AND gen=? AND serial=? AND cell_offset>? AND cell_offset<?)", "drop-cell: SEARCH payload USING INDEX sqlite_autoindex_payload_1 (ns=? AND serial=? AND gen=? AND cell_offset=?)", "step: SEARCH shrink USING PRIMARY KEY (ns=? AND serial=? AND gen=? AND depth=?)"]
+S6_OWNER_OPERATION unrelated=128 operation=overwrite-128k foreground_statements=101 vm=6966 changed=112 bound_bytes=133056 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=128 operation=shrink foreground_statements=46 vm=1734 changed=28 bound_bytes=907 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=128 operation=regrow foreground_statements=37 vm=1014 changed=16 bound_bytes=704 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=128 operation=read-128k foreground_statements=38 vm=930 changed=8 bound_bytes=936 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=128 operation=append foreground_statements=40 vm=1197 changed=19 bound_bytes=780 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=1024 operation=overwrite-128k foreground_statements=101 vm=6966 changed=112 bound_bytes=133056 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=1024 operation=shrink foreground_statements=46 vm=1734 changed=28 bound_bytes=907 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=1024 operation=regrow foreground_statements=37 vm=1014 changed=16 bound_bytes=704 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=1024 operation=read-128k foreground_statements=38 vm=930 changed=8 bound_bytes=936 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=1024 operation=append foreground_statements=40 vm=1197 changed=19 bound_bytes=780 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=overwrite-128k foreground_statements=101 vm=6966 changed=112 bound_bytes=133056 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=shrink foreground_statements=46 vm=1734 changed=28 bound_bytes=907 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=regrow foreground_statements=37 vm=1014 changed=16 bound_bytes=704 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=read-128k foreground_statements=38 vm=930 changed=8 bound_bytes=936 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_OPERATION unrelated=4096 operation=append foreground_statements=40 vm=1197 changed=19 bound_bytes=780 fullscan=0 sorts=0 autoindex=0 reprepare=0 maintenance_accounted_separately=true
+S6_OWNER_MAINTENANCE statements=252 changed=171 vm=10857
+
+
+successes:
+    a_blocked_base_fact_leaves_the_owner_free_and_publishes_after_a_capture
+    closed_and_stopped_services_return_exact_outcomes_without_effect
+    concurrent_appenders_and_a_tail_reader_see_whole_records_through_real_owner_jobs
+    concurrent_operations_through_real_owner_jobs_keep_counts_and_references_exact
+    opposing_directory_moves_from_real_threads_never_form_a_cycle
+    orphans::inherited_open_unlinked_log_keeps_bytes_through_owner_installs_failures_and_idle_cleanup
+    orphans::non_file_lookup_custody_survives_real_owner_installs_and_a_last_consumer
+    payload_complete_operations_have_indexed_work_through_the_real_owner
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.24s
+
+     Running tests/namespace_profile.rs (core/target/cluster2-linux/debug/deps/namespace_profile-6811fdab8a550887)
+
+running 1 test
+test complete_operations_keep_point_work_as_names_and_inodes_grow ... ok
+
+successes:
+
+---- complete_operations_keep_point_work_as_names_and_inodes_grow stdout ----
+S4_PLANS ["lower-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen>? AND gen<?)", "active-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "drop-name: SEARCH dentry USING PRIMARY KEY (ns=? AND parent=? AND name=? AND gen=?)", "active-inode: SEARCH inode USING PRIMARY KEY (ns=? AND serial=? AND gen=?)", "put-name: vm-program opcodes=172 btree-cursors=5 btree-scan-opcodes=0", "put-inode: vm-program opcodes=306 btree-cursors=5 btree-scan-opcodes=0"]
+S4_OPERATION siblings=128 operation=create-inherited-parent owner_rounds=2 statements=59 vm_steps=1662 rows_changed=22 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=create-local-parent owner_rounds=1 statements=53 vm_steps=1546 rows_changed=22 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=link-file owner_rounds=1 statements=53 vm_steps=1569 rows_changed=20 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=rename-replace owner_rounds=1 statements=65 vm_steps=1979 rows_changed=24 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=unlink owner_rounds=1 statements=54 vm_steps=1710 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=mkdir owner_rounds=2 statements=59 vm_steps=1662 rows_changed=22 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=rename-directory-across-parents owner_rounds=1 statements=72 vm_steps=2015 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=rmdir owner_rounds=1 statements=54 vm_steps=1710 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=chmod-utimens owner_rounds=1 statements=37 vm_steps=1014 rows_changed=16 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=lookup-local owner_rounds=0 statements=27 vm_steps=612 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=lookup-inherited owner_rounds=0 statements=34 vm_steps=714 rows_changed=8 base_demand=14 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=128 operation=list-window owner_rounds=0 statements=23 vm_steps=1356 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=create-inherited-parent owner_rounds=2 statements=59 vm_steps=1662 rows_changed=22 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=create-local-parent owner_rounds=1 statements=53 vm_steps=1546 rows_changed=22 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=link-file owner_rounds=1 statements=53 vm_steps=1569 rows_changed=20 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=rename-replace owner_rounds=1 statements=65 vm_steps=1979 rows_changed=24 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=unlink owner_rounds=1 statements=54 vm_steps=1710 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=mkdir owner_rounds=2 statements=59 vm_steps=1662 rows_changed=22 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=rename-directory-across-parents owner_rounds=1 statements=72 vm_steps=2015 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=rmdir owner_rounds=1 statements=54 vm_steps=1710 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=chmod-utimens owner_rounds=1 statements=37 vm_steps=1014 rows_changed=16 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=lookup-local owner_rounds=0 statements=27 vm_steps=612 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=lookup-inherited owner_rounds=0 statements=34 vm_steps=714 rows_changed=8 base_demand=14 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=1024 operation=list-window owner_rounds=0 statements=23 vm_steps=1356 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=create-inherited-parent owner_rounds=2 statements=59 vm_steps=1662 rows_changed=22 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=create-local-parent owner_rounds=1 statements=53 vm_steps=1546 rows_changed=22 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=link-file owner_rounds=1 statements=53 vm_steps=1569 rows_changed=20 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=rename-replace owner_rounds=1 statements=65 vm_steps=1979 rows_changed=24 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=unlink owner_rounds=1 statements=54 vm_steps=1710 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=mkdir owner_rounds=2 statements=59 vm_steps=1662 rows_changed=22 base_demand=3 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=rename-directory-across-parents owner_rounds=1 statements=72 vm_steps=2015 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=rmdir owner_rounds=1 statements=54 vm_steps=1710 rows_changed=23 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=chmod-utimens owner_rounds=1 statements=37 vm_steps=1014 rows_changed=16 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=lookup-local owner_rounds=0 statements=27 vm_steps=612 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=lookup-inherited owner_rounds=0 statements=34 vm_steps=714 rows_changed=8 base_demand=14 fullscan=0 sorts=0 autoindex=0 reprepare=0
+S4_OPERATION siblings=4096 operation=list-window owner_rounds=0 statements=23 vm_steps=1356 rows_changed=8 base_demand=0 fullscan=0 sorts=0 autoindex=0 reprepare=0
+
+
+successes:
+    complete_operations_keep_point_work_as_names_and_inodes_grow
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.89s
+
+     Running tests/namespace_view.rs (core/target/cluster2-linux/debug/deps/namespace_view-dfac5499eaf8fd2e)
+
+running 5 tests
+test opposing_directory_moves_cannot_form_a_cycle_between_owner_rounds ... ok
+test a_rebound_name_between_owner_rounds_is_resolved_before_the_one_attempt ... ok
+test known_install_folds_a_capture_and_keeps_later_namespace_changes ... ok
+test enumeration_returns_every_persistent_name_once_across_mutation_and_resume ... ok
+test name_and_inode_counts_have_no_cap_and_every_window_stays_bounded ... ok
+
+successes:
+
+successes:
+    a_rebound_name_between_owner_rounds_is_resolved_before_the_one_attempt
+    enumeration_returns_every_persistent_name_once_across_mutation_and_resume
+    known_install_folds_a_capture_and_keeps_later_namespace_changes
+    name_and_inode_counts_have_no_cap_and_every_window_stays_bounded
+    opposing_directory_moves_cannot_form_a_cycle_between_owner_rounds
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.85s
+
+     Running tests/nonfile.rs (core/target/cluster2-linux/debug/deps/nonfile-2256afd7fb44c8e8)
+
+running 3 tests
+test failed_name_composition_drops_only_whiteouts_over_proven_absent_base_names ... ok
+test non_file_lookup_and_processing_owners_preserve_removed_metadata_and_target ... ok
+test linked_symlink_targets_follow_effective_layers_through_repeated_failed_captures ... ok
+
+successes:
+
+successes:
+    failed_name_composition_drops_only_whiteouts_over_proven_absent_base_names
+    linked_symlink_targets_follow_effective_layers_through_repeated_failed_captures
+    non_file_lookup_and_processing_owners_preserve_removed_metadata_and_target
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-8d0ca108a7069576)
+
+running 3 tests
+test writes_change_only_their_window_and_never_read_the_inherited_payload ... ok
+test truncate_and_regrow_never_resurrect_bytes_across_capture_and_known_install ... ok
+test fragmented_inherited_bytes_are_read_as_one_base_range ... ok
+
+successes:
+
+---- writes_change_only_their_window_and_never_read_the_inherited_payload stdout ----
+S5_WRITE_DEMAND inherited_file_bytes=400000 first_write_upstream_bytes=2094 attribute_facts_upstream_bytes=2094 later_write_upstream_bytes=0 base_read_128k_upstream_bytes=33640
+
+---- fragmented_inherited_bytes_are_read_as_one_base_range stdout ----
+S5_READ_GAPS inherited_gaps=2048 objects=5 upstream_bytes=33640 same_as_unfragmented_range=true overwritten_window_objects=0
+
+
+successes:
+    fragmented_inherited_bytes_are_read_as_one_base_range
+    truncate_and_regrow_never_resurrect_bytes_across_capture_and_known_install
+    writes_change_only_their_window_and_never_read_the_inherited_payload
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
