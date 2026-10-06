@@ -1,0 +1,26 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.51s
+  Executable tests/filesystem_attributes.rs (core/target/debug/deps/filesystem_attributes-c3beface54fc1aee)
+  Executable tests/filesystem_bounds.rs (core/target/debug/deps/filesystem_bounds-6a5d10a6b1d3fc43)
+  Executable tests/filesystem_codec.rs (core/target/debug/deps/filesystem_codec-b8b91e275abd598c)
+  Executable tests/filesystem_failure.rs (core/target/debug/deps/filesystem_failure-3ab14e7b7e14d8c2)
+  Executable tests/filesystem_hardlinks.rs (core/target/debug/deps/filesystem_hardlinks-63a7485f91aaf1f9)
+  Executable tests/filesystem_limits.rs (core/target/debug/deps/filesystem_limits-422f8309d92c9d4d)
+  Executable tests/filesystem_ordering.rs (core/target/debug/deps/filesystem_ordering-b07997645b40395c)
+  Executable tests/filesystem_ordering_consolidate.rs (core/target/debug/deps/filesystem_ordering_consolidate-fe5582263e7e7fa5)
+  Executable tests/filesystem_ordering_scan.rs (core/target/debug/deps/filesystem_ordering_scan-1031f588b8d6fa8c)
+  Executable tests/filesystem_parent_lookup.rs (core/target/debug/deps/filesystem_parent_lookup-c2b6251d280fd5e5)
+  Executable tests/filesystem_profile.rs (core/target/debug/deps/filesystem_profile-cbc923fe4ac3c992)
+  Executable tests/filesystem_read.rs (core/target/debug/deps/filesystem_read-74b9ee6c7d86651a)
+  Executable tests/filesystem_reference.rs (core/target/debug/deps/filesystem_reference-a68f0cc5be2a48a2)
+  Executable tests/filesystem_rows.rs (core/target/debug/deps/filesystem_rows-693f80d7588e60d3)
+  Executable tests/filesystem_sorted.rs (core/target/debug/deps/filesystem_sorted-cafa159be4f47f29)
+  Executable tests/filesystem_timing.rs (core/target/debug/deps/filesystem_timing-e4b5d48dde6f0c17)
+  Executable tests/filesystem_topology.rs (core/target/debug/deps/filesystem_topology-52112ab7d09244ae)
+  Executable tests/filesystem_updates.rs (core/target/debug/deps/filesystem_updates-86b9911038e50d5d)
+  Executable tests/object_context.rs (core/target/debug/deps/object_context-546585297a15e2b8)

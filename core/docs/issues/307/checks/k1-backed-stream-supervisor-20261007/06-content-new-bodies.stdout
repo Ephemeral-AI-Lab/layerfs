@@ -1,0 +1,35 @@
+
+running 8 tests
+test malformed_mapping_record_and_reused_file_scope_never_fall_back_to_stored_objects ... ok
+test file_state_refusal_and_post_accept_ack_refusal_retain_one_pending_attempt ... ok
+test no_op_and_whole_file_transition_keep_the_existing_dispatch_without_backing_effects ... ok
+test original_backing_discard_settle_and_post_accept_failure_end_without_another_job ... ok
+test original_consumer_refusal_leaves_attempt_marker_and_no_file_state_or_acknowledgement ... ok
+test backed_and_memory_routes_share_canonical_result_and_end_with_acknowledged_state ... ok
+test repeated_page_dag_reuses_real_stored_identity_without_conflating_private_drafts ... ok
+test resolved_repeated_child_cannot_hide_a_shifted_interior_mapping_boundary ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+
+running 5 tests
+test provider_refusal_and_absence_end_the_original_demand_once ... ok
+test rehashed_malformed_or_short_nonroot_pages_are_never_retained ... ok
+test cached_pages_still_check_each_requested_summary_without_another_demand ... ok
+test a_full_cache_survives_a_rejected_new_summary_without_retaining_the_page ... ok
+test more_than_two_cache_windows_evict_and_retained_pages_move_without_a_copy ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 7 tests
+test original_cursor_failure_stops_before_future_rows_objects_or_replay ... ok
+test a_present_empty_update_retains_the_original_directory_and_root ... ok
+test the_same_effective_cycle_validator_rejects_a_streamed_self_move ... ok
+test removed_and_unchanged_points_distinguish_a_move_from_a_second_parent ... ok
+test paged_effective_names_match_the_resident_move_with_removals_and_insertions ... ok
+test counts_order_and_point_disagreement_refuse_before_final_output ... ok
+test generated_wide_stream_matches_the_existing_resident_canonical_root ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

@@ -19,7 +19,9 @@
 //! **Every row is owned by the caller.** A cursor returns one decoded row at a
 //! time, so the resident cost of reading a sequence is that one row rather than
 //! the sequence. The row is exactly as large as the directory it describes, which
-//! is the unit the mounted route itself produces.
+//! is the legacy resident directory input. [`StreamedRowSource`] is the additive
+//! route for fixed directory headers and bounded per-parent change cursors; it
+//! does not require that resident row.
 //!
 //! **Declared totals are checked, not trusted.** A source declares how many rows
 //! each sequence holds, and [`check_input`] refuses one whose cursors end
@@ -31,13 +33,22 @@
 mod check;
 mod source;
 mod spool;
+mod stream;
+mod stream_update;
 mod update;
+pub(crate) mod view;
 
-pub use check::check_input;
+pub(crate) use check::check_operation_input;
+pub use check::{check_input, check_streamed_input};
 pub(crate) use source::serial_in_range;
 pub use source::{
     DirectoryRowSource, InodeRowSource, PreparedRows, RowSource, SerialRowSource,
     SliceDirectoryRows, SliceInodeRows, SliceSerialRows,
 };
 pub use spool::{RowSpool, SPOOL_SLOT_BYTES};
+pub use stream::{
+    DirectoryChangeLookup, DirectoryChangeSource, DirectoryHeader, DirectoryHeaderSource,
+    PreparedDirectoryStreams, StreamedRowSource,
+};
+pub use stream_update::StreamedFilesystemInput;
 pub use update::PreparedUpdate;

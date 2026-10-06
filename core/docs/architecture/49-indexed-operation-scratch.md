@@ -3,8 +3,10 @@
 > Status: source implementation checkpoint following R4 commit
 > `4090cb9a2d5fa1cd899d63c7a44537ff3f23e3cd`; component verification is recorded
 > in the [checkpoint](../issues/307/K1-INDEXED-SCRATCH-E01-20261007.md).
-> This implements a neutral Overlay/Daemon record provider. It does not complete
-> the backed Content editor, captured normalization, sparse Commit or S10/P3.
+> This implements a neutral Overlay/Daemon record provider. The subsequent
+> [Content editor](50-backed-file-edit-state.md) and
+> [Workspace adapter](52-workspace-edit-backing-port.md) use it. Captured
+> normalization, sparse Commit and S10/P3 remain unfinished.
 
 Overlay owns these records in its existing daemon database. Daemon schedules
 short credited Scratch jobs. Content owns the meaning of kinds, draft encodings,
@@ -75,6 +77,13 @@ namespace/operation/file/kind prefix, excluding exactly one retained root. Its
 ordered primary-key walk can skip at most that one excluded row. It has no after
 cursor or OFFSET. Consumption can atomically remove a candidate and add children
 below its key; the next window starts from the first eligible key again.
+
+The additive `indexed_scratch_keys` path takes an optional exclusion. Some uses
+the same five-parameter query and excludes only the exact key; None uses a
+four-parameter prefix query with 32 bound bytes and excludes no key. Both project
+at most 64 keys/2,048 bytes. Content uses None when the retained root is Stored or
+belongs to another draft domain. No all-zero key sentinel or digest partition
+stands in for that fact. Diagnostics retain both actual EQP and VM programs.
 
 Exact `release_operation` removes the original nonrecycled owner and atomically
 enqueues both the existing owned integer Scratch target and a separate indexed

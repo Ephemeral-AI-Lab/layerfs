@@ -1,0 +1,24 @@
+
+running 4 tests
+test direct_overlay_port_keeps_deciding_and_unadmitted_inputs_without_owner_release ... ok
+test oversized_unattempted_input_and_stopped_owner_retain_first_cause ... ok
+test terminal_refusal_keeps_original_completion_and_other_scope_progresses ... ok
+test canonical_file_edit_uses_real_owner_records_and_explicit_last_owner_cleanup ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+
+running 2 tests
+test original_atomic_refusal_and_credits_survive_independent_owner_jobs ... ok
+test released_indexed_rows_reclaim_automatically_and_close_preserves_actual_owner ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 3 tests
+test policy_mismatch_retains_both_original_replies_and_does_not_open_overlay ... ok
+test original_owner_failure_and_failed_object_operation_keep_custody_without_poisoning_independent_operation ... ok
+test mismatched_host_profile_and_same_root_history_context_refuse_before_local_open ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+

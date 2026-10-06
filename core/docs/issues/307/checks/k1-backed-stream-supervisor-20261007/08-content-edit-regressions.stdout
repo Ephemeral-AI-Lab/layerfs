@@ -1,0 +1,41 @@
+
+running 7 tests
+test an_overlapping_stream_is_rejected_before_any_work ... ok
+test repeated_length_changes_accumulate ... ok
+test adjacent_edits_stay_separate_segments ... ok
+test delete_only_streams_are_monotonic_in_result_coordinates ... ok
+test several_separated_edits_apply_in_order ... ok
+test many_small_edits_are_applied_in_one_pass ... ok
+test every_object_the_edit_emits_is_reachable_from_its_root ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 12 tests
+test a_missing_base_root_is_reported_as_missing ... ok
+test a_consumer_that_rejects_stops_the_edit_once ... ok
+test a_bounded_sink_that_fills_during_emission_fails_the_edit_once ... ok
+test a_source_that_ends_early_fails_without_emitting_a_root ... ok
+test the_retained_frontier_does_not_grow_with_the_edit_count ... FAILED
+test many_files_and_many_edits_stay_bounded ... ok
+test a_join_of_two_full_pages_stays_canonical ... ok
+test streaming_flush_boundaries_and_height_growth ... ok
+test join_occupancy_at_every_boundary ... ok
+test a_thousand_separated_edits_keep_bounded_state ... ok
+test the_frontier_does_not_grow_with_repeated_in_place_edits ... ok
+test the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound ... ok
+
+failures:
+
+---- the_retained_frontier_does_not_grow_with_the_edit_count stdout ----
+
+thread 'the_retained_frontier_does_not_grow_with_the_edit_count' panicked at crates/layerfs-content/tests/edit_bounds.rs:312:9:
+doubling the edit count doubled the frontier: [3984, 4064, 4248, 4888, 6168]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    the_retained_frontier_does_not_grow_with_the_edit_count
+
+test result: FAILED. 11 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.50s
+

@@ -416,3 +416,29 @@ split/concat/coalesce and root-partition algorithms. The public `EditObjects`,
 relocation, not a second tree algorithm or measured simplification. The memory
 profile's 8MiB-derived draft limit, growing identity collections, sparse
 replacement/comparison and owning indexed-backend requirements remain K1 work.
+
+### Shared backed editor, 2026-10-07
+
+The subsequent source change after `889836c44` supplies
+`apply_edits_backed` and one tagged canonical edit engine for both profiles.
+The owning responsibilities above move into focused
+`edit/{engine,state,references,resolution,draft_codec}.rs`; `objects.rs` retains
+the public memory facade. Stored, editable Node and already-canonical draft Page
+references have distinct exact tags. No missing draft becomes a Stored read.
+Draft/reference/detached/resolution/emission state can now reside behind a
+caller-owned indexed port while tree decisions and canonical bytes stay in
+Content. The memory route retains its original charge and refusal.
+
+The source correction also checks every acknowledged draft resolution against
+its requested summary and root/non-root context. A 51-byte retained witness
+records those facts; an accepted object ID alone cannot validate changed child
+boundaries. The engine attempts each mapping and FileState acceptance once,
+retains pending/known acknowledgement state and propagates bookkeeping failure
+without resend. Superseded leaves release before replacement allocation;
+branches retain their parent through both joins to preserve repeated children.
+See [backed file-edit state](50-backed-file-edit-state.md) and the explicit
+[Workspace/Daemon custody adapter](52-workspace-edit-backing-port.md).
+
+This source supplies backed file-edit state, not captured sparse normalization,
+Save/history/known install, total process residency or Commit qualification.
+Earlier source-pinned descriptions and failed receipts retain their scope.

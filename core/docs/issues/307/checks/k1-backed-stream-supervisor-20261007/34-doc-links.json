@@ -1,0 +1,13 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/target/cluster2-307/check_k1_joint_docs.py"
+  ],
+  "wall_timeout_s": 30,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 91085833,
+  "kind": "documentation",
+  "workers": 1
+}

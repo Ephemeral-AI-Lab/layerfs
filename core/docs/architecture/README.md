@@ -379,4 +379,13 @@ and transport/bounded-import/resource gaps remain explicit in #307 audits.
 
 - [Indexed operation scratch](49-indexed-operation-scratch.md): bounded neutral
   records, guarded atomic changes, credited Daemon jobs and last-owner cleanup
-  in the existing local database. Content-backed construction remains pending.
+  in the existing local database. Its optional no-exclusion key window preserves
+  every key identity.
+- [Backed file edit state](50-backed-file-edit-state.md): one canonical editor
+  with tagged draft identities, indexed ownership/resolution/emission records
+  and the retained memory route.
+- [Streamed directory input](51-streamed-directory-input.md): fallible headers,
+  point lookups and per-parent cursors through the existing filesystem algorithm.
+- [Workspace edit backing port](52-workspace-edit-backing-port.md): explicit
+  operation/file custody, original terminal refusals and bounded conversion/copy
+  observations over Direct Overlay or the fair Daemon owner.

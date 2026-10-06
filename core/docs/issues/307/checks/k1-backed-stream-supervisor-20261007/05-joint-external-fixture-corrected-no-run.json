@@ -1,0 +1,26 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-content",
+    "-p",
+    "layerfs-workspace",
+    "-p",
+    "layerfs-daemon",
+    "-p",
+    "layerfs-sdk",
+    "--all-targets",
+    "--no-run"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1400255000,
+  "kind": "build",
+  "workers": 1
+}

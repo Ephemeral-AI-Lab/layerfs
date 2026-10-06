@@ -177,7 +177,8 @@ pub enum SupervisorEvent {
 /// Actual composition counts, separate from provider/native/allocator costs.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SupervisorWork {
-    /// Bounded turns; each polls one rotating attachment and invokes at most one job.
+    /// Bounded turns; each polls at most one rotating occupied attachment and
+    /// invokes at most one job. Empty admission slots are skipped within the turn.
     pub turns: u64,
     /// Actual attach successes.
     pub attached: u64,

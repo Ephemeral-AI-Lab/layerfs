@@ -1,0 +1,26 @@
+{
+  "command": [
+    "env",
+    "LAYERFS_R4_LINUX_CONSUMER=/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/k1-backed-stream-binaries/27-consumer",
+    "LAYERFS_R4_PROOF_OUTPUT=/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/29-native-proof",
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-daemon",
+    "--test",
+    "upstream_docker",
+    "--",
+    "--ignored",
+    "--nocapture"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 101,
+  "timed_out": false,
+  "wall_ns": 1105143917,
+  "kind": "functional",
+  "workers": 1
+}

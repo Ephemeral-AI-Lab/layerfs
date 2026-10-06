@@ -1,0 +1,17 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.39s
+  Executable tests/edit_batch.rs (core/target/debug/deps/edit_batch-16513af13f6403e3)
+  Executable tests/edit_bounds.rs (core/target/debug/deps/edit_bounds-171a21beb2eb1d79)
+  Executable tests/edit_lazy_plan.rs (core/target/debug/deps/edit_lazy_plan-9b5e757afdff8e37)
+  Executable tests/edit_localized.rs (core/target/debug/deps/edit_localized-6b3e672532146568)
+  Executable tests/edit_model.rs (core/target/debug/deps/edit_model-be02524d95b5a417)
+  Executable tests/edit_noop.rs (core/target/debug/deps/edit_noop-8d66936deb28d310)
+  Executable tests/edit_reference.rs (core/target/debug/deps/edit_reference-8670d2abe57506d1)
+  Executable tests/edit_single.rs (core/target/debug/deps/edit_single-2e1bf09b8a6a0405)
+  Executable tests/edit_timing.rs (core/target/debug/deps/edit_timing-ba40441586125e5a)
+  Executable tests/edit_transitions.rs (core/target/debug/deps/edit_transitions-56d063218fea32c7)

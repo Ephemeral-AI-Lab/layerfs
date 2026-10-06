@@ -20,16 +20,24 @@ pub mod update;
 pub mod validate;
 
 pub use identity::{InodeIdentity, InodeScope};
-pub use input::{DirectoryUpdate, FilesystemInput, FilesystemResources, InodeUpdate};
+pub use input::{
+    DirectoryUpdate, FilesystemInput, FilesystemResources, InodeUpdate, StreamedFilesystemInput,
+};
 pub use objects::{FilesystemObjects, FilesystemPhases, ObjectWork};
 pub use path::{LogicalPath, PathName};
 pub use read::{DirectoryListing, FilesystemRead, FilesystemReadWork, Resolved, Stat};
 pub use root::{profile_id, scope_for_seed, FilesystemRoot, FilesystemRootId};
 pub use rows::{check_input, DirectoryRowSource, InodeRowSource, PreparedRows, SerialRowSource};
+pub use rows::{
+    check_streamed_input, DirectoryChangeLookup, DirectoryChangeSource, DirectoryHeader,
+    DirectoryHeaderSource, PreparedDirectoryStreams, StreamedRowSource,
+};
 pub use sorted::{DirectoryRoot, SortedWork, MAXIMUM_SCRATCH_BYTES};
 pub use symlink::SymlinkTarget;
 pub use update::{
-    build_filesystem, build_filesystem_timed, update_filesystem, update_filesystem_timed,
-    FilesystemResult, FilesystemUpdateCounters,
+    build_filesystem, build_filesystem_streamed, build_filesystem_streamed_timed,
+    build_filesystem_timed, update_filesystem, update_filesystem_streamed,
+    update_filesystem_streamed_timed, update_filesystem_timed, FilesystemResult,
+    FilesystemUpdateCounters,
 };
 pub use validate::{check, CheckedInput, FilesystemTopology};

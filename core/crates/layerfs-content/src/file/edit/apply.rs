@@ -43,6 +43,43 @@ pub fn apply_edits(
     consumer: &mut dyn FinalizedConsumer,
     scope: TimingScope<'_>,
 ) -> ContentResult<ConstructedFile> {
+    apply_inner(policy, capacities, reader, request, consumer, None, scope)
+}
+
+/// Applies the same canonical edit algorithm with caller-owned indexed mutable
+/// state. The provider owns its explicit operation/file scope and first original
+/// failure custody; construction never opens backing or releases that scope.
+#[allow(clippy::too_many_arguments)]
+pub fn apply_edits_backed(
+    policy: ConstructionPolicy,
+    capacities: &ConstructionCapacities,
+    reader: &dyn AuthenticatedObjects,
+    request: EditRequest<'_>,
+    consumer: &mut dyn FinalizedConsumer,
+    backing: &mut dyn super::backing::IndexedEditBacking,
+    scope: TimingScope<'_>,
+) -> ContentResult<ConstructedFile> {
+    apply_inner(
+        policy,
+        capacities,
+        reader,
+        request,
+        consumer,
+        Some(backing),
+        scope,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_inner(
+    policy: ConstructionPolicy,
+    capacities: &ConstructionCapacities,
+    reader: &dyn AuthenticatedObjects,
+    request: EditRequest<'_>,
+    consumer: &mut dyn FinalizedConsumer,
+    backing: Option<&mut dyn super::backing::IndexedEditBacking>,
+    scope: TimingScope<'_>,
+) -> ContentResult<ConstructedFile> {
     policy.validated()?;
     scope.run(|edit| {
         let view = FileView::open(reader, request.root, edit.child("edit.base"))?;
@@ -134,7 +171,7 @@ pub fn apply_edits(
                 // chunked route is handed that decoded state instead of reading
                 // and decoding the same object a second time.
                 Some(state) => replace_chunked(
-                    capacities, state, reader, &request, consumer, &mut pages, edit,
+                    capacities, state, reader, &request, consumer, &mut pages, backing, edit,
                 ),
                 None => stream_combined(capacities, &view, &request, consumer, edit),
             },
@@ -252,12 +289,13 @@ fn replace_chunked(
     request: &EditRequest<'_>,
     consumer: &mut dyn FinalizedConsumer,
     pages: &mut crate::file::mapping::PageCache,
+    backing: Option<&mut dyn super::backing::IndexedEditBacking>,
     edit: &TimingScope<'_, Active>,
 ) -> ContentResult<ConstructedFile> {
     // One read of the base root per edit, not two: the state the view decoded is
     // the state this route starts from, and the summary is derived from it.
-    let mut summary = crate::file::mapping::NodeSummary {
-        id: state.mapping_root,
+    let mut summary = super::references::Summary {
+        id: super::references::EditRef::Stored(state.mapping_root),
         bytes: state.logical_len,
         extents: state.extent_count,
         level: state.tree_level,
@@ -266,7 +304,11 @@ fn replace_chunked(
     // mapping root lives in `summary` and every other field of the file state is
     // derived once, at emission.
     let mut result_len = state.logical_len;
-    let mut objects = crate::file::edit::tree::EditObjects::new(reader, consumer, pages);
+    let state = match backing {
+        Some(backing) => super::state::State::Backed(backing),
+        None => super::state::State::Memory(super::state::Memory::default()),
+    };
+    let mut objects = crate::file::edit::tree::EditObjects::new(reader, consumer, pages, state);
     for index in 0..request.edits.len() {
         let declared = request.edits.edit_at(index)?;
         let replacement_len = declared.replacement_len();
@@ -286,7 +328,7 @@ fn replace_chunked(
         })?;
         // The replaced range is dropped from the result, so the unfinished node
         // the split built for it is released here and never encoded.
-        crate::file::edit::tree::discard(&mut objects, removed);
+        crate::file::edit::tree::discard(&mut objects, removed)?;
         // The declared replacement length is checked against the source before any
         // work: a source that cannot serve the declared bytes is a caller error, not
         // an I/O failure to be interpreted.
@@ -327,7 +369,11 @@ fn replace_chunked(
                         what: "replacement bytes",
                     });
                 }
-                builder.finish(&mut sink).map(|build| build.root)
+                builder.finish(&mut sink).map(|build| {
+                    build
+                        .root
+                        .map(|root| super::references::Summary::from_canonical(root, true))
+                })
             })?
         };
         let prefix = crate::file::edit::tree::concat_optional(&mut objects, left, middle)?;
@@ -341,7 +387,7 @@ fn replace_chunked(
         // The result of this edit is known: drafts the boundary work
         // disconnected are released here, so the retained frontier is the tree
         // the operation ends up with rather than the edits that produced it.
-        objects.settle(mapping);
+        objects.settle(mapping)?;
     }
     if result_len != request.edits.final_len() {
         return Err(ContentError::LengthMismatch {
@@ -355,7 +401,7 @@ fn replace_chunked(
     Ok(ConstructedFile {
         root,
         logical_len: result_len,
-        counters: objects.counters(),
+        counters: objects.counters,
     })
 }
 
@@ -365,16 +411,16 @@ fn replace_chunked(
 /// stored work the physical delta hint needs.
 fn rightmost_payload(
     objects: &mut crate::file::edit::tree::EditObjects<'_>,
-    summary: crate::file::mapping::NodeSummary,
+    summary: super::references::Summary,
 ) -> ContentResult<Option<ObjectId>> {
     let mut current = summary;
     let mut root = true;
     loop {
         match objects.load_node(current, root)? {
-            crate::file::mapping::ExtentNode::Leaf { extents, .. } => {
+            super::references::Node::Leaf { extents, .. } => {
                 return Ok(extents.last().map(|extent| extent.payload_object_id()))
             }
-            crate::file::mapping::ExtentNode::Branch {
+            super::references::Node::Branch {
                 level, children, ..
             } => {
                 if children.is_empty() {

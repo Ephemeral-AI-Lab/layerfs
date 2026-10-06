@@ -1,6 +1,7 @@
 //! Declared totals: the row counts a source promises are the counts it produced.
 
-use super::PreparedRows;
+use super::view::{OperationInput, ResidentInput, StreamedInput};
+use super::{PreparedDirectoryStreams, PreparedRows};
 use crate::error::{ContentError, ContentResult};
 /// Checks the shape of every supplied row before any object is touched.
 ///
@@ -10,6 +11,15 @@ use crate::error::{ContentError, ContentResult};
 /// must equal the declared totals. A source whose cursor ends early is refused
 /// here rather than silently applying fewer rows than it declared.
 pub fn check_input(rows: &dyn PreparedRows) -> ContentResult<()> {
+    check_operation_input(&ResidentInput::new(rows))
+}
+
+/// Checks stable streamed headers, exact per-parent counts/order and points.
+pub fn check_streamed_input(rows: &dyn PreparedDirectoryStreams) -> ContentResult<()> {
+    check_operation_input(&StreamedInput::new(rows))
+}
+
+pub(crate) fn check_operation_input(rows: &dyn OperationInput) -> ContentResult<()> {
     let resources = rows.resources();
     resources.check()?;
     let root_serial = rows.root_serial();
@@ -20,18 +30,15 @@ pub fn check_input(rows: &dyn PreparedRows) -> ContentResult<()> {
     let mut seen = 0_usize;
     let mut cursor = rows.directories()?;
     while let Some(update) = cursor.next_row()? {
-        update.check()?;
-        if update
-            .changes
-            .iter()
-            .any(|(_, binding)| binding.is_some_and(|serial| !super::serial_in_range(serial)))
-        {
-            return Err(ContentError::InvalidRecord("inode serial"));
+        update.check_header()?;
+        for change in update.changes()? {
+            let (name, binding) = change?;
+            update.check_point(&name, binding)?;
         }
-        if seen > 0 && previous >= update.parent {
+        if seen > 0 && previous >= update.header.parent {
             return Err(ContentError::NonCanonicalOrdering);
         }
-        previous = update.parent;
+        previous = update.header.parent;
         seen += 1;
     }
     if seen != rows.directory_rows() {

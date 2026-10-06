@@ -1,0 +1,12 @@
+{
+  "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-linux/debug/examples/upstream_consumer",
+  "retained": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/k1-backed-stream-binaries/27-consumer",
+  "sha256": "9db613f6f8f37bef4c6cfab9360a934a51d2e99fd01b03388d94bfc55dc76416",
+  "bytes": 71812088,
+  "parent": "889836c446507c726a53f0ccf1e4418bd4d0946f",
+  "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "workers": 1,
+  "profile": "dev",
+  "compiler_graph": "27-linux-consumer-build.json",
+  "eligibility": "FUNCTIONAL_ONLY"
+}

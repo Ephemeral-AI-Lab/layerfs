@@ -1,0 +1,10 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 6.57s
+     Running tests/edit_backed.rs (core/target/debug/deps/edit_backed-54e9dde5e2f41af8)
+     Running tests/edit_cache.rs (core/target/debug/deps/edit_cache-f4ac7d869651eece)
+     Running tests/filesystem_streamed.rs (core/target/debug/deps/filesystem_streamed-26327536ba8072bf)

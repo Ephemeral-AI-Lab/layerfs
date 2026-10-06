@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 mod base;
+mod construction;
 mod mutation;
 mod operations;
 mod workspace;
@@ -32,12 +33,16 @@ pub(crate) use operations::file::write;
 pub use base::{BaseRead, BaseStat, BaseView};
 pub use cache::CanonicalCache;
 pub use client::{CanonicalClient, ClientWork};
+pub use construction::{EditBackingCustody, EditBackingWork, EditInputRefusal, IndexedEditRecords};
 pub use facts::{BaseFacts, Need};
 pub use install::PreparedBase;
 pub use job::{JobOutcome, NamespaceJob};
 pub use list::ViewListing;
 pub use operation::{Operation, Outcome, Position, Refusal, Time, WriteData};
 pub use port::{FileLengths, OverlayFileRead, OverlayJobs, OverlayRead};
+pub use port::{
+    OverlayScratch, ScratchApply, ScratchCopies, ScratchInputRefusal, ScratchRefusal, ScratchReply,
+};
 pub use serials::{InodeSerials, SERIAL_REFILL};
 pub use view::{SourceView, ViewStat};
 pub use workspace::{Workspace, WorkspaceError, WorkspaceResult};

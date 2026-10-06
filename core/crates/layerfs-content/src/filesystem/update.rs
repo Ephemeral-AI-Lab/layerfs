@@ -22,7 +22,8 @@ use crate::filesystem::references::backing::OrderingBacking;
 use crate::filesystem::references::reduce::{PendingState, ReferenceReducer, ReferenceWork};
 use crate::filesystem::references::release::{release_zero_count, ReleaseWork};
 use crate::filesystem::root::{profile_id, FilesystemRoot, FilesystemRootId};
-use crate::filesystem::rows::PreparedRows;
+use crate::filesystem::rows::view::{OperationInput, ResidentInput, StreamedInput};
+use crate::filesystem::rows::{PreparedDirectoryStreams, PreparedRows};
 use crate::filesystem::sorted::finish::DirectoryRoot;
 use crate::filesystem::sorted::SortedWork;
 use crate::filesystem::validate::{self, ValidationWork};
@@ -74,7 +75,12 @@ pub fn build_filesystem(
     if input.base().is_some() {
         return Err(ContentError::InvalidRecord("initial build base"));
     }
-    run(objects, input, backing, &FilesystemPhases::disabled())
+    run(
+        objects,
+        &ResidentInput::new(input),
+        backing,
+        &FilesystemPhases::disabled(),
+    )
 }
 
 /// Builds a new filesystem while recording the caller's coarse phase scopes.
@@ -87,7 +93,7 @@ pub fn build_filesystem_timed(
     if input.base().is_some() {
         return Err(ContentError::InvalidRecord("initial build base"));
     }
-    run(objects, input, backing, phases)
+    run(objects, &ResidentInput::new(input), backing, phases)
 }
 
 /// Applies one complete update to a checked immutable base root.
@@ -99,7 +105,12 @@ pub fn update_filesystem(
     if input.base().is_none() {
         return Err(ContentError::InvalidRecord("update base root"));
     }
-    run(objects, input, backing, &FilesystemPhases::disabled())
+    run(
+        objects,
+        &ResidentInput::new(input),
+        backing,
+        &FilesystemPhases::disabled(),
+    )
 }
 
 /// Applies one complete update while recording the caller's coarse phase scopes.
@@ -112,16 +123,59 @@ pub fn update_filesystem_timed(
     if input.base().is_none() {
         return Err(ContentError::InvalidRecord("update base root"));
     }
-    run(objects, input, backing, phases)
+    run(objects, &ResidentInput::new(input), backing, phases)
+}
+
+/// Builds from stable streamed directory headers/changes without resident rows.
+pub fn build_filesystem_streamed(
+    objects: &mut FilesystemObjects<'_>,
+    input: &impl PreparedDirectoryStreams,
+    backing: Option<&mut dyn OrderingBacking>,
+) -> ContentResult<FilesystemResult> {
+    build_filesystem_streamed_timed(objects, input, backing, &FilesystemPhases::disabled())
+}
+
+/// Streamed initial construction with the same coarse phase scopes.
+pub fn build_filesystem_streamed_timed(
+    objects: &mut FilesystemObjects<'_>,
+    input: &impl PreparedDirectoryStreams,
+    backing: Option<&mut dyn OrderingBacking>,
+    phases: &FilesystemPhases<'_>,
+) -> ContentResult<FilesystemResult> {
+    if input.base().is_some() {
+        return Err(ContentError::InvalidRecord("initial build base"));
+    }
+    run(objects, &StreamedInput::new(input), backing, phases)
+}
+
+/// Applies stable streamed changes through the existing canonical driver.
+pub fn update_filesystem_streamed(
+    objects: &mut FilesystemObjects<'_>,
+    input: &impl PreparedDirectoryStreams,
+    backing: Option<&mut dyn OrderingBacking>,
+) -> ContentResult<FilesystemResult> {
+    update_filesystem_streamed_timed(objects, input, backing, &FilesystemPhases::disabled())
+}
+
+/// Streamed update with the same coarse phase scopes; no alternate validator.
+pub fn update_filesystem_streamed_timed(
+    objects: &mut FilesystemObjects<'_>,
+    input: &impl PreparedDirectoryStreams,
+    backing: Option<&mut dyn OrderingBacking>,
+    phases: &FilesystemPhases<'_>,
+) -> ContentResult<FilesystemResult> {
+    if input.base().is_none() {
+        return Err(ContentError::InvalidRecord("update base root"));
+    }
+    run(objects, &StreamedInput::new(input), backing, phases)
 }
 
 fn run<'b>(
     objects: &mut FilesystemObjects<'_>,
-    input: &impl PreparedRows,
+    input: &dyn OperationInput,
     backing: Option<&'b mut dyn OrderingBacking>,
     phases: &FilesystemPhases<'_>,
 ) -> ContentResult<FilesystemResult> {
-    let input: &dyn PreparedRows = input;
     let mut backing = backing;
     // The flag is set by the body the moment the checked completion runs, so the
     // failure path below never releases the same backing twice and never depends
@@ -150,7 +204,7 @@ fn run<'b>(
 
 fn run_body<'b>(
     objects: &mut FilesystemObjects<'_>,
-    input: &dyn PreparedRows,
+    input: &dyn OperationInput,
     backing: Option<&mut (dyn OrderingBacking + 'b)>,
     phases: &FilesystemPhases<'_>,
     cleanup_attempted: &mut bool,
@@ -161,7 +215,7 @@ fn run_body<'b>(
     let unreachable = unreachable_parents(input)?;
     let mut validation = ValidationWork::default();
     let checked = phases.phase("validate", || {
-        validate::check(objects.reader(), input, &unreachable, &mut validation)
+        validate::check_operation(objects.reader(), input, &unreachable, &mut validation)
     })?;
     let reader = objects.reader();
     let mut counters = FilesystemUpdateCounters {
@@ -219,20 +273,21 @@ fn run_body<'b>(
             let mut parents = Vec::with_capacity(updates.len());
             for update in &updates {
                 if checked.topology.table.is_some()
-                    && !unreachable.contains_key(&update.parent)
-                    && !input.is_new(update.parent)?
+                    && !unreachable.contains_key(&update.header.parent)
+                    && !input.is_new(update.header.parent)?
                 {
-                    parents.push(update.parent);
+                    parents.push(update.header.parent);
                 }
             }
             let bases = lookup_many(reader, table, &parents, &mut InodeReadWork::default())?;
             for update in &updates {
-                if unreachable.contains_key(&update.parent) {
+                if unreachable.contains_key(&update.header.parent) {
                     // Nothing binds this directory in the result, so no page of it
                     // is worth building. Its bindings are still this operation's
                     // edges and stay accounted: every final binding of a directory
                     // this operation allocates is an addition.
-                    for (_, binding) in &update.changes {
+                    for change in update.changes()? {
+                        let (_, binding) = change?;
                         let Some(child) = binding else {
                             continue;
                         };
@@ -240,27 +295,27 @@ fn run_body<'b>(
                             &mut reducer,
                             initial_counts.as_deref_mut(),
                             input,
-                            *child,
+                            child,
                         )?;
                         counters.bindings_added = counters.bindings_added.saturating_add(1);
                     }
                     continue;
                 }
                 let base = parents
-                    .binary_search(&update.parent)
+                    .binary_search(&update.header.parent)
                     .ok()
                     .and_then(|index| bases[index]);
-                let content_root = if update.changes.is_empty() {
+                let content_root = if update.header.change_rows == 0 {
                     // An unchanged directory retains its root; a new directory
                     // needs one actual empty page.
-                    if input.is_new(update.parent)? || checked.topology.table.is_none() {
+                    if input.is_new(update.header.parent)? || checked.topology.table.is_none() {
                         crate::filesystem::directory::update::empty_directory(objects)?.0
                     } else {
                         base.ok_or(ContentError::InvalidRecord("directory parent record"))?
                             .content_root
                     }
                 } else {
-                    let base_directory = if input.is_new(update.parent)? {
+                    let base_directory = if input.is_new(update.header.parent)? {
                         None
                     } else if checked.topology.table.is_some() {
                         let record =
@@ -298,10 +353,7 @@ fn run_body<'b>(
                     let (root, work) = apply_bindings(
                         objects,
                         base_directory,
-                        update
-                            .changes
-                            .iter()
-                            .map(|(name, binding)| Ok((name.clone(), *binding))),
+                        update.changes()?,
                         resources.scratch_bytes,
                         &mut observe,
                     )?;
@@ -332,7 +384,7 @@ fn run_body<'b>(
                     counters.directory_updates = counters.directory_updates.saturating_add(1);
                     root.0
                 };
-                contents.insert(update.parent, content_root);
+                contents.insert(update.header.parent, content_root);
             }
             if !parents.is_empty() {
                 retained_parents = parents;
@@ -532,7 +584,7 @@ fn run_body<'b>(
 /// building: its bindings are accounted by the walk that dropped it. Only a
 /// declared-new parent can be in that state - an existing directory that is not
 /// rebound keeps the record it already has.
-fn unreachable_parents(input: &dyn PreparedRows) -> ContentResult<BTreeMap<u64, ()>> {
+fn unreachable_parents(input: &dyn OperationInput) -> ContentResult<BTreeMap<u64, ()>> {
     let limit = usize::try_from(input.resources().ordering_bytes / 1024).unwrap_or(usize::MAX);
     let root = input.root_serial();
     // The retained membership is the targeted set itself: one entry per
@@ -543,7 +595,7 @@ fn unreachable_parents(input: &dyn PreparedRows) -> ContentResult<BTreeMap<u64, 
     let mut parents: BTreeMap<u64, bool> = BTreeMap::new();
     let mut rows = input.directories()?;
     while let Some(update) = rows.next_row()? {
-        let parent = update.parent;
+        let parent = update.header.parent;
         if parent == root || parents.contains_key(&parent) {
             continue;
         }
@@ -566,9 +618,10 @@ fn unreachable_parents(input: &dyn PreparedRows) -> ContentResult<BTreeMap<u64, 
     // directory this operation allocates has none to keep.
     let mut rows = input.directories()?;
     while let Some(update) = rows.next_row()? {
-        for (_, binding) in &update.changes {
+        for change in update.changes()? {
+            let (_, binding) = change?;
             if let Some(child) = binding {
-                if let Some(bound) = parents.get_mut(child) {
+                if let Some(bound) = parents.get_mut(&child) {
                     *bound = true;
                 }
             }
@@ -584,7 +637,7 @@ fn unreachable_parents(input: &dyn PreparedRows) -> ContentResult<BTreeMap<u64, 
 
 fn register_values(
     reducer: &mut ReferenceReducer<'_, '_>,
-    input: &dyn PreparedRows,
+    input: &dyn OperationInput,
     unreachable: &BTreeMap<u64, ()>,
 ) -> ContentResult<()> {
     let mut serials = input.new_inodes()?;
@@ -610,7 +663,7 @@ fn register_values(
 fn note_retained_binding(
     reducer: &mut ReferenceReducer<'_, '_>,
     initial_counts: Option<&mut [u64]>,
-    input: &dyn PreparedRows,
+    input: &dyn OperationInput,
     serial: u64,
 ) -> ContentResult<()> {
     if let Some(counts) = initial_counts {

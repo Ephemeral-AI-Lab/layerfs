@@ -15,12 +15,14 @@ use crate::filesystem::directory::read::{list_after, DirectoryReadWork};
 use crate::filesystem::identity::InodeScope;
 use crate::filesystem::inode::read::{lookup_many, InodeReadWork, InodeTable};
 use crate::filesystem::root::{FilesystemRoot, FilesystemRootId};
-use crate::filesystem::rows::{check_input, PreparedRows};
+use crate::filesystem::rows::view::{DirectoryRow, OperationInput, ResidentInput};
+use crate::filesystem::rows::{check_operation_input, DirectoryChangeLookup, PreparedRows};
 use crate::filesystem::sorted::finish::DirectoryRoot;
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::{AuthenticatedObjects, ObjectId};
 
 mod cycles;
+mod entries;
 
 /// Work one operation's validation performed.
 ///
@@ -99,13 +101,13 @@ fn charge_site(
 /// memo and the entries an effective-tree walk examines — keeps the
 /// conservative per-entry rate, because those hold real decoded records and
 /// examined work.
-fn walk_limit(input: &dyn PreparedRows) -> usize {
+fn walk_limit(input: &dyn OperationInput) -> usize {
     usize::try_from(input.resources().ordering_bytes / 1024).unwrap_or(usize::MAX)
 }
 
 /// The declared-total allowance: one ordering slot per serial, the same figure
 /// as `FilesystemResources::maximum_touched_serials`.
-fn declared_limit(input: &dyn PreparedRows) -> usize {
+fn declared_limit(input: &dyn OperationInput) -> usize {
     input.resources().maximum_touched_serials()
 }
 /// Serial demands one allocator-precondition wave may make.
@@ -179,7 +181,28 @@ pub fn check<'a>(
     unreachable: &BTreeMap<u64, ()>,
     work: &mut ValidationWork,
 ) -> ContentResult<CheckedInput<'a>> {
-    check_input(input)?;
+    let view = ResidentInput::new(input);
+    let checked = check_operation(reader, &view, unreachable, work)?;
+    Ok(CheckedInput {
+        input,
+        topology: checked.topology,
+        additions: checked.additions,
+    })
+}
+
+pub(crate) struct CheckedOperationInput<'a> {
+    pub input: &'a dyn OperationInput,
+    pub topology: FilesystemTopology,
+    pub additions: BTreeMap<u64, u64>,
+}
+
+pub(crate) fn check_operation<'a>(
+    reader: &dyn AuthenticatedObjects,
+    input: &'a dyn OperationInput,
+    unreachable: &BTreeMap<u64, ()>,
+    work: &mut ValidationWork,
+) -> ContentResult<CheckedOperationInput<'a>> {
+    check_operation_input(input)?;
     let declared = declared_limit(input);
     let rows = input
         .directory_rows()
@@ -213,20 +236,22 @@ pub fn check<'a>(
         let mut rows = input.directories()?;
         let mut names = 0usize;
         while let Some(update) = rows.next_row()? {
-            names = names.saturating_add(update.changes.len());
+            names = names
+                .saturating_add(usize::try_from(update.header.change_rows).unwrap_or(usize::MAX));
             if names > declared {
                 return Err(ContentError::ObjectLimitExceeded {
                     limit: declared,
                     actual: names,
                 });
             }
-            if update.parent != input.root_serial() && !input.is_new(update.parent)? {
-                demanded.push(update.parent);
+            if update.header.parent != input.root_serial() && !input.is_new(update.header.parent)? {
+                demanded.push(update.header.parent);
             }
-            for (_, binding) in &update.changes {
+            for change in update.changes()? {
+                let (_, binding) = change?;
                 if let Some(child) = binding {
-                    if *child != input.root_serial() {
-                        demanded.push(*child);
+                    if child != input.root_serial() {
+                        demanded.push(child);
                     }
                 }
             }
@@ -246,56 +271,58 @@ pub fn check<'a>(
     let mut rows = input.directories()?;
     let mut names = 0usize;
     while let Some(update) = rows.next_row()? {
-        names = names.saturating_add(update.changes.len());
+        names =
+            names.saturating_add(usize::try_from(update.header.change_rows).unwrap_or(usize::MAX));
         if names > declared {
             return Err(ContentError::ObjectLimitExceeded {
                 limit: declared,
                 actual: names,
             });
         }
-        if update.parent == input.root_serial() && input.base().is_none() {
+        if update.header.parent == input.root_serial() && input.base().is_none() {
             // The root directory of a new filesystem is built by this operation.
-        } else if update.parent == input.root_serial() {
+        } else if update.header.parent == input.root_serial() {
             // A root directory update is legal; the root's own count stays zero.
-        } else if input.is_new(update.parent)? {
+        } else if input.is_new(update.header.parent)? {
             // A directory this operation allocates starts empty; its value must
             // still declare the directory kind it will have.
             let value = input
-                .value_for(update.parent)?
+                .value_for(update.header.parent)?
                 .ok_or(ContentError::InvalidRecord("directory parent value"))?;
             if value.kind != InodeKind::Directory {
                 return Err(ContentError::InvalidRecord("directory parent kind"));
             }
         } else if let Some(table) = topology.table {
-            let record = state.lookup_one(reader, table, update.parent, work)?;
+            let record = state.lookup_one(reader, table, update.header.parent, work)?;
             if record.kind != InodeKind::Directory {
                 return Err(ContentError::InvalidRecord("directory parent kind"));
             }
         } else {
             let value = input
-                .value_for(update.parent)?
+                .value_for(update.header.parent)?
                 .ok_or(ContentError::InvalidRecord("directory parent value"))?;
             if value.kind != InodeKind::Directory {
                 return Err(ContentError::InvalidRecord("directory parent kind"));
             }
         }
-        for (name, binding) in &update.changes {
+        for change in update.changes()? {
+            let (name, binding) = change?;
             let _ = name;
             let Some(child) = binding else {
                 continue;
             };
-            if *child == input.root_serial() {
+            if child == input.root_serial() {
                 return Err(ContentError::InvalidRecord("root directory binding"));
             }
             // The kind comes from the stored record for an existing inode and
             // from the caller's typed value for one this operation allocates.
             let stored = match topology.table {
-                Some(table) => state.lookup_optional(reader, table, *child, work)?,
+                Some(table) => state.lookup_optional(reader, table, child, work)?,
                 None => None,
             };
             let previous = match stored {
                 Some(record) => Some(record),
-                None => input.value_for(*child)?,
+                None => input.value_for(child)?,
             };
             let previous = previous.ok_or(ContentError::InvalidRecord("binding kind"))?;
             // Only a regular file may carry several bindings, so a file that
@@ -307,7 +334,7 @@ pub fn check<'a>(
             // A same-batch duplicate is refused here, before any base record is
             // consulted: a directory or a symlink has one binding outside the
             // root and the batch already names it twice.
-            let added = additions.entry(*child).or_insert(0);
+            let added = additions.entry(child).or_insert(0);
             *added = added.checked_add(1).ok_or(ContentError::LengthOverflow)?;
             if *added > 1 {
                 return Err(ContentError::InvalidRecord("multiple parents"));
@@ -319,7 +346,7 @@ pub fn check<'a>(
             // stored record.
             if stored.is_some() {
                 by_parent
-                    .entry(update.parent)
+                    .entry(update.header.parent)
                     .or_default()
                     .push(name.as_bytes().to_vec());
             }
@@ -328,7 +355,7 @@ pub fn check<'a>(
     drop(rows);
     charge_site(work, bindings_before, |sites| &mut sites.bindings);
     let aliases_before = work.inode_pages_read;
-    check_parent_aliases(
+    let aliases = check_parent_aliases(
         reader,
         input,
         &topology,
@@ -336,13 +363,16 @@ pub fn check<'a>(
         unreachable,
         work,
         &mut state,
-    )?;
+    );
+    input.clear_binding_points();
+    aliases?;
     charge_site(work, aliases_before, |sites| &mut sites.aliases);
     let mut rows = input.directories()?;
     while let Some(update) = rows.next_row()? {
-        for (_, binding) in &update.changes {
+        for change in update.changes()? {
+            let (_, binding) = change?;
             if let Some(child) = binding {
-                let _ = additions.entry(*child).or_insert(0);
+                let _ = additions.entry(child).or_insert(0);
             }
         }
     }
@@ -358,7 +388,7 @@ pub fn check<'a>(
             }
         }
     }
-    let checked = CheckedInput {
+    let checked = CheckedOperationInput {
         input,
         topology,
         additions,
@@ -370,7 +400,7 @@ pub fn check<'a>(
 /// Refuses a stored non-file inode that keeps its base binding and gains another.
 fn check_parent_aliases(
     reader: &dyn AuthenticatedObjects,
-    input: &dyn PreparedRows,
+    input: &dyn OperationInput,
     topology: &FilesystemTopology,
     by_parent: &BTreeMap<u64, Vec<Vec<u8>>>,
     unreachable: &BTreeMap<u64, ()>,
@@ -395,10 +425,11 @@ fn check_parent_aliases(
     for (parent, names) in &by_parent {
         let update = input.directory_for(*parent)?;
         for name in names {
-            if let Some(child) = update
-                .as_ref()
-                .and_then(|row| binding_in(&row.changes, name))
-            {
+            let child = match &update {
+                Some(row) => binding_in(row, name)?,
+                None => None,
+            };
+            if let Some(child) = child {
                 candidates.insert(child, ());
             }
         }
@@ -406,14 +437,7 @@ fn check_parent_aliases(
     let Some(root) = topology.base else {
         return Ok(());
     };
-    let mut changes: BTreeMap<u64, BTreeMap<Vec<u8>, Option<u64>>> = BTreeMap::new();
-    let mut rows = input.directories()?;
-    while let Some(update) = rows.next_row()? {
-        let parent = changes.entry(update.parent).or_default();
-        for (name, binding) in update.changes {
-            parent.insert(name.as_bytes().to_vec(), binding);
-        }
-    }
+    input.prepare_binding_points()?;
     // The one binding a non-file child has may sit in a directory this batch
     // never names, so the walk covers the base tree once, bounded by the same
     // entry ceiling as every other whole-tree check.
@@ -486,10 +510,11 @@ fn check_parent_aliases(
         // base. Repeating the whole changed row for every restated base name
         // used to turn an N-name permutation into N² charged visits.
         for name in by_parent.get(&parent).into_iter().flatten() {
-            let Some(child) = update
-                .as_ref()
-                .and_then(|row| binding_in(&row.changes, name))
-            else {
+            let child = match &update {
+                Some(row) => binding_in(row, name)?,
+                None => None,
+            };
+            let Some(child) = child else {
                 continue;
             };
             visited = visited.saturating_add(1);
@@ -508,10 +533,11 @@ fn check_parent_aliases(
     for (parent, names) in &by_parent {
         let update = input.directory_for(*parent)?;
         for name in names {
-            let Some(child) = update
-                .as_ref()
-                .and_then(|row| binding_in(&row.changes, name))
-            else {
+            let child = match &update {
+                Some(row) => binding_in(row, name)?,
+                None => None,
+            };
+            let Some(child) = child else {
                 continue;
             };
             let Some(base) = bound.get(&child) else {
@@ -524,7 +550,7 @@ fn check_parent_aliases(
                     legal = true;
                     break;
                 }
-                if !base_binding_survives(&changes, *base_parent, base_name, child) {
+                if !base_binding_survives(input, *base_parent, base_name, child)? {
                     legal = true;
                     break;
                 }
@@ -537,28 +563,32 @@ fn check_parent_aliases(
     Ok(())
 }
 
-/// The child one name in an already-loaded, sorted update binds.
-fn binding_in(
-    changes: &[(crate::filesystem::path::PathName, Option<u64>)],
-    name: &[u8],
-) -> Option<u64> {
-    changes
-        .binary_search_by(|(changed, _)| changed.as_bytes().cmp(name))
-        .ok()
-        .and_then(|index| changes[index].1)
+/// One exact changed-name point from the selected operation input.
+fn binding_in(row: &DirectoryRow<'_>, name: &[u8]) -> ContentResult<Option<u64>> {
+    Ok(
+        match row.binding_for(&crate::filesystem::PathName::from_bytes(name)?)? {
+            DirectoryChangeLookup::Bound(serial) => Some(serial),
+            DirectoryChangeLookup::Removed | DirectoryChangeLookup::Unchanged => None,
+        },
+    )
 }
 
-/// True when the base still binds `child` under `base_name` in `base_parent`.
 fn base_binding_survives(
-    changes: &BTreeMap<u64, BTreeMap<Vec<u8>, Option<u64>>>,
+    input: &dyn OperationInput,
     base_parent: u64,
     base_name: &[u8],
     child: u64,
-) -> bool {
-    changes
-        .get(&base_parent)
-        .and_then(|names| names.get(base_name))
-        .is_none_or(|binding| *binding == Some(child))
+) -> ContentResult<bool> {
+    Ok(
+        match input.binding_change(
+            base_parent,
+            &crate::filesystem::PathName::from_bytes(base_name)?,
+        )? {
+            DirectoryChangeLookup::Unchanged => true,
+            DirectoryChangeLookup::Removed => false,
+            DirectoryChangeLookup::Bound(serial) => serial == child,
+        },
+    )
 }
 
 /// Memoizes authenticated base records and absence within a resource-sized
@@ -699,7 +729,7 @@ fn charge_directory(work: &mut ValidationWork, directory: DirectoryReadWork) {
 
 fn check_new_identities(
     reader: &dyn AuthenticatedObjects,
-    input: &dyn PreparedRows,
+    input: &dyn OperationInput,
     topology: FilesystemTopology,
     work: &mut ValidationWork,
 ) -> ContentResult<()> {
@@ -733,7 +763,7 @@ fn check_new_identities(
     Ok(())
 }
 
-fn check_root_invariants(input: &dyn PreparedRows) -> ContentResult<()> {
+fn check_root_invariants(input: &dyn OperationInput) -> ContentResult<()> {
     let root_serial = input.root_serial();
     if input.base().is_none() {
         let value = input
@@ -745,8 +775,9 @@ fn check_root_invariants(input: &dyn PreparedRows) -> ContentResult<()> {
     }
     let mut rows = input.directories()?;
     while let Some(update) = rows.next_row()? {
-        for (_, binding) in &update.changes {
-            if *binding == Some(root_serial) {
+        for change in update.changes()? {
+            let (_, binding) = change?;
+            if binding == Some(root_serial) {
                 return Err(ContentError::InvalidRecord("root directory binding"));
             }
         }

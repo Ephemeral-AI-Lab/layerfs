@@ -1,9 +1,13 @@
 # Indexed scratch, lazy file-edit Plan and E01 receipts
 
-> Status: local implementation checkpoint; S7/S9/S10 remain incomplete and
+> Status: committed locally as `889836c446507c726a53f0ccf1e4418bd4d0946f`;
+> S7/S9/S10 remain incomplete and
 > unchecked. First parent `d6d9ad5a3f3dcbc52559ef5ac37f8839d275161f`.
 > Product source tree `f0b2facf66b3cb76489b91bbfaefdd1c7e55a08e`; final commit
-> is verified against the staged tree after the evidence files are added.
+> tree `18de8ef21f34523e918955a38a9ce675a410291a` matches the staged tree.
+> [Committed source/count confirmation](checks/k1-lazy-indexed-20261007/47-committed-verification.json)
+> and [separate tracker receipts](checks/k1-lazy-indexed-20261007/48-tracker-receipts.json)
+> are retained by the next checkpoint; original proof/source pins remain.
 
 This checkpoint implements the neutral local record provider needed by the
 [K0/K1 proposal](K0-K1-BACKED-EDIT-DESIGN-20261007.md), the lazy small-result edit

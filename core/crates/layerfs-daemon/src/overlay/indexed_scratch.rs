@@ -24,6 +24,10 @@ pub enum IndexedScratchJob {
         kind: u32,
         excluded_root: [u8; 32],
     },
+    FirstKeysAll {
+        scope: IndexedScope,
+        kind: u32,
+    },
 }
 
 /// Original deciding outcomes stay inside the existing credited Completion.
@@ -52,7 +56,7 @@ impl IndexedScratchJob {
                 }
                 (input, SCRATCH_BYTES)
             }
-            Self::FirstKeys { .. } => (0, PAGE_ROWS * 32),
+            Self::FirstKeys { .. } | Self::FirstKeysAll { .. } => (0, PAGE_ROWS * 32),
         };
         std::mem::size_of::<Self>()
             .checked_add(std::mem::size_of::<IndexedScratchReply>())?
@@ -65,7 +69,8 @@ impl IndexedScratchJob {
             Self::Contains { scope, .. }
             | Self::Get { scope, .. }
             | Self::Apply { scope, .. }
-            | Self::FirstKeys { scope, .. } => *scope,
+            | Self::FirstKeys { scope, .. }
+            | Self::FirstKeysAll { scope, .. } => *scope,
         };
         if scope.owner.route() != route {
             return Err(OverlayError::Stale);
@@ -86,6 +91,9 @@ impl IndexedScratchJob {
                 ..
             } => db
                 .indexed_scratch_first_keys(scope, kind, excluded_root)
+                .map(IndexedScratchReply::Keys),
+            Self::FirstKeysAll { kind, .. } => db
+                .indexed_scratch_keys(scope, kind, None)
                 .map(IndexedScratchReply::Keys),
         }
     }

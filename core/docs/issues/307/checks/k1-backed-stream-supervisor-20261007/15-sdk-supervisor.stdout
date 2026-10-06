@@ -1,0 +1,18 @@
+
+running 6 tests
+test pre_body_denial_delivers_original_refusal_then_returns_joined_custody_without_dispatch ... ok
+test fence_before_service_admission_returns_original_decoded_unattempted_input ... ok
+test idle_peer_does_not_hold_unrelated_service_and_held_delivery_keeps_both_credits ... ok
+test peer_blocked_after_grant_cannot_hold_unrelated_policy_and_partial_input_returns_at_fence ... ok
+test slow_output_does_not_hold_provider_service_and_fence_returns_dispatched_result ... ok
+test real_supervisor_delivers_binding_same_save_objects_history_and_consumer_ports ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+
+running 2 tests
+test sparse_slot_gets_each_turn_and_fence_reuse_preserves_original_custody ... ok
+test occupied_slots_rotate_across_hole_and_keep_one_phase_per_turn ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+

@@ -1,0 +1,245 @@
+
+running 12 tests
+test generic_domains_are_accepted_without_platform_dispatch ... ok
+test a_reader_boundary_is_not_a_store_and_writes_are_rejected_once ... ok
+test a_missing_or_foreign_attribute_tree_fails_explicitly ... ok
+test attribute_pages_reject_malformed_rows_and_reserved_fields ... ok
+test portable_fields_round_trip_and_are_checked ... ok
+test exact_sizing_partitions_match_the_encoder_and_the_tail_rebalances ... ok
+test values_are_extent_only_at_every_size ... ok
+test the_patch_route_and_a_from_scratch_build_agree_on_the_same_final_set ... ok
+test opaque_values_survive_patches_without_being_decoded ... ok
+test reference_attribute_trees_are_reproduced_exactly ... ok
+test every_attribute_descent_rejects_same_or_skipped_child_levels ... ok
+test an_inode_attribute_tree_is_read_through_a_path ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 17 tests
+test one_grouped_demand_is_one_charged_wave ... ok
+test one_batched_demand_is_exactly_one_read_wave ... ok
+test an_empty_tree_and_a_deep_tree_both_stay_inside_their_declared_ceilings ... ok
+test a_backing_too_small_for_the_declared_ceiling_is_refused_up_front ... ok
+test validation_reads_are_charged_to_the_operation ... ok
+release: released 128 pages 65 base_records 129
+test the_release_frontier_reads_one_wave_per_batch_not_one_record_per_demand ... ok
+test released_subtrees_are_traversed_in_bounded_pages_and_aliases_survive ... ok
+test merge_inputs_and_output_are_covered_by_the_declared_ceiling ... ok
+test a_grouped_demand_is_one_wave_and_every_page_it_decoded ... ok
+test a_wide_branch_page_reads_its_children_in_one_wave ... ok
+test a_small_change_reads_its_own_path_and_never_an_unrelated_subtree ... ok
+test binding_lookups_are_batched_per_phase ... ok
+test every_reported_owner_is_nonzero_where_work_happened_and_zero_where_it_did_not ... ok
+test narrowing_keeps_a_small_scratch_working ... ok
+test a_build_has_no_independent_cycle_walk_limit ... ok
+test a_directory_larger_than_the_former_walk_ceiling_can_be_rebound ... ok
+test a_branch_materialization_reads_children_in_one_wave ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+
+
+running 9 tests
+test attribute_pages_match_the_reference_bytes ... ok
+test roles_and_identity_are_not_interchangeable ... ok
+test every_tree_role_checks_its_role_byte_and_its_flags ... ok
+test malformed_and_reserved_input_is_rejected_once ... ok
+test roots_and_symlinks_match_the_reference_bytes ... ok
+test directory_pages_match_the_reference_bytes ... ok
+test inode_pages_match_the_reference_bytes ... ok
+test both_inode_leaf_routes_are_one_grammar ... ok
+test a_directory_leaf_never_exceeds_the_page_ceiling ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 8 tests
+test a_binding_serial_outside_the_stored_range_is_refused ... ok
+test the_attribute_value_bound_is_the_chunk_maximum_at_its_boundary ... ok
+test a_malformed_or_unauthenticated_demanded_page_is_rejected_without_a_root ... ok
+test invalid_input_is_refused_before_anything_is_emitted ... ok
+test a_read_failure_at_each_boundary_publishes_no_root_and_keeps_the_old_one ... ok
+test cancellation_leaves_no_owned_ordering_resources_and_repeatable_state ... ok
+test a_refusing_consumer_ends_the_operation_once_without_a_root ... ok
+test a_branch_that_misstates_its_summary_is_refused_by_the_tree_engine ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 6 tests
+test a_declared_new_inode_cannot_lose_a_binding ... ok
+test a_regular_file_keeps_at_least_one_binding ... ok
+test a_child_moved_out_of_a_removed_subtree_survives ... ok
+test a_move_across_directories_keeps_the_count_and_the_inode ... ok
+test two_aliases_reach_one_derived_count ... ok
+test removing_one_alias_leaves_the_other_and_removing_the_last_removes_it ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 7 tests
+test a_component_name_is_accepted_at_255_bytes_and_refused_at_256 ... ok
+test a_symlink_target_is_accepted_at_4096_bytes_and_refused_at_4097 ... ok
+test a_path_is_accepted_at_4096_bytes_and_refused_at_4097 ... ok
+test a_path_is_accepted_at_256_components_and_refused_at_257 ... ok
+test an_attribute_domain_and_key_are_accepted_at_their_bounds_and_refused_over ... ok
+test the_limits_this_suite_cannot_bound_are_named_with_their_reason ... ok
+test a_read_wave_is_accepted_at_4096_demands_and_refused_at_4097 ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 18 tests
+test records_are_fixed_width_and_every_malformed_field_is_rejected ... ok
+test a_fresh_build_counts_bindings_without_ordering_runs ... ok
+test growth_is_reserved_before_it_happens_and_cleanup_returns_the_bytes ... ok
+test a_fresh_build_charges_its_count_array_to_the_ordering_ceiling ... ok
+test a_stale_run_file_does_not_block_a_later_backing ... ok
+test the_operation_ceiling_is_enforced_before_the_rows_are_written ... ok
+test a_failed_run_removal_keeps_the_file_and_its_bytes_in_the_account ... ok
+test the_parent_membership_charges_parents_not_bindings ... ok
+test a_removal_that_fails_is_visible_instead_of_being_hidden_in_drop ... ok
+test tier_carries_keep_the_newest_row_and_accumulate_counts ... ok
+test a_high_pending_ceiling_runs_spill_free_to_the_byte_bound ... ok
+test append_read_flush_and_release_failures_fail_the_operation_without_a_root ... ok
+test run_lookup_answers_every_serial_in_every_order ... ok
+test a_successful_operation_releases_its_ordering_resources_once ... ok
+test carried_state_removes_the_zero_count_re_pass ... ok
+test a_spilled_lookup_agrees_with_a_full_scan_of_every_tier ... ok
+test a_spill_keeps_the_scans_of_tiers_above_its_level ... ok
+test the_pending_threshold_changes_only_where_the_rows_live ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+
+running 1 test
+test consolidation_never_writes_into_a_run_it_merges ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 3 tests
+test a_restarted_scan_returns_the_same_rows_as_a_fresh_one ... ok
+test a_sparse_newer_tier_skips_its_gap_and_finds_older_rows ... ok
+test lookups_allocate_nothing_after_the_tiers_are_built ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 5 tests
+test inherited_children_resolve_and_list_by_parent_identity ... ok
+test partial_parent_batches_preserve_values_new_directories_and_removals ... ok
+test unchanged_parents_share_reads_and_reuse_their_authenticated_values ... ok
+test parent_values_remain_correct_when_the_reference_reducer_spills ... ok
+test parent_value_ordering_quota_matrix_is_explicit_and_canonical ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+
+running 2 tests
+test a_foreign_profile_is_refused_before_a_root_exists ... ok
+test the_profile_text_names_the_bounds_it_is_hashed_with ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+test a_serial_the_table_lacks_is_not_provider_absence ... ok
+test a_symlink_reads_back_its_exact_stored_target ... ok
+test an_unbound_name_is_not_provider_absence ... ok
+test resolve_stat_and_list_agree_on_the_same_tree ... ok
+test repeated_and_shared_demands_keep_order_and_cardinality ... ok
+test listing_is_bounded_by_bytes_as_well_as_count ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test construction_matches_the_sealed_reference_roots_and_pages ... ok
+test updates_match_the_sealed_reference_operation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+
+running 6 tests
+test a_spool_that_does_not_hold_its_declared_rows_is_refused ... ok
+test the_spool_file_is_removed_when_the_update_is_done ... ok
+test a_spool_refuses_a_row_beyond_its_declared_totals_or_capacity ... ok
+test a_spool_refuses_a_key_that_does_not_rise_inside_its_run ... ok
+test a_spooled_update_publishes_the_same_root_as_resident_rows ... ok
+test a_wide_spooled_generation_applies_every_row_from_the_file ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 7 tests
+test an_unsorted_duplicate_or_repeating_change_is_refused_once ... ok
+test a_genuinely_empty_directory_is_emitted_once ... ok
+test a_late_source_error_propagates_and_publishes_nothing ... ok
+test a_tiny_supported_budget_works_or_refuses_before_allocating ... ok
+test initial_construction_needs_no_provisional_seed ... ok
+test page_widths_running_total_matches_the_recorded_partition ... ok
+test leaf_and_branch_boundaries_are_partitioned_canonically ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test a_recorded_construction_reports_its_phases ... ok
+test a_recorded_update_reports_coarse_phases_and_changes_nothing ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 19 tests
+test a_build_whose_root_is_not_declared_new_is_refused_up_front ... ok
+test a_build_cycle_that_the_root_holds_is_refused ... ok
+test a_dropped_directory_emits_no_page_of_its_own ... ok
+test a_cycle_formed_by_moving_a_directory_below_itself_is_refused ... ok
+test a_cycle_formed_inside_a_build_is_refused ... ok
+test a_base_resident_directory_cannot_gain_a_second_parent ... ok
+test a_caller_asserted_count_is_never_trusted ... ok
+test a_build_with_a_disconnected_directory_cycle_is_refused ... ok
+test a_foreign_scope_or_profile_is_refused ... ok
+test a_base_resident_symlink_cannot_gain_a_second_parent ... ok
+test a_disconnected_new_record_is_refused ... ok
+test a_base_resident_directory_can_be_renamed_by_unbinding_first ... ok
+test a_reused_identity_is_refused ... ok
+test an_update_cycling_two_declared_new_directories_is_refused ... ok
+test a_self_binding_is_refused ... ok
+test the_root_stays_a_zero_count_directory ... ok
+test an_update_with_a_disconnected_fresh_directory_cycle_is_refused ... ok
+test a_directory_or_symlink_cannot_have_two_parents ... ok
+test a_permutation_of_65_directory_bindings_is_one_linear_walk ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+test a_content_only_change_leaves_every_directory_page_untouched ... ok
+test a_same_name_no_op_keeps_the_root_identity ... ok
+test a_tiny_tree_is_created_and_read_back_exactly ... ok
+test removing_the_last_binding_removes_the_inode_and_keeps_the_root_readable ... ok
+test an_unsorted_or_duplicate_change_list_is_refused_before_any_write ... ok
+test a_type_replacement_replaces_the_binding_and_the_record ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 13 tests
+test attribute_values_require_extent_roots_and_refuse_oversized_lengths_before_mapping_demand ... ok
+test extent_branches_check_nonroot_fill_level_and_exact_cumulative_summaries ... ok
+test extent_payload_kind_slice_and_file_state_actual_summaries_are_checked ... ok
+test failures_and_cardinality_end_the_original_demand_without_retry ... ok
+test filesystem_root_requires_the_expected_zero_count_directory_record ... ok
+test inode_placement_content_kind_and_portable_metadata_are_contextual ... ok
+test directory_branches_check_fill_level_maximum_and_exact_counts_and_bytes ... ok
+test local_reference_and_identity_context_refusals_precede_all_demands ... ok
+test inode_branches_check_fill_level_maximum_count_and_leaf_ranges ... ok
+test attribute_branches_check_fill_level_maximum_and_exact_counts_and_bytes ... ok
+test regular_roots_obey_whole_file_capacity_and_retain_small_file_states ... ok
+test all_thirteen_roles_validate_with_direct_children_and_scoped_one_id_demands ... ok
+test a_hundred_large_inode_roots_do_not_form_one_oversized_provider_batch ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

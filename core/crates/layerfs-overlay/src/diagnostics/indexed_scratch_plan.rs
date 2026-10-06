@@ -43,6 +43,7 @@ impl Overlay {
             ("get", sql::INDEXED_SCRATCH_GET, point.as_slice(), 64),
             ("delete", sql::INDEXED_SCRATCH_DELETE, point.as_slice(), 64),
             ("keys", sql::INDEXED_SCRATCH_KEYS, keys.as_slice(), 64),
+            ("all-keys", sql::INDEXED_SCRATCH_ALL_KEYS, &keys[..4], 32),
             (
                 "operation-cleanup",
                 sql::INDEXED_SCRATCH_RECLAIM_OPERATION,
@@ -67,16 +68,22 @@ impl Overlay {
         let empty: &[u8] = &[];
         let put: [&dyn rusqlite::ToSql; 6] =
             [point[0], point[1], point[2], point[3], point[4], &empty];
-        for (label, statement, params) in [
-            ("put-vm", sql::INDEXED_SCRATCH_PUT, put.as_slice()),
-            ("keys-vm", sql::INDEXED_SCRATCH_KEYS, keys.as_slice()),
-            ("delete-vm", sql::INDEXED_SCRATCH_DELETE, point.as_slice()),
+        for (label, statement, params, bytes) in [
+            ("put-vm", sql::INDEXED_SCRATCH_PUT, put.as_slice(), 64),
+            ("keys-vm", sql::INDEXED_SCRATCH_KEYS, keys.as_slice(), 64),
+            ("all-keys-vm", sql::INDEXED_SCRATCH_ALL_KEYS, &keys[..4], 32),
+            (
+                "delete-vm",
+                sql::INDEXED_SCRATCH_DELETE,
+                point.as_slice(),
+                64,
+            ),
         ] {
             plans.extend(self.query(
                 StatementKind::Explain,
                 &format!("EXPLAIN {statement}"),
                 params,
-                64,
+                bytes,
                 |row| {
                     Ok(format!(
                         "{label}: {} {} {} {} {} {:?}",

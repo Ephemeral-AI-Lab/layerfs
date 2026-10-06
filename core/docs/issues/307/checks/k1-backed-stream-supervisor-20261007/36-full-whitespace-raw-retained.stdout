@@ -1,0 +1,52 @@
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/02-overlay-window-tests.stdout:16: new blank line at EOF.
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/06-content-new-bodies.stdout:35: new blank line at EOF.
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/08-content-edit-regressions.stdout:41: new blank line at EOF.
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/11-content-frontier-corrected-bodies.stdout:98: trailing whitespace.
++  candidate_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/11-content-frontier-corrected-bodies.stdout:105: trailing whitespace.
++  oracle_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/11-content-frontier-corrected-bodies.stdout:122: trailing whitespace.
++  candidate_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/11-content-frontier-corrected-bodies.stdout:129: trailing whitespace.
++  oracle_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/11-content-frontier-corrected-bodies.stdout:159: trailing whitespace.
++  candidate_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/11-content-frontier-corrected-bodies.stdout:166: trailing whitespace.
++  oracle_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/11-content-frontier-corrected-bodies.stdout:183: trailing whitespace.
++  candidate_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/11-content-frontier-corrected-bodies.stdout:190: trailing whitespace.
++  oracle_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/11-content-frontier-corrected-bodies.stdout:195: trailing whitespace.
++  candidate_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/11-content-frontier-corrected-bodies.stdout:202: trailing whitespace.
++  oracle_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/11-content-frontier-corrected-bodies.stdout:259: new blank line at EOF.
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/13-daemon-adapter-bodies.stdout:24: new blank line at EOF.
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/15-sdk-supervisor.stdout:18: new blank line at EOF.
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/17-filesystem.stdout:245: new blank line at EOF.
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/19-linux-content.stdout:108: trailing whitespace.
++  candidate_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/19-linux-content.stdout:115: trailing whitespace.
++  oracle_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/19-linux-content.stdout:132: trailing whitespace.
++  candidate_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/19-linux-content.stdout:139: trailing whitespace.
++  oracle_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/19-linux-content.stdout:169: trailing whitespace.
++  candidate_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/19-linux-content.stdout:176: trailing whitespace.
++  oracle_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/19-linux-content.stdout:193: trailing whitespace.
++  candidate_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/19-linux-content.stdout:200: trailing whitespace.
++  oracle_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/19-linux-content.stdout:205: trailing whitespace.
++  candidate_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/19-linux-content.stdout:212: trailing whitespace.
++  oracle_survivors: 
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/19-linux-content.stdout:526: new blank line at EOF.
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/21-host-custody.stdout:240: new blank line at EOF.
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/23-linux-custody.stdout:271: new blank line at EOF.
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/29-real-host-linux-proof.stdout:11: new blank line at EOF.
+core/docs/issues/307/checks/k1-backed-stream-supervisor-20261007/30-real-host-linux-proof-prepared.stdout:22: new blank line at EOF.

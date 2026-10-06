@@ -88,6 +88,9 @@ pub(crate) const INDEXED_SCRATCH_DELETE: &str = "DELETE FROM indexed_scratch
 pub(crate) const INDEXED_SCRATCH_KEYS: &str = "SELECT key FROM indexed_scratch
     WHERE ns=?1 AND operation=?2 AND file_scope=?3 AND kind=?4 AND key<>?5
     ORDER BY key LIMIT 64";
+pub(crate) const INDEXED_SCRATCH_ALL_KEYS: &str = "SELECT key FROM indexed_scratch
+    WHERE ns=?1 AND operation=?2 AND file_scope=?3 AND kind=?4
+    ORDER BY key LIMIT 64";
 pub(crate) const INDEXED_SCRATCH_RECLAIM_OPERATION: &str =
     "SELECT file_scope,kind,key,length(value)
     FROM indexed_scratch WHERE ns=?1 AND operation=?2 ORDER BY file_scope,kind,key LIMIT 64";

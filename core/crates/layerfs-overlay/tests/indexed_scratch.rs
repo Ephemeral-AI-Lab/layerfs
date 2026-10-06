@@ -93,6 +93,59 @@ fn complete_keys_and_full_file_scopes_never_alias_other_custody() {
 }
 
 #[test]
+fn optional_exclusion_keeps_zero_identity_and_finds_new_lower_keys() {
+    let temp = Temp::new();
+    let db = temp.db();
+    let scope = scope(&db, 221, 1, u64::MAX);
+    let zero = key(19, 0);
+    let rows: Vec<_> = (0..65).map(|n| put(key(19, n), vec![])).collect();
+    apply(&db, scope, &rows);
+    let before = db.diagnostics();
+    let first = db.indexed_scratch_keys(scope, 19, None).unwrap();
+    let work = db.diagnostics().since(&before);
+    assert_eq!(first.len(), 64);
+    assert_eq!(first[0], zero.key, "None never excludes a sentinel");
+    assert_eq!(first[63], key(19, 63).key);
+    let scratch = work.statements[StatementKind::Scratch as usize];
+    assert_eq!((scratch.attempts, scratch.executions), (1, 1));
+    assert_eq!(
+        (scratch.rows_returned, scratch.returned_blob_bytes),
+        (64, 2048)
+    );
+    assert_eq!(scratch.bound_bytes, 32);
+    assert_eq!(scratch.fullscan_steps, 0);
+    let filtered = db.indexed_scratch_keys(scope, 19, Some(zero.key)).unwrap();
+    assert_eq!(filtered.first(), Some(&key(19, 1).key));
+    assert_eq!(filtered.last(), Some(&key(19, 64).key));
+    apply(
+        &db,
+        scope,
+        &[IndexedChange {
+            key: zero,
+            expected: ExpectedValue::ExactBytes(vec![]),
+            value: None,
+        }],
+    );
+    assert_eq!(
+        db.indexed_scratch_keys(scope, 19, None).unwrap().first(),
+        Some(&key(19, 1).key)
+    );
+    apply(&db, scope, &[put(zero, vec![])]);
+    assert_eq!(
+        db.indexed_scratch_keys(scope, 19, None).unwrap().first(),
+        Some(&zero.key)
+    );
+    let plans = db.explain_indexed_scratch(scope, zero, zero.key).unwrap();
+    assert!(plans
+        .iter()
+        .any(|p| p.starts_with("all-keys: SEARCH indexed_scratch USING PRIMARY KEY")));
+    assert!(plans.iter().any(|p| p.starts_with("all-keys-vm:")));
+    println!("INDEXED_ALL_KEYS original_work={scratch:?} plans={plans:?}");
+    db.release_operation(scope.owner).unwrap();
+    maintain(&db, 32);
+}
+
+#[test]
 fn guarded_batches_are_atomic_capacity_bounded_and_allow_a_128_child_node_shape() {
     // Mapping-only raw drafts: two conservative 12,460-byte buffers, 128
     // reference pre/post u64 values and 258 exactly reserved descriptors.

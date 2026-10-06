@@ -1,0 +1,16 @@
+{
+  "milestones": {
+    "S7": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6026157299",
+    "S9": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/307#issuecomment-6026158680"
+  },
+  "commit": "889836c446507c726a53f0ccf1e4418bd4d0946f",
+  "source_tree": "f0b2facf66b3cb76489b91bbfaefdd1c7e55a08e",
+  "body_sha256": {
+    "S7": "6a635fc0b57a2bf6afe76361c658cd3bb3b47245ec3fb9b83cc6e1ad9d1efb69",
+    "S9": "b90bdd6e49baa18d255464c26f2f66fd80799155c5e5ce51052f152c05257473"
+  },
+  "checklist_unchanged": true,
+  "all_selected_milestones_unchecked": true,
+  "source_local_only_unpushed": true,
+  "goal": "active; continuing ready implementation; no blocked/completed status"
+}

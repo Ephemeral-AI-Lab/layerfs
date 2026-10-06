@@ -1,0 +1,28 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error[E0559]: variant `layerfs_daemon::Command::ReleaseOperation` has no field named `owner`
+  --> crates/layerfs-daemon/tests/edit_backing.rs:95:37
+   |
+95 |         Command::ReleaseOperation { owner: scope.owner },
+   |                                     ^^^^^ field does not exist
+   |
+  ::: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon/src/overlay/commands.rs:70:5
+   |
+70 |     ReleaseOperation(OperationOwner),
+   |     ---------------- `layerfs_daemon::Command::ReleaseOperation` defined here
+   |
+help: `layerfs_daemon::Command::ReleaseOperation` is a tuple variant, use the appropriate syntax
+   |
+95 |         Command::ReleaseOperation(/* OperationOwner */),
+   |                                  ~~~~~~~~~~~~~~~~~~~~~~
+
+For more information about this error, try `rustc --explain E0559`.
+error: could not compile `layerfs-daemon` (test "edit_backing") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

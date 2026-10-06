@@ -12,12 +12,11 @@
 //! localized edit costs the affected paths and the join boundaries, never the whole
 //! retained mapping.
 
+use super::references::{Child as ChildDescriptor, Node as ExtentNode, Summary as NodeSummary};
 use crate::error::{ContentError, ContentResult};
-use crate::file::mapping::{
-    ChildDescriptor, ExtentNode, ExtentSlice, NodeSummary, MAX_ENTRIES, MAX_LEVEL,
-};
+use crate::file::mapping::{ExtentSlice, MAX_ENTRIES, MAX_LEVEL};
 
-pub(super) use super::objects::{DeferredSink, EditObjects};
+pub(super) use super::engine::{DeferredSink, Engine as EditObjects};
 
 /// Summaries of a branch's children, recovering each child's own totals.
 pub fn child_summaries(children: &[ChildDescriptor], level: u8) -> ContentResult<Vec<NodeSummary>> {
@@ -69,10 +68,11 @@ pub fn coalesce(extents: &mut Vec<ExtentSlice>) -> ContentResult<()> {
 /// published: the draft the split created for it is dropped here instead of being
 /// carried until the operation ends. Only that node is released - the pages it was
 /// split from are shared with the halves that survive.
-pub fn discard(objects: &mut EditObjects<'_>, summary: Option<NodeSummary>) {
+pub fn discard(objects: &mut EditObjects<'_>, summary: Option<NodeSummary>) -> ContentResult<()> {
     if let Some(summary) = summary {
-        objects.release(summary.id);
+        objects.release(summary.id)?;
     }
+    Ok(())
 }
 
 /// Splits one subtree at `offset`, in its own coordinates.
@@ -102,9 +102,12 @@ pub fn split(
     // draft it may hold is superseded and released. Every child it was built from
     // stays live: it is re-referenced by one of the halves or by the recursion.
     let node = objects.load_node(root, root_context)?;
-    objects.release(root.id);
     match node {
         ExtentNode::Leaf { extents, .. } => {
+            // Payload slices own no draft mapping children. Release the
+            // superseded leaf before allocating its halves; a parent-referenced
+            // leaf remains retained by the counted release transition.
+            objects.release(root.id)?;
             let mut left = Vec::new();
             let mut right = Vec::new();
             let mut logical = 0_u64;
@@ -156,10 +159,15 @@ pub fn split(
             let (child_left, child_right) = split(objects, child, offset - before, false)?;
             let prefix = root_from_children(objects, summaries[..index].to_vec())?;
             let suffix = root_from_children(objects, summaries[index + 1..].to_vec())?;
-            Ok((
+            // A singleton prefix/suffix is a bare child summary, so it does not
+            // supply a new counted parent. Keep the original parent until both
+            // concatenations have consumed their repeated child references.
+            let halves = (
                 concat_optional(objects, prefix, child_left)?,
                 concat_optional(objects, child_right, suffix)?,
-            ))
+            );
+            objects.release(root.id)?;
+            Ok(halves)
         }
     }
 }
@@ -241,8 +249,10 @@ fn concat_inner(
         let right_node = right.take(objects, true)?;
         // A join replaces both inputs: a merged page when they are leaves, and a
         // rebuilt page when they are branches. Their children stay live.
-        objects.release(left.summary.id);
-        objects.release(right.summary.id);
+        objects.release(left.summary.id)?;
+        if right.summary.id != left.summary.id {
+            objects.release(right.summary.id)?;
+        }
         return match (left_node, right_node) {
             (ExtentNode::Leaf { mut extents, .. }, ExtentNode::Leaf { extents: other, .. }) => {
                 extents.extend(other);
@@ -275,7 +285,6 @@ fn concat_inner(
         let summaries = child_summaries(&children, level - 1)?;
         // The taller side is dismantled into a rebuilt prefix and one descending
         // boundary; every child it held stays live in one of the two.
-        objects.release(left.summary.id);
         let (last, prefix) = summaries
             .split_last()
             .ok_or(ContentError::InvalidRecord("empty branch"))?;
@@ -291,6 +300,7 @@ fn concat_inner(
             right,
             depth + 1,
         )?;
+        objects.release(left.summary.id)?;
         return match prefix {
             None => Ok(boundary),
             Some(prefix) if prefix.level == boundary.level => concat_inner(
@@ -310,7 +320,7 @@ fn concat_inner(
                 // The loaded page is superseded by the branch that re-hosts its
                 // children; the prefix becomes the first of those children and
                 // stays live.
-                objects.release(boundary.id);
+                objects.release(boundary.id)?;
                 summaries.insert(0, prefix);
                 root_from_children(objects, summaries)?
                     .ok_or(ContentError::InvalidRecord("empty concat"))
@@ -339,7 +349,6 @@ fn concat_inner(
     let summaries = child_summaries(&children, level - 1)?;
     // Mirror of the taller-left case: the taller side is dismantled into a
     // descending boundary and one rebuilt suffix.
-    objects.release(right.summary.id);
     let (first, suffix) = summaries
         .split_first()
         .ok_or(ContentError::InvalidRecord("empty branch"))?;
@@ -353,6 +362,7 @@ fn concat_inner(
         depth + 1,
     )?;
     let suffix = root_from_children(objects, suffix.to_vec())?;
+    objects.release(right.summary.id)?;
     match suffix {
         None => Ok(boundary),
         Some(suffix) if suffix.level == boundary.level => concat_inner(
@@ -372,7 +382,7 @@ fn concat_inner(
             // The loaded page is superseded by the branch that re-hosts its
             // children; the suffix becomes the last of those children and stays
             // live.
-            objects.release(boundary.id);
+            objects.release(boundary.id)?;
             summaries.push(suffix);
             root_from_children(objects, summaries)?
                 .ok_or(ContentError::InvalidRecord("empty concat"))
@@ -387,7 +397,7 @@ fn concat_inner(
             let mut summaries = child_summaries(&children, level - 1)?;
             // The suffix page is rebuilt around the boundary, which stays live as
             // its first child.
-            objects.release(suffix.id);
+            objects.release(suffix.id)?;
             summaries.insert(0, boundary);
             root_from_children(objects, summaries)?
                 .ok_or(ContentError::InvalidRecord("empty concat"))

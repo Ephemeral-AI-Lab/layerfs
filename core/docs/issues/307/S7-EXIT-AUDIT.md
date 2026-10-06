@@ -314,3 +314,17 @@ NOT_RUN/count0; physical I/O, residency, copies, queue/debt/rate and calibrated
 observers remain open. S7 remains CHECKPOINT/unchecked. The full goal continues.
 
 [Source, original diagnostics, failures and checks](K1-INDEXED-SCRATCH-E01-20261007.md).
+
+## Backed editor and occupied-turn continuation (2026-10-07)
+
+The Content backed editor, explicit Workspace/Daemon adapter and optional full-key
+window now use the existing operation-owned indexed records. Copy/conversion
+gauges remain scoped and supply no aggregate memory/physical-I/O allowance.
+Streamed directory input shares the canonical validator/update, while its other
+growing state remains a prerequisite. Supervisor selects occupied attachments
+under the same one-phase/one-provider-unit turn. Public functional checks retain
+the original failed frontier bound and its corrected result. There is no sampled
+performance treatment, service-rate attribution or E1/E2 gate. S7 stays
+CHECKPOINT/unchecked; the full goal continues.
+
+[Source, original failures, checks and remaining scope](K1-BACKED-STREAM-SUPERVISOR-20261007.md).

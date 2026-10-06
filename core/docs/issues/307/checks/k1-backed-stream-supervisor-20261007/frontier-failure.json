@@ -1,0 +1,29 @@
+{
+  "receipt": "08-content-edit-regressions.json",
+  "status": "original FAIL retained, no timeout",
+  "passed_before_stop": "edit_batch7 and edit_bounds11",
+  "failed_body": "edit_bounds::the_retained_frontier_does_not_grow_with_the_edit_count",
+  "observed_peaks": [
+    3984,
+    4064,
+    4248,
+    4888,
+    6168
+  ],
+  "unchanged_gate": "every step<=64KiB and next peak<=prior peak+1024 bytes",
+  "cause": "new Leaf split retained its superseded draft through both half allocations; Leaf owns no mapping draft children",
+  "repair": "restore early Leaf release, preserving true-parent count check; keep Branch until both actual joins, including singleton summaries; no oracle/counter/workload/budget change",
+  "added_regression": "natural three repeated Page children and later monotone boundary overwrite",
+  "scope_investigation": "arbitrary private [P,P] bare-root alias schedule not reproduced by valid public monotone input; no additional root-pin jobs selected",
+  "unrun_after_failure": [
+    "edit_lazy_plan",
+    "edit_localized",
+    "edit_model",
+    "edit_noop",
+    "edit_reference",
+    "edit_single",
+    "edit_timing",
+    "edit_transitions"
+  ],
+  "source_review": "targeted cache/resolution fixes accepted before bodies; all failures retained"
+}

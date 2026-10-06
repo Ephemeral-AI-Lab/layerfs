@@ -1,0 +1,205 @@
+{
+  "receipts": {
+    "11-content-frontier-corrected-bodies": {
+      "group": "Content-host",
+      "passed_by_target": [
+        9,
+        7,
+        12,
+        3,
+        8,
+        6,
+        7,
+        3,
+        11,
+        4,
+        10
+      ],
+      "raw_total": 80,
+      "wall_ns": 10005834292,
+      "timeout_s": 120
+    },
+    "06-content-new-bodies": {
+      "group": "Content-host",
+      "passed_by_target": [
+        8,
+        5,
+        7
+      ],
+      "raw_total": 20,
+      "wall_ns": 8982579584,
+      "timeout_s": 120
+    },
+    "17-filesystem": {
+      "group": "Content-host",
+      "passed_by_target": [
+        12,
+        17,
+        9,
+        8,
+        6,
+        7,
+        18,
+        1,
+        3,
+        5,
+        2,
+        6,
+        2,
+        6,
+        7,
+        2,
+        19,
+        6,
+        13
+      ],
+      "raw_total": 149,
+      "wall_ns": 12788955500,
+      "timeout_s": 120
+    },
+    "02-overlay-window-tests": {
+      "group": "Owner-host",
+      "passed_by_target": [
+        6
+      ],
+      "raw_total": 6,
+      "wall_ns": 1465710208,
+      "timeout_s": 120
+    },
+    "13-daemon-adapter-bodies": {
+      "group": "Owner-host",
+      "passed_by_target": [
+        4,
+        2,
+        3
+      ],
+      "raw_total": 9,
+      "wall_ns": 2323114125,
+      "timeout_s": 120
+    },
+    "15-sdk-supervisor": {
+      "group": "Owner-host",
+      "passed_by_target": [
+        6,
+        2
+      ],
+      "raw_total": 8,
+      "wall_ns": 2146014167,
+      "timeout_s": 120
+    },
+    "21-host-custody": {
+      "group": "Owner-host",
+      "passed_by_target": [
+        0,
+        1,
+        9,
+        2,
+        5,
+        21,
+        10,
+        9,
+        7,
+        5,
+        8,
+        1,
+        5,
+        3,
+        4,
+        3
+      ],
+      "raw_total": 93,
+      "wall_ns": 16971287958,
+      "timeout_s": 120
+    },
+    "19-linux-content": {
+      "group": "Linux",
+      "passed_by_target": [
+        9,
+        7,
+        12,
+        5,
+        3,
+        8,
+        6,
+        7,
+        3,
+        11,
+        4,
+        10,
+        12,
+        17,
+        9,
+        8,
+        6,
+        7,
+        18,
+        1,
+        3,
+        5,
+        2,
+        6,
+        2,
+        6,
+        7,
+        7,
+        2,
+        19,
+        6,
+        13
+      ],
+      "raw_total": 241,
+      "wall_ns": 3569919916,
+      "timeout_s": 120
+    },
+    "23-linux-custody": {
+      "group": "Linux",
+      "passed_by_target": [
+        0,
+        4,
+        2,
+        1,
+        9,
+        3,
+        0,
+        6,
+        4,
+        2,
+        1,
+        0,
+        0,
+        0,
+        0,
+        9,
+        7,
+        5,
+        8,
+        1,
+        5,
+        3,
+        4,
+        3
+      ],
+      "raw_total": 77,
+      "wall_ns": 5772050125,
+      "timeout_s": 120
+    },
+    "30-real-host-linux-proof-prepared": {
+      "group": "native",
+      "passed_by_target": [
+        1
+      ],
+      "raw_total": 1,
+      "wall_ns": 3811369542,
+      "timeout_s": 120
+    }
+  },
+  "host_distinct_rust_bodies": 357,
+  "host_native_orchestration_bodies": 1,
+  "linux_distinct_rust_bodies": 318,
+  "tool_self_tests": 41,
+  "reuse": "06 backed8 superseded by11 backed9; reuse06 cache5 andstream7 only; Iterator alias has no behavior/public API change; original source identities not relabeled",
+  "ignored": "host device_capacity; Linux daemon/overlay device_capacity remain ignored; four Linux SDK native targets have0 bodies; two new occupied-slot bodies macOS only",
+  "arithmetic_correction": "11 totals80, not90 stated in an earlier commentary/continuation summary; underlying receipts unchanged",
+  "performance": "NOT_EVALUATED",
+  "E1_sample_count": 0
+}

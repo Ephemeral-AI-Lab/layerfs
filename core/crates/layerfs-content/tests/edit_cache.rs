@@ -140,6 +140,20 @@ fn a_full_cache_survives_a_rejected_new_summary_without_retaining_the_page() {
             reader.demands.borrow().len(),
             READ_NAVIGATION_CACHE_PAGES + 1
         );
+        assert_eq!(
+            objects.counters().nodes_read,
+            (READ_NAVIGATION_CACHE_PAGES + 1) as u64
+        );
+        assert_eq!(
+            objects.load_node(nodes.last().unwrap().0, false),
+            Err(ContentError::ProviderFailure {
+                what: "terminated memory edit"
+            })
+        );
+        assert_eq!(
+            reader.demands.borrow().len(),
+            READ_NAVIGATION_CACHE_PAGES + 1
+        );
     }
     assert!(cache.get(wrong.id, false).is_none());
     assert_eq!(

@@ -505,3 +505,17 @@ remain unfinished. S9 remains CHECKPOINT/unchecked; Init/history verdicts stay
 unchanged and the full goal continues.
 
 [Source, original diagnostics, failures and checks](K1-INDEXED-SCRATCH-E01-20261007.md).
+
+## Construction-port and occupied supervision continuation (2026-10-07)
+
+The real Daemon owner now backs a public Content file edit through an explicit
+Workspace operation/file adapter. Original refused commands/Completions and
+their credits remain owned, later calls stop, and explicit release permits
+automatic cleanup. Streamed directory inputs preserve the canonical filesystem
+driver. Supervisor occupied-slot scheduling has public macOS coverage; those
+native slot bodies are not claimed on Linux. Captured normalization, full
+topology/provenance, crash/unknown recovery, native application/Exec/Commit,
+scale and E/Q acceptance remain unfinished. S9 stays CHECKPOINT/unchecked;
+Init/history verdicts remain unchanged and the full goal continues.
+
+[Source, original failures, checks and remaining scope](K1-BACKED-STREAM-SUPERVISOR-20261007.md).

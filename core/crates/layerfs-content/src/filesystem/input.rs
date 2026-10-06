@@ -24,6 +24,8 @@ use crate::filesystem::rows::{
 };
 use crate::object::inode_leaf::InodeValue;
 
+pub use crate::filesystem::rows::StreamedFilesystemInput;
+
 /// One directory's final binding changes.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DirectoryUpdate {

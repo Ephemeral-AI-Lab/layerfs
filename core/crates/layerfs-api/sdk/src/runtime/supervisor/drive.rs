@@ -14,16 +14,21 @@ use layerfs_bridge::{
 use std::sync::mpsc::TryRecvError;
 
 impl Supervisor<'_, '_> {
-    /// Performs one rotating nonblocking attachment turn and at most one provider
-    /// job. No provider lock spans socket I/O. Caller-owned events keep all credits
-    /// until released. `None` means no completed event, not no outstanding work.
+    /// Performs one rotating nonblocking occupied-attachment turn and at most one
+    /// provider job. Selecting the next owner scans at most the configured slots;
+    /// unused admission capacity does not consume separate polling turns. No
+    /// provider lock spans socket I/O. Caller-owned events keep all credits until
+    /// released. `None` means no completed event, not no outstanding work.
     /// Drive this owner independently of consumer calls and explicit fence waits.
     pub fn step(&mut self) -> Option<SupervisorEvent> {
         self.work.turns = self.work.turns.saturating_add(1);
-        let slot = self.next;
-        self.next = (self.next + 1) % self.attachments.len();
         let mut event = None;
-        if let Some(mut attachment) = self.attachments[slot].take() {
+        let slot = (self.next..self.attachments.len())
+            .chain(0..self.next)
+            .find(|&slot| self.attachments[slot].is_some());
+        if let Some(slot) = slot {
+            self.next = (slot + 1) % self.attachments.len();
+            let mut attachment = self.attachments[slot].take().expect("selected owner");
             if attachment.service_fence.is_none() {
                 match turn(&mut self.service, &mut attachment, &mut self.work) {
                     Ok(Some(delivery)) => {

@@ -1,0 +1,10 @@
+{
+  "receipt": "29-real-host-linux-proof.json",
+  "failure": "required output_root parent was absent; create_dir(output_root/Durable) returned NotFound",
+  "source_boundary": "upstream_docker.rs:65 after Host::new(Durable), before assignment persistence, listener, Docker launch and serving loop",
+  "Durable": "host fixture creation completed; Linux consumer and serving loop NOT_RUN",
+  "Disposable": "NOT_RUN",
+  "repair": "prepare a fresh 30-native-proof root; unchanged binary/source/deadlines, independent fresh fixtures",
+  "operation_retry": false,
+  "performance_qualification": false
+}

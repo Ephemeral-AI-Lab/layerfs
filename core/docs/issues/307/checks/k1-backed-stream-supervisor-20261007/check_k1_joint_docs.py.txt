@@ -1,0 +1,21 @@
+import hashlib, json, re, unicodedata
+from pathlib import Path
+from urllib.parse import unquote
+paths = [Path(p) for p in ['core/AGENTS.md', 'core/docs/architecture/README.md', 'core/docs/architecture/03-files.md', 'core/docs/architecture/06-limits.md', 'core/docs/architecture/45-runtime-supervision.md', 'core/docs/architecture/49-indexed-operation-scratch.md', 'core/docs/architecture/50-backed-file-edit-state.md', 'core/docs/architecture/51-streamed-directory-input.md', 'core/docs/architecture/52-workspace-edit-backing-port.md', 'core/docs/issues/307/K1-INDEXED-SCRATCH-E01-20261007.md', 'core/docs/issues/307/K1-BACKED-STREAM-SUPERVISOR-20261007.md', 'core/docs/issues/307/S7-EXIT-AUDIT.md', 'core/docs/issues/307/S9-EXIT-AUDIT.md']]
+links=anchors=0
+for path in paths:
+ for target in re.findall(r"\[[^\]]*\]\(([^)]+)\)",path.read_text()):
+  if re.match(r"[a-z][a-z0-9+.-]*:",target): continue
+  raw,sep,anchor=target.partition("#")
+  destination=(path.parent/unquote(raw)).resolve() if raw else path.resolve()
+  assert destination.exists(),(str(path),target)
+  links+=1
+  if sep and anchor:
+   headings=[]; seen={}
+   for text in re.findall(r"^#{1,6}\s+(.+)$",destination.read_text(),re.M):
+    slug="".join(c for c in text.lower() if c in "_- " or unicodedata.category(c)[0] in "LN").replace(" ","-")
+    index=seen.get(slug,0);seen[slug]=index+1
+    headings.append(slug if index==0 else f"{slug}-{index}")
+   assert unquote(anchor) in headings,(str(path),target)
+   anchors+=1
+print(json.dumps({"documents":len(paths),"local_links":links,"anchors":anchors,"status":"PASS","checker_sha256":hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}))

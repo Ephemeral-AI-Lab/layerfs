@@ -21,8 +21,13 @@ That partial startup is not a completed attachment.
 
 ## Bounded serving turns and independent I/O
 
-Each [turn](../../crates/layerfs-api/sdk/src/runtime/supervisor/drive.rs) polls one
-rotating attachment, then invokes at most one existing fair service job. Each
+Each [turn](../../crates/layerfs-api/sdk/src/runtime/supervisor/drive.rs) selects the
+next occupied attachment by scanning at most the configured slots, polls that one
+owner, then invokes at most one existing fair service job. Unused connection
+admission slots do not consume separate caller turns. The cursor advances after
+the selected slot; fenced owners remain occupied until their original worker joins
+return, and removal or slot reuse preserves rotation. An empty attachment registry
+still reaches the existing service step. Each
 connection has one current exchange, matching `Calls`' bounded serialized exchanges.
 Connections progress independently. Service retains its Workspace/class rotation,
 protected demand/control slots and byte reserves, and same-Save ordering. Raw native
@@ -118,8 +123,9 @@ implicit deadline, reconnect, resend, Save abort or Workspace teardown.
 Let C be configured attached connections, J admitted Service jobs, B encoded or
 decoded bounded body bytes, E encoded error fields and M original calls. Startup
 allocates O(C) attachment slots and the existing O(C + J) service registries. Attach
-and capability route lookup scan at most C slots. A turn polls one attachment in
-O(1), plus the existing fair service scheduling/invocation cost; matching a dispatched
+and capability route lookup scan at most C slots. A turn selects the next occupied
+attachment in O(C) worst-case bounded slot work and polls that owner in O(1), plus
+the existing fair service scheduling/invocation cost; matching a dispatched
 ticket to its attachment is O(C). Complete local fence scans existing bounded service
 jobs/order state and drains owned queued/partial/result data. It does not walk a
 filesystem namespace or reopen a Store.
@@ -131,7 +137,13 @@ consumer Vec delivery and owning provider/SQL work remain separately accountable
 The composition adds no SQL/schema, immutable construction or filesystem algorithms.
 Across M calls, its registry routing costs O(M*C), with C a declared simultaneous
 admission window, plus actual cumulative bodies/errors/service/native work. It
-retains no namespace-sized or lifetime-call-sized collection. Held events, permits,
+retains no namespace-sized or lifetime-call-sized collection. Occupancy selection
+adds no registry, allocation, provider attempt or extra phase to a turn. It does
+not provide a wakeup/progress API: `None` still means no completed event, and an
+idle or parked occupied attachment still takes its fair share of turns. The R4
+functional proof's existing caller sleep and budgets are unchanged; its retained
+wall receipts do not establish a latency improvement or packet-level cause.
+Held events, permits,
 partial bodies and reports retain their owning credit; callers must release them
 for further admission.
 

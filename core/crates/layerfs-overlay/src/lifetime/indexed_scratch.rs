@@ -129,23 +129,42 @@ impl Overlay {
         kind: u32,
         excluded_root: [u8; 32],
     ) -> OverlayResult<Vec<[u8; 32]>> {
+        self.indexed_scratch_keys(scope, kind, Some(excluded_root))
+    }
+
+    /// First keys with an optional exact exclusion. None excludes nothing;
+    /// every 32-byte identity, including all-zero bytes, is representable.
+    pub fn indexed_scratch_keys(
+        &self,
+        scope: IndexedScope,
+        kind: u32,
+        excluded_root: Option<[u8; 32]>,
+    ) -> OverlayResult<Vec<[u8; 32]>> {
         self.check_operation(scope.owner)?;
         let file = scope.file_scope.to_be_bytes();
-        self.query(
-            StatementKind::Scratch,
-            sql::INDEXED_SCRATCH_KEYS,
-            &[
-                &scope.owner.route.ns,
-                &integer(scope.owner.owner)?,
-                &file.as_slice(),
-                &i64::from(kind),
-                &excluded_root.as_slice(),
-            ],
-            64,
-            |r| {
-                let key: Vec<u8> = r.get(0)?;
-                key.try_into().map_err(|_| rusqlite::Error::InvalidQuery)
-            },
-        )
+        let operation = integer(scope.owner.owner)?;
+        let kind = i64::from(kind);
+        let prefix: [&dyn rusqlite::ToSql; 4] =
+            [&scope.owner.route.ns, &operation, &file.as_slice(), &kind];
+        let decode = |r: &rusqlite::Row<'_>| {
+            let key: Vec<u8> = r.get(0)?;
+            key.try_into().map_err(|_| rusqlite::Error::InvalidQuery)
+        };
+        match excluded_root {
+            Some(root) => self.query(
+                StatementKind::Scratch,
+                sql::INDEXED_SCRATCH_KEYS,
+                &[prefix[0], prefix[1], prefix[2], prefix[3], &root.as_slice()],
+                64,
+                decode,
+            ),
+            None => self.query(
+                StatementKind::Scratch,
+                sql::INDEXED_SCRATCH_ALL_KEYS,
+                &prefix,
+                32,
+                decode,
+            ),
+        }
     }
 }

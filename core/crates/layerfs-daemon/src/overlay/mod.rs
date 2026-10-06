@@ -6,3 +6,4 @@ pub(crate) mod indexed_scratch;
 pub(crate) mod owner;
 pub(crate) mod queue;
 pub(crate) mod read_port;
+mod scratch_port;

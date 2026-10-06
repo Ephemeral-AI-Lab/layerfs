@@ -45,6 +45,22 @@ public exports. This relocation and segment-container removal do not remove the
 8MiB memory-profile draft refusal or growing reference/detached/resolved/emitted
 state, and do not establish aggregate resident bounds. See
 [the separate lazy/source-organization scope](03-files.md#lazy-small-result-assembly-and-edit-ownership-2026-10-07).
+The backed-editor addition following `889836c44` introduces
+`apply_edits_backed` without changing canonical file bytes. The existing memory
+route retains its 8MiB deferred-state limit and original charge formula. The
+backed route places growing draft/reference/detached/resolved/emission records
+behind a caller-owned indexed port. Its bounded windows and record codec are
+separate from total editor/provider/SQL/process residency; neither a heap charge
+nor copy counters qualify a whole-operation bound. See
+[backed file edit state](50-backed-file-edit-state.md) and the
+[Workspace owning adapter](52-workspace-edit-backing-port.md).
+
+The additive streamed filesystem input avoids materializing all changed names
+through legacy directory rows. It retains the existing growing demanded,
+addition, topology, count and frontier domains and their resource refusals;
+those domains are the next backed-state scope. See
+[streamed directory input](51-streamed-directory-input.md).
+
 The Service/Bridge file-save limits below describe the #252 source in the same
 commit as this note; older flow diagrams retain their historical source pins.
 The keyed namespace-tree subsection of §9 describes the #256 source of phase

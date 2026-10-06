@@ -1,0 +1,167 @@
+{
+  "parent": "889836c446507c726a53f0ccf1e4418bd4d0946f",
+  "product_tree": "b99c4a3050b88f2ce47ba1daf334710ed90ee267",
+  "source_files": {
+    "core/crates/layerfs-api/sdk/src/runtime/supervisor/drive.rs": {
+      "sha256": "216b041849607854575bcdd7ea0b80317ecdbe6af3c52fac2c9b7e916eb573da",
+      "physical_lines": 335
+    },
+    "core/crates/layerfs-api/sdk/src/runtime/supervisor/types.rs": {
+      "sha256": "05cf161501dceee48272a86e7c8c3f497e895b7238ee10e3b6afc323dbb1e7d4",
+      "physical_lines": 203
+    },
+    "core/crates/layerfs-content/src/file/edit/apply.rs": {
+      "sha256": "32e4569aad914bc1567d2b3bffd81ccc43c600649c562a714b4233df93f76f62",
+      "physical_lines": 549
+    },
+    "core/crates/layerfs-content/src/file/edit/backing.rs": {
+      "sha256": "654ed18b378267bccd600f402bae1cf00577a242504bc29a32d6e0abcf2f0056",
+      "physical_lines": 60
+    },
+    "core/crates/layerfs-content/src/file/edit/draft_codec.rs": {
+      "sha256": "8cf22fff94cef60d9731b12c5c479e3719eba9e8b6207b11555e04c4606148e5",
+      "physical_lines": 261
+    },
+    "core/crates/layerfs-content/src/file/edit/engine.rs": {
+      "sha256": "3197739d98e2053f5a7281161f544a6b888095ef21d9df02cf08cc268301802a",
+      "physical_lines": 512
+    },
+    "core/crates/layerfs-content/src/file/edit/mod.rs": {
+      "sha256": "1ea2fcb4387d1cc1355cfad4ff0e43434d3e957d780e683f62851a8ea94b223c",
+      "physical_lines": 30
+    },
+    "core/crates/layerfs-content/src/file/edit/objects.rs": {
+      "sha256": "be2d9fbc68e480e4df0e2dc9f0fb955c1ac5f60c0d7d3b6c247195f9308ee4ee",
+      "physical_lines": 194
+    },
+    "core/crates/layerfs-content/src/file/edit/references.rs": {
+      "sha256": "b1f51031dc340fc9ae067925cb8e07e60c43068762c80690f6b88de90a1a4943",
+      "physical_lines": 185
+    },
+    "core/crates/layerfs-content/src/file/edit/resolution.rs": {
+      "sha256": "fd43fa136f90eb7d7dd4ca7471719a6f25682637c18039c4c2f893149a965cd6",
+      "physical_lines": 37
+    },
+    "core/crates/layerfs-content/src/file/edit/state.rs": {
+      "sha256": "bb4557334619488d676080e22160336aa1d86fdb62832939ef37353026274e3c",
+      "physical_lines": 277
+    },
+    "core/crates/layerfs-content/src/file/edit/tree.rs": {
+      "sha256": "c125b352e483e10af25b4015df3c7df339aeab3372ad6777702d7edb5259daa2",
+      "physical_lines": 497
+    },
+    "core/crates/layerfs-content/src/file/mod.rs": {
+      "sha256": "1db195e7b40b7e840234d91299f420307d6ad42ac0edd11faf050d7c4ef2d3d4",
+      "physical_lines": 28
+    },
+    "core/crates/layerfs-content/src/filesystem/input.rs": {
+      "sha256": "1d6239d9c6c14d0a0095de33194a0c0dceffb4bff551efeeb32216b9606d333d",
+      "physical_lines": 204
+    },
+    "core/crates/layerfs-content/src/filesystem/mod.rs": {
+      "sha256": "fc869bb97d67072237b2974f2a2043ee9b00c9496c120519784c9466aee8bd24",
+      "physical_lines": 43
+    },
+    "core/crates/layerfs-content/src/filesystem/rows/check.rs": {
+      "sha256": "6a6083a6188657d80bc27345fc802611fdf9726d9478ac2595e10e9c23ca7097",
+      "physical_lines": 87
+    },
+    "core/crates/layerfs-content/src/filesystem/rows/mod.rs": {
+      "sha256": "433bde4ef716dbedffa3b20f8e51a2909b6f05e983fdf31c779c72258f23aa77",
+      "physical_lines": 54
+    },
+    "core/crates/layerfs-content/src/filesystem/rows/stream.rs": {
+      "sha256": "2c6128466ccf5dafbc2e24035f71fb9359e290deef7a30f96b5bd3b6ce68b09f",
+      "physical_lines": 93
+    },
+    "core/crates/layerfs-content/src/filesystem/rows/stream_update.rs": {
+      "sha256": "0006b0ae670090c0877aeb09aa9383b21bca188c14f352b4a27437cdde60d67c",
+      "physical_lines": 75
+    },
+    "core/crates/layerfs-content/src/filesystem/rows/view.rs": {
+      "sha256": "2e3176f684423299b9a676654e25b68777f4c269848e10ac02d68f47cd2c1428",
+      "physical_lines": 361
+    },
+    "core/crates/layerfs-content/src/filesystem/update.rs": {
+      "sha256": "73c6c5b951c91b86001c8cecc56c2f8bc8ac045c1ed96210de4fd789cf3de10f",
+      "physical_lines": 741
+    },
+    "core/crates/layerfs-content/src/filesystem/validate.rs": {
+      "sha256": "53fbb152a8c3004c6d8f1cd1410ad0820720652b158d617ffb7b4dff1c0ab248",
+      "physical_lines": 790
+    },
+    "core/crates/layerfs-content/src/filesystem/validate/cycles.rs": {
+      "sha256": "9c909035bf3997307945f3a975b2c1c7813810ec1a845bb62de48a06c60699c8",
+      "physical_lines": 181
+    },
+    "core/crates/layerfs-content/src/filesystem/validate/entries.rs": {
+      "sha256": "dbf4a13da67028e476fde65c1ab38e2fb0a560324fcdd846d20b57612878ee76",
+      "physical_lines": 113
+    },
+    "core/crates/layerfs-content/src/lib.rs": {
+      "sha256": "9209a1035d40e1c5d6b8e955d30a256ad278c645c95b03eea6df1aa8766ca056",
+      "physical_lines": 51
+    },
+    "core/crates/layerfs-daemon/src/overlay/indexed_scratch.rs": {
+      "sha256": "1d5f81a996d20f2818ef1a0211eb82c8191d6373bc8327b1200f6fa9ae98bd81",
+      "physical_lines": 100
+    },
+    "core/crates/layerfs-daemon/src/overlay/mod.rs": {
+      "sha256": "2e64f35bfa620bc3eeee6428a92392acea72eec09925c11fa38b5847a76fbe05",
+      "physical_lines": 9
+    },
+    "core/crates/layerfs-daemon/src/overlay/scratch_port.rs": {
+      "sha256": "8197440f9210c0fb1bfe55831b5eaccb557e32ca3ba54b1b5908278ccd721b34",
+      "physical_lines": 118
+    },
+    "core/crates/layerfs-overlay/src/database/statements.rs": {
+      "sha256": "709fb45e5ec281f0c90d07ac45a8910f3c9ea9df78fca8449c7b480c11951117",
+      "physical_lines": 102
+    },
+    "core/crates/layerfs-overlay/src/diagnostics/indexed_scratch_plan.rs": {
+      "sha256": "d39576179bbc68498e0dcede5051b42257ad3df7bb4c6202dd2130d898d90a5a",
+      "physical_lines": 102
+    },
+    "core/crates/layerfs-overlay/src/lifetime/indexed_scratch.rs": {
+      "sha256": "78f6fa82b03e55fb41b80659ceeceae10f3727e1d3c1963409255b0bb7c08b2d",
+      "physical_lines": 170
+    },
+    "core/crates/layerfs-workspace/src/construction/mod.rs": {
+      "sha256": "1af6fc970bf0d445df5d3125e29b8f51816447a2660cfe01b89f8232305535ed",
+      "physical_lines": 3
+    },
+    "core/crates/layerfs-workspace/src/construction/records.rs": {
+      "sha256": "1d26ab293c1c6d924d62fd4aba5f5c436cce3e72740240290e716504319d96ff",
+      "physical_lines": 235
+    },
+    "core/crates/layerfs-workspace/src/lib.rs": {
+      "sha256": "dae3da267df83849ff77018b21e865216065a2d359fd7312f6b7953ac26ae680",
+      "physical_lines": 48
+    },
+    "core/crates/layerfs-workspace/src/ports/mod.rs": {
+      "sha256": "1ccd39b3fc2e48836adacdf9b8f8ad2593b76dec16b08ff82ff6566a00e4090b",
+      "physical_lines": 11
+    },
+    "core/crates/layerfs-workspace/src/ports/scratch.rs": {
+      "sha256": "e018820ea32659dc7646bef42781e434ca010ede65b9903f4cff71f72af427c5",
+      "physical_lines": 183
+    }
+  },
+  "source_hash_scope": "all changed first-party production source; full unchanged source identified by exact staged subtree",
+  "independent_review": "evidence_registry found no material custody/capacity blocker; native reviewer corrected resolution/context and FileState failure cases; runtime owner corrected actual leaf lifetime",
+  "last_source_change": "private ChangeIterator lifetime alias only, no behavior/public API change; prior functional receipts reused, final Clippy/native proof compiled this identity",
+  "compiler_flags": "repository .cargo/config.toml ARM64 AEAD inputs retained; no explicit RUSTFLAGS",
+  "no_new_dependency": true,
+  "performance_admission": "NOT_EVALUATED",
+  "E1_samples": 0,
+  "build_harness_pins": {
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "core/Cargo.toml": "7b9f341f9b091ec20e7f6634d60b9269c528c997de01cc5fb933def6cfd03461",
+    "core/Cargo.lock": "7d9bff0e8d68626efb046cd4f3d4a572fe3c1e6f579f99b5a38cd41376066a7c",
+    "core/crates/layerfs-daemon/tests/upstream_docker.rs": "cbf1866b0e1ccbe19b7d996269d8dd0fa8110f5e0e6aa999b7068ed90969d2db",
+    "core/crates/layerfs-daemon/tests/support/upstream_host.rs": "205edfcb0846f54042ab94dcf546e56adabc7b88a880c02a778525ce57a3ff2e",
+    "core/crates/layerfs-daemon/tests/support/upstream_payload.rs": "6080437f8054d3a4a2df40dab3d277a4bf35b12e864f91b2a2bde2ebf8b7b27c",
+    "core/crates/layerfs-daemon/examples/upstream_consumer.rs": "f523dfea77cba404919f327bd54c80d93efaea8b741332497ec326dc0327d5e5",
+    "core/crates/layerfs-daemon/examples/upstream_consumer/assignment.rs": "796ed44262b41afa1036a27dc624ef731e6d18a1089a92c4108fc38b9cd78a79"
+  }
+}
