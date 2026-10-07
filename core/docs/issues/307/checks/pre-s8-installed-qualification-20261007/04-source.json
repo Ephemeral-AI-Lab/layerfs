@@ -1,0 +1,13 @@
+{
+  "timestamp": "2026-10-07T11:43:55.204115+00:00",
+  "parent": "8e5f8066f421280344e19f25991ae5f3e18a413f",
+  "files": {
+    "core/crates/layerfs-daemon/tests/installed_qualification.rs": "dd0b80e296742bbdf3631d03980792e8b962be67c1fe7df4ab37af1e52a3c321",
+    "core/crates/layerfs-daemon/tests/support/control_fixture.rs": "7e4af0a3fd25896e793cd2307c50c6eb765e86af96deb06cc91a221278ef6c9a",
+    "core/crates/layerfs-daemon/tests/support/installed_store.rs": "d3bc9d9ae6b09f421babfb79583ac43ad986203179d6b44b00d71fd63548f9c0",
+    "core/crates/layerfs-daemon/tests/support/native_install.rs": "09519cb71b1aeb5186b8ac6c5139faf5099e41ec68912e4d07624d44739cf392",
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "core/Cargo.toml": "441b1162aacb628b299ed1e660a1bd08f9ce76e82ced5af5f777fb501f254544",
+    "core/Cargo.lock": "1339a41bdfcca8ec0f2f3569d46054f58251ef5d830daabbead35f07fbaf5b29"
+  }
+}

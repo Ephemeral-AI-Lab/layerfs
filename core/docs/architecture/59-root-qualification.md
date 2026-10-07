@@ -47,3 +47,8 @@ The [F0 checkpoint](../issues/307/PRE-S8-F0-20261007.md) links the retained
 host and Linux evidence, including malformed roots and the real daemon overlay
 operation records adapter. Its canonical object provider is a fixture; an installed
 Store running the same pass through daemon ports remains F15.
+
+The explicit pass now has [F15 installed-Store proof](../issues/307/PRE-S8-F15-20261007.md)
+through direct daemon ports and real operation-owned overlay records. Binding
+continues to perform only bounded root checks; no qualifier is hidden in mount.
+The topology proof does not walk file payloads, symlink targets or attributes.

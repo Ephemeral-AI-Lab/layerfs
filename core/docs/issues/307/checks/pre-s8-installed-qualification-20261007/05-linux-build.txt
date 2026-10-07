@@ -1,0 +1,12 @@
+# {"timestamp": "2026-10-07T11:43:55.270112+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-qualification-build", "-e", "CARGO_HOME=/work/core/target/cluster2-linux-cargo", "-e", "CARGO_TARGET_DIR=/work/core/target/cluster2-linux", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; python3 -c 'import json,hashlib; m=json.load(open(\"core/docs/issues/307/checks/pre-s8-installed-qualification-20261007/04-source.json\")); bad=[p for p,h in m[\"files\"].items() if hashlib.sha256(open(p,\"rb\").read()).hexdigest()!=h]; print(\"source hashes match:\",not bad); assert not bad,bad'; cargo test --manifest-path core/Cargo.toml --locked -p layerfs-daemon --test installed_qualification --no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "8e5f8066f421280344e19f25991ae5f3e18a413f", "wall_stop": "specified in command; build is not test execution"}
+source hashes match: True
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.96s
+  Executable tests/installed_qualification.rs (core/target/cluster2-linux/debug/deps/installed_qualification-fd4e7aaf3499ea93)
+
+# exit=0
