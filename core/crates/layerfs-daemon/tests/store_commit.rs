@@ -669,3 +669,91 @@ fn unknown_history_acknowledgement_retains_original_intent_and_capture() {
     drop((observer, failed, workspace, store, handles));
     f.cleanup();
 }
+
+#[test]
+fn nested_storage_unknown_keeps_original_capture_and_blocks_another_commit() {
+    let (f, store, owner) = setup("nested-unknown");
+    let missing = || StorageError::ObjectMissing(ObjectId::for_bytes(b"nested unknown dependency"));
+    let unknown = || StorageError::UnknownOutcome {
+        original: Box::new(missing()),
+    };
+    let cases = [
+        StorageError::CleanupFailed {
+            original: Box::new(unknown()),
+            cleanup: Box::new(StorageError::Busy),
+        },
+        StorageError::CleanupFailed {
+            original: Box::new(missing()),
+            cleanup: Box::new(unknown()),
+        },
+        StorageError::CleanupFailed {
+            original: Box::new(StorageError::CleanupFailed {
+                original: Box::new(unknown()),
+                cleanup: Box::new(StorageError::Busy),
+            }),
+            cleanup: Box::new(missing()),
+        },
+        StorageError::CleanupFailed {
+            original: Box::new(missing()),
+            cleanup: Box::new(StorageError::Busy),
+        },
+    ];
+    let mut retained = Vec::new();
+    for (index, error) in cases.into_iter().enumerate() {
+        let workspace = bind(&store, &owner, &f, 61 + index as u8);
+        let original = workspace.snapshot().unwrap();
+        let value = bytes(b'J' + index as u8);
+        write(&workspace, &value);
+        let failed = workspace
+            .commit(|_, _, _| Err(CommitError::Storage(error)))
+            .unwrap_err();
+        assert_eq!(failed.phase, CommitPhase::Construct);
+        assert!(failed.capture.is_some() && failed.captured.is_some());
+        assert!(failed.intent.is_none() && failed.published.is_none());
+        assert!(matches!(
+            &failed.error,
+            CommitError::Storage(StorageError::CleanupFailed { .. })
+        ));
+        assert_eq!(workspace.snapshot().unwrap(), original);
+        assert_eq!(read(&workspace), value);
+        assert!(store
+            .history()
+            .stage(workspace.identity())
+            .unwrap()
+            .is_none());
+        if index < 3 {
+            assert!(
+                !failed.locally_settled,
+                "nested original unknown must not resolve capture: case {index}"
+            );
+            assert!(failed.local.is_none() && failed.local_error.is_none());
+            assert!(workspace.commit_in_flight());
+            assert!(matches!(
+                workspace
+                    .commit(|_, _, _| unreachable!())
+                    .unwrap_err()
+                    .error,
+                CommitError::InFlight
+            ));
+            retained.push((workspace, failed));
+        } else {
+            assert!(failed.locally_settled && failed.local.is_some());
+            assert!(!workspace.commit_in_flight());
+            drop(failed);
+            let later = workspace
+                .commit(|save, _, snapshot| {
+                    construct(save, snapshot, &value, store.policy().construction())
+                })
+                .unwrap();
+            assert!(matches!(later.history, CommitStagedOutcome::Committed(_)));
+            drop(later);
+            close(&owner, &workspace);
+        }
+    }
+    println!("NESTED_UNKNOWN original_and_cleanup_and_nested=retained definite_control=resolved later_explicit_commit=passed no_stage=true terminal_unknowns=3");
+    // These are deliberately supplied original producer outcomes. The proof
+    // does not execute a native SQLite I/O failure or settle the three unknowns.
+    owner.stop().unwrap();
+    drop((retained, store));
+    f.cleanup();
+}

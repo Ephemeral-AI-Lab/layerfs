@@ -1,0 +1,8 @@
+# {"timestamp": "2026-10-07T09:56:10.912549+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "-m", "unittest", "discover", "-s", "core/tools", "-p", "test_check_product_boundary.py"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "f7c7fe91cbce565a66a4941891503edaf1934918ed2c3f48264d2e689d54b3bf", "source_parent": "a5f8b7f278134a51e35f4a2ea6ac618548f615ea", "wall_stop": "specified in command; build is not test execution"}
+.....................
+----------------------------------------------------------------------
+Ran 21 tests in 0.018s
+
+OK
+
+# exit=0

@@ -1,0 +1,15 @@
+# {"timestamp": "2026-10-07T09:50:57.771702+00:00", "command": ["cargo", "+1.85.1", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-daemon", "--test", "store_commit", "--no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "f7c7fe91cbce565a66a4941891503edaf1934918ed2c3f48264d2e689d54b3bf", "source_parent": "a5f8b7f278134a51e35f4a2ea6ac618548f615ea", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.44s
+  Executable tests/store_commit.rs (core/target/debug/deps/store_commit-fb5644ea67cf932d)
+
+# exit=0

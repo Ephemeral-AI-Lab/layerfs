@@ -1,0 +1,19 @@
+# {"timestamp": "2026-10-07T09:50:43.703977+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/store_commit-fb5644ea67cf932d", "--exact", "nested_storage_unknown_keeps_original_capture_and_blocks_another_commit", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/store_commit-fb5644ea67cf932d": "4d592615f0a08135f24661c4aa7f3f281098e65e0d8976ef0c734e0f83dd2e8a"}, "source_diff_sha256": "a513562be1932a5592f68a4c97fd3e906919938404439c89c000dcf28122d525", "source_parent": "a5f8b7f278134a51e35f4a2ea6ac618548f615ea", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test nested_storage_unknown_keeps_original_capture_and_blocks_another_commit ... STORE_COMMIT_FIXTURE case=nested-unknown files=8
+
+thread 'nested_storage_unknown_keeps_original_capture_and_blocks_another_commit' panicked at crates/layerfs-daemon/tests/store_commit.rs:725:13:
+nested original unknown must not resolve capture: case 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    nested_storage_unknown_keeps_original_capture_and_blocks_another_commit
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.04s
+
+
+# exit=101

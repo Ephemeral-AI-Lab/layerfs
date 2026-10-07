@@ -1,0 +1,11 @@
+# {"timestamp": "2026-10-07T09:51:50.394046+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/store_commit-fb5644ea67cf932d", "--exact", "nested_storage_unknown_keeps_original_capture_and_blocks_another_commit", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/store_commit-fb5644ea67cf932d": "7da193549816ee983ec1d6c1835220f9711ce9fa4a2874c0be89e678fdc9de9d"}, "source_diff_sha256": "f7c7fe91cbce565a66a4941891503edaf1934918ed2c3f48264d2e689d54b3bf", "source_parent": "a5f8b7f278134a51e35f4a2ea6ac618548f615ea", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test nested_storage_unknown_keeps_original_capture_and_blocks_another_commit ... STORE_COMMIT_FIXTURE case=nested-unknown files=8
+NESTED_UNKNOWN original_and_cleanup_and_nested=retained definite_control=resolved later_explicit_commit=passed no_stage=true terminal_unknowns=3
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.09s
+
+
+# exit=0

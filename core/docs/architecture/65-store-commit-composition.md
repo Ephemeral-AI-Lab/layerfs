@@ -51,3 +51,9 @@ through successive installs. The acknowledgement-loss case is an external public
 port adapter over a real committed Store; it qualifies caller custody only,
 not a native SQLite I/O failure or quarantine mechanism. A new Workspace reads
 the exact published root. This does not implement or qualify S10's normalizer.
+
+The shared Storage unknown-outcome classifier also examines both causes of a
+CleanupFailed wrapper. Original unknowns supplied by a Content producer must
+retain capture even when nested, while a definite wrapper still resolves once.
+The real Commit regression and its prior failure are retained in the
+[nested uncertainty checkpoint](../issues/307/PRE-S8-NESTED-UNKNOWN-20261007.md).

@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-10-07T09:52:10.869607+00:00",
+  "parent": "a5f8b7f278134a51e35f4a2ea6ac618548f615ea",
+  "files": {
+    "core/crates/layerfs-storage/src/store/error.rs": "6f982877a400aa6648c8cbde2da0332e6ae6e18a8e2dc35f1f3f0bb7f35c8541",
+    "core/crates/layerfs-daemon/tests/store_commit.rs": "eb7c24f767a66ca9e598745eade6fe394599f8612e73e0a3737c7bdfdbf51708",
+    "core/Cargo.lock": "36a4a9b711c7d3a2b9eae6d3c2dab5bd214b494a7c447dd44bcda74663baeaea",
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+  },
+  "refresh": "byte-identical copy and rename"
+}

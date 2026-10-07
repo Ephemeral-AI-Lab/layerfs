@@ -86,7 +86,13 @@ pub enum StorageError {
 impl StorageError {
     /// True when this failure leaves the persistence outcome unproven.
     pub fn is_unknown_outcome(&self) -> bool {
-        matches!(self, Self::UnknownOutcome { .. })
+        match self {
+            Self::UnknownOutcome { .. } => true,
+            Self::CleanupFailed { original, cleanup } => {
+                original.is_unknown_outcome() || cleanup.is_unknown_outcome()
+            }
+            _ => false,
+        }
     }
 }
 
