@@ -5,6 +5,7 @@ mod roots;
 mod store;
 mod types;
 
+pub(crate) use codec::{change, QUALIFY_CONTEXT, QUALIFY_INODE, QUALIFY_QUEUE};
 pub(crate) use initial::InitialRows;
 pub(crate) use roots::RebuiltRoots;
 pub(crate) use store::SerialState;

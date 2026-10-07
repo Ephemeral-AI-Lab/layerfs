@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-10-07T06:19:09.731049+00:00",
+  "parent": "21ff451faf67208162ff96054f329c2d52e7dd68",
+  "method": "byte-identical copy then rename, host hashes; container comparison in 14",
+  "files": {
+    "core/crates/layerfs-content/src/filesystem/inode/mod.rs": "c2b864e5f365c12913dff2d91c79c86532cea05f1023616a4cac52e310d14bad",
+    "core/crates/layerfs-content/src/filesystem/inode/read.rs": "5423a6da8f1748f785f167c780a381a5e35c20cb3aa5278b967350e6201928cd",
+    "core/crates/layerfs-content/src/filesystem/mod.rs": "b34740af12a28a1f9b20cc77dc75f556694c89898b95e8c1317a54a986e27fd7",
+    "core/crates/layerfs-content/src/filesystem/state/codec.rs": "a56f50948e9982282da90818c044c5f7f5246270e23adf736d0a4a42e4667b39",
+    "core/crates/layerfs-content/src/filesystem/state/mod.rs": "59a5d018d6ed366dc4cb647270ae2aad31f0bfbf087dcd5cac39616e7a070680",
+    "core/crates/layerfs-content/src/filesystem/qualify/mod.rs": "134bf2977388d5a527034f2c742982c0fb82171e67489a1043793f4fd39479a6",
+    "core/crates/layerfs-content/src/filesystem/qualify/proof.rs": "91438d78bec0d008ccf20ccfb5337499fcfc7dea0a15ba689f7aa3a4ccb9d48f",
+    "core/crates/layerfs-content/src/filesystem/qualify/records.rs": "7af7ca9c121a730b16a21ed4c7c7ebcc03897f85aa15bb9e62a89c83ed0d2409",
+    "core/crates/layerfs-content/src/filesystem/qualify/walk.rs": "ba91457e23de53d80ded5590821dc2df295bc16d150adc312731429489d355a7",
+    "core/crates/layerfs-content/tests/filesystem_qualify.rs": "13e3a0878c728d7ad23f71070c88bffd87c9493d16a37c27cdf70bc503d649bc",
+    "core/crates/layerfs-daemon/tests/root_qualification.rs": "3ba24cee96c723a336d7c12e8a18871f23bdb675ad66def609cfd260643e4c42"
+  }
+}

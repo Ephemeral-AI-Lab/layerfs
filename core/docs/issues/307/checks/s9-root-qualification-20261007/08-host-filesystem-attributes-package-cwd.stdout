@@ -1,0 +1,19 @@
+# 2026-10-07T05:32:11Z layerfs-content::filesystem_attributes rerun from its package directory: 07 ran it from the repository root, where its relative sealed fixture path does not resolve (invocation error, no source change) wall_stop=100s sha256=c96dbd9ac1cecef30f6d34c039bda22d148d286f9483756c0378f349192c53af
+
+running 12 tests
+test a_missing_or_foreign_attribute_tree_fails_explicitly ... ok
+test a_reader_boundary_is_not_a_store_and_writes_are_rejected_once ... ok
+test an_inode_attribute_tree_is_read_through_a_path ... ok
+test attribute_pages_reject_malformed_rows_and_reserved_fields ... ok
+test every_attribute_descent_rejects_same_or_skipped_child_levels ... ok
+test exact_sizing_partitions_match_the_encoder_and_the_tail_rebalances ... ok
+test generic_domains_are_accepted_without_platform_dispatch ... ok
+test opaque_values_survive_patches_without_being_decoded ... ok
+test portable_fields_round_trip_and_are_checked ... ok
+test reference_attribute_trees_are_reproduced_exactly ... ok
+test the_patch_route_and_a_from_scratch_build_agree_on_the_same_final_set ... ok
+test values_are_extent_only_at_every_size ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+# exit=0

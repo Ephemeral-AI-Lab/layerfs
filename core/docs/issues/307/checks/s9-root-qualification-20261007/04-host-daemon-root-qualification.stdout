@@ -1,0 +1,20 @@
+# 2026-10-07T05:30:02Z host daemon root_qualification wall_stop=100s binary=core/target/debug/deps/root_qualification-80c7ac607f85d6e8 sha256=49422c7c3cd358d3da09ea2123296b9d609bc39a6f8ae4e4e10b6d32fee4b770
+
+running 1 test
+test a_real_root_qualifies_through_short_original_scratch_jobs ... S9_R2_QUALIFY_REAL_SCRATCH inodes=2022 bindings=2040 inode_pages=81 directory_pages=41 record_reads=2080 record_batches=82 record_changes=4083 peak_batch_changes=72 owner_jobs=2162 peak_conversion_heap_bytes=19200 peak_reply_capacity_bytes=50 diagnostic_wall_ms=78
+
+thread 'a_real_root_qualifies_through_short_original_scratch_jobs' panicked at crates/layerfs-daemon/tests/root_qualification.rs:229:5:
+assertion `left == right` failed
+  left: Err(ProviderFailure { what: "filesystem backing precondition" })
+ right: Err(ProviderFailure { what: "indexed edit backing original refusal" })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    a_real_root_qualifies_through_short_original_scratch_jobs
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+# exit=101

@@ -1,0 +1,411 @@
+## 2026-10-07T05:31:39Z layerfs-daemon::edit_backing wall_stop=100s sha256=6bb194075c6c6d1f861ffb053b162b1dda550c9ebcfa118b40a46899dcd967b4
+
+running 4 tests
+test canonical_file_edit_uses_real_owner_records_and_explicit_last_owner_cleanup ... ok
+test direct_overlay_port_keeps_deciding_and_unadmitted_inputs_without_owner_release ... ok
+test oversized_unattempted_input_and_stopped_owner_retain_first_cause ... ok
+test terminal_refusal_keeps_original_completion_and_other_scope_progresses ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:40Z layerfs-content::filesystem_attributes wall_stop=100s sha256=c96dbd9ac1cecef30f6d34c039bda22d148d286f9483756c0378f349192c53af
+
+running 12 tests
+test a_missing_or_foreign_attribute_tree_fails_explicitly ... ok
+test a_reader_boundary_is_not_a_store_and_writes_are_rejected_once ... ok
+test an_inode_attribute_tree_is_read_through_a_path ... ok
+test attribute_pages_reject_malformed_rows_and_reserved_fields ... ok
+test every_attribute_descent_rejects_same_or_skipped_child_levels ... ok
+test exact_sizing_partitions_match_the_encoder_and_the_tail_rebalances ... ok
+test generic_domains_are_accepted_without_platform_dispatch ... ok
+test opaque_values_survive_patches_without_being_decoded ... ok
+test portable_fields_round_trip_and_are_checked ... ok
+test reference_attribute_trees_are_reproduced_exactly ... FAILED
+test the_patch_route_and_a_from_scratch_build_agree_on_the_same_final_set ... ok
+test values_are_extent_only_at_every_size ... ok
+
+failures:
+
+---- reference_attribute_trees_are_reproduced_exactly stdout ----
+
+thread 'reference_attribute_trees_are_reproduced_exactly' panicked at crates/layerfs-content/tests/filesystem_attributes.rs:56:42:
+sealed attribute fixture: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    reference_attribute_trees_are_reproduced_exactly
+
+test result: FAILED. 11 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+## exit=101 wall_s=1
+## 2026-10-07T05:31:41Z layerfs-content::filesystem_bounds wall_stop=100s sha256=d255c85681a712556743d07dd57f953142b51ea170e17c8e02a576587b377622
+
+running 17 tests
+test a_backing_too_small_for_the_declared_ceiling_is_refused_up_front ... ok
+test a_branch_materialization_reads_children_in_one_wave ... ok
+test a_build_has_no_independent_cycle_walk_limit ... ok
+test a_directory_larger_than_the_former_walk_ceiling_can_be_rebound ... ok
+test a_grouped_demand_is_one_wave_and_every_page_it_decoded ... ok
+test a_small_change_reads_its_own_path_and_never_an_unrelated_subtree ... ok
+test a_wide_branch_page_reads_its_children_in_one_wave ... ok
+test an_empty_tree_and_a_deep_tree_both_stay_inside_their_declared_ceilings ... ok
+test binding_lookups_are_batched_per_phase ... ok
+test every_reported_owner_is_nonzero_where_work_happened_and_zero_where_it_did_not ... ok
+test merge_inputs_and_output_are_covered_by_the_declared_ceiling ... ok
+test narrowing_keeps_a_small_scratch_working ... ok
+test one_batched_demand_is_exactly_one_read_wave ... ok
+test one_grouped_demand_is_one_charged_wave ... ok
+test released_subtrees_are_traversed_in_bounded_pages_and_aliases_survive ... ok
+test the_release_frontier_reads_one_wave_per_batch_not_one_record_per_demand ... ok
+test validation_reads_are_charged_to_the_operation ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s
+
+## exit=0 wall_s=2
+## 2026-10-07T05:31:43Z layerfs-content::filesystem_codec wall_stop=100s sha256=95f462692c252f04088a9bc5e083886945f97ae7deafdcb85cbf8f1d280e3002
+
+running 9 tests
+test a_directory_leaf_never_exceeds_the_page_ceiling ... ok
+test attribute_pages_match_the_reference_bytes ... ok
+test both_inode_leaf_routes_are_one_grammar ... ok
+test directory_pages_match_the_reference_bytes ... ok
+test every_tree_role_checks_its_role_byte_and_its_flags ... ok
+test inode_pages_match_the_reference_bytes ... ok
+test malformed_and_reserved_input_is_rejected_once ... ok
+test roles_and_identity_are_not_interchangeable ... ok
+test roots_and_symlinks_match_the_reference_bytes ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+## exit=0 wall_s=0
+## 2026-10-07T05:31:43Z layerfs-content::filesystem_failure wall_stop=100s sha256=c3dacf6e840c4321316e4f3d0a525b81c81347cef9484bd948f9323433c47cb5
+
+running 8 tests
+test a_binding_serial_outside_the_stored_range_is_refused ... ok
+test a_branch_that_misstates_its_summary_is_refused_by_the_tree_engine ... ok
+test a_malformed_or_unauthenticated_demanded_page_is_rejected_without_a_root ... ok
+test a_read_failure_at_each_boundary_publishes_no_root_and_keeps_the_old_one ... ok
+test a_refusing_consumer_ends_the_operation_once_without_a_root ... ok
+test cancellation_leaves_no_owned_ordering_resources_and_repeatable_state ... ok
+test invalid_input_is_refused_before_anything_is_emitted ... ok
+test the_attribute_value_bound_is_the_chunk_maximum_at_its_boundary ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:44Z layerfs-content::filesystem_hardlinks wall_stop=100s sha256=f7f4b69066b0284cda978c03140aeaceb0f4fac3432c326f63026bb8fcca2f76
+
+running 6 tests
+test a_child_moved_out_of_a_removed_subtree_survives ... ok
+test a_declared_new_inode_cannot_lose_a_binding ... ok
+test a_move_across_directories_keeps_the_count_and_the_inode ... ok
+test a_regular_file_keeps_at_least_one_binding ... ok
+test removing_one_alias_leaves_the_other_and_removing_the_last_removes_it ... ok
+test two_aliases_reach_one_derived_count ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:45Z layerfs-content::filesystem_limits wall_stop=100s sha256=9a2aaa8dab0669fa6b3e4f143eadcc96fa462e2d04a617b8525f609791103e62
+
+running 7 tests
+test a_component_name_is_accepted_at_255_bytes_and_refused_at_256 ... ok
+test a_path_is_accepted_at_256_components_and_refused_at_257 ... ok
+test a_path_is_accepted_at_4096_bytes_and_refused_at_4097 ... ok
+test a_read_wave_is_accepted_at_4096_demands_and_refused_at_4097 ... ok
+test a_symlink_target_is_accepted_at_4096_bytes_and_refused_at_4097 ... ok
+test an_attribute_domain_and_key_are_accepted_at_their_bounds_and_refused_over ... ok
+test the_limits_this_suite_cannot_bound_are_named_with_their_reason ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:46Z layerfs-content::filesystem_ordering wall_stop=100s sha256=c0bbeb8f70d7e5c22e0d666e02b22aad7cb0b41941616b1631209335596d8d57
+
+running 18 tests
+test a_failed_run_removal_keeps_the_file_and_its_bytes_in_the_account ... ok
+test a_fresh_build_charges_its_count_array_to_the_ordering_ceiling ... ok
+test a_fresh_build_counts_bindings_without_ordering_runs ... ok
+test a_high_pending_ceiling_runs_spill_free_to_the_byte_bound ... ok
+test a_removal_that_fails_is_visible_instead_of_being_hidden_in_drop ... ok
+test a_spill_keeps_the_scans_of_tiers_above_its_level ... ok
+test a_spilled_lookup_agrees_with_a_full_scan_of_every_tier ... ok
+test a_stale_run_file_does_not_block_a_later_backing ... ok
+test a_successful_operation_releases_its_ordering_resources_once ... ok
+test append_read_flush_and_release_failures_fail_the_operation_without_a_root ... ok
+test carried_state_removes_the_zero_count_re_pass ... ok
+test growth_is_reserved_before_it_happens_and_cleanup_returns_the_bytes ... ok
+test records_are_fixed_width_and_every_malformed_field_is_rejected ... ok
+test run_lookup_answers_every_serial_in_every_order ... ok
+test the_operation_ceiling_is_enforced_before_the_rows_are_written ... ok
+test the_parent_membership_charges_parents_not_bindings ... ok
+test the_pending_threshold_changes_only_where_the_rows_live ... ok
+test tier_carries_keep_the_newest_row_and_accumulate_counts ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:47Z layerfs-content::filesystem_ordering_consolidate wall_stop=100s sha256=c1337e7ab69cdbd18339043f48461e1065e972b9d1d5c18bb6637b4ace60afb5
+
+running 1 test
+test consolidation_never_writes_into_a_run_it_merges ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+## exit=0 wall_s=0
+## 2026-10-07T05:31:47Z layerfs-content::filesystem_ordering_scan wall_stop=100s sha256=e17c3195f27dfe91c579236cba309beb6432cf39e7e1aa227aa41bca1c1a6c5f
+
+running 3 tests
+test a_restarted_scan_returns_the_same_rows_as_a_fresh_one ... ok
+test a_sparse_newer_tier_skips_its_gap_and_finds_older_rows ... ok
+test lookups_allocate_nothing_after_the_tiers_are_built ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:48Z layerfs-content::filesystem_parent_lookup wall_stop=100s sha256=4f37c52084a29e4ef98b6abffc7545a3f1d78e6ad455960951bc0d89fb66fac7
+
+running 5 tests
+test inherited_children_resolve_and_list_by_parent_identity ... ok
+test parent_value_ordering_quota_matrix_is_explicit_and_canonical ... ok
+test parent_values_remain_correct_when_the_reference_reducer_spills ... ok
+test partial_parent_batches_preserve_values_new_directories_and_removals ... ok
+test unchanged_parents_share_reads_and_reuse_their_authenticated_values ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:49Z layerfs-content::filesystem_profile wall_stop=100s sha256=0694ec09bd4628f1f05b55b678d754aa3f79a39209590d4f7120572275088de2
+
+running 2 tests
+test a_foreign_profile_is_refused_before_a_root_exists ... ok
+test the_profile_text_names_the_bounds_it_is_hashed_with ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:50Z layerfs-content::filesystem_qualify wall_stop=100s sha256=c950218094e10ba5bb9dd9c6d19b0533fa969e2ad043c8e2ad2bdff7e1c83508
+
+running 10 tests
+test a_binding_to_a_serial_outside_the_table_is_refused ... ok
+test a_built_multi_page_root_qualifies_within_bounded_windows ... ok
+test a_directory_bound_twice_is_refused_in_one_parent_or_two ... ok
+test a_proof_admits_only_its_own_root_and_context ... ok
+test a_root_of_another_context_is_refused_before_any_record ... ok
+test an_inode_leaf_overlapping_its_left_sibling_is_refused ... ok
+test every_cycle_is_refused ... ok
+test invalid_inode_rows_and_a_missing_root_inode_are_refused ... ok
+test provider_and_record_failures_return_no_proof ... ok
+test unreachable_and_miscounted_inodes_are_refused ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+## exit=0 wall_s=0
+## 2026-10-07T05:31:50Z layerfs-content::filesystem_read wall_stop=100s sha256=99f5015b2f52f12f4d4ec2ce44168aeee2aaa96302a9a3ad04bdd6e9446d5a67
+
+running 6 tests
+test a_serial_the_table_lacks_is_not_provider_absence ... ok
+test a_symlink_reads_back_its_exact_stored_target ... ok
+test an_unbound_name_is_not_provider_absence ... ok
+test listing_is_bounded_by_bytes_as_well_as_count ... ok
+test repeated_and_shared_demands_keep_order_and_cardinality ... ok
+test resolve_stat_and_list_agree_on_the_same_tree ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:51Z layerfs-content::filesystem_reference wall_stop=100s sha256=89b65c0174b00265421b5514aa27f3eb857a96db120b849d4864c473b65ea5a5
+
+running 2 tests
+test construction_matches_the_sealed_reference_roots_and_pages ... ok
+test updates_match_the_sealed_reference_operation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:52Z layerfs-content::filesystem_references_backed wall_stop=100s sha256=b22cb2235df5c0e64d7990fd6b994dbcac5c2f4407b26b554ca32f53404e419e
+
+running 13 tests
+test authenticated_max_count_plus_one_is_length_overflow_before_release_or_final_root_on_both_routes ... ok
+test complete_zero_seed_finishes_before_any_directory_release_even_across_windows ... ok
+test deep_release_persists_namespace_frames_and_finishes_all_fifo_windows ... ok
+test late_final_row_failure_is_forwarded_as_error_without_eof_finalization_or_later_demand ... ok
+test missing_fresh_membership_and_stale_row_guard_cannot_change_rows_or_touch_witnesses ... ok
+test missing_work_window_is_not_false_completion_and_no_rows_are_dropped_for_final_scan ... ok
+test new_child_inside_released_rebuilt_parent_remains_an_explicit_refusal_with_known_children_retained ... ok
+test paged_release_keeps_actual_utf8_name_boundaries_and_all_repeated_parent_pages ... ok
+test rebuilt_released_directory_requires_same_save_capability_and_keeps_original_accepted_reader_error ... ok
+test release_creates_lower_serial_rows_repeated_counts_and_surviving_aliases_without_losing_final_rows ... ok
+test required_row_touch_fresh_and_full_key_grammar_fail_without_final_output_or_later_calls ... ok
+test row_plus_touch_mutation_and_child_progress_are_atomic_and_keep_original_refusal_custody ... ok
+test wide_multiwindow_direct_rows_remove_the_reducer_quota_and_match_canonical_roots ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+## exit=0 wall_s=0
+## 2026-10-07T05:31:52Z layerfs-content::filesystem_rows wall_stop=100s sha256=130c950eba3528271290d631e00cbe207936d3be85ec97b804c19a7c8145bf91
+
+running 6 tests
+test a_spool_refuses_a_key_that_does_not_rise_inside_its_run ... ok
+test a_spool_refuses_a_row_beyond_its_declared_totals_or_capacity ... ok
+test a_spool_that_does_not_hold_its_declared_rows_is_refused ... ok
+test a_spooled_update_publishes_the_same_root_as_resident_rows ... ok
+test a_wide_spooled_generation_applies_every_row_from_the_file ... ok
+test the_spool_file_is_removed_when_the_update_is_done ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:53Z layerfs-content::filesystem_sorted wall_stop=100s sha256=ba298f2f09d8ad7905368fd4ecf23e6310360cc6adf861d3e6380ee926a64b21
+
+running 7 tests
+test a_genuinely_empty_directory_is_emitted_once ... ok
+test a_late_source_error_propagates_and_publishes_nothing ... ok
+test a_tiny_supported_budget_works_or_refuses_before_allocating ... ok
+test an_unsorted_duplicate_or_repeating_change_is_refused_once ... ok
+test initial_construction_needs_no_provisional_seed ... ok
+test leaf_and_branch_boundaries_are_partitioned_canonically ... ok
+test page_widths_running_total_matches_the_recorded_partition ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:54Z layerfs-content::filesystem_state_backed wall_stop=100s sha256=6084becb9bf88540695e8b0c4c116807a79e4859892758f97e41235309a80894
+
+running 10 tests
+test atomic_not_applied_and_malformed_root_are_refusals_not_fallbacks ... ok
+test backed_initial_counts_and_streamed_final_rows_preserve_real_alias_counts ... ok
+test backed_new_parent_membership_exceeds_only_the_old_map_allowance_and_drops_empty_parent ... ok
+test backed_update_consumes_rebuilt_roots_in_order_before_values_and_matches_move_alias_result ... ok
+test disappearing_replayed_root_cannot_be_overwritten_by_a_supplied_directory_value ... ok
+test exact_context_marker_refuses_reuse_before_new_effects_and_retains_original_batch ... ok
+test late_initial_count_read_failure_keeps_accepted_inode_pages_and_no_final_root ... ok
+test missing_declared_count_or_directory_root_never_uses_a_default_or_supplied_draft_root ... ok
+test original_parent_count_and_post_accept_root_failures_stop_without_another_job ... ok
+test stale_serial_state_refuses_its_missing_guard_and_file_editor_kinds_remain_separate ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:55Z layerfs-content::filesystem_streamed wall_stop=100s sha256=876c08541f52a1cc7947f235a62a0d07d6a5cd2cfa065d42362fb80440429dec
+
+running 7 tests
+test a_present_empty_update_retains_the_original_directory_and_root ... ok
+test counts_order_and_point_disagreement_refuse_before_final_output ... ok
+test generated_wide_stream_matches_the_existing_resident_canonical_root ... ok
+test original_cursor_failure_stops_before_future_rows_objects_or_replay ... ok
+test paged_effective_names_match_the_resident_move_with_removals_and_insertions ... ok
+test removed_and_unchanged_points_distinguish_a_move_from_a_second_parent ... ok
+test the_same_effective_cycle_validator_rejects_a_streamed_self_move ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+## exit=0 wall_s=0
+## 2026-10-07T05:31:55Z layerfs-content::filesystem_timing wall_stop=100s sha256=0a2666acb4e58ae1c4824d90792cee60d2ee632d1637941c1feebe00a7c2ab49
+
+running 2 tests
+test a_recorded_construction_reports_its_phases ... ok
+test a_recorded_update_reports_coarse_phases_and_changes_nothing ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:56Z layerfs-content::filesystem_topology wall_stop=100s sha256=1f29ff63c0637bf8e28872d58f3599a6506b3ab5d3ca115b8db1a2482137f1a0
+
+running 19 tests
+test a_base_resident_directory_can_be_renamed_by_unbinding_first ... ok
+test a_base_resident_directory_cannot_gain_a_second_parent ... ok
+test a_base_resident_symlink_cannot_gain_a_second_parent ... ok
+test a_build_cycle_that_the_root_holds_is_refused ... ok
+test a_build_whose_root_is_not_declared_new_is_refused_up_front ... ok
+test a_build_with_a_disconnected_directory_cycle_is_refused ... ok
+test a_caller_asserted_count_is_never_trusted ... ok
+test a_cycle_formed_by_moving_a_directory_below_itself_is_refused ... ok
+test a_cycle_formed_inside_a_build_is_refused ... ok
+test a_directory_or_symlink_cannot_have_two_parents ... ok
+test a_disconnected_new_record_is_refused ... ok
+test a_dropped_directory_emits_no_page_of_its_own ... ok
+test a_foreign_scope_or_profile_is_refused ... ok
+test a_permutation_of_65_directory_bindings_is_one_linear_walk ... ok
+test a_reused_identity_is_refused ... ok
+test a_self_binding_is_refused ... ok
+test an_update_cycling_two_declared_new_directories_is_refused ... ok
+test an_update_with_a_disconnected_fresh_directory_cycle_is_refused ... ok
+test the_root_stays_a_zero_count_directory ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:57Z layerfs-content::filesystem_updates wall_stop=100s sha256=fbeb39162b70b7f275059b445a281177a11599f638d5e7f961aa8fb3b2f4c41f
+
+running 6 tests
+test a_content_only_change_leaves_every_directory_page_untouched ... ok
+test a_same_name_no_op_keeps_the_root_identity ... ok
+test a_tiny_tree_is_created_and_read_back_exactly ... ok
+test a_type_replacement_replaces_the_binding_and_the_record ... ok
+test an_unsorted_or_duplicate_change_list_is_refused_before_any_write ... ok
+test removing_the_last_binding_removes_the_inode_and_keeps_the_root_readable ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+## exit=0 wall_s=0
+## 2026-10-07T05:31:57Z layerfs-daemon::indexed_scratch wall_stop=100s sha256=fee5d4f25e209ac4a7a2531c7f128d85113ff207a00255e25679aee53ac6a9ce
+
+running 2 tests
+test original_atomic_refusal_and_credits_survive_independent_owner_jobs ... ok
+test released_indexed_rows_reclaim_automatically_and_close_preserves_actual_owner ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:58Z layerfs-content::inode_leaf wall_stop=100s sha256=119dd6913f66683abf1164598c67312f7a69960c820d76a86cc1e266cb1356ef
+
+running 7 tests
+test a_leaf_round_trips_with_its_exact_layout ... ok
+test a_pooled_body_keeps_the_prefix_and_the_serials ... ok
+test a_pooled_body_rejects_a_zero_ordinal_and_a_wrong_width ... ok
+test a_pooled_value_object_is_exactly_ninety_four_canonical_bytes ... ok
+test an_inode_value_round_trips_and_rejects_a_foreign_kind ... ok
+test checked_pooling_leaf_reuses_decode_and_retains_all_ordinal_checks ... ok
+test malformed_leaves_are_rejected ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:31:59Z layerfs-content::layerfs_content wall_stop=100s sha256=8d53ddff1cd458fc5da36ffa9206177428a9ae65cf26789fc48cd7f865dc211c
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+## exit=0 wall_s=0
+## 2026-10-07T05:31:59Z layerfs-content::object_context wall_stop=100s sha256=d06e14c5a54ee48e41b72766a9dafc5ce9b6752c766cd8fa006cc9e1eea78b84
+
+running 13 tests
+test a_hundred_large_inode_roots_do_not_form_one_oversized_provider_batch ... ok
+test all_thirteen_roles_validate_with_direct_children_and_scoped_one_id_demands ... ok
+test attribute_branches_check_fill_level_maximum_and_exact_counts_and_bytes ... ok
+test attribute_values_require_extent_roots_and_refuse_oversized_lengths_before_mapping_demand ... ok
+test directory_branches_check_fill_level_maximum_and_exact_counts_and_bytes ... ok
+test extent_branches_check_nonroot_fill_level_and_exact_cumulative_summaries ... ok
+test extent_payload_kind_slice_and_file_state_actual_summaries_are_checked ... ok
+test failures_and_cardinality_end_the_original_demand_without_retry ... ok
+test filesystem_root_requires_the_expected_zero_count_directory_record ... ok
+test inode_branches_check_fill_level_maximum_count_and_leaf_ranges ... ok
+test inode_placement_content_kind_and_portable_metadata_are_contextual ... ok
+test local_reference_and_identity_context_refusals_precede_all_demands ... ok
+test regular_roots_obey_whole_file_capacity_and_retain_small_file_states ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+## exit=0 wall_s=1
+## 2026-10-07T05:32:00Z layerfs-daemon::root_qualification wall_stop=100s sha256=63f574f68d8a9fc584ce057af81fdb63ad950d9be631759d43b7c95427086abb
+
+running 1 test
+test a_real_root_qualifies_through_short_original_scratch_jobs ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+## exit=0 wall_s=0

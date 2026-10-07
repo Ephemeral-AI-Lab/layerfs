@@ -147,6 +147,69 @@ pub fn lookup_many(
     Ok(answers)
 }
 
+/// Rows of the one leaf holding the first serial after `after`, in serial
+/// order; `None` starts before every serial. Empty only at the end of the table.
+///
+/// A sequential pass pays one root-to-leaf descent per leaf window and keeps no
+/// cursor. Unlike a point demand it also refuses a page whose first key does not
+/// follow its left sibling's summary, so no row can hide behind an earlier one.
+pub fn rows_after(
+    reader: &dyn AuthenticatedObjects,
+    table: InodeTable,
+    after: Option<u64>,
+    work: &mut InodeReadWork,
+) -> ContentResult<Vec<(u64, InodeValue)>> {
+    let mut id = table.root;
+    let mut expected: Option<(u8, u64)> = None;
+    let mut floor: Option<u64> = None;
+    loop {
+        let canonical = reader.read_canonical(id)?;
+        work.pages_read = work.pages_read.saturating_add(1);
+        work.read_waves = work.read_waves.saturating_add(1);
+        let (first, next) = match page(&canonical, expected.is_none(), expected)? {
+            Page::Leaf { mut rows, .. } => {
+                let first = rows.first().map(|(key, _)| *key);
+                rows.retain(|(key, _)| after.is_none_or(|after| *key > after));
+                (first, Err(rows))
+            }
+            Page::Branch { level, children } => {
+                let index = children.partition_point(|(key, _)| after.is_some_and(|a| *key <= a));
+                (
+                    children.first().map(|(key, _)| *key),
+                    Ok((level, children, index)),
+                )
+            }
+        };
+        if floor
+            .zip(first)
+            .is_some_and(|(floor, first)| first <= floor)
+        {
+            return Err(ContentError::NonCanonicalOrdering);
+        }
+        match next {
+            Err(rows) => {
+                work.demands = work.demands.saturating_add(1);
+                return Ok(rows);
+            }
+            Ok((level, children, index)) => {
+                let Some((maximum, child)) = children.get(index).copied() else {
+                    return Ok(Vec::new());
+                };
+                if index > 0 {
+                    floor = Some(children[index - 1].0);
+                }
+                id = child;
+                expected = Some((
+                    level
+                        .checked_sub(1)
+                        .ok_or(ContentError::MappingDepthExceeded)?,
+                    maximum,
+                ));
+            }
+        }
+    }
+}
+
 /// One decoded inode page, reduced to what a demand walk needs.
 enum Page {
     Leaf {

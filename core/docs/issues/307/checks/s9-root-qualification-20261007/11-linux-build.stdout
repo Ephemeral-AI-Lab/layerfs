@@ -1,0 +1,10 @@
+# 2026-10-07T05:32:45Z linux build, full diagnostics after 10 image=sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6
+   Compiling layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+error: this file contains an unclosed delimiter
+ --> crates/layerfs-content/src/filesystem/inode/mod.rs:9:68
+  |
+9 | pub use update::{apply_changes, apply_inode_values, build_table, In
+  |                 - unclosed delimiter                               ^
+
+error: could not compile `layerfs-content` (lib) due to 1 previous error
+# exit=0

@@ -405,3 +405,6 @@ and transport/bounded-import/resource gaps remain explicit in #307 audits.
 - [E04 original write receipts](58-e04-original-write-receipts.md): actual host
   acquisition, authenticated Linux writes and independent retained-data oracle;
   diagnostic accounting and qualification keep separate outcomes.
+- [Explicit root qualification](59-root-qualification.md): context-bound
+  topology proof over indexed inode counts and a backed directory queue;
+  installed-Store use remains a separate integration checkpoint.

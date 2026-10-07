@@ -8,6 +8,11 @@ pub(super) const CONTEXT: u32 = 0x4653_0000;
 pub(super) const PARENT: u32 = CONTEXT + 1;
 pub(super) const ROOT: u32 = CONTEXT + 2;
 pub(super) const COUNT: u32 = CONTEXT + 3;
+/// Whole-root qualification pass context, inode rows and directory queue.
+/// Kinds +4..=+9 belong to the indexed reference rows.
+pub(crate) const QUALIFY_CONTEXT: u32 = CONTEXT + 0x10;
+pub(crate) const QUALIFY_INODE: u32 = CONTEXT + 0x11;
+pub(crate) const QUALIFY_QUEUE: u32 = CONTEXT + 0x12;
 pub(super) const WINDOW: usize = 65_536;
 
 pub(super) fn key(kind: u32, serial: u64) -> ConstructionRecordKey {
@@ -25,7 +30,7 @@ pub(super) fn context(input: &dyn OperationInput) -> Vec<u8> {
     value.extend_from_slice(&input.root_serial().to_be_bytes());
     value
 }
-pub(super) fn change(
+pub(crate) fn change(
     kind: u32,
     serial: u64,
     old: Option<Vec<u8>>,

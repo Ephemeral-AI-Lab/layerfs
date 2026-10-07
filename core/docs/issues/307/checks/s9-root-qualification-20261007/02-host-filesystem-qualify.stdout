@@ -1,0 +1,27 @@
+# 2026-10-07T05:28:45Z host filesystem_qualify (corrected two test expectations after 01) wall_stop=100s binary=core/target/debug/deps/filesystem_qualify-be1ee350ebdb2178 sha256=1fd5b3a85764e48a96afc84743871412347988e048c3ee6046c863b44abcae55
+
+running 10 tests
+test a_binding_to_a_serial_outside_the_table_is_refused ... ok
+test a_built_multi_page_root_qualifies_within_bounded_windows ... S9_R2_QUALIFY inodes=708 directories=6 bindings=709 inode_pages=29 directory_pages=29 record_reads=718 record_batches=30 record_changes=1422 peak_batch_changes=64 peak_batch_bytes=13568
+ok
+test a_directory_bound_twice_is_refused_in_one_parent_or_two ... ok
+test a_proof_admits_only_its_own_root_and_context ... ok
+test a_root_of_another_context_is_refused_before_any_record ... ok
+test an_inode_leaf_overlapping_its_left_sibling_is_refused ... ok
+test every_cycle_is_refused ... ok
+test invalid_inode_rows_and_a_missing_root_inode_are_refused ... 
+thread 'invalid_inode_rows_and_a_missing_root_inode_are_refused' panicked at crates/layerfs-content/tests/filesystem_qualify.rs:514:73:
+inode table: NonCanonicalPagePartition
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test provider_and_record_failures_return_no_proof ... ok
+test unreachable_and_miscounted_inodes_are_refused ... ok
+
+failures:
+
+failures:
+    invalid_inode_rows_and_a_missing_root_inode_are_refused
+
+test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+# exit=101

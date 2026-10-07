@@ -1,0 +1,19 @@
+# {"timestamp": "2026-10-07T06:19:36.588382+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-f0-content", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "timeout", "--kill-after=1s", "100s", "/work/core/target/cluster2-linux/debug/deps/filesystem_qualify-8b73e84d5f735698", "--test-threads=1", "--nocapture"], "construction_workers": "1", "source_parent": "21ff451faf67208162ff96054f329c2d52e7dd68", "wall_stop": "specified in command; build is not test execution"}
+
+running 10 tests
+test a_binding_to_a_serial_outside_the_table_is_refused ... ok
+test a_built_multi_page_root_qualifies_within_bounded_windows ... S9_R2_QUALIFY inodes=708 directories=6 bindings=709 inode_pages=29 directory_pages=29 record_reads=718 record_batches=30 record_changes=1422 peak_batch_changes=64 peak_batch_bytes=13568
+ok
+test a_directory_bound_twice_is_refused_in_one_parent_or_two ... ok
+test a_proof_admits_only_its_own_root_and_context ... ok
+test a_root_of_another_context_is_refused_before_any_record ... ok
+test an_inode_leaf_overlapping_its_left_sibling_is_refused ... ok
+test every_cycle_is_refused ... ok
+test invalid_inode_rows_and_a_missing_root_inode_are_refused ... ok
+test provider_and_record_failures_return_no_proof ... ok
+test unreachable_and_miscounted_inodes_are_refused ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+# exit=0

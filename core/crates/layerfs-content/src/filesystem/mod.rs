@@ -10,6 +10,7 @@ pub mod input;
 pub mod limits;
 pub mod objects;
 pub mod path;
+pub mod qualify;
 pub mod read;
 pub mod references;
 pub mod root;
@@ -26,6 +27,7 @@ pub use input::{
 };
 pub use objects::{FilesystemObjects, FilesystemPhases, ObjectWork};
 pub use path::{LogicalPath, PathName};
+pub use qualify::{qualify_root, QualificationWork, QualifiedRoot, RootContext};
 pub use read::{DirectoryListing, FilesystemRead, FilesystemReadWork, Resolved, Stat};
 pub use root::{profile_id, scope_for_seed, FilesystemRoot, FilesystemRootId};
 pub use rows::{check_input, DirectoryRowSource, InodeRowSource, PreparedRows, SerialRowSource};

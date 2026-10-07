@@ -5,5 +5,5 @@ pub mod read;
 pub mod update;
 
 pub use codec::{decode_inode_page, encode_inode_page, InodePage};
-pub use read::{lookup, lookup_many, InodeReadWork, InodeTable};
+pub use read::{lookup, lookup_many, rows_after, InodeReadWork, InodeTable};
 pub use update::{apply_changes, apply_inode_values, build_table, InodeChange};

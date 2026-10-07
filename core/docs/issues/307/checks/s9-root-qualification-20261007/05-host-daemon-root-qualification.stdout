@@ -1,0 +1,9 @@
+# 2026-10-07T05:30:13Z host daemon root_qualification (corrected reused-scope cause expectation after 04) wall_stop=100s binary=core/target/debug/deps/root_qualification-80c7ac607f85d6e8 sha256=63f574f68d8a9fc584ce057af81fdb63ad950d9be631759d43b7c95427086abb
+
+running 1 test
+test a_real_root_qualifies_through_short_original_scratch_jobs ... S9_R2_QUALIFY_REAL_SCRATCH inodes=2022 bindings=2040 inode_pages=81 directory_pages=41 record_reads=2080 record_batches=82 record_changes=4083 peak_batch_changes=72 owner_jobs=2162 peak_conversion_heap_bytes=19200 peak_reply_capacity_bytes=50 diagnostic_wall_ms=79
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+# exit=0
