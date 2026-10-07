@@ -7,6 +7,17 @@
 > is implemented or measured. This is the primary kernel-facing design;
 > [05](05-fuse-assessment.md) retains source/evidence assessment.
 
+Owner supersession 2026-10-08 at R0 input `1a6bb53ef`: the SDK exposes
+ProjectApi, WorkspaceApi and SandboxApi. Ordinary Sandbox/runtime or an external
+executor owns command launch, standard streams, exit status and explicit
+cancellation; the filesystem daemon owns no command supervisor, launcher,
+per-Exec cgroup, command registration or custom Exec wire. FUSE serves every
+permitted visible process. Shell exit/zero registered commands proves no
+filesystem drain, and forced filesystem teardown never implicitly kills caller
+processes. Current [S8 specification](../307/S8-SPECIFICATION-20261008.md) and
+[R0–R9 rollout](../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
+historical baseline pins, receipts and verdicts retain their original scope.
+
 ## 1. Load-bearing contract
 
 One tool call is the smallest supported orchestration granularity. A Workspace
@@ -44,9 +55,9 @@ turn mode selection into automatic Commit/unmount or an elapsed-time limit.
 
 Immediate execution readiness means no namespace reconstruction or dependency
 preparation at mount. Cold lookup/data faults still cost authenticated demand I/O;
-a whole-root scan or payload prefetch is not hidden in setup. Native Init currently
-refuses symlinks, so faithful initial root acquisition remains an integration
-prerequisite, not a reason to exclude the 10,070 symlinks in the full fixture.
+a whole-root scan or payload prefetch is not hidden in setup. Historical Init symlink refusal is superseded by current backed faithful import.
+Acquisition of the historical full fixture into an installed Store and its native
+proof remain required; all 10070 symlinks stay in scope.
 
 ## 2. Profile and inherited behavior
 
@@ -106,13 +117,13 @@ The payload algorithm must bound work even after dense one-byte fragmentation;
 
 | Event | Required action |
 | --- | --- |
-| FUSE write/create/remove/rename/truncate | Prove kernel reply ordering, alias/attribute/page coherence; ordinary per-WRITE invalidate removed only with this proof |
+| FUSE write/create/remove/rename/truncate | Prove kernel reply ordering, alias/attribute/page coherence; zero per-WRITE invalidation is a liveness requirement under cached I/O; prove coherence through replies |
 | Non-FUSE mutation, if supported | SQL commit, then entry/inode invalidation before caller acknowledgement |
 | Capture | No visible change; immutable captured domain and current view preserved |
 | Known install | No invalidate only if names/bytes/links/attributes/serials are identical before/after |
 | Failed/uncertain Commit | Preserve current view and exact custody; replacement composition proof required |
 | Retirement/consolidation | Delete only unreachable state; do not change visible bytes or attributes |
-| Terminal unmount | Fence callbacks, detach mount, close namespace, own automatic reclaim |
+| Terminal unmount | Reversible normal kernel Busy probe; force control-producer refusal, one connection-specific abort/one plain detach; full loop + daemon-work drain before indexed ownership revocation/Close/cleanup |
 
 ```text
  request plans against [active A -> captured C -> base R]

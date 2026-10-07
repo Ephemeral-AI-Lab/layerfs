@@ -34,6 +34,17 @@ once before readiness; Workspace rows are namespaced within it. Bash Exec has
 no automatic runtime timeout. This supersedes the per-Workspace-file proposal;
 shared writer/pager/failure accounting and fair admission apply below.
 
+Owner supersession 2026-10-08 at R0 input `1a6bb53ef`: the SDK exposes
+ProjectApi, WorkspaceApi and SandboxApi. Ordinary Sandbox/runtime or an external
+executor owns command launch, standard streams, exit status and explicit
+cancellation; the filesystem daemon owns no command supervisor, launcher,
+per-Exec cgroup, command registration or custom Exec wire. FUSE serves every
+permitted visible process. Shell exit/zero registered commands proves no
+filesystem drain, and forced filesystem teardown never implicitly kills caller
+processes. Current [S8 specification](../307/S8-SPECIFICATION-20261008.md) and
+[R0–R9 rollout](../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
+historical baseline pins, receipts and verdicts retain their original scope.
+
 ## Primary design documents
 
 Seven primary contracts own the current operation and implementation design.
@@ -43,7 +54,7 @@ claims implementation or load-bearing qualification.
 | Document | Authoritative subject |
 | --- | --- |
 | [mount](workspace-api/mount.md) | Complete-root readiness, fast logical bootstrap, FUSE attach and partial startup custody |
-| [Exec](workspace-api/exec.md) | Ordinary Bash, no automatic timeout, streaming process I/O and concurrent filesystem activity |
+| [Exec](workspace-api/exec.md) | Optional WorkspaceApi delegation to actual Sandbox/runtime; external execution, standard streams/status and explicit cancellation; no daemon command owner |
 | [Commit](workspace-api/commit.md) | Full affected-state capture, construction/publication, concurrent Saves, outcomes and retention |
 | [terminal unmount](workspace-api/unmount.md) | Detach, logical close, activity fences and automatic physical cleanup, no separate close |
 | [status](workspace-api/status.md) | Bounded read-only observation, maintained counters and outcome knowledge |
@@ -181,7 +192,7 @@ Important claims carry one of these, in square brackets:
 ```text
  host: Project Init, seal, install, control only      Linux sandbox daemon (one of several)
                                                       FUSE + Workspace + content
-            control: mount / Exec / Commit /          Storage / Reader / Save + HistoryCatalog
+            control: mount / Commit /          Storage / Reader / Save + HistoryCatalog
             status / unmount  ------------------->         |                    |
                                                     overlay.sqlite        store.sqlite
                                                     one per daemon        one shared volume
@@ -316,7 +327,7 @@ Real limits, listed with their kind in
   can exceed `EDIT_DEFERRED_LIMIT` at Commit; one directory's changed names
   must fit in memory at Commit; a hole is committed as zeros.
 - **Resources:** daemon database/physical-disk budgets, logical Workspace admission budgets, configured counts
-  (Workspaces, Execs, upstream connections), cache budgets, the commands'
+  (Workspaces, admitted filesystem/control requests, runtime resources), cache budgets, the commands'
   descriptor limit.
 - **Engine and platform:** SQLite's database size, 64-bit offsets, 128 KiB per
   FUSE request.

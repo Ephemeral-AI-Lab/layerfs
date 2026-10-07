@@ -5,6 +5,17 @@
 > and the owner's subsequent directions. No new implementation or performance
 > qualification is claimed. [README](README.md) indexes the primary contracts.
 
+Owner supersession 2026-10-08 at R0 input `1a6bb53ef`: the SDK exposes
+ProjectApi, WorkspaceApi and SandboxApi. Ordinary Sandbox/runtime or an external
+executor owns command launch, standard streams, exit status and explicit
+cancellation; the filesystem daemon owns no command supervisor, launcher,
+per-Exec cgroup, command registration or custom Exec wire. FUSE serves every
+permitted visible process. Shell exit/zero registered commands proves no
+filesystem drain, and forced filesystem teardown never implicitly kills caller
+processes. Current [S8 specification](../307/S8-SPECIFICATION-20261008.md) and
+[R0–R9 rollout](../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
+historical baseline pins, receipts and verdicts retain their original scope.
+
 ## 1. What the owner requires
 
 Implement both current workstreams in `core/`. Root `crates/` is the v0.1.6
@@ -56,26 +67,22 @@ Known install advances W's base without remounting or discarding later changes.
 ## 2. The shape in one picture
 
 ```text
- host application composition                     Linux sandbox
- +-----------------------------------+             +----------------------------+
- | SDK/controller                    |  control    | daemon registry/routing    |
- | initialized cluster-one runtime   |------------>| ordinary process runner    |
- |  Storage / Reader / Save           |             | one FUSE mount per live W  |
- |  HistoryCatalog                   |             | Workspace semantics        |
- |  selected persistence provider    |<----------->| content read/construction  |
- +-----------------+-----------------+ adapters    | shared overlay SQL owner   |
-                   |                               +---------------+------------+
- current provider: host-local SQLite                                |
- immutable content / mutable history                   overlay.sqlite (one per daemon)
-                                                       WS metadata/payload/operation records
+host Project Init -> seal -> install once -> named in-VM shared Store
+host filesystem controls -------------> Linux daemon A / B / C
+                                          in-process Content / Storage / History
+                                          one Store + fixed readers/cache each
+                                          one local Overlay SQL owner each
+                                          Workspace / FUSE mounted directories
+                                                       ^
+ordinary Sandbox/runtime or external executor ---------+
+commands, standard streams/status and explicit cancellation
 ```
 
-`layerfs-server` is retired from the target. No dependency on or revival of that
-legacy crate is planned. At the source pin its directory remains excluded reference
-code; current active cluster-one libraries expose no deployed RPC endpoints.
-The host application embeds those libraries and supplies bounded authenticated
-runtime adapters. A future distributed provider is a separate implementation,
-not inferred from immutable object IDs ([06](06-cluster-one-integration.md)).
+Host retains no installed Store/data service. Every daemon opens shared Store
+directly; no legacy layerfs-server or host runtime adapter returns. Filesystem
+controls and ordinary runtime execution have separate owners. Immutable IDs
+permit reuse/distribution but imply no distributed provider, authority, exact
+history completion or safe collection.
 
 ## 3. Ownership, execution location, database and transport
 
@@ -84,12 +91,12 @@ not inferred from immutable object IDs ([06](06-cluster-one-integration.md)).
 | Mutable metadata and physical payload | daemon overlay engine / shared SQLite | Every key/query constrained by Workspace namespace/incarnation |
 | Filesystem semantics and stable views | Workspace / daemon | No SQL text, kernel protocol or pack format knowledge |
 | Kernel protocol/coherence | FUSE adapter / daemon | Ordinary syscall path for every authorized process |
-| Bash and streaming process I/O | process runner / daemon | No automatic runtime cap or command-specific filesystem hooks |
+| Bash and streaming process I/O | ordinary Sandbox/runtime or external executor | No automatic runtime cap or command-specific filesystem hooks |
 | Registry/lifecycle/admission | daemon composition | Short routing references; no whole-Exec/Commit slot lock |
 | Logical content reads/construction | layerfs-content / daemon | Stable sources, Store policy, bounded synchronous output |
-| Saved objects and physical encoding | cluster-one Storage/provider / runtime | Immutable identities, semantic admission, reference closure |
-| Branch/stage/Commit/serial authority | HistoryCatalog/provider / runtime | Atomic conditional mutable transitions and exact outcomes |
-| Cross-process delivery | runtime ports/adapters / both sides | Bounded correlated calls, authority binding, cancellation fences |
+| Saved objects and physical encoding | cluster-one Storage/provider / daemon | Immutable identities, semantic admission, reference closure |
+| Branch/stage/Commit/serial authority | HistoryCatalog/provider / daemon | Atomic overwrite Branch publication with captured parent; exact outcomes |
+| Cross-process delivery | authenticated filesystem control and ordinary runtime routes | Bounded correlated calls, authority binding, cancellation fences |
 
 One overlay database is opened/schema-initialized before daemon readiness.
 Workspace mount creates only small logical state and a base binding; no database
@@ -102,7 +109,7 @@ real, especially after cold mount. Fast bootstrap is a requirement, not a result
 | --- | --- | --- |
 | Read/lookup | Bounded consistent overlay plan, immutable references, cached/base demand read | Release locks before fetch; metadata queries exclude payload BLOBs |
 | Mutation | Fair admission, consistent validation, bounded SQL data/metadata transaction, reply | No base-payload copy-up, construction, network or arbitrary cleanup in transaction |
-| Commit | Fixed capture domain, construction, Save finish, stage, conditional transition, install | Bounded SQL windows; canonical work/transport outside overlay owner |
+| Commit | Fixed capture domain, construction, Save finish, atomic stage-and-publish, install | Bounded SQL windows; canonical work/transport outside overlay owner |
 
 State is disk-backed rows, not arrays sized to dirty file/name/edit counts. Paging
 limits memory windows, not total accepted files/bytes. Cluster-one deferred-node,
@@ -122,30 +129,34 @@ changes. No cap increase or whole-file error fallback substitutes for those chan
                                     |
                          overlay.sqlite
 
- independent workers: Bash processes, content construction per Commit,
-                      network delivery, runnable FUSE dispatch
+ independent daemon work: content construction per Commit, Store demands,
+                          runnable filesystem service; commands remain runtime-owned
  parked requests: inode/resource waiters retain bounded cancellable replies
 ```
 
-One database does not require one connection. The MEMORY/OFF single-owner profile
-is an initial candidate; WAL with a startup reader pool is a distinct unselected
-option. Standard SQLite still has one writer per database. Do not describe shared
-SQL writes as parallel or claim sustained throughput without proof.
+Overlay uses the selected one-owner connection MEMORY/OFF/EXCLUSIVE profile;
+shared Store is separate, Disposable/WAL/OFF, opened directly in each daemon
+with a fixed read set/cache and one writer session. No upstream exists. Neither
+single-writer database serializes whole commands or Commits. SQL jobs retain
+short transaction ownership and bounded fair service; actual device throughput
+and whole-system residency remain qualification work.
 
-Fairness spans Workspaces and service classes, including cleanup. A step's byte/page
-bound is not a device-latency bound. No busy/resource waiter occupies all FUSE workers;
-no Workspace mutex is held while queued for SQL or upstream. One Commit slot per
-Workspace; multiple Workspace construction producers may run concurrently, each
-with one construction worker and an independently owned Save capability.
+Fairness spans Workspaces and service classes, including live/idle cleanup.
+Waiters park without occupying all native workers or holding Workspace locks
+across owner/Store waits. Each Workspace admits one Commit lifecycle, with one
+construction producer and its local borrowed Save. Different Workspaces may
+construct concurrently, paying explicit shared resources and one-attempt Store
+Busy outcomes; no whole-Commit writer gate or extra construction helper.
 
 ## 6. Trust boundary
 
 Commands use configured non-root identity/environment without daemon credentials.
 The shared overlay stays daemon-private outside the FUSE mount. Namespace checks
 protect logical ownership; database/daemon failures remain shared physical domains.
-Runtime adapters bind peer, Workspace incarnation, Branch/scope and Save capability.
-They decode role/references and authenticate objects; an ID is not authorization.
-Current source lacks this complete boundary and remains a prerequisite.
+Authenticated controls bind peer, Workspace incarnation and Branch/scope.
+Constructed objects come from Content in-process; Store derives policy and
+reference closure. Sandbox/executor protects whole-Store authority and credentials;
+actual access setup/native proof remains required. No Save wire capability exists.
 
 Immutable objects are suitable for reuse/replication and prevent in-place version
 corruption. They do not establish durability, safe GC, distributed publication or

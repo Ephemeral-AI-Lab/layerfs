@@ -1,4 +1,4 @@
-# S8 specification: native mount, Bash Exec, request service and cache lifecycle
+# S8 specification: native filesystem, ordinary runtime access and cache lifecycle
 
 > **Status:** Proposal; target LayerFS 0.1.7; not a released contract.
 > Written 2026-10-08 on local `main` at `32d969776151588aec5aee1e9296658b8d00908d`
@@ -23,11 +23,23 @@ receiver admission. Original review reports/dispositions remain historical;
 these current rules supersede their conflicting decisions and count hypotheses.
 The product source pin is unchanged and no runtime proof is added.
 
+Owner supersession 2026-10-08, R0 at `1a6bb53ef`: SDK organization is
+ProjectApi, WorkspaceApi and SandboxApi. Ordinary Sandbox/runtime or the external
+executor owns commands, streams, exit status and explicit cancellation. The
+filesystem daemon has no Exec supervisor, launcher mode, per-Exec cgroups,
+command registration or custom Exec wire. Filesystem admission/capture and
+complete drain require their own exact owners. The
+[R0 reconciliation and withdrawal ledger](checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md)
+owns the prospective disposition; historical source pins, receipts and verdicts
+stay unchanged. The [R0–R9 rollout](ROLLOUT-LEDGER-20261008.md) is the current
+implementation assignment, superseding narrower old checkpoint dispatches.
+
 ## 1. Scope, authority and status of claims
 
 S8 delivers, on the existing direct-Store daemon: a native FUSE mount per
-Workspace with exact readiness and detach; ordinary `/bin/bash -c` Exec with
-bounded streaming I/O and exact process custody; an event-driven request service
+Workspace with exact readiness and detach, accessible to ordinary Bash and any
+permitted process; Sandbox/runtime access setup protecting the databases and
+credentials; an event-driven request service
 that parks admitted work off the receive loops, with the explicit pre-admission
 capacity exception of §6.2; the kernel cache
 profile with its coherence rules; stable identity; confinement of Bash from both
@@ -95,7 +107,7 @@ Workspace lifetime and Commit cadence are independent.
  host (control only after install)             Linux sandbox: one daemon
  --------------------------------             ---------------------------------------------
  Init -> seal -> install (once)               control Service + registry (one per daemon)
- mount / Exec / Commit / status /   ------->    |        |             |
+ mount / Commit / status /   ------->    |        |             |
  unmount over authenticated channels         Store (1 writer,     Overlay Owner       request service
                                              N readers, 1 cache)  (1 SQL thread)      (K workers, fair)
                                                  ^                    ^                   ^
@@ -103,7 +115,7 @@ Workspace lifetime and Commit cadence are independent.
                                                            |
                                 Workspace A (ns a)   Workspace B (ns b)   ...   independent mounts
                                 FUSE session A       FUSE session B             fresh kernel caches each
-                                Exec sessions        Exec sessions              shared Bash identity
+                                ordinary processes   ordinary processes         runtime-owned identity
 ```
 
 Daemon-lifetime owners, never recreated per mount [implemented and
@@ -127,12 +139,12 @@ Invariants. Each is a requirement with a proof row in the
 | I-8 | An admitted request never waits on a prerequisite on a dispatch loop or service worker; it parks with owned inputs/reply/credits and no Workspace/cache/registry/SQL lock. The sole dispatch exception is the pre-admission handoff-capacity wait in §6.2, charged to one fixed receive slot per loop and woken on shutdown |
 | I-9 | No park depends on a future kernel request on the same connection. Every prerequisite a request can park on is resolved by the daemon alone |
 | I-10 | READ replies exactly `min(length, EOF − offset)` bytes; WRITE replies the full count or an error; the WRITE offset is always the kernel's |
-| I-11 | Exec launches ordinary `/bin/bash -c`. There is no implicit Commit, reset, unmount, install, restore, command classifier, shell-specific filesystem route or automatic timeout |
-| I-12 | Shell reaping, each stream EOF or explicit disposal, descendant quiescence, outbound-record disposition, descriptors, mappings and requests are independent observations. Exec resource release requires their terminal conjunction (§5.4); Quiescent alone releases none of the stream/result owners |
+| I-11 | Ordinary Bash/runtime execution belongs to Sandbox or an external executor. Optional WorkspaceApi.exec delegates with the mounted directory. No implicit Commit, reset, unmount, install, restore, command classifier or automatic timeout |
+| I-12 | Runtime exit status, stream EOF/disposal, descendants, descriptors, mappings and FUSE work are independent observations. Runtime owns stream/result correctness; shell exit or zero registered commands never proves filesystem drain (§5.4) |
 | I-13 | Bash cannot open the Store, the overlay database, a daemon credential, `/dev/fuse` or a control socket through any path alias or inherited descriptor |
-| I-14 | Terminal success requires native detach, all loops joined, Exec terminal dispositions, drained daemon request/owner/completion/Store/control work, no owner capable of later accessing the namespace, native ownership revoked, logical Close acknowledged and routing removed. Indexed physical deletion may finish later as reported debt |
+| I-14 | Terminal success requires native detach, all loops joined, drained daemon request/owner/completion/Store/control work, no owner capable of later accessing the namespace, native ownership revoked, logical Close acknowledged and routing removed. Indexed physical deletion may finish later as reported debt |
 | I-15 | No Workspace `fsync`/`fdatasync`/`sync_data`/`sync_all`; no automatic retry, busy handler, polling sleep or failed-operation replay anywhere in these paths |
-| I-16 | Resident daemon state is bounded by admitted requests, fixed receive slots, open handles, live Execs and configured caches. Kernel lookup custody is indexed in Overlay, with bounded processing windows; no resident map grows with the visited tree, a file or a Commit |
+| I-16 | Resident daemon state is bounded by admitted requests, fixed receive slots, open handles and configured caches. Kernel lookup custody is indexed in Overlay, with bounded processing windows; no resident map grows with the visited tree, a file or a Commit |
 
 ## 4. Control operations and acknowledgement points
 
@@ -154,9 +166,7 @@ use separate connections, as today.
 | `Status(token)` (existing, extended) | `Status(WorkspaceStatus)` | Adds the native fields of section 4.3. Still zero Store SQL and one indexed engine observation |
 | `Commit(token)` (existing) | `Committed(outcome)` | Unchanged Store half; allowed in `Bound` and `Ready`. Live normalization is S10 (section 14) |
 | `Unmount(token)` (existing, extended) | `Unmounted(token)` | Normal terminal unmount, section 11. Acknowledged after I-14 |
-| `ForceUnmount { token, relinquish_unknown }` (new) | `ForceUnmounted { token, outcome }` or `Retained(TeardownCustody)` | Explicit forced policy. The additive result preserves original publication knowledge, cancellation and stream-disposal dispositions, detach/drain receipts and cleanup debt (§11) |
-| `ExecStatus { token, exec }` (new) | `Exec(ExecObservation)` | Bounded observation of one Exec session by identity |
-| `ExecCancel { token, exec, signal }` (new) | `Exec(ExecObservation)` | Explicit cancellation: signals the whole owned group, section 10.4 |
+| `ForceUnmount { token, relinquish_unknown }` (new) | `ForceUnmounted { token, outcome }` or `Retained(TeardownCustody)` | Explicit forced policy. The additive result preserves original publication knowledge, filesystem work disposition, detach/drain receipts and cleanup debt (§11) |
 | `Fork`, `History` (existing) | unchanged | Unchanged |
 
 The SDK exposes a typed `mount` helper that performs `Mount` then `Attach` as
@@ -164,31 +174,17 @@ two separately acknowledged attempts, each retaining its own request, phase and
 original failure. It is two control exchanges per mount; each is one bounded
 record pair on an existing connection.
 
-Exec runs on a dedicated authenticated connection per Exec, so that stream
-backpressure never blocks another control conversation:
+ProjectApi reuses Init/seal/install and fork/history. WorkspaceApi owns
+mount/location/Commit/status/unmount over this channel. SandboxApi owns actual
+sandbox lifecycle and ordinary runtime execution. Optional WorkspaceApi.exec
+selects the Ready mount directory and delegates to Sandbox; it adds no filesystem
+command registration. Standard runtime streams and status use the runtime's
+existing route. No Exec records or process identifiers are added to Bridge.
 
-```text
- host -> daemon                         daemon -> host
- ------------------------------         ----------------------------------------------
- ExecStart { token, exec, cwd,          ExecStarted { exec }            launch acknowledged
-             stdin: Closed|Piped,       ExecRefused(ControlRefusal)     before-spawn refusal
-             environment }
- ExecCommand(bytes)*  ExecCommandEnd
- ExecStdin(bytes)*    ExecStdinEof      ExecStdout(bytes)*  ExecStderr(bytes)*
-                                        ExecStreamEof(Stdout|Stderr)
-                                        ExecExited { code | signal }    root shell reaped
-                                        ExecQuiescent                   owned group empty
-                                        ExecCompleted(disposition)      all terminal conditions hold
-```
-
-`exec` is a host-selected 16-byte identity, unique within the Workspace
-incarnation. A second `ExecStart` with an admitted identity is refused `Busy`;
-nothing is ever executed twice on the daemon's initiative. The command text
-arrives in bounded chunks and is refused only at the operating system's
-single-argument limit, reported as that limit. Stream chunks are at most
-32768 bytes. The daemon holds at most one unsent chunk per stream; a slow host
-applies ordinary pipe backpressure to the command through the channel's own flow
-control. Total output and runtime are unbounded.
+The former dedicated Exec stream proposal and its 32768-byte custom records are
+withdrawn before implementation. Runtime streams still require bounded buffering,
+ordinary backpressure, complete per-stream delivery or explicit failure/disposal,
+actual exit status and no automatic execution replay or total output/runtime cap.
 
 ### 4.2 Typed refusals
 
@@ -201,10 +197,7 @@ existing codes. S8 adds phases, not message parsing.
 | `Attach` fails before `mount(2)` returns 0 | `Failed`, phase `attach:mount` | None. Entry stays `Unattached`; a new explicit `Attach` is a new operation |
 | `mount(2)` returned 0 but handshake or loop start failed | `Failed`, phase `attach:session`, with exact teardown custody | One owned detach attempt and complete daemon-work drain are required before returning to Unattached; any unestablished detach, join or consumer disposal remains Retained |
 | `Attach` outcome unknown to the daemon (owner thread lost, panic) | `Unknown` | Entry `Retained`; never a second attachment for that incarnation |
-| `ExecStart` on a Workspace that is not `Ready`, or is fenced | `Invalid` / `Busy`, phase `exec:admission` | None |
-| Exec capacity exhausted | `Capacity` | None |
-| Launch failed before the child existed | `Failed`, phase `exec:launch`, OS code in detail | No command ran |
-| Normal `Unmount` while Exec sessions, opens, request/receive work or Commit custody remain | `Busy`, phase `unmount:admission`, or `Unknown` for retained Commit custody | No terminal effect. Workspace stays usable |
+| Normal `Unmount` while opens, request/receive work or active control/Commit custody remain | `Busy`, phase `unmount:admission`, or `Unknown` for retained Commit custody | No terminal effect. Workspace stays usable |
 | Normal `umount2` returned `EBUSY` during the reversible probe | `Busy`, phase `unmount:kernel` | Control probe withdrawn; kernel requests were serviced normally throughout, so no terminal filesystem error was injected |
 | Detach began and detach/join/daemon-work drain is not established | `Retained(TeardownCustody)` | Original phase and remaining owners retained; usability is not promised |
 | New `Mount` while maintenance is stopped or declared debt headroom is exhausted | `Capacity`, phase `mount:debt` | None (D-13) |
@@ -214,7 +207,6 @@ existing codes. S8 adds phases, not message parsing.
 `WorkspaceStatus` gains a bounded `native` block: native phase; mount and
 connection identity; admitted/parked/running requests and fixed receive slots in
 use; queued ownership decrements and completions; open file/directory handles;
-nonterminal Exec sessions, process-group population, stream/result dispositions;
 control producers and Store demands/subscriptions retaining this namespace;
 lookup-reference totals and indexed-retirement debt; engine `CleanupState`,
 maintenance failure and reader/writer quarantine. Lists use fixed windows.
@@ -263,7 +255,7 @@ Store demand, stream send or join. This is new S8 wiring, not an existing proof.
 | Attaching | definite pre-mount failure | no mount effect | Unattached | mount owner |
 | Attaching | post-mount failure | detach and complete drain established | Unattached | mount/drain owner |
 | Attaching | effect or drain not established | original custody retained | Retained { attach } | mount/drain owner |
-| Ready | normal Unmount | no live control producer, nonterminal Exec, open or received/admitted work | ProbeUnmount | control Service |
+| Ready | normal Unmount | no live control producer, open or received/admitted work | ProbeUnmount | control Service |
 | ProbeUnmount | kernel EBUSY | kernel service remained normal | Ready | control Service |
 | ProbeUnmount | plain umount returned 0 | mount identity unchanged | Draining | mount/drain owner |
 | Ready | ForceUnmount | no active Commit/Attach/control producer; §11.1 guards | Stopping | control Service |
@@ -272,8 +264,7 @@ Store demand, stream send or join. This is new S8 wiring, not an existing proof.
 | Closing | logical Close acknowledged | original outcomes retained in result | Absent | control Service |
 | terminal phase | outcome/drain not established | no guessed cleanup | Retained { phase } | original owner |
 
-`execs` counts sessions not yet resource-terminal (§5.4), not just populated
-groups. `requests` includes admitted requests and no-reply ownership work until
+No command/session gauge participates in filesystem admission or drain. `requests` includes admitted requests and no-reply ownership work until
 completion disposal. Received-but-unadmitted callbacks have separate fixed-slot
 gauges. Track queued/running completions, control producers and namespace-bound
 Store consumers separately. Idle receive-buffer reservations and cached kernel
@@ -314,7 +305,7 @@ lookups are not active-request gauges. Shared Store/cache owners survive unmount
 | Parked | the above plus one `Pending` or one flight subscription or one admission wait | the prerequisite's completion event |
 | Runnable | the above | a service worker taking it in per-Workspace round-robin order |
 | Published | the above plus an engine `Publication` ticket | reply attempt |
-| ReplyAttempt | the reply object until `ok`/`error` returns | return of the send call; a send error is recorded, never retried |
+| ReplyAttempt | the reply object until `ok`/`error` returns | return of the pinned void-return reply method; one attempt counted, send result/delivery unavailable |
 | Released | nothing | — |
 
 This table describes reply-bearing requests. A FORGET unit has no reply object;
@@ -326,7 +317,7 @@ Linearization: a mutation takes effect at the commit of its single owner job
 also atomically acquires lookup custody before the entry reply; it is an owning
 write job, not a read-only exception (D-4/D-6). Reply order to the kernel is not
 controlled by the daemon and fuser gives
-no delivery receipt; correctness therefore rests on I-5, I-6 and the kernel's
+no exact send-result or delivery receipt; correctness therefore rests on I-5, I-6 and the kernel's
 own `attr_version` discard of attribute replies sampled before a newer inode
 version (section 8.3). Capture includes exactly the published frontier, ordered
 with earlier reply attempts through the engine's existing
@@ -339,9 +330,9 @@ parked requests get one terminal reply attempt (no-reply FORGET work is retained
 until disposal). For an already-attempted prerequisite, the drain owner retains
 its original result, completion and credits even if a terminal reply is attempted
 earlier to release a blocked task. The reply attempt does not dispose that job
-or settle its outcome. A published mutation stays published. A thread blocked
-in FUSE must be released/aborted before waiting for process exit; the separate
-daemon-work barrier still precedes lease retirement and logical Close.
+or settle its outcome. A published mutation stays published. A caller thread blocked in FUSE must be released/aborted by its filesystem
+disposition. Any separately requested process cancellation/wait belongs to its
+runtime owner; the daemon-work barrier precedes lease retirement and Close.
 
 ### 5.3 Lookup references and open handles
 
@@ -388,61 +379,34 @@ Backing grows with live kernel ownership; resident windows stay bounded. Count
 indexed writes and total retirement work honestly in H-4/H-8 and prove removal,
 O_PATH, partial/batched FORGET and detach in FP-29/FP-31.
 
-### 5.4 Exec, process group and streams
+<a id="54-exec-process-group-and-streams"></a>
+### 5.4 Runtime process and stream ownership
 
-```text
- ExecStart -> Launching -> Running
-                           | root wait/reap event -> Exited(status)
-                           | stdout read=0        -> StdoutEof
-                           | stderr read=0        -> StderrEof
-                           | cgroup empty         -> Quiescent
-                           | outbound records     -> Delivered | Failed | ExplicitlyDiscarded
-                           +---- all terminal conditions known ----> ResourceTerminal
-```
+Sandbox/runtime or the external executor launches ordinary commands and owns
+standard I/O, actual exit/signal status and explicit caller cancellation. The
+old daemon ResourceTerminal/cgroup/stream-record state machine is withdrawn.
+No process or stream owner is created in the filesystem daemon. Runtime EOF,
+output delivery/disposal and exit status remain independently correct: buffered
+bytes can remain after process exit, and descendants can retain a pipe or file.
+A lost result never authorizes automatic command re-execution.
 
-These events can arrive in any order. Quiescent records process-group emptiness
-only. It does not close pipes, release unsent chunks/connections, discard the
-shell's status or decrement the nonterminal-Exec gauge. Empty groups can still
-have bytes buffered in their pipes and outbound channel queues.
+Ordinary filesystem admission has no command identity or parent requirement.
+The daemon cannot infer released cwd, O_PATH, open descriptors, mappings or
+kernel lookup ownership from shell exit or a runtime observation. Runtime setup
+establishes identity and mount visibility/protection; the native mount owner
+qualifies actual kernel busy/detach behavior at that topology. The filesystem
+barrier is §11.2, and forced teardown never implicitly signals caller processes.
 
-ResourceTerminal requires: the root child reaped with its original status;
-the group empty; stdin closed/disposed; stdout and stderr each drained to EOF
-or explicitly disposed; all owned output and pre-completion event records have
-a known send/failed/discarded disposition; and their I/O owners stopped/joined.
-Only this conjunction releases session resources and decrements `execs`.
-The terminal observation records which streams completed and which did not.
-The subsequent ExecCompleted notification is owned by the bounded terminal
-observation mechanism, not included recursively in the predicate that creates
-it. A send return is not proof of host consumption; a lost/unknown final send
-retains that exact outcome without replay or retaining disposed pipes.
-
-Each live session owns its group, pipes, dedicated connection and at most one
-unsent chunk per output stream. Process event handling remains runnable while
-that stream's I/O owner is backpressured. A stalled host may keep an exited,
-quiescent session nonterminal; normal unmount returns Busy until output has a
-known terminal disposition. No timeout or automatic truncation is introduced.
-
-| Event | Session effect | Does not imply |
-| --- | --- | --- |
-| Connection lost | OutputDetached: stop further pipe reads, retain bounded pending bytes and original delivery failure; explicit ExecCancel/ForceUnmount can dispose the streams and record output incomplete | kill, replay or complete output |
-| ExecCancel(signal) | Signal owned processes; retain independent process and stream outcomes. A detached/unavailable output sink may be explicitly disposed by this cancellation, recorded as incomplete | quiescence or output success |
-| Exited | Reap and record original status; queue its event | stream EOF or empty group |
-| StreamEof | No further bytes from that pipe; keep any unsent chunk until disposition | delivery of buffered bytes or process completion |
-| Quiescent | Record empty group; preserve pipe/output/result owners | ResourceTerminal |
-| Explicit forced output disposal | Close/dispose owned streams and pending records once, recording incomplete output and original send failures | successful EOF delivery |
-| ResourceTerminal | Release joined I/O/session resources and decrement execs; retain bounded terminal observation | Commit or unmount |
-
-FP-7/FP-30 must exercise fast process exit followed by a slow reader, EOF before
-group emptiness and group emptiness before EOF/delivery, including output detached
-and explicitly discarded by forced teardown.
+FP-6-Runtime, FP-7-Runtime and FP-30-Runtime replace the old prospective daemon
+stream/session selections. FP-20/21/22-FS/28/29/31–34 retain filesystem-lifetime
+proofs independent of how commands were launched.
 
 ### 5.5 Terminal drain
 
 The terminal owner first freezes control admission and establishes the correct
 probe/stopping phase, then owns kernel detach and all remaining daemon work.
 FUSE receiver-loop exit is one barrier, not the whole barrier. Requests, pending
-owner completions, namespace-bound Store consumers, control producers and Exec
-I/O retain their original ownership until result disposal. Only the complete
+owner completions, namespace-bound Store consumers, control producers retain their original ownership until result disposal. Only the complete
 §11.2 predicate permits revocation of native leases and logical Close. Physical
 retirement/deletion is then paged through the existing fair owner, with debt
 reported until Gone. No receiver shutdown silently drops another owner's job.
@@ -456,7 +420,6 @@ reported until Gone. No receiver shutdown silently drops another owner's job.
 | Dispatch loop (fuser `run`) | 2 per mount initially | Decode into its fixed receive slot; wait only for that mount's native handoff credit before any copy/job; own bounded inputs and hand off request/FORGET work | Wait for an owner result/credit, Store demand or stream; retain Workspace/cache/registry/SQL locks during the admission wait |
 | Service worker | `K` per daemon, fixed at readiness; initial `K = read_handles + 2` | Run one step of one request; perform a cold Store demand when it holds a reader; compose and send replies | Wait on a `Pending`, a flight or an admission credit |
 | Overlay Owner | 1 per daemon [implemented] | Short typed SQL jobs and maintenance turns | Content decode, Store I/O, reply sends |
-| Exec supervisor | 1 per daemon | Advance independent process, pipe and group events; retain bounded per-stream I/O owners so one blocked send cannot stop other sessions | Filesystem work or a global blocking stream send |
 | Mount session owner | 1 per mount, around `fuser::Session::run` | Retain session/result custody; distinguish joined successful completion from errors that can leave unjoined loops | Infer complete drain from run() returning an error |
 
 The existing engine remains the only SQL scheduler. The request service
@@ -746,7 +709,7 @@ above waits for it to expire.
 | `st_dev` | Assigned by the kernel per mount; differs across mounts and is outside daemon control | kernel fact |
 | `st_mode`, `st_size`, `st_mtime` | Stored, 1 ns granularity | implemented and source-verified |
 | `st_ctime`, `st_atime` | Reported equal to `st_mtime`; the mount is `noatime` | owner decision O-9 direction, K12 |
-| `st_uid`, `st_gid` | The daemon's configured Bash identity for every inode; not stored | proposed design |
+| `st_uid`, `st_gid` | The runtime's configured command identity for every inode; not stored | proposed design |
 | `st_nlink` | Stored name count for files; 2 for directories | proposed design |
 | `st_blocks`, `st_blksize` | Derived from size; fixed block size | proposed design |
 
@@ -777,91 +740,69 @@ Consequences that must not be overstated:
   any filesystem sees them. S8 neither repairs it nor reduces the timestamp
   contract around it.
 
-## 10. Exec, streams and confinement
+## 10. Ordinary runtime execution, access and confinement
 
-### 10.1 Launch
+<a id="101-launch"></a>
+### 10.1 Runtime execution
 
-The daemon never runs code between `fork` and `exec` in its own image. It spawns
-its own executable in a launcher mode; that process, using only safe `nix` and
-standard-library calls:
-
-1. joins the Exec session's process-custody group;
-2. enters a new mount namespace and applies the propagation contract of 10.3;
-3. detaches the Store volume, the overlay directory and every sibling Workspace
-   mount from its namespace;
-4. sets no-new-privileges unless the explicit configuration value clears it
-   (P-2 ruling: set);
-5. drops supplementary groups, then gid, then uid, to the daemon's Bash identity;
-6. changes directory to the mount, then to the authorized relative directory,
-   resolved beneath the mount without leaving it;
-7. replaces itself with `/bin/bash -c <command>` and the caller's environment.
-
-Any failure before step 7 is a launch failure with the failing step and OS code,
-reported as `exec:launch`; no command ran. The launcher inherits exactly three
-descriptors (the pipes); every other daemon descriptor is close-on-exec, and the
-launcher asserts its own descriptor table before step 7.
+SandboxApi uses the actual ordinary Sandbox runtime backend for lifecycle,
+standard streams, exit status and explicit caller-requested cancellation.
+WorkspaceApi.exec, when exposed, only chooses the mounted directory and delegates.
+External executors can launch Bash directly. There is no filesystem daemon
+launcher mode, process supervisor, per-Exec cgroup, Exec registration, custom
+stream/status/cancellation protocol or change-at-exit hook. Resource limits
+selected by the runtime remain explicit; LayerFS adds no runtime/output cap.
 
 ### 10.2 What confinement is and is not
 
-| Property | Mechanism | Strength |
+| Property | Owning requirement | Proof |
 | --- | --- | --- |
-| Bash cannot open the Store or overlay database by path | Volume and overlay directory traversable only by the daemon user; detached from the launcher's namespace | Both are required: the user change defeats `/proc/<daemon>/root` and `/proc/<daemon>/fd`; the detach removes the path |
-| Bash cannot reach them by descriptor | Close-on-exec everywhere, asserted | Verified per launch |
-| Bash cannot abort or unmount the connection | The mount owner is the daemon user; the fusectl files belong to that user; no setuid unmount helper is reachable when P-2 is set | Depends on P-2 for helpers outside the mount |
-| File access inside the mount | Kernel `default_permissions` on the reported mode with the Bash uid as owner | The only correct option: requests carry one uid and gid, and cached reads never reach the daemon |
-| Separation between Workspaces of one daemon | A sibling's mount is absent from a command's namespace | **Path visibility only.** All commands of one daemon share one uid (O-24); a same-uid process is reachable through `/proc/<pid>/root`. This is not an adversarial isolation boundary and is not claimed as one |
-| The working directory | Chosen under the mount | Not confinement. A command can `cd` anywhere its identity permits |
+| Commands cannot open Store, Overlay or daemon credentials | Sandbox setup/external executor establishes unprivileged identity, protected path visibility, /proc protections and no inherited protected descriptors | FP-5-Runtime at actual topology; a directory layout is not isolation evidence |
+| Commands cannot abort/unmount the connection | Daemon owns mount/fusectl controls; runtime withholds relevant capabilities and helper escalation. P-2's explicit no-new-privileges setting belongs to runtime setup | FP-5-Runtime |
+| Permitted filesystem access | Kernel default_permissions and reported configured uid/gid/mode; same semantics for all processes seeing the mount | FP-17; no Exec admission |
+| Sibling mount visibility | Runtime access setup declares and proves its actual namespace topology; shared uid alone is no adversarial isolation boundary | FP-5-Runtime and FP-22-FS |
+| Working directory | Caller/runtime chooses it; optional SDK convenience chooses a mounted directory | It is not confinement |
+
+Protected descriptor custody is tested for the actual runtime. Requiring exactly
+three descriptors from a daemon launcher is withdrawn. The setup must prevent
+Store/Overlay/credential access through path, /proc and descriptor aliases, with
+an exact source/environment proof. P-2's original launcher wording remains a
+historical owner ruling in §15.3; its helper barrier is now enforced by runtime.
 
 ### 10.3 Mount propagation contract
 
-Each Workspace mount point lives in its own shared peer group in the daemon's
-namespace. A launcher's namespace receives its own Workspace's mount as a slave
-and holds no copy of any other Workspace's mount. Required consequences:
+Sandbox setup/external executor owns mount visibility. The daemon must qualify
+normal busy/detach and connection/drain behavior for every supported topology.
+If namespaces copy a mount, prove that a retained cwd/descriptor/mapping keeps
+normal unmount truthful, successful detach disposes all required copies, and a
+process using Workspace A does not keep B's connection alive. Do not choose
+private or slave propagation by assumption; FP-22-FS proves the actual runtime
+setup. A caller-owned process surviving forced connection teardown is permitted;
+the daemon does not own its later exit, output or cancellation.
 
-- the daemon's plain `umount2(path, 0)` returns `EBUSY` while any process of
-  that Workspace uses the mount in its own namespace, so the kernel busy check
-  stays truthful;
-- when it returns 0, every copy is gone, the connection ends and the loops
-  observe `ENODEV`;
-- a long-running command in Workspace A holds no reference that could keep
-  Workspace B's connection alive.
+<a id="104-process-custody-and-cancellation"></a>
+### 10.4 Explicit caller cancellation and forced filesystem teardown
 
-These follow from general VFS propagation semantics that the kernel review did
-not line-verify. They are therefore requirements with a dedicated native oracle
-(FP-22) in the first lifecycle checkpoint, and the design is not considered
-established until that oracle passes.
-
-### 10.4 Process custody and cancellation
-
-Custody of descendants is by a kernel-maintained group that a process cannot
-leave by `setsid` or double-fork: one cgroup v2 leaf per Exec session, observed
-through its population event and killed as a unit. The root shell's exit status
-comes from its own exit event. If the sandbox does not delegate a writable
-cgroup v2 subtree, daemon readiness fails explicitly; there is no silent
-fallback to process-group signalling, which cannot see an escaped descendant.
-This requirement, together with `/dev/fuse` and the capabilities for `mount`,
-namespace entry and identity change, is verified against the actual environment
-in the first implementation checkpoint and is not inferred from the retained
-image identity.
-
-Cancellation is explicit and has three independent parts: signal the group;
-complete parked filesystem replies of that Workspace where the caller requested
-forced teardown (I-7 makes this precede any wait for exit); observe `Exited`,
-EOFs and `Quiescent` as events. Accepted filesystem mutations are never rolled
-back.
+Runtime owns command identity and requested cancellation. Daemon ForceUnmount
+owns only the exact connection-specific abort, native request disposition,
+attempted daemon-work drain, plain detach and namespace retirement of §11.
+It never implicitly kills commands, waits for command output EOF or treats
+process exit as a filesystem fence. Accepted filesystem effects stay published.
+If a caller needs both process cancellation and unmount, it explicitly requests
+both from their owners; neither establishes the other's completion.
 
 ## 11. Terminal unmount, drain and reclamation
 
 ### 11.1 Admission
 
-Control admission and the native drain owner establish one ordering with request,
-Exec and control-operation guards. No guard may be minted after the terminal
+Control admission and the native drain owner establish one ordering with request and
+control-operation guards. No guard may be minted after the terminal
 barrier closes; an already-owned guard keeps its original result/lease alive.
 
 | Policy | Before any terminal effect | Admitted phase |
 | --- | --- | --- |
-| Normal | Refuse Busy for an active control producer, nonterminal Exec, open, received/admitted request, ownership decrement or pending completion. Retained Commit uncertainty returns Unknown. Cached nlookup references and empty receive reservations are not activity | ProbeUnmount |
-| Forced | Refuse Busy while Commit, Attach or another namespace control producer is still running. No signal/abort/unmount occurs on that refusal. A stopped known-publication failure keeps its original outcome; stopped unknown custody requires explicit relinquish_unknown and stays Unknown in the terminal receipt | Stopping, even if Exec/kernel request owners remain |
+| Normal | Refuse Busy for an active control producer, open, received/admitted request, ownership decrement or pending completion. Retained Commit uncertainty returns Unknown. Cached nlookup references and empty receive reservations are not activity | ProbeUnmount |
+| Forced | Refuse Busy while Commit, Attach or another namespace control producer is still running. No abort/unmount occurs on that refusal. A stopped known-publication failure keeps its original outcome; stopped unknown custody requires explicit relinquish_unknown and stays Unknown in the terminal receipt | Stopping, even if kernel request owners remain |
 
 Relinquishing stopped unknown custody is not cancellation or resolution of an
 in-flight operation. It permits explicit local disposal only after all consumers
@@ -870,7 +811,7 @@ interruptible Commit or let a terminal action race its Store publication.
 
 ### 11.2 Probe, forced stop and complete drain
 
-**Normal path.** ProbeUnmount temporarily refuses new Exec/Attach/Commit control
+**Normal path.** ProbeUnmount temporarily refuses new Attach/Commit control
 admission but continues ordinary kernel request admission and service. It neither
 returns terminal errors nor parks filesystem requests waiting for the unmount
 syscall; that syscall can itself need filesystem service. Make one plain
@@ -884,10 +825,9 @@ the exact mount/phase; it does not guess Ready or Detached.
 owned/validated for that mount; do not use `umount2(MNT_FORCE)` as an abort-only
 primitive. First establish Stopping, then make one one-byte abort write on the
 retained control descriptor, wake receive-capacity waiters, complete unattempted
-parked replies and signal the explicitly owned Exec groups. Preserve the results
-of jobs already attempted even if their terminal reply was sent early. No wait
-for process exit precedes releasing its blocked FUSE request. Explicit forced
-stream disposal records output incomplete; it cannot masquerade as delivered EOF.
+parked replies. Preserve the results of jobs already attempted even if their
+terminal reply was sent early. The daemon neither signals caller processes nor
+waits for their exit or stream EOF; it drains exact filesystem/daemon consumers.
 
 Abort and detach are independent effects. Linux 6.12's
 [fusectl abort handler](https://github.com/torvalds/linux/blob/v6.12/fs/fuse/control.c#L31-L42)
@@ -898,9 +838,11 @@ exactly one plain detach attempt, with no second unmount after success and no
 retry after EBUSY/error. Bind the abort descriptor to the connection/mount
 incarnation at Attach; do not reopen a guessed connection number at teardown.
 Its write return alone is not loop-exit or detach evidence. Missing capability
-refuses forced admission before signals/effects; short/failed/unknown abort or
+refuses forced admission before effects; short/failed/unknown abort or
 detach retains the original phase and custody. A failed detach after abort is
 Retained/aborted-but-still-mounted, never the reversible normal Busy result.
+A caller-held cwd/descriptor/mapping can cause that post-abort EBUSY while its
+process survives; caller cleanup remains external and no second detach is attempted.
 
 **Complete drain predicate, required by both paths before revocation/Close:**
 
@@ -922,9 +864,10 @@ Retained/aborted-but-still-mounted, never the reversible normal Busy result.
    forced admission refuse a running Commit; any other unestablished disposition
    keeps the terminal operation Retained. Original known/unknown publication
    records are transferred into the terminal receipt, never settled by a read.
-5. Every Exec is ResourceTerminal: child reaped, group empty, streams/output/
-   result records disposed and I/O owners stopped. Forced disposal is explicit
-   and recorded. No future pipe, request or callback can use the namespace.
+5. No native/control/request continuation can acquire or use this namespace
+   after the barrier. Caller processes and runtime streams are independent;
+   their survival after forced filesystem abort does not reauthorize filesystem
+   access or permit retirement before the daemon-work barrier.
 
 A service/cold job may outlive FUSE loop exit. Its drain guard, original inputs,
 result and credits stay alive until the above predicate holds; no timeout drops
@@ -934,7 +877,7 @@ remaining owner/phase and leaves leases and routing held.
 ```text
  normal: ProbeUnmount (kernel service continues) -> plain detach once
           EBUSY -> Ready; no filesystem request failed because of the probe
- forced: Stopping -> abort once -> replies/signals/dispositions -> daemon drain
+ forced: Stopping -> abort once -> replies/dispositions -> daemon drain
           -> plain detach once; failure remains Retained, not Ready
  both: detach + all loop joins + complete daemon-work drain
           -> fixed logical native-owner revocation -> logical Close -> terminal reply
@@ -966,12 +909,11 @@ an unbounded foreground walk or deletion of an owner that is still executing.
 | Retained { phase } | Abort, detach, join, consumer disposition, revocation or Close was not established | Exact stopping owner/work and original publication knowledge remain; no success or guessed cleanup |
 
 Normal success keeps its existing Unmounted record. ForceUnmounted is a new tag
-whose bounded outcome carries original known/unknown Commit knowledge, stream
-completion/discard/failure counts, abort/detach/drain dispositions and cleanup
-state. Unknown stays Unknown even after explicit local relinquishment; an absent
-Commit is not invented as a NotPublished verdict. Individual Exec terminal
-observations use the bounded ExecStatus route while their observation owner is
-retained, and the terminal aggregate preserves incomplete-output disposition.
+whose bounded outcome carries original known/unknown Commit knowledge,
+filesystem-work disposal, abort/detach/drain dispositions and cleanup state.
+Unknown stays Unknown after explicit local relinquishment; an absent Commit
+is never invented as a NotPublished verdict. Runtime execution/results remain
+under their separate caller/runtime owner and do not enter this terminal record.
 
 ### 11.4 Reclamation and debt
 
@@ -996,14 +938,13 @@ declared headroom; actual growth/progress is proved, not assumed from a counter.
 | A reader session quarantined | `EIO` for the demand that observed it | reader excluded and reported | reuse of that reader |
 | Mutation job outcome uncertain (owner lost mid-attempt) | `EIO` | the engine's original unknown; the Workspace's activity becomes `Uncertain` | a resend, a rollback, a guessed success |
 | Serial range exhausted because the Store write was `Busy` | `EAGAIN` (P-1 ruling, section 15.3) | the create has no effect | a wait, a gate or a replay of the failed reservation |
-| Reply send fails | none possible | a per-mount counter and the publication, if any | a second send |
+| Reply method returns () | One explicit attempt; exact send result/delivery is unavailable through pinned fuser | Attempt count and publication, if any; internal library error logs are uncorrelated diagnostics | Retrying or claiming send/delivery success/error from method return |
 | Request during ProbeUnmount / after terminal stop | ordinary service during probe; ENOTCONN only in Stopping/known detach | receive-slot/request disposal and original attempted work | terminal errors from a reversible probe |
 | Parked request when the connection is aborted | one terminal reply attempt; no-reply work retains its explicit disposal path | every attempted job, original result/completion, credit and drain guard until disposal | treating a sent error or loop exit as daemon-work completion |
 | Lost `Mount` reply | — | the entry, observable through `Locate` | a second binding for that incarnation |
 | Lost `Attach` reply | — | the `Ready` or `Retained` entry | a second attachment |
-| Lost Exec connection | original send/receive failure; OutputDetached | bounded pipe/output/process custody until ResourceTerminal or explicit incomplete-output disposal | automatic kill, truncation-success, timeout or replay |
 | Known publication, failed local install | existing `LocalFailure` custody | the original capture and known publication | resolution by a later read |
-| Later explicit observation (`Status`, `Locate`, `ExecStatus`) | the current observation | — | settling an earlier unknown |
+| Later explicit observation (`Status`, `Locate`) | the current observation | — | settling an earlier unknown |
 
 Uncertain outcomes remain unknown; no observer resolves one. Explicit forced
 local relinquishment follows §11.1 only after consumers stop and preserves that
@@ -1046,7 +987,7 @@ coverage.
 
 | ID | Decision | Alternative rejected and why |
 | --- | --- | --- |
-| D-1 | Extend the existing registry `Binding` with a native state and three gauges; add `Attach`, `Locate`, `ForceUnmount`, `ExecStatus`, `ExecCancel` and the Exec stream records as additive tags | A second routing registry; a single combined mount record that would blur the two acknowledgement points |
+| D-1 | Extend the existing registry `Binding` with a native state and three gauges; add `Attach`, `Locate`, `ForceUnmount` as additive tags | A second routing registry; a single combined mount record that would blur the two acknowledgement points |
 | D-2 | First-party `mount(2)`/`umount2(2)` and `Session::from_fd`; two loops through `Config.n_threads` | fuser's mount and unmount ownership: silent helper fallback, lazy detach, a handle that reports success after `EBUSY` |
 | D-3 | A daemon request service with per-Workspace runnable queues, fixed workers and completion notifiers; dispatch loops never wait | Blocking the loop in `Pending::wait`; more loops per mount as a substitute for parking |
 | D-4 | One consistent answer job with required owning effects: positive LOOKUP acquires indexed custody, pure observations remain read-only; explicit processing leases/fact rounds are counted | A torn multi-job answer or a zero-SQL claim that drops necessary ownership |
@@ -1055,9 +996,9 @@ coverage.
 | D-7 | Fair bounded cold-demand admission with idle, healthy reader selection and per-request failure scopes | The blind rotating counter and blocking reader mutex |
 | D-8 | Complete native/daemon-work drain, then fixed logical native-owner revocation and indexed bounded physical retirement | Treating receiver-loop exit as full drain, retiring active producers, or assuming all FORGET/RELEASE records arrive |
 | D-9 | Mount reads its Branch snapshot through a read-only session; no daemon-local gate on the writer session | A writer mutex or wait, which K30 forbids |
-| D-10 | Launcher/cgroup custody and independent process, stream and result owners; ResourceTerminal is their conjunction; dedicated connection per Exec | Releasing a session at Quiescent, implicit output truncation, or process-group-only descendant custody |
-| D-11 | The Bash identity is one explicit daemon configuration value, required equal in every daemon sharing a Store; mount access is `allow_other` plus `default_permissions` with the daemon as mount owner | Making the Bash user the mount owner, which would let it abort the connection |
-| D-12 | Per-Workspace shared peer group, slave propagation into each launcher namespace, sibling mounts detached | Private propagation, under which the daemon's unmount succeeds while commands still use the mount and the join never completes |
+| D-10 | Withdrawn 2026-10-08: no daemon command/session owner. Sandbox/runtime owns ordinary standard streams/status and explicit cancellation; optional WorkspaceApi.exec delegates | Historical launcher/cgroup/ResourceTerminal/custom-wire proposal is retained at its source pin only |
+| D-11 | The command identity is an explicit runtime/access configuration value, required equal in every daemon sharing a Store; mount access is `allow_other` plus `default_permissions` with the daemon as mount owner | Making the Bash user the mount owner, which would let it abort the connection |
+| D-12 | Runtime setup owns mount visibility/propagation; qualify exact busy/detach/drain at actual supported topology, including external processes and separate Workspaces | Unproved copied mounts, shell-exit fences or daemon launcher namespaces |
 | D-13 | Mount admission refuses on stopped maintenance or exhausted declared debt headroom | Nominal success with unbounded overlay growth |
 | D-14 | No kernel notifications in S8; xattr family answered `ENOSYS` | Per-WRITE invalidation, which deadlocks under cached I/O |
 | D-15 | Subscribers of a shared failed acquisition receive the same original failure and are never re-attempted; lent bytes stay charged after eviction | Hidden re-acquisition; reporting eviction as freed memory |
@@ -1085,7 +1026,10 @@ over the recommendation column below.
 The recommendations of section 15.2 were presented to the owner in the main
 chat on 2026-10-08 in a refined form, and the owner replied "proceed". The rows
 below transcribe what was presented. They govern over the recommendation column
-of 15.2, and none of them sets a number that the text says is left for later.
+of 15.2, and none sets a number left for later. P-2's original launcher mechanism
+wording is historical and superseded by R0: actual Sandbox/executor setup applies
+its explicit no-new-privileges/helper barrier and proof. It authorizes no daemon
+launcher, per-Exec cgroup or command supervision.
 
 | ID | Ruling |
 | --- | --- |

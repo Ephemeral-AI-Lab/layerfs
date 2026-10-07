@@ -14,6 +14,17 @@ The [cluster one](../../../../cluster_one_handbook.md) and
 [CAS/CDC/delta](../../../../cas_cdc_deltaencoding_handbook.md) handbooks govern
 the implemented libraries; SQLite overlay transactions do not replace their APIs.
 
+Owner supersession 2026-10-08 at R0 input `1a6bb53ef`: the SDK exposes
+ProjectApi, WorkspaceApi and SandboxApi. Ordinary Sandbox/runtime or an external
+executor owns command launch, standard streams, exit status and explicit
+cancellation; the filesystem daemon owns no command supervisor, launcher,
+per-Exec cgroup, command registration or custom Exec wire. FUSE serves every
+permitted visible process. Shell exit/zero registered commands proves no
+filesystem drain, and forced filesystem teardown never implicitly kills caller
+processes. Current [S8 specification](../307/S8-SPECIFICATION-20261008.md) and
+[R0–R9 rollout](../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
+historical baseline pins, receipts and verdicts retain their original scope.
+
 ## 1. Readiness and the complete base
 
 [owner requirement; proposed readiness contract]
@@ -35,7 +46,7 @@ zero-I/O or measured mount-time claim follows from this design.
 
 ```text
 PREPARATION / INITIALIZATION                         TOOL CALL
-host application: cluster-one runtime
+host Init/seal/install -> shared Store; daemon opens in-process
   canonical full root + history binding ---- authorized root ----+
   active content/storage/history/persistence                      |
                                                                 v
@@ -48,13 +59,11 @@ daemon startup: overlay.sqlite                         logical Workspace open
                                                 terminal unmount + logical cleanup
 ```
 
-The host application embeds the existing cluster-one libraries and owns the
-runtime ports/adapters across the sandbox boundary. This proposal does not revive
-or rename the removed legacy `layerfs-server` and does not require a replacement
-crate solely to host those libraries. The current persistence provider is
-host-local macOS SQLite. Immutable content permits authentication and reuse across
-processes, and can support future distribution; a distributed provider still needs
-history conditional transitions, authority, exact outcomes and root retention.
+Every daemon embeds the existing cluster-one libraries and opens the shared
+Store directly on a named in-VM volume. Host Init/seal/install is separate and
+control-only afterward. No host Store/data runtime or layerfs-server exists.
+Immutable reuse does not establish a distributed provider; authority, exact
+history transitions, reference closure and retention remain explicit.
 
 Mount, ordinary Exec, explicit Commit and terminal unmount can be sequenced at
 one-call granularity. The same Workspace can also remain mounted for many
@@ -89,7 +98,7 @@ waiting for its job. In-process rollback and acknowledged transaction atomicity
 require proof. No daemon/VM/power-loss survival is claimed under this profile.
 
 ```text
-Execs / FUSE workers / Commit constructors / lifecycle / maintenance producers
+FUSE workers / Commit constructors / lifecycle / maintenance producers
                                   |
                       bounded per-Workspace queues
                                   |
@@ -364,32 +373,31 @@ local cleanup. Reuse does not make a measurement cache cold.
 Unsafe shared SQLite corruption/I/O or unknown state can affect every daemon
 Workspace. Logical namespace admission refusals can remain local. The current
 host provider also quarantines its shared session after unknown persistence
-outcomes; host-runtime adapters must report that global scope honestly.
+outcomes; daemon adapters report that session scope honestly.
 
 ## 7. Outcome, trust and lifetime prerequisites
 
 [required integration proofs]
 
 Immutable content IDs do not authorize a peer or prove a role/reference graph.
-The host runtime derives identity, role and direct references, validates policy
-and reference closure, and binds authenticated peer, Workspace incarnation,
-Branch/scope, Store/profile and Save capability. Enforce canonical object length,
+Content constructors produce objects in the same daemon process; bounded root
+checks and explicit Content validation retain policy/reference obligations.
+Authenticated filesystem controls bind route/incarnation and Branch/scope.
+Sandbox setup protects whole-Store authority and daemon credentials. Enforce canonical object length,
 batch/queued bytes and live-session budgets before allocation. Reserve demand
-read/control capacity; a Save capability must not occupy every transport
-connection for its full lifetime.
+read/control capacity; constructor-local Saves cannot monopolize the fixed
+reader set or native filesystem service.
 
-Actual `Save<'a>` borrows `Storage` and retains mutable index borrows. A runtime
-session registry needs a valid owner/borrow lifetime topology; one Storage per
-Save does not by itself specify a safe owning registry. Interleaving Saves is a
-proof obligation, not known impossible and not established by a comment. No
-legacy engine or patched dependency is a fallback.
+Actual Save borrows its independently owned Storage on the Commit thread.
+There is no remote Save/session registry. Shared-process/interleaved Save proofs
+retain their exact direct-provider scope; mounted construction/service remains
+required. No legacy engine or patched dependency is a fallback.
 
 Keep construction acceptance, Save finish, stage creation, history transition,
 overlay install and physical retirement distinct. A lost stage/discard/transition
 reply preserves the exact uncertain disposition; never fold or resend on a
-guess. Forced teardown needs incarnation/capability fencing for dispatched host
-operations and reports an already-crossed transition as unknown when it cannot
-be stopped. MEMORY/OFF supplies no cross-crash reconstruction procedure. The
+guess. Force refuses active namespace control producers before effects; stopped
+unknowns preserve exact original custody. No host data operation is dispatched. MEMORY/OFF supplies no cross-crash reconstruction procedure. The
 bounded orphan/failure-composition algorithm and its sustained progress remain
 required before claiming this engine can serve a continuously appended log.
 

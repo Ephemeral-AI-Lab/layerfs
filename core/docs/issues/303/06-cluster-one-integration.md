@@ -12,6 +12,17 @@ This is the integration map for the [operation documents](README.md#primary-desi
 The [deepest-file plan](../307/SERVERLESS-STORE-PLAN-20261007.md) lists every
 file that changes, with production LOC before and estimated after.
 
+Owner supersession 2026-10-08 at R0 input `1a6bb53ef`: the SDK exposes
+ProjectApi, WorkspaceApi and SandboxApi. Ordinary Sandbox/runtime or an external
+executor owns command launch, standard streams, exit status and explicit
+cancellation; the filesystem daemon owns no command supervisor, launcher,
+per-Exec cgroup, command registration or custom Exec wire. FUSE serves every
+permitted visible process. Shell exit/zero registered commands proves no
+filesystem drain, and forced filesystem teardown never implicitly kills caller
+processes. Current [S8 specification](../307/S8-SPECIFICATION-20261008.md) and
+[R0–R9 rollout](../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
+historical baseline pins, receipts and verdicts retain their original scope.
+
 ## 1. The contract in brief
 
 ```text
@@ -23,7 +34,7 @@ file that changes, with production LOC before and estimated after.
  install: copy the file once  ----------->        |          |          |
                                              daemon A   daemon B   daemon C
  control only  <------------------------>    each daemon, in one process:
-   mount / Exec / Commit /                     overlay.sqlite   local mutable state
+   mount / Commit /                     overlay.sqlite   local mutable state
    status / unmount                            Store connection objects, Save, history
                                                Workspace + FUSE -> ordinary Bash
 ```
@@ -84,8 +95,10 @@ a new system-call dependency.
 
 ### 3.2 Profiles
 
-Both profiles use WAL and differ only in synchronization (owner ruling O-21,
-implemented in [F1–F4](../307/PRE-S8-F1-F4-20261007.md)).
+Only Disposable/WAL/OFF may execute, explicitly selected. Durable code remains
+but execution is NOT_RUN — disabled until explicit owner reauthorization.
+Historical profile definitions below are retained API description, not execution
+permission. [F1–F4](../307/PRE-S8-F1-F4-20261007.md) retains original receipts.
 
 | Profile | Journal | `synchronous` | Survives |
 | --- | --- | --- | --- |
@@ -162,9 +175,9 @@ Not available to a daemon:
 - **One write handle and a fixed set of read handles per daemon**, opened once
   at startup. Save, history and serial reservation use the write handle; object
   and length reads use the read set, so a daemon's own publication never stalls
-  its base reads. Each handle is used by one thread at a time under its own
-  mutex, per bounded job. Taking a mutex inside the process is mutual
-  exclusion, not a retry. No lock spans a Commit.
+  its base reads. Persistence uses one-attempt try_lock and typed Busy for session contention;
+  no blocking writer mutex/gate is introduced. S8 selects idle healthy readers
+  for bounded demands; no lock spans a Commit.
 - **The shared immutable object cache sits above the read handles.** An object
   never changes, so most reads never reach the Store.
 - **Few write transactions per Commit:** one combined initial id reservation per Save, explicitly counted block refills
@@ -187,10 +200,10 @@ Not available to a daemon:
 
 ## 5. Host control and install
 
-The host has five commands: mount, Exec, Commit, status and terminal unmount,
-with the semantics of the [operation contracts](README.md#primary-design-documents).
-Exec has no automatic deadline. A control call's own deadline never terminates
-Bash.
+Host filesystem controls are mount, Commit, status and terminal unmount,
+plus fork/history. Ordinary execution is Sandbox/runtime or external executor;
+optional WorkspaceApi.exec delegates with mounted cwd. Its streams/status and
+explicit cancellation do not travel over daemon filesystem controls.
 
 | Step | Where | What |
 | --- | --- | --- |
@@ -207,18 +220,18 @@ Store/engine binding; S8 adds the required kernel attachment/readiness.
 
 ## 6. Store visibility
 
-Bash run inside a Workspace must not see or open the Store or the overlay
-database. Nothing confines Exec today; the current daemon has no Exec. The
-required shape:
+Commands accessing a Workspace must not open Store, Overlay or daemon
+credentials. Sandbox setup/external executor owns command identity, actual mount
+visibility/path protections, /proc protections and inherited descriptor control.
+Runtime runs ordinary commands and retains explicit cancellation/status/stream
+ownership. The daemon implements no launcher namespace or command supervisor.
 
-- the volume is mounted at a path only the daemon's user can traverse;
-- Bash runs as a different, unprivileged user;
-- the Exec launcher enters a private mount namespace and detaches the Store and
-  overlay paths before `exec`.
-
-The user change is required. Without it `/proc/<daemon>/root` and
-`/proc/<daemon>/fd` reopen the file. Which user Bash runs as is open (O-8,
-O-19).
+Actual topology must prove these protections and native busy/detach/drain.
+Shared uid or cwd alone is not adversarial isolation. If copied mount namespaces
+are supported, prove propagation/parent-mount behavior rather than assuming
+shared FUSE children guarantee Busy and complete detach. Current
+[S8 access contract](../307/S8-SPECIFICATION-20261008.md#10-ordinary-runtime-execution-access-and-confinement)
+and successor FP-5-Runtime/FP-22-FS own these prospective requirements.
 
 ## 7. Authority
 
@@ -264,7 +277,7 @@ daemon upstream are retired in [F12](../307/PRE-S8-F12-20261007.md).
 | P10 | Unknown-history resolver | Unchanged: `Uncertain` stays terminal |
 | P15 | Persistence opens on Linux; WAL profiles; typed `Busy`; seal | New |
 | P16 | Two daemons on one volume: concurrent Saves, a Branch race, `Busy` leaves no effect | New proof |
-| P17 | Exec confinement hides the Store and overlay paths | New, with S8 |
+| P17 | Sandbox/executor access setup protects Store, Overlay and daemon credentials | New, with S8 |
 
 ## 10. Failure boundaries
 
@@ -281,7 +294,7 @@ daemon upstream are retired in [F12](../307/PRE-S8-F12-20261007.md).
 
 ## 11. Platform and acceptance
 
-Init runs on macOS. The daemon, FUSE and Exec run on Linux. The host builds the
+Init runs on macOS. Daemon/FUSE and ordinary Sandbox/external execution run on Linux. The host builds the
 Store with the system SQLite and daemons open it with the bundled one; the file
 format is portable and the schema identity is checked at open. ARM64 builds keep
 the repository build inputs.

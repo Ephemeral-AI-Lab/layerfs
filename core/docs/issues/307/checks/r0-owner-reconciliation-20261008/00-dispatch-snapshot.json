@@ -1,0 +1,37 @@
+{
+  "head": "1a6bb53ef14e1860d8f222df11394e5a654bb34d",
+  "branch": "main",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "64c4d07180035760fd19611abe752f39b317331badcb163f7572180838eedbf2",
+      "bytes": 18447,
+      "initial_status": "modified"
+    },
+    {
+      "path": "core/AGENTS.md",
+      "sha256": "b4f871f1f0ea293a28e49695c8cc0c9ee0e38b26179386856a3cbc5c8abc56bf",
+      "bytes": 26604,
+      "initial_status": "modified"
+    },
+    {
+      "path": "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md",
+      "sha256": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+      "bytes": 23879,
+      "initial_status": "untracked/protected"
+    },
+    {
+      "path": "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+      "sha256": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+      "bytes": 24153,
+      "initial_status": "untracked/protected"
+    },
+    {
+      "path": "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md",
+      "sha256": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027",
+      "bytes": 28245,
+      "initial_status": "untracked/protected"
+    }
+  ],
+  "purpose": "Original guide edits and protected notes before R0 reconciliation; snapshots preserve existing work. No product execution."
+}

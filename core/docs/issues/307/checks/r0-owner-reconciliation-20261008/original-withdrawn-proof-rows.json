@@ -1,0 +1,50 @@
+[
+  {
+    "id": "FP-5",
+    "original_proposal_row": "| FP-5 | Confinement | From Bash: the Store and overlay paths are absent and unreadable through `/proc` aliases; the descriptor table holds exactly the three pipes; the connection cannot be aborted or unmounted; a sibling Workspace's mount is absent from the namespace | I-13, \u00a710.2 |",
+    "successor": "FP-5-Runtime",
+    "disposition": "WITHDRAWN prospectively, original managed-daemon selection not run; original historical receipts/verdicts unchanged"
+  },
+  {
+    "id": "FP-6",
+    "original_proposal_row": "| FP-6 | Streams | Output far larger than any buffer arrives complete and ordered per stream; a stalled consumer stalls the command without growth in daemon-owned bytes; a command longer than every control deadline is not terminated | I-11, \u00a74.1 |",
+    "successor": "FP-6-Runtime",
+    "disposition": "WITHDRAWN prospectively, original managed-daemon selection not run; original historical receipts/verdicts unchanged"
+  },
+  {
+    "id": "FP-7",
+    "original_proposal_row": "| FP-7 | Independent Exec events | Exercise all orders of Exited, both EOFs, Quiescent and outbound-record disposition; execs remains nonzero until ResourceTerminal. Group emptiness alone closes no pipe, drops no chunk/status and admits no normal unmount | I-12, \u00a75.4 |",
+    "successor": "FP-7-Runtime",
+    "disposition": "WITHDRAWN prospectively, original managed-daemon selection not run; original historical receipts/verdicts unchanged"
+  },
+  {
+    "id": "FP-19",
+    "original_proposal_row": "| FP-19 | Cancel while parked | A process blocked in a parked request receives its reply before the daemon waits for its exit; `ExecCancel` then observes `Exited` | I-7 |",
+    "successor": "FP-19-FS",
+    "disposition": "WITHDRAWN prospectively, original managed-daemon selection not run; original historical receipts/verdicts unchanged"
+  },
+  {
+    "id": "FP-22",
+    "original_proposal_row": "| FP-22 | Propagation | A command in its own namespace keeps the mount busy for the daemon's `umount2`; after the command exits the unmount succeeds and no copy remains; a long-running command in Workspace A does not keep Workspace B's connection alive | \u00a710.3 |",
+    "successor": "FP-22-FS",
+    "disposition": "WITHDRAWN prospectively, original managed-daemon selection not run; original historical receipts/verdicts unchanged"
+  },
+  {
+    "id": "FP-23",
+    "original_proposal_row": "| FP-23 | Forced stop and precise effects | Active Commit refuses Busy before signal/abort. Otherwise exactly one validated abort write, wake/dispose native waiters, preserve attempted-job outcomes, terminalize Execs, one plain detach attempt and complete drain precede revocation. Failure after abort stays Retained; unknown publication and discarded output remain explicit | \u00a711.1\u201311.3 |",
+    "successor": "FP-23-FS",
+    "disposition": "WITHDRAWN prospectively, original managed-daemon selection not run; original historical receipts/verdicts unchanged"
+  },
+  {
+    "id": "FP-25",
+    "original_proposal_row": "| FP-25 | Lost replies | Lost `Mount`, `Attach` and Exec connection (external fixture): the entry is observable through `Locate`/`ExecStatus`; no second binding, attachment or execution | \u00a712 |",
+    "successor": "FP-25-Routes",
+    "disposition": "WITHDRAWN prospectively, original managed-daemon selection not run; original historical receipts/verdicts unchanged"
+  },
+  {
+    "id": "FP-30",
+    "original_proposal_row": "| FP-30 | Process gone, output still pending | Fast writer exits before a deliberately slow consumer drains both pipes; all bytes/status arrive exactly once. Hold the last outbound chunk after both EOFs. Quiescent/EOF alone cannot release the session or allow normal unmount. For lost output connection, explicit cancellation/force records incomplete output and disposes owners once | \u00a75.4 |",
+    "successor": "FP-30-Runtime",
+    "disposition": "WITHDRAWN prospectively, original managed-daemon selection not run; original historical receipts/verdicts unchanged"
+  }
+]

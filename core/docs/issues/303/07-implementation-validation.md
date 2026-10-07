@@ -35,6 +35,17 @@ once before readiness; Workspace rows are namespaced within it. Bash Exec has
 no automatic runtime timeout. This supersedes the per-Workspace-file proposal;
 shared writer/pager/failure accounting and fair admission apply below.
 
+Owner supersession 2026-10-08 at R0 input `1a6bb53ef`: the SDK exposes
+ProjectApi, WorkspaceApi and SandboxApi. Ordinary Sandbox/runtime or an external
+executor owns command launch, standard streams, exit status and explicit
+cancellation; the filesystem daemon owns no command supervisor, launcher,
+per-Exec cgroup, command registration or custom Exec wire. FUSE serves every
+permitted visible process. Shell exit/zero registered commands proves no
+filesystem drain, and forced filesystem teardown never implicitly kills caller
+processes. Current [S8 specification](../307/S8-SPECIFICATION-20261008.md) and
+[R0–R9 rollout](../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
+historical baseline pins, receipts and verdicts retain their original scope.
+
 ## 1. Starting point
 
 [implemented and source-verified]
@@ -131,10 +142,10 @@ identities.
 
 | Layer | Development / execution environment | Ownership |
 | --- | --- | --- |
-| Authoring and host checks | Existing macOS ARM64 checkout; installed Rust 1.85.1; locked core manifest | Cluster-one provider, SDK runtime composition, portable library checks and product-boundary tooling |
+| Authoring and host checks | Existing macOS ARM64 checkout; installed Rust 1.85.1; locked core manifest | Host Init/seal/install and SDK control/facades, portable library checks and product-boundary tooling |
 | Sandbox integration | Running Linux ARM64 Docker backend; checked client/server version 29.5.2 | Actual daemon, SQLite overlay, Linux FUSE mounts and ordinary Bash execution |
-| Host runtime | macOS process embedding current Handles/Storage/HistoryCatalog | Selected global Store profile; authenticated object/Save/history adapters, initialized once |
-| Sandbox runtime | Linux sandbox with a daemon initialized before Workspace readiness | One overlay database per daemon; multiple namespaced Workspaces and independent process/stream custody |
+| Host provisioning/control | macOS Project Init/seal/install, then control-only | Explicit Disposable Store; no installed Store handle or object/Save/history data service |
+| Sandbox runtime | Linux sandbox with a daemon initialized before Workspace readiness | Direct shared Store and one local Overlay per daemon; multiple Workspaces; ordinary runtime owns processes/streams |
 | Build outputs | Worktree-owned `core/target/`; distinct owned Linux target such as `core/target/cluster2-linux/` | Reuse matching build seals; no target/cache borrowed from another worktree |
 
 Docker availability does not prove mounted FUSE readiness or the locked Linux
@@ -146,7 +157,8 @@ ARMv8 AEAD inputs must reach Linux builds too; an explicit RUSTFLAGS/image build
 must preserve them. Do not patch dependencies or select a fallback to hide an
 unsupported required capability.
 
-Reuse initialized host runtime and sandbox daemon across Workspace opens.
+Reuse the initialized direct Store/Overlay daemon and ordinary Sandbox runtime
+across Workspace opens.
 Workspace-per-tool-call does not imply a new container, provider or database per
 call. Each logical open binds the complete immutable base and namespaced local
 state; native FUSE attach cost remains part of the actual operation. A persistent
@@ -183,8 +195,8 @@ at operation, command and repeated-Workspace-lifetime scales.
 | **S5 Payload and stream semantics** | Selected bounded cells/tails/validity, append/overwrite, inherited reads, cutoff truncate/regrow and hole handling; explicit representation transitions | S4; R1 and content hole contracts | Dense fragmentation does not enlarge one request's work; no base WRITE copy-up; READ gap demands bounded; tiny-file/page/journal/copy amplification reported |
 | **S6 Lifetimes and reclamation** | Independent orphan custody, bounded success/failure composition, reservations/headroom, exact reader/capture/operation owners and weighted automatic reclaim | S5; R4/R6/R8 | Repeated log/orphan/Commit failures do not grow read depth or require payload-sized busy folding. Reclaim progresses while live/idle; stale deletion cannot remove new data |
 | **S7 Engine cost gate** | Consolidate per-operation EXPLAIN/profile, request/statement/VM/row/page/byte/copy and queue/debt evidence; select physical layout through declared tradeoffs | S1–S6 | Derived worst-case/amortized/cumulative work demonstrated or rejected. No quadratic mechanism, hidden scan, input-sized resident set or raised cap accepted from a small timing win |
-| **S8 FUSE, daemon and explicit APIs** | Native mount, deferred owned replies/fair dispatch, coherent promoted cached profile, kernel-origin mmap/time updates, cheap individual FORGET, event-driven lifecycle; registry plus mount/exec/commit/status/unmount contracts and ordinary Bash streams | S3, S6, S7; runtime reads may use S9 | Mounted alias/truncate/mmap/capture-frontier tests; blocked requests leave unrelated work runnable. Short/long Exec and multi-call same mount work; actual buffer/thread/teardown costs visible |
-| **S9 Runtime adapters and complete roots** | Embed existing host libraries; bounded authenticated object/policy/serial/Save/history calls; pending-Save visibility, fair demand/finish service and exact disconnect fences. Fix faithful bounded initial import, symlinks/large files, runtime-compatible complete execution state | S0; P1/P2/P5/P12; parallel to S1–S8 | Real Store reads and two interleaved Saves work through actual APIs; no whole-Save connection checkout or guessed outcome. Full root includes ignored/dependency/cache/output data without per-call restoration |
+| **S8 FUSE, daemon and explicit APIs** | Native mount, deferred owned replies/fair dispatch, coherent promoted cached profile, kernel-origin mmap/time updates, cheap individual FORGET, event-driven lifecycle; filesystem registry plus mount/commit/status/unmount contracts; Sandbox/executor owns ordinary Bash streams | S3, S6, S7; runtime reads may use S9 | Mounted alias/truncate/mmap/capture-frontier tests; blocked requests leave unrelated work runnable. Short/long Exec and multi-call same mount work; actual buffer/thread/teardown costs visible |
+| **S9 Runtime adapters and complete roots** | Superseded host-runtime work: every daemon opens shared Store directly; use implemented direct ports/Store-half Commit/native install/control and exact custody. Fix faithful bounded initial import, symlinks/large files, runtime-compatible complete execution state | S0; P1/P2/P5/P12; parallel to S1–S8 | Real Store reads and two interleaved Saves work through actual APIs; no whole-Save connection checkout or guessed outcome. Full root includes ignored/dependency/cache/output data without per-call restoration |
 | **S10 Incremental Commit** | Normalize captured final state; bounded file/namespace construction and operation records; Save finish, stage, conditional transition, known install and exact refused/conflicted/uncertain custody | S6, S8, S9; P3/P4/P6/P7/P13/P14 corrected | Published root equals captured state; later active changes remain. Repeated same-mount Commit, same-Branch conflict and phase failures preserve identity/bytes/ownership without whole-base alias walks |
 | **S11 Integration cleanup** | Remove superseded core Workspace backing, host-construction/duplicate Init routes and retired server integration after replacement coverage. Update SDK/sandbox/bridge wiring and active members | S10 | One authentic core path; no legacy aliases/fallback/parallel implementation; source removals/relocations classified. Root v0.1.6 reference retained for S12 comparisons |
 | **S12 Integrated qualification** | Prospectively selected full-root correctness/resource and seven-family reporting on actual integrated source; fresh/retained Workspaces, short/long Execs, concurrency and sustained cleanup | S11; actual implementation and frozen specifications | Required proof/resource rows pass; every selection retains its actual outcome. EXPLAIN/profile and bounded-work evidence accompany performance claims; historical failures remain unchanged |
@@ -201,6 +213,12 @@ one initialized indexed/profiled engine, correct generations and one real-root
 read/mutation/capture path. Progress it alongside the highest-risk cluster-one
 and Save-lifetime proofs. Do not begin with cache/worker tuning or a full legacy
 crate port.
+
+The earlier file/size proposal in §4 is retained historical planning context.
+The [complete destination manifest](../307/FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md)
+and [R0–R9 rollout](../307/CLUSTER-TWO-LOC-AND-ROLLOUT-20261008.md) supersede its
+host adapters/daemon execution destinations and earlier estimates. Never dispatch
+those obsolete homes or infer implementation from their source counts.
 
 ## 4. Source removal, relocation and estimates
 
@@ -337,11 +355,11 @@ core/
 
     layerfs-daemon/                           service ownership and orchestration
       src/main.rs, lib.rs, run.rs, config.rs  readiness and process composition
-      src/registry.rs, lifecycle.rs           Workspace/Exec identity and custody
+      src/registry.rs, lifecycle.rs           Workspace/filesystem-control identity and custody
       src/overlay_owner.rs                   bounded fair short engine jobs
       src/upstream.rs                        object/Save/history client sessions
-      src/control.rs, control_commit.rs      mount/exec/commit/unmount/status routing
-      src/execution.rs                       ordinary Bash and streamed process I/O
+      src/control.rs, control_commit.rs      mount/commit/unmount/status routing
+      ordinary Sandbox/runtime               commands and standard streams outside filesystem daemon
       tests/
 
     layerfs-bridge/                           wire contracts, not FS construction

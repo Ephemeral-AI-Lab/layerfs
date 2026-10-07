@@ -23,6 +23,15 @@ The candidate keeps its captured parent; last database publication effect wins.
 Busy and unknown custody stay unchanged. Older separate-stage diagrams below
 retain the API distinction; the current daemon uses one atomic stage_and_commit.
 
+Owner supersession 2026-10-08: commands are ordinary Sandbox/runtime/external
+executor work, independent of filesystem admission and capture. Optional
+WorkspaceApi.exec delegates mounted cwd. Daemon owns exact FUSE/Commit work and
+full drain, never process supervision/registration. Current direct Store
+integration supersedes host-runtime prose at the original source pin. Current
+[S8 specification](../../307/S8-SPECIFICATION-20261008.md) and
+[rollout ledger](../../307/ROLLOUT-LEDGER-20261008.md) govern future composition;
+pre-S8 proofs remain component scope, with no native namespace Commit claim.
+
 ## 1. Purpose and granularity
 
 [owner requirement]
@@ -177,68 +186,38 @@ as unpublished.
 
 ## 4. End-to-end workflow
 
-[proposed design over current cluster-one APIs]
+[source-verified Store half; live captured namespace producer remains R4/R5]
 
-`layerfs-server` is removed from the target architecture. Existing cluster-one
-libraries are embedded in the host application's cluster-one runtime. Its
-runtime-owned object/history/Save adapters cross the sandbox boundary where
-necessary. Operation names below describe adapter calls, not existing HTTP URLs
-or a new standalone server. Current persistence remains host-local macOS SQLite.
+Every daemon opens the shared Store directly in-process, separate from its local
+Overlay. The existing `BoundWorkspace::commit` is the single orchestrator:
 
 ```text
- caller / SDK       daemon: Workspace + content      embedded cluster-one runtime
-      |                        |                         Storage + History
-      | commit(W, incarnation) |                              |
-      +----------------------->|                              |
-      |                        | validate / admit Commit      |
-      |                        |       |                      |
-      |                        | bounded SQL CAPTURE          |
-      |                        | C = fixed changed domain     |
-      |                        | A = later mutations          |
-      |                        |       |                      |
-      |                        +---------- begin Save ------->| Storage::begin_save
-      |                        |<-------- capability ---------|
-      |                        |       |                      |
-      |                        |  one construction producer   |
-      |                        |  +-----------------------+   |
-      |                        |  | read captured windows |   |
-      |                        |  | normalize final edits |   |
-      |                        |  | construct file roots  |   |
-      |                        |  | update namespace      |   |
-      |                        |  +-----------+-----------+   |
-      |                        |              |               |
-      |                        +--- bounded finalized batch ->| validate role/refs,
-      |                        |<--- accept / backpressure ----| identity + authority;
-      |                        |              |               | Save::accept
-      |                        |  repeat until candidate root |
-      |                        |              |               |
-      |                        +---------- finish Save ------>| Save::finish
-      |                        |<--------- saved outcome ------|
-      |                        |              |               |
-      |                        +---------- StageRequest ------>| stage_changes
-      |                        |<--------- exact token --------|
-      |                        |              |               |
-      |                        +------- CommitStagedRequest -->| compare expectations,
-      |                        |<--- Committed / UpToDate -----| publish Branch
-      |                        |              |               |
-      |                        | bounded SQL INSTALL          |
-      |                        | bind reported root/head      |
-      |                        | preserve A and inode identity|
-      |<----- exact result ----+                              |
-      |                        | bounded background retirement|
-      |                        | / consolidation              |
+exact Workspace control admission
+  -> one CAPTURE of published frontier, later active mutations continue
+  -> one local Save with actual Store policy/capacities
+  -> captured files + complete namespace through owning Content constructors
+       bounded Overlay operation records, retained immutable sources
+       SaveSink acceptance / actual same-Save reads / backpressure
+  -> Save.finish
+  -> bounded candidate checks and prepared local binding
+  -> History.stage_and_commit once, captured parent and overwrite policy
+  -> known local Install, preserve later active writes and effective live view
+  -> exact result/custody and automatic bounded local retirement
 ```
 
-No transaction or Workspace mutex spans hashing/chunking, output acceptance,
-network wait, Save completion or Bash. Construction requests bounded captured
-data/operation records jobs from the daemon SQL engine and yields between them. Waiters are
-parked without consuming all FUSE dispatch workers.
+There is no host data call, remote Save registry/capability, second Commit driver,
+native tree materialization or Project Init path inside Commit. The host is
+control-only after initial sealed installation. Save completion, history effect,
+local install and physical cleanup remain separate fences. No transaction or
+Workspace mutex spans canonical construction, Store I/O, acceptance or runtime
+execution. Ordinary syscall mutations continue regardless of launch route.
 
-One shared overlay database gives one SQLite writer, not parallel writer
-transactions. Connection/read topology is an engine decision in
-[daemon-sqlite](../daemon-sqlite.md). Concurrent callers, constructors, cache hits
-and transport can proceed while short SQL jobs take turns. Fairness and bounded
-work are required; high aggregate throughput is not yet measured.
+The existing Store-half proof directly constructs a candidate through Content;
+it does not implement the live normalizer. R4 supplies names, links, metadata and
+changed file roots from exact retained capture with backed validation/incremental
+topology; R5 composes that producer here and proves mounted survival, concurrent
+writes and exact constructor/reader/operation custody. Never drop those owners
+at callback return before their consumer/Save/publication/install disposition.
 
 ## 5. Capture and live activity timeline
 
@@ -357,7 +336,7 @@ retry a failed edit constructor with an error-driven whole-file alternative.
              |
        bounded adapter batch             byte + object bounds before allocation
              |
-       runtime Save::accept
+       local Save::accept
        reuse / encode / reference-closed publication
              |
        acknowledgement -------- backpressure --------> request next input
@@ -389,8 +368,8 @@ refusing a workload.
 
 [proposed design]
 
-Each Workspace owns its capture, active state, operation records, Commit slot and Save
-capability. They share the daemon database, devices/caches and cluster-one runtime.
+Each Workspace owns its capture, active state, operation records, Commit slot and local Save
+owner. They share the daemon database, devices/caches and cluster-one runtime.
 One producer per Commit may run concurrently with another Workspace's producer;
 no helper lane increases a single Commit's construction concurrency.
 
@@ -399,7 +378,7 @@ Workspace A              Workspace B              fair shared service
 -----------              -----------              -------------------
 capture CA               capture CB               overlay jobs take turns
 construct A              construct B              computation outside SQL
-Save capability SA       Save capability SB        separate logical custody
+local Save SA       local Save SB        separate logical custody
       |                        |                         |
       +-- accept A1 -----------+------------------------>| serve SA batch
       |                        +-- base read ----------->| serve demand read
@@ -413,17 +392,12 @@ Save capability SA       Save capability SB        separate logical custody
 install A                install B                independent local bindings
 ```
 
-This is an illustrative interleaving, not a frozen priority order. Scheduler
-shares/bypass rules must guarantee progress for reads, accepts, finish, history,
-overlay mutations and cleanup under the admitted load. Strict read priority can
-starve Commits. Whole-Save connection checkout can exhaust demand-read capacity;
-Save capabilities therefore outlive individual transport calls/checkouts.
-
-The current `Save<'_>` borrows its `Storage` and mutable indexes. Multiple
-logical sessions need sound ownership/lifetime arrangements over separate
-Storage handles and the shared provider; the comment that separate handles may
-write concurrently does not itself prove this runtime session registry. No unsafe
-lifetime extension or serialization of entire Commits substitutes for the proof.
+This is an illustrative interleaving, not a priority order. Overlay jobs are
+short and fairly serviced. Each constructor owns local Storage/Save state over
+the opened provider; one attempted write can return Busy, with no gate/wait/retry.
+Fixed readers/cache keep immutable demands independent of the writer. Save borrows
+its actual Storage on the constructor thread; no remote owning session registry
+or unsafe lifetime extension exists. Saved waves precede referencing history.
 
 Immutable objects make content identity, reuse and authenticated acquisition
 natural candidates for distributed storage. They do not remove mutable Branch
@@ -612,10 +586,9 @@ preparation observations on `codex/phase7-experiment-305` at
 
 Full-state proofs include ignored data, `.git/index`, symlinks, dependencies,
 caches/build output and hard-link aliases. Historical experiment verification
-exclusions do not authorize exclusions from this product contract. Native Init's
-current symlink refusal and retained scan collections need a faithful bounded
-provisioning correction; Commit/mount must not invoke a partial importer to make
-each call usable.
+exclusions do not authorize exclusions from this product contract. Current backed native Init supersedes the historical symlink/scan limitations
+at its exact proof scope; faithful full-fixture provisioning and mounted proof
+remain required. Commit/mount never invokes an importer to make a call usable.
 
 ## 11. Required proofs and future measurement
 

@@ -945,3 +945,21 @@ Final file counts are a planning inventory, not production LOC or a budget.
 Implementation must still reconcile S8 control/status/drain/proof requirements
 to caller-owned execution, complete the real Sandbox API/backend integration,
 finish S10 normalization and prove S12 before S13 retirement.
+
+## 7. R0 implementation-boundary amendment, 2026-10-08
+
+The original destination manifest/receipt remains unchanged at its source pin.
+R0 read-only construction review identifies one additional real adapter home:
+`layerfs-daemon/src/overlay/captured_namespace_port.rs`, proposed (P), which
+implements Workspace's neutral retained captured-namespace port through the
+existing OwnerClient/typed Commands and preserves original attempted Completion
+custody. It introduces no second SQL owner or mutable graph. Exact destination
+amendment is [retained separately](checks/r0-owner-reconciliation-20261008/04-destination-amendment.json).
+The original planning inventory remains 523 E / 5 M / 108 P; this prospective
+addition is +1 P, yielding 109 P, and creates no implementation or LOC.
+
+Actual Sandbox replacement also preserves/relocates excluded source before path
+replacement, with exact migration accounting; it never activates the old manifest
+with its retired API-core/host-service dependencies. Current
+[S8 implementation plan](S8-IMPLEMENTATION-PLAN-20261008.md#2-cargo-activation)
+and [R0–R9 ledger](ROLLOUT-LEDGER-20261008.md) govern activation/coverage.

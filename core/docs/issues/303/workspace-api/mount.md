@@ -13,6 +13,17 @@ This document owns the observable mount operation. Read the
 The [cluster-one handbook](../../../../../cluster_one_handbook.md) governs the
 underlying library APIs and their completion semantics.
 
+Owner supersession 2026-10-08 at R0 input `1a6bb53ef`: the SDK exposes
+ProjectApi, WorkspaceApi and SandboxApi. Ordinary Sandbox/runtime or an external
+executor owns command launch, standard streams, exit status and explicit
+cancellation; the filesystem daemon owns no command supervisor, launcher,
+per-Exec cgroup, command registration or custom Exec wire. FUSE serves every
+permitted visible process. Shell exit/zero registered commands proves no
+filesystem drain, and forced filesystem teardown never implicitly kills caller
+processes. Current [S8 specification](../../307/S8-SPECIFICATION-20261008.md) and
+[R0–R9 rollout](../../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
+historical baseline pins, receipts and verdicts retain their original scope.
+
 ## 1. Purpose and granularity
 
 [owner requirement]
@@ -101,12 +112,11 @@ bytes can be demand-loaded after attachment. Cold access still pays authenticati
 object-tree navigation, transport and storage reads; immediate readiness does not
 mean zero I/O or universal residency.
 
-Current native Init is not yet the faithful bounded acquisition path: it refuses
-symlinks, retains namespace/job collections and rejects regular files beyond its
-4 GiB `MAX_FILE`. These are existing source limitations, not accepted limits of
-the required product. See [scan.rs](../../../../crates/layerfs-project/src/scan.rs)
-and [error.rs](../../../../crates/layerfs-project/src/error.rs), and the prerequisite
-inventory in [06](../06-cluster-one-integration.md).
+The historical 2026-10-05 Init baseline refused symlinks/large files and used
+resident acquisition collections. Current [backed acquisition](../../../architecture/43-backed-initial-acquisition.md)
+and [complete-root direct proof](../../307/PRE-S8-F11-20261007.md) supersede those
+source limitations at their exact scope. Native full-fixture acquisition and
+mounted full-root proofs remain required; no historical receipt is relabelled.
 
 ## 3. Inputs, outputs and readiness
 
@@ -136,8 +146,8 @@ and define its publication target without silently treating it as the latest hea
 One local overlay SQLite database is initialized before daemon readiness. Mount
 uses this existing engine. SQL connection topology is an engine decision;
 mount must neither create a per-Workspace database nor imply simultaneous SQLite
-writers. The global object/history runtime embeds the existing cluster-one
-libraries in the host application. No legacy `layerfs-server` is restored.
+writers. Every daemon opens the shared global Store directly in-process. Host Init/seal/
+install is separate and control-only afterward; no host object/history service.
 
 ```text
  Caller / SDK        Daemon registry       Overlay engine       Cluster-one runtime / FUSE
@@ -273,15 +283,17 @@ to write this document.
 
 [source-verified baseline; proposed replacement]
 
-The dormant [SDK WorkspaceApi](../../../../crates/layerfs-api/sdk/src/workspace.rs)
-already has `mount(sandbox, project, branch, commit_id)`. It creates an identity,
-sends `WorkspaceOpen` with a 15,000 ms control deadline and returns a mount path or
-retained/uncertain result. The daemon still has one selected slot and stale
-cluster-one bindings; this is not the concurrent engine proposed above.
-The [native FUSE mount](../../../../crates/layerfs-fuse/src/mount.rs) already
-retains a `MountHandle`/lease for partial failures; preserve that custody principle
-while replacing its profile and polling lifecycle. Actual runtime endpoints and
-revised SDK results are integration work, not available APIs claimed here.
+The original 2026-10-05 dormant SDK/daemon/FUSE baseline used WorkspaceOpen,
+a selected slot, legacy cluster-one bindings and polling mount custody. Those
+observations retain their historical source pin and do not identify current
+active file paths. Current [native control](../../../architecture/68-native-workspace-control.md)
+implements authenticated bounded Store/engine binding and returns Bound.
+Current [sealed install](../../../architecture/67-native-store-install.md) provides
+one-time provisioning; S8/R2 adds real kernel attachment/Ready, exact native
+custody and independently proved read/service/permissions/drain. Partial native
+owners remain retained until exact disposition. Existing public Control is not
+a real WorkspaceApi facade; R1 supplies the actual organization/backend.
 
-Load-bearing acceptance requires the complete pipeline and its R1–R8/integration
-corrections, not merely fast logical row insertion. See [the validation plan](../07-implementation-validation.md).
+Load-bearing acceptance requires the complete pipeline and applicable integration
+corrections, not merely logical row binding. [Validation](../07-implementation-validation.md)
+and the current R0–R9 rollout retain exact evidence and remaining scope.

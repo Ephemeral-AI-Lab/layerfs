@@ -131,31 +131,22 @@ See the [S7/S9 remaining plan](docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-2026100
 Owner clarification 2026-10-08: these are implementation and proof requirements,
 not a claim that S8 or S10 is qualified. FUSE serves any permitted process that
 can see the mount. Request admission and Workspace mutation/capture must not
-require an Exec identity, registered command or LayerFS-launched parent.
+require a managed Exec identity, registered command or LayerFS-launched parent.
 Apply the same permissions, filesystem semantics and ownership to external
-executors, interactive shells and ordinary Sandbox execution.
+executors, interactive shells and managed Exec processes.
 
-Sandbox setup or the external executor establishes command identity, mount
-visibility and protection of Store, Overlay and daemon credentials. Ordinary
-runtime execution owns standard I/O, exit status and caller-requested cancellation.
-SDK public organization uses ProjectApi, WorkspaceApi and SandboxApi. Optional
-WorkspaceApi.exec selects the mounted directory and delegates to Sandbox;
-the daemon has no exec/supervisor, launcher mode, per-Exec cgroups, command
-registration or custom Exec stream/status/cancellation protocol.
-
-FUSE owns exact request/open/lookup/capture/Commit lifetimes and complete
-filesystem/daemon-work drain. Zero registered commands or shell exit is never
-evidence of released descriptors, mappings, kernel references or daemon jobs.
-Forced filesystem teardown does not implicitly kill caller-owned processes.
-Normal unmount uses a reversible kernel busy probe while ordinary service stays
-usable. Force refuses active namespace control producers before any effect.
+The daemon's `exec/` owns managed launch, stdin/stdout/stderr, exit status,
+descendants and explicit cancellation. An external executor owns those duties
+for its commands and establishes mount visibility, identity and protection of
+the Store, overlay and daemon credentials. Do not claim managed Exec status or
+cancellation for unowned external processes. FUSE still owns request/open/lookup
+lifetimes; zero managed Execs does not establish that a mount has no users or is
+safe to reclaim. Coordinate external process cleanup with terminal unmount.
 
 Commit consumes the Workspace's published frontier through the shared Content,
 Storage and Persistence pipeline regardless of launch route. stdout/stderr are
 not filesystem state unless the command writes them to a file in the Workspace.
-The old proposed managed-daemon Exec selections are withdrawn prospectively;
-retain their original IDs, source pins, receipts and verdicts. Ordinary runtime
-stream/result correctness and filesystem-lifetime proofs keep their real owners.
+This boundary does not remove the selected managed Exec implementation or proofs.
 
 S8 verification must include a process launched outside the Exec API, with no
 Exec registration, reading and mutating the mount and retaining a filesystem

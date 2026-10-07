@@ -1,288 +1,163 @@
-# workspace_api.exec — ordinary Bash against a ready Workspace
+# workspace_api.exec — ordinary runtime execution against a ready Workspace
 
 > **Status:** Proposal; target LayerFS 0.1.7; not a released contract.
-> Owner revisions: 2026-10-05. Product baseline:
-> `f96d97651be5299f153ccde2bc8d921dd58807ad`; supersedes the Exec direction
-> of design `334fc743751b9a181e670d0601a24fb3169208f9` where stated below.
-> No implementation, throughput measurement or workload qualification is claimed.
+> Reconciled 2026-10-08 at R0 input `1a6bb53ef14e1860d8f222df11394e5a654bb34d`.
+> Earlier baseline `f96d97651be5299f153ccde2bc8d921dd58807ad` and design
+> `334fc743751b9a181e670d0601a24fb3169208f9` remain historical source identities.
+> No implementation, native execution, measurement or qualification is claimed.
 
-This document owns process-runner behavior. [Mount](mount.md) supplies a complete
-ready filesystem; the [daemon/SQLite engine](../daemon-sqlite.md) owns local data,
-[FUSE](../fuse.md) owns kernel requests, and [Commit](commit.md) publishes an
-explicit capture. Process launch is not another filesystem implementation.
+This document owns the optional SDK execution convenience and ordinary runtime
+boundary. [Mount](mount.md) supplies a complete ready filesystem;
+[daemon/SQLite](../daemon-sqlite.md) owns local data, [FUSE](../fuse.md) kernel
+requests, and [Commit](commit.md) explicit captured history. Sandbox/external
+executor owns commands. Current [S8 specification](../../307/S8-SPECIFICATION-20261008.md)
+and [rollout](../../307/ROLLOUT-LEDGER-20261008.md) govern implementation/proofs.
 
 ## 1. Ordinary execution contract
 
-[owner requirement]
+[owner requirement, 2026-10-08]
 
-Exec launches an ordinary Bash command in the mounted directory under the
-configured command identity/environment. For Bash semantics the shell is
-`/bin/bash -c`; direct program invocation and interactive PTY sessions, if exposed,
-are separately declared runner modes. Launching `bash -c` does not itself supply
-an interactive terminal or full job control.
+Commands execute as ordinary Bash or ordinary Sandbox/runtime commands, including
+commands launched by an external executor. Optional WorkspaceApi.exec selects the
+Ready mounted directory and delegates to Sandbox execution. It creates no daemon
+command registration or filesystem admission identity. A process with mount
+visibility and permissions accesses the same filesystem through ordinary syscalls.
 
-There is no automatic runtime timeout, command count, lifetime output cap or
-hidden preparation budget. A build, server or logger can run until it exits or
-an explicit lifecycle action cancels it. Storage/control RPC deadlines cannot
-silently become a shell lifetime limit. OS descriptor/process/argument limits,
-declared CPU/memory/disk resources and caller-selected cancellation still exist.
+SandboxApi owns actual runtime lifecycle/execution, standard I/O, exit status
+and explicit caller-requested cancellation. The filesystem daemon supervises no
+commands; no launcher mode, per-Exec cgroups, execution sessions, custom streams,
+status or cancellation protocol is added to its control channel.
 
-The selected base already contains `.git`, ignored paths, dependencies, symlinks,
-caches and output. Exec does not restore filtered files, install dependencies,
-interpret `git`/compiler/package-manager commands, reroute selected paths outside
-the Workspace, scan changes at exit, flush through command-specific hooks, or
-implicitly capture, Commit, mount or unmount. A command that explicitly requests
-an install still performs an install normally; preparation is not injected by
-LayerFS.
+There is no automatic runtime timeout, command count, lifetime output cap,
+command classifier, hidden preparation, change-at-exit hook or implicit Commit,
+reset/install/unmount. A build/server/logger can run until actual exit or caller
+cancellation. OS/platform bounds and explicit runtime resource admission remain.
+A control deadline cannot silently become a shell lifetime limit.
 
-Any authorized process accessing the same mount receives the same filesystem
-semantics, whether launched through this API or another ordinary route.
-
-One Workspace can serve many sequential or overlapping calls for a long
-lifetime. Each uses that Workspace's current live filesystem; Exec completion
-does not unmount, reset or require Commit before the next call. The caller can
-issue repeated incremental Commits while calls continue. Sharing a Workspace
-provides ordinary filesystem visibility, not isolated per-call transactions.
-
-Per-tool-call is the expected common orchestration mode and per-task is also
-supported. Neither implies Exec duration. Every command can finish quickly or
-remain long-lived; no command classifier, default timeout or presumed short
-request lifetime controls output, Commit or Workspace teardown. Process/stream/
-filesystem ownership must remain valid throughout the actual execution.
+The selected root already contains .git/index, ignored files, dependencies,
+symlinks, caches and outputs. Runtime executes the caller's command; it does not
+restore/install/reconstruct paths to make a filtered Workspace usable. One
+Workspace can serve many sequential/concurrent calls and incremental Commits;
+command duration, Workspace lifetime and Commit cadence are independent.
 
 ## 2. Inputs, results and independent lifetimes
 
-[proposed design; final SDK/wire types remain integration work]
+[proposed public organization; real facades/backend remain R1 work]
 
-| Item | Contract |
+| Subject | Contract and actual owner |
 | --- | --- |
-| Workspace selector | Exact ID/incarnation of a Ready mount; stale selectors fail |
-| Program mode | Bash command by default, or explicitly supported direct/PTY mode |
-| Cwd/environment | Mounted directory or authorized relative cwd; ordinary caller environment with private daemon credentials excluded |
-| Streams | Bounded stdin/stdout/stderr chunks or explicit caller-owned sinks, with ordinary backpressure |
-| Process ownership | Exec identity, process/process-group custody and event-driven child/descendant observations |
-| Normal result | Actual exit/signal information and stream completion/disposition; no inferred filesystem Commit |
-| Launch failure | Exact failure before acknowledged launch; no guessed successful command |
-| Lost result | Process/result may exist; retain Exec identity and known state, no automatic command re-execution |
-| Cancellation | Explicit runner action with fenced process/stream state; accepted filesystem mutations are not rolled back |
+| Workspace selector/cwd | WorkspaceApi resolves exact Ready incarnation/mounted directory; Sandbox or caller selects authorized cwd |
+| Program/environment | Ordinary runtime invocation; private Store/Overlay/daemon credentials excluded by access setup |
+| Streams | Existing ordinary runtime stdin/stdout/stderr or caller sinks; bounded buffering and ordinary backpressure |
+| Exit/status | Actual runtime exit/signal result, independent of stream EOF/delivery and filesystem owners |
+| Lost result | Original runtime process/result custody; never automatic command replay |
+| Cancellation | Explicit caller request to runtime/executor; accepted filesystem effects remain published |
+| Filesystem access | Permission/visibility based, with no command/parent/Exec identity requirement |
 
-Root-shell exit, stdout/stderr EOF, descendant lifetime and mounted handles are
-distinct events. A descendant can retain a pipe or open file after the shell
-exits. Define response/stream behavior for this case; do not infer quiescence from
-`wait()` of the shell. If a caller requires background services, their lifetime
-and eventual teardown must be explicit rather than accidentally limited by a
-control envelope.
+Root-shell exit, pipe EOF, delivered/disposed buffered output, descendant lifetime,
+cwd/O_PATH/open descriptors, dirty mappings and FUSE work are distinct events.
+No runtime exit/status or zero-command count authorizes filesystem reclamation.
+A descendant can retain a pipe or file after its shell exits; stream delivery must
+remain exact or explicitly failed/disposed under the runtime owner.
 
 ## 3. Launch, I/O and filesystem workflow
 
-[proposed design]
+[proposed composition]
 
 ```text
- Caller / SDK             Daemon process runner               Kernel / Workspace
- ------------             ---------------------               ------------------
- exec(W, Bash, streams) -> check exact Ready incarnation
-                              |
-                              v
-                         admit process resources
-                         spawn Bash with cwd + identity
-                              |
- launch/result stream <-------+--- stdout/stderr chunks <---- ordinary process pipes
-                              |                                |
- stdin chunks ----------------+------------------------------> |
-                              |                                v
-                              |                          ordinary syscalls
-                              |                                |
-                              |                       +--------+---------+
-                              |                       | FUSE mount       |
-                              |                       | read/write/name  |
-                              |                       +--------+---------+
-                              |                                |
-                              |                         Workspace semantics
-                              |                                |
-                              |                         bounded engine job
-                              |                                |
-                              |                       transaction COMMIT
-                              |                                |
-                              |                      successful syscall reply
-                              |
-                         child exit / pipe EOF events
-                              |
- terminal result <------------+
-
- no registry/Workspace lock spans process runtime or stream backpressure
- no output collector grows with total bytes emitted
- no Exec-specific capture, status scan, dependency restore or history publication
+caller / optional WorkspaceApi.exec -> Sandbox or external executor
+                                         ordinary command + mounted cwd
+                                         standard streams / actual status
+                                                      |
+                                         ordinary filesystem syscalls
+                                                      |
+                                              kernel -> FUSE
+                                                      |
+                                         Workspace -> Overlay / Store
+                                                      |
+                                        atomic local publication -> reply
 ```
 
-When output goes to stdout, it uses runner pipes/sinks. `printf ... >> log` inside
-the mount is file logging and follows the ordinary filesystem append path. These
-are different workloads. Only redirected file bytes participate in filesystem
-Commit; retained stdout is not implicitly inserted into the namespace.
-
-Successful filesystem writes commit their bounded local transaction before reply.
-A request buffer is not a delayed write log: once acknowledged, SQLite ownership
-or the declared filesystem representation owns the bytes. Runtime atomicity of
-the disposable overlay is not crash durability.
+Runtime streams use the runtime's standard route, separate from authenticated
+filesystem mount/Commit/status/unmount controls. Redirected stdout written to a
+Workspace file is ordinary filesystem state and participates in capture; an
+output stream is not implicitly inserted into history. No registry/Workspace
+lock spans command runtime or stream backpressure.
 
 ## 4. Bounded buffers without total-flow limits
 
-[proposed resource contract]
-
-```text
- BIG FILE / MANY EDITS                 PROCESS STDOUT / STDERR
-
- write syscall                        process pipe
-     |                                    |
- bounded FUSE request                 bounded stream chunk
-     |                                    |
- payload units + metadata             bounded queued chunks
-     |                                    |
- atomic overlay transaction           caller sink / streamed consumer
-     |                                    |
- acknowledgement                      backpressure if sink is slow
-     |                                    |
- next request                         next chunk
-
- Total accepted data grows on disk.    Runtime/output length does not grow RAM.
- No file/edit/flow cap.                No silent 8 KiB total truncation.
-```
-
-Many tiny files create indexed metadata and small payload records. Repeated edits
-replace the active visible representation rather than retain a chronological
-FUSE log or a resident piece table. Big writes use successive bounded windows.
-Sparse writes retain hole/cutoff semantics. The engine must bound operation work
-under old fragmentation and reclaim discarded bytes outside acknowledgement.
-These are required algorithms, not consequences of choosing SQLite.
-
-All windows include queued, executing and blocked-producer bytes. A slow sink
-applies ordinary pipe backpressure; it does not cause unlimited buffering or
-truncate total output. Explicit disk sinks have declared capacity and failure
-handling. Failed delivery cannot be reported as complete output.
+Every runtime stream includes queued, executing and blocked-producer bytes in
+its own accounting. Slow sinks apply ordinary pipe backpressure; they cannot
+cause unlimited collection, silent total truncation or complete-output success
+on failed delivery. Filesystem request/payload windows remain independently
+bounded without a file/edit/Commit cap. Runtime stream correctness is covered by
+prospective FP-6/7/30-Runtime; no daemon stream protocol is built for those tests.
 
 ## 5. Concurrency and Commit independence
 
-[owner requirement; proposed scheduling]
+Several commands can share one Workspace or run in different Workspaces.
+Computation/runtime execution is independent; filesystem requests meet at exact
+inode ordering, bounded request service and the single fair Overlay SQL owner.
+Store writes attempt once; contention returns typed Busy before effects with no
+busy handler/wait/retry. No writer serializes whole commands or Commits.
 
-Several Execs can share one Workspace, and Execs in different Workspaces can run
-concurrently. Their processes and computation run independently. Requests meet
-at inode ordering, the shared SQLite writer/engine scheduler, transport demand
-capacity and host runtime service. Fair bounded jobs and deferred FUSE waiters
-must keep unrelated activity runnable. SQLite's one writer per database is not
-permission to serialize whole Execs or Commit lifetimes.
-
-```text
- time ------->
-
- Exec A:  [read] [write X] [compute................] [write Y] [read] [exit]
- Exec B:       [create] [append.......................] [rename] [exit]
- Commit:                 | CAPTURE C | [construct/save/history] | INSTALL |
-                         ^
-                         |
-                  acknowledged requests before here -> C
-                  later requests                     -> active A
-
- Live view while constructing: A over C over old base
- Live view after known install: A over new base
- No command pause for the duration of Commit.
-```
-
-An ordinary syscall split across FUSE requests may straddle capture. Buffered
-mmap stores not yet locally published are outside that captured mutation frontier.
-Exec exit must not be used as an unproved mmap flush/capture hook. The caller
-chooses a quiescent command boundary if its tool-call policy wants one, while
-the filesystem's general Commit remains usable during activity.
-
-For smallest granularity the caller normally uses:
-
-```text
- mount full previous root -> exec command -> explicit commit -> terminal unmount
-                                             |
-                               delta includes ignored caches/output too
-```
-
-The caller can instead retain the same Workspace across any number of calls and
-incremental Commits, independent of task boundaries. Commit captures its whole
-published frontier, potentially including several callers' changes, then known
-install advances the base and retains later active changes. The next Exec uses
-that live view; it does not require another mount. Only explicit terminal unmount
-ends the Workspace.
-A nonzero command exit does not mean no data changed; the caller decides whether
-to preserve that resulting state. An unknown Commit cannot be hidden by treating
-Exec completion or unmount as history success.
+Commit captures the shared locally published frontier regardless of launch route.
+Later active writes remain over the new base after known install. An ordinary
+syscall split across FUSE requests can straddle capture; mapped stores not yet
+published are outside it. Shell exit is not an automatic flush or capture hook.
+Nonzero exit does not imply no filesystem changes. The caller chooses explicit
+Commit/unmount cadence or keeps a Workspace across calls.
 
 ## 6. Failure, cancellation and terminal unmount
 
-[proposed design]
+Runtime launch/delivery/exit failures retain their original custody. Neither a
+lost runtime result nor a lost filesystem reply permits re-execution or guessed
+rollback. Explicit process cancellation is requested from Sandbox/executor.
 
-```text
- before spawn          launched                      process exited
-     |                    |                                |
- failure -> no command    +-- stream/result lost ----------> retain identity/state
-                          +-- explicit cancel ------------> signal/fence owned group
-                          +-- ordinary unmount request ---> Busy; no silent kill
-                          +-- forced unmount -------------> explicit cancel + drain
-                                                            then lifecycle custody
+[Normal unmount](unmount.md) probes the kernel while ordinary service continues.
+Kernel Busy withdraws the control probe and leaves the filesystem usable. Force
+refuses active namespace control producers before effects; otherwise it owns
+connection abort, attempted filesystem/daemon-work drain and one plain detach.
+It does not kill caller processes or wait for their streams/output/status.
+If a caller wants process cancellation and filesystem teardown it explicitly
+requests both, preserving their separate results and filesystem effects.
 
- accepted writes remain live until explicit Commit or successful terminal discard
- no automatic resend of an unknown Exec: re-running a command can duplicate effects
-```
-
-Daemon/container termination can stop processes and loses a disposable local
-Workspace; host history reflects whichever operations completed. Signal policy,
-process-group custody, stream detachment and descendant handling must be defined
-without assuming a killed shell terminated every descendant. The mount cannot
-be reclaimed while a process, callback or transport operation still retains its
-data. [Unmount](unmount.md) owns the full fence sequence.
+Sandbox setup/external executor owns command identity, actual mount visibility,
+Store/Overlay/credential protection and no inherited protected descriptors.
+Namespace propagation/isolation needs a proof at actual topology; a working
+directory or shared uid is not an adversarial isolation boundary.
 
 ## 7. Workloads and acceptance
 
-[proposed validation; IDs are documentation cases, not frozen benchmark selections]
+[prospective validation; no frozen sample or run]
 
-| Case | Workload | Required proof/cost observation |
+| Case | Workload | Required observation |
 | --- | --- | --- |
-| E1 | Immediate `git status`/build on full committed tree | `.git`, ignored dependencies/caches/output present; no hidden preparation |
-| E2 | Create/copy/hard-link many tiny files, wide directories | No dirty metadata frontier limit; request service and bytes/journal/index work attributable |
-| E3 | 100,000 repeated/scattered edits followed by full Commit | No edit-count refusal or prior-fragment-sized new write; exact final bytes |
-| E4 | Large regular files and sparse writes beyond former 4 GiB cap | Windowed flow and correct range reads; sparse Commit prerequisite not bypassed |
-| E5 | Continuous tiny file appends, tail/read, rotate/truncate/unlink-open | No whole-log append reconstruction, growing orphan chain or payload-sized stall |
-| E6 | Long-running Bash plus large streamed stdout/stderr | No automatic 30 s timeout/8 KiB truncation; bounded queued/blocked bytes |
-| E7 | Multiple Execs and concurrent Workspaces/Commits | Independent progress; no control slot held across Exec; no contention EBUSY |
-| E8 | Background descendants, inherited pipe and open file at shell exit | Separate process/stream/handle ownership; ordinary unmount reports Busy |
-| E9 | Cancellation or lost connection while writing/outputting | No automatic command replay; exact output/process disposition and accepted bytes |
-| E10 | Same command through Exec and another authorized process route | Identical filesystem semantics, permissions and visible paths |
-| E11 | Persistent Workspace with overlapping calls and many incremental Commits | Same-mount current view and valid caches; later writes preserved; no lifetime/call cap or growing orphan/generation chain; cleanup progresses before final unmount |
+| E1 | Immediate git/build access on full root | Complete .git, ignored/dependency/cache/output state; no hidden preparation |
+| E2 | Many tiny files/wide directories | No dirty frontier cap; indexed bounded work attributed |
+| E3 | 100000 scattered edits then Commit | Exact final bytes, no edit-count refusal |
+| E4 | Large and sparse files | Windowed flow; no implementation file-size cap; >4GiB actual execution retains owner waiver |
+| E5 | Logger/tail/rotation/truncate/unlink-open | Exact lifetime/content, bounded reclaim/read depth |
+| E6 | Long command and large standard output | Runtime stream order/backpressure/completion, no automatic timeout/truncation |
+| E7 | Several processes/Workspaces/Commits | Finite fair filesystem progress; no daemon command slot |
+| E8 | Shell exit with descendants, pipes and open/cwd/mapping references | Independent runtime and kernel/filesystem custody; truthful normal Busy |
+| E9 | Explicit cancellation/lost result during mutation/output | Original runtime result and output disposal, retained accepted filesystem effects |
+| E10 | Optional SDK execution and external executor on same mount | Identical permissions and filesystem semantics without registration |
+| E11 | Same mount across repeated calls/incremental Commits | Coherent live view, later writes and live/idle cleanup; no lifetime/call cap |
 
-The historical full fixture is 130,045 entries / 3,475,776,149 regular-file bytes;
-dependency replay is 95,021 entries / 2,126,509,110 bytes. Exact source/manifest
-identities and evidence limits are in [mount](mount.md). A source-only subset or
-small smoke package cannot replace final full-workload execution and Commit proof.
-
-Load-bearing acceptance also requires the engine's fragmentation/lifetime/
-fairness/residency work and cluster one's deferred-edit, directory-memory,
-new-parent, sparse and faithful-import corrections. Streaming output alone does
-not establish either filesystem throughput or the complete tool-call latency.
-
-Future timing separates launch, actual command, output drain, Commit and unmount;
-reports overlapping observations without adding them twice. Use the repository
-cold/equal-cache, one-sample, command-budget, independent-proof and append-only
-rules from [validation](../07-implementation-validation.md). Harness stop budgets
-never become product Bash timeouts. No workload was run for this document.
+Full historical fixture is 130045 entries/3475776149 regular-file bytes; replay
+95021 entries/2126509110 bytes. [Mount](mount.md) retains exact manifest/source
+pins and limitations. Full-root/mounted survival remains real proof work; source
+organization or a small smoke fixture does not close it. Timing follows current
+measurement/family/cache rules and prospective registration with distinct runtime
+and filesystem observations; harness stops are never product command timeouts.
 
 ## 8. Current source versus replacement
 
-[source-verified baseline]
-
-The dormant [SDK](../../../../crates/layerfs-api/sdk/src/workspace.rs) uses
-`exec(id, command)` through a 30,000 ms control call. The
-[wire contract](../../../../crates/layerfs-bridge/src/contract/execution.rs) sets
-`WORKSPACE_EXEC_MAX_MS = 30_000`, 8,192 output bytes per stream, and a bounded
-whole result. [execution.rs](../../../../crates/layerfs-daemon/src/execution.rs)
-launches `/bin/sh -c`, null stdin and piped output, collects capped Vecs, polls
-Workspace revision for progress and kills the process group on error.
-[control.rs](../../../../crates/layerfs-daemon/src/control.rs) retains the old
-serialized slot. The dormant packages are excluded from the active workspace.
-
-These are required replacement points. Current product code has not been changed
-to implement ordinary Bash, unlimited runtime, streaming output, concurrent
-control or the engine described here. Actual Exec streams/control framing must
-be specified and verified in integration without restoring `layerfs-server`.
+At R0 input, active SDK exports qualified Init/install and low-level Control;
+it has no real ProjectApi/WorkspaceApi/SandboxApi facades. Active daemon has no
+command supervisor or native FUSE executable. Excluded SDK/daemon/Sandbox source
+contains old host Server/data paths, capped execution and legacy dependencies;
+its organization may be inspected, never source-included or restored.
+The [destination layout](../../307/FINAL-CLUSTER-TWO-FILE-LAYOUT-20261008.md)
+lists replacement homes/origins, all proposed until implemented and proved.

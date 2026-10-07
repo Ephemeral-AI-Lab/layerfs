@@ -14,6 +14,17 @@ kernel bookkeeping to [FUSE](../fuse.md), and cluster-one completion semantics t
 [06](../06-cluster-one-integration.md) and the
 [handbook](../../../../../cluster_one_handbook.md).
 
+Owner supersession 2026-10-08 at R0 input `1a6bb53ef`: the SDK exposes
+ProjectApi, WorkspaceApi and SandboxApi. Ordinary Sandbox/runtime or an external
+executor owns command launch, standard streams, exit status and explicit
+cancellation; the filesystem daemon owns no command supervisor, launcher,
+per-Exec cgroup, command registration or custom Exec wire. FUSE serves every
+permitted visible process. Shell exit/zero registered commands proves no
+filesystem drain, and forced filesystem teardown never implicitly kills caller
+processes. Current [S8 specification](../../307/S8-SPECIFICATION-20261008.md) and
+[R0–R9 rollout](../../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
+historical baseline pins, receipts and verdicts retain their original scope.
+
 ## 1. Purpose and no hidden work
 
 [proposed public contract]
@@ -95,7 +106,7 @@ admission also prevents aggressive polling from starving mutations or history.
 | Identity | Workspace ID, incarnation, daemon incarnation, observation sequence | Validated registry and local state |
 | Lifecycle | Attaching/ready/unmounting/terminal/failed, mounted/routing state, retained cleanup disposition | Lifecycle owner; one coherent local copy |
 | Base | Authorized Branch, installed head/root, scope/profile | Installed immutable binding; not a fresh Branch query |
-| Activity | Active Exec/operation/handle counts and deferred-waiter counts | Maintained acquisition/release bookkeeping |
+| Activity | Active filesystem/control operation/handle counts and deferred-waiter counts | Maintained acquisition/release bookkeeping |
 | Mutation | Acknowledged revision, active generation, maintained dirty-inode/name counters | Post-commit mutation/capture bookkeeping |
 | Commit | Idle/running/uncertain/local-failure; phase, captured generation and known root/head/token | Commit custody owner |
 | Queues | Admitted/queued bytes/jobs by bounded class, queue/service observations | Scheduler counters with explicit scope/epoch |
@@ -159,19 +170,17 @@ UNCERTAIN
       +--> next Commit and normal unmount refuse pending exact disposition
 ```
 
-Save and history live in the host application's embedded cluster-one runtime;
-there is no restored `layerfs-server`. Status remains local and does not issue
-runtime object/history calls to fill gaps. A future exact resolver is a separate
+Save and history run in-process in each daemon over its opened shared Store.
+Status remains local and issues no Store/history calls to fill gaps. A future exact resolver is a separate
 authorized/fenced protocol, not a status side effect. See [Commit](commit.md).
 
 ## 5. Exec, terminal unmount and retained cleanup
 
 [owner lifecycle requirements]
 
-An Exec may run indefinitely and multiple Execs may share a Workspace. Status can
-report activity counts while commands compute, stream output or wait on ordinary
-filesystem resources. It does not inspect or reinterpret their commands. Process
-exit/output arrives through the runner's own event channel.
+An Exec may run indefinitely and multiple Execs may share a Workspace. Status reports actual filesystem/control activity, never command counts or
+process completion. Ordinary runtime owns command exit/output/status, and those
+observations never authorize filesystem unmount or reclamation.
 
 Per-tool-call is the expected common mode; per-task and long-lived multi-call
 reuse are also supported. Exec duration is independent of mode. Repeated
@@ -202,30 +211,21 @@ namespace/custody and cannot mutate a newly mounted Workspace.
 
 ## 6. Current source versus target
 
-[source-verified dormant implementation]
+The original 2026-10-05 dormant SDK/Bridge/daemon status path and serialized
+Exec slot are historical baseline observations at the source pin above. Those
+source paths were retired/relocated and are not current public APIs.
 
-The existing SDK route is
-[WorkspaceApi::status](../../../../crates/layerfs-api/sdk/src/workspace.rs).
-It uses a 5,000 ms control call and converts mounted/stopping/closed flags,
-active operations, nodes/handles/cookies, `consumer_accounted_bytes`, projection
-counts and upstream calls. The comment correctly calls it an observation, not
-part of a write acknowledgement.
+Current [native control](../../../architecture/68-native-workspace-control.md)
+provides a bounded authenticated local observation: coherent binding/control
+activity/publication knowledge plus one indexed engine State point, with separate
+scope/epoch and no Store SQL. It implements the pre-S8 component route; real
+WorkspaceApi facade and native request/owner/lookup/retirement fields remain
+R1/R2/R6. No command registry/status/output route belongs to this filesystem
+observation. Runtime observes commands independently.
 
-The wire sources are
-[WorkspaceStatusWire](../../../../crates/layerfs-bridge/src/contract/control.rs)
-and [WorkspaceWritableStatusWire](../../../../crates/layerfs-bridge/src/contract/workspace_commit.rs).
-The latter has generation/revision/dirty-inode and submission/Commit fields, but
-the SDK conversion does not currently expose all of them. The old dispatcher in
-[control.rs](../../../../crates/layerfs-daemon/src/control.rs) takes its global
-slot before status; Exec and Commit hold that slot across their operation.
-That conflicts with concurrent observation and must be replaced.
-
-The legacy `consumer_accounted_bytes` is not a whole-process, page-cache or
-phase-memory ceiling. Its node/cookie sizes describe the old private backing
-structures, not the replacement engine. Revise fields/semantics when those
-structures are removed, and do not preserve their fixed capacities merely to
-keep the old status schema unchanged. These dormant crates remain excluded from
-the active core workspace at the inspected pin.
+Old consumer-accounted bytes or node/cookie quotas never establish phase-memory,
+page-cache or workload caps. Actual maintained counters, field unavailability,
+scoped resource observations and exact known/unknown custody govern implementation.
 
 ## 7. Workloads and required proofs
 

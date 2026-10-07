@@ -20,7 +20,7 @@ Owner direction 2026-10-07 (serverless direct Store): every Linux daemon opens
 the global SQLite Store directly from a volume the daemons share; there is no
 host or server adapter in the data path. Project Init stays on the host and
 ends with one sealed Store file installed once into that volume; afterwards the
-host is control-only (mount, Exec, Commit, status, unmount). No retry, busy
+host is control-only (mount, Commit, status, unmount; ordinary execution uses Sandbox/runtime). No retry, busy
 handler or readiness wait is added. Both Store profiles are supported and
 development verification stays Disposable. A mounted SQLite volume is the raw
 shape of the serverless design; another database may later sit behind the same
@@ -28,6 +28,17 @@ ports. This reverses the two 2026-10-03 rows of §2 marked below, revises K2 and
 K24, and retires the host-mediated runtime. The simplified contract is
 [06](06-cluster-one-integration.md); K28–K33 and O-18–O-21 record it. Nothing
 here is implemented or measured by this revision.
+
+Owner supersession 2026-10-08 at R0 input `1a6bb53ef`: the SDK exposes
+ProjectApi, WorkspaceApi and SandboxApi. Ordinary Sandbox/runtime or an external
+executor owns command launch, standard streams, exit status and explicit
+cancellation; the filesystem daemon owns no command supervisor, launcher,
+per-Exec cgroup, command registration or custom Exec wire. FUSE serves every
+permitted visible process. Shell exit/zero registered commands proves no
+filesystem drain, and forced filesystem teardown never implicitly kills caller
+processes. Current [S8 specification](../307/S8-SPECIFICATION-20261008.md) and
+[R0–R9 rollout](../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
+historical baseline pins, receipts and verdicts retain their original scope.
 
 ## 1. Provenance
 
@@ -109,13 +120,14 @@ R1–R8 bounds are implemented. "Reverses" names a prepared item marked decided.
 | K22 | Terminal unmount includes logical close and automatic cleanup; no required public close | Owner direction 2026-10-05; [04 §10](04-concurrency-commit.md#10-second-commit-and-terminal-unmount) | Separate detach-only unmount and close lifecycle withdrawn |
 | K23 | Complete filesystem at one-call minimum granularity; long-lived multi-call Workspaces with incremental Commits supported | Owner clarification: lifetime independent of call/task; ignored files/dependencies/caches/output ready; Commit advances base and preserves later changes | Source-only/filter/reinstall projections and mandatory one-call teardown rejected |
 | K24 | **Revised 2026-10-07:** `layerfs-server` stays retired and no host runtime replaces it; cluster-one libraries are embedded by the daemon, and by the host only for Init | Owner direction: no host/server adapter in the data path | "Embed cluster-one runtime through public adapters" on the host; the SDK runtime, client and Bridge data codec built under #307 are retired (K31) |
-| K25 | Capture retains existing rows; later active mutations and operation scratch create separate required state | Discussion clarification; [Commit §5.1](workspace-api/commit.md#51-existing-captured-rows-new-active-rows-and-scratch) | No bulk overlay snapshot copy or premature captured deletion |
+| K25 | Capture retains existing rows; later active mutations and operation scratch create separate required state | Discussion clarification; [Commit §5.1](workspace-api/commit.md#51-existing-captured-rows-new-active-rows-and-operation-records) | No bulk overlay snapshot copy or premature captured deletion |
 | K26 | Automatic bounded SQL row deletion after logical retirement, including idle periods | [engine §6.1](daemon-sqlite.md#61-automatic-batched-sql-deletion) | No manual cleanup, intentional TTL, shared-table DROP or implied file shrink; throughput still unqualified |
 | K27 | Both per-tool-call and per-task modes; per-tool-call expected commonly; Exec duration independent of either | Owner clarification: commands may be short or long-lived; multi-call reuse and incremental Commit supported | Presumed short Exec, one-call ownership limit and automatic lifecycle by command class rejected |
 | K28 | **Owner direction 2026-10-07:** every Linux daemon opens the global SQLite Store file directly from a volume the daemons share and performs reads, Save and history in-process | "Daemon directly communicates to db rather than a host/server adapter then db"; a mounted SQLite volume is the raw shape of the serverless design and another database may later sit behind the same Storage/History ports | One host-local Store with one writable owner; macOS-only open; host-mediated object/Save/history transport |
 | K29 | Persistence opens on Linux for both profiles; development verification stays Disposable | Owner: "support both profiles, but for testing purpose, focus on disposable". The profile definitions for a file shared by several processes are proposed in [06 §3](06-cluster-one-integration.md#3-the-shared-store) and need the owner's ruling O-21 | macOS gates and the macOS allocation owner in the daemon path |
 | K30 | No retry: one write transaction is attempted once; a contended Store returns one exact before-effect `Busy` refusal and the caller's state is retained | Owner: "keep it simple, we need no retry". No busy handler, timeout, readiness wait or writer gate is added | The side review's proposed bounded wait before a write |
-| K31 | The host is control-only after install: mount, Exec, Commit, status, unmount. SDK `client/` and `runtime/`, the Bridge data codec and daemon `upstream/` are retired; R1 application assembly, R3 restart custody and R4 remote Save are not built | Owner direction; they exist only to carry the data path across a process boundary that no longer exists | #307 S9 rows R1, R3, R4 as scoped on 2026-10-07 |
+| K35 | SDK ProjectApi/WorkspaceApi/SandboxApi; ordinary Sandbox/external runtime commands; daemon owns filesystem only, no supervisor/launcher/cgroups/registration/custom Exec wire | Owner dispatch 2026-10-08; forced filesystem stop never kills caller processes; shell exit is no filesystem drain | R0–R9 current rollout |
+| K31 | The host is control-only after install: mount, Commit, status, unmount; ordinary execution uses Sandbox/runtime. SDK `client/` and `runtime/`, the Bridge data codec and daemon `upstream/` are retired; R1 application assembly, R3 restart custody and R4 remote Save are not built | Owner direction; they exist only to carry the data path across a process boundary that no longer exists | #307 S9 rows R1, R3, R4 as scoped on 2026-10-07 |
 | K32 | The Store volume is reachable by the daemon and not by Bash run inside a Workspace | Owner direction; mechanism in [06 §6](06-cluster-one-integration.md#6-store-visibility) | — |
 | K33 | Project Init stays on the host and ends with one sealed Store file; install copies it once into the shared volume. No collector runs under several writers | Owner direction; a sealed file has no sidecar and is safe to copy | Host-held writable Store after Init |
 | K34 | **Owner supersession 2026-10-07:** Branch Commit is overwrite-only. Last successful database publication effect wins; each candidate keeps its captured parent and filesystem state. Current-root equality gives UpToDate | Owner: "for now, it should be overwrite only"; [decision/proof](../307/BRANCH-OVERWRITE-DECISION-20261007.md) | Same-Branch HeadMoved acceptance in F8/F9/F13; merge/rebase/conflict policy deferred |
@@ -175,14 +187,14 @@ the #301 documents; "#304" the study.
 | Item | Source | Status | Note |
 | --- | --- | --- | --- |
 | Crate split: `layerfs-overlay` knows SQL only; `layerfs-workspace` knows no SQL; `layerfs-fuse` knows no storage | planning prompt | **retain** | [01 §3](01-architecture.md#3-ownership-execution-location-database-and-transport) |
-| No `LowerFilesystem` trait; the base is read with `layerfs-content` over `AuthenticatedObjects` | plan §0.2 | **retain** | The provider behind the trait is now a bridge client |
+| No `LowerFilesystem` trait; the base is read with `layerfs-content` over `AuthenticatedObjects` | plan §0.2 | **retain** | Superseded K28–K35: provider is the in-process daemon Store; no bridge data client |
 | An empty base is a real cluster one root | plan | **retain** | — |
 | Contract C1 object reads, C3 serial reservation | plan §6 | **retain**, restated | [06 §2](06-cluster-one-integration.md#2-cluster-one-apis-the-daemon-calls) |
 | Contract C2 history over PostgreSQL; C7 composition in `engines.rs`; C8 receipt reuse keyed on removed crates | plan §6 | **superseded** | — |
 | Contract C4 Save session with Refused/Uncertain classes and a resolver | plan §6 | **replace** | `begin_save`, `accept`, `finish`, `take_failure`; no resolver exists |
 | Contract C5 one publication call; C6 a conclusive `NotPublished` | plan §6 | **replace** / **unresolved** | K15; O-4 |
 | Contract C9 cluster one stops refusing on accumulated change | plan amendment | **unresolved** | Never sent; #302 closed ([06 §6](06-cluster-one-integration.md#9-prerequisites) P3, P7) |
-| layerfs-server retired | Owner clarification / #303 done-when | **retain** | No revival/rename; host application embeds current cluster-one libraries and bounded runtime adapters |
+| layerfs-server retired | Owner clarification / #303 done-when | **retain** | No revival/rename; host Init/seal/install then control-only; daemon embeds cluster-one direct Store |
 | Bridge payload and history contracts deleted | #303 comment 3 | **replace** | Construction contracts deleted; history contracts kept |
 | Rename the old crate to `-legacy`, delete it at the end | plan S1 | **retain** | As a relocation of a dormant crate |
 | Rollout S0–S14 | plan §2 | **replace** | [07 §3](07-implementation-validation.md#3-slices) |
@@ -240,15 +252,15 @@ IDs are kept below so earlier references remain traceable.
 | O-2 | **Superseded 2026-10-07:** placement is construction, Save and history in the daemon (K2 revised) | Option C and its host semantic admission are withdrawn with the wire | — |
 | O-3 | Must a Workspace survive a daemon process crash? (no / yes) | No. "Yes" selects the write-ahead alternative and a restart protocol not designed here | S1 |
 | O-4 | May exact uncertain-history resolution be added, with completion fencing and coherent authorized reads, no resend/delete on a guess? | Specify policy; two unfenced reads are insufficient | Terminal Uncertain remains until permitted and implemented |
-| O-5 | **Resolved 2026-10-07:** both profiles are supported; development verification runs Disposable | The shared-file definition of Disposable is O-21 | — |
+| O-5 | **Superseded:** Disposable/WAL/OFF only may execute, explicitly selected; Durable execution disabled indefinitely | Retained Durable API/source is not execution permission | Owner reauthorization required for Durable |
 | O-6 | **Superseded by K34 for Branch Commit:** after a conflict, what does the product offer: reopen on the new head, commit to a fork, or leave it to the caller? | Leave it to the caller in the first release | — |
 | O-7 | May the overlay start writeback and drop clean pages on its own files to bound guest page cache, given that root `AGENTS.md` §4 forbids sync calls on Workspace backing? | — | Target T8 |
-| O-8 | Which uid:gid do commands run as, and is it one identity per daemon or one per Workspace? Under a shared identity a command of one Workspace can open another's mount | One per Workspace | S8 |
+| O-8 | **Superseded by O-24 and K35:** Sandbox/executor owns actual command identity and visibility/protection | Same configured identity and exact actual access proof; shared uid is not adversarial isolation | R1/S8 |
 | O-9 | Is reporting `ctime = mtime` accepted? | Yes | S4 |
 | O-10 | Are pinned read-only SDK views kept? Each one is an extra live generation | Defer them | — |
 | O-11 | **Resolved by requirement:** remove inherited 4 GiB Workspace file cap | Engineering work; retain platform/resource limits | No additional owner gate |
 | O-12 | **Engineering assignment:** allocate P1/P3–P7/P12 follow-up ownership | Required integration scope, not a request to weaken requirements | No additional owner gate |
-| O-13 | **Engineering defaults:** start with 2 Workspaces/4 Execs as proposed, expose explicit resource settings | Defaults must pass sustained progress/resource proofs; no qualification claimed | No additional owner gate |
+| O-13 | **Engineering defaults:** Workspace/resource settings belong to actual owners; no daemon Exec count, expose explicit resource settings | Defaults must pass sustained progress/resource proofs; no qualification claimed | No additional owner gate |
 | O-14 | **Resolved:** unmount includes logical close and cleanup; successful unmount discards uncommitted local state, no implicit Commit | Normal Busy/Uncertain preserves state; explicit force handles cancellation/unknown custody | No separate public close |
 | O-15 | **Resolved by owner:** a Workspace may serve many sequential/concurrent calls over a long lifetime and Commit incrementally | Same mount and current live view; no automatic teardown on call exit or Commit; lifetime independent of task | Qualify both fast fresh mounts and persistent cache/ownership/reclaim behavior |
 | O-16 | For registered selections whose subject is a removed mechanism, is `NOT_RUN — mechanism removed`, shown beside a prospectively registered successor, the accepted disposition? | Yes | S12 |

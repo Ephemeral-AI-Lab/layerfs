@@ -1,0 +1,29 @@
+{
+  "scope": "R0 documents only, no Cargo/tests/mount/measurement",
+  "checked_local_links": 483,
+  "external_links_not_fetched": 12,
+  "link_errors": [],
+  "immutable_original_files_checked": 5551,
+  "immutable_errors": [],
+  "protected_notes": [
+    {
+      "path": "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md",
+      "sha256": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+      "matches": true
+    },
+    {
+      "path": "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+      "sha256": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+      "matches": true
+    },
+    {
+      "path": "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md",
+      "sha256": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027",
+      "matches": true
+    }
+  ],
+  "source_trees": {
+    "core/crates": "611c3a5387cffc73816ef0358d8b8b285c8b52cb",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  }
+}

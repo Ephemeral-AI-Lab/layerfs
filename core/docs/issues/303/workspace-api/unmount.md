@@ -11,6 +11,17 @@ This document owns the terminal Workspace operation. Read [mount](mount.md),
 [daemon/SQLite](../daemon-sqlite.md) and [FUSE](../fuse.md) for their respective
 contracts. There is no required separate `workspace_api.close`.
 
+Owner supersession 2026-10-08 at R0 input `1a6bb53ef`: the SDK exposes
+ProjectApi, WorkspaceApi and SandboxApi. Ordinary Sandbox/runtime or an external
+executor owns command launch, standard streams, exit status and explicit
+cancellation; the filesystem daemon owns no command supervisor, launcher,
+per-Exec cgroup, command registration or custom Exec wire. FUSE serves every
+permitted visible process. Shell exit/zero registered commands proves no
+filesystem drain, and forced filesystem teardown never implicitly kills caller
+processes. Current [S8 specification](../../307/S8-SPECIFICATION-20261008.md) and
+[R0–R9 rollout](../../307/ROLLOUT-LEDGER-20261008.md) govern prospective work;
+historical baseline pins, receipts and verdicts retain their original scope.
+
 ## 1. Observable contract
 
 [owner decision]
@@ -87,9 +98,9 @@ Unmount does not synthesize a tool-call audit record.
 | --- | --- |
 | Selector | Exact Workspace ID/incarnation and authorized daemon instance |
 | Normal policy | Quiescent terminal teardown; no silent process termination |
-| Force policy | Explicit cancellation/termination semantics, including descendant and uncertain-history custody |
+| Force policy | Explicit forced filesystem abort/detach/drain with exact uncertain-history custody; no implicit process cancellation |
 | Success | Native detach and activity/routing fences established; logical ownership closed; automatic cleanup scheduled/owned |
-| Busy | Admission refused before terminal effects because Execs, handles or Commit are active; Workspace stays usable |
+| Busy | Admission refused before terminal effects because filesystem/control owners are active or the kernel reports retained references; Workspace stays usable |
 | Uncertain | Exact Commit/native/lifecycle outcome cannot be established; retain ownership/context, do not claim ordinary success |
 | Retained partial teardown | Teardown began but detach/drain failed; return phase, actual remaining owner and known state |
 | Cleanup debt | Accounted rows/bytes/work still awaiting physical reclamation; not falsely reported as zero |
@@ -101,124 +112,55 @@ and [status](status.md) must distinguish those cases.
 
 ## 3. Fair lifecycle admission
 
-[proposed design]
+Normal/forced unmount atomically arbitrates with Attach/Commit and other exact
+namespace control producers. Force refuses active producers before any terminal
+effect. Normal admission also refuses actual active filesystem/daemon work and
+original uncertain Commit custody. There is no command/session registration gate.
 
-Unmount admission atomically arbitrates with new Execs, new handles and Commit
-admission for the exact Workspace. A race has one defined winner:
-
-```text
-    Exec / Commit admission                 Unmount admission
-               |                                   |
-               +------------ lifecycle gate -------+
-                                  |
-                         one ordered decision
-                     +------------+------------+
-                     |                         |
-            new activity wins          terminal fence wins
-            unmount returns Busy       future activity refused
-            Workspace remains live     previously accepted work drained/fenced
-```
-
-Registry and Workspace locks are not held across process cancellation, FUSE
-detach/join, network waits or shared SQL-owner queue waits. Resource/inode waiters
-are deferred and cancellable rather than occupying every dispatch worker. A
-large Workspace's teardown must not stall mount/Exec/read/write/Commit service
-for another Workspace through a synchronous row deletion or maintenance lock.
+Normal ProbeUnmount freezes new control producers while ordinary FUSE admission
+and service continue. One plain detach attempt returning EBUSY withdraws the
+control probe with no injected ENOTCONN/EIO. Kernel cached lookups are not active
+requests; descriptors/cwd/mappings can keep the kernel busy independently of
+daemon open or command counts. Locks never span syscalls, queue waits or joins.
 
 ## 4. Terminal workflow and ownership transfer
 
-[proposed design]
+Normal: control probe → one plain detach; EBUSY → usable Ready. Known detach →
+terminal native phase → all loops and daemon work drained → fixed logical native
+owner revocation → logical Close/routing removal → indexed physical cleanup debt.
 
-```text
- Caller         Lifecycle owner         FUSE / processes        Shared overlay engine
- ------         ---------------         ----------------        ---------------------
- unmount(W) --> check identity/policy
-                    |
-                    +-- Busy/Uncertain ------> preserve exact live custody; report
-                    |
-                    v
-               fence new activity
-                    |
-                    +------------------> drain accepted callbacks/replies/handles
-                    |                    cancel parked waiters when appropriate
-                    |                    event-driven native detach + worker join
-                    | <----------------- exact native disposition
-                    |
-                    +----------------------------------------> bounded close-state job
-                    |                                         namespace unreachable
-                    |                                         transfer cleanup ownership
-                    | <--------------------------------------- logical close result
-                    |
-                    v
-               invalidate incarnation/capabilities
- result <------ exact terminal success
-                                                              |
-                                                     fair background cleanup
-                                                     metadata / payload / operation records
-                                                     orphan leases / retired state
-                                                              |
-                                                     debt converges to reclaimed
+Force: before-effect control producer/capability guard → Stopping → one validated
+connection-specific fusectl abort write → wake/dispose native waiters and preserve
+attempted-work results → local work drain → one plain detach. Abort and detach
+are independent effects. No MNT_FORCE fallback, retry, lazy detach or guessed
+connection number. Short/failed/unknown abort or failed detach after abort retains
+original phase/effects/custody; it is never the reversible normal Busy result.
 
- overlay.sqlite stays open: other Workspaces and later mounts reuse this engine
- immutable shared base/attribute caches remain only within their declared budgets
-```
-
-Release/flush and cancellation callbacks needed to finish accepted activity must
-remain serviceable after the entry fence. A stopped entry path cannot be allowed
-to deadlock the release path. Construction, base-read and transport jobs retain
-their operation leases until fenced completion; closed namespace visibility
-alone does not make their payload reclaimable.
-
-All queued jobs carry Workspace namespace/incarnation ownership. A stale job
-cannot target a new mount. Namespace keys are not reused while retained rows,
-leases, deferred jobs or cleanup contexts can still refer to them.
+Loop exit alone is not full drain. Every received callback/reservation, admitted
+request, queued/running service step, FORGET decrement, owner Pending/completion,
+publication ticket, Store consumer/subscription and namespace control/capture/
+Commit producer must be disposed with original outcome and no continuation able
+to access the namespace. A run() error is not join evidence. Only after this
+barrier may native indexed lookup/open/processing owners be logically revoked.
+Physical rows retire in bounded O(K) indexed turns; no whole-base scan or early
+reclamation. Unestablished drain preserves exact Retained custody.
 
 ## 5. Commit-aware forced teardown
 
-[proposed design; exact outcome preservation]
+Both normal and force refuse a running namespace Commit/constructor before
+effects. This design adds no interruptible Commit and cannot race publication
+or local install. Stopped known publication retains its root/head even if install
+failed. Stopped unknown custody requires explicit local relinquishment policy
+and remains Unknown in terminal receipt; it is never settled by an observer.
+Previously saved immutable waves remain in the Store. No guessed discard, resend,
+rollback or history deletion is introduced. [Direct integration](../06-cluster-one-integration.md)
+and existing Store Commit own the exact one-attempt sequence and failure phases.
 
-Normal unmount refuses an in-flight/uncertain Commit. Force must not guess that
-cancelling a local task cancelled the corresponding host operation.
-
-```text
- Commit phase                   Required fence / retained knowledge
- ------------                   ----------------------------------
-
- capture / construct / Save      stop producer + queued/in-flight calls
- before staging                 history not requested; keep possible saved waves
-                                local cancellation may resolve after the fence
-
- staging completed              exact owned stage token + known discard disposition
-                                before ordinary terminal cleanup can succeed
-
- staging reply lost             stage may exist; retain operation/context
-                                no guessed absence / resend / discard
-
- transition in flight           publication may happen after cancellation request
- or reply lost                  fence original operation and settle exactly,
-                                otherwise preserve/report uncertainty
-
- transition known successful    preserve published head/root even if local install fails
-                                unmount cannot undo acknowledged history
-
- required discard reply lost     preserve exact stage custody; not retryable Idle
-```
-
-Exact resolution requires the runtime adapter's authorized operation identity and
-completion fencing. Unfenced `GetStage`/`GetCommit` absence is insufficient while
-the original request may still execute. One-attempt/no-guessed-retry rules in
-[cluster-one integration](../06-cluster-one-integration.md) remain in force.
-
-An explicit forced policy may relinquish local custody with an acknowledged-unknown
-result if that product policy is supplied. It must never return ordinary success
-implying NotPublished. Dropping the local capture does not delete a shared object,
-cancel a host stage or undo a Branch transition. Immutability does not settle
-history outcomes or remove authority/reference/durability requirements.
-
-For Exec, forced policy signals/fences the owned processes/descendants, drains or
-explicitly terminates their streams, and waits for mount references to release.
-Ordinary unmount does not add a timeout to long-running Bash. The old fixed
-lifecycle envelope cannot silently kill commands.
+Commands, stdout/stderr and exit/cancellation belong to Sandbox/runtime or an
+external executor. Forced filesystem teardown does not signal/kill caller-owned
+processes or wait for output drain. Caller cancellation is a separate explicit
+runtime action. Accepted filesystem changes survive a lost reply/process exit;
+normal kernel busy/detach and full daemon-work drain prove filesystem lifetime.
 
 ## 6. Cleanup and large-state cost
 
@@ -261,8 +203,8 @@ Admission, reserved headroom and fair cleanup service belong in the
 inherited file-count, edit-count, payload-size or total-flow ceiling is introduced.
 
 Orphan bytes held by live descriptors cannot be reclaimed prematurely. Normal
-unmount refuses those handles; forced teardown must establish their release or
-retain precise custody. Shared immutable objects are not local garbage and have
+unmount refuses those handles; forced connection teardown must establish native/daemon-work disposal
+and exact detach or retain precise custody. Shared immutable objects are not local garbage and have
 no guessed deletion path in these APIs.
 
 ## 7. Per-tool-call and concurrent workloads
@@ -275,9 +217,9 @@ no guessed deletion path in these APIs.
 | U2 | Many tiny dirty files/wide directories | Foreground unmount does not scan/delete all rows; actual cleanup debt tracked |
 | U3 | Big files, many edits, large operation records and old captured state | Payload/operation records ownership fenced; physical reclamation windowed |
 | U4 | Continuous logger/open-unlinked descriptor | Normal Busy leaves content live; force releases/fences before reclaim |
-| U5 | Unmount races Exec/create/Commit | Exact admission winner and no late stale mutation into another namespace |
+| U5 | Unmount races create/Commit/control producers | Exact admission winner and no late stale mutation into another namespace |
 | U6 | Simultaneous Workspaces; one unmounts large state while others Commit/write | Fair SQL/runtime/dispatch progress; no global teardown lock |
-| U7 | Long-running Bash/background descendant | No implicit timeout/kill in normal path; explicit forced process policy |
+| U7 | Long-running Bash/background descendant | No implicit timeout/kill in either filesystem path; explicit caller runtime cancellation stays separate |
 | U8 | Lost native detach or history stage/transition result | Retained phase/identity; no guessed absence, cleanup or replay |
 | U9 | Repeated per-call mount/Exec/Commit/unmount faster than cleanup | Bounded aggregate debt/admission and eventual complete reclamation |
 
@@ -296,23 +238,16 @@ one-sample, separate-proof and append-only rules in
 
 ## 8. Current source versus target
 
-[source-verified baseline; required migration]
+The original 2026-10-05 dormant SDK/daemon/FUSE sources at
+`f96d97651be5299f153ccde2bc8d921dd58807ad` separated detach from semantic close,
+used a serialized selected slot and polling lifecycle. Those are historical
+source observations, not current active paths or instructions to restore them.
 
-The dormant [SDK](../../../../crates/layerfs-api/sdk/src/workspace.rs) sends
-`WorkspaceUnmount` using a 5,000 ms control call. The
-[daemon control path](../../../../crates/layerfs-daemon/src/control.rs) detaches
-its native mount handle for that operation. Separate
-`WorkspaceCloseClean` and [lifecycle.close](../../../../crates/layerfs-daemon/src/lifecycle.rs)
-close clean semantic state; the old lifecycle owns only one selected slot.
-
-[MountHandle::unmount](../../../../crates/layerfs-fuse/src/mount.rs) stops
-admission, polls Workspace activity/handles/replies, detaches, polls worker
-completion and retains its owner on failure. Its comment explicitly permits
-local semantic handles to remain after detach. This is detach-only behavior,
-not the owner's terminal-unmount contract.
-
-Migrate the SDK/wire/daemon routes to this combined terminal operation, event-driven
-fences and bounded namespace cleanup. Preserve exact native-failure custody, but
-do not preserve the separate public-close requirement, whole-Workspace scans,
-fixed total cleanup envelope or old serialized control slot. Product code has
-not yet implemented this contract.
+Current [native control](../../../architecture/68-native-workspace-control.md)
+implements authenticated logical unmount/Close and automatic engine cleanup,
+refusing active/unresolved Commit custody. It is the pre-S8 Store/engine half;
+no kernel attachment, busy probe or native drain is established by its receipts.
+R2/R6 supplies the combined terminal native operation and exact FS lifetime
+proofs through current S8 owners. Excluded old FUSE is reference until replacement
+coverage, never a source include or fallback. No separate public close, daemon
+process supervisor or command cancellation route returns.

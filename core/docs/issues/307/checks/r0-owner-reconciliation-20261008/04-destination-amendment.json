@@ -1,0 +1,22 @@
+{
+  "status": "PROPOSAL - no product created",
+  "input_head": "1a6bb53ef14e1860d8f222df11394e5a654bb34d",
+  "original_manifest": "core/docs/issues/307/checks/final-cluster-two-layout-20261008/02-destination-manifest.json",
+  "original_counts": {
+    "E": 523,
+    "M": 5,
+    "P": 108
+  },
+  "added": {
+    "core/crates/layerfs-daemon/src/overlay/captured_namespace_port.rs": {
+      "status": "P",
+      "origin": null,
+      "responsibility": "Implement neutral retained Workspace captured namespace port over existing OwnerClient/Commands, with exact attempted Completion custody; SQL remains Overlay"
+    }
+  },
+  "effective_counts": {
+    "E": 523,
+    "M": 5,
+    "P": 109
+  }
+}

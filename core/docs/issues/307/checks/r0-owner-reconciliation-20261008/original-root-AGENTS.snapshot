@@ -59,10 +59,8 @@ separate MEMORY/OFF/EXCLUSIVE database.
 - Filesystem access does not require `workspace_api.exec` or an Exec registration.
   Any process with mount visibility and permission, including Bash launched by an
   external executor, uses the same Workspace semantics through ordinary filesystem
-  calls. Sandbox or the external executor owns command launch, streams, exit
-  status and explicit cancellation. The filesystem daemon supervises no commands;
-  optional `WorkspaceApi.exec` only delegates ordinary Sandbox execution.
-  Keep this boundary explicit in implementation
+  calls. Managed Exec owns command launch, streams and process lifecycle; it is
+  optional for filesystem access. Keep this boundary explicit in implementation
   and proofs; see [execution ownership](core/AGENTS.md#filesystem-access-and-execution-ownership).
 - Initial full-root acquisition is explicit. Repeated mount binds the complete
   root without a whole-tree scan/copy/materialization, dependency restoration or
