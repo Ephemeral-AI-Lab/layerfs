@@ -250,6 +250,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ => return Err("explicit durable/disposable profile required".into()),
     };
     let config = PersistenceConfig::sqlite(&args[1]).with_sqlite_profile(selected);
+    // Provisioning order: a writable opener establishes missing WAL sidecars
+    // before the independent read set. It performs no logical mutation.
+    let writer = Handles::open_writable(config.clone(), b"layerfs-bench-pro", cursor)?;
     let handles = Handles::open_read_only(config.clone(), b"layerfs-bench-pro", cursor)?;
     let history = &handles.history;
     let record = history
@@ -331,6 +334,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if sampled_files as usize != sample.len() {
         return Err("sampled file count mismatch".into());
     }
+    drop(provider);
+    drop(storage);
+    drop(handles);
+    writer.seal()?;
     println!("{{\"status\":\"PASS\",\"paths\":{},\"discovered_files\":{},\"directories\":{},\"manifest_bytes\":{},\"sampled_files\":{},\"sampled_bytes\":{},\"sample_policy\":\"{}\",\"workers\":{},\"metadata_attribute_waves\":{},\"root\":\"{}\",\"manifest_sha256\":\"{}\"}}",
         seen.len(), discovered_files, directories, manifest_bytes, sampled_files, sampled_bytes,
         SAMPLE_POLICY, VERIFY_WORKERS, attributes.read_waves + file_metadata_waves, root, manifest_digest);

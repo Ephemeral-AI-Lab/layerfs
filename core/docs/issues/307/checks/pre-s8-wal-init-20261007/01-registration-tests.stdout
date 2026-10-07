@@ -1,0 +1,8 @@
+# {"timestamp": "2026-10-07T06:50:44.551449+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "-m", "unittest", "discover", "-s", "core/benchmark/fs-bench-pro/tests", "-p", "test_serverless_init.py"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "0e26e5ea2156461ba9f2b21f0c658774484f192d0e8ba791df3b480e7af617dc", "source_parent": "8c66eb8b413a10814488ddda794a12c2514207e2", "wall_stop": "specified in command; build is not test execution"}
+....
+----------------------------------------------------------------------
+Ran 4 tests in 0.001s
+
+OK
+
+# exit=0

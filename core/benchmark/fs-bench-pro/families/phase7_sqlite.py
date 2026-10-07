@@ -257,6 +257,13 @@ for original in WORK_REDUCTION_CASES:
     INCUMBENT_RESTORED_CASES.append(new)
 INCUMBENT_RESTORED_CASES=tuple(INCUMBENT_RESTORED_CASES)
 
+# Owner-dispatched pre-S8 decision: one new WAL profile, no old row retargeted.
+SERVERLESS_WAL_CASE = 'phase7-sqlite-disposable-init-1000-serverless-wal-v1'
+CASES[SERVERLESS_WAL_CASE] = Case(SERVERLESS_WAL_CASE, 'namespace-1000-compact-v3',
+    None, None, 30_000_000_000, 19_000_000_000, 'disposable')
+RETIRED_ALLOCATION_INIT = tuple(name for name, case in CASES.items()
+                               if case.fixture is not None and name != SERVERLESS_WAL_CASE)
+
 PROFILE_IDS={'durable':contract.PROFILE,'disposable':'sqlite-memory-off-macos-v1'}
 # Missing user rulings are explicit; no measurement uses a guessed admission gate.
 INIT_ALLOCATION_RULE="candidate-final-database-wal-shm-allocation<=matched-baseline-final-total-v1"
@@ -314,6 +321,9 @@ def build(root,arm,out,common):
 
 def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pins=None):
     case=CASES[selection]
+    if selection == SERVERLESS_WAL_CASE:
+        from families import serverless_init
+        return serverless_init.run(case, output, arm, common)
     if selection in RETIRED_STREAMING_CASES:raise ValueError('withdrawn streaming treatment; source and receipts retained on codex/init-streaming-candidate; ordinary incumbent restored')
     if selection in RETIRED_PAYLOAD_SEGMENT_CASES:raise ValueError('payload layout withdrawn; historical receipts retained; no active vehicle')
     regression=selection in REGRESSION_CASES+SPACE_SCALING_V1_CASES+SPACE_SCALING_CASES+WORK_REDUCTION_CASES+STREAMING_CASES+STREAMING_BATCHED_CASES+STREAMING_REFILL_CASES+INCUMBENT_RESTORED_CASES
@@ -329,6 +339,8 @@ def run(selection,output,arm,baseline_root,common,corpus_root=None,reference_pin
         raise ValueError('prospective Init allocation contract is pending; no admission arm is authorized under a guessed gate')
     if selection in RETIRED_RUN_BACKED_INIT:
         raise ValueError('run-backed Init selection retired with its scratch vehicle; original receipts retained; use the acquisition case')
+    if selection in RETIRED_ALLOCATION_INIT:
+        raise ValueError('NOT_RUN — mechanism removed: former Init allocation/profile vehicle; historical receipts retained')
     if os.uname().sysname!='Darwin':raise ValueError('required SQLite full-sync profile and wait4 accounting are macOS-only')
     root=common.ROOT if arm=='candidate' else Path(baseline_root).resolve()
     if arm=='baseline' and (not root.is_relative_to(common.ROOT/'target/phase7-baseline') or subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()!=BASE or subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True)):
