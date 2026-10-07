@@ -1,0 +1,165 @@
+{
+  "timestamp": "2026-10-07T16:44:01.595452+00:00",
+  "status": "PASS",
+  "source": "f0797c646d82835ec922c4bb62fa2374ec8843cf",
+  "prompt_sha256": "2dfb8396a94ff26a6c0cd173c3dd73cb27c1c9ba23aaeb63f3ac266cb815a9f9",
+  "lines": 572,
+  "links": [
+    {
+      "target": "checks/s8-spec-prompt-20261008/02-source-evidence-index.json",
+      "exists": true
+    },
+    {
+      "target": "../../../../AGENTS.md",
+      "exists": true
+    },
+    {
+      "target": "../../../AGENTS.md",
+      "exists": true
+    },
+    {
+      "target": "../../../../cluster_one_handbook.md",
+      "exists": true
+    },
+    {
+      "target": "../../../../cas_cdc_deltaencoding_handbook.md",
+      "exists": true
+    },
+    {
+      "target": "../303/README.md",
+      "exists": true
+    },
+    {
+      "target": "../303/06-cluster-one-integration.md",
+      "exists": true
+    },
+    {
+      "target": "../303/07-implementation-validation.md",
+      "exists": true
+    },
+    {
+      "target": "../303/08-decisions-provenance.md",
+      "exists": true
+    },
+    {
+      "target": "../303/05-fuse-assessment.md",
+      "exists": true
+    },
+    {
+      "target": "../303/fuse-optimization-investigation.md",
+      "exists": true
+    },
+    {
+      "target": "../../../../docs/general/optimization-guide.md",
+      "exists": true
+    },
+    {
+      "target": "../../../../docs/general/agent-measurement-policy.md",
+      "exists": true
+    },
+    {
+      "target": "../../../../docs/general/benchmark_rules.md",
+      "exists": true
+    },
+    {
+      "target": "../../../../benchmark_agent_report.md",
+      "exists": true
+    },
+    {
+      "target": "../../../benchmark/fs-bench-pro/AGENTS.md",
+      "exists": true
+    },
+    {
+      "target": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/308",
+      "scope": "external; retained issue snapshot or contextual link"
+    },
+    {
+      "target": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/309",
+      "scope": "external; retained issue snapshot or contextual link"
+    },
+    {
+      "target": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/314",
+      "scope": "external; retained issue snapshot or contextual link"
+    },
+    {
+      "target": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/305",
+      "scope": "external; retained issue snapshot or contextual link"
+    },
+    {
+      "target": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/306",
+      "scope": "external; retained issue snapshot or contextual link"
+    },
+    {
+      "target": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/313",
+      "scope": "external; retained issue snapshot or contextual link"
+    },
+    {
+      "target": "checks/s8-spec-prompt-20261008/sources/",
+      "exists": true
+    },
+    {
+      "target": "PRE-S8-COMPLETION-20261007.md",
+      "exists": true
+    },
+    {
+      "target": "PRE-S8-RESOURCE-GROWTH-RESULTS-20261007.md",
+      "exists": true
+    },
+    {
+      "target": "DISPOSABLE-WAL-MATRIX-20261007.md",
+      "exists": true
+    },
+    {
+      "target": "SEAL-ALLOCATION-STRIDE1-20261007.md",
+      "exists": true
+    },
+    {
+      "target": "FUSER-REGISTRY-PATCH-20261006.md",
+      "exists": true
+    },
+    {
+      "target": "FUSER-OFFICIAL-CANDIDATE-20261006.md",
+      "exists": true
+    },
+    {
+      "target": "LINUX-TIMESTAMP-DOCKER-20261006.md",
+      "exists": true
+    },
+    {
+      "target": "S8-EXIT-AUDIT.md",
+      "exists": true
+    },
+    {
+      "target": "PRE-S8-COMPLETION-20261007.md",
+      "exists": true
+    },
+    {
+      "target": "SAVE-RESERVATION-DECISION-20261007.md",
+      "exists": true
+    },
+    {
+      "target": "BRANCH-OVERWRITE-DECISION-20261007.md",
+      "exists": true
+    },
+    {
+      "target": "PRE-S8-ACCEPTANCE-DECISION-20261007.md",
+      "exists": true
+    }
+  ],
+  "required_scope_checks": {
+    "planning_only": true,
+    "one_primary_three_read_only": true,
+    "five_required_documents": true,
+    "supersessions": true,
+    "current_cache_scope": true,
+    "evidence_limits": true,
+    "required_issues": true
+  },
+  "source_and_protected_note_hashes": "PASS",
+  "historical_snapshot_hashes": "PASS",
+  "whitespace": "PASS",
+  "runtime_execution": "NOT_RUN \u2014 dispatch prompt preparation only",
+  "subagents_or_chats_created": 0,
+  "remote_mutations": 0,
+  "review_scope": "Source/evidence routing and prompt consistency only; next agent must perform full issue/raw-evidence specification review."
+}

@@ -1,0 +1,228 @@
+{
+  "timestamp": "2026-10-07T16:38:35.975261+00:00",
+  "task": "prompt preparation only; no new product, build, test or benchmark",
+  "source_commit": "f0797c646d82835ec922c4bb62fa2374ec8843cf",
+  "source_tree": "461a53713b35e44dd62793375acad6ebe7359582",
+  "core_product_tree": "611c3a5387cffc73816ef0358d8b8b285c8b52cb",
+  "root_reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+  "sha256": {
+    "AGENTS.md": "808069ace1929b5a69652df78730738ee25dc5fdcf1e557a39e727b3eed88b93",
+    "core/AGENTS.md": "7292c8a579f9140b3efa2892be4e874184d152012bd71dcd09dda06af8525b8e",
+    "core/Cargo.toml": "441b1162aacb628b299ed1e660a1bd08f9ce76e82ced5af5f777fb501f254544",
+    "core/crates/layerfs-daemon/src/store/open.rs": "7b28cfbec9e70d258e2104ba9dc00d192894305dd7ad712b30f14ed273dac588",
+    "core/crates/layerfs-daemon/src/store/ports.rs": "cef3f5ce71158add495632068f2e53fff8ae7690d236bbb0420607a2dda48130",
+    "core/crates/layerfs-daemon/src/store/bind.rs": "55e78faf3a393b72434f0e3d358c11fea82a5bd9f8df0d8f0b93dd3bae1b1cf5",
+    "core/crates/layerfs-daemon/src/store/commit.rs": "5e4beacc9eb1c18fd1626c641eacd35d65424a42f31feb1e69fc74b75fd6ee2c",
+    "core/crates/layerfs-daemon/src/bootstrap.rs": "6b1db1533fd6b0b1c0b3e38936707bedd0321d62de7002d34732c81184e1c51c",
+    "core/crates/layerfs-daemon/src/install_types.rs": "1f12deb5a77d7b3642261efd43d5d45a0cb24bae2440a5b4a4d00774d26e0e93",
+    "core/crates/layerfs-daemon/src/control/registry.rs": "20a02a7273ca0b5909a11079d4cb04d8987c69c7c2df7f66da26017f0966ba49",
+    "core/crates/layerfs-daemon/src/control/operations.rs": "09318951583f01363e58651edd7db8268f822ef7fd02d0e878afca61ef622d7c",
+    "core/crates/layerfs-workspace/src/base/cache.rs": "43c3260e7e2410620f7ce7fab8ab2a4f607fb3d8e1b176e069f57b0bcb62bfe5",
+    "core/crates/layerfs-workspace/src/base/client.rs": "a324790f34e6dd284b74635189fa672813a235fea0a9a9c0e30350d42e8705b3",
+    "core/crates/layerfs-persistence/src/backend/sqlite/seal_allocation.rs": "525aac2f5e1a5f36fcaeff2b570b2b226b5085ec5f8ca1c508220f36d6c7ab24",
+    "tools/production_loc.py": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+    "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027"
+  },
+  "issues": [
+    {
+      "path": "core/docs/issues/307/checks/s8-spec-prompt-20261008/sources/issue-305.json",
+      "number": 305,
+      "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/305",
+      "updatedAt": "2026-10-04T01:02:39Z",
+      "comments": 15,
+      "bytes": 64718,
+      "sha256": "608667ddf0e7039bea15697c0e50313d01ad985092204211024aa92ceb8c54d4"
+    },
+    {
+      "path": "core/docs/issues/307/checks/s8-spec-prompt-20261008/sources/issue-306.json",
+      "number": 306,
+      "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/306",
+      "updatedAt": "2026-10-04T06:41:39Z",
+      "comments": 4,
+      "bytes": 30166,
+      "sha256": "170bf19bf36b75e2d188e9968827f104441084115034235e1f9a50e353dcc0c8"
+    },
+    {
+      "path": "core/docs/issues/307/checks/s8-spec-prompt-20261008/sources/issue-308.json",
+      "number": 308,
+      "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/308",
+      "updatedAt": "2026-10-05T10:22:44Z",
+      "comments": 0,
+      "bytes": 16019,
+      "sha256": "71ee5fe02ecb04b74136f97efbd11f8bb921e2a226c93b0f24d588efd01be166"
+    },
+    {
+      "path": "core/docs/issues/307/checks/s8-spec-prompt-20261008/sources/issue-309.json",
+      "number": 309,
+      "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/309",
+      "updatedAt": "2026-10-05T11:46:25Z",
+      "comments": 0,
+      "bytes": 17829,
+      "sha256": "05c1332bc4845f14d98f68bc25d0f0f95c57fc72bc98840b3a00a79909d89d68"
+    },
+    {
+      "path": "core/docs/issues/307/checks/s8-spec-prompt-20261008/sources/issue-313.json",
+      "number": 313,
+      "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/313",
+      "updatedAt": "2026-10-07T08:27:06Z",
+      "comments": 0,
+      "bytes": 9913,
+      "sha256": "4e64ade46f21c303a179269428ae9884ff38be3729c0e37b437e5c8b4c28e413"
+    },
+    {
+      "path": "core/docs/issues/307/checks/s8-spec-prompt-20261008/sources/issue-314.json",
+      "number": 314,
+      "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/314",
+      "updatedAt": "2026-10-07T15:19:40Z",
+      "comments": 0,
+      "bytes": 15099,
+      "sha256": "c1211e80a4054cb19f488680a1288393df41b87b12ca149135a0eb47813cb040"
+    }
+  ],
+  "experiment_sources": [
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/305/EXPERIMENT-PLAN.md",
+      "bytes": 20904,
+      "sha256": "048057157b362f9763e8138019960749003b5af7c3904750c91621abece96744",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/305/PREPARATION-REPORT.md",
+      "bytes": 4997,
+      "sha256": "ed9d4e681d5d3d25806ef442c8a561c29ae2a1dc8e65c5d32ee71ee33a3407e1",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/305/STAGE-A-REPORT.md",
+      "bytes": 17085,
+      "sha256": "59a28100f3d5aa8ab2afff40fe1e81f1c648b3e8dd5d72653d15a4bc1ba9dcd8",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/305/STAGE-A-RECEIPTS.json",
+      "bytes": 216969,
+      "sha256": "f3b1e89c619711c8ea5dc533e6235907fd21bcd21d22d2cd5934fc152a4fe6e5",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/305/STAGE-B-REPORT.md",
+      "bytes": 9036,
+      "sha256": "5425dcb75b5363fcb8b44e6ada57a62bfb7e46e33aa2fafc546d7065e1213f4b",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/305/STAGE-B-RECEIPTS.json",
+      "bytes": 9679,
+      "sha256": "da12c72c3defb950757ed21fc19e783c53455e259d46317a4249f31aeedc6d03",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/305/STAGE-C-REPORT.md",
+      "bytes": 2397,
+      "sha256": "9cebbf11835fa4a1120b20820f1e850786da4e89f9cb31d99e4aa8738382cb7c",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/305/SUMMARY.md",
+      "bytes": 20438,
+      "sha256": "2818d28ed38fae7b29551d590cf7aeffcb74767465f1e4b66a4a27dcfbab53fe",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/305/A2-OPTIMIZATION-REPORT.md",
+      "bytes": 6636,
+      "sha256": "88154a7774c039767b6827d6d03aa5b94cd8e9f07d186f0fc226bab848b20667",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/305/A2-READDIRPLUS-REPORT.md",
+      "bytes": 13307,
+      "sha256": "e013028d049e42bd3b8c2555c3a9d6580f36a1faa17dbae032ba3f08c5a4573d",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/305/A2-IDENTITY-REPORT.md",
+      "bytes": 11502,
+      "sha256": "409f5dc832f0dbbcf241f141c0badcaa913a5b269c03dca426a0c605b8bd8e86",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/305/A2-IDENTITY-CHURN-REPORT.md",
+      "bytes": 8726,
+      "sha256": "58691a4e61d607940a143b204600f6a3d7d19d06ad20f1cc205dc1a9cd64767c",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/305/CF-FSBENCH-V2-CONTRACT.md",
+      "bytes": 4432,
+      "sha256": "43daa94791886c2cd589961f489c8a80cbf0f695125cc0a7fc5e9c23ebfa8a5c",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/306/BENCHMARK-PLAN.md",
+      "bytes": 11867,
+      "sha256": "6e7993f5321a3e4e42593fb473be997cb7be01182262d6a45e6d24276cf805e5",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/306/COMPARISON-REPORT.md",
+      "bytes": 20969,
+      "sha256": "5d17012f2e74cf9d1178061a246a7ea63a8f8562562c0d2ac199ee81c11201c2",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/306/EXPERIMENT-LEDGER.md",
+      "bytes": 8538,
+      "sha256": "75ffa430e04898ad070acc80d6e5c0c822a4574db85a485bd4ecf8feeb9d6c5d",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/docs/issues/306/RUNTIME-IDENTITIES.json",
+      "bytes": 1723,
+      "sha256": "58b558df90fc3597d383f560162296cb5d59b26c32660f1799b52422cb59f76f",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/experiment/real-tree/workload.py",
+      "bytes": 1748,
+      "sha256": "300fbd9c86b631c0c075536e9bc5aba7e135e49f0b003dfa6f940ae9eb103b8a",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/experiment/real-tree/runner.py",
+      "bytes": 26438,
+      "sha256": "01a56c33daf7ba6fd445ee2e64c5993eed9e3e9fade281b712417d0182c6ed85",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    },
+    {
+      "ref": "1451b68a720bbe2175a103dd9b35693ad05e2be1",
+      "path": "core/experiment/real-tree/oracles.py",
+      "bytes": 942,
+      "sha256": "a25d4a07439e3451a7fd462a42dc5982d282abf2968d1ad07efaa1d135039585",
+      "review_scope": "retained source locator/hash; full review required of the next specification agent"
+    }
+  ],
+  "containers": "9cf2fe345496 layerfs-experiment-305-dev Up 4 days\nce75ac504df9 layerfs-4c8cde9ee1cf49f8049298b3377d4927 Up 4 days\nd2433851ea59 layerfs-dbd59ea75fdc62de0a1f6d9d099609ab Up 5 days\nd2550144998b layerfs-76b116dc9d984679f5802e2ec9c0798d Up 5 days\n",
+  "local_only": true
+}
