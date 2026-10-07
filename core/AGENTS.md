@@ -202,9 +202,13 @@ fixtures, examples and tools do not contribute to production LOC.
   attempt; they do not permit replay after failed/unknown publication.
 - Preserve definite-failure atomicity, original errors and exact uncertain
   custody. No resend, rollback/delete or success claim based on an unfenced read.
-- Global Persistence opens on macOS and Linux with both profiles using WAL.
-  Durable uses FULL (and macOS full synchronization); Disposable uses OFF and
-  claims process-crash survival only. Open verifies WAL and never converts an
+- Global Persistence uses **Disposable/WAL/OFF only**, on macOS and Linux,
+  under the [owner's active-profile rule](../AGENTS.md#active-persistence-profile--owner-direction-2026-10-07).
+  Durable execution is disabled indefinitely until explicit owner reauthorization;
+  retained Durable source may compile but no test, diagnostic, measurement or
+  application invocation may execute it. Select Disposable explicitly rather than
+  relying on a default argument. Disposable claims process-crash survival only.
+  Open verifies WAL and never converts an
   existing Store. Select profile/layout before open; Postgres stays unavailable.
   Owner supersession2026-10-07 keeps WAL throughout Init and Commit; no private
   MEMORY import or journal promotion remains. The measured host Init regression
@@ -213,7 +217,7 @@ fixtures, examples and tools do not contribute to production LOC.
   See the [foundation checkpoint](docs/issues/307/PRE-S8-F1-F4-20261007.md).
 - Target (owner direction 2026-10-07): the same Store opened directly by every
   Linux daemon from a shared volume, several writer processes, no host in the
-  data path, both profiles, Disposable for development verification. A contended
+  data path, using only Disposable/WAL/OFF. A contended
   write is one exact before-effect refusal, never a wait or retry. Follow the
   [integration contract](docs/issues/303/06-cluster-one-integration.md) and its
   [deepest-file plan](docs/issues/307/SERVERLESS-STORE-PLAN-20261007.md); do not

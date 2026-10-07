@@ -13,6 +13,12 @@ the v0.1.6 reference until cluster two completes.
 
 ## Select the actual operation and profile
 
+Owner direction 2026-10-07: **new executions use Disposable/WAL/OFF only**.
+Durable is disabled until the owner explicitly reauthorizes it; old registered
+Durable cases and receipts are historical, not permission to execute them.
+No MEMORY-journal Store may substitute for the selected WAL profile. Report
+Durable as `NOT_RUN — disabled by owner until explicit reauthorization`.
+
 `runner.py` routes several distinct families; their presence does not make them
 equivalent or authorize rerunning closed experiments. Inspect the selected case
 registry, driver, frozen contract, source/profile and closure before invoking it.
