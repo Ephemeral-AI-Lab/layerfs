@@ -16,12 +16,20 @@ This is the single decision owner for S8. The
 decide nothing themselves. Where they disagree with this document, this
 document governs and the other is a defect.
 
+Review correction after `77cf51686`, 2026-10-08: the
+[six-finding correction ledger](checks/s8-spec-review-fixes-20261008/02-correction-ledger.md)
+revises Exec completion, lookup custody, terminal drain, unmount probing and
+receiver admission. Original review reports/dispositions remain historical;
+these current rules supersede their conflicting decisions and count hypotheses.
+The product source pin is unchanged and no runtime proof is added.
+
 ## 1. Scope, authority and status of claims
 
 S8 delivers, on the existing direct-Store daemon: a native FUSE mount per
 Workspace with exact readiness and detach; ordinary `/bin/bash -c` Exec with
 bounded streaming I/O and exact process custody; an event-driven request service
-that never pins a receive loop on an unavailable prerequisite; the kernel cache
+that parks admitted work off the receive loops, with the explicit pre-admission
+capacity exception of §6.2; the kernel cache
 profile with its coherence rules; stable identity; confinement of Bash from both
 databases; and terminal unmount with bounded automatic reclamation.
 
@@ -66,9 +74,9 @@ reading is current.
 | One command identity per Workspace (O-8 recommendation) | [08 §7](../303/08-decisions-provenance.md#7-questions-only-the-owner-can-answer) | Not adopted. One unprivileged Bash user per daemon, different from the daemon user | O-24 |
 | Reply `Bound` as mount success | [control records](../../../crates/layerfs-bridge/src/control_types.rs) | `Bound` is the Store/engine half only. Native readiness is the new `Ready` reply (section 4) | [native control](../../architecture/68-native-workspace-control.md) |
 | "Each handle, including the write handle, sits behind its own mutex" | [06 §4](../303/06-cluster-one-integration.md#4-the-daemon-adapter) | Contradicted by source: the Persistence session uses `try_lock` and returns `Busy`, in-process as well as cross-process. K30 forbids a writer gate. Consequences and the one open choice are D-9 and P-1 | [cache review C1](checks/s8-specification-20261008/03-review-cache-lifecycle.md) |
-| Open and lookup references are independent indexed lease rows; native FORGET/RELEASE mapping "remains S8" | [S6 lifetime contract](S6-LIFETIME-CONTRACT.md) | S8 maps OPEN/RELEASE to the existing `OpenFile` custody and maps kernel `nlookup` to no per-inode state (D-6). `LookupOwner` remains an engine capability for request-processing custody | This document |
+| Open and lookup references are independent indexed lease rows; native FORGET/RELEASE mapping "remains S8" | [S6 lifetime contract](S6-LIFETIME-CONTRACT.md) | S8 maps kernel lookup counts to indexed per-mount/per-inode custody, independent of OPEN/RELEASE and processing leases. The original D-6 counter-only proposal is withdrawn | S6 and review correction R2 |
 | Mmap flush "emits a ctime-bearing SETATTR" | [fuse-investigation 01 §6, 03 §6](../303/fuse-investigation/01-kernel-and-request-path.md) | Contradicted for writeback off: inodes are `S_NOCMTIME`, the daemon owns times and never receives `FATTR_CTIME` | Kernel review finding 26 |
-| The kernel sends DESTROY at unmount | [fuse-investigation 03](../303/fuse-investigation/03-per-call-lifecycle.md) | Contradicted for the `fuse` type: the connection is aborted first; loops observe `ENODEV`. Loop exit and join, not DESTROY, is the detach signal | Kernel review finding 22 |
+| The kernel sends DESTROY at unmount | [fuse-investigation 03](../303/fuse-investigation/03-per-call-lifecycle.md) | Contradicted for the `fuse` type: connection abort makes loops observe `ENODEV`. Loop exit/join establishes receiver disposal, not mount detach or the complete daemon-work drain; record all three separately | Kernel review finding 22 and corrections R3/R5 |
 | Removing the per-WRITE `inval_inode` is an optimization | [05 §7](../303/05-fuse-assessment.md#7-optimization-disposition), [fuse.md §4](../303/fuse.md#4-cache-coherence-and-lifetime-transitions) | Understated. Under cached I/O that call takes folio locks held by an in-flight partial-page WRITE and self-deadlocks. Its absence is a liveness requirement (I-9) | Kernel review finding 20 |
 | Parked requests never block unrelated files | [fuse.md §3](../303/fuse.md#3-callback-ownership-and-scheduling) | True for foreground requests only. With `max_background` 1, one parked background request (readahead READ, mapped WRITE, RELEASE) queues every other background request of that mount in the kernel (section 8.2) | Kernel review counterexample 1 |
 | Predecessor `layerfs-fuse` as the adapter to re-enable | [fuse.md §2](../303/fuse.md#2-profile-and-inherited-behavior) | It imports symbols that exist only in `layerfs-workspace-legacy` and cannot compile against the active Workspace crate. It is reference reading for semantics, not a base to port | Kernel review (b) |
@@ -115,16 +123,16 @@ Invariants. Each is a requirement with a proof row in the
 | I-4 | The view of a mounted Workspace changes only through a kernel request on that mount. S8 issues no kernel notification and accepts no non-FUSE mutation of a mounted Workspace |
 | I-5 | A successful mutation reply is preceded by local publication of all of its effects in one atomic owner job. A failed or lost reply never undoes a published mutation |
 | I-6 | Every attribute-bearing reply is computed from published state at or after the request was received. No reply is produced from a view older than a mutation whose reply was already attempted |
-| I-7 | Every admitted kernel request receives exactly one explicit reply attempt in daemon-owned time. No path relies on dropping a reply object or on FUSE_INTERRUPT |
-| I-8 | No dispatch loop, service worker or SQL owner turn waits on a prerequisite. A parked request holds an owned reply and its credits and holds no Workspace, cache, registry or SQL lock |
+| I-7 | Every admitted reply-bearing kernel request receives exactly one explicit reply attempt in daemon-owned time. No-reply ownership work has an explicit completion/disposal path. No path relies on dropping a reply object or on FUSE_INTERRUPT |
+| I-8 | An admitted request never waits on a prerequisite on a dispatch loop or service worker; it parks with owned inputs/reply/credits and no Workspace/cache/registry/SQL lock. The sole dispatch exception is the pre-admission handoff-capacity wait in §6.2, charged to one fixed receive slot per loop and woken on shutdown |
 | I-9 | No park depends on a future kernel request on the same connection. Every prerequisite a request can park on is resolved by the daemon alone |
 | I-10 | READ replies exactly `min(length, EOF − offset)` bytes; WRITE replies the full count or an error; the WRITE offset is always the kernel's |
 | I-11 | Exec launches ordinary `/bin/bash -c`. There is no implicit Commit, reset, unmount, install, restore, command classifier, shell-specific filesystem route or automatic timeout |
-| I-12 | Shell exit, each stream's EOF, descendant quiescence, open descriptors, dirty mappings and in-flight requests are distinct observations with distinct owners. None is inferred from another |
+| I-12 | Shell reaping, each stream EOF or explicit disposal, descendant quiescence, outbound-record disposition, descriptors, mappings and requests are independent observations. Exec resource release requires their terminal conjunction (§5.4); Quiescent alone releases none of the stream/result owners |
 | I-13 | Bash cannot open the Store, the overlay database, a daemon credential, `/dev/fuse` or a control socket through any path alias or inherited descriptor |
-| I-14 | Terminal unmount success means: admission fenced, kernel mount detached, every dispatch loop exited and joined, session buffers released, routing removed, logical close acknowledged. Physical row deletion may finish later and is reported as debt |
+| I-14 | Terminal success requires native detach, all loops joined, Exec terminal dispositions, drained daemon request/owner/completion/Store/control work, no owner capable of later accessing the namespace, native ownership revoked, logical Close acknowledged and routing removed. Indexed physical deletion may finish later as reported debt |
 | I-15 | No Workspace `fsync`/`fdatasync`/`sync_data`/`sync_all`; no automatic retry, busy handler, polling sleep or failed-operation replay anywhere in these paths |
-| I-16 | Resident daemon state is bounded by admitted requests, open handles, live Execs and configured caches. Nothing resident is proportional to the namespace, a file, the visited tree or a Commit |
+| I-16 | Resident daemon state is bounded by admitted requests, fixed receive slots, open handles, live Execs and configured caches. Kernel lookup custody is indexed in Overlay, with bounded processing windows; no resident map grows with the visited tree, a file or a Commit |
 
 ## 4. Control operations and acknowledgement points
 
@@ -146,7 +154,7 @@ use separate connections, as today.
 | `Status(token)` (existing, extended) | `Status(WorkspaceStatus)` | Adds the native fields of section 4.3. Still zero Store SQL and one indexed engine observation |
 | `Commit(token)` (existing) | `Committed(outcome)` | Unchanged Store half; allowed in `Bound` and `Ready`. Live normalization is S10 (section 14) |
 | `Unmount(token)` (existing, extended) | `Unmounted(token)` | Normal terminal unmount, section 11. Acknowledged after I-14 |
-| `ForceUnmount { token, relinquish_unknown }` (new) | `Unmounted(token)` or `Retained(TeardownCustody)` | Explicit forced teardown, section 11.3 |
+| `ForceUnmount { token, relinquish_unknown }` (new) | `ForceUnmounted { token, outcome }` or `Retained(TeardownCustody)` | Explicit forced policy. The additive result preserves original publication knowledge, cancellation and stream-disposal dispositions, detach/drain receipts and cleanup debt (§11) |
 | `ExecStatus { token, exec }` (new) | `Exec(ExecObservation)` | Bounded observation of one Exec session by identity |
 | `ExecCancel { token, exec, signal }` (new) | `Exec(ExecObservation)` | Explicit cancellation: signals the whole owned group, section 10.4 |
 | `Fork`, `History` (existing) | unchanged | Unchanged |
@@ -170,6 +178,7 @@ backpressure never blocks another control conversation:
                                         ExecStreamEof(Stdout|Stderr)
                                         ExecExited { code | signal }    root shell reaped
                                         ExecQuiescent                   owned group empty
+                                        ExecCompleted(disposition)      all terminal conditions hold
 ```
 
 `exec` is a host-selected 16-byte identity, unique within the Workspace
@@ -190,92 +199,97 @@ existing codes. S8 adds phases, not message parsing.
 | --- | --- | --- |
 | `Attach` on a token that is not `Bound`/`Unattached` | `Invalid` or `Busy` | None |
 | `Attach` fails before `mount(2)` returns 0 | `Failed`, phase `attach:mount` | None. Entry stays `Unattached`; a new explicit `Attach` is a new operation |
-| `mount(2)` returned 0 but handshake or loop start failed | `Failed`, phase `attach:session`, with `Retained` custody | The daemon detaches what it owns; if detach is not established the entry becomes `Retained` and says so |
+| `mount(2)` returned 0 but handshake or loop start failed | `Failed`, phase `attach:session`, with exact teardown custody | One owned detach attempt and complete daemon-work drain are required before returning to Unattached; any unestablished detach, join or consumer disposal remains Retained |
 | `Attach` outcome unknown to the daemon (owner thread lost, panic) | `Unknown` | Entry `Retained`; never a second attachment for that incarnation |
 | `ExecStart` on a Workspace that is not `Ready`, or is fenced | `Invalid` / `Busy`, phase `exec:admission` | None |
 | Exec capacity exhausted | `Capacity` | None |
 | Launch failed before the child existed | `Failed`, phase `exec:launch`, OS code in detail | No command ran |
-| Normal `Unmount` while Execs, opens, requests or Commit custody remain | `Busy`, phase `unmount:admission`, or `Unknown` for retained Commit custody | None. Workspace stays usable |
-| Kernel `umount2` returned `EBUSY` after daemon gauges passed | `Busy`, phase `unmount:kernel` | Fence withdrawn. Workspace stays usable |
-| Detach began and loop exit/join is not established | `Retained(TeardownCustody)` | Stopping owner retained; usability is not promised |
+| Normal `Unmount` while Exec sessions, opens, request/receive work or Commit custody remain | `Busy`, phase `unmount:admission`, or `Unknown` for retained Commit custody | No terminal effect. Workspace stays usable |
+| Normal `umount2` returned `EBUSY` during the reversible probe | `Busy`, phase `unmount:kernel` | Control probe withdrawn; kernel requests were serviced normally throughout, so no terminal filesystem error was injected |
+| Detach began and detach/join/daemon-work drain is not established | `Retained(TeardownCustody)` | Original phase and remaining owners retained; usability is not promised |
 | New `Mount` while maintenance is stopped or declared debt headroom is exhausted | `Capacity`, phase `mount:debt` | None (D-13) |
 
 ### 4.3 Status additions
 
-`WorkspaceStatus` gains a bounded `native` block: native state (section 5.1);
-mount directory; requests in flight and parked, by prerequisite kind; open file
-and directory handles; live Exec sessions (count, and at most a fixed window of
-identities with their observation); owned WRITE bytes; engine `CleanupState`;
-whether automatic maintenance is stopped; quarantined readers; and whether the
-Store writer session is quarantined. Every field is a maintained counter or one
-point observation. Status never scans, reads the Store, drives cleanup or
-resolves an unknown.
+`WorkspaceStatus` gains a bounded `native` block: native phase; mount and
+connection identity; admitted/parked/running requests and fixed receive slots in
+use; queued ownership decrements and completions; open file/directory handles;
+nonterminal Exec sessions, process-group population, stream/result dispositions;
+control producers and Store demands/subscriptions retaining this namespace;
+lookup-reference totals and indexed-retirement debt; engine `CleanupState`,
+maintenance failure and reader/writer quarantine. Lists use fixed windows.
+Every field is a maintained counter or one indexed point observation. The total
+kernel lookup count does not block normal unmount: the connection can retain
+lookups until detach. A zero live-work barrier, not a cache/count observation,
+authorizes retirement. Status observes and never resolves an original unknown.
 
 ## 5. State machines and ownership
 
 ### 5.1 Workspace and mount
 
-The registry `Binding`
-([registry.rs](../../../crates/layerfs-daemon/src/control/registry.rs)) is
-extended; no second registry exists. The existing `Activity` keeps arbitrating
-Commit and terminal transitions. A new `native` field and three gauges are
-updated only under the same short registry mutex, which never spans a kernel
-call, a queue wait, a Store read or a join.
+Extend the existing registry `Binding`; there is no second routing registry.
+The registry arbitrates control operations. Each binding retains one native
+admission/drain owner with an atomic phase and counted operation guards;
+callbacks use that owner, not the global registry mutex per request. Crossing
+a terminal phase and acquiring a guard must have one linearization order, so
+no producer can appear behind a completed drain. No lock spans a syscall, job,
+Store demand, stream send or join. This is new S8 wiring, not an existing proof.
 
 ```text
- Absent --Mount--> Binding --bind ok--> Bound/Unattached --Attach--> Attaching
-                      |                       |    ^                    |
-                bind definite fail            |    | attach definite    | I-3 holds
-                      v                       |    | failure            v
-                   Absent                     |    +------------------ Ready <----+
-                                              |                          |        | kernel EBUSY /
-                           Unmount (no native)|            Unmount/Force |        | gauges busy:
-                                              v                          v        | fence withdrawn
-                                           Closing --------------------> Fenced --+
-                                              |                          |
-                                              |                  umount2 ok
-                                              |                          v
-                                              |                      Detaching --loops joined--> Detached
-                                              |                          |                          |
-                                              +<----- logical Close job --------------------------+
-                                              v                          | join/abort not established
-                                           Absent (routing removed;      v
-                                           reclaim debt remains)      Retained { phase }
+ Absent -> Binding -> Unattached -> Attaching -> Ready
+                                   failure       |  \
+                                   retained      |   Force (only after control-admission guard)
+                                                 |                  v
+                                     normal ProbeUnmount         Stopping
+                                     kernel service continues      | abort + drain
+                                      | EBUSY       | detach=0     | detach=0
+                                      v             v              v
+                                    Ready        Draining <--------+
+                                                     |
+                                    loops + daemon work drained; native ownership revoked
+                                                     v
+                                               logical Close -> Absent (physical debt remains)
+ any unknown/unestablished terminal phase -> Retained { original phase and custody }
 ```
 
-| From | Event | Guard | To | Owner of the transition |
+| From | Event | Guard | To | Transition owner |
 | --- | --- | --- | --- | --- |
-| Absent | `Mount` | capacity, debt headroom | Binding | control Service |
-| Binding | bind success | — | Bound/Unattached | control Service |
+| Absent | `Mount` | capacity and debt headroom | Binding | control Service |
+| Binding | bind success | known Open | Unattached | control Service |
 | Binding | definite bind failure | original proves no local ownership | Absent | control Service |
-| Binding | uncertain `Open` | — | Retained { bind } (observable through `Locate`; today's silent placeholder is removed) | control Service |
-| Unattached | `Attach` | activity `Idle` | Attaching | control Service |
-| Attaching | `mount(2)`=0, handshake ok, loops running | — | Ready | mount session owner |
-| Attaching | definite failure before `mount(2)`=0 | — | Unattached | mount session owner |
-| Attaching | failure after `mount(2)`=0, detach established | — | Unattached | mount session owner |
-| Attaching | failure after `mount(2)`=0, detach not established | — | Retained { attach } | mount session owner |
-| Ready | `Unmount`/`ForceUnmount` admitted | lifecycle gate (section 11.1) | Fenced | control Service |
-| Fenced | busy by gauge or kernel `EBUSY` (normal policy) | — | Ready | control Service |
-| Fenced | `umount2` returned 0 | — | Detaching | mount session owner |
-| Detaching | every loop exited and joined | — | Detached | mount session owner |
-| Detaching | join or abort not established | — | Retained { detach } | mount session owner |
-| Detached, or Unattached under `Closing` | engine `Close` acknowledged | — | Absent | control Service |
-| any | engine `Close` outcome uncertain | — | activity `Uncertain`, entry kept | control Service |
+| Binding | uncertain Open | original custody retained | Retained { bind } | control Service |
+| Unattached | Attach | Idle; prior native ownership disposed | Attaching | control Service |
+| Attaching | mount, handshake, loops ready | all native readiness evidence | Ready | mount owner |
+| Attaching | definite pre-mount failure | no mount effect | Unattached | mount owner |
+| Attaching | post-mount failure | detach and complete drain established | Unattached | mount/drain owner |
+| Attaching | effect or drain not established | original custody retained | Retained { attach } | mount/drain owner |
+| Ready | normal Unmount | no live control producer, nonterminal Exec, open or received/admitted work | ProbeUnmount | control Service |
+| ProbeUnmount | kernel EBUSY | kernel service remained normal | Ready | control Service |
+| ProbeUnmount | plain umount returned 0 | mount identity unchanged | Draining | mount/drain owner |
+| Ready | ForceUnmount | no active Commit/Attach/control producer; §11.1 guards | Stopping | control Service |
+| Stopping | abort and local work disposition, then plain detach=0 | §11.2 | Draining | mount/drain owner |
+| Draining | complete drain predicate | native ownership logically revoked | Closing | drain/Overlay owners |
+| Closing | logical Close acknowledged | original outcomes retained in result | Absent | control Service |
+| terminal phase | outcome/drain not established | no guessed cleanup | Retained { phase } | original owner |
 
-Gauges on the binding: `execs` (admitted Exec sessions not yet quiescent),
-`handles` (open file plus directory handles), `requests` (admitted and not
-released). Exec, kernel requests and Commit may overlap freely; only terminal
-admission reads all three.
+`execs` counts sessions not yet resource-terminal (§5.4), not just populated
+groups. `requests` includes admitted requests and no-reply ownership work until
+completion disposal. Received-but-unadmitted callbacks have separate fixed-slot
+gauges. Track queued/running completions, control producers and namespace-bound
+Store consumers separately. Idle receive-buffer reservations and cached kernel
+lookups are not active-request gauges. Shared Store/cache owners survive unmount.
 
 ### 5.2 Kernel request and reply
 
 ```text
- /dev/fuse -> dispatch loop:  decode, bind incarnation, check fence
+ /dev/fuse -> fixed receive slot: decode, bind incarnation, check native phase
+                 |            pre-admission wait for mount handoff capacity (§6.2)
                  |            take request credit + byte credit
                  |            copy bounded inputs (name <= 255, WRITE data <= 128 KiB, once)
                  |            move the fuser reply object into NativeRequest
                  |
-                 +-- inline class (FORGET, BATCH_FORGET, refused opcodes) --> reply/no reply, release
+                 +-- refused/inline opcode --> reply, release
+                 +-- FORGET unit --> bounded owned decrement job; no reply
                  |
                  +-- first step inline when it cannot wait: cached base facts, try_submit owner job
                  |
@@ -289,7 +303,7 @@ admission reads all three.
         [mutation only] Published (owner job committed)  <-- linearization point
                  |
                  v
-        ReplyAttempt (exactly one)  -->  release owned inputs and credits
+        ReplyAttempt (exactly one)  -->  release after original work/result disposal
                  |
         [mutation only] publication ticket released to the engine (ReplyAttempted)
 ```
@@ -303,9 +317,15 @@ admission reads all three.
 | ReplyAttempt | the reply object until `ok`/`error` returns | return of the send call; a send error is recorded, never retried |
 | Released | nothing | — |
 
+This table describes reply-bearing requests. A FORGET unit has no reply object;
+its completion is the known checked decrement or explicit retained teardown
+disposition, with its credit and drain guard held until then.
+
 Linearization: a mutation takes effect at the commit of its single owner job
-(K4). A read-class request is linearized at its single read-only owner job
-(D-4). Reply order to the kernel is not controlled by the daemon and fuser gives
+(K4). Metadata/data reads observe one consistent owner turn. A positive LOOKUP
+also atomically acquires lookup custody before the entry reply; it is an owning
+write job, not a read-only exception (D-4/D-6). Reply order to the kernel is not
+controlled by the daemon and fuser gives
 no delivery receipt; correctness therefore rests on I-5, I-6 and the kernel's
 own `attr_version` discard of attribute replies sampled before a newer inode
 version (section 8.3). Capture includes exactly the published frontier, ordered
@@ -313,67 +333,119 @@ with earlier reply attempts through the engine's existing
 `Publication`/`ReplyAttempted`/`PendingPublications` mechanism [implemented and
 source-verified]; it never includes unflushed userspace or mapped stores.
 
-After a fence or connection abort, a parked request is completed with one reply
-attempt (errno in section 12) before any wait for a process to exit, because a
-task blocked in a request the daemon already read cannot be killed until that
-reply arrives (kernel review finding 7). A prerequisite already attempted runs
-to its original outcome; a published mutation stays published.
+A reversible normal-unmount probe changes no kernel request handling. Only
+Stopping/known detach is a terminal fence. Then received waiters and unattempted
+parked requests get one terminal reply attempt (no-reply FORGET work is retained
+until disposal). For an already-attempted prerequisite, the drain owner retains
+its original result, completion and credits even if a terminal reply is attempted
+earlier to release a blocked task. The reply attempt does not dispose that job
+or settle its outcome. A published mutation stays published. A thread blocked
+in FUSE must be released/aborted before waiting for process exit; the separate
+daemon-work barrier still precedes lease retirement and logical Close.
 
 ### 5.3 Lookup references and open handles
 
+D-6 preserves the S6 distinction between names, kernel lookup references, open
+handles and processing/captured owners. Unique serials prevent aliasing; they
+do not make an unlinked inode disposable while the kernel can still request it.
+
 | Kernel object | Daemon owner | State kept | Released by |
 | --- | --- | --- | --- |
-| Node identity | The canonical inode serial is the FUSE node id; generation 0; serials are never reused [implemented and source-verified] | none | — |
-| `nlookup` reference | none (D-6). FORGET and BATCH_FORGET update two per-mount gauges and do nothing else: no SQL, no table lookup, no collection | two counters per mount | not applicable |
-| Open regular file (`OPEN`, `CREATE`) | engine `OpenFile` custody, one lifecycle-class owner job to acquire and one to release [implemented and source-verified] | the file-handle value encodes the engine owner; no per-open adapter table | `RELEASE`, or group retirement at detach (section 11.2) |
-| Open directory (`OPENDIR`) | one cursor per handle: the last returned name (at most 255 bytes), the offset told to the kernel, and the fixed reply window | bounded by open directory handles | `RELEASEDIR` or detach |
-| In-flight read after a park | engine `FileRead` processing custody where the request must outlive its handle [implemented and source-verified] | per request | reply attempt |
-| Unlinked-while-open file | the engine's existing orphan domain | SQL rows | last `RELEASE` |
+| Node identity | canonical serial and native mount incarnation | scalar identity | never reused within the identity domain |
+| Kernel lookup reference | indexed aggregate keyed by `(namespace, mount incarnation, serial)`, backed by the existing lookup-lease semantics | one backing row/count per live kernel inode; bounded command windows, no resident visited-tree map | checked FORGET decrement or logical revocation after complete detach/drain |
+| Implicit root reference | mount-owned root custody | one indexed/scalar owner | complete detach/drain |
+| Open regular file | existing `OpenFile` custody | indexed lease; encoded handle | RELEASE, or drain-qualified native-owner revocation |
+| Open directory | directory processing/open custody and bounded cursor | last name, cookie and reply window per handle | RELEASEDIR, or drain-qualified revocation |
+| In-flight operation | separate processing custody whenever it outlives its lookup/open protection | indexed lease plus bounded request plan | original result/reply/completion disposal |
+| Removed inode | exact retained metadata and, where needed, orphan content domain | indexed/backed state | last independent lookup/open/processing/captured owner |
 
-Consequence of D-6, stated as a boundary of the contract rather than hidden: an
-inode with no name and no open handle has no custody. A later request that names
-it by node id (the practical case is a process whose current directory was
-removed) is answered from retained rows while they exist and with `ESTALE`
-afterwards. It can never reach another inode's data, because serials are not
-reused. Regular-file data after unlink is always reached through a handle and is
-exact.
+A positive LOOKUP acquires one reference in the same short owner transaction
+that validates and composes its answer. CREATE/MKDIR/SYMLINK/LINK entry replies
+include that acquisition in their existing mutation transaction. The increment
+is known before any entry reply attempt. A send attempt is not delivery evidence;
+never guess a compensating decrement after an unobservable send failure.
+Future READDIRPLUS, if selected, must charge every returned reference too.
+
+FORGET subtracts the kernel's exact `nlookup`, checks the mount/incarnation and
+underflow, and releases the lookup lease only at zero. It has no reply. The
+adapter hands each callback an owned bounded decrement record; the default
+fuser BATCH_FORGET callback can hand off several such records, each charged.
+The fair owner may combine already-queued records within a declared window,
+without a batching timer or whole-table scan. Processing that outlives a lookup
+or handle retains its independent lease before the protecting owner is released.
+A decrement failure preserves the record and custody and stops that cleanup;
+it is never converted to a successful counter update or automatically retried.
+
+A removed cwd and an O_PATH reference retain exact metadata without requiring
+an OpenFile handle. Reclamation timing must not turn their valid GETATTR/fstat
+into ESTALE. Ordinary unlink, replacement rename and FORGET affect different
+owners; physical deletion is eligible only after the last independent owner.
+At native teardown, missing FORGET/RELEASE records are handled by the bounded
+logical-revocation/physical-cleanup sequence in §11, not by forgetting live work.
+
+This changes the original zero-SQL FORGET and read-only positive-LOOKUP targets.
+Backing grows with live kernel ownership; resident windows stay bounded. Count
+indexed writes and total retirement work honestly in H-4/H-8 and prove removal,
+O_PATH, partial/batched FORGET and detach in FP-29/FP-31.
 
 ### 5.4 Exec, process group and streams
 
 ```text
- ExecStart admitted --> Launching --child exists--> Running
-        |                  |                           |  \
-   refused (no effect)   launch failed               shell reaped -> Exited{status}   (pidfd/wait event)
-                         (no command)                  |             stdout EOF -> StreamEof  (pipe event)
-                                                       |             stderr EOF -> StreamEof
-                                                       v
-                                               owned group empty -> Quiescent  (cgroup event)
-                                                       |
-                                              session released; `execs` gauge decremented
+ ExecStart -> Launching -> Running
+                           | root wait/reap event -> Exited(status)
+                           | stdout read=0        -> StdoutEof
+                           | stderr read=0        -> StderrEof
+                           | cgroup empty         -> Quiescent
+                           | outbound records     -> Delivered | Failed | ExplicitlyDiscarded
+                           +---- all terminal conditions known ----> ResourceTerminal
 ```
 
-`Exited`, each `StreamEof` and `Quiescent` are independent events in any order.
-A descendant that keeps a pipe open delays that stream's EOF without delaying
-`Exited`; a descendant that outlives the shell delays `Quiescent` and keeps the
-Workspace busy for normal unmount. Each Exec session owns: one process-custody
-group, the write end of stdin if piped, the read ends of stdout and stderr, at
-most one unsent chunk per stream, and its dedicated connection.
+These events can arrive in any order. Quiescent records process-group emptiness
+only. It does not close pipes, release unsent chunks/connections, discard the
+shell's status or decrement the nonterminal-Exec gauge. Empty groups can still
+have bytes buffered in their pipes and outbound channel queues.
 
-| Event | Session effect | What it does not imply |
+ResourceTerminal requires: the root child reaped with its original status;
+the group empty; stdin closed/disposed; stdout and stderr each drained to EOF
+or explicitly disposed; all owned output and pre-completion event records have
+a known send/failed/discarded disposition; and their I/O owners stopped/joined.
+Only this conjunction releases session resources and decrements `execs`.
+The terminal observation records which streams completed and which did not.
+The subsequent ExecCompleted notification is owned by the bounded terminal
+observation mechanism, not included recursively in the predicate that creates
+it. A send return is not proof of host consumption; a lost/unknown final send
+retains that exact outcome without replay or retaining disposed pipes.
+
+Each live session owns its group, pipes, dedicated connection and at most one
+unsent chunk per output stream. Process event handling remains runnable while
+that stream's I/O owner is backpressured. A stalled host may keep an exited,
+quiescent session nonterminal; normal unmount returns Busy until output has a
+known terminal disposition. No timeout or automatic truncation is introduced.
+
+| Event | Session effect | Does not imply |
 | --- | --- | --- |
-| Connection lost | Session becomes `OutputDetached`: the daemon stops reading the pipes; the command blocks on a full pipe exactly as with any stalled consumer | No kill, no timeout, no replay. `ExecStatus`/`ExecCancel` on another connection still work |
-| `ExecCancel(signal)` | Signal delivered to every member of the owned group | Not completion: `Exited` and `Quiescent` still arrive as events |
-| `Exited` | Status recorded and sent once | Not stream EOF, not quiescence, not a flush of mappings |
-| `Quiescent` | Session released | Not a Commit and not an unmount |
+| Connection lost | OutputDetached: stop further pipe reads, retain bounded pending bytes and original delivery failure; explicit ExecCancel/ForceUnmount can dispose the streams and record output incomplete | kill, replay or complete output |
+| ExecCancel(signal) | Signal owned processes; retain independent process and stream outcomes. A detached/unavailable output sink may be explicitly disposed by this cancellation, recorded as incomplete | quiescence or output success |
+| Exited | Reap and record original status; queue its event | stream EOF or empty group |
+| StreamEof | No further bytes from that pipe; keep any unsent chunk until disposition | delivery of buffered bytes or process completion |
+| Quiescent | Record empty group; preserve pipe/output/result owners | ResourceTerminal |
+| Explicit forced output disposal | Close/dispose owned streams and pending records once, recording incomplete output and original send failures | successful EOF delivery |
+| ResourceTerminal | Release joined I/O/session resources and decrement execs; retain bounded terminal observation | Commit or unmount |
+
+FP-7/FP-30 must exercise fast process exit followed by a slow reader, EOF before
+group emptiness and group emptiness before EOF/delivery, including output detached
+and explicitly discarded by forced teardown.
 
 ### 5.5 Terminal drain
 
-Covered in section 11; the ownership handover is: registry (fence) → mount
-session owner (kernel detach, reply completion, loop join, buffer release) →
-overlay Owner (logical `Close`, then bounded automatic reclamation). No step is
-performed by a detached, unowned background task: reclamation is the existing
-Owner thread's maintenance turn, and every other step is joined before the
-operation that started it replies.
+The terminal owner first freezes control admission and establishes the correct
+probe/stopping phase, then owns kernel detach and all remaining daemon work.
+FUSE receiver-loop exit is one barrier, not the whole barrier. Requests, pending
+owner completions, namespace-bound Store consumers, control producers and Exec
+I/O retain their original ownership until result disposal. Only the complete
+§11.2 predicate permits revocation of native leases and logical Close. Physical
+retirement/deletion is then paged through the existing fair owner, with debt
+reported until Gone. No receiver shutdown silently drops another owner's job.
 
 ## 6. Native request service and scheduling
 
@@ -381,11 +453,11 @@ operation that started it replies.
 
 | Thread | Count | May do | Never does |
 | --- | --- | --- | --- |
-| Dispatch loop (fuser `run`) | 2 per mount initially | Decode, fence check, credit admission, one bounded copy of inputs, cache-hit-only base facts, `try_submit`, inline FORGET | Wait for an owner job, a Store read, a stream consumer or another request; take the registry mutex per request |
+| Dispatch loop (fuser `run`) | 2 per mount initially | Decode into its fixed receive slot; wait only for that mount's native handoff credit before any copy/job; own bounded inputs and hand off request/FORGET work | Wait for an owner result/credit, Store demand or stream; retain Workspace/cache/registry/SQL locks during the admission wait |
 | Service worker | `K` per daemon, fixed at readiness; initial `K = read_handles + 2` | Run one step of one request; perform a cold Store demand when it holds a reader; compose and send replies | Wait on a `Pending`, a flight or an admission credit |
 | Overlay Owner | 1 per daemon [implemented] | Short typed SQL jobs and maintenance turns | Content decode, Store I/O, reply sends |
-| Exec supervisor | 1 per daemon | Wait on process, pipe and group events; move at most one chunk per stream | Filesystem work |
-| Mount session owner | 1 per mount, only inside `fuser::Session::run` | Own the session for its whole life and return when every loop has exited | — |
+| Exec supervisor | 1 per daemon | Advance independent process, pipe and group events; retain bounded per-stream I/O owners so one blocked send cannot stop other sessions | Filesystem work or a global blocking stream send |
+| Mount session owner | 1 per mount, around `fuser::Session::run` | Retain session/result custody; distinguish joined successful completion from errors that can leave unjoined loops | Infer complete drain from run() returning an error |
 
 The existing engine remains the only SQL scheduler. The request service
 schedules requests, not SQL: it decides which parked-then-runnable request a
@@ -395,26 +467,46 @@ lanes.
 
 ### 6.2 Admission and backpressure
 
-Each mount has a request credit count `R` and a byte credit for owned inputs.
-Initial settings, not optima: `R = 16`, equal to the Owner's
-`jobs_per_namespace`, so one outstanding ordinary owner job per in-flight
-request never exceeds the lane; owned WRITE bytes at most `R × 128 KiB`. A
-dispatch loop reads the next kernel request only while a request credit is
-free. When none is free it stops reading; the kernel queues and the calling
-tasks block. That is the only backpressure, and by I-9 it cannot deadlock.
+The pinned fuser loop reads before calling Filesystem methods; it exposes no
+pre-read credit hook. S8 therefore gates at callback entry, not by claiming to
+control the library's next read. This is the narrow admission-only exception to
+I-8. While waiting, the callback holds only its borrowed native buffer/reply and
+one fixed receive-slot reservation. It has submitted no owner job, acquired no
+mutable lease and copied no WRITE payload. It holds no shared product lock.
 
-Owner admission can still refuse a job (`AdmissionFull`: the daemon-wide 8 MiB
-credit, or the two lifecycle slots per namespace used by OPEN, RELEASE and
-reply-attempt releases). That refusal is before any attempt and returns the
-original command; the request parks on `OwnerAdmission` and is made runnable by
-a credit-release notification. It is a readiness wait before an attempt, not a
-retry, and never becomes `EBUSY` (K13). The lifecycle slot count is an explicit
-`OwnerConfig` value chosen at daemon readiness for native serving; the plan
-sizes it and the proof plan measures the parks. The lane shared by `Open` and
-by undropped completions is sized by the same explicit value. A control `Mount`
-that still meets a full lane is refused `Capacity` before any effect, as today:
-that is an exact typed control result, not a kernel request, and it is not
-queued.
+There are `N = 2` fixed receive slots per mount, one per loop, allocated/charged
+before the loops start. Each may hold one received-but-unadmitted callback.
+They are separate from `R = 16` admitted native handoff credits. Thus at most
+`R + N` native units are held in userspace, including the two callbacks waiting
+at admission. Count active receive slots separately; an empty reserved slot is
+not an active request and does not make an idle mount Busy. fuser's own buffer
+allocation and transient borrowed WRITE bytes remain a separate resource domain.
+
+On admission the callback moves its reply and one bounded input copy into an
+owned request and returns immediately. An admitted unit keeps its credit through
+original result/reply/completion disposal. A no-reply FORGET unit releases its
+credit after its checked owner decrement/disposition. The default BATCH_FORGET
+may deliver several units from one frame; each uses this same bounded handoff,
+without copying the entire batch or a timer. Opcode and handoff-unit counts stay
+distinct. Valid inline/no-reply operations have an explicit counted disposal path.
+
+A condition/event wakes admission waiters when handoff credit is released or the
+mount enters a terminal phase. The wait loop only rechecks admission/phase; it
+never repeats an attempted filesystem or Store operation. A normal ProbeUnmount
+continues kernel admission/service. Stopping or known detach wakes every waiter:
+a borrowed reply gets one terminal attempt, no-reply ownership work is retained
+for teardown disposal, and no waiter remains blocked on an empty credit pool.
+No callback owns a request needed to release the capacity it is awaiting. By I-9,
+progress of admitted units cannot require reading a later kernel request.
+
+Owner admission is a different wait. AdmissionFull returns the original command
+before any attempt; the admitted native request parks on OwnerAdmission and
+relinquishes its receiver/worker. The existing notifier makes it runnable on
+credit release. No dispatch callback waits for an Owner credit or completion.
+Daemon-wide byte credits and ordinary/lifecycle lane settings stay explicit;
+count additional lookup ownership jobs instead of assuming every request uses
+only a read lane. A control Mount with a full lane still receives a before-effect
+Capacity refusal. FP-34/H-10 cover full handoff capacity and shutdown wakeup.
 
 ### 6.3 Events instead of blocking ports
 
@@ -438,24 +530,26 @@ owner jobs.
 
 | Request | Round 0 (no SQL) | Owner job | After the job |
 | --- | --- | --- | --- |
-| LOOKUP | Base child and inode facts for `(parent, name)` under the currently bound root, from cache or a cold demand | One read-only compound job: validates the bound root, reads the parent row, the local entry and the target row, composes the effective answer | Reply. If the job reports the root changed, one further round under the new root |
+| LOOKUP | Base child/inode facts under the bound root, from cache or a cold demand | One consistent terminal job: positive answer plus indexed lookup acquisition is a short write transaction; negative answer is read-only. Any zero-effect Need/root-fact rounds are counted separately | Entry reply only after known acquisition; no implicit lease rollback after send |
 | GETATTR | Base inode facts for the serial | One read-only compound job | Reply |
 | READLINK | Base target | One read-only job for the local layer | Reply |
 | READ | — | One `SourceRead`/`FileRead` job returning the local window, mask and base root [implemented] | One base range demand for inherited bytes, then reply (I-10) |
 | READDIR | Base page for the cursor | One read-only job for the local page | Merge in name order, reply at most one window |
 | OPEN / RELEASE | — | One lifecycle job each [implemented] | Reply |
-| WRITE, SETATTR, CREATE, MKDIR, SYMLINK, LINK, UNLINK, RMDIR, RENAME | Facts the evaluation needs | One mutation job (one transaction) [implemented]; `Need` adds a fact round before it | Reply, then release the publication ticket |
+| WRITE, SETATTR, CREATE, MKDIR, SYMLINK, LINK, UNLINK, RMDIR, RENAME | Required immutable facts | One mutation transaction; entry-bearing successes also acquire lookup custody in it. Need rounds precede the effect | Reply, then release publication ticket; all ownership effects counted |
 | FSYNC, FSYNCDIR | — | none | Success; no work and no durability claim |
 | FLUSH | — | none | Success |
 | xattr family | — | none | `ENOSYS` (sticky), section 8.4 |
-| FORGET | — | none | no reply |
+| FORGET / BATCH_FORGET callbacks | Own bounded `(mount, serial, nlookup)` decrement units | Indexed checked ownership decrements on the existing fair owner; bounded already-queued batching is permitted | No reply; retain failed decrement custody, otherwise release handoff credit |
 | STATFS | — | none | Inline reply from fixed declared values: block size 4096, name length 255 and a constant nonzero free-space figure. It reports no physical capacity and is not an admission signal; the library default of all zeros is not used |
 
-A read-class job is a set of unframed read statements in one owner turn: no
-write transaction and no base-source lease, because after the job the request
-performs only immutable base reads keyed by an explicit root. The engine's
-base-source windows remain for the multi-job sequences that still need them
-(captured reads, construction).
+Pure metadata/data observations use unframed reads in one owner turn when all
+facts are available, retaining a complete bounded answer/plan and immutable root
+for later base reads. Positive entry replies additionally acquire lookup custody;
+they are owning writes. A parked/multi-job plan that needs mutable state after
+its protecting reference can be released must retain separate processing/source
+custody. Record these lease jobs and zero-effect fact rounds explicitly; the
+former blanket zero-write/zero-lease read-class hypothesis is withdrawn.
 
 Kernel VFS locking makes a name-level recheck unnecessary: LOOKUP holds the
 parent shared while every mutation of that parent holds it exclusively, and by
@@ -544,7 +638,8 @@ Each is reported separately and none is summed into a single "cache bound".
 | Overlay pager and MEMORY journal | SQLite suggestion; per-transaction journal | existing engine observations |
 | Store sessions | one writer plus `read_handles` pager suggestions | existing session counters |
 | Owner job credits | 8 MiB daemon-wide | `OwnerWork.credited_bytes` |
-| Per-mount native | `R` owned requests; two 16 MiB + 4 KiB receive buffers (virtual; residency unverified); one transient handshake buffer per attach | request-service gauges; proof plan R-domain |
+| Per-mount native | R admitted units plus N fixed receive slots (initially 16 + 2); two 16 MiB + 4 KiB library buffers and transient handshake buffer | active/reserved receive slots, handoff credits, owned-copy bytes and native buffer observations separately |
+| Indexed lookup ownership | backing rows/counts for live kernel references; bounded resident command windows | rows, counts, physical bytes, decrement jobs and revocation debt |
 | Kernel dentries, inodes, pages | kernel-owned; grows with the visited tree and file bytes | cgroup and `/proc` observations only |
 
 A cache allowance never becomes an object, file or Commit size limit: oversized
@@ -610,7 +705,7 @@ the proof plan (FP-10 to FP-18). The daemon sends no notification in any row.
 | GETATTR racing a write or truncate | A reply sampled before a newer inode version, or arriving during a write/truncate, is discarded; the stat caller may still see the old values | I-6 | A reply from a view older than an already-acknowledged write would truncate the page cache: I-6 is what prevents it |
 | Short READ | A short READ shrinks the kernel's size, under the same version check | I-10 exactly | — |
 | CREATE, MKDIR, SYMLINK | Reply attributes applied; parent attributes invalidated | Reply the published attributes with the 60 s lifetime | — |
-| UNLINK, RMDIR | Kernel drops link count locally and invalidates ctime and parent attributes | Publish, reply | D-6 boundary for an unopened removed inode |
+| UNLINK, RMDIR | Kernel drops link count locally and invalidates ctime and parent attributes | Publish and reply; preserve independent lookup/open/processing custody | Exact removed-inode metadata until last owner, independent of reclamation timing |
 | Hard link (`link`) and aliases | Aliases share one kernel inode per node id: one page cache, one attribute set | One serial per inode; LINK replies the published attributes | — |
 | Replacement rename | Target always revalidated; replaced inode's link count dropped | One atomic job for both names | — |
 | Negative lookup | An `ENOENT` error installs an uncached negative dentry | Reply `ENOENT`. Cached negative entries are a candidate only | Repeated misses cost a request each |
@@ -759,78 +854,137 @@ back.
 
 ### 11.1 Admission
 
-Unmount admission arbitrates under the registry mutex with Exec admission,
-Commit admission and the gauges, and has exactly one winner.
+Control admission and the native drain owner establish one ordering with request,
+Exec and control-operation guards. No guard may be minted after the terminal
+barrier closes; an already-owned guard keeps its original result/lease alive.
 
-| Policy | Refuses when | Otherwise |
+| Policy | Before any terminal effect | Admitted phase |
 | --- | --- | --- |
-| Normal | activity is not `Idle` (Commit running: `Busy`; `Uncertain`/`LocalFailure`: `Unknown` with retained custody); or `execs`, `handles` or `requests` is nonzero | Fenced |
-| Forced | never for activity or gauges; `relinquish_unknown` must be explicitly true to proceed past retained Commit custody, and the result then says the publication outcome is unknown, never `NotPublished` | Fenced |
+| Normal | Refuse Busy for an active control producer, nonterminal Exec, open, received/admitted request, ownership decrement or pending completion. Retained Commit uncertainty returns Unknown. Cached nlookup references and empty receive reservations are not activity | ProbeUnmount |
+| Forced | Refuse Busy while Commit, Attach or another namespace control producer is still running. No signal/abort/unmount occurs on that refusal. A stopped known-publication failure keeps its original outcome; stopped unknown custody requires explicit relinquish_unknown and stays Unknown in the terminal receipt | Stopping, even if Exec/kernel request owners remain |
 
-### 11.2 Sequence
+Relinquishing stopped unknown custody is not cancellation or resolution of an
+in-flight operation. It permits explicit local disposal only after all consumers
+have stopped and their original outcomes are retained. S8 does not add an
+interruptible Commit or let a terminal action race its Store publication.
+
+### 11.2 Probe, forced stop and complete drain
+
+**Normal path.** ProbeUnmount temporarily refuses new Exec/Attach/Commit control
+admission but continues ordinary kernel request admission and service. It neither
+returns terminal errors nor parks filesystem requests waiting for the unmount
+syscall; that syscall can itself need filesystem service. Make one plain
+`umount2(path, 0)` attempt on the owned mount. EBUSY withdraws the control probe
+and returns Busy with no terminal filesystem effect. Mutations legitimately
+completed during the probe remain visible. A known detach transitions to
+Draining and only then closes native admission. Any unestablished outcome retains
+the exact mount/phase; it does not guess Ready or Detached.
+
+**Forced path.** Use the connection-specific fusectl `abort` control already
+owned/validated for that mount; do not use `umount2(MNT_FORCE)` as an abort-only
+primitive. First establish Stopping, then make one one-byte abort write on the
+retained control descriptor, wake receive-capacity waiters, complete unattempted
+parked replies and signal the explicitly owned Exec groups. Preserve the results
+of jobs already attempted even if their terminal reply was sent early. No wait
+for process exit precedes releasing its blocked FUSE request. Explicit forced
+stream disposal records output incomplete; it cannot masquerade as delivered EOF.
+
+Abort and detach are independent effects. Linux 6.12's
+[fusectl abort handler](https://github.com/torvalds/linux/blob/v6.12/fs/fuse/control.c#L31-L42)
+invokes connection abort without unmounting. In contrast,
+[MNT_FORCE continues through unmount](https://github.com/torvalds/linux/blob/v6.12/fs/namespace.c#L1773-L1814).
+The selected path therefore has one abort write and, after local consumers drain,
+exactly one plain detach attempt, with no second unmount after success and no
+retry after EBUSY/error. Bind the abort descriptor to the connection/mount
+incarnation at Attach; do not reopen a guessed connection number at teardown.
+Its write return alone is not loop-exit or detach evidence. Missing capability
+refuses forced admission before signals/effects; short/failed/unknown abort or
+detach retains the original phase and custody. A failed detach after abort is
+Retained/aborted-but-still-mounted, never the reversible normal Busy result.
+
+**Complete drain predicate, required by both paths before revocation/Close:**
+
+1. Native admission is terminal; every received callback has returned/disposed
+   its reservation, and every FUSE loop is known exited and joined. A fuser
+   `run()` error is not sufficient evidence: partial thread creation or a panic
+   can return without joining remaining loops. Keep Retained when join cannot
+   be established; never infer success from the outer thread or mountinfo alone.
+2. Each admitted request, queued/running service step, ownership decrement,
+   owner Pending/completion/publication ticket and already-attempted operation
+   has its original outcome and disposal acknowledged. Sending ENOTCONN is not
+   completion of the job that preceded it. No queued continuation can later
+   acquire or use a local namespace owner.
+3. Every namespace-bound Store read/decode consumer or flight subscription has
+   completed or been explicitly detached with no access to the namespace.
+   A shared immutable acquisition may continue for other subscribers under its
+   Store owner; it cannot retain a departing Workspace continuation/custody.
+4. No control constructor/Commit/capture consumer remains active. Normal and
+   forced admission refuse a running Commit; any other unestablished disposition
+   keeps the terminal operation Retained. Original known/unknown publication
+   records are transferred into the terminal receipt, never settled by a read.
+5. Every Exec is ResourceTerminal: child reaped, group empty, streams/output/
+   result records disposed and I/O owners stopped. Forced disposal is explicit
+   and recorded. No future pipe, request or callback can use the namespace.
+
+A service/cold job may outlive FUSE loop exit. Its drain guard, original inputs,
+result and credits stay alive until the above predicate holds; no timeout drops
+it to fabricate completion. Any unestablished item returns Retained with the
+remaining owner/phase and leaves leases and routing held.
 
 ```text
- Unmount(token)
-   | registry: fence (no new Exec, Attach, Commit; new kernel requests refused at the loop)
-   |
-   +-- normal: umount2(path, 0) --EBUSY--> withdraw fence, reply Busy (no effect)
-   |                           \--0------> Detaching
-   +-- forced: signal Exec groups; abort the connection (umount2 MNT_FORCE);
-   |           complete every parked reply; umount2(path, 0)
-   v
- loops observe ENODEV and return -> mount session owner joins all loops
-   | session dropped: receive buffers, cursors, owned requests released
-   v
- engine: one bounded job retires this namespace's remaining open/read/request owners as a group
- engine: logical Close (existing)            -> acknowledged
- registry: remove routing                    -> reply Unmounted
-   :
- Owner maintenance turns (existing): bounded row deletion while other Workspaces run and when idle
+ normal: ProbeUnmount (kernel service continues) -> plain detach once
+          EBUSY -> Ready; no filesystem request failed because of the probe
+ forced: Stopping -> abort once -> replies/signals/dispositions -> daemon drain
+          -> plain detach once; failure remains Retained, not Ready
+ both: detach + all loop joins + complete daemon-work drain
+          -> fixed logical native-owner revocation -> logical Close -> terminal reply
+          -> fair indexed retirement/deletion until Gone
 ```
 
-Rules:
-
-- Loop exit and join is the detach evidence. Disappearance of a path from
-  mountinfo is corroboration only.
-- The kernel queues no FORGET once the superblock is inactive, and an abort ends
-  queued RELEASE and mapped-WRITE requests. Outstanding open and request owners
-  of the namespace are therefore retired as one group by a bounded engine job
-  after detach, keyed by namespace and paged by the existing row windows. This
-  is new engine work: today an unreleased lease, request or base-source row
-  keeps a closed namespace `Held` forever, because no reclaim phase deletes
-  those tables. There is no per-FORGET collection, no sweep of the base, no
-  shared-cache flush, no database rebuild, no history deletion and no sync.
-- Mapped stores that were still queued in the kernel when the connection ended
-  are lost with the discarded local state. Normal unmount cannot reach that
-  state: it requires no live user of the mount.
-- Unmount never publishes, and never deletes shared objects or history.
+After this barrier, one short owner job marks the exact native mount group
+revoked; its lookup/open/processing records cease to represent live consumers.
+This is logical revocation, not bulk SQL deletion. Indexed maintenance releases
+native ownership rows and dependent references in bounded windows, with total
+work proportional to affected records. Unrelated/captured/control owners are
+not swept into that group; any undisposed independent owner prevents the barrier.
+Logical Close may then acknowledge with physical debt still Queued. Revocation,
+Close and physical retirement are distinct counted phases; failures retain exact
+custody and stop automatic replay. No missing FORGET/RELEASE at detach causes
+an unbounded foreground walk or deletion of an owner that is still executing.
 
 ### 11.3 Outcomes
 
 | Outcome | Meaning | Workspace afterwards |
 | --- | --- | --- |
-| Busy | Refused before any terminal effect | Fully usable |
-| Unknown | Retained Commit or lifecycle custody blocks a normal unmount | Usable for status; custody unchanged |
-| Cancelled | Forced policy signalled Execs and completed parked replies | Proceeding to detach |
-| Detached | Kernel mount gone, loops joined, session released | No longer mounted; logical close follows |
-| Cleanup-pending | `Unmounted` was replied; engine reports `Queued` rows | Gone from routing; debt visible in daemon status until `Gone` |
-| Complete | Engine reports `Gone` for the namespace | — |
-| Retained { phase } | A teardown step was not established | The stopping owner and its exact phase are kept and reported; no success is claimed and nothing is guessed |
+| Busy | Normal pre-effect refusal/kernel EBUSY, or forced refusal of a running control producer before effects | Fully usable; no terminal request error injected |
+| Unknown | Retained Commit/lifecycle knowledge prevents normal unmount | Original custody retained |
+| Stopping | Forced cancellation/abort/disposal has effects but detach/drain is incomplete | No Ready claim |
+| Detached | Exact detach effect known | May still have daemon work; this alone permits no revocation or Close |
+| Drained | All five drain conditions hold | Native-owner revocation and Close may run |
+| Cleanup-pending | Terminal reply after logical Close; physical retirement/deletion is Queued | Gone from routing; debt visible until Gone |
+| Complete | Engine reports Gone after terminal completion | No remaining local debt |
+| Retained { phase } | Abort, detach, join, consumer disposition, revocation or Close was not established | Exact stopping owner/work and original publication knowledge remain; no success or guessed cleanup |
 
-Logical close is reported separately from physical debt in every result.
+Normal success keeps its existing Unmounted record. ForceUnmounted is a new tag
+whose bounded outcome carries original known/unknown Commit knowledge, stream
+completion/discard/failure counts, abort/detach/drain dispositions and cleanup
+state. Unknown stays Unknown even after explicit local relinquishment; an absent
+Commit is not invented as a NotPublished verdict. Individual Exec terminal
+observations use the bounded ExecStatus route while their observation owner is
+retained, and the terminal aggregate preserves incomplete-output disposition.
 
 ### 11.4 Reclamation and debt
 
-Existing behaviour is reused [implemented and source-verified]: closed-namespace
-reclaim runs in bounded steps (at most 14 payload cells or 64 metadata rows per
-step) on the Owner thread, one step per eight foreground jobs or when idle, and
-freed pages are reused without shrinking the file. S8 adds two things. Status
-surfaces closed-namespace debt and whether maintenance has stopped. Mount
-admission refuses with a typed `Capacity` result while maintenance is stopped or
-a declared debt headroom is exhausted (D-13), so that repeated per-call
-Workspaces cannot grow the overlay without bound while every operation reports
-success. One failed maintenance attempt still stops automatic maintenance with
-no replay, as the S6 contract already states.
+Reuse the fair Owner's maintenance windows (currently at most14 payload cells or
+64 small metadata rows per step), service while active/idle, page reuse and
+first-failure stopping. Add indexed native-owner revocation/retirement phases;
+prove their bounds separately rather than crediting old S6 receipts with new
+behaviour. If there are K native ownership rows, the mark is fixed foreground
+work and physical retirement is O(K) indexed work in bounded turns. No base scan,
+per-FORGET global collection, shared-cache flush, database rebuild, history
+deletion or Workspace sync is introduced. Surface retired-ownership and payload
+debt separately. Mount admission still refuses on stopped maintenance or exhausted
+declared headroom; actual growth/progress is proved, not assumed from a counter.
 
 ## 12. Failure, unknown and custody rules
 
@@ -843,16 +997,17 @@ no replay, as the S6 contract already states.
 | Mutation job outcome uncertain (owner lost mid-attempt) | `EIO` | the engine's original unknown; the Workspace's activity becomes `Uncertain` | a resend, a rollback, a guessed success |
 | Serial range exhausted because the Store write was `Busy` | `EAGAIN` (P-1 ruling, section 15.3) | the create has no effect | a wait, a gate or a replay of the failed reservation |
 | Reply send fails | none possible | a per-mount counter and the publication, if any | a second send |
-| Request on a fenced or detaching mount | `ENOTCONN` | — | new owner work |
-| Parked request when the connection is aborted | one reply attempt with `ENOTCONN`; if its owner job was already attempted, that job's original outcome stands | published state | cancellation of an attempted job |
+| Request during ProbeUnmount / after terminal stop | ordinary service during probe; ENOTCONN only in Stopping/known detach | receive-slot/request disposal and original attempted work | terminal errors from a reversible probe |
+| Parked request when the connection is aborted | one terminal reply attempt; no-reply work retains its explicit disposal path | every attempted job, original result/completion, credit and drain guard until disposal | treating a sent error or loop exit as daemon-work completion |
 | Lost `Mount` reply | — | the entry, observable through `Locate` | a second binding for that incarnation |
 | Lost `Attach` reply | — | the `Ready` or `Retained` entry | a second attachment |
-| Lost `Exec` connection | — | the `OutputDetached` session and its process | a kill, a timeout or a re-execution |
+| Lost Exec connection | original send/receive failure; OutputDetached | bounded pipe/output/process custody until ResourceTerminal or explicit incomplete-output disposal | automatic kill, truncation-success, timeout or replay |
 | Known publication, failed local install | existing `LocalFailure` custody | the original capture and known publication | resolution by a later read |
 | Later explicit observation (`Status`, `Locate`, `ExecStatus`) | the current observation | — | settling an earlier unknown |
 
-Uncertain outcomes stay terminal until the owner rules on O-4; no observer
-resolves one.
+Uncertain outcomes remain unknown; no observer resolves one. Explicit forced
+local relinquishment follows §11.1 only after consumers stop and preserves that
+unknown in ForceUnmounted or Retained. It is not a publication-outcome resolver.
 
 ## 13. Capabilities: supported, rejected, deferred
 
@@ -867,7 +1022,7 @@ resolves one.
 | Kernel writeback, kernel passthrough bypassing capture, permission removal, fixed CPU affinity | Rejected |
 | FUSE_INTERRUPT cancellation, `batch_forget` override, notify-retrieve, capability removal, receive buffers sized to negotiation | Not available in the pinned library; not worked around by patching |
 | Kernel notifications and invalidation | Not used in S8 |
-| Exact attributes of an unopened inode after its last name is removed | Best effort, bounded by D-6 |
+| Exact attributes after the last name is removed while a kernel lookup/cwd/O_PATH or processing owner remains | Supported through indexed D-6 custody; no cleanup-timing-dependent ESTALE |
 | Negative entries, READDIRPLUS, FLUSH elision, CACHE_SYMLINKS, PARALLEL_DIROPS, larger requests, more background or loops, CopyFileRange reuse | Deferred candidates, each behind its own proof |
 | Interactive PTY and direct program modes | Deferred; not part of S8 |
 | Live Commit of a mounted Workspace's namespace, and its survival in a fresh mount | S10 |
@@ -894,13 +1049,13 @@ coverage.
 | D-1 | Extend the existing registry `Binding` with a native state and three gauges; add `Attach`, `Locate`, `ForceUnmount`, `ExecStatus`, `ExecCancel` and the Exec stream records as additive tags | A second routing registry; a single combined mount record that would blur the two acknowledgement points |
 | D-2 | First-party `mount(2)`/`umount2(2)` and `Session::from_fd`; two loops through `Config.n_threads` | fuser's mount and unmount ownership: silent helper fallback, lazy detach, a handle that reports success after `EBUSY` |
 | D-3 | A daemon request service with per-Workspace runnable queues, fixed workers and completion notifiers; dispatch loops never wait | Blocking the loop in `Pending::wait`; more loops per mount as a substitute for parking |
-| D-4 | One read-only compound owner job per read-class reply, with immutable base facts fetched outside it | Today's composition of up to five independent jobs with rechecks, which the engine contract already forbids |
-| D-5 | Per-mount request and byte credits; a loop stops reading when none is free; owner admission refusals park | Unbounded owned queues; `EBUSY` |
-| D-6 | No per-inode state for kernel `nlookup`; open handles and request reads carry custody; FORGET is a counter update | A table proportional to the visited tree (I-16); an SQL write transaction per LOOKUP reply and per FORGET |
+| D-4 | One consistent answer job with required owning effects: positive LOOKUP acquires indexed custody, pure observations remain read-only; explicit processing leases/fact rounds are counted | A torn multi-job answer or a zero-SQL claim that drops necessary ownership |
+| D-5 | R admitted handoffs plus N fixed receive slots; only callback-entry native-capacity admission may wait on a receiver. Owner/Store prerequisites park off-loop; terminal wakeup disposes all waiters | Pretending fuser exposes a pre-read hook, unbounded pending input, or waiting on SQL/Store while holding a receiver |
+| D-6 | Indexed per-mount/per-inode lookup counts and leases; bounded checked FORGET jobs; independent open/processing custody | Counter-only FORGET and best-effort removed-inode attributes; a resident visited-tree map |
 | D-7 | Fair bounded cold-demand admission with idle, healthy reader selection and per-request failure scopes | The blind rotating counter and blocking reader mutex |
-| D-8 | Group retirement of a detached namespace's remaining owners by a bounded engine job | Waiting for FORGET or RELEASE that the kernel does not send at teardown |
+| D-8 | Complete native/daemon-work drain, then fixed logical native-owner revocation and indexed bounded physical retirement | Treating receiver-loop exit as full drain, retiring active producers, or assuming all FORGET/RELEASE records arrive |
 | D-9 | Mount reads its Branch snapshot through a read-only session; no daemon-local gate on the writer session | A writer mutex or wait, which K30 forbids |
-| D-10 | Exec through a launcher mode of the daemon executable, cgroup custody, a dedicated connection per Exec with transport backpressure | `pre_exec` code in the daemon image; process-group-only custody; application-level stream credits |
+| D-10 | Launcher/cgroup custody and independent process, stream and result owners; ResourceTerminal is their conjunction; dedicated connection per Exec | Releasing a session at Quiescent, implicit output truncation, or process-group-only descendant custody |
 | D-11 | The Bash identity is one explicit daemon configuration value, required equal in every daemon sharing a Store; mount access is `allow_other` plus `default_permissions` with the daemon as mount owner | Making the Bash user the mount owner, which would let it abort the connection |
 | D-12 | Per-Workspace shared peer group, slave propagation into each launcher namespace, sibling mounts detached | Private propagation, under which the daemon's unmount succeeds while commands still use the mount and the join never completes |
 | D-13 | Mount admission refuses on stopped maintenance or exhausted declared debt headroom | Nominal success with unbounded overlay growth |

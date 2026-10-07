@@ -9,6 +9,12 @@
 > within the stated responsibility and line ceilings; the reuse and ownership
 > columns are not adjustable without a specification change.
 
+Review correction after `77cf51686`, 2026-10-08: follow the revised
+[specification](S8-SPECIFICATION-20261008.md) and
+[correction ledger](checks/s8-spec-review-fixes-20261008/02-correction-ledger.md).
+Original reviews and receipts remain unchanged. These are corrected proposals
+and prospective oracles, not new implementation or runtime evidence.
+
 ## 1. Starting point and rules
 
 Starting state [implemented and source-verified at the pin]:
@@ -76,9 +82,9 @@ pin.
 | File | Lines | Action | S8 responsibility |
 | --- | --- | --- | --- |
 | [control_types.rs](../../../crates/layerfs-bridge/src/control_types.rs) | 163 | C | `WorkspaceStatus` gains the bounded `native` block (§4.3) |
-| `layerfs-bridge/src/control_native.rs` | — | N | `NativeMount`, negotiation receipt, `TeardownCustody`, native state and gauge types |
+| `layerfs-bridge/src/control_native.rs` | — | N | NativeMount, connection/negotiation identity, native phase, separate live/reserved/drain gauges, TeardownCustody and forced terminal outcome |
 | [control_request.rs](../../../crates/layerfs-bridge/src/control_request.rs) | 125 | C | Additive tags `Attach`, `Locate`, `ForceUnmount`, `ExecStatus`, `ExecCancel` |
-| [control_reply.rs](../../../crates/layerfs-bridge/src/control_reply.rs) | 241 | C | Additive tags `Ready`, `Located`, `Retained`, `Exec`; new refusal phases |
+| [control_reply.rs](../../../crates/layerfs-bridge/src/control_reply.rs) | 241 | C | Additive Ready, Located, Retained, Exec and ForceUnmounted tags; forced outcome preserves original publication and incomplete-output dispositions |
 | `layerfs-bridge/src/exec_types.rs`, `exec_wire.rs` | — | N | Exec identity, observation, and the stream records of §4.1 with the 32768-byte chunk bound |
 | [control.rs](../../../crates/layerfs-bridge/src/control.rs), [wire.rs](../../../crates/layerfs-bridge/src/wire.rs), [native/](../../../crates/layerfs-bridge/src/native/channel.rs) | — | R | Channel, record limits and existing encodings are unchanged; retained F13 receipts keep their meaning |
 | [sdk control.rs](../../../crates/layerfs-api/sdk/src/control.rs) | 164 | C | `attach`, `locate`, `force_unmount`, `exec_status`, `exec_cancel`; a typed `mount` helper performing `Mount` then `Attach` as two attempts with separate custody |
@@ -88,30 +94,30 @@ pin.
 
 | File | Lines | Action | S8 responsibility |
 | --- | --- | --- | --- |
-| [control/registry.rs](../../../crates/layerfs-daemon/src/control/registry.rs) | 131 | C | `Bound` gains native state and the `execs`, `handles`, `requests` gauges; uncertain `Open` becomes an observable `Retained { bind }` entry instead of a silent placeholder |
-| `control/native_state.rs` | — | N | The §5.1 state enum and its guarded transitions, called only under the registry mutex |
+| [control/registry.rs](../../../crates/layerfs-daemon/src/control/registry.rs) | 131 | C | Binding owns native admission/drain state; serialize control admission with guards. Exec sessions remain counted through ResourceTerminal; native callbacks use per-binding admission guards, not the global registry mutex |
+| `control/native_state.rs` | — | N | ProbeUnmount, Stopping, Draining and Retained transitions with an admission/guard barrier; normal probe serves kernel requests; running Commit refuses forced admission before effects |
 | [control/operations.rs](../../../crates/layerfs-daemon/src/control/operations.rs) | 240 | C | Mount admission gains the debt check (D-13); `Locate` |
-| `control/attach.rs`, `control/unmount.rs` | — | N | `Attach` conversation; normal and forced terminal sequence of §11.2 with its outcomes |
+| `control/attach.rs`, `control/unmount.rs` | — | N | Attach plus reversible normal probe; forced abort/disposal, complete daemon-work drain, one plain detach attempt, native-owner revocation and logical Close in the specified order |
 | [control/status.rs](../../../crates/layerfs-daemon/src/control/status.rs) | 60 | C | Native block from maintained counters; still zero Store SQL |
 | [control/serve.rs](../../../crates/layerfs-daemon/src/control/serve.rs) | 93 | C | Route new tags; hand an Exec conversation to its own owner |
 | [control/failure.rs](../../../crates/layerfs-daemon/src/control/failure.rs) | 202 | C | New phases; no message parsing |
 | [bootstrap.rs](../../../crates/layerfs-daemon/src/bootstrap.rs) | 91 | C | Native configuration and readiness are composed here; concrete Store opening stays here |
-| `native/config.rs`, `native/readiness.rs` | — | N | Bash identity, `R`, `K`, mount root, P-2 policy; explicit readiness failure when `/dev/fuse`, required capabilities or a delegated cgroup v2 subtree are missing |
-| `native/session.rs` | — | N | Mount session owner: owns one `layerfs-fuse` session for its life, drives Attaching → Ready and Detaching → Detached, joins every loop |
-| `request/types.rs`, `request/credits.rs`, `request/queue.rs`, `request/workers.rs` | — | N | Request states and prerequisites (§5.2); per-mount request and byte credits; per-Workspace runnable FIFOs with round-robin; `K` fixed workers |
+| `native/config.rs`, `native/readiness.rs` | — | N | Bash identity, R, N, K and admission limits; readiness facts for FUSE/capabilities/cgroup delegation. Bind the owned fusectl abort capability/connection identity; unavailable forced capability refuses before effects |
+| `native/session.rs` | — | N | Mount/session ownership and drain evidence. Successful joined loop completion is distinct from run() error; retain unestablished partial-spawn/panic/exit custody instead of inferring Detached |
+| `request/types.rs`, `request/credits.rs`, `request/queue.rs`, `request/workers.rs` | — | N | R admitted handoffs and N receive slots; callback-entry capacity wait only; explicit terminal wakeup; fair runnable steps and separate request/completion/drain guards, including no-reply FORGET work |
 | `request/steps/` (`lookup`, `attributes`, `read`, `directory`, `open`, `mutation`, `refused`) | — | N | One resumable step function per request shape of §6.4; each returns a reply or exactly one prerequisite |
 | [service/completion.rs](../../../crates/layerfs-daemon/src/service/completion.rs) | 189 | C | Optional notifier on `Pending` that enqueues the owning request; synchronous `wait` stays for control and tests |
 | [overlay/credits.rs](../../../crates/layerfs-daemon/src/overlay/credits.rs) | 60 | C | Release notification for admission waiters |
 | [overlay/owner.rs](../../../crates/layerfs-daemon/src/overlay/owner.rs) | 492 | C | `lifecycle_jobs_per_namespace` chosen explicitly for native serving at readiness; closed-namespace debt and stopped-maintenance state exposed as counters |
 | [overlay/commands.rs](../../../crates/layerfs-daemon/src/overlay/commands.rs) | 763 | C | Kept under the ceiling by adding the new commands in a sibling file |
-| `overlay/read_commands.rs` | — | N | Read-only compound commands for LOOKUP, GETATTR, READLINK and a directory page (D-4); the group-retirement command (D-8) |
+| `overlay/read_commands.rs`, `overlay/native_ownership_commands.rs` | — | N | Consistent compound reads; positive-entry read/acquire transaction; checked lookup decrements; native-group revoke and bounded retirement commands on the existing owner |
 | [overlay/queue.rs](../../../crates/layerfs-daemon/src/overlay/queue.rs) | 376 | R | Lanes and rotation unchanged; H-12 measures them |
 | [store/open.rs](../../../crates/layerfs-daemon/src/store/open.rs) | 103 | C | Idle and healthy reader selection; quarantined readers leave the rotation and are counted (R-2) |
 | `store/read_service.rs` | — | N | Per-Workspace FIFOs of bounded demand batches served round-robin at read-set concurrency; a demand runs on a worker that already holds a reader (R-1) |
 | [store/ports.rs](../../../crates/layerfs-daemon/src/store/ports.rs) | 151 | C | One failure scope per kernel request, built from the session's `Arc<BoundWorkspace>`; no scope mutex across provider I/O (R-3) |
 | [store/bind.rs](../../../crates/layerfs-daemon/src/store/bind.rs) | 117 | C | Branch snapshot through a read-only session (R-4) |
 | [store/commit.rs](../../../crates/layerfs-daemon/src/store/commit.rs), [store/operation.rs](../../../crates/layerfs-daemon/src/store/operation.rs) | 175, 67 | R | Store half of Commit unchanged; admitted in `Bound` and `Ready` |
-| `exec/session.rs`, `exec/supervisor.rs`, `exec/custody.rs`, `exec/streams.rs`, `exec/serve.rs` | — | N | Exec state machine (§5.4); one supervisor thread on process, pipe and group events; one cgroup v2 leaf per session; one unsent chunk per stream; the dedicated-connection conversation |
+| `exec/session.rs`, `exec/supervisor.rs`, `exec/custody.rs`, `exec/streams.rs`, `exec/serve.rs` | — | N | Independent reap/group/stream/result owners; ResourceTerminal conjunction; nonblocking supervisor progress while stream owners backpressure; one-chunk bounds; explicit failed/discarded output and bounded terminal observations |
 | `exec/spawn.rs`, `exec/launcher.rs` | — | N | Spawn of the daemon's own executable with exactly three pipes; the seven launcher steps of §10.1 with the descriptor-table assertion |
 | executable entry | — | N | Mode selection and delegation only |
 
@@ -122,33 +128,37 @@ reply types and supplies one sink at mount.
 
 | File | Action | S8 responsibility |
 | --- | --- | --- |
-| `mount/syscalls.rs` | N | Open `/dev/fuse`; first-party `mount(2)` with the option string; `umount2`; per-Workspace shared peer group (D-2, D-12) |
+| `mount/syscalls.rs` | N | Open /dev/fuse; direct mount and one plain detach attempt; per-mount validated fusectl abort descriptor with one abort write; no MNT_FORCE-as-abort or automatic fallback/retry |
 | `mount/profile.rs` | N | The §8.1 flags and limits requested at init; the negotiation receipt; refusal when a required element is not granted |
-| `mount/session.rs` | N | `Session::from_fd`, two loops, `SessionACL::All`; `run` returns when every loop has exited |
-| `request/types.rs`, `request/decode.rs` | N | Owned first-party request values with one bounded input copy; the `fuser::Filesystem` implementation that decodes, checks the fence, takes credits and hands the request to the sink |
+| `mount/session.rs` | N | Session::from_fd and two loops; successful join evidence versus partial-spawn/panic errors. Error return does not prove all loops exited; preserve Retained rather than claim successful teardown |
+| `request/types.rs`, `request/decode.rs` | N | Callback entry owns a fixed receive slot; native handoff admission precedes copies/jobs, then bounded owned request/FORGET units. ProbeUnmount continues service; terminal phase wakes and disposes waiters |
 | `request/reply.rs` | N | A typed wrapper owning the fuser reply object: exactly one attempt, send error recorded, drop-without-reply counted |
 | `attributes.rs` | N | Identity and attribute mapping of §9 |
 | `diagnostics.rs` | N | Opcode counters and per-mount gauges for H-9, H-15, H-17, H-18 |
 
-Because fuser owns the read loop, "stops reading when no credit is free" is
-implemented as acquiring the next request's credit before the callback returns.
-That is the only wait a loop has (specification §6.2). It precedes any attempt,
-holds no lock, and is released only by reply attempts made on service workers,
-never by a future kernel request (I-9).
+fuser owns the read loop and has no pre-read admission hook. Gate at callback
+entry: at most N received callbacks may wait in their already-budgeted native
+buffers/replies while R handoffs are admitted. No payload copy, owner job or
+mutable lease precedes admission. This narrow wait holds no shared product lock,
+is woken by handoff release or terminal phase, and never repeats an operation.
+Empty receive reservations are not active requests. Admitted requests park
+owner/Store prerequisites off-loop. FORGET subcallbacks are charged handoff
+units with no reply and release only after decrement/disposition. FP-34 proves
+R+N accounting, no self-dependent progress and wakeup on abort/detach.
 
 ### 3.4 Workspace and Overlay
 
 | File | Lines | Action | S8 responsibility |
 | --- | --- | --- | --- |
-| [workspace/view.rs](../../../crates/layerfs-workspace/src/workspace/view.rs) | 221 | C | Read-class answers composed from one compound owner result plus immutable base facts; the multi-job `lookup`/`stat` composition is no longer on the native path |
+| [workspace/view.rs](../../../crates/layerfs-workspace/src/workspace/view.rs) | 221 | C | Compose one consistent answer/plan, with positive-entry ownership acquisition and explicit processing leases where needed; do not claim every read-class request is read-only |
 | `operations/read_plan.rs` | — | N | Resumable read-class plans in the `Need`/facts shape mutations already have |
-| [mutation/](../../../crates/layerfs-workspace/src/mutation/driver.rs), [operations/](../../../crates/layerfs-workspace/src/operations/types.rs) | — | R | Mutation jobs, windows and publication tickets unchanged |
+| [mutation/](../../../crates/layerfs-workspace/src/mutation/driver.rs), [operations/](../../../crates/layerfs-workspace/src/operations/types.rs) | — | C | Reuse mutation/publication semantics; native entry-bearing results acquire indexed lookup custody in the same transaction before reply. Do not add a second acknowledgement transaction |
 | [base/client.rs](../../../crates/layerfs-workspace/src/base/client.rs), [base/cache.rs](../../../crates/layerfs-workspace/src/base/cache.rs), [base/view.rs](../../../crates/layerfs-workspace/src/base/view.rs) | 174, 112, 184 | R | Unchanged in the mandatory scope. Shared cached bytes and the fact cache are ranked candidates behind their gates |
 | [workspace/serials.rs](../../../crates/layerfs-workspace/src/workspace/serials.rs) | 54 | C | Low-water early reservation attempts: at most one per create below an explicit low-water value (P-1 ruling) |
-| `layerfs-overlay/src/namespace/read_compound.rs` | — | N | The unframed read statements of one read-class job: validate bound root, parent row, local entry, target row |
-| `layerfs-overlay/src/lifetime/retire.rs` | — | N | Bounded, paged retirement of a detached namespace's remaining open, request and base-source owners (D-8) |
-| [lifetime/close.rs](../../../crates/layerfs-overlay/src/lifetime/close.rs), [maintenance/reclaim.rs](../../../crates/layerfs-overlay/src/maintenance/reclaim.rs) | 84, 296 | C | Close reaches `Queued` after retirement; debt and maintenance-stopped observations |
-| overlay runtime SQL | — | C if needed | Any new statement ships with its exact `EXPLAIN QUERY PLAN` and correlated runtime counts before a cost claim |
+| `layerfs-overlay/src/namespace/read_compound.rs` | — | N | Consistent pure observations and positive-LOOKUP short read/acquire transaction; count required fact/lease rounds explicitly |
+| `layerfs-overlay/src/lifetime/lookup.rs`, native ownership SQL, `lifetime/retire.rs` | — | C/N | Reuse existing lookup/open/processing lease semantics. Add indexed mount/serial aggregate counts and checked decrements; fixed native-group revocation only after drain; paged physical retirement/dependent-reference release |
+| [lifetime/close.rs](../../../crates/layerfs-overlay/src/lifetime/close.rs), [maintenance/reclaim.rs](../../../crates/layerfs-overlay/src/maintenance/reclaim.rs) | 84, 296 | C | Close may reach `Queued` after drain and logical revocation, while indexed physical retirement remains debt; maintenance-stopped observations |
+| overlay runtime SQL/schema | — | C | Index native mount/group and serial ownership. Review schema/version change explicitly; no restart migration is implied. Cover exact checked increments/decrements, underflow, foreign incarnation and revoked-group eligibility; retain EXPLAIN/runtime accounting |
 
 Not touched by S8: Content, Storage, Persistence, History, Project, telemetry
 and the root reference tree. The Persistence `try_lock` behaviour stays; R-4
@@ -172,19 +182,22 @@ when its code landed earlier.
 The smallest genuine vertical slice: installed sealed Store, the existing
 overlay Owner, the public Workspace, a native attach with exact readiness,
 reads, stats and permission checks through the mount, `/bin/bash -c true`, and
-exact terminal unmount with every loop joined.
+exact terminal unmount with every loop joined and all namespace consumers
+disposed before native-owner revocation and logical Close.
 
 | Order | Work | Why it is in the floor |
 | --- | --- | --- |
 | 1 | Environment facts recorded from the actual sandbox: kernel, `/dev/fuse`, capabilities for mount, namespace entry and identity change, cgroup v2 delegation | §10.4: verified, not inferred from an image identity |
 | 2 | Activation A-1 to A-7 | First native build |
 | 3 | `Attach`/`Ready`, `Locate`, native state and gauges, mount session owner, profile and receipt | I-3; M-1, M-2 |
-| 4 | Request service in its final shape (credits, parked and runnable states, workers, notifier), read-class steps with the single compound owner job, OPEN/RELEASE, directory cursors, FORGET counters, refused opcodes | A blocking interim adapter would be a second design to delete. M-3, M-4, M-8 |
+| 4 | Final request admission/service, consistent read plans, indexed positive-LOOKUP/FORGET custody, OPEN/RELEASE and directory owners; logical native-group revocation and bounded retirement | Required for correct reads and the first real detach; no counter-only lookup shortcut. M-3, M-4, M-8, M-11 |
 | 5 | Read service R-1 to R-3 | Without R-3 one cold failure poisons later requests; without R-1/R-2 a loop or worker would block on a reader |
-| 6 | Launcher, identity drop, propagation contract, cgroup custody, `Exited` and `Quiescent`, pipes owned with the one-chunk bound | `bash -c true` needs the real launch path; normal unmount needs a truthful `execs` gauge |
-| 7 | Normal `Unmount`: gate, `umount2`, join, logical close | I-14; M-11 normal path |
+| 6 | Launcher, identity drop, propagation, cgroup custody and complete Exec terminal conjunction with bounded pipes/output | Even true can report terminal events in different orders; normal unmount waits for full session disposition |
+| 7 | Normal `Unmount`: reversible probe with filesystem service, one plain detach, full native/daemon-work drain, ownership revocation and logical Close | I-14; M-11 normal path |
 
-Proofs: FP-1, FP-2, FP-3, FP-4, FP-17 (read side), FP-22; H-1, H-2, H-3, H-4,
+Proofs: FP-1, FP-2, FP-3, FP-4, FP-17 (read side), FP-20 (read probe), FP-21,
+FP-22, FP-31 (lookup/decrement/detach), FP-34 (single-mount admission and normal
+detach); H-1, H-2, H-3, H-4,
 H-7, H-8, H-10, H-15. FP-22 is in this checkpoint because the propagation
 design is not established until it passes.
 
@@ -196,15 +209,19 @@ the reply attempt; mapped WRITE acceptance; the refused families; the ruled
 P-1 behaviour (early single reservation attempts, `EAGAIN` on exhaustion) with
 its oracle from proof-plan section 8.1.
 
-Proofs: FP-10 to FP-18, FP-28, FP-29; H-6, H-18; H-5 recorded.
+Proofs: FP-10 to FP-18, FP-20 (mutation probe), FP-28, FP-29, FP-31
+(entry-bearing mutation acquisition); H-6, H-18; H-5 recorded.
 
 ### C3 — Exec streams, descendants and forced teardown
 
-Stream backpressure and detachment, `ExecStatus`/`ExecCancel`, reply completion
-before waiting for exit, `ForceUnmount`, group retirement of remaining owners,
-`Retained` outcomes, lost-reply observation.
+Stream backpressure/detachment and all ResourceTerminal permutations;
+ExecStatus/ExecCancel; forced admission refusal for an active Commit; one abort
+write, original attempted-work disposal, daemon-work drain and one plain detach;
+Retained outcomes and explicit unknown/incomplete-output receipts. Reuse the
+native-group revocation/retirement built in C1; extend the drain to forced owners.
 
-Proofs: FP-5, FP-6, FP-7, FP-19, FP-20, FP-21, FP-23, FP-25.
+Proofs: FP-5, FP-6, FP-7, FP-19, FP-20, FP-21, FP-23, FP-25, FP-30 to FP-34
+(forced/adversarial extensions; reuse unchanged earlier passing scopes).
 
 ### C4 — concurrent Workspace service
 
@@ -212,7 +229,8 @@ Several Workspaces on one daemon; R-4; reader health reporting; fairness and
 head-of-line observations. No new mechanism is selected here: this checkpoint
 produces the baselines that gate the ranked candidates.
 
-Proofs: FP-8, FP-9, FP-24, FP-27; H-9, H-11, H-12, H-13 recorded.
+Proofs: FP-8, FP-9, FP-24, FP-27, FP-34 (cross-Workspace progress);
+H-9, H-11, H-12, H-13 recorded.
 
 ### C5 — sustained ownership and churn
 
@@ -237,7 +255,7 @@ survival, committed-index fast paths) is outside every checkpoint above.
 | Not to be built | Why |
 | --- | --- |
 | A blocking adapter in which a dispatch loop waits for an owner job or a Store read | I-8; a parked request makes the calling process unkillable |
-| A per-inode lookup table, or SQL work in FORGET | D-6, I-16 |
+| A resident map proportional to all visited inodes, counter-only FORGET, or deletion while kernel references remain | D-6 uses indexed backing and bounded windows; owning SQL/decrement costs are required and counted |
 | A second routing registry, a private per-mount or per-Workspace immutable cache, a mutable mirror of overlay rows | I-2; #314 |
 | fuser's mount helper, lazy detach or its unmount handle | D-2 |
 | Kernel notifications, writeback, passthrough bypassing capture, permission removal | D-14; rejected capabilities |

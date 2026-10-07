@@ -8,6 +8,12 @@
 > [S8 specification](S8-SPECIFICATION-20261008.md) owns every decision referenced
 > here.
 
+Review correction after `77cf51686`, 2026-10-08: follow the revised
+[specification](S8-SPECIFICATION-20261008.md) and
+[correction ledger](checks/s8-spec-review-fixes-20261008/02-correction-ledger.md).
+Original reviews and receipts remain unchanged. These are corrected proposals
+and prospective oracles, not new implementation or runtime evidence.
+
 ## 1. Purpose and rules
 
 The plan defines how a future S8 implementation must prove function, counts,
@@ -128,7 +134,7 @@ presented as a reduced performance substitute for the full fixture.
 | FP-4 | Identity across two fresh mounts | Identical inode number, size, mtime, ctime, mode, uid, gid and link count for every entry; differing `st_dev` | §9 |
 | FP-5 | Confinement | From Bash: the Store and overlay paths are absent and unreadable through `/proc` aliases; the descriptor table holds exactly the three pipes; the connection cannot be aborted or unmounted; a sibling Workspace's mount is absent from the namespace | I-13, §10.2 |
 | FP-6 | Streams | Output far larger than any buffer arrives complete and ordered per stream; a stalled consumer stalls the command without growth in daemon-owned bytes; a command longer than every control deadline is not terminated | I-11, §4.1 |
-| FP-7 | Independent Exec events | A descendant holding stdout delays that EOF but not `Exited`; a descendant outliving the shell delays `Quiescent`; normal unmount is `Busy` until then | I-12, §5.4 |
+| FP-7 | Independent Exec events | Exercise all orders of Exited, both EOFs, Quiescent and outbound-record disposition; execs remains nonzero until ResourceTerminal. Group emptiness alone closes no pipe, drops no chunk/status and admits no normal unmount | I-12, §5.4 |
 | FP-8 | Parked requests | With both loops having received requests that park (external holding fixture), an unrelated request on the same mount and on another Workspace completes | I-8 |
 | FP-9 | Background head-of-line | With one readahead READ parked, a second process's cold cached read of another file is observed queued in the kernel, and completes once the first is answered; foreground requests proceed meanwhile | §8.2 |
 | FP-10 | Write, append, read coherence | A cached reader and a mutator over write and `O_APPEND` writes: cached read, fresh open, stat and daemon truth agree, with zero notifications and request counts showing the cache was used | §8.3 |
@@ -141,21 +147,35 @@ presented as a reduced performance substitute for the full fixture.
 | FP-17 | Permissions, times and symlinks | A mode-000 file is unreadable from cache; `chmod` takes effect at once; ctime equals mtime after `chmod`, link and rename; symlink targets up to the page limit round-trip; longer creation is refused | §8.3, §9 |
 | FP-18 | Refused requests | After the first `ENOSYS`, no further xattr request arrives across many small writes; special files, set-id bits and ownership changes are refused with the stated errno; `fsync` succeeds with no work | §6.4, §8.4 |
 | FP-19 | Cancel while parked | A process blocked in a parked request receives its reply before the daemon waits for its exit; `ExecCancel` then observes `Exited` | I-7 |
-| FP-20 | Unmount Busy | With an open handle, a current-directory holder, or a live descendant: `Busy`, the Workspace fully usable, and a later unmount succeeds | §11.1 |
-| FP-21 | Detach evidence | After `umount2` returns 0 every loop observes `ENODEV` and is joined; with `K` kernel lookup references outstanding and no FORGET, and with handles the kernel never releases after an abort, the namespace still reaches `Gone` | §11.2 |
+| FP-20 | Reversible normal unmount probe | Hold a cwd/kernel reference outside Exec gauges and race reads/stats/writes between probe admission and kernel EBUSY; requests retain normal results with no probe-induced ENOTCONN/EIO, mutations persist, control admission reopens and a later explicit unmount succeeds | §11.1–11.2 |
+| FP-21 | Complete detach/drain | Native detach and joined loops alone cannot trigger retirement. Hold service/owner completions and Store consumers after loop exit; Close waits or Retained preserves them. After complete drain, outstanding lookup/handle records are logically revoked and physically retired in bounded indexed turns until Gone | I-14, §11.2 |
 | FP-22 | Propagation | A command in its own namespace keeps the mount busy for the daemon's `umount2`; after the command exits the unmount succeeds and no copy remains; a long-running command in Workspace A does not keep Workspace B's connection alive | §10.3 |
-| FP-23 | Forced teardown | Execs signalled, parked replies completed, connection aborted, loops joined; retained Commit custody is reported as unknown publication, never as not published; a step that cannot be established yields `Retained` with its phase | §11.3 |
+| FP-23 | Forced stop and precise effects | Active Commit refuses Busy before signal/abort. Otherwise exactly one validated abort write, wake/dispose native waiters, preserve attempted-job outcomes, terminalize Execs, one plain detach attempt and complete drain precede revocation. Failure after abort stays Retained; unknown publication and discarded output remain explicit | §11.1–11.3 |
 | FP-24 | Several Workspaces | Simultaneous mounts over different and related roots: correct routing, isolated mutable state, a stale token never redirects | I-2 |
 | FP-25 | Lost replies | Lost `Mount`, `Attach` and Exec connection (external fixture): the entry is observable through `Locate`/`ExecStatus`; no second binding, attachment or execution | §12 |
 | FP-26 | Debt and admission | Repeated mount, write, unmount faster than reclaim while a peer writes: closed-namespace count and database pages plateau, or `Mount` is refused with the typed capacity result; a stopped maintenance turn is visible in status and refuses new mounts | §11.4 |
 | FP-27 | Reader health and failure scope | A quarantined reader receives no further demand; one request's cold failure does not fail a later request | §7.2 |
-| FP-28 | Open-unlinked and rotation | A retained descriptor keeps exact content across unlink, rotation and truncation; rows are released at the last close | §5.3 |
-| FP-29 | Removed directory without a handle | A request naming it returns either its retained attributes or `ESTALE`, never another inode's data | §5.3 |
+| FP-28 | Open-unlinked and rotation | Descriptor content stays exact across unlink/rotation/truncate; releasing an open handle does not reclaim state still held by lookup, processing or captured owners. Delete only after the last independent reference | §5.3 |
+| FP-29 | Removed cwd/O_PATH and lookup custody | After unlink/rmdir/replacement, retain cwd or O_PATH without OpenFile custody and force maintenance/cache revalidation: stat/fstat returns exact retained metadata including nlink0, never cleanup-timing-dependent ESTALE. Exercise hard-link aliases and processing reads across release | §5.3 |
+| FP-30 | Process gone, output still pending | Fast writer exits before a deliberately slow consumer drains both pipes; all bytes/status arrive exactly once. Hold the last outbound chunk after both EOFs. Quiescent/EOF alone cannot release the session or allow normal unmount. For lost output connection, explicit cancellation/force records incomplete output and disposes owners once | §5.4 |
+| FP-31 | Exact lookup counts and bounded retirement | Positive LOOKUP and entry-bearing mutations acquire before reply. Partial/repeated/batched FORGET decrements exact counts; foreign incarnation/underflow/failure preserves custody. Zero releases only lookup ownership. Large K uses bounded resident windows and O(K) indexed total work; no whole-base scan. Missing FORGET at detach is retired only after drain | D-6, D-8 |
+| FP-32 | Forced teardown against active producers | Hold a Commit before Save finish, publication and local install: forced admission is before-effect Busy in every active phase. Hold an attempted owner job/cold-read consumer past native loop exit: no retirement/Close while its guard remains. Original outcomes survive early terminal replies and explicit stopped-unknown relinquishment | §11.2 |
+| FP-33 | Abort/detach syscall outcomes | Correct per-mount abort descriptor; one one-byte abort write; exactly one plain umount call after forced local drain. Successful detach has no second call. Short/failed/unknown abort and EBUSY/error after abort remain Retained with original effects; no MNT_FORCE fallback and no automatic replay | §11.2 |
+| FP-34 | Receive slots, full handoff capacity and shutdown | With R admitted units and N blocked callbacks, held native units never exceed R+N and no payload is copied before admission. Idle reservations do not count as active requests. Reply/decrement disposal wakes credit waiters; terminal stop wakes every borrowed callback with no lost reply/ownership unit; another Workspace progresses | I-8, §6.2 |
 
 Adversarial races that must be included rather than sampled around: reply
 ordering (FP-16), admission against unmount (FP-20), cancellation against a
 parked reply (FP-19), a flight subscriber's cancellation if coalescing is ever
-selected, and attach failure after `mount(2)` returned 0 (FP-25).
+selected, attach failure after mount returned0 (FP-25), group-empty-before-output-drain (FP-30),
+lookup release against removed-inode reads (FP-29/31), full native credit versus
+stop (FP-34), and active producer/Store/owner completion versus retirement
+(FP-32). All are prospective; none ran for this correction.
+
+Checkpoint coverage is explicit: C1 covers FP-20's read-only probe and FP-34's
+single-mount admission/normal-detach cases; C2 adds the mutation probe and
+entry-bearing lookup acquisition; C3 adds forced/adversarial dispositions;
+C4 adds cross-Workspace progress. A partial-scope receipt never closes the
+whole row, and unchanged passing scopes are reused instead of rerun.
 
 ## 4. Count hypotheses
 
@@ -169,21 +189,22 @@ adds.
 | H-1 | A fresh-cache mount's object batches follow the tree depth (the recorded 10/11/12 shape for 1/1024/100000 files) and include no enumeration | Batches grow with entry count beyond depth, or any whole-directory or whole-tree read appears |
 | H-2 | A warm fresh mount performs zero object demands, exactly one history read and one overlay Open job, and creates no database | Any is larger |
 | H-3 | Attach performs a fixed number of system calls, starts a fixed number of threads and makes no base demand | A base demand or a variable count appears |
-| H-4 | A read-class request executes exactly one owner job, zero write transactions and zero base-source leases | More than one job, or any write transaction |
+| H-4 | With facts/current root ready, pure observations use one read-only answer job; positive LOOKUP uses one short answer/acquire transaction. Entry-bearing mutations include acquisition in their mutation transaction. Every Need round and required processing/source lease is separately counted | Torn answers, uncharged ownership/fact work, or a blanket zero-write claim for positive lookup |
 | H-5 | Baseline to record: object-cache hits and length demands per warm LOOKUP and GETATTR of an unchanged base entry | (Recorded, not gated; it is the gate input for the fact-cache candidate) |
 | H-6 | A mutating request executes one mutation transaction and one ticket-release job | More |
 | H-7 | OPEN and RELEASE execute one lifecycle job each | More |
-| H-8 | FORGET executes zero jobs and zero SQL; an unmount with `K` outstanding lookup references runs a constant number of foreground jobs | Work grows with `K` in the foreground |
+| H-8 | For N FORGET units, checked indexed work is O(N), with bounded queued/processing bytes and no namespace scan; record actual batching/jobs. Detach foreground revocation is fixed work after drain; K ownership rows retire in O(K) indexed work across bounded maintenance turns | Lost decrements, early reclamation, resident state proportional to visited inodes, a base scan, or claiming zero SQL/constant total retirement |
 | H-9 | At most `max_background` background requests of a mount are in userspace at once | The observed depth exceeds it, or a foreground request is blocked by a parked background one |
-| H-10 | No dispatch loop and no service worker is ever blocked waiting for an owner job, a Store reader, a flight or an owner-admission credit. The only loop wait is for the mount's own request credit before its next read (specification §6.2) | A thread-state observation finds any other wait |
+| H-10 | Only pre-admission callback-entry handoff-capacity waits may occupy dispatch loops, under N fixed slots. No admitted request waits there on owner admission/results or Store service. Workers park prerequisites; R+N accounting and terminal wakeup hold | Any prohibited wait, uncharged receive slot/input, lost wakeup or capacity dependence on a future kernel request |
 | H-11 | Cold demands keep the caller's batch (no per-identity Store calls); batch identities and bytes are recorded against the demand window; duplicate concurrent acquisitions of one identity are counted; a hot Workspace's demand waits at most the declared number of in-service batches while a peer scans | A split batch; an unbounded wait |
 | H-12 | Under sustained unequal job weights every admitted runnable Workspace completes at least the declared share of requests | A Workspace falls below it |
 | H-13 | Baseline to record: bytes copied, allocated and freed while the cache mutex is held, and cache wait, under several concurrent Workspaces | (Recorded; gate input for shared cached bytes) |
 | H-14 | S10: a second fresh mount's `git status` issues no content READ for unchanged tracked files once a refreshed index is committed | Any such READ |
-| H-15 | After terminal unmount the mount's threads, owned requests, cursors and receive buffers are released and per-mount gauges are zero | Any remains |
+| H-15 | Terminal success has native detach, all loop joins, full daemon/Exec result disposal and no continuation capable of namespace access. Native ownership is logically revoked; only explicitly reported indexed physical retirement/deletion may remain | Premature Close/routing removal, surviving active consumer or unreported native ownership debt |
 | H-16 | Reclaim debt of a closed namespace reaches `Gone` in bounded steps with no further API call, while other Workspaces run and when idle | Debt stalls without a reported cause |
 | H-17 | FUSE requests by opcode for each workload fall in a range predicted from the profile before the run | Outside the range |
 | H-18 | After the first `ENOSYS`, zero xattr requests | Any |
+| H-19 | A successful forced teardown makes one abort write and one plain detach attempt; active-control refusal makes neither; no automatic repeated write/unmount after any failure | Extra/misdirected syscall, lost original outcome or normal-Busy classification after terminal effects |
 
 For any SQL hypothesis the future proof must carry the exact
 `EXPLAIN QUERY PLAN` (full `EXPLAIN` where needed) together with correlated
@@ -202,12 +223,12 @@ phase peak.
 | Daemon heap and resident set | Process observations at phase boundaries |
 | Immutable cache | Retained charge; lent bytes if shared ownership is selected |
 | Demand and decode transients | Read-service gauge; concurrent demands |
-| Owned request bytes and replies | Per-mount gauges against `R` |
+| Owned request bytes and replies | R admitted handoffs plus N receive-slot reservations/active callbacks, counted separately; queued FORGET units and original completion/drain guards |
 | Overlay SQLite | Pager and journal observations; logical and allocated file bytes |
 | Store | Writer and reader session counters; logical and allocated file bytes; WAL size |
 | Per-mount native | Threads; receive-buffer address space and resident pages; handshake buffer; cursors |
 | Kernel | Page, dentry and inode cache attributed through the cgroup; never credited to or hidden behind a bounded heap |
-| Reclaim debt | Closed namespaces; queued rows; maintenance state |
+| Reclaim debt | Closed namespaces; logically revoked native ownership rows versus payload debt; per-turn retired rows/reference updates and first maintenance failure |
 
 ## 6. Cache classes and comparison arms
 
@@ -251,9 +272,9 @@ without summing overlapping spans:
 ```text
  setup (clone or declared reuse)  |  not product time
  mount: Mount + Attach to Ready   |  product
- Exec: launch .. Exited, output drain to both EOFs, Quiescent   (three separate marks)
+ Exec: launch .. Exited, output EOF/disposition, Quiescent, outbound disposition, ResourceTerminal (separate marks)
  explicit Commit when selected    |  S10
- terminal unmount: fence .. Unmounted (detach, join, logical close)
+ terminal unmount: control probe/stop .. terminal reply (detach, complete drain, revocation, logical Close)
  eventual cleanup: Unmounted .. Gone   (reported; never hidden, never charged to the reply)
  independent verifier             |  separate command and budget
 ```

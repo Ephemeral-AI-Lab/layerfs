@@ -1,0 +1,258 @@
+{
+  "timestamp_utc": "2026-10-07T18:25:46.219959+00:00",
+  "status": "PASS",
+  "parent": "ac576a5fb1a58eb46380e711a4bfb3006b8435fa",
+  "method": "Scoped Python document check: resolve inline local Markdown links/GitHub-style heading anchors, exactly one status, whitespace/final newline; unique FP1..34/H1..19 and all FP/H references; exact owner-ruling added-line preservation; protected-note SHA256/untracked checks; historical receipt bytes against parent; git diff scope/whitespace. External URLs listed, not fetched by this check. Human semantic review maps all six fixes to sections and future proof rows in 02-correction-ledger.md.",
+  "documents": [
+    {
+      "path": "core/docs/issues/307/S8-SPECIFICATION-20261008.md",
+      "sha256": "a0e3bb079f078569908f5757c1aea491456580f4c2abe118c43ed530ad22d478",
+      "lines": 1106,
+      "status_banners": [
+        "> **Status:** Proposal; target LayerFS 0.1.7; not a released contract."
+      ],
+      "local_links": 33,
+      "external_links": [
+        "https://github.com/Ephemeral-AI-Lab/layerfs/issues/309",
+        "https://github.com/Ephemeral-AI-Lab/layerfs/issues/314",
+        "https://github.com/torvalds/linux/blob/v6.12/fs/fuse/control.c#L31-L42",
+        "https://github.com/torvalds/linux/blob/v6.12/fs/namespace.c#L1773-L1814"
+      ],
+      "unresolved": [],
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "single_final_newline": true
+    },
+    {
+      "path": "core/docs/issues/307/S8-IMPLEMENTATION-PLAN-20261008.md",
+      "sha256": "382b252a31035aeebb7ce7cf7ddbf0682980d5ca0e05fa3fbb34f143adcde2dd",
+      "lines": 311,
+      "status_banners": [
+        "> **Status:** Proposal; target LayerFS 0.1.7; not a released contract."
+      ],
+      "local_links": 46,
+      "external_links": [],
+      "unresolved": [],
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "single_final_newline": true
+    },
+    {
+      "path": "core/docs/issues/307/S8-PROOF-PLAN-20261008.md",
+      "sha256": "fb1480ec4fabb7e20d2c2f0376060a5f777871d0b562e8a1c76c3d3b444ba497",
+      "lines": 355,
+      "status_banners": [
+        "> **Status:** Proposal; target LayerFS 0.1.7; not a released contract."
+      ],
+      "local_links": 10,
+      "external_links": [],
+      "unresolved": [],
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "single_final_newline": true
+    },
+    {
+      "path": "core/docs/issues/307/S8-MECHANISM-EVIDENCE-20261008.md",
+      "sha256": "de4ff8638854bdfed210d41c230b938d33ef2c17f72e35c21f37b566a9b195c2",
+      "lines": 249,
+      "status_banners": [
+        "> **Status:** Proposal; target LayerFS 0.1.7; not a released contract."
+      ],
+      "local_links": 67,
+      "external_links": [
+        "https://github.com/Ephemeral-AI-Lab/layerfs/issues/314",
+        "https://github.com/Ephemeral-AI-Lab/layerfs/issues/313",
+        "https://github.com/Ephemeral-AI-Lab/layerfs/issues/314"
+      ],
+      "unresolved": [],
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "single_final_newline": true
+    },
+    {
+      "path": "core/docs/issues/307/HANDOFF-S8-IMPLEMENTATION-20261008.md",
+      "sha256": "457f53b90df961efbb085889e762973580bf15fd7f362291fcddf670bf7b936f",
+      "lines": 219,
+      "status_banners": [
+        "> **Status:** Dated planning checkpoint; not release evidence or a product contract."
+      ],
+      "local_links": 16,
+      "external_links": [],
+      "unresolved": [],
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "single_final_newline": true
+    },
+    {
+      "path": "core/docs/issues/307/checks/s8-spec-review-fixes-20261008/01-plan.md",
+      "sha256": "52f24d429f862bd20828357a14867a656a15ea12f70222833eca07abadf8384e",
+      "lines": 26,
+      "status_banners": [
+        "> **Status:** Dated planning checkpoint; not release evidence or a product contract."
+      ],
+      "local_links": 0,
+      "external_links": [],
+      "unresolved": [],
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "single_final_newline": true
+    },
+    {
+      "path": "core/docs/issues/307/checks/s8-spec-review-fixes-20261008/02-correction-ledger.md",
+      "sha256": "09139e2b55745c734c097f6ec0dd103e9092521c45210d553b6f56c130cb2d54",
+      "lines": 80,
+      "status_banners": [
+        "> **Status:** Dated planning checkpoint; not release evidence or a product contract."
+      ],
+      "local_links": 19,
+      "external_links": [
+        "https://github.com/torvalds/linux/blob/v6.12/fs/fuse/control.c#L31-L42",
+        "https://github.com/torvalds/linux/blob/v6.12/fs/namespace.c#L1773-L1814"
+      ],
+      "unresolved": [],
+      "trailing_whitespace_lines": [],
+      "tab_lines": [],
+      "single_final_newline": true
+    }
+  ],
+  "identifier_rows": {
+    "FP": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34
+    ],
+    "H": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19
+    ]
+  },
+  "undefined_proof_references": [],
+  "owner_rulings": [
+    {
+      "path": "core/docs/issues/307/S8-SPECIFICATION-20261008.md",
+      "added_owner_lines": 25,
+      "missing": []
+    },
+    {
+      "path": "core/docs/issues/307/S8-IMPLEMENTATION-PLAN-20261008.md",
+      "added_owner_lines": 7,
+      "missing": []
+    },
+    {
+      "path": "core/docs/issues/307/S8-PROOF-PLAN-20261008.md",
+      "added_owner_lines": 23,
+      "missing": []
+    },
+    {
+      "path": "core/docs/issues/307/S8-MECHANISM-EVIDENCE-20261008.md",
+      "added_owner_lines": 1,
+      "missing": []
+    },
+    {
+      "path": "core/docs/issues/307/HANDOFF-S8-IMPLEMENTATION-20261008.md",
+      "added_owner_lines": 6,
+      "missing": []
+    }
+  ],
+  "protected_notes": [
+    {
+      "path": "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md",
+      "sha256": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+      "unchanged": true,
+      "tracked": false
+    },
+    {
+      "path": "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+      "sha256": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+      "unchanged": true,
+      "tracked": false
+    },
+    {
+      "path": "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md",
+      "sha256": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027",
+      "unchanged": true,
+      "tracked": false
+    }
+  ],
+  "historical_receipts": [
+    {
+      "directory": "core/docs/issues/307/checks/s8-specification-20261008",
+      "tracked_files": 7,
+      "mismatches": [],
+      "parent_subtree": "165bc7fcfed1558587522d30844f13c71c28151d"
+    },
+    {
+      "directory": "core/docs/issues/307/checks/s8-owner-rulings-20261008",
+      "tracked_files": 3,
+      "mismatches": [],
+      "parent_subtree": "fb14bdb5c1340b33f660b2eeb9cde3e3e25ca7c1"
+    }
+  ],
+  "changed_tracked_files": [
+    "core/docs/issues/307/HANDOFF-S8-IMPLEMENTATION-20261008.md",
+    "core/docs/issues/307/S8-IMPLEMENTATION-PLAN-20261008.md",
+    "core/docs/issues/307/S8-MECHANISM-EVIDENCE-20261008.md",
+    "core/docs/issues/307/S8-PROOF-PLAN-20261008.md",
+    "core/docs/issues/307/S8-SPECIFICATION-20261008.md"
+  ],
+  "parent_product_trees": {
+    "core/crates": "611c3a5387cffc73816ef0358d8b8b285c8b52cb",
+    "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+  },
+  "git_diff_check": {
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "errors": [],
+  "runtime_checks": "NOT_RUN - docs-only; no product/dependency/harness changes, so no build/test/Clippy/mount/measurement",
+  "durable": "NOT_RUN - disabled by owner until explicit reauthorization"
+}

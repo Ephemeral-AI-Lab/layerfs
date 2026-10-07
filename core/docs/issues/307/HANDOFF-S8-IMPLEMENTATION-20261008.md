@@ -13,7 +13,8 @@ genuine native vertical slice. An installed sealed Store, the existing overlay
 Owner and the public Workspace are attached to a native FUSE mount with exact
 readiness; files are read and stat-ed through the mount with kernel permission
 checks; `/bin/bash -c true` runs as the Bash identity; and an explicit terminal
-unmount detaches the mount and joins every loop.
+unmount detaches the mount, joins every loop and disposes all namespace consumers
+before revoking native ownership and acknowledging logical Close.
 
 This dispatch authorizes product implementation of checkpoint C1 in `core/`,
 its external tests and examples, locked builds, the scoped checks and native
@@ -24,6 +25,12 @@ the recorded lockfile growth, third-party edits, remote issue edits, push,
 release, deployment, a new worktree or another user-facing chat. Continue
 independent work when one decision needs the owner; ask only for choices that
 are theirs.
+
+Review correction after `77cf51686`, 2026-10-08: follow the revised
+[specification](S8-SPECIFICATION-20261008.md) and
+[correction ledger](checks/s8-spec-review-fixes-20261008/02-correction-ledger.md).
+Original reviews and receipts remain unchanged. These are corrected proposals
+and prospective oracles, not new implementation or runtime evidence.
 
 ## 1. Checkout and preserved state
 
@@ -91,20 +98,26 @@ Build, in the order of the plan's C1 table:
 3. `Attach`/`Ready` and `Locate`; the native state and gauges on the existing
    registry entry; the mount session owner; the kernel profile and its
    negotiation receipt.
-4. The request service in its final shape, the read-class steps with one
-   read-only compound owner job each, OPEN/RELEASE on existing `OpenFile`
-   custody, bounded directory cursors, FORGET as counters, and the refused
-   opcodes.
+4. The final request service: R handoff credits and N fixed receive slots;
+   callback-entry capacity exception with terminal wakeup; consistent answer
+   jobs, indexed positive-entry acquisition and FORGET decrements; independent
+   OPEN/processing custody; bounded directory cursors and refused opcodes.
+   Include drain-qualified logical native-owner revocation and bounded physical
+   retirement now: the first correct unmount already needs them.
 5. The read service changes R-1 to R-3.
-6. The launcher mode, identity drop, propagation contract, cgroup custody,
-   `Exited` and `Quiescent`, with the three pipes owned under the one-chunk
-   bound.
-7. Normal terminal `Unmount`.
+6. Launcher, identity drop, propagation and cgroup custody; separate Exited,
+   stream EOF/disposition, Quiescent and outbound-result states. Release the
+   session only at ResourceTerminal, with bounded pipes/output throughout.
+7. Normal Unmount probes while kernel service continues; Busy injects no
+   terminal filesystem error. Exact detach and complete daemon-work drain
+   precede revocation/Close. Receiver-loop exit alone is not completion.
 
 Done means all of these hold at one final identity:
 
-- FP-1, FP-2, FP-3, FP-4, the read side of FP-17, and FP-22 pass as external
-  native proofs, each deterministic with a bounded wait and an explicit stop.
+- FP-1, FP-2, FP-3, FP-4, the read side of FP-17, FP-20's read probe, FP-21,
+  FP-22, FP-31's lookup/decrement/detach scope and FP-34's single-mount
+  admission/normal-detach scope pass as external native
+  proofs, each deterministic with a bounded wait and an explicit stop.
 - H-1, H-2, H-3, H-4, H-7, H-8, H-10 and H-15 are recorded from receipts and not
   falsified. A falsified hypothesis is reported as such with its receipt; it is
   not tuned away.
@@ -113,20 +126,25 @@ Done means all of these hold at one final identity:
 - A dated C1 record under this directory lists what was built, every check and
   its outcome, every failure and gap, and the per-commit LOC comparisons.
 
-Not in C1, even if convenient: mutation requests, mapped writes, stream
-backpressure proofs, `ExecCancel`, `ForceUnmount`, group retirement, several
-Workspaces, debt-coupled admission, any candidate from the mechanism ledger, any
-timing.
+Not in C1, even if convenient: mutation requests, mapped writes,
+full stream-backpressure permutations, ExecCancel/ForceUnmount, several
+Workspaces, debt-coupled admission, optional candidates or timing. Basic complete
+Exec disposition and drain-qualified native-owner revocation/retirement are in
+C1; their forced/adversarial extensions are later proofs, not missing foundations.
 
 ## 4. What must not be built
 
 The plan's section 5 is binding. In particular: no blocking interim adapter in
-which a loop waits for an owner job or a Store read; no per-inode lookup table
-and no SQL in FORGET; no second registry, private immutable cache or mutable
-mirror; no use of fuser's mount helper, lazy detach or unmount handle; no kernel
+which a loop waits for an owner job or Store read; no resident visited-inode map
+or counter-only FORGET. Indexed lookup ownership and its SQL costs are required.
+No second registry, private immutable cache or mutable mirror; no use of fuser's
+mount helper, lazy detach or unmount handle; no kernel
 notification, writeback, passthrough or permission removal; no timeout, implicit
 Commit or automatic unmount around Exec; no writer gate, wait or retry around
-the Store session; no port of the excluded predecessor's request model.
+the Store session; no port of the excluded predecessor's request model. Follow the corrected
+§11 drain predicate; do not retire active Commit/request/Store/Exec owners,
+release output at Quiescent, inject ENOTCONN during a normal Busy probe, or use
+MNT_FORCE as an abort-only call followed by another unmount.
 
 ## 5. Owner choices and how C1 treats them
 

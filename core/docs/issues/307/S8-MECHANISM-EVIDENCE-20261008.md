@@ -13,6 +13,12 @@ over a passthrough adapter. Candidates are ranked by the strength of their
 evidence, their cost and their correctness risk, and each names the count that
 would falsify it before any timing is taken.
 
+Review correction after `77cf51686`, 2026-10-08: follow the revised
+[specification](S8-SPECIFICATION-20261008.md) and
+[correction ledger](checks/s8-spec-review-fixes-20261008/02-correction-ledger.md).
+Original reviews and receipts remain unchanged. These are corrected proposals
+and prospective oracles, not new implementation or runtime evidence.
+
 ## 1. Labels
 
 | Label | Meaning |
@@ -71,20 +77,23 @@ Each row is contract. "Spec" names the owning section; "Proof" names rows of the
 | --- | --- | --- | --- | --- |
 | M-1 | Native attach with exact readiness, first-party mount and unmount, negotiation receipt | [mount contract](../303/workspace-api/mount.md), I-3 | [§4](S8-SPECIFICATION-20261008.md#4-control-operations-and-acknowledgement-points), [§8.1](S8-SPECIFICATION-20261008.md#81-profile) | FP-1, FP-2, H-3 |
 | M-2 | Registry extension: native state, gauges, `Attach`/`Locate`/`ForceUnmount`, status fields | [#314](https://github.com/Ephemeral-AI-Lab/layerfs/issues/314) priority 1; dispatch §6 | [§5.1](S8-SPECIFICATION-20261008.md#51-workspace-and-mount) | FP-24, FP-25 |
-| M-3 | Owned deferred replies, per-mount credits, completion notifiers, fair request service | R5, K13, [fuse.md §3](../303/fuse.md#3-callback-ownership-and-scheduling) | [§6](S8-SPECIFICATION-20261008.md#6-native-request-service-and-scheduling) | FP-8, H-10 |
-| M-4 | One read-only compound owner job per read-class reply | [daemon-sqlite §5](../303/daemon-sqlite.md#5-prepared-sql-and-service-windows) | [§6.4](S8-SPECIFICATION-20261008.md#64-request-shapes-and-their-owner-jobs) | H-4, FP-12 |
+| M-3 | Owned deferred replies, R handoff credits plus N fixed receive slots, callback-entry capacity exception, completion notifiers and fair service | R5, K13 and I-8 as corrected | [§6](S8-SPECIFICATION-20261008.md#6-native-request-service-and-scheduling) | FP-8, FP-34, H-10 |
+| M-4 | Consistent compound answer jobs with positive-entry custody acquisition; separately counted processing/fact work | S6 ownership and D-4 | [§6.4](S8-SPECIFICATION-20261008.md#64-request-shapes-and-their-owner-jobs) | H-4, FP-12, FP-31 |
 | M-5 | Fair bounded cold-demand admission; idle and healthy reader selection; per-request failure scope; snapshot through a reader | R5; dispatch §6 | [§7.2](S8-SPECIFICATION-20261008.md#72-mandatory-changes) | FP-27, H-11 |
 | M-6 | Kernel profile and coherence rules without notifications | [fuse.md §2, §4](../303/fuse.md#4-cache-coherence-and-lifetime-transitions) | [§8](S8-SPECIFICATION-20261008.md#8-kernel-profile-and-coherence) | FP-9 to FP-18 |
 | M-7 | Kernel-origin mapped WRITE acceptance with handle-liveness check only | [fuse.md §5](../303/fuse.md#5-optimization-disposition) | [§8.3](S8-SPECIFICATION-20261008.md#83-coherence-matrix) | FP-15 |
-| M-8 | Lookup and handle mapping: no per-inode lookup state, `OpenFile` custody for opens, bounded directory cursors | S6 contract ("native FORGET/RELEASE mapping remains S8"); I-16 | [§5.3](S8-SPECIFICATION-20261008.md#53-lookup-references-and-open-handles) | H-7, H-8, FP-28, FP-29 |
-| M-9 | Ordinary Bash Exec: launcher, identity drop, cgroup custody, dedicated stream connection, independent events | [Exec contract](../303/workspace-api/exec.md), K21, O-24 | [§10](S8-SPECIFICATION-20261008.md#10-exec-streams-and-confinement) | FP-5, FP-6, FP-7, FP-19 |
+| M-8 | Indexed native lookup counts and independent open/processing custody; checked bounded FORGET units and exact removed-inode semantics | S6 contract and corrected D-6; resident windows bounded | [§5.3](S8-SPECIFICATION-20261008.md#53-lookup-references-and-open-handles) | H-7, H-8, FP-28, FP-29, FP-31 |
+| M-9 | Ordinary Bash with independent process, stream and result owners; ResourceTerminal is the full conjunction | Exec contract, K21, O-24, corrected I-12 | [§5.4](S8-SPECIFICATION-20261008.md#54-exec-process-group-and-streams) | FP-5, FP-6, FP-7, FP-19, FP-30 |
 | M-10 | Confinement of Bash from both databases and from the connection; propagation contract | K32, [06 §6](../303/06-cluster-one-integration.md#6-store-visibility) | [§10.2](S8-SPECIFICATION-20261008.md#102-what-confinement-is-and-is-not), [§10.3](S8-SPECIFICATION-20261008.md#103-mount-propagation-contract) | FP-5, FP-22 |
-| M-11 | Terminal unmount: gate, kernel busy check, detach evidence by loop join, group owner retirement, outcomes | [unmount contract](../303/workspace-api/unmount.md), K22 | [§11](S8-SPECIFICATION-20261008.md#11-terminal-unmount-drain-and-reclamation) | FP-20, FP-21, FP-23, H-8 |
+| M-11 | Reversible normal probe; forced active-control refusal; separate abort/plain-detach effects; full daemon-work drain before logical native-owner revocation and bounded retirement | Unmount contract, K22 and review corrections R3–R5 | [§11](S8-SPECIFICATION-20261008.md#11-terminal-unmount-drain-and-reclamation) | FP-20, FP-21, FP-23, FP-32, FP-33, H-8, H-15, H-19 |
 | M-12 | Debt and maintenance state in status; debt-coupled mount admission | [unmount U9](../303/workspace-api/unmount.md#7-per-tool-call-and-concurrent-workloads), [mount M7](../303/workspace-api/mount.md#7-workloads-and-future-proofs) | [§11.4](S8-SPECIFICATION-20261008.md#114-reclamation-and-debt) | FP-26, H-16 |
 
-M-4 is a count change as well as a contract: a read-class request goes from up
-to five owner round trips, some of them write transactions for source leases, to
-one read-only job. Its hypothesis H-4 is registered before any timing.
+M-4 is a prospective count hypothesis, not a universal read-only shortcut.
+Pure observations can use one answer job; positive LOOKUP must also acquire
+indexed custody, and deferred plans may need processing leases. H-4 records
+those writes and fact rounds. FORGET does real indexed ownership work and
+retirement has O(K) total backing work; zero-SQL/constant-total claims from the
+original proposal are withdrawn. No historical receipt changes verdict.
 
 ## 4. Ranked candidates
 
@@ -233,4 +242,8 @@ own table and raw receipts give twenty and four.
 
 Three read-only reviews informed this ledger. Their reports are retained
 verbatim and every finding has an accepted, rejected or deferred disposition
-with its reason in the [finding ledger](checks/s8-specification-20261008/05-finding-ledger.md).
+with its original reason in the [finding ledger](checks/s8-specification-20261008/05-finding-ledger.md).
+The later [six-finding correction](checks/s8-spec-review-fixes-20261008/02-correction-ledger.md)
+supersedes counter-only lookup custody, Quiescent-as-release, receiver-only drain,
+the terminal normal-probe fence, the MNT_FORCE sequence and implicit pre-read
+credit control. The original ledger/reviewer reports are retained, not rewritten.
