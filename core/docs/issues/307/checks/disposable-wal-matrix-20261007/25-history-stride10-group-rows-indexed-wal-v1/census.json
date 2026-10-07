@@ -1,0 +1,40 @@
+{
+  "canonical_bytes": 380559460,
+  "canonical_objects": 51689,
+  "inventory_sha256": "fb5c8b1768e52ed56013c255c227f155ffe98f4cd2af7aaf5abec60471402249",
+  "owners": [
+    {
+      "allocated_bytes": 51384320,
+      "application_id": 1279677264,
+      "closed_sidecars": [],
+      "device": 16777230,
+      "immutable_read": true,
+      "inode": 871886137,
+      "length_bytes": 50753536,
+      "main_allocated_bytes": 51384320,
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride10-group-rows-indexed-wal-v1-candidate/store.sqlite",
+      "rows": {
+        "branch": 17,
+        "commit": 16,
+        "content_signature": 6614,
+        "history_meta": 1,
+        "layer": 17,
+        "layer_stack": 1,
+        "metadata_value_group": 1626,
+        "object_location": 51689,
+        "pack": 613,
+        "pack_unit": 2965,
+        "scope_allocator": 0,
+        "store_policy": 1,
+        "workspace_stage": 0
+      },
+      "sha256_after": "05070d189bbd43bc88aa94653d0949aa2519cf22c1fc41f892c81c6568639100",
+      "sha256_before": "05070d189bbd43bc88aa94653d0949aa2519cf22c1fc41f892c81c6568639100",
+      "user_version": 3
+    }
+  ],
+  "pack_bodies_bytes": 45556963,
+  "scope": "closed-owner schema/integrity, canonical IDs/roles/lengths and C5 roots/counts; namespace oracle separate",
+  "status": "CHECKED",
+  "storage_bytes": 51384320
+}

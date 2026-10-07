@@ -20,6 +20,15 @@ No production correction was indicated. This closes that focused investigation
 and supports S8 implementation, while the broader measurement precision limits
 below remain unqualified.
 
+Later owner direction makes Disposable/WAL/OFF the only permitted execution
+profile; Durable is disabled indefinitely until explicit reauthorization (the
+earlier deferrals below retain their historical scope). The subsequent
+[full Init/history matrix](DISPOSABLE-WAL-MATRIX-20261007.md) completes all seven
+product workloads and their functional/cold proofs. Three Init historical speed
+comparisons and the stride1 original allocated-storage ceiling fail. Those
+numerical findings are retained and are not changed by the functional closure
+table below.
+
 ## Controlling owner decisions
 
 - The approved narrow macOS seal file-control exception is in

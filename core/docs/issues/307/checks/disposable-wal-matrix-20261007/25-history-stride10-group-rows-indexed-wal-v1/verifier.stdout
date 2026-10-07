@@ -1,0 +1,1 @@
+{"acquired_content_bytes": 3301773, "admission": "NOT_RUN", "authenticated_bytes": 970326, "custody_states": 17, "independent_root_pins": "CHECKED", "paths": 101477, "sample_policy": "all-state-structure-five-anchor-bounded-content-v1", "sampled_content_paths": 67, "states": 17, "status": "CHECKED"}

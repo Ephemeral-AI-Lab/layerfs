@@ -1,0 +1,1286 @@
+{
+  "schema": "disposable-wal-matrix-report-v1",
+  "timestamp_utc": "2026-10-07T15:11:33.910015+00:00",
+  "receipt_integrity": "PASS",
+  "completed_product_cases": 7,
+  "retained_ineligible_zero_sample_cases": 1,
+  "historical_speed_arithmetic_failures": 3,
+  "allocation_failures": 1,
+  "admission_eligible": false,
+  "durable_execution": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "rows": [
+    {
+      "case": "phase7-sqlite-disposable-init-100-owner-wal-v1",
+      "source": "5ba8362cb82ce8f210f2cc0fcdb8affffcc1d72b",
+      "raw_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-init-100-owner-wal-v1-candidate/receipt.json",
+      "raw_receipt_sha256": "be88312e162f191108bc1b0a994036b3a09e908713962e961a721a097f66c9c2",
+      "wrapper": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-wrapper/phase7-sqlite-disposable-init-100-owner-wal-v1-candidate.json",
+      "wrapper_sha256": "d89e6f39ad5f879e4e7800a1e82d39a8ca92ba4d8858dcc7a5aeb4638677081b",
+      "source_tree": "d7cedc29f91a8a279bb058d96272ac686ceffbcf",
+      "build": {
+        "binaries": {
+          "benchmark_init": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393/benchmark_init",
+            "sha256": "65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393"
+          },
+          "verify_namespace": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736/verify_namespace",
+            "sha256": "c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736"
+          }
+        },
+        "budget_ns": 30000000000,
+        "child": null,
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "build",
+          "--manifest-path",
+          "core/Cargo.toml",
+          "--release",
+          "--locked",
+          "-p",
+          "layerfs-project",
+          "--example",
+          "benchmark_init",
+          "--example",
+          "verify_namespace"
+        ],
+        "cpu_ns": 194096000,
+        "dependency_reuse": "worktree-local incremental target",
+        "exit_code": 0,
+        "peak_rss_bytes": 37830656,
+        "profile": "release/locked",
+        "reference_product_unmodified": false,
+        "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+        "status": "PASS",
+        "timed_out": false,
+        "wall_ns": 442434083
+      },
+      "profile": "sqlite-wal-off-v2",
+      "status": "COMPLETE",
+      "sample_count": 1,
+      "original_wrapper_stdout_created_utc": "2026-10-07T14:53:07.095179+00:00",
+      "timestamp_scope": "filesystem creation time of the original launcher stdout artifact",
+      "fixture": {
+        "case": "namespace-100-compact-v3",
+        "directories": 2,
+        "files": 100,
+        "logical_bytes": 5000000,
+        "manifest": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/manifest.tsv",
+        "manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+        "preparation_wall_ns": 5931416,
+        "profile": "core-sdk-init-fixture-v2",
+        "reused": true,
+        "route": "host-direct-sdk-v2",
+        "seed": 1,
+        "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100-compact-v3-47c14612ce845b9b/payload"
+      },
+      "cache": "PASS",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000,
+      "image": "N/A native macOS",
+      "competing_work": [
+        "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+        "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+        "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+        "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+        "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+        "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+      ],
+      "product_ns": 63918250,
+      "complete_performance_ns": 1044272917,
+      "verification_ns": 579196916,
+      "allocated_store_bytes_at_measurement": 5259264,
+      "storage_files_at_measurement": [
+        {
+          "allocated_bytes": 5259264,
+          "length_bytes": 5259264,
+          "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-init-100-owner-wal-v1-candidate/store.sqlite"
+        }
+      ],
+      "post_proof_file_stat": [
+        {
+          "file": "store.sqlite",
+          "length_bytes": 5259264,
+          "allocated_bytes": 5259264,
+          "allocation_minus_length": 0
+        }
+      ],
+      "post_proof_file_stat_scope": "later read-only observation; never replaces measured original allocation",
+      "verification": "PASS",
+      "cleanup": "PASS",
+      "proof": {
+        "directories": 2,
+        "discovered_files": 100,
+        "manifest_bytes": 5000000,
+        "manifest_sha256": "9b97114260decac04edb93b288b2c1b6037b2d9d7f4127c21186cc21a43201e3",
+        "metadata_attribute_waves": 5,
+        "paths": 102,
+        "root": "ca1c20f806277e3fb0447ef526a5ca8d298753d01667f501e8b58b6350cd86f1",
+        "sample_policy": "stride64-size-log2-endpoints-v1",
+        "sampled_bytes": 3354003,
+        "sampled_files": 53,
+        "status": "PASS",
+        "workers": 4
+      },
+      "comparison": {
+        "kind": "historical-unpaired-comparison",
+        "admission_eligible": false,
+        "reference": {
+          "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-disposable-init-100-incumbent-restored-v1/candidate/receipt.json",
+          "sha256": "1d9b096675ef04ccf3aeca6f9630859f81a6d4c0df4c7b0bdd2116ac3588d116"
+        },
+        "reference_source": "2fced797d14f9d4f6b72c9ad00574976a4dfd5f0",
+        "reference_profile": "sqlite-memory-off-macos-v1",
+        "reference_ns": 45688500,
+        "reference_storage_bytes": 5255168,
+        "speed_formula": "10*candidate_ns<=11*historical_reference_ns",
+        "strict_allocation_status": "NOT_RUN \u2014 mechanism removed",
+        "time_delta_ns": 18229750,
+        "time_delta_percent": 39.900084266281446,
+        "historical_speed_arithmetic": "FAIL",
+        "storage_delta_bytes": 4096,
+        "allocation_ceiling": null
+      },
+      "cpu_ns": 81223000,
+      "lifetime_peak_rss_bytes": 40337408,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-1000-owner-wal-v1",
+      "source": "5ba8362cb82ce8f210f2cc0fcdb8affffcc1d72b",
+      "raw_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-init-1000-owner-wal-v1-candidate/receipt.json",
+      "raw_receipt_sha256": "ef850e15c5db9bcfe2cebfd568b9de6ed0748aafe0b1c3f2fb11f788d0cd13a0",
+      "wrapper": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-wrapper/phase7-sqlite-disposable-init-1000-owner-wal-v1-candidate.json",
+      "wrapper_sha256": "61cbd3fecd24a66fb6c612abb3b6876d9fc4237d67b49044c5faaa6acc26cca1",
+      "source_tree": "d7cedc29f91a8a279bb058d96272ac686ceffbcf",
+      "build": {
+        "binaries": {
+          "benchmark_init": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393/benchmark_init",
+            "sha256": "65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393"
+          },
+          "verify_namespace": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736/verify_namespace",
+            "sha256": "c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736"
+          }
+        },
+        "budget_ns": 30000000000,
+        "child": null,
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "build",
+          "--manifest-path",
+          "core/Cargo.toml",
+          "--release",
+          "--locked",
+          "-p",
+          "layerfs-project",
+          "--example",
+          "benchmark_init",
+          "--example",
+          "verify_namespace"
+        ],
+        "cpu_ns": 67195000,
+        "dependency_reuse": "worktree-local incremental target",
+        "exit_code": 0,
+        "peak_rss_bytes": 38338560,
+        "profile": "release/locked",
+        "reference_product_unmodified": false,
+        "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+        "status": "PASS",
+        "timed_out": false,
+        "wall_ns": 82582167
+      },
+      "profile": "sqlite-wal-off-v2",
+      "status": "COMPLETE",
+      "sample_count": 1,
+      "original_wrapper_stdout_created_utc": "2026-10-07T14:53:18.674142+00:00",
+      "timestamp_scope": "filesystem creation time of the original launcher stdout artifact",
+      "fixture": {
+        "case": "namespace-1000-compact-v3",
+        "directories": 11,
+        "files": 1000,
+        "logical_bytes": 20000000,
+        "manifest": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9/manifest.tsv",
+        "manifest_sha256": "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c",
+        "preparation_wall_ns": 45525583,
+        "profile": "core-sdk-init-fixture-v2",
+        "reused": true,
+        "route": "host-direct-sdk-v2",
+        "seed": 1,
+        "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9/payload"
+      },
+      "cache": "PASS",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000,
+      "image": "N/A native macOS",
+      "competing_work": [
+        "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+        "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+        "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+        "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+        "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+        "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+      ],
+      "product_ns": 186204834,
+      "complete_performance_ns": 275462375,
+      "verification_ns": 31228250,
+      "allocated_store_bytes_at_measurement": 20590592,
+      "storage_files_at_measurement": [
+        {
+          "allocated_bytes": 20590592,
+          "length_bytes": 20590592,
+          "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-init-1000-owner-wal-v1-candidate/store.sqlite"
+        }
+      ],
+      "post_proof_file_stat": [
+        {
+          "file": "store.sqlite",
+          "length_bytes": 20590592,
+          "allocated_bytes": 20590592,
+          "allocation_minus_length": 0
+        }
+      ],
+      "post_proof_file_stat_scope": "later read-only observation; never replaces measured original allocation",
+      "verification": "PASS",
+      "cleanup": "PASS",
+      "proof": {
+        "directories": 11,
+        "discovered_files": 1000,
+        "manifest_bytes": 20000000,
+        "manifest_sha256": "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c",
+        "metadata_attribute_waves": 5,
+        "paths": 1011,
+        "root": "a71b9151bb269cdc3e71d9424e36669edd7d78ed39f9055bc355cebd4d93ec2c",
+        "sample_policy": "stride64-size-log2-endpoints-v1",
+        "sampled_bytes": 6430827,
+        "sampled_files": 70,
+        "status": "PASS",
+        "workers": 4
+      },
+      "comparison": {
+        "kind": "historical-unpaired-comparison",
+        "admission_eligible": false,
+        "reference": {
+          "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-disposable-init-1000-incumbent-restored-v1/candidate/receipt.json",
+          "sha256": "eedfd8a8a45e8a59fdae59317cee05471f99e2e118b78ffd344ceb007c21e1a8"
+        },
+        "reference_source": "2fced797d14f9d4f6b72c9ad00574976a4dfd5f0",
+        "reference_profile": "sqlite-memory-off-macos-v1",
+        "reference_ns": 155291459,
+        "reference_storage_bytes": 20590592,
+        "speed_formula": "10*candidate_ns<=11*historical_reference_ns",
+        "strict_allocation_status": "NOT_RUN \u2014 mechanism removed",
+        "time_delta_ns": 30913375,
+        "time_delta_percent": 19.90668076600401,
+        "historical_speed_arithmetic": "FAIL",
+        "storage_delta_bytes": 0,
+        "allocation_ceiling": null
+      },
+      "cpu_ns": 242464000,
+      "lifetime_peak_rss_bytes": 52379648,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-10000-owner-wal-v1",
+      "source": "5ba8362cb82ce8f210f2cc0fcdb8affffcc1d72b",
+      "raw_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-init-10000-owner-wal-v1-candidate/receipt.json",
+      "raw_receipt_sha256": "6c95a6a5b6d248fd67bd8064c1d78e70a2567f9f3f795c7337e382c3c241bc48",
+      "wrapper": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-wrapper/phase7-sqlite-disposable-init-10000-owner-wal-v1-candidate.json",
+      "wrapper_sha256": "98fe69ecc7725c85a7250aba03d56b8b4d41e7e7671a6fb56177d91d005bbfeb",
+      "source_tree": "d7cedc29f91a8a279bb058d96272ac686ceffbcf",
+      "build": {
+        "binaries": {
+          "benchmark_init": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393/benchmark_init",
+            "sha256": "65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393"
+          },
+          "verify_namespace": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736/verify_namespace",
+            "sha256": "c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736"
+          }
+        },
+        "budget_ns": 30000000000,
+        "child": null,
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "build",
+          "--manifest-path",
+          "core/Cargo.toml",
+          "--release",
+          "--locked",
+          "-p",
+          "layerfs-project",
+          "--example",
+          "benchmark_init",
+          "--example",
+          "verify_namespace"
+        ],
+        "cpu_ns": 105454000,
+        "dependency_reuse": "worktree-local incremental target",
+        "exit_code": 0,
+        "peak_rss_bytes": 38453248,
+        "profile": "release/locked",
+        "reference_product_unmodified": false,
+        "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+        "status": "PASS",
+        "timed_out": false,
+        "wall_ns": 218797417
+      },
+      "profile": "sqlite-wal-off-v2",
+      "status": "COMPLETE",
+      "sample_count": 1,
+      "original_wrapper_stdout_created_utc": "2026-10-07T14:53:33.703075+00:00",
+      "timestamp_scope": "filesystem creation time of the original launcher stdout artifact",
+      "fixture": {
+        "case": "namespace-10000",
+        "directories": 101,
+        "files": 10000,
+        "logical_bytes": 300000000,
+        "manifest": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-10000-edd2a0ddbfc8fab0/manifest.tsv",
+        "manifest_sha256": "878f44e10303cc43f5f202a4cf59e817316b16cee153fb70f8bf389ade6253ab",
+        "preparation_wall_ns": 391794917,
+        "profile": "core-sdk-init-fixture-v2",
+        "reused": true,
+        "route": "host-direct-sdk-v2",
+        "seed": 1,
+        "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-10000-edd2a0ddbfc8fab0/payload"
+      },
+      "cache": "PASS",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000,
+      "image": "N/A native macOS",
+      "competing_work": [
+        "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+        "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+        "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+        "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+        "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+        "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+      ],
+      "product_ns": 2327953500,
+      "complete_performance_ns": 2971469750,
+      "verification_ns": 352048167,
+      "allocated_store_bytes_at_measurement": 321703936,
+      "storage_files_at_measurement": [
+        {
+          "allocated_bytes": 321703936,
+          "length_bytes": 305471488,
+          "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-init-10000-owner-wal-v1-candidate/store.sqlite"
+        }
+      ],
+      "post_proof_file_stat": [
+        {
+          "file": "store.sqlite",
+          "length_bytes": 305471488,
+          "allocated_bytes": 321703936,
+          "allocation_minus_length": 16232448
+        }
+      ],
+      "post_proof_file_stat_scope": "later read-only observation; never replaces measured original allocation",
+      "verification": "PASS",
+      "cleanup": "PASS",
+      "proof": {
+        "directories": 101,
+        "discovered_files": 10000,
+        "manifest_bytes": 300000000,
+        "manifest_sha256": "878f44e10303cc43f5f202a4cf59e817316b16cee153fb70f8bf389ade6253ab",
+        "metadata_attribute_waves": 5,
+        "paths": 10101,
+        "root": "0907bdcd8aa52fbc350058f8edffa5a634757952cda77f27c70e1ca28c79ab1b",
+        "sample_policy": "stride64-size-log2-endpoints-v1",
+        "sampled_bytes": 101928859,
+        "sampled_files": 72,
+        "status": "PASS",
+        "workers": 4
+      },
+      "comparison": {
+        "kind": "historical-unpaired-comparison",
+        "admission_eligible": false,
+        "reference": {
+          "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-disposable-init-10000-incumbent-restored-v1/candidate/receipt.json",
+          "sha256": "912ffed2735f0ffd36b5b807afc87e9131795dde8ce46cd4f48af7311e528551"
+        },
+        "reference_source": "2fced797d14f9d4f6b72c9ad00574976a4dfd5f0",
+        "reference_profile": "sqlite-memory-off-macos-v1",
+        "reference_ns": 1943650833,
+        "reference_storage_bytes": 305471488,
+        "speed_formula": "10*candidate_ns<=11*historical_reference_ns",
+        "strict_allocation_status": "NOT_RUN \u2014 mechanism removed",
+        "time_delta_ns": 384302667,
+        "time_delta_percent": 19.772207048466303,
+        "historical_speed_arithmetic": "FAIL",
+        "storage_delta_bytes": 16232448,
+        "allocation_ceiling": null
+      },
+      "cpu_ns": 3032447000,
+      "lifetime_peak_rss_bytes": 65536000,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution"
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-100000-owner-wal-v1",
+      "source": "5ba8362cb82ce8f210f2cc0fcdb8affffcc1d72b",
+      "raw_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-init-100000-owner-wal-v1-candidate/receipt.json",
+      "raw_receipt_sha256": "3805845592479581c2596cf37afa7a5a0924dc57ac18ff18c525e9dac5233933",
+      "wrapper": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-wrapper/phase7-sqlite-disposable-init-100000-owner-wal-v1-candidate.json",
+      "wrapper_sha256": "554196453b692d8d14c6d210ceeb135603928dee0abeff3aa9c062be9e83d2d5",
+      "source_tree": "d7cedc29f91a8a279bb058d96272ac686ceffbcf",
+      "build": {
+        "binaries": {
+          "benchmark_init": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393/benchmark_init",
+            "sha256": "65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393"
+          },
+          "verify_namespace": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736/verify_namespace",
+            "sha256": "c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736"
+          }
+        },
+        "budget_ns": 30000000000,
+        "child": null,
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "build",
+          "--manifest-path",
+          "core/Cargo.toml",
+          "--release",
+          "--locked",
+          "-p",
+          "layerfs-project",
+          "--example",
+          "benchmark_init",
+          "--example",
+          "verify_namespace"
+        ],
+        "cpu_ns": 107063000,
+        "dependency_reuse": "worktree-local incremental target",
+        "exit_code": 0,
+        "peak_rss_bytes": 38158336,
+        "profile": "release/locked",
+        "reference_product_unmodified": false,
+        "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+        "status": "PASS",
+        "timed_out": false,
+        "wall_ns": 232479208
+      },
+      "profile": "sqlite-wal-off-v2",
+      "status": "INELIGIBLE",
+      "sample_count": 0,
+      "original_wrapper_stdout_created_utc": "2026-10-07T14:53:52.175350+00:00",
+      "timestamp_scope": "filesystem creation time of the original launcher stdout artifact",
+      "fixture": {
+        "case": "namespace-100000",
+        "directories": 1001,
+        "files": 100000,
+        "logical_bytes": 500000000,
+        "manifest": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/manifest.tsv",
+        "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+        "preparation_wall_ns": 3928338083,
+        "profile": "core-sdk-init-fixture-v2",
+        "reused": true,
+        "route": "host-direct-sdk-v2",
+        "seed": 1,
+        "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/payload"
+      },
+      "cache": "INELIGIBLE",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000,
+      "image": "N/A native macOS",
+      "competing_work": [
+        "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+        "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+        "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+        "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+        "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+        "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+      ],
+      "reason": "source-cold attestation: 1626 resident pages; no product attempt",
+      "verification": "NOT_RUN",
+      "source_residency": {
+        "attestation_ns": 3681131000,
+        "files": 100000,
+        "first_pass_ns": 3885307000,
+        "fstats": 203310,
+        "helper_binary_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+        "helper_seal": "6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87",
+        "invalidated_files": 3310,
+        "inventory_entries": 204004,
+        "invocation": {
+          "budget_ns": 30000000000,
+          "child": {
+            "attestation_ns": 3681131000,
+            "files": 100000,
+            "first_pass_ns": 3885307000,
+            "fstats": 203310,
+            "invalidated_files": 3310,
+            "inventory_entries": 204004,
+            "length_bytes": 500000000,
+            "mincore_calls": 201310,
+            "mmap_calls": 198000,
+            "msync_calls": 3310,
+            "munmap_calls": 198000,
+            "opens": 203310,
+            "page_size_bytes": 16384,
+            "resident_after": 1626,
+            "resident_first": 3310,
+            "total_pages": 126206,
+            "vector_peak_bytes": 6104
+          },
+          "command": [
+            "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+            "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/payload"
+          ],
+          "cpu_ns": 7359265000,
+          "exit_code": 0,
+          "peak_rss_bytes": 1671168,
+          "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+          "timed_out": false,
+          "wall_ns": 7577887083
+        },
+        "length_bytes": 500000000,
+        "method": "native two-pass msync-invalidate and whole-input mincore; no payload reads",
+        "mincore_calls": 201310,
+        "mmap_calls": 198000,
+        "msync_calls": 3310,
+        "munmap_calls": 198000,
+        "opens": 203310,
+        "page_size_bytes": 16384,
+        "resident_after": 1626,
+        "resident_first": 3310,
+        "scope": "regular-file content pages; filesystem metadata residency not directly observed",
+        "status": "INELIGIBLE",
+        "total_pages": 126206,
+        "vector_peak_bytes": 6104
+      }
+    },
+    {
+      "case": "phase7-sqlite-disposable-history-stride10-group-rows-indexed-wal-v1",
+      "source": "06dc05a7d6a8e77fb1c5ffa532225ad635920275",
+      "raw_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride10-group-rows-indexed-wal-v1-candidate/receipt.json",
+      "raw_receipt_sha256": "00b1dddd4348718249ffef548b849a9e83e724c241dfcaede75cbb55643096c0",
+      "wrapper": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-wrapper/phase7-sqlite-disposable-history-stride10-group-rows-indexed-wal-v1-candidate.json",
+      "wrapper_sha256": "3b283071505e30c4c544bd211ca42b6d76a53a2af76024dd5c41ab95e53824fd",
+      "source_tree": "b72ed8d245ad07c2a0f73d2eebc25d8d414675cb",
+      "build": {
+        "binaries": {
+          "benchmark_history": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/2bd92bd2d79ce4ffa827b3be08c8ac005887572b4d72ef6a07d34d9f20af1a62/benchmark_history",
+            "sha256": "2bd92bd2d79ce4ffa827b3be08c8ac005887572b4d72ef6a07d34d9f20af1a62"
+          },
+          "verify_history": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/af5e1508cca2a7ecaff356582ea9910e0ad6073230090b75c03b9735bd04cdaf/verify_history",
+            "sha256": "af5e1508cca2a7ecaff356582ea9910e0ad6073230090b75c03b9735bd04cdaf"
+          }
+        },
+        "budget_ns": 30000000000,
+        "child": null,
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "build",
+          "--manifest-path",
+          "core/Cargo.toml",
+          "--release",
+          "--locked",
+          "-p",
+          "layerfs-project",
+          "--example",
+          "benchmark_history",
+          "--example",
+          "verify_history"
+        ],
+        "compilation_seal": "5fde9987a5678c51108312db231055c541c9ad6cded45997ee04ea7a846823ec",
+        "cpu_ns": 100518000,
+        "dependency_reuse": "worktree-local target",
+        "exit_code": 0,
+        "mode": "incremental-build",
+        "peak_rss_bytes": 38256640,
+        "profile": "release/locked",
+        "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+        "status": "PASS",
+        "timed_out": false,
+        "wall_ns": 240414833
+      },
+      "profile": "sqlite-wal-off-v2",
+      "status": "COMPLETE",
+      "sample_count": 1,
+      "original_wrapper_stdout_created_utc": "2026-10-07T15:00:18.974766+00:00",
+      "timestamp_scope": "filesystem creation time of the original launcher stdout artifact",
+      "fixture": {
+        "checkpoints": 157,
+        "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+        "reachable_commits": 15632,
+        "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+        "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+        "total_logical_bytes": 4936693030,
+        "unique_blob_bytes": 891893320
+      },
+      "cache": "PASS",
+      "command_budget_ns": 60000000000,
+      "verification_budget_ns": 12000000000,
+      "image": "N/A native macOS",
+      "competing_work": [
+        "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+        "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+        "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+        "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+        "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+        "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+      ],
+      "canonical_census": {
+        "canonical_bytes": 380559460,
+        "canonical_objects": 51689,
+        "inventory_sha256": "fb5c8b1768e52ed56013c255c227f155ffe98f4cd2af7aaf5abec60471402249",
+        "owners": [
+          {
+            "allocated_bytes": 51384320,
+            "application_id": 1279677264,
+            "closed_sidecars": [],
+            "device": 16777230,
+            "immutable_read": true,
+            "inode": 871886137,
+            "length_bytes": 50753536,
+            "main_allocated_bytes": 51384320,
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride10-group-rows-indexed-wal-v1-candidate/store.sqlite",
+            "rows": {
+              "branch": 17,
+              "commit": 16,
+              "content_signature": 6614,
+              "history_meta": 1,
+              "layer": 17,
+              "layer_stack": 1,
+              "metadata_value_group": 1626,
+              "object_location": 51689,
+              "pack": 613,
+              "pack_unit": 2965,
+              "scope_allocator": 0,
+              "store_policy": 1,
+              "workspace_stage": 0
+            },
+            "sha256_after": "05070d189bbd43bc88aa94653d0949aa2519cf22c1fc41f892c81c6568639100",
+            "sha256_before": "05070d189bbd43bc88aa94653d0949aa2519cf22c1fc41f892c81c6568639100",
+            "user_version": 3
+          }
+        ],
+        "pack_bodies_bytes": 45556963,
+        "scope": "closed-owner schema/integrity, canonical IDs/roles/lengths and C5 roots/counts; namespace oracle separate",
+        "status": "CHECKED",
+        "storage_bytes": 51384320
+      },
+      "product_ns": 33380784333,
+      "complete_performance_ns": 54282765417,
+      "verification_ns": 5573308125,
+      "allocated_store_bytes_at_measurement": 51384320,
+      "storage_files_at_measurement": [
+        {
+          "allocated_bytes": 51384320,
+          "length_bytes": 50753536,
+          "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride10-group-rows-indexed-wal-v1-candidate/store.sqlite"
+        }
+      ],
+      "post_proof_file_stat": [
+        {
+          "file": "store.sqlite",
+          "length_bytes": 50753536,
+          "allocated_bytes": 51384320,
+          "allocation_minus_length": 630784
+        },
+        {
+          "file": "independent-proof.sqlite",
+          "length_bytes": 50753536,
+          "allocated_bytes": 50753536,
+          "allocation_minus_length": 0
+        }
+      ],
+      "post_proof_file_stat_scope": "later read-only observation; never replaces measured original allocation",
+      "verification": "PASS",
+      "cleanup": "PASS",
+      "proof": {
+        "acquired_content_bytes": 3301773,
+        "admission": "NOT_RUN",
+        "authenticated_bytes": 970326,
+        "custody_states": 17,
+        "independent_root_pins": "CHECKED",
+        "paths": 101477,
+        "sample_policy": "all-state-structure-five-anchor-bounded-content-v1",
+        "sampled_content_paths": 67,
+        "states": 17,
+        "status": "CHECKED"
+      },
+      "comparison": {
+        "kind": "historical-unpaired-comparison",
+        "admission_eligible": false,
+        "reference": {
+          "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride10-group-rows-indexed-v1/baseline/receipt.json",
+          "sha256": "ce6af979869c10f1fc2b738f8130130a51a216ef9dd96a5e972cc8177b52877f"
+        },
+        "reference_source": "7edddbdb8e8512627aed0ed42533ef099d802384",
+        "reference_profile": "phase4.5-memory-off",
+        "reference_ns": 34544042250,
+        "reference_storage_bytes": 52473856,
+        "speed_formula": "10*candidate_ns<=11*historical_reference_ns",
+        "strict_allocation_status": "NOT_RUN \u2014 mechanism removed",
+        "time_delta_ns": -1163257917,
+        "time_delta_percent": -3.367463218639388,
+        "historical_speed_arithmetic": "PASS",
+        "storage_delta_bytes": -1089536,
+        "allocation_ceiling": 54278964,
+        "allocation_gate": "PASS",
+        "incumbent": {
+          "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride10-group-rows-indexed-v1/candidate/receipt.json",
+          "sha256": "ae3cd6cd80f81a4c998701604fd437e95e39e3988f984e9a75b357e491b64827",
+          "comparison_ns": 33708739000,
+          "storage_bytes": 50692096
+        }
+      },
+      "cpu_ns": 24500678000,
+      "lifetime_peak_rss_bytes": 257081344,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "versus_retained_incumbent": {
+        "time_delta_percent": -0.972906957451004,
+        "allocated_delta_bytes": 692224,
+        "allocated_delta_percent": 1.365546218487395
+      }
+    },
+    {
+      "case": "phase7-sqlite-disposable-history-stride3-group-rows-indexed-wal-v1",
+      "source": "06dc05a7d6a8e77fb1c5ffa532225ad635920275",
+      "raw_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride3-group-rows-indexed-wal-v1-candidate/receipt.json",
+      "raw_receipt_sha256": "b4c880c8602c96b2ab6bd30a4028762d19c5c069601792f46e05312aa77ebc1a",
+      "wrapper": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-wrapper/phase7-sqlite-disposable-history-stride3-group-rows-indexed-wal-v1-candidate.json",
+      "wrapper_sha256": "371c84fd9cb27f6f7dbeac4b398ef2763de878e9a13abbe946b7b079765d9774",
+      "source_tree": "b72ed8d245ad07c2a0f73d2eebc25d8d414675cb",
+      "build": {
+        "binaries": {
+          "benchmark_history": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/2bd92bd2d79ce4ffa827b3be08c8ac005887572b4d72ef6a07d34d9f20af1a62/benchmark_history",
+            "sha256": "2bd92bd2d79ce4ffa827b3be08c8ac005887572b4d72ef6a07d34d9f20af1a62"
+          },
+          "verify_history": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/af5e1508cca2a7ecaff356582ea9910e0ad6073230090b75c03b9735bd04cdaf/verify_history",
+            "sha256": "af5e1508cca2a7ecaff356582ea9910e0ad6073230090b75c03b9735bd04cdaf"
+          }
+        },
+        "budget_ns": 30000000000,
+        "child": null,
+        "command": null,
+        "compilation_seal": "5fde9987a5678c51108312db231055c541c9ad6cded45997ee04ea7a846823ec",
+        "cpu_ns": 100518000,
+        "dependency_reuse": "worktree-local target",
+        "exit_code": 0,
+        "mode": "sealed-binary-reuse",
+        "peak_rss_bytes": 38256640,
+        "profile": "release/locked",
+        "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+        "status": "PASS",
+        "timed_out": false,
+        "wall_ns": 0
+      },
+      "profile": "sqlite-wal-off-v2",
+      "status": "COMPLETE",
+      "sample_count": 1,
+      "original_wrapper_stdout_created_utc": "2026-10-07T15:01:34.612405+00:00",
+      "timestamp_scope": "filesystem creation time of the original launcher stdout artifact",
+      "fixture": {
+        "checkpoints": 157,
+        "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+        "reachable_commits": 15632,
+        "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+        "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+        "total_logical_bytes": 4936693030,
+        "unique_blob_bytes": 891893320
+      },
+      "cache": "PASS",
+      "command_budget_ns": 170000000000,
+      "verification_budget_ns": 12000000000,
+      "image": "N/A native macOS",
+      "competing_work": [
+        "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+        "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+        "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+        "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+        "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+        "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+      ],
+      "canonical_census": {
+        "canonical_bytes": 589480854,
+        "canonical_objects": 73447,
+        "inventory_sha256": "de9a85025bbd10c907e9b5aab67a3d69bd72ee7da8c0a3d2bb12cac6c415972b",
+        "owners": [
+          {
+            "allocated_bytes": 64872448,
+            "application_id": 1279677264,
+            "closed_sidecars": [],
+            "device": 16777230,
+            "immutable_read": true,
+            "inode": 871886359,
+            "length_bytes": 64409600,
+            "main_allocated_bytes": 64872448,
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride3-group-rows-indexed-wal-v1-candidate/store.sqlite",
+            "rows": {
+              "branch": 53,
+              "commit": 52,
+              "content_signature": 6788,
+              "history_meta": 1,
+              "layer": 53,
+              "layer_stack": 1,
+              "metadata_value_group": 4107,
+              "object_location": 73447,
+              "pack": 790,
+              "pack_unit": 5912,
+              "scope_allocator": 0,
+              "store_policy": 1,
+              "workspace_stage": 0
+            },
+            "sha256_after": "04935cfa1217a4cd98ade2d62354da4042d352d8d4cb7fb19f10ca5a72184262",
+            "sha256_before": "04935cfa1217a4cd98ade2d62354da4042d352d8d4cb7fb19f10ca5a72184262",
+            "user_version": 3
+          }
+        ],
+        "pack_bodies_bytes": 57096669,
+        "scope": "closed-owner schema/integrity, canonical IDs/roles/lengths and C5 roots/counts; namespace oracle separate",
+        "status": "CHECKED",
+        "storage_bytes": 64872448
+      },
+      "product_ns": 68569406416,
+      "complete_performance_ns": 87685327334,
+      "verification_ns": 7066451250,
+      "allocated_store_bytes_at_measurement": 64872448,
+      "storage_files_at_measurement": [
+        {
+          "allocated_bytes": 64872448,
+          "length_bytes": 64409600,
+          "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride3-group-rows-indexed-wal-v1-candidate/store.sqlite"
+        }
+      ],
+      "post_proof_file_stat": [
+        {
+          "file": "store.sqlite",
+          "length_bytes": 64409600,
+          "allocated_bytes": 64872448,
+          "allocation_minus_length": 462848
+        },
+        {
+          "file": "independent-proof.sqlite",
+          "length_bytes": 64409600,
+          "allocated_bytes": 64409600,
+          "allocation_minus_length": 0
+        }
+      ],
+      "post_proof_file_stat_scope": "later read-only observation; never replaces measured original allocation",
+      "verification": "PASS",
+      "cleanup": "PASS",
+      "proof": {
+        "acquired_content_bytes": 3689369,
+        "admission": "NOT_RUN",
+        "authenticated_bytes": 921174,
+        "custody_states": 53,
+        "independent_root_pins": "CHECKED",
+        "paths": 306861,
+        "sample_policy": "all-state-structure-five-anchor-bounded-content-v1",
+        "sampled_content_paths": 66,
+        "states": 53,
+        "status": "CHECKED"
+      },
+      "comparison": {
+        "kind": "historical-unpaired-comparison",
+        "admission_eligible": false,
+        "reference": {
+          "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride3-group-rows-indexed-v1/baseline/receipt.json",
+          "sha256": "c2f11d698af0403c1aa2a92c3980e04de91e9b05ddd4d781b3af4d8b1dadbcde"
+        },
+        "reference_source": "7edddbdb8e8512627aed0ed42533ef099d802384",
+        "reference_profile": "phase4.5-memory-off",
+        "reference_ns": 72230709750,
+        "reference_storage_bytes": 65142784,
+        "speed_formula": "10*candidate_ns<=11*historical_reference_ns",
+        "strict_allocation_status": "NOT_RUN \u2014 mechanism removed",
+        "time_delta_ns": -3661303334,
+        "time_delta_percent": -5.068901228677183,
+        "historical_speed_arithmetic": "PASS",
+        "storage_delta_bytes": -270336,
+        "allocation_ceiling": 70427034,
+        "allocation_gate": "PASS",
+        "incumbent": {
+          "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride3-group-rows-indexed-v1/candidate/receipt.json",
+          "sha256": "1617663694103e86b049d2ff182208cb5aab8c7cf169fface7f86abb5c6c58af",
+          "comparison_ns": 66838917708,
+          "storage_bytes": 64245760
+        }
+      },
+      "cpu_ns": 48012710000,
+      "lifetime_peak_rss_bytes": 265781248,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "versus_retained_incumbent": {
+        "time_delta_percent": 2.589043580208775,
+        "allocated_delta_bytes": 626688,
+        "allocated_delta_percent": 0.9754542556582723
+      }
+    },
+    {
+      "case": "phase7-sqlite-disposable-history-stride1-group-rows-indexed-wal-v1",
+      "source": "06dc05a7d6a8e77fb1c5ffa532225ad635920275",
+      "raw_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride1-group-rows-indexed-wal-v1-candidate/receipt.json",
+      "raw_receipt_sha256": "fac1a26fe4c6535efb6e424c32969b3e7c6065556f5edb064ed58d57740a7462",
+      "wrapper": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-wrapper/phase7-sqlite-disposable-history-stride1-group-rows-indexed-wal-v1-candidate.json",
+      "wrapper_sha256": "2dc64f9d90f9b7929522e659c1e9e70b72f3f98f88ab4d591c1f7f3d8d69dd57",
+      "source_tree": "b72ed8d245ad07c2a0f73d2eebc25d8d414675cb",
+      "build": {
+        "binaries": {
+          "benchmark_history": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/2bd92bd2d79ce4ffa827b3be08c8ac005887572b4d72ef6a07d34d9f20af1a62/benchmark_history",
+            "sha256": "2bd92bd2d79ce4ffa827b3be08c8ac005887572b4d72ef6a07d34d9f20af1a62"
+          },
+          "verify_history": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/af5e1508cca2a7ecaff356582ea9910e0ad6073230090b75c03b9735bd04cdaf/verify_history",
+            "sha256": "af5e1508cca2a7ecaff356582ea9910e0ad6073230090b75c03b9735bd04cdaf"
+          }
+        },
+        "budget_ns": 30000000000,
+        "child": null,
+        "command": null,
+        "compilation_seal": "5fde9987a5678c51108312db231055c541c9ad6cded45997ee04ea7a846823ec",
+        "cpu_ns": 100518000,
+        "dependency_reuse": "worktree-local target",
+        "exit_code": 0,
+        "mode": "sealed-binary-reuse",
+        "peak_rss_bytes": 38256640,
+        "profile": "release/locked",
+        "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+        "status": "PASS",
+        "timed_out": false,
+        "wall_ns": 0
+      },
+      "profile": "sqlite-wal-off-v2",
+      "status": "COMPLETE",
+      "sample_count": 1,
+      "original_wrapper_stdout_created_utc": "2026-10-07T15:03:19.369597+00:00",
+      "timestamp_scope": "filesystem creation time of the original launcher stdout artifact",
+      "fixture": {
+        "checkpoints": 157,
+        "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+        "reachable_commits": 15632,
+        "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+        "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+        "total_logical_bytes": 4936693030,
+        "unique_blob_bytes": 891893320
+      },
+      "cache": "PASS",
+      "command_budget_ns": 300000000000,
+      "verification_budget_ns": 30000000000,
+      "image": "N/A native macOS",
+      "competing_work": [
+        "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+        "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+        "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+        "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+        "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+        "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+      ],
+      "canonical_census": {
+        "canonical_bytes": 871337620,
+        "canonical_objects": 104618,
+        "inventory_sha256": "f0966c7721109a06a84ccad49f1e7b209090df627fb31f5094a0476bf80f1d87",
+        "owners": [
+          {
+            "allocated_bytes": 101498880,
+            "application_id": 1279677264,
+            "closed_sidecars": [],
+            "device": 16777230,
+            "immutable_read": true,
+            "inode": 871886648,
+            "length_bytes": 85348352,
+            "main_allocated_bytes": 101498880,
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride1-group-rows-indexed-wal-v1-candidate/store.sqlite",
+            "rows": {
+              "branch": 157,
+              "commit": 156,
+              "content_signature": 7092,
+              "history_meta": 1,
+              "layer": 157,
+              "layer_stack": 1,
+              "metadata_value_group": 9131,
+              "object_location": 104618,
+              "pack": 1271,
+              "pack_unit": 11755,
+              "scope_allocator": 0,
+              "store_policy": 1,
+              "workspace_stage": 0
+            },
+            "sha256_after": "94613822a21812af141537decea420256f5a6118a01bcce59d6796d4828fac19",
+            "sha256_before": "94613822a21812af141537decea420256f5a6118a01bcce59d6796d4828fac19",
+            "user_version": 3
+          }
+        ],
+        "pack_bodies_bytes": 74809857,
+        "scope": "closed-owner schema/integrity, canonical IDs/roles/lengths and C5 roots/counts; namespace oracle separate",
+        "status": "CHECKED",
+        "storage_bytes": 101498880
+      },
+      "product_ns": 182854812667,
+      "complete_performance_ns": 204333286708,
+      "verification_ns": 17267117916,
+      "allocated_store_bytes_at_measurement": 101498880,
+      "storage_files_at_measurement": [
+        {
+          "allocated_bytes": 101498880,
+          "length_bytes": 85348352,
+          "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride1-group-rows-indexed-wal-v1-candidate/store.sqlite"
+        }
+      ],
+      "post_proof_file_stat": [
+        {
+          "file": "store.sqlite",
+          "length_bytes": 85348352,
+          "allocated_bytes": 101498880,
+          "allocation_minus_length": 16150528
+        },
+        {
+          "file": "independent-proof.sqlite",
+          "length_bytes": 85348352,
+          "allocated_bytes": 85348352,
+          "allocation_minus_length": 0
+        }
+      ],
+      "post_proof_file_stat_scope": "later read-only observation; never replaces measured original allocation",
+      "verification": "PASS",
+      "cleanup": "PASS",
+      "proof": {
+        "acquired_content_bytes": 5347088,
+        "admission": "NOT_RUN",
+        "authenticated_bytes": 921174,
+        "custody_states": 157,
+        "independent_root_pins": "CHECKED",
+        "paths": 904143,
+        "sample_policy": "all-state-structure-five-anchor-bounded-content-v1",
+        "sampled_content_paths": 66,
+        "states": 157,
+        "status": "CHECKED"
+      },
+      "comparison": {
+        "kind": "historical-unpaired-comparison",
+        "admission_eligible": false,
+        "reference": {
+          "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1/baseline/receipt.json",
+          "sha256": "b52964747a9647f350b0ccd1267db5ed4cc071d72e30d4c09bc939442797b868"
+        },
+        "reference_source": "7edddbdb8e8512627aed0ed42533ef099d802384",
+        "reference_profile": "phase4.5-memory-off",
+        "reference_ns": 192712692209,
+        "reference_storage_bytes": 86179840,
+        "speed_formula": "10*candidate_ns<=11*historical_reference_ns",
+        "strict_allocation_status": "NOT_RUN \u2014 mechanism removed",
+        "time_delta_ns": -9857879542,
+        "time_delta_percent": -5.115324491086955,
+        "historical_speed_arithmetic": "PASS",
+        "storage_delta_bytes": 15319040,
+        "allocation_ceiling": 92342273,
+        "allocation_gate": "FAIL",
+        "incumbent": {
+          "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw-r2/phase7-sqlite-disposable-history-stride1-group-rows-indexed-v1/candidate/receipt.json",
+          "sha256": "9e982606b131ae4a85f8d971172c231b9de0330076edf664825b6b9cdba812a5",
+          "comparison_ns": 185189368250,
+          "storage_bytes": 85172224
+        }
+      },
+      "cpu_ns": 123531639000,
+      "lifetime_peak_rss_bytes": 338493440,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "versus_retained_incumbent": {
+        "time_delta_percent": -1.2606315389814502,
+        "allocated_delta_bytes": 16326656,
+        "allocated_delta_percent": 19.168991055112052
+      }
+    },
+    {
+      "case": "phase7-sqlite-disposable-init-100000-owner-wal-v2",
+      "source": "06dc05a7d6a8e77fb1c5ffa532225ad635920275",
+      "raw_receipt": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-init-100000-owner-wal-v2-candidate/receipt.json",
+      "raw_receipt_sha256": "4e1faf5eec306ed1dfbb878fb028d1dcbf33e82907d696a3d39726e1351e2dce",
+      "wrapper": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-wrapper/phase7-sqlite-disposable-init-100000-owner-wal-v2-candidate.json",
+      "wrapper_sha256": "bc03a89315d6bd4ae95a0a416a63dec951438e3c311d2cb721b262d87fce5a7e",
+      "source_tree": "b72ed8d245ad07c2a0f73d2eebc25d8d414675cb",
+      "build": {
+        "binaries": {
+          "benchmark_init": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393/benchmark_init",
+            "sha256": "65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393"
+          },
+          "verify_namespace": {
+            "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736/verify_namespace",
+            "sha256": "c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736"
+          }
+        },
+        "budget_ns": 30000000000,
+        "child": null,
+        "command": [
+          "cargo",
+          "+1.85.1",
+          "build",
+          "--manifest-path",
+          "core/Cargo.toml",
+          "--release",
+          "--locked",
+          "-p",
+          "layerfs-project",
+          "--example",
+          "benchmark_init",
+          "--example",
+          "verify_namespace"
+        ],
+        "cpu_ns": 110448000,
+        "dependency_reuse": "worktree-local incremental target",
+        "exit_code": 0,
+        "peak_rss_bytes": 38240256,
+        "profile": "release/locked",
+        "reference_product_unmodified": false,
+        "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+        "status": "PASS",
+        "timed_out": false,
+        "wall_ns": 245788083
+      },
+      "profile": "sqlite-wal-off-v2",
+      "status": "COMPLETE",
+      "sample_count": 1,
+      "original_wrapper_stdout_created_utc": "2026-10-07T14:59:43.226069+00:00",
+      "timestamp_scope": "filesystem creation time of the original launcher stdout artifact",
+      "fixture": {
+        "case": "namespace-100000",
+        "directories": 1001,
+        "files": 100000,
+        "logical_bytes": 500000000,
+        "manifest": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-prepared.noindex/namespace-100000-b69e710dfd0474a5/manifest.tsv",
+        "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+        "preparation_wall_ns": 3893885708,
+        "profile": "core-sdk-init-fixture-v2",
+        "reused": true,
+        "route": "host-direct-sdk-v2",
+        "seed": 1,
+        "source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-prepared.noindex/namespace-100000-b69e710dfd0474a5/payload"
+      },
+      "cache": "PASS",
+      "command_budget_ns": 30000000000,
+      "verification_budget_ns": 19000000000,
+      "image": "N/A native macOS",
+      "competing_work": [
+        "502 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+        "504 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+        "5696 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5697 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5698 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+        "5733 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+        "5736 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+        "5737 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+        "5790 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "5791 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+        "34602 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+      ],
+      "product_ns": 7495571834,
+      "complete_performance_ns": 14681307917,
+      "verification_ns": 1108929291,
+      "allocated_store_bytes_at_measurement": 532172800,
+      "storage_files_at_measurement": [
+        {
+          "allocated_bytes": 532172800,
+          "length_bytes": 515612672,
+          "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-init-100000-owner-wal-v2-candidate/store.sqlite"
+        }
+      ],
+      "post_proof_file_stat": [
+        {
+          "file": "store.sqlite",
+          "length_bytes": 515612672,
+          "allocated_bytes": 522747904,
+          "allocation_minus_length": 7135232
+        }
+      ],
+      "post_proof_file_stat_scope": "later read-only observation; never replaces measured original allocation",
+      "verification": "PASS",
+      "cleanup": "PASS",
+      "proof": {
+        "directories": 1001,
+        "discovered_files": 100000,
+        "manifest_bytes": 500000000,
+        "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+        "metadata_attribute_waves": 5,
+        "paths": 101001,
+        "root": "6401f9bdd86784b9992ab4c3ce7f5e8984c2c6271d13e4e5af6cb8913f62d0ef",
+        "sample_policy": "stride64-size-log2-endpoints-v1",
+        "sampled_bytes": 200286236,
+        "sampled_files": 73,
+        "status": "PASS",
+        "workers": 4
+      },
+      "comparison": {
+        "kind": "historical-unpaired-comparison",
+        "admission_eligible": false,
+        "reference": {
+          "path": "core/docs/issues/307/checks/incumbent-restoration-20261007/raw/phase7-sqlite-disposable-init-100000-incumbent-restored-v1/candidate/receipt.json",
+          "sha256": "1b9e139019fa3f67b0313c2c8c3186f0e5ff6bee3b3ee2052423fe210b5b709e"
+        },
+        "reference_source": "2fced797d14f9d4f6b72c9ad00574976a4dfd5f0",
+        "reference_profile": "sqlite-memory-off-macos-v1",
+        "reference_ns": 7423399375,
+        "reference_storage_bytes": 515579904,
+        "speed_formula": "10*candidate_ns<=11*historical_reference_ns",
+        "strict_allocation_status": "NOT_RUN \u2014 mechanism removed",
+        "time_delta_ns": 72172459,
+        "time_delta_percent": 0.9722292356121551,
+        "historical_speed_arithmetic": "PASS",
+        "storage_delta_bytes": 16592896,
+        "allocation_ceiling": null
+      },
+      "cpu_ns": 12160533000,
+      "lifetime_peak_rss_bytes": 81133568,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution"
+    }
+  ],
+  "verified_manifest_files": 121,
+  "verified_binary_hashes": {
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393/benchmark_init": "65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736/verify_namespace": "c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/2bd92bd2d79ce4ffa827b3be08c8ac005887572b4d72ef6a07d34d9f20af1a62/benchmark_history": "2bd92bd2d79ce4ffa827b3be08c8ac005887572b4d72ef6a07d34d9f20af1a62",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/af5e1508cca2a7ecaff356582ea9910e0ad6073230090b75c03b9735bd04cdaf/verify_history": "af5e1508cca2a7ecaff356582ea9910e0ad6073230090b75c03b9735bd04cdaf"
+  },
+  "validation_ns": 1325339042,
+  "retention": "seven original closed Stores, three independent proof copies, original and corrected source preparations, all receipts retained; no unknown product outcome"
+}

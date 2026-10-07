@@ -1,0 +1,162 @@
+{
+  "arm": "candidate",
+  "copy_cold_helper": {
+    "binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold",
+    "binary_sha256": "dcfb4229eb48b2129094eb19195c90b72e56bb1967011916b869b939c0961d15",
+    "build": {
+      "budget_ns": 30000000000,
+      "child": null,
+      "command": [
+        "/usr/bin/clang",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/shared/cold_native.c",
+        "-o",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/cold-helper-archive/6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87/phase7-cold"
+      ],
+      "cpu_ns": 185557000,
+      "exit_code": 0,
+      "peak_rss_bytes": 49283072,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "timed_out": false,
+      "wall_ns": 143970583
+    },
+    "build_wall_ns": 55206000,
+    "inputs": {
+      "architecture": "arm64",
+      "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+      "flags": [
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror"
+      ],
+      "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+      "source_sha256": "cb87d6136140eaa5f99afac19db0dcf11b88413e60030009895faacdb53c8883"
+    },
+    "mode": "sealed-binary-reuse",
+    "seal": "6e2a508dfe3f302ebcca45a1d5880dc3af2802aab69184df49db670ebe4f0a87"
+  },
+  "copy_limit_bytes": 54278964,
+  "corpus": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+  "db": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride10-group-rows-indexed-wal-v1-candidate/store.sqlite",
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "1339a41bdfcca8ec0f2f3569d46054f58251ef5d830daabbead35f07fbaf5b29",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [
+      "?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md",
+      "?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+      "?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md"
+    ],
+    "harness_seal": "85046b6909c6f8b9e81409936cef6b159117ba4bca443b09d801ab46d8a2c640",
+    "product_seal": "1449d745c75d3d7a65e8d4e969e6b8852ed7a617dc31972ddf8e208d7f5489ec",
+    "source_commit": "06dc05a7d6a8e77fb1c5ffa532225ad635920275",
+    "source_dirty": true,
+    "source_tree": "b72ed8d245ad07c2a0f73d2eebc25d8d414675cb"
+  },
+  "observer": {
+    "build": {
+      "budget_ns": 30000000000,
+      "child": null,
+      "command": [
+        "/usr/bin/clang",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-dynamiclib",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/diagnostics/sqlite_history_observer.c",
+        "-lsqlite3",
+        "-o",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/history-observer-archive/2d73e1bfcd82a12929be4c7bd94dbdf860e43b974ca33ee662d80de74d1b007c/history-observer.dylib"
+      ],
+      "cpu_ns": 441826000,
+      "exit_code": 0,
+      "peak_rss_bytes": 56164352,
+      "rss_scope": "Darwin wait4 per-child lifetime for the recorded command; no phase-only attribution",
+      "timed_out": false,
+      "wall_ns": 570843542
+    },
+    "coverage": "trace statements/VM plus delegated BLOB open/read/close and VFS read/write/sync/close; native VM reset counters unqualified; no device-byte/syscall claim",
+    "inputs": {
+      "architecture": "arm64",
+      "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+      "flags": [
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-dynamiclib"
+      ],
+      "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+      "sources": {
+        "sqlite_close_observer.c": "f1075ec9294b86fedf9b662bf5a040a03db530cdf332d5873055561a946a1aa7",
+        "sqlite_history_observer.c": "ed376e52e12f476a6b8651d5ff4a813a31ae4e137dd096971bdc893123b7614c",
+        "sqlite_vfs_observer.c": "0cd6594f9b7b4311fcdaa15f8092a4b5b32fe31e0daedc10f4439fe3cfa99c0d",
+        "sqlite_work.c": "385c3c62e707eec28fbf656d3949912d5f1d550e5684c91b8c26e25d00886276"
+      },
+      "sqlite_link": "unmodified system -lsqlite3"
+    },
+    "mode": "compiled",
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/history-observer-archive/2d73e1bfcd82a12929be4c7bd94dbdf860e43b974ca33ee662d80de74d1b007c/history-observer.dylib",
+    "seal": "2d73e1bfcd82a12929be4c7bd94dbdf860e43b974ca33ee662d80de74d1b007c",
+    "sha256": "15513e146c2ea324a476db313be32a0db877f8ba3085186c4f078c8035f27877"
+  },
+  "out": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride10-group-rows-indexed-wal-v1-candidate",
+  "pins": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride10-group-rows-indexed-wal-v1-candidate/reference-pins.json",
+  "producer": {
+    "bootstrap_ns": 42398666,
+    "canonical_bytes": 380559460,
+    "canonical_inventory_sha256": "fb5c8b1768e52ed56013c255c227f155ffe98f4cd2af7aaf5abec60471402249",
+    "canonical_objects": 51689,
+    "close_ns": 30733292,
+    "custody_ns": 471584,
+    "custody_states": 17,
+    "finalization_ns": 1672084,
+    "operation_ns": 33380784333,
+    "profile_identity": "sqlite-wal-off-v2",
+    "roots": [
+      "ff484f8d92f57413ee83e7201fb04c8512ffd7bed3083471713db4e8e17c70d3",
+      "2906f3669420afb3ec336bc5d87856328371db4e9ad644ced4224cc8d3cd75ab",
+      "1282ed4c917126c0ee219ba221243405bf0223092021c860b48163b741068bde",
+      "92f98e576ec1811361095b29bea2cc5137d2eca8c9b3fce96d75cfb4c30a7fa9",
+      "208d34b9ee9c867cf7e8988dd53d342d5acb4ca9ddc2420d2eb020c39d0b580f",
+      "0bba4b43e94f8d20551a062b35379db0897e89f8de62b425b7d47abd4f79e698",
+      "83c507e708c9a53e0d205d666c84d2c08ff2c8f60d63604df4b719417577cbdc",
+      "ca4ac6eb28a22995b580b57435f904b48594f3eb14d0405bf1fcbc1fd5ef9d0e",
+      "5532bc3c204f92a48122bad3aa684b150614d1266972ed1724412e1affa55517",
+      "1f8ab5053f1bb25ced3ec59504a196c0c5f3078dc70e8ece55fd12c8bf7412e4",
+      "ac623f883e77b3e5150a4188d62bfdb4fc9bee9ecc74168e15fe516e590ed7e0",
+      "23a46c5765b9b64f428be8455b539f009c3e5f35a77e445bcea4076770240984",
+      "f47315de1d996263ecfc900244742c43862765e90e781a1c84619785e18b2928",
+      "9619cad6e350b6c872b95ed5ec8468a07e24453df60032ff8f826e581ab57878",
+      "3728f7dbc9b8276322b1c92d3db550bf95d46b27e74e14a9bc13ca740110689f",
+      "fe6aa65d2f28b1f3a6fd946a400e85549bf2b6c82a0fd8b440dd6db0ece83241",
+      "b9a4eeac902c5b6d10acc1d26fd69f9c1f809e1b0d68316eb98a873e9eea5d03"
+    ],
+    "seal_ns": 30733292,
+    "selected_states": 17,
+    "stages_ns": [
+      16668434708,
+      1628294001,
+      2599573502,
+      12151828249
+    ],
+    "states": 17,
+    "status": "COMPLETE"
+  },
+  "profile": "disposable",
+  "proof_policy": "all-state-structure-five-anchor-bounded-content-v1",
+  "retained_reference_case": "phase7-sqlite-disposable-history-stride10-group-rows-indexed-wal-v1",
+  "row": "history-stride10",
+  "sqlite_schema_version": 3,
+  "verifier": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/binary-archive/af5e1508cca2a7ecaff356582ea9910e0ad6073230090b75c03b9735bd04cdaf/verify_history",
+  "wal_proof_copy": true
+}

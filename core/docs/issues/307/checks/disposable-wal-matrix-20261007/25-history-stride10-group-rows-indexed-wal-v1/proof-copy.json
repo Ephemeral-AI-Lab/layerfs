@@ -1,0 +1,10 @@
+{
+  "method": "independent read/write byte stream, not APFS clone",
+  "bytes": 50753536,
+  "buffer_bytes": 65536,
+  "limit_bytes": 54278964,
+  "cache_io_hint": "macOS F_NOCACHE on source/destination; hint, not a memory bound",
+  "sha256": "05070d189bbd43bc88aa94653d0949aa2519cf22c1fc41f892c81c6568639100",
+  "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-history-stride10-group-rows-indexed-wal-v1-candidate/independent-proof.sqlite",
+  "sidecars": []
+}

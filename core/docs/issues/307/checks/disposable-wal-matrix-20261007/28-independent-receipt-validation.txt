@@ -1,0 +1,19 @@
+# {"timestamp": "2026-10-07T15:11:32.369420+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "/tmp/layerfs-wal-matrix-report.py"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "06dc05a7d6a8e77fb1c5ffa532225ad635920275", "wall_stop": "specified in command; build is not test execution"}
+{
+  "schema": "disposable-wal-matrix-report-v1",
+  "timestamp_utc": "2026-10-07T15:11:33.910015+00:00",
+  "receipt_integrity": "PASS",
+  "completed_product_cases": 7,
+  "retained_ineligible_zero_sample_cases": 1,
+  "historical_speed_arithmetic_failures": 3,
+  "allocation_failures": 1,
+  "admission_eligible": false,
+  "durable_execution": "NOT_RUN \u2014 disabled by owner until explicit reauthorization",
+  "verified_manifest_files": 121,
+  "validation_ns": 1325339042,
+  "retention": "seven original closed Stores, three independent proof copies, original and corrected source preparations, all receipts retained; no unknown product outcome"
+}
+
+# complete_command_ns=1473605542
+
+# exit=0

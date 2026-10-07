@@ -21,10 +21,19 @@ passes14 selected host/Linux runs, including64 distinct Commits in one Workspace
 and records full release, bounded source owners and the separate OS-cache costs.
 No product memory fix was required by these observations.
 
+The owner's subsequent [full Disposable WAL Init/history selection](DISPOSABLE-WAL-MATRIX-20261007.md)
+has seven completed, functionally verified and content-cold product runs.
+Init100/1000/10000 miss their historical1.10 speed arithmetic. History stride1
+fails original allocated storage:101498880B against92342273B; its logical file
+is85348352B. All command/proof budgets pass. An earlier100k cold refusal with
+zero product samples and its source-reader correction remain separately retained.
+These component results do not close integrated S8 or full resource qualification.
+
 Daemons open the shared Store directly; SDK host-mediated transport is retired.
 Current Branch Commit is overwrite-only in successful database effect order,
 with captured parent provenance retained. Old HeadMoved and transport receipts
-remain historical. Durable execution is deferred; actual native files above4GiB
+remain historical. Only Disposable/WAL/OFF may execute; Durable is disabled
+indefinitely until explicit owner reauthorization. Actual native files above4GiB
 are waived. S8 FUSE/Bash and S10 live namespace normalization remain separate
 work. No release or whole S7–S13 completion is claimed. The earlier entries below
 retain their original checkpoint scope and do not dispatch the retired topology.

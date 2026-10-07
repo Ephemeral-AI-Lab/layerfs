@@ -1,4 +1,11 @@
-# Disposable WAL: namespace Init and history matrix
+from pathlib import Path
+import json
+base=Path('core/docs/issues/307');checks=base/'checks/disposable-wal-matrix-20261007'
+data=json.loads((checks/'29-matrix-report.json').read_text())
+rows={x['case']:x for x in data['rows']};prefix='phase7-sqlite-disposable-'
+init=[rows[prefix+f'init-{n}-owner-wal-v'+('2' if n==100000 else '1')] for n in (100,1000,10000,100000)]
+history=[rows[prefix+f'history-stride{s}-group-rows-indexed-wal-v1'] for s in (10,3,1)]
+text='''# Disposable WAL: namespace Init and history matrix
 
 > **Status:** Dated measurement checkpoint; not release evidence or a product contract.
 
@@ -55,11 +62,10 @@ Binary SHA256 values (receipt11; rechecked by28):
 
 | Executable | SHA256 |
 | --- | --- |
-|benchmark_init|`65285aded5a4dc68665f646d0bee077369c8578ee60ac3456b8f11b836177393`|
-|verify_namespace|`c8b8f303e68ed9ae6761c9d3971526933ee44e55f52803706711b017ec37c736`|
-|benchmark_history|`2bd92bd2d79ce4ffa827b3be08c8ac005887572b4d72ef6a07d34d9f20af1a62`|
-|verify_history|`af5e1508cca2a7ecaff356582ea9910e0ad6073230090b75c03b9735bd04cdaf`|
-
+'''
+inputs=json.loads((checks/'11-build-inputs.json').read_text())
+for name,b in inputs['binaries'].items():text+=f"|{name}|`{b['sha256']}`|\n"
+text+='''
 ## Namespace Init
 
 The product clock includes fresh Store creation, public Init and required
@@ -71,22 +77,20 @@ The removed strict-allocation mechanism has no new PASS: NOT_RUN remains its sta
 
 | Files | Product ns | Complete performance ns /30s | Proof ns /19s | Original allocated Store B | Functional / cold / cleanup | Receipt |
 | ---: | ---: | ---: | ---: | ---: | --- | --- |
-|100|63918250|1044272917|579196916|5259264|PASS / PASS / PASS|[13](checks/disposable-wal-matrix-20261007/13-init-100-v1/receipt.json)|
-|1000|186204834|275462375|31228250|20590592|PASS / PASS / PASS|[14](checks/disposable-wal-matrix-20261007/14-init-1000-v1/receipt.json)|
-|10000|2327953500|2971469750|352048167|321703936|PASS / PASS / PASS|[15](checks/disposable-wal-matrix-20261007/15-init-10000-v1/receipt.json)|
-|100000|7495571834|14681307917|1108929291|532172800|PASS / PASS / PASS|[24](checks/disposable-wal-matrix-20261007/24-init-100000-owner-wal-v2/receipt.json)|
-
+'''
+for n,r,receipt in zip((100,1000,10000,100000),init,('13-init-100-v1','14-init-1000-v1','15-init-10000-v1','24-init-100000-owner-wal-v2')):
+ text+=f"|{n}|{r['product_ns']}|{r['complete_performance_ns']}|{r['verification_ns']}|{r['allocated_store_bytes_at_measurement']}|PASS / PASS / PASS|[{receipt.split('-')[0]}](checks/disposable-wal-matrix-20261007/{receipt}/receipt.json)|\n"
+text+='''
 The prior Disposable MEMORY incumbent at `2fced797d` is a retained comparison,
 not a newly run arm. The following is the existing arithmetic
 `10 × current_ns <= 11 × historical_ns`, not matched-harness admission.
 
 | Files | Historical MEMORY ns | Current difference ns / percent | 1.10 arithmetic | Original allocated-byte difference |
 | ---: | ---: | --- | --- | ---: |
-|100|45688500|+18229750 / +39.900084%|FAIL|+4096|
-|1000|155291459|+30913375 / +19.906681%|FAIL|+0|
-|10000|1943650833|+384302667 / +19.772207%|FAIL|+16232448|
-|100000|7423399375|+72172459 / +0.972229%|PASS|+16592896|
-
+'''
+for n,r in zip((100,1000,10000,100000),init):
+ c=r['comparison'];text+=f"|{n}|{c['reference_ns']}|{c['time_delta_ns']:+d} / {c['time_delta_percent']:+.6f}%|{c['historical_speed_arithmetic']}|{c['storage_delta_bytes']:+d}|\n"
+text+='''
 The accepted earlier1000-file WAL point remains198720291ns. This new owner-selected
 observation is186204834ns (−6.298027%); neither replaces the other or establishes
 repeatability. The older eight Init speed failures and eight strict-allocation
@@ -98,11 +102,10 @@ and content. It is not a full-byte oracle of all input files.
 
 | Files | All paths | Selected files | Authenticated selected B | Total fixture B |
 | ---: | ---: | ---: | ---: | ---: |
-|100|102|53|3354003|5000000|
-|1000|1011|70|6430827|20000000|
-|10000|10101|72|101928859|300000000|
-|100000|101001|73|200286236|500000000|
-
+'''
+for n,r in zip((100,1000,10000,100000),init):
+ p=r['proof'];text+=f"|{n}|{p['paths']}|{p['sampled_files']}|{p['sampled_bytes']}|{p['manifest_bytes']}|\n"
+text+='''
 ## Retained history
 
 Each row performs all registered states, construction, Save, History custody,
@@ -115,10 +118,10 @@ fabricated split-file allocation is reported.
 
 | Stride / states | Product ns | Complete performance ns / bound | Proof ns / bound | Original allocated Store B / ceiling | Storage | Receipt |
 | --- | ---: | --- | --- | --- | --- | --- |
-|10 / 17|33380784333|54282765417 /60s|5573308125 /12s|51384320 /54278964|PASS|[25](checks/disposable-wal-matrix-20261007/25-history-stride10-group-rows-indexed-wal-v1/receipt.json)|
-|3 / 53|68569406416|87685327334 /170s|7066451250 /12s|64872448 /70427034|PASS|[26](checks/disposable-wal-matrix-20261007/26-history-stride3-group-rows-indexed-wal-v1/receipt.json)|
-|1 / 157|182854812667|204333286708 /300s|17267117916 /30s|101498880 /92342273|FAIL|[27](checks/disposable-wal-matrix-20261007/27-history-stride1-group-rows-indexed-wal-v1/receipt.json)|
-
+'''
+for s,r,receipt in zip((10,3,1),history,('25-history-stride10-group-rows-indexed-wal-v1','26-history-stride3-group-rows-indexed-wal-v1','27-history-stride1-group-rows-indexed-wal-v1')):
+ c=r['comparison'];text+=f"|{s} / {r['proof']['states']}|{r['product_ns']}|{r['complete_performance_ns']} /{r['command_budget_ns']//10**9}s|{r['verification_ns']} /{r['verification_budget_ns']//10**9}s|{r['allocated_store_bytes_at_measurement']} /{c['allocation_ceiling']}|{c['allocation_gate']}|[{receipt[:2]}](checks/disposable-wal-matrix-20261007/{receipt}/receipt.json)|\n"
+text+='''
 All three rows pass semantic proof, cold eligibility, command/proof budgets and
 cleanup. All pass the historical1.10 speed arithmetic against the independent
 Phase4.5 reference retained from the previous matched campaign. These are not
@@ -127,16 +130,16 @@ all their meaning, including the stride1 FAIL.
 
 | Stride | Historical independent reference ns | Current time delta | Prior Disposable incumbent ns | Current delta vs incumbent | Allocated B delta vs incumbent |
 | --- | ---: | ---: | ---: | ---: | ---: |
-|10|34544042250|-3.367463%|33708739000|-0.972907%|+692224 (+1.365546%)|
-|3|72230709750|-5.068901%|66838917708|+2.589044%|+626688 (+0.975454%)|
-|1|192712692209|-5.115324%|185189368250|-1.260632%|+16326656 (+19.168991%)|
-
+'''
+for s,r in zip((10,3,1),history):
+ c=r['comparison'];v=r['versus_retained_incumbent'];text+=f"|{s}|{c['reference_ns']}|{c['time_delta_percent']:+.6f}%|{c['incumbent']['comparison_ns']}|{v['time_delta_percent']:+.6f}%|{v['allocated_delta_bytes']:+d} ({v['allocated_delta_percent']:+.6f}%)|\n"
+text+='''
 | Stride | Canonical objects / B | All structural path-states | Selected content paths / authenticated B | Acquired proof B | Root / custody proof |
 | --- | --- | ---: | --- | ---: | --- |
-|10|51689 /380559460|101477|67 /970326|3301773|CHECKED / CHECKED|
-|3|73447 /589480854|306861|66 /921174|3689369|CHECKED / CHECKED|
-|1|104618 /871337620|904143|66 /921174|5347088|CHECKED / CHECKED|
-
+'''
+for s,r in zip((10,3,1),history):
+ p=r['proof'];c=r['canonical_census'];text+=f"|{s}|{c['canonical_objects']} /{c['canonical_bytes']}|{p['paths']}|{p['sampled_content_paths']} /{p['authenticated_bytes']}|{p['acquired_content_bytes']}|CHECKED / CHECKED|\n"
+text+='''
 Historical separate worktree census/root-pin files are unavailable. The immutable
 retained baseline receipts still contain the independent producer roots and
 recorded native proof. Their hashes are pinned; current roots are compared with
@@ -197,8 +200,8 @@ receipt integrity, not a claim that the failed numerical gates passed.
 The existing runner executes each sample through the retained campaign launcher:
 
 ```bash
-LAYERFS_CAMPAIGN=disposable-wal-matrix-20261007 LAYERFS_CONSTRUCTION_WORKERS=1 \
-python3 -B core/docs/issues/307/checks/incumbent-restoration-20261007/measure.py \
+LAYERFS_CAMPAIGN=disposable-wal-matrix-20261007 LAYERFS_CONSTRUCTION_WORKERS=1 \\
+python3 -B core/docs/issues/307/checks/incumbent-restoration-20261007/measure.py \\
 /Users/yifanxu/Ephemeral-AI-Lab/layerfs <registered-case-id> candidate <outer-stop-s>
 ```
 
@@ -230,3 +233,5 @@ The following results-only commit has its own exact comparison in receipt31.
 The counter is `tools/production_loc.py`, SHA256
 `c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb`.
 No reference or transport code is retired in this campaign.
+'''
+(base/'DISPOSABLE-WAL-MATRIX-20261007.md').write_text(text)

@@ -1,0 +1,27 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "core/benchmark/fs-bench-pro/runner.py",
+    "run",
+    "--case",
+    "phase7-sqlite-disposable-init-100000-owner-wal-v2",
+    "--arm",
+    "candidate",
+    "--out",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-init-100000-owner-wal-v2-candidate"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+  "wall_timeout_s": 100,
+  "wall_ns": 21497100542,
+  "exit_code": 0,
+  "timed_out": false,
+  "output": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/disposable-wal-matrix-20261007-phase7-sqlite-disposable-init-100000-owner-wal-v2-candidate",
+  "report_template_sha256": "20905ac2e5b69cbab0acb527853910b16d428a57fc44a0304f0024ed49422dfe",
+  "source": "06dc05a7d6a8e77fb1c5ffa532225ad635920275",
+  "dirty_after": [
+    "?? core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md",
+    "?? core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+    "?? core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md"
+  ]
+}
