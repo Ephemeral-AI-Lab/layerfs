@@ -1,0 +1,202 @@
+{
+  "schema": "pre-s8-accounting-registry-v1",
+  "mode": "diagnostic",
+  "numeric_acceptance": "OWNER_DEFERRED",
+  "authority": "core/docs/issues/307/PRE-S8-ACCEPTANCE-DECISION-20261007.md",
+  "budget_ns": 15000000000,
+  "cache": "natural-functional-no-cold-claim",
+  "cases": {
+    "engine-finite": {
+      "binary_name": "engine_finite",
+      "route": "public Owner / six service classes / original completion / release / automatic terminal drain",
+      "workspaces": 4,
+      "service_classes": 6,
+      "waves": 32,
+      "jobs": 1060,
+      "operation_record_bytes": 16384,
+      "phases": [
+        "startup",
+        "setup",
+        "arrivals",
+        "release",
+        "idle",
+        "stop",
+        "finished"
+      ],
+      "prepared": false
+    },
+    "store-commit": {
+      "binary_name": "store_accounting",
+      "route": "direct Store capture / Content / Save / atomic overwrite / paired local install",
+      "namespace_files": 100000,
+      "outcomes": [
+        "Committed",
+        "UpToDate"
+      ],
+      "engine_jobs_per_commit": 2,
+      "initial_reservations_per_commit": 1,
+      "reservation_refills": 0,
+      "history_writes_per_commit": 1,
+      "phases": [
+        "clone",
+        "startup",
+        "bind",
+        "write",
+        "commit",
+        "up_to_date",
+        "verify",
+        "release",
+        "idle",
+        "stop",
+        "finished"
+      ],
+      "prepared": true
+    }
+  },
+  "original_catalog_dispositions": [
+    {
+      "case": "E01-startup",
+      "prospective_status": "RETAINED_ORIGINAL_SCOPE_NO_RESAMPLE",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "E02-bind-1",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "E03-bind-64",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "E04-write-16m",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "E05-write-1g",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "E06-read-mixed",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "E07-reclaim",
+      "prospective_status": "RETAINED_ORIGINAL_SCOPE_NO_RESAMPLE",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "R01-connect",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "R02-objects-1",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "R03-objects-1000",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "R04-cache-trace",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "R05-length-batch",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "R06-length-consumer",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "R07-serial-consumer",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "R08-save-waves",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "R09-shared-call",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "R10-separate-calls",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "R11-history",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "Q01-mixed-load",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "Q02-root-1000",
+      "prospective_status": "RETAINED_ORIGINAL_SCOPE_NO_RESAMPLE",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "Q03-root-10000",
+      "prospective_status": "RETAINED_ORIGINAL_SCOPE_NO_RESAMPLE",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "Q04-root-100000",
+      "prospective_status": "RETAINED_ORIGINAL_SCOPE_NO_RESAMPLE",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "Q05-root-1000000",
+      "prospective_status": "NOT_RUN_UNSELECTED",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "Q06-native-file-5g",
+      "prospective_status": "NOT_RUN_OWNER_WAIVED",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "P01-slow-peer",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "P02-disconnect",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    },
+    {
+      "case": "P03-local-full",
+      "prospective_status": "WITHDRAWN_HOST_MEDIATED_TOPOLOGY",
+      "historical_verdicts": "UNCHANGED"
+    }
+  ],
+  "not_claimed": [
+    "cold cache",
+    "speed comparison",
+    "continuous peak",
+    "exclusive device I/O",
+    "S8 FUSE/Exec",
+    "S10 live normalization"
+  ],
+  "Durable": "NOT_RUN_OWNER_DEFERRED"
+}

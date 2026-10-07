@@ -52,6 +52,9 @@ def template(selected=None):
 
 
 def admission(manifest, root):
+    if manifest.get("schema") == "pre-s8-accounting-registration-v1":
+        from shared.pre_s8_registration import admit
+        return admit(manifest, root)
     catalog = registry()
     result = validate(catalog, manifest, root)
     wanted = [name for name in manifest.get("selected_order", [])]

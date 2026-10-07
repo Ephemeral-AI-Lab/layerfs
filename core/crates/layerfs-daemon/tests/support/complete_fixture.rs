@@ -13,7 +13,7 @@ use layerfs_storage::StoragePolicy;
 use layerfs_telemetry::timer::Timing;
 use std::{
     fs::{self, File},
-    io::Write,
+    io::{Read, Write},
     os::unix::{
         ffi::OsStrExt,
         fs::{FileExt, MetadataExt, PermissionsExt},
@@ -282,7 +282,23 @@ impl Fixture {
             mtime_nanoseconds: fields[5].parse().unwrap(),
         };
         let database = directory.join("store.sqlite");
-        let copied = fs::copy(prepared.join("prepared.sqlite"), &database).unwrap();
+        let mut source = File::open(prepared.join("prepared.sqlite")).unwrap();
+        let mut target = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&database)
+            .unwrap();
+        let mut window = vec![0; bytes::WINDOW];
+        let mut copied = 0;
+        loop {
+            let read = source.read(&mut window).unwrap();
+            if read == 0 {
+                break;
+            }
+            target.write_all(&window[..read]).unwrap();
+            copied += read as u64;
+        }
+        drop((source, target));
         assert_eq!(copied, manifest.bytes);
         manifest.locator = database.to_str().unwrap().into();
         let opened = open_store_observed(
@@ -295,7 +311,7 @@ impl Fixture {
             layerfs_storage::ReservationBlocks::default(),
         )
         .unwrap();
-        println!("Q1_CLONE setup=clone bytes={copied} provider=sealed_file_copy original_retained=true no_native_source=true prepared={}",prepared.display());
+        println!("Q1_CLONE setup=clone bytes={copied} provider=buffered_byte_copy window=131072 original_retained=true no_native_source=true prepared={}",prepared.display());
         Self {
             directory,
             opened,

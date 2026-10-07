@@ -1,0 +1,16 @@
+# {"timestamp": "2026-10-07T13:15:34.666625+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-byte-copy-proof", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-e", "LAYERFS_Q1_PREPARED=/prepared", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-v", "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-24248-Wide:/prepared:ro", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "sha256sum core/target/cluster2-linux/debug/deps/complete_installed_roots-424351482b7c3263; exec timeout --kill-after=1s 100s core/target/cluster2-linux/debug/deps/complete_installed_roots-424351482b7c3263 --exact huge_native_namespace_is_complete_after_install --nocapture --test-threads=1"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "50c4d95dba70d6f471e2b22dd1e65835a9a8761cc1e16a682d21f99e43a3e945", "source_parent": "01f72eee039a90df8f7708877aa0090db8562cd0", "wall_stop": "specified in command; build is not test execution"}
+08bc2c0dd6f0cfcfb41e4ff314c56f468c8196fc6bfb00985ca5b8e4b3a670a7  core/target/cluster2-linux/debug/deps/complete_installed_roots-424351482b7c3263
+
+running 1 test
+test huge_native_namespace_is_complete_after_install ... Q1_CLONE setup=clone bytes=24678400 provider=buffered_byte_copy window=131072 original_retained=true no_native_source=true prepared=/prepared
+Q1_WIDE files=100000 windows=1563 window=64 all_names_bytes_metadata=exact batched_inode_and_content=true
+Q1_ORACLE shape=Wide passed=true source_absent=true sealed_absent=true
+Q1_COUNTS shape=Wide post_install_mount_batches=12 warm_mount_batches=0 work=StoreWork { object_batches: 3719, object_ids: 102657, length_batches: 0, length_ids: 0, serial_reservations: 0 } cache=ClientWork { cache_hits: 914018, cache_misses: 102657, upstream_batches: 3719, authenticated_bytes: 15730213, evictions: 82133, charged_cache_bytes: 8384372, cached_objects: 20461 }
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 2.82s
+
+
+# complete_command_ns=3583925458
+
+# exit=0
