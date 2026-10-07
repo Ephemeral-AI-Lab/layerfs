@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-10-07T13:59:10.674844+00:00",
+  "files": {
+    "core/crates/layerfs-daemon/examples/resource_growth/allocation.rs": "5787f618244a9e9fe8020b36d6bc1fa5bab84eb057c6d7b9a7a45f69156cf2f1",
+    "core/crates/layerfs-daemon/examples/resource_growth/operations.rs": "7988f53a9a6681ad094bf1afc82de414b6e1a802903e861e89746810d05bfbac",
+    "core/crates/layerfs-daemon/examples/resource_growth/observe.rs": "258a51414613f72a8ccf71e0aba74a9dfbd098517fe34ccc2579c712d1106c6b",
+    "core/crates/layerfs-daemon/examples/resource_growth.rs": "831b23c6a06d038478b4dc897a8b51fed4b49a1f7f97f9049bc13fe71826cb0c",
+    "core/crates/layerfs-daemon/examples/resource_prepare.rs": "66600cdffad9e81ba1e2cd9a4729e1d3d2fc5147dd0d9b992348e10e45e10562",
+    "core/crates/layerfs-daemon/examples/store_accounting/produce.rs": "1d5316c85dbc8d68d4e0f052dacd82005ff1cb3741b3730d3a0c92122e26212a",
+    "core/crates/layerfs-daemon/tests/support/complete_fixture.rs": "8ead13485dc790c576effb70585c609fb2b4e3c6fb9473915db50525bb50d43f",
+    "core/crates/layerfs-daemon/tests/support/complete_bytes.rs": "d05d1e1a6beffb39df95a8f0aac52f11d34226dca12e4b07a98466ffda9933e4",
+    "core/crates/layerfs-daemon/tests/support/native_install.rs": "09519cb71b1aeb5186b8ac6c5139faf5099e41ec68912e4d07624d44739cf392",
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "core/Cargo.lock": "1339a41bdfcca8ec0f2f3569d46054f58251ef5d830daabbead35f07fbaf5b29",
+    "core/Cargo.toml": "441b1162aacb628b299ed1e660a1bd08f9ce76e82ced5af5f777fb501f254544"
+  }
+}

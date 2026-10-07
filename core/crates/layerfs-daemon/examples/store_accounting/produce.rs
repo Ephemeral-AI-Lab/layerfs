@@ -15,11 +15,17 @@ use layerfs_storage::Save;
 use layerfs_telemetry::timer::Timing;
 use layerfs_workspace::{Operation, Outcome, Position, Time};
 pub fn changed_bytes() -> Vec<u8> {
+    changed_bytes_with_tag(b'X')
+}
+pub fn changed_bytes_with_tag(tag: u8) -> Vec<u8> {
     let mut bytes = b"complete-native-entry:000000\0".to_vec();
-    bytes[0] = b'X';
+    bytes[0] = tag;
     bytes
 }
 pub fn mutate(bound: &BoundWorkspace) {
+    mutate_tag(bound, b'X');
+}
+pub fn mutate_tag(bound: &BoundWorkspace, tag: u8) {
     let op = bound.operation().unwrap();
     let route = bound.route();
     let done = op
@@ -50,7 +56,7 @@ pub fn mutate(bound: &BoundWorkspace) {
             Operation::Write {
                 serial: stat.serial,
                 position: Position::At(0),
-                data: vec![b'X'].into(),
+                data: vec![tag].into(),
             },
             Time {
                 seconds: stat.metadata.mtime_seconds,
@@ -85,6 +91,14 @@ pub fn construct(
     snapshot: &BranchSnapshot,
     policy: ConstructionPolicy,
 ) -> Result<FilesystemRootId, CommitError> {
+    construct_tag(save, snapshot, policy, b'X')
+}
+pub fn construct_tag(
+    save: &Save<'_>,
+    snapshot: &BranchSnapshot,
+    policy: ConstructionPolicy,
+    tag: u8,
+) -> Result<FilesystemRootId, CommitError> {
     let mut reader = FilesystemRead::new(save, FilesystemRootId(snapshot.effective_root))?;
     let root = reader.root();
     let mut inode =
@@ -94,7 +108,7 @@ pub fn construct(
         layerfs_content::construct_bytes(
             policy,
             &policy.capacities(),
-            &changed_bytes(),
+            &changed_bytes_with_tag(tag),
             &mut sink,
             scope.child("file"),
         )

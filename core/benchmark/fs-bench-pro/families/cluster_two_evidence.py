@@ -52,7 +52,7 @@ def template(selected=None):
 
 
 def admission(manifest, root):
-    if manifest.get("schema") == "pre-s8-accounting-registration-v1":
+    if manifest.get("schema") in {"pre-s8-accounting-registration-v1", "pre-s8-growth-registration-v1"}:
         from shared.pre_s8_registration import admit
         return admit(manifest, root)
     catalog = registry()

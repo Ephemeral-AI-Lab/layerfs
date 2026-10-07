@@ -1,0 +1,27 @@
+# {"timestamp": "2026-10-07T13:59:02.328871+00:00", "command": ["cargo", "+1.85.1", "clippy", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-daemon", "--all-targets", "--", "-D", "warnings"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e1d6685e661d30604d98bae81911d657f4382b0d4fe4359c196f8efe0a9313fc", "source_parent": "1fd566b74f0b12e196563aa2d1440e35644e9219", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error: call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes
+   --> crates/layerfs-daemon/examples/resource_growth/operations.rs:120:5
+    |
+120 |     drop(sink);
+    |     ^^^^^^^^^^
+    |
+note: argument has type `operations::Tracked<'_, '_>`
+   --> crates/layerfs-daemon/examples/resource_growth/operations.rs:120:10
+    |
+120 |     drop(sink);
+    |          ^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#drop_non_drop
+    = note: `-D clippy::drop-non-drop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::drop_non_drop)]`
+
+error: could not compile `layerfs-daemon` (example "resource_growth") due to 1 previous error
+
+# complete_command_ns=1117154833
+
+# exit=101

@@ -1,0 +1,57 @@
+{
+  "timestamp": "2026-10-07T14:03:12.938231+00:00",
+  "setup": "explicit byte-copy clones, no cold claim",
+  "fixtures": {
+    "1000": {
+      "directory": "/private/tmp/layerfs-resource-prepared-20261007-n1000",
+      "files": {
+        "prepared.sqlite": {
+          "sha256": "fb47ee6db356dc7ff1adcfa571e4ccce8e2841138b68dfcbd0ea1e7b60996cd3",
+          "bytes": 491520
+        },
+        "prepared.manifest": {
+          "sha256": "62ed13e34705b2b6a4724c7f5a927f4d9e1d78c86df3e83e02f1430e3abaea88",
+          "bytes": 201
+        },
+        "expected-metadata.txt": {
+          "sha256": "b1bb14035db5792a18248db607363f8a81a922f7366bb4cf34a9baaaf8983e7b",
+          "bytes": 50
+        }
+      }
+    },
+    "10000": {
+      "directory": "/private/tmp/layerfs-resource-prepared-20261007-n10000",
+      "files": {
+        "prepared.sqlite": {
+          "sha256": "f2383bab10073003832e057105384f57c41f60ace26cb03476ff93f2ff878e93",
+          "bytes": 3166208
+        },
+        "prepared.manifest": {
+          "sha256": "e1d81eafb65efeec38a40d77c58df5224243ad824e41377ded79737950afda40",
+          "bytes": 202
+        },
+        "expected-metadata.txt": {
+          "sha256": "8766adcf6cbbbd4c370ae98454c8cac422d9d90cb6eab284b196ced409e54a01",
+          "bytes": 50
+        }
+      }
+    },
+    "100000": {
+      "directory": "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-24248-Wide",
+      "files": {
+        "prepared.sqlite": {
+          "sha256": "39d0bd5c614dc3b7d4ed2ec7477b2ff909e5030c817bb9ade1afe91c0e86c08e",
+          "bytes": 24678400
+        },
+        "prepared.manifest": {
+          "sha256": "35c1822940d37a1cf3c518f1a880d8ff7bce3bcecaccd7e8f6b82c2d452090ac",
+          "bytes": 222
+        },
+        "expected-metadata.txt": {
+          "sha256": "6779ec9d025009061aa80b072ac859291490d641c4537743fb3e847943f19b5e",
+          "bytes": 50
+        }
+      }
+    }
+  }
+}

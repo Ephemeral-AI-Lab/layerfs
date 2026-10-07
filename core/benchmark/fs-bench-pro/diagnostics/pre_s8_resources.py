@@ -14,7 +14,7 @@ import sys
 import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from shared import evidence_resources as resources
-from shared.pre_s8_registration import admit
+from shared.pre_s8_registration import admit, GROWTH_SCHEMA
 
 INTERVAL_NS = 5_000_000
 WINDOW = 65536
@@ -36,7 +36,8 @@ def fresh_json(path, value):
 def collect(binary, output, database, case, registration, prepared=None, cgroup=None):
     started = time.monotonic_ns()
     binary, output, database = Path(binary).resolve(), Path(output).resolve(), Path(database).resolve()
-    if case not in {"engine-finite", "store-commit"} or (case == "store-commit") != (prepared is not None):
+    growth = case.startswith("growth-")
+    if (case not in {"engine-finite", "store-commit"} and not growth) or (case != "engine-finite") != (prepared is not None):
         raise ValueError("exact fixed case/preparation required")
     if os.environ.get("LAYERFS_CONSTRUCTION_WORKERS") != "1":
         raise ValueError("one construction worker required")
@@ -54,6 +55,10 @@ def collect(binary, output, database, case, registration, prepared=None, cgroup=
     command = [str(binary), str(database), str(jobs)]
     if prepared is not None:
         command.append(str(Path(prepared).resolve()))
+    if growth:
+        if frozen["schema"] != GROWTH_SCHEMA:
+            raise ValueError("growth schema required")
+        command.extend(frozen["workload"]["arguments"])
     identity = {"schema": "pre-s8-diagnostic-invocation-v1", "case": case,
                 "registration_sha256": digest(registration),
                 "mode": "diagnostic", "numeric_acceptance": "OWNER_DEFERRED",
@@ -142,7 +147,8 @@ def collect(binary, output, database, case, registration, prepared=None, cgroup=
         status = child.wait(timeout=2)
         if status != 0:
             raise RuntimeError(f"original child exit={status}")
-        expected = (["startup", "setup", "arrivals", "release", "idle", "stop", "finished"]
+        expected = (frozen["workload"]["phases"] if growth else
+                    ["startup", "setup", "arrivals", "release", "idle", "stop", "finished"]
                     if case == "engine-finite" else
                     ["clone", "startup", "bind", "write", "commit", "up_to_date", "verify", "release", "idle", "stop", "finished"])
         if phase_order != expected:
@@ -183,7 +189,7 @@ if __name__ == "__main__":
     parser.add_argument("--binary", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--database", required=True)
-    parser.add_argument("--case", required=True, choices=["engine-finite", "store-commit"])
+    parser.add_argument("--case", required=True)
     parser.add_argument("--registration", required=True)
     parser.add_argument("--prepared")
     parser.add_argument("--cgroup")

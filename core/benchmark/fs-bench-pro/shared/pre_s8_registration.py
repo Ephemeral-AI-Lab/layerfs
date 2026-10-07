@@ -6,6 +6,8 @@ import subprocess
 
 SCHEMA = "pre-s8-accounting-registration-v1"
 REGISTRY = "core/benchmark/fs-bench-pro/registry/pre-s8-accounting-v1.json"
+GROWTH_SCHEMA = "pre-s8-growth-registration-v1"
+GROWTH_REGISTRY = "core/benchmark/fs-bench-pro/registry/pre-s8-growth-v1.json"
 
 
 def digest(path):
@@ -20,8 +22,11 @@ def admit(value, root):
     root = Path(root).resolve()
     errors = []
     try:
-        registry = json.loads((root / REGISTRY).read_text())
-        if value.get("schema") != SCHEMA or value.get("registry_sha256") != digest(root / REGISTRY):
+        selected = {SCHEMA: REGISTRY, GROWTH_SCHEMA: GROWTH_REGISTRY}.get(value.get("schema"))
+        if selected is None:
+            raise ValueError("unregistered schema")
+        registry = json.loads((root / selected).read_text())
+        if value.get("registry_sha256") != digest(root / selected):
             raise ValueError("registration/registry identity")
         case = registry["cases"][value["case"]]
         if value.get("workload") != case or value.get("mode") != "diagnostic" or value.get("numeric_acceptance") != "OWNER_DEFERRED":
