@@ -1,0 +1,43 @@
+{
+  "admission_eligible": false,
+  "attempt_count": 1,
+  "binary_sha256": "7b7c0f98b168b1375aa740f3b4eb764ee1d10e34acd59ae77d50dabe8f796669",
+  "cache": "natural-functional-no-cold-claim",
+  "case": "growth-save32m",
+  "cgroup": "/sys/fs/cgroup",
+  "clock": {
+    "adjustable": false,
+    "api": "python.time.monotonic_ns",
+    "cross_clock_calibration": "UNAVAILABLE",
+    "implementation": "clock_gettime(CLOCK_MONOTONIC)",
+    "monotonic": true,
+    "platform": "linux",
+    "resolution_ns": 1000000
+  },
+  "command": [
+    "/work/core/target/cluster2-linux/release/examples/resource_growth",
+    "/tmp/layerfs-resource-linux-growth-save32m",
+    "/work/core/docs/issues/307/checks/pre-s8-resource-growth-20261007/57-linux-growth-save32m/jobs.jsonl",
+    "/prepared",
+    "save",
+    "1000",
+    "33554432"
+  ],
+  "construction_workers": "1",
+  "database_directory": "/tmp/layerfs-resource-linux-growth-save32m",
+  "mode": "diagnostic",
+  "numeric_acceptance": "OWNER_DEFERRED",
+  "observer": "/work/core/benchmark/fs-bench-pro/diagnostics/pre_s8_resources.py",
+  "observer_sha256": "f7469aa9e3555ef3c8c962a169e7f9dc4364f5785abf319310b51c934d8afb02",
+  "platform": "linux",
+  "prepared": {
+    "expected-metadata.txt": "b1bb14035db5792a18248db607363f8a81a922f7366bb4cf34a9baaaf8983e7b",
+    "prepared.manifest": "62ed13e34705b2b6a4724c7f5a927f4d9e1d78c86df3e83e02f1430e3abaea88",
+    "prepared.sqlite": "fb47ee6db356dc7ff1adcfa571e4ccce8e2841138b68dfcbd0ea1e7b60996cd3"
+  },
+  "reader_sha256": "bb4bbf78cc22c55e1f91ac69a9ae87469deb9c8413515e49764eade9d816da8f",
+  "registration_sha256": "4bef45c50e618af222f6418d373a13145178355f8a0ed11539f839afe1377048",
+  "sample_count": 0,
+  "sampling_interval_ns": 5000000,
+  "schema": "pre-s8-diagnostic-invocation-v1"
+}

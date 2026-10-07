@@ -1,0 +1,23 @@
+# {"timestamp": "2026-10-07T14:20:59.425236+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "-c", "\nfrom pathlib import Path\nimport hashlib,json,re,subprocess\nroot=Path.cwd();base=root/\"core/docs/issues/307/checks/pre-s8-resource-growth-20261007\"\nfiles=[root/\"core/docs/issues/307/PRE-S8-RESOURCE-GROWTH-RESULTS-20261007.md\",root/\"core/docs/issues/307/PRE-S8-RESOURCE-GROWTH-20261007.md\",root/\"core/docs/issues/307/PRE-S8-COMPLETION-20261007.md\",root/\"core/docs/issues/307/PRE-S8-F14-20261007.md\",root/\"core/docs/issues/307/PROGRESS.md\",root/\"core/docs/architecture/21-daemon-owner.md\"]\nlinks=0\nfor p in files:\n for target in re.findall(r\"\\]\\(([^)]+)\\)\",p.read_text()):\n  if \"://\" in target or target.startswith(\"#\"):continue\n  assert (p.parent/target.split(\"#\")[0]).exists(),(p,target);links+=1\nold=json.loads((root/\"core/docs/issues/307/checks/pre-s8-wal-init-20261007/10-wal-sample/receipt.json\").read_text())[\"declared_noninputs\"]\nfor p,h in old.items():assert hashlib.sha256((root/p).read_bytes()).hexdigest()==h\nassert not subprocess.check_output([\"git\",\"diff\",\"1fd566b74\",\"--\",\"core/crates/*/src\",\"core/crates/*/sql\",\"core/crates/layerfs-api/*/src\",\"crates\"])\nassert hashlib.sha256((root/\"tools/production_loc.py\").read_bytes()).hexdigest()==\"c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb\"\nprotected=[\"9cf2fe345496\",\"ce75ac504df9\",\"d2433851ea59\",\"d2550144998b\"]\nactive=subprocess.check_output([\"docker\",\"ps\",\"--format\",\"{{.ID}}\"],text=True).splitlines();assert all(c in active for c in protected)\nremaining=subprocess.check_output([\"docker\",\"ps\",\"-a\",\"--filter\",\"name=layerfs-resource-linux-\",\"--format\",\"{{.Names}}\"],text=True).strip();assert not remaining\nsubprocess.run([\"git\",\"diff\",\"--check\"],check=True)\nprint(json.dumps({\"status\":\"PASS\",\"local_link_targets\":links,\"protected_notes\":old,\"protected_running_containers\":protected,\"owned_diagnostic_containers_remaining\":remaining,\"production_source_change\":False,\"current_branch\":subprocess.check_output([\"git\",\"branch\",\"--show-current\"],text=True).strip()},indent=2))\n"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "0c736c4bf774ababab16dc6627fea3fcbb6ad930", "wall_stop": "specified in command; build is not test execution"}
+{
+  "status": "PASS",
+  "local_link_targets": 138,
+  "protected_notes": {
+    "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+    "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+    "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027"
+  },
+  "protected_running_containers": [
+    "9cf2fe345496",
+    "ce75ac504df9",
+    "d2433851ea59",
+    "d2550144998b"
+  ],
+  "owned_diagnostic_containers_remaining": "",
+  "production_source_change": false,
+  "current_branch": "main"
+}
+
+# complete_command_ns=515447125
+
+# exit=0

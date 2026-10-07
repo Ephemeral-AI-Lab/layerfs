@@ -217,3 +217,7 @@ macOS/Linux. Independent validation reconciles original family receipts and all
 opened Store-handle counters, with supported process/cgroup/file observations.
 Continuous phase peaks, exclusive physical attribution and numerical acceptance
 remain explicitly unqualified; diagnostic observations do not change Owner policy.
+The [focused growth follow-up](../issues/307/PRE-S8-RESOURCE-GROWTH-RESULTS-20261007.md)
+adds external Rust live-request accounting, actual increasing-size/repeated-Commit
+observations and exact released ownership. It changes no product allocator or
+admission policy; whole-process/OS cache remains a separate resource domain.

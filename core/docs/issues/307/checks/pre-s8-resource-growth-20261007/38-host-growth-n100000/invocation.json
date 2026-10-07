@@ -1,0 +1,43 @@
+{
+  "admission_eligible": false,
+  "attempt_count": 1,
+  "binary_sha256": "e1d96be5f216bf0b359c25e8ab11e1b8a8ab59433638bc7db9510b5c20c999f4",
+  "cache": "natural-functional-no-cold-claim",
+  "case": "growth-n100000",
+  "cgroup": null,
+  "clock": {
+    "adjustable": false,
+    "api": "python.time.monotonic_ns",
+    "cross_clock_calibration": "UNAVAILABLE",
+    "implementation": "mach_absolute_time()",
+    "monotonic": true,
+    "platform": "darwin",
+    "resolution_ns": 42
+  },
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/resource_growth",
+    "/private/tmp/layerfs-resource-host-growth-n100000-20261007",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/pre-s8-resource-growth-20261007/38-host-growth-n100000/jobs.jsonl",
+    "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-24248-Wide",
+    "commit",
+    "100000",
+    "1"
+  ],
+  "construction_workers": "1",
+  "database_directory": "/private/tmp/layerfs-resource-host-growth-n100000-20261007",
+  "mode": "diagnostic",
+  "numeric_acceptance": "OWNER_DEFERRED",
+  "observer": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/diagnostics/pre_s8_resources.py",
+  "observer_sha256": "f7469aa9e3555ef3c8c962a169e7f9dc4364f5785abf319310b51c934d8afb02",
+  "platform": "darwin",
+  "prepared": {
+    "expected-metadata.txt": "6779ec9d025009061aa80b072ac859291490d641c4537743fb3e847943f19b5e",
+    "prepared.manifest": "35c1822940d37a1cf3c518f1a880d8ff7bce3bcecaccd7e8f6b82c2d452090ac",
+    "prepared.sqlite": "39d0bd5c614dc3b7d4ed2ec7477b2ff909e5030c817bb9ade1afe91c0e86c08e"
+  },
+  "reader_sha256": "bb4bbf78cc22c55e1f91ac69a9ae87469deb9c8413515e49764eade9d816da8f",
+  "registration_sha256": "2db55a87d5e5feeb053817c2d8e949d50d323a0b6dfb11acf023e4c5f7d67c0b",
+  "sample_count": 0,
+  "sampling_interval_ns": 5000000,
+  "schema": "pre-s8-diagnostic-invocation-v1"
+}

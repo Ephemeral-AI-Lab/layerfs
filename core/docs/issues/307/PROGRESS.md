@@ -16,6 +16,10 @@ Disposable functional/count proofs. F14's registered direct routes, original
 whole-operation accounting and supported phase diagnostics are complete under
 the [owner's diagnostic acceptance scope](PRE-S8-ACCEPTANCE-DECISION-20261007.md);
 continuous phase-peak/physical attribution remains explicitly incomplete.
+The subsequent [focused resource-growth check](PRE-S8-RESOURCE-GROWTH-RESULTS-20261007.md)
+passes14 selected host/Linux runs, including64 distinct Commits in one Workspace,
+and records full release, bounded source owners and the separate OS-cache costs.
+No product memory fix was required by these observations.
 
 Daemons open the shared Store directly; SDK host-mediated transport is retired.
 Current Branch Commit is overwrite-only in successful database effect order,

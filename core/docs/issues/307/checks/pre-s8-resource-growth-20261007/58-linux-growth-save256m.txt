@@ -1,0 +1,42 @@
+# {"timestamp": "2026-10-07T14:10:40.795771+00:00", "command": ["python3", "-B", "-c", "import fcntl,subprocess,sys;from pathlib import Path;f=Path(\"benchmark-results/fs-bench-pro/.run.lock\").open(\"a+b\");fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB);sys.exit(subprocess.run(sys.argv[1:]).returncode)", "docker", "run", "--name", "layerfs-resource-linux-growth-save256m", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-v", "/tmp/layerfs-resource-prepared-20261007-n1000:/prepared:ro", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "timeout", "--kill-after=1s", "100s", "python3", "-B", "core/benchmark/fs-bench-pro/diagnostics/pre_s8_resources.py", "--binary", "/work/core/target/cluster2-linux/release/examples/resource_growth", "--out", "core/docs/issues/307/checks/pre-s8-resource-growth-20261007/59-linux-growth-save256m", "--database", "/tmp/layerfs-resource-linux-growth-save256m", "--case", "growth-save256m", "--registration", "core/docs/issues/307/checks/pre-s8-resource-growth-20261007/30-linux-growth-save256m-registration.json", "--prepared", "/prepared", "--cgroup", "/sys/fs/cgroup"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "0c736c4bf774ababab16dc6627fea3fcbb6ad930", "wall_stop": "specified in command; build is not test execution"}
+{
+  "admission_eligible": false,
+  "artifact_directory": "/tmp/layerfs-q1-9-Wide-clone",
+  "attempt_count": 1,
+  "case": "growth-save256m",
+  "child_exit": 0,
+  "child_joined": true,
+  "child_pid": 9,
+  "collector_wall_ns": 2875114083,
+  "continuous_peak": "NOT_CLAIMED",
+  "jobs_sha256": "7fa878669e10d6624199de5c662615db762c26a414b2978d1fc23076a5c1b12b",
+  "limitations": [
+    "short phases may have no interior sample; endpoints are not a peak proof",
+    "resource read intervals and observer/phase handshake overhead are included",
+    "macOS ps has no per-file cache, kernel, physical-I/O or pager decomposition",
+    "Linux process/cgroup fields overlap and retain their original kernel scope",
+    "no inferred internal SQLite copies, visited pages or runnable-only wait",
+    "backing artifacts are retained; logical cleanup never means file shrink"
+  ],
+  "numeric_acceptance": "OWNER_DEFERRED",
+  "original_failure": null,
+  "phases": [
+    "clone",
+    "startup",
+    "bind",
+    "save",
+    "verify",
+    "close",
+    "drain",
+    "stop",
+    "finished"
+  ],
+  "resource_records": 388,
+  "resources_sha256": "b2f4cfaaf7b32d1dfcb6c8fa8a2a1c3cb18763624aee33b1a922833f431de6fc",
+  "schema": "pre-s8-diagnostic-outcome-v1",
+  "status": "RECORDED"
+}
+
+# complete_command_ns=3410525500
+
+# exit=0

@@ -1,0 +1,12 @@
+ENGINE_PHASE clone pid=34482
+Q1_CLONE setup=clone bytes=24678400 provider=buffered_byte_copy window=131072 original_retained=true no_native_source=true prepared=/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-24248-Wide
+STORE_ARTIFACT_DIRECTORY /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-34482-Wide-clone
+ENGINE_PHASE startup pid=34482
+ENGINE_PHASE bind pid=34482
+ENGINE_PHASE cycle-000 pid=34482
+ENGINE_PHASE released-000 pid=34482
+ENGINE_PHASE close pid=34482
+ENGINE_PHASE drain pid=34482
+ENGINE_PHASE stop pid=34482
+GROWTH_COMPLETE mode=commit files=100000 amount=1 retained=/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-34482-Wide-clone
+ENGINE_PHASE finished pid=34482

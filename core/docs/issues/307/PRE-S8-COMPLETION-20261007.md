@@ -12,6 +12,14 @@ phase diagnostics. Exact continuous peaks/physical attribution remain incomplete
 new numerical acceptance is owner-deferred. No claim says future failures are
 impossible or that these proofs cover FUSE, Bash or live Commit normalization.
 
+The subsequent owner-authorized [resource-growth investigation](PRE-S8-RESOURCE-GROWTH-RESULTS-20261007.md)
+now passes14 actual host/Linux selections: namespace growth,4/32/256MiB streamed
+Saves and64 distinct Commits in one Workspace. Source-bounded Rust ownership and
+terminal release are supported; OS file-cache growth is explicitly accounted.
+No production correction was indicated. This closes that focused investigation
+and supports S8 implementation, while the broader measurement precision limits
+below remain unqualified.
+
 ## Controlling owner decisions
 
 - The approved narrow macOS seal file-control exception is in
@@ -216,7 +224,9 @@ No reduction is claimed as an algorithmic simplification.
 | `a2189c250` | 165673 → 165673 (+0) | 100256 → 100256 | 57382 → 57382 | 6549 → 6549 | test(accounting): register direct engine and Store diagnostic routes |
 | `772bda27a` | 165673 → 165673 (+0) | 100256 → 100256 | 57382 → 57382 | 6549 → 6549 | test(accounting): distinguish bounded signature scans from namespace work |
 | `02922afa1` | 165673 → 165673 (+0) | 100256 → 100256 | 57382 → 57382 | 6549 → 6549 | test(accounting): charge candidate-ring loading for every Save |
-| This final documentation/evidence commit, first parent `02922afa1` |165673 →165673 (+0)|100256 →100256|57382 →57382|6549 →6549|Preserve final diagnostics, complete the scope/limitations handoff and repair retired-source links|
+| `1fd566b74` |165673 →165673 (+0)|100256 →100256|57382 →57382|6549 →6549|Preserve diagnostics, scope/limitations handoff and repaired retired-source links|
+| `0c736c4bf` |165673 →165673 (+0)|100256 →100256|57382 →57382|6549 →6549|Register focused resource-growth and repeated-Commit checks; external instrumentation only|
+| This resource-growth results commit, first parent `0c736c4bf` |165673 →165673 (+0)|100256 →100256|57382 →57382|6549 →6549|Retain14 passing selections, resource interpretations and successful owned cleanup|
 
 Net from the dispatched starting point: combined170293→165673 (−4620),
 core104876→100256 (−4620), active61711→57382 (−4329). The transport retirement

@@ -1,0 +1,70 @@
+# {"timestamp": "2026-10-07T14:05:57.602195+00:00", "command": ["python3", "-B", "-c", "import sys,json;from pathlib import Path;sys.path.insert(0,\"core/benchmark/fs-bench-pro\");from shared.pre_s8_registration import admit;p=Path(\"core/docs/issues/307/checks/pre-s8-resource-growth-20261007\");result={x.name:admit(json.loads(x.read_text()),Path.cwd()) for x in sorted(p.glob(\"*-host-growth-*-registration.json\"))};print(json.dumps(result,indent=2));assert len(result)==7 and all(v[\"status\"]==\"PASS\" for v in result.values())"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "0c736c4bf774ababab16dc6627fea3fcbb6ad930", "wall_stop": "specified in command; build is not test execution"}
+{
+  "18-host-growth-n1000-registration.json": {
+    "schema": "pre-s8-accounting-registration-result-v1",
+    "status": "PASS",
+    "registration_only": true,
+    "numeric_acceptance": "OWNER_DEFERRED",
+    "qualification": "NOT_EVALUATED",
+    "case": "growth-n1000",
+    "errors": []
+  },
+  "19-host-growth-n10000-registration.json": {
+    "schema": "pre-s8-accounting-registration-result-v1",
+    "status": "PASS",
+    "registration_only": true,
+    "numeric_acceptance": "OWNER_DEFERRED",
+    "qualification": "NOT_EVALUATED",
+    "case": "growth-n10000",
+    "errors": []
+  },
+  "20-host-growth-n100000-registration.json": {
+    "schema": "pre-s8-accounting-registration-result-v1",
+    "status": "PASS",
+    "registration_only": true,
+    "numeric_acceptance": "OWNER_DEFERRED",
+    "qualification": "NOT_EVALUATED",
+    "case": "growth-n100000",
+    "errors": []
+  },
+  "21-host-growth-save4m-registration.json": {
+    "schema": "pre-s8-accounting-registration-result-v1",
+    "status": "PASS",
+    "registration_only": true,
+    "numeric_acceptance": "OWNER_DEFERRED",
+    "qualification": "NOT_EVALUATED",
+    "case": "growth-save4m",
+    "errors": []
+  },
+  "22-host-growth-save32m-registration.json": {
+    "schema": "pre-s8-accounting-registration-result-v1",
+    "status": "PASS",
+    "registration_only": true,
+    "numeric_acceptance": "OWNER_DEFERRED",
+    "qualification": "NOT_EVALUATED",
+    "case": "growth-save32m",
+    "errors": []
+  },
+  "23-host-growth-save256m-registration.json": {
+    "schema": "pre-s8-accounting-registration-result-v1",
+    "status": "PASS",
+    "registration_only": true,
+    "numeric_acceptance": "OWNER_DEFERRED",
+    "qualification": "NOT_EVALUATED",
+    "case": "growth-save256m",
+    "errors": []
+  },
+  "24-host-growth-repeat64-registration.json": {
+    "schema": "pre-s8-accounting-registration-result-v1",
+    "status": "PASS",
+    "registration_only": true,
+    "numeric_acceptance": "OWNER_DEFERRED",
+    "qualification": "NOT_EVALUATED",
+    "case": "growth-repeat64",
+    "errors": []
+  }
+}
+
+# complete_command_ns=456746666
+
+# exit=0

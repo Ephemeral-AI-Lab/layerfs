@@ -1,0 +1,37 @@
+{
+  "admission_eligible": false,
+  "artifact_directory": "/tmp/layerfs-q1-9-Wide-clone",
+  "attempt_count": 1,
+  "case": "growth-n1000",
+  "child_exit": 0,
+  "child_joined": true,
+  "child_pid": 9,
+  "collector_wall_ns": 254494208,
+  "continuous_peak": "NOT_CLAIMED",
+  "jobs_sha256": "541a26a3aff5fb50c7f88046d554808d926ecfe3c603931c6d93a4a37b4d8ca2",
+  "limitations": [
+    "short phases may have no interior sample; endpoints are not a peak proof",
+    "resource read intervals and observer/phase handshake overhead are included",
+    "macOS ps has no per-file cache, kernel, physical-I/O or pager decomposition",
+    "Linux process/cgroup fields overlap and retain their original kernel scope",
+    "no inferred internal SQLite copies, visited pages or runnable-only wait",
+    "backing artifacts are retained; logical cleanup never means file shrink"
+  ],
+  "numeric_acceptance": "OWNER_DEFERRED",
+  "original_failure": null,
+  "phases": [
+    "clone",
+    "startup",
+    "bind",
+    "cycle-000",
+    "released-000",
+    "close",
+    "drain",
+    "stop",
+    "finished"
+  ],
+  "resource_records": 20,
+  "resources_sha256": "e140948d1eab14c9b39e4a394857463fa7e4a0b01987a299a3d9feb20fd5818b",
+  "schema": "pre-s8-diagnostic-outcome-v1",
+  "status": "RECORDED"
+}

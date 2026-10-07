@@ -1,0 +1,42 @@
+# {"timestamp": "2026-10-07T14:06:39.390119+00:00", "command": ["python3", "-B", "-c", "import fcntl,subprocess,sys;from pathlib import Path;f=Path(\"benchmark-results/fs-bench-pro/.run.lock\").open(\"a+b\");fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB);sys.exit(subprocess.run(sys.argv[1:]).returncode)", "perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "core/benchmark/fs-bench-pro/diagnostics/pre_s8_resources.py", "--binary", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/resource_growth", "--out", "core/docs/issues/307/checks/pre-s8-resource-growth-20261007/36-host-growth-n10000", "--database", "/tmp/layerfs-resource-host-growth-n10000-20261007", "--case", "growth-n10000", "--registration", "core/docs/issues/307/checks/pre-s8-resource-growth-20261007/19-host-growth-n10000-registration.json", "--prepared", "/tmp/layerfs-resource-prepared-20261007-n10000"], "construction_workers": "1", "binaries": {"/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/resource_growth": "e1d96be5f216bf0b359c25e8ab11e1b8a8ab59433638bc7db9510b5c20c999f4"}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "0c736c4bf774ababab16dc6627fea3fcbb6ad930", "wall_stop": "specified in command; build is not test execution"}
+{
+  "admission_eligible": false,
+  "artifact_directory": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-34408-Wide-clone",
+  "attempt_count": 1,
+  "case": "growth-n10000",
+  "child_exit": 0,
+  "child_joined": true,
+  "child_pid": 34408,
+  "collector_wall_ns": 224780667,
+  "continuous_peak": "NOT_CLAIMED",
+  "jobs_sha256": "678d25941129f4980de53c9d0af73a17b26e742081e19c82ca2e21e44f864d4d",
+  "limitations": [
+    "short phases may have no interior sample; endpoints are not a peak proof",
+    "resource read intervals and observer/phase handshake overhead are included",
+    "macOS ps has no per-file cache, kernel, physical-I/O or pager decomposition",
+    "Linux process/cgroup fields overlap and retain their original kernel scope",
+    "no inferred internal SQLite copies, visited pages or runnable-only wait",
+    "backing artifacts are retained; logical cleanup never means file shrink"
+  ],
+  "numeric_acceptance": "OWNER_DEFERRED",
+  "original_failure": null,
+  "phases": [
+    "clone",
+    "startup",
+    "bind",
+    "cycle-000",
+    "released-000",
+    "close",
+    "drain",
+    "stop",
+    "finished"
+  ],
+  "resource_records": 21,
+  "resources_sha256": "d51fc9ccd2071485babff3e9fcfa52c7fc80c4f8895664af7ed20acee3b81edb",
+  "schema": "pre-s8-diagnostic-outcome-v1",
+  "status": "RECORDED"
+}
+
+# complete_command_ns=352740833
+
+# exit=0

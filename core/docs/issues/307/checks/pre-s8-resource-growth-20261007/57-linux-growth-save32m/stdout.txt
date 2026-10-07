@@ -1,0 +1,12 @@
+ENGINE_PHASE clone pid=9
+Q1_CLONE setup=clone bytes=491520 provider=buffered_byte_copy window=131072 original_retained=true no_native_source=true prepared=/prepared
+STORE_ARTIFACT_DIRECTORY /tmp/layerfs-q1-9-Wide-clone
+ENGINE_PHASE startup pid=9
+ENGINE_PHASE bind pid=9
+ENGINE_PHASE save pid=9
+ENGINE_PHASE verify pid=9
+ENGINE_PHASE close pid=9
+ENGINE_PHASE drain pid=9
+ENGINE_PHASE stop pid=9
+GROWTH_COMPLETE mode=save files=1000 amount=33554432 retained=/tmp/layerfs-q1-9-Wide-clone
+ENGINE_PHASE finished pid=9

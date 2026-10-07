@@ -1,0 +1,148 @@
+# {"timestamp": "2026-10-07T14:13:10.504268+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "-c", "\nfrom pathlib import Path\nimport json,sys,re,time\nsys.path.insert(0,\"core/benchmark/fs-bench-pro\")\nfrom shared.pre_s8_growth import validate\nfrom shared.pre_s8_phase_report import phase_report\nfrom shared.pre_s8_registration import digest\nstart=time.monotonic_ns();base=Path(\"core/docs/issues/307/checks/pre-s8-resource-growth-20261007\")\nregistry=json.loads(Path(\"core/benchmark/fs-bench-pro/registry/pre-s8-growth-v1.json\").read_text());result={}\nfor platform,regbase,runbase,dirbase in [(\"host\",18,33,34),(\"linux\",25,48,49)]:\n for i,(case,work) in enumerate(registry[\"cases\"].items()):\n  name=f\"{dirbase+2*i}-{platform}-{case}\";p=base/name;reg=base/f\"{regbase+i}-{platform}-{case}-registration.json\"\n  frozen=json.loads(reg.read_text());invocation=json.loads((p/\"invocation.json\").read_text());outcome=json.loads((p/\"outcome.json\").read_text())\n  assert frozen[\"workload\"]==work and frozen[\"case\"]==case\n  assert invocation[\"registration_sha256\"]==digest(reg) and invocation[\"binary_sha256\"]==frozen[\"binary\"][\"sha256\"]\n  assert outcome[\"status\"]==\"RECORDED\" and outcome[\"child_exit\"]==0 and outcome[\"child_joined\"] and outcome[\"original_failure\"] is None\n  assert outcome[\"attempt_count\"]==1 and outcome[\"phases\"]==work[\"phases\"]\n  for key,file in [(\"jobs_sha256\",\"jobs.jsonl\"),(\"resources_sha256\",\"resources.jsonl\")]:assert outcome[key]==digest(p/file)\n  wall=int(re.search(r\"# complete_command_ns=(\\d+)\",(base/f\"{runbase+2*i}-{platform}-{case}.txt\").read_text()).group(1));assert wall<=15000000000\n  counts=validate(p/\"jobs.jsonl\",work);phases=phase_report(p/\"resources.jsonl\");assert phases[\"records\"]==outcome[\"resource_records\"] and list(phases[\"phases\"])==work[\"phases\"]\n  released=[r for r in counts[\"points\"] if r[\"stage\"]==\"released\"]\n  result[f\"{platform}/{case}\"]={\"receipt_directory\":name,\"registration\":reg.name,\"source_commit\":frozen[\"source_commit\"],\"binary_sha256\":frozen[\"binary\"][\"sha256\"],\"whole_command_ns\":wall,\"collector_ns\":outcome[\"collector_wall_ns\"],\"original_artifact_directory\":outcome[\"artifact_directory\"],\"counts\":counts,\"resources\":phases,\"summary\":{\"released_rust_first\":released[0][\"rust_live_requested\"],\"released_rust_last\":released[-1][\"rust_live_requested\"],\"cache_first\":released[0][\"cache_bytes\"],\"cache_last\":released[-1][\"cache_bytes\"],\"terminal_rust\":counts[\"terminal\"][\"rust_live_requested\"],\"maximum_observed_process_rss\":max(v[\"rss_observed_max_bytes\"] for v in phases[\"phases\"].values()),\"maximum_observed_cgroup\":max((v[\"cgroup_observed_max_bytes\"] or 0) for v in phases[\"phases\"].values()) if platform==\"linux\" else None}}\nns=time.monotonic_ns()-start;assert ns<10000000000\nreport={\"schema\":\"pre-s8-growth-report-v1\",\"verification_ns\":ns,\"selections\":result,\"functional_count_status\":\"PASS\",\"numerical_acceptance\":\"OWNER_DEFERRED\",\"growth_conclusion\":\"requires interpretation with source owner inventory; sampled maxima are not continuous peaks\"}\nwith (base/\"63-growth-report.json\").open(\"x\") as f:json.dump(report,f,indent=2)\nprint(json.dumps({k:{**v[\"summary\"],\"whole_command_ns\":v[\"whole_command_ns\"]} for k,v in result.items()},indent=2));print(\"verification_ns\",ns)\n"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "0c736c4bf774ababab16dc6627fea3fcbb6ad930", "wall_stop": "specified in command; build is not test execution"}
+{
+  "host/growth-n1000": {
+    "released_rust_first": 2902152,
+    "released_rust_last": 2902152,
+    "cache_first": 32691,
+    "cache_last": 32691,
+    "terminal_rust": 10412,
+    "maximum_observed_process_rss": 32702464,
+    "maximum_observed_cgroup": null,
+    "whole_command_ns": 800753958
+  },
+  "host/growth-n10000": {
+    "released_rust_first": 2910248,
+    "released_rust_last": 2910248,
+    "cache_first": 41055,
+    "cache_last": 41055,
+    "terminal_rust": 10416,
+    "maximum_observed_process_rss": 36732928,
+    "maximum_observed_cgroup": null,
+    "whole_command_ns": 352740833
+  },
+  "host/growth-n100000": {
+    "released_rust_first": 2921159,
+    "released_rust_last": 2921159,
+    "cache_first": 52451,
+    "cache_last": 52451,
+    "terminal_rust": 10443,
+    "maximum_observed_process_rss": 44154880,
+    "maximum_observed_cgroup": null,
+    "whole_command_ns": 475768584
+  },
+  "host/growth-save4m": {
+    "released_rust_first": 7189505,
+    "released_rust_last": 7189505,
+    "cache_first": 4287358,
+    "cache_last": 4287358,
+    "terminal_rust": 10418,
+    "maximum_observed_process_rss": 44138496,
+    "maximum_observed_cgroup": null,
+    "whole_command_ns": 442088458
+  },
+  "host/growth-save32m": {
+    "released_rust_first": 11696039,
+    "released_rust_last": 11696039,
+    "cache_first": 8380169,
+    "cache_last": 8380169,
+    "terminal_rust": 10421,
+    "maximum_observed_process_rss": 59785216,
+    "maximum_observed_cgroup": null,
+    "whole_command_ns": 751180375
+  },
+  "host/growth-save256m": {
+    "released_rust_first": 15032337,
+    "released_rust_last": 15032337,
+    "cache_first": 8369608,
+    "cache_last": 8369608,
+    "terminal_rust": 10424,
+    "maximum_observed_process_rss": 75825152,
+    "maximum_observed_cgroup": null,
+    "whole_command_ns": 3304555166
+  },
+  "host/growth-repeat64": {
+    "released_rust_first": 2921450,
+    "released_rust_last": 3741463,
+    "cache_first": 52451,
+    "cache_last": 647360,
+    "terminal_rust": 10446,
+    "maximum_observed_process_rss": 50905088,
+    "maximum_observed_cgroup": null,
+    "whole_command_ns": 6949820042
+  },
+  "linux/growth-n1000": {
+    "released_rust_first": 2887424,
+    "released_rust_last": 2887424,
+    "cache_first": 32691,
+    "cache_last": 32691,
+    "terminal_rust": 9918,
+    "maximum_observed_process_rss": 29978624,
+    "maximum_observed_cgroup": 46022656,
+    "whole_command_ns": 564992875
+  },
+  "linux/growth-n10000": {
+    "released_rust_first": 2895807,
+    "released_rust_last": 2895807,
+    "cache_first": 41055,
+    "cache_last": 41055,
+    "terminal_rust": 9921,
+    "maximum_observed_process_rss": 33058816,
+    "maximum_observed_cgroup": 54603776,
+    "whole_command_ns": 613397958
+  },
+  "linux/growth-n100000": {
+    "released_rust_first": 2906982,
+    "released_rust_last": 2906982,
+    "cache_first": 52451,
+    "cache_last": 52451,
+    "terminal_rust": 9924,
+    "maximum_observed_process_rss": 39956480,
+    "maximum_observed_cgroup": 105222144,
+    "whole_command_ns": 733564208
+  },
+  "linux/growth-save4m": {
+    "released_rust_first": 7175065,
+    "released_rust_last": 7175065,
+    "cache_first": 4287358,
+    "cache_last": 4287358,
+    "terminal_rust": 9924,
+    "maximum_observed_process_rss": 40222720,
+    "maximum_observed_cgroup": 62001152,
+    "whole_command_ns": 625156917
+  },
+  "linux/growth-save32m": {
+    "released_rust_first": 11681311,
+    "released_rust_last": 11681311,
+    "cache_first": 8380169,
+    "cache_last": 8380169,
+    "terminal_rust": 9927,
+    "maximum_observed_process_rss": 42012672,
+    "maximum_observed_cgroup": 92377088,
+    "whole_command_ns": 919490375
+  },
+  "linux/growth-save256m": {
+    "released_rust_first": 15017897,
+    "released_rust_last": 15017897,
+    "cache_first": 8369608,
+    "cache_last": 8369608,
+    "terminal_rust": 9930,
+    "maximum_observed_process_rss": 43196416,
+    "maximum_observed_cgroup": 343416832,
+    "whole_command_ns": 3410525500
+  },
+  "linux/growth-repeat64": {
+    "released_rust_first": 2906697,
+    "released_rust_last": 3726998,
+    "cache_first": 52451,
+    "cache_last": 647360,
+    "terminal_rust": 9927,
+    "maximum_observed_process_rss": 57212928,
+    "maximum_observed_cgroup": 133566464,
+    "whole_command_ns": 7003615500
+  }
+}
+verification_ns 174536458
+
+# complete_command_ns=321862916
+
+# exit=0
