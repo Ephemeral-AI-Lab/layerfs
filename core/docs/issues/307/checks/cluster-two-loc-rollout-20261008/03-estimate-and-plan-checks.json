@@ -1,0 +1,217 @@
+{
+  "timestamp_utc": "2026-10-07T19:03:16.309100+00:00",
+  "status": "PASS",
+  "parent": "e765b39af0b40ebddb14556dafb2497d6219fa62",
+  "method": "Exact current package/count receipt plus complete disjoint active-package estimate model; component/scope/retirement arithmetic, R0..R9 dependency-order review, local Markdown links/anchors/status/whitespace, preserved guide/note hashes and tracked/staged scope. Estimated growth is source-reading judgement, not measured source or a code-size budget.",
+  "estimate_rows": [
+    {
+      "owner": "Content",
+      "packages": [
+        "crates/layerfs-content"
+      ],
+      "scope": "cluster_one",
+      "now": 19085,
+      "remaining_growth_low": 1000,
+      "remaining_growth_high": 2500,
+      "after_low": 20085,
+      "after_high": 21585
+    },
+    {
+      "owner": "Overlay",
+      "packages": [
+        "crates/layerfs-overlay"
+      ],
+      "scope": "cluster_two",
+      "now": 7542,
+      "remaining_growth_low": 700,
+      "remaining_growth_high": 1800,
+      "after_low": 8242,
+      "after_high": 9342
+    },
+    {
+      "owner": "Workspace",
+      "packages": [
+        "crates/layerfs-workspace"
+      ],
+      "scope": "cluster_two",
+      "now": 3902,
+      "remaining_growth_low": 1600,
+      "remaining_growth_high": 3200,
+      "after_low": 5502,
+      "after_high": 7102
+    },
+    {
+      "owner": "Daemon",
+      "packages": [
+        "crates/layerfs-daemon"
+      ],
+      "scope": "cluster_two",
+      "now": 4427,
+      "remaining_growth_low": 900,
+      "remaining_growth_high": 1800,
+      "after_low": 5327,
+      "after_high": 6227
+    },
+    {
+      "owner": "Bridge + SDK",
+      "packages": [
+        "crates/layerfs-bridge",
+        "crates/layerfs-api/sdk"
+      ],
+      "scope": "cluster_two",
+      "now": 2021,
+      "remaining_growth_low": 500,
+      "remaining_growth_high": 1000,
+      "after_low": 2521,
+      "after_high": 3021
+    },
+    {
+      "owner": "Replacement FUSE",
+      "packages": [],
+      "scope": "cluster_two",
+      "now": 0,
+      "remaining_growth_low": 1300,
+      "remaining_growth_high": 2000,
+      "after_low": 1300,
+      "after_high": 2000
+    },
+    {
+      "owner": "Replacement Sandbox",
+      "packages": [],
+      "scope": "cluster_two",
+      "now": 0,
+      "remaining_growth_low": 1100,
+      "remaining_growth_high": 1800,
+      "after_low": 1100,
+      "after_high": 1800
+    },
+    {
+      "owner": "Other cluster-one libraries",
+      "packages": [
+        "crates/layerfs-storage",
+        "crates/layerfs-history",
+        "crates/layerfs-persistence",
+        "crates/layerfs-project",
+        "crates/layerfs-telemetry"
+      ],
+      "scope": "cluster_one",
+      "now": 20545,
+      "remaining_growth_low": 0,
+      "remaining_growth_high": 500,
+      "after_low": 20545,
+      "after_high": 21045
+    }
+  ],
+  "subscopes": {
+    "cluster_one": {
+      "now": 39630,
+      "growth_low": 1000,
+      "growth_high": 3000,
+      "after_low": 40630,
+      "after_high": 42630
+    },
+    "cluster_two": {
+      "now": 17892,
+      "growth_low": 6100,
+      "growth_high": 11600,
+      "after_low": 23992,
+      "after_high": 29492
+    }
+  },
+  "active_growth": [
+    7100,
+    14600
+  ],
+  "active_after": [
+    64622,
+    72122
+  ],
+  "planning_midpoint": 68372,
+  "core_retirement": 42874,
+  "reference_retirement": 65417,
+  "combined_phases": {
+    "current": 165813,
+    "all_old_source_retained": [
+      172913,
+      180413
+    ],
+    "after_excluded_core_retirement": [
+      130039,
+      137539
+    ],
+    "after_root_reference_retirement": [
+      64622,
+      72122
+    ],
+    "net_combined_decrease": [
+      93691,
+      101191
+    ]
+  },
+  "rollout_checkpoints": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+  ],
+  "documents": [
+    {
+      "path": "core/docs/issues/307/CLUSTER-TWO-LOC-AND-ROLLOUT-20261008.md",
+      "sha256": "9113c297641a2be349c1a1d461bc6ba4df30ef29131c53a4abe630d75cb9eb5c",
+      "lines": 153,
+      "local_links": 6,
+      "unresolved": [],
+      "status_banners": [
+        "> **Status:** Proposal; target LayerFS 0.1.7; not a released contract."
+      ],
+      "trailing_whitespace": []
+    },
+    {
+      "path": "core/docs/issues/307/checks/cluster-two-loc-rollout-20261008/01-plan.md",
+      "sha256": "5679759b07bd3b69b0f4beff19eb045baec1dff1e712cadee9fa0ed69cd561ca",
+      "lines": 23,
+      "local_links": 0,
+      "unresolved": [],
+      "status_banners": [
+        "> **Status:** Dated planning checkpoint; not release evidence or a product contract."
+      ],
+      "trailing_whitespace": []
+    }
+  ],
+  "preserved_files": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "64c4d07180035760fd19611abe752f39b317331badcb163f7572180838eedbf2",
+      "unchanged": true
+    },
+    {
+      "path": "core/AGENTS.md",
+      "sha256": "b4f871f1f0ea293a28e49695c8cc0c9ee0e38b26179386856a3cbc5c8abc56bf",
+      "unchanged": true
+    },
+    {
+      "path": "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md",
+      "sha256": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+      "unchanged": true
+    },
+    {
+      "path": "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+      "sha256": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+      "unchanged": true
+    },
+    {
+      "path": "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md",
+      "sha256": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027",
+      "unchanged": true
+    }
+  ],
+  "errors": [],
+  "runtime_checks": "NOT_RUN - documentation-only; no implementation/build/native proof/measurement/retirement",
+  "durable": "NOT_RUN - disabled by owner until explicit reauthorization"
+}

@@ -1,0 +1,62 @@
+{
+  "timestamp_utc": "2026-10-07T19:00:46.116068+00:00",
+  "parent": "e765b39af0b40ebddb14556dafb2497d6219fa62",
+  "product_tree": "611c3a5387cffc73816ef0358d8b8b285c8b52cb",
+  "method": "Pinned tools/production_loc.py counted_lines/scope_files over git archive of the exact committed core product tree; Rust/runtime SQL, no docs/tests/examples/harness; active members from exact core/Cargo.toml",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "categories": {
+    "active": {
+      "crates/layerfs-api/sdk": 473,
+      "crates/layerfs-bridge": 1548,
+      "crates/layerfs-content": 19085,
+      "crates/layerfs-daemon": 4427,
+      "crates/layerfs-history": 818,
+      "crates/layerfs-overlay": 7542,
+      "crates/layerfs-persistence": 6550,
+      "crates/layerfs-project": 1562,
+      "crates/layerfs-storage": 9353,
+      "crates/layerfs-telemetry": 2262,
+      "crates/layerfs-workspace": 3902
+    },
+    "excluded_predecessor": {
+      "crates/layerfs-bridge-legacy": 6834,
+      "crates/layerfs-daemon-legacy": 2151,
+      "crates/layerfs-sdk-legacy": 505,
+      "crates/layerfs-workspace-legacy": 26835
+    },
+    "excluded_integration": {
+      "crates/layerfs-fuse": 1447,
+      "crates/layerfs-sandbox": 1106,
+      "crates/layerfs-server": 3996
+    }
+  },
+  "subtotals": {
+    "active": 57522,
+    "excluded_predecessor": 36325,
+    "excluded_integration": 6549
+  },
+  "product_source_files_per_package": {
+    "crates/layerfs-api/sdk": 6,
+    "crates/layerfs-bridge": 16,
+    "crates/layerfs-bridge-legacy": 32,
+    "crates/layerfs-content": 119,
+    "crates/layerfs-daemon": 36,
+    "crates/layerfs-daemon-legacy": 11,
+    "crates/layerfs-fuse": 5,
+    "crates/layerfs-history": 7,
+    "crates/layerfs-overlay": 56,
+    "crates/layerfs-persistence": 137,
+    "crates/layerfs-project": 12,
+    "crates/layerfs-sandbox": 5,
+    "crates/layerfs-sdk-legacy": 5,
+    "crates/layerfs-server": 31,
+    "crates/layerfs-storage": 63,
+    "crates/layerfs-telemetry": 23,
+    "crates/layerfs-workspace": 42,
+    "crates/layerfs-workspace-legacy": 101
+  },
+  "core": 100396,
+  "reference": 65417,
+  "combined": 165813,
+  "reference_evidence": "Unchanged exact reference subtree versus final-cluster-two-layout-20261008/04-production-loc.json; retained exact count 65417"
+}
