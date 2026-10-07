@@ -11,7 +11,7 @@ implementation. This ledger records actual state, not promised acceptance.
 | Checkpoint | State | Evidence/remaining work |
 | --- | --- | --- |
 | R0 contract/proof/guide/layout/dispatch reconciliation | COMPLETE — documentation scope only | [Deepest-file plan](checks/r0-owner-reconciliation-20261008/01-deepest-file-plan.md), [owner/proof disposition](checks/r0-owner-reconciliation-20261008/03-owner-and-proof-ledger.md); [independent review](checks/r0-owner-reconciliation-20261008/06-independent-review-disposition.md) and [scoped document verification](checks/r0-owner-reconciliation-20261008/07-verification-scope.md); exact staged LOC/identity recorded in checkpoint receipts; no native product claim |
-| R1 real SDK and ordinary Sandbox lifecycle/execution/access | NOT_STARTED | Existing Init/install/control reused; facades/backend not implemented; old excluded Sandbox cannot activate unchanged |
+| R1 real SDK and ordinary Sandbox lifecycle/execution/access | IN_PROGRESS | [Deepest-file plan](checks/r1-sdk-sandbox-20261008/01-deepest-file-plan.md); real Project/Workspace facade component subcheckpoint first; actual Sandbox/backend/native ready route still required. Old excluded Sandbox cannot activate unchanged |
 | R2 real native Ready/read/permissions/indexed custody/normal drain | NOT_STARTED | Bound is not Ready; no native serving path proved |
 | R3 ordinary mutation/kernel coherence | NOT_STARTED | Component mutation source exists; native semantics/races/mappings/removed references unproved |
 | R4 captured namespace and incremental topology | NOT_STARTED | Existing captured files/operation records/Content route reused; owning namespace producer, bounded validation and checked ancestry remain |
@@ -36,3 +36,18 @@ production LOC: combined165813; core100396; active57522; excluded predecessors
 exact first-parent/final staged/committed trees for every commit. Checkpoint
 commit/LOC receipts are appended here as they are completed; no estimates enter
 commit accounting.
+
+## Local checkpoint commits
+
+| Commit | Checkpoint scope | Exact production LOC |
+| --- | --- | --- |
+| `eb9b06c4c8633053e9b1cbf5f545d141b88915fc` | R0 documentation reconciliation only, no native product claim | 165813→165813 (delta+0); core100396/active57522/reference65417/predecessor36325/integration6549 unchanged |
+
+R0 [commit confirmation](checks/r0-owner-reconciliation-20261008/10-commit-confirmation.json)
+confirms exact first parent, final staged/committed tree and counted product trees.
+
+R1a real Project/Workspace component facade subcheckpoint is verified; R1 remains
+IN_PROGRESS until actual Sandbox/runtime/daemon-ready/access scope. Final
+[results](checks/r1-sdk-sandbox-20261008/19-component-results.md) and
+[exact LOC](checks/r1-sdk-sandbox-20261008/21-exact-production-loc.json) retain
+all original and final receipts. Production LOC: 165813→166022 (delta +209); active 57522→57731; core 100396→100605; reference/excluded subtotals unchanged.

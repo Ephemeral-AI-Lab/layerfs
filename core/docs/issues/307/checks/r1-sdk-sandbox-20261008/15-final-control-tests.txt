@@ -1,0 +1,23 @@
+
+running 6 tests
+test an_original_unknown_blocks_another_commit_and_normal_unmount ... CONTROL_UNKNOWN producer_original_retained=true normal_unmount=Unknown another_commit=Unknown no_reentry=true
+ok
+test another_control_channel_observes_running_commit_and_refuses_unmount_before_effect ... CONTROL_CONCURRENT status_while_constructing=true Store_SQL_for_status=0 unmount=Busy_before_effect later_commit=Committed
+ok
+test control_busy_keeps_the_channel_healthy_for_a_later_explicit_call ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+ok
+test native_mount_commit_status_fork_history_and_terminal_unmount ... CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_COMMIT writes=3 initial=1 refills=0 publication=1 history=1
+CONTROL_FLOW overwrite_last_effect=true captured_parent_preserved=true calls=20 Store_SQL_for_status=0 history_anchor_stable=true stale_namespace_fenced=true
+ok
+test original_lost_control_reply_is_not_replayed_or_settled_by_an_observer ... CONTROL_LOST_ORIGINAL client=ControlFailure { call: Call { id: 2, request: Commit(WorkspaceToken { workspace: WorkspaceId(5555555555555555555555555555555555555555555555555555555555555555), namespace: 1 }) }, phase: Receive, attempted: true, received: None, cause: Channel(CloseFailed { original: Io(Kind(UnexpectedEof)), close: Os { code: 57, kind: NotConnected, message: "Socket is not connected" } }), fence_error: None } daemon_reply=Committed(Committed(CommitRecord { id: CommitId(12b3db96c3b0dd9e111043f0fb79c0660df2ba361d241b3c3637cc9847d2c20c88), stack: LayerStackId(3136363636363636363636363636363636), root: ObjectId("276aeb7abee1ee16c96195d6b25ec42c1382b724f429df774cd6d45b095545da"), parent: None, base_layer: LayerId(32eb169f9aa39df9acdd3b9de97e8eb23290462ff06ef4c4906ac93e12b80143e4) })) capture=Capture { route: Route { engine: 5, ns: 1, incarnation: [85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85] }, generation: Generation(1), revision: 1, base_root: [111, 48, 66, 236, 144, 80, 35, 157, 72, 44, 236, 174, 202, 38, 149, 147, 184, 48, 135, 12, 236, 151, 81, 248, 111, 67, 171, 90, 78, 34, 127, 16] }
+CONTROL_LOST_REPLY client_original_unknown=true daemon_original_known_commit=true replay=false observer_does_not_settle=true
+ok
+test status_retains_known_publication_when_the_engine_is_unavailable ... CONTROL_LOCAL_FAILURE known_publication=retained engine=unavailable Store_SQL_for_status=0 normal_unmount=Unknown
+ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+

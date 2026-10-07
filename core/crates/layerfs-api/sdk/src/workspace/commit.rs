@@ -1,0 +1,21 @@
+//! Explicit Commit over the existing daemon constructor/publication owner.
+use super::WorkspaceApi;
+use crate::{operation::exchange, OperationFailure};
+use layerfs_bridge::control::{Reply, Request, WorkspaceToken};
+use layerfs_history::CommitStagedOutcome;
+
+impl WorkspaceApi<'_> {
+    /// Requests one Commit and returns its original known publication/install result.
+    /// The configured daemon constructor defines the input route; this facade does
+    /// not implement live namespace normalization or infer it from binding.
+    pub fn commit(
+        &mut self,
+        token: WorkspaceToken,
+    ) -> Result<CommitStagedOutcome, Box<OperationFailure>> {
+        let request = Request::Commit(token);
+        match exchange(self.control, request.clone())? {
+            Reply::Committed(outcome) => Ok(outcome),
+            reply => Err(OperationFailure::unexpected(request, reply)),
+        }
+    }
+}

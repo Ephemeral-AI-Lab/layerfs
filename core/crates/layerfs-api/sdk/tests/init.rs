@@ -6,7 +6,7 @@ use layerfs_content::{
 };
 use layerfs_history::{BranchId, HistoryCatalog, HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
-use layerfs_sdk::{initialize, InitError, InitRequest};
+use layerfs_sdk::{InitError, InitRequest, ProjectApi};
 use layerfs_storage::StoragePolicy;
 use layerfs_telemetry::timer::Timing;
 use std::{
@@ -52,9 +52,11 @@ fn init_seals_complete_root_and_first_branch_without_retained_handles() {
     fs::write(directory.join("source/.git/index"), b"complete index").unwrap();
     std::os::unix::fs::symlink("../file", directory.join("source/.git/link")).unwrap();
     let config = request(&directory).store;
-    let project = Timing::disabled("sdk.init", |timer| initialize(request(&directory), timer))
-        .0
-        .unwrap();
+    let project = Timing::disabled("sdk.init", |timer| {
+        ProjectApi::new().init(request(&directory), timer)
+    })
+    .0
+    .unwrap();
     assert_eq!(project.initialized.entries, 6);
     assert_eq!(project.manifest.provider, ProviderKind::Sqlite);
     assert_eq!(project.manifest.profile, StoreProfile::Disposable);
@@ -135,15 +137,17 @@ fn refusal_preserves_existing_output_and_original_request() {
         std::env::temp_dir().join(format!("layerfs-sdk-refusal-{}", std::process::id()));
     fs::create_dir(&directory).unwrap();
     fs::write(directory.join("sealed.sqlite"), b"original").unwrap();
-    let failure = Timing::disabled("sdk.init", |timer| initialize(request(&directory), timer))
-        .0
-        .unwrap_err();
+    let failure = Timing::disabled("sdk.init", |timer| {
+        ProjectApi::new().init(request(&directory), timer)
+    })
+    .0
+    .unwrap_err();
     assert!(matches!(failure.error, InitError::Persistence(_)));
     assert!(failure.initialized.is_none() && failure.branch.is_none());
     assert_eq!(fs::read(&failure.request.store.path).unwrap(), b"original");
     let mut invalid = request(&directory);
     invalid.locator = "relative".into();
-    let failure = Timing::disabled("sdk.init", |timer| initialize(invalid, timer))
+    let failure = Timing::disabled("sdk.init", |timer| ProjectApi::new().init(invalid, timer))
         .0
         .unwrap_err();
     assert!(matches!(

@@ -1,14 +1,14 @@
-//! Host Project Init and sealed Store provisioning, with no Store data service.
+//! Project provisioning and authenticated filesystem facades, with no host data service.
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-mod init;
-mod init_types;
-mod install;
-mod install_types;
-pub use init::initialize;
-pub use init_types::{InitError, InitFailure, InitRequest, SealedProject};
-pub use install::install;
-pub use install_types::{InstallError, InstallFailure, InstallWork, Installed};
-
 pub mod control;
+mod operation;
+pub mod project;
+pub mod workspace;
+pub use operation::{OperationCause, OperationFailure};
+pub use project::{
+    initialize, install, InitError, InitFailure, InitRequest, InstallError, InstallFailure,
+    InstallWork, Installed, ProjectApi, SealedProject,
+};
+pub use workspace::{BoundWorkspace, WorkspaceApi};

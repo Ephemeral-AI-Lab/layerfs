@@ -1,0 +1,36 @@
+{
+  "local_links_checked": 61,
+  "errors": [],
+  "protected": [
+    {
+      "path": "core/docs/issues/307/HANDOFF-PRE-S8-SERVERLESS-20261007.md",
+      "sha256": "a7fb0474c4ed154d654659c7b0d0cc40545297498ec30792d10d9f43780d50b7",
+      "matches": true
+    },
+    {
+      "path": "core/docs/issues/307/HANDOFF-S7-S9-RESUME-20261006.md",
+      "sha256": "39ab313e0b38b1e47f6620262feabb8d94770248c9edfe77ef9dca728c1234d7",
+      "matches": true
+    },
+    {
+      "path": "core/docs/issues/307/S7-S9-SPEED-TEST-PLAN.md",
+      "sha256": "52f09b72e4d3bb3a28dbbd0b07fc8692311a346baa5e03420dd8edea67cec027",
+      "matches": true
+    }
+  ],
+  "unchanged_inputs": {
+    "core/Cargo.toml": true,
+    "core/Cargo.lock": true,
+    ".cargo/config.toml": true,
+    "tools/production_loc.py": true
+  },
+  "unchanged_relocated_modules": {
+    "control.rs -> control/connection.rs": true,
+    "init_types.rs -> project/init_types.rs": true,
+    "install_types.rs -> project/install_types.rs": true
+  },
+  "root_reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+  "scoped_cpp_rust_runtime_tests": "Only selected SDK/daemon component targets; no kernel/Sandbox/measurement",
+  "r0_receipts": "preserved; no R0 proof rerun",
+  "profile": "Disposable only; no Durable execution"
+}

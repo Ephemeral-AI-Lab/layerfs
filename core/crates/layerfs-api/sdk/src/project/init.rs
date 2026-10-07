@@ -16,6 +16,11 @@ pub fn initialize(
     let mut initialized = None;
     let mut branch = None;
     let result = (|| {
+        if request.store.sqlite_profile != SqlitePersistenceProfile::Disposable {
+            return Err(InitError::Manifest(
+                "explicit Disposable Store profile required",
+            ));
+        }
         check_destination(
             &request.locator,
             &request.catalog.binding_key,

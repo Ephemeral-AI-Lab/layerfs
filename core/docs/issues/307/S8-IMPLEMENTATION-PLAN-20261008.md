@@ -97,7 +97,7 @@ pin.
 | [control_request.rs](../../../crates/layerfs-bridge/src/control_request.rs) | 125 | C | Additive tags `Attach`, `Locate`, `ForceUnmount` |
 | [control_reply.rs](../../../crates/layerfs-bridge/src/control_reply.rs) | 241 | C | Additive Ready, Located, Retained and ForceUnmounted tags; forced outcome preserves original publication and filesystem-work dispositions |
 | [control.rs](../../../crates/layerfs-bridge/src/control.rs), [wire.rs](../../../crates/layerfs-bridge/src/wire.rs), [native/](../../../crates/layerfs-bridge/src/native/channel.rs) | — | R | Channel, record limits and existing encodings are unchanged; retained F13 receipts keep their meaning |
-| [sdk control.rs](../../../crates/layerfs-api/sdk/src/control.rs) | 164 | C | Shared control connection beneath Project/Workspace facades; attach/locate/force_unmount and typed mount composing two separately acknowledged attempts |
+| [SDK control connection](../../../crates/layerfs-api/sdk/src/control/connection.rs) | 164 | C | Shared control connection beneath Project/Workspace facades; attach/locate/force_unmount and typed mount composing two separately acknowledged attempts |
 
 
 | SDK owning home | Action | Ordinary public path |

@@ -1,0 +1,147 @@
+{
+  "method": "Same pinned root tools/production_loc.py scan() and exact-manifest per-path member classification over git archive of exact first parent and staged product src/runtime SQL; inline/transitive test code excluded. Added receipts/docs excluded. Final staged/committed product identities confirmed separately.",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "commands": [
+    "git archive <first-parent-or-git-write-tree> core/crates crates core/Cargo.toml tools/production_loc.py",
+    "python3 tools/production_loc.py --root <archive-root> --json (scan() invoked with same pinned counter)",
+    "git diff --cached --check"
+  ],
+  "first_parent": "eb9b06c4c8633053e9b1cbf5f545d141b88915fc",
+  "counted_index_tree": "372247d074257590a9eb38f4e07c93c0e352ae30",
+  "before": {
+    "scopes": {
+      "core": {
+        "files": 707,
+        "lines": 100396,
+        "crates": {
+          "layerfs-api": 473,
+          "layerfs-bridge": 1548,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 19085,
+          "layerfs-daemon": 4427,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 818,
+          "layerfs-overlay": 7542,
+          "layerfs-persistence": 6550,
+          "layerfs-project": 1562,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9353,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 3902,
+          "layerfs-workspace-legacy": 26835
+        }
+      },
+      "reference": {
+        "files": 193,
+        "lines": 65417,
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        }
+      }
+    },
+    "combined": 165813,
+    "migration_subtotals": {
+      "active": 57522,
+      "excluded_predecessors": 36325,
+      "excluded_integration": 6549
+    },
+    "members": [
+      "crates/layerfs-content",
+      "crates/layerfs-storage",
+      "crates/layerfs-persistence",
+      "crates/layerfs-project",
+      "crates/layerfs-history",
+      "crates/layerfs-telemetry",
+      "crates/layerfs-overlay",
+      "crates/layerfs-workspace",
+      "crates/layerfs-daemon",
+      "crates/layerfs-api/sdk",
+      "crates/layerfs-bridge"
+    ],
+    "product_trees": {
+      "core/crates": "611c3a5387cffc73816ef0358d8b8b285c8b52cb",
+      "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    }
+  },
+  "after": {
+    "scopes": {
+      "core": {
+        "files": 718,
+        "lines": 100605,
+        "crates": {
+          "layerfs-api": 682,
+          "layerfs-bridge": 1548,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 19085,
+          "layerfs-daemon": 4427,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 818,
+          "layerfs-overlay": 7542,
+          "layerfs-persistence": 6550,
+          "layerfs-project": 1562,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9353,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 3902,
+          "layerfs-workspace-legacy": 26835
+        }
+      },
+      "reference": {
+        "files": 193,
+        "lines": 65417,
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        }
+      }
+    },
+    "combined": 166022,
+    "migration_subtotals": {
+      "active": 57731,
+      "excluded_predecessors": 36325,
+      "excluded_integration": 6549
+    },
+    "members": [
+      "crates/layerfs-content",
+      "crates/layerfs-storage",
+      "crates/layerfs-persistence",
+      "crates/layerfs-project",
+      "crates/layerfs-history",
+      "crates/layerfs-telemetry",
+      "crates/layerfs-overlay",
+      "crates/layerfs-workspace",
+      "crates/layerfs-daemon",
+      "crates/layerfs-api/sdk",
+      "crates/layerfs-bridge"
+    ],
+    "product_trees": {
+      "core/crates": "a70b7b3d2aa81a1cb06de644a2af0eb48a3df12a",
+      "crates": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+    }
+  },
+  "signed_delta": 209,
+  "migration": "Existing SDK Init/install/control/types relocated. New facades/shared typed failure and explicit profile admission grow active SDK; no source duplication/reference/predecessor/integration retirement."
+}

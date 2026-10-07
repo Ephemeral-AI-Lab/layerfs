@@ -12,7 +12,7 @@ use layerfs_history::{
     BranchId, CommitHistoryRequest, CommitStagedOutcome, ForkRequest, ForkSource, HistoryName,
     WorkspaceId,
 };
-use layerfs_sdk::control::Control;
+use layerfs_sdk::{control::Control, OperationCause, ProjectApi, WorkspaceApi};
 use std::sync::{
     atomic::{AtomicU8, Ordering},
     mpsc, Arc,
@@ -26,29 +26,22 @@ fn mount(
     workspace: WorkspaceId,
     branch: BranchId,
 ) -> (WorkspaceToken, layerfs_history::BranchSnapshot) {
-    match client.call(Request::Mount { workspace, branch }).unwrap() {
-        Reply::Bound { token, binding } => (token, binding),
-        other => panic!("{other:?}"),
-    }
+    let bound = WorkspaceApi::new(client).bind(workspace, branch).unwrap();
+    (bound.token, bound.binding)
 }
-fn committed(reply: Reply) -> layerfs_history::CommitRecord {
-    match reply {
-        Reply::Committed(CommitStagedOutcome::Committed(value)) => value,
+fn committed(client: &mut Control, token: WorkspaceToken) -> layerfs_history::CommitRecord {
+    match WorkspaceApi::new(client).commit(token).unwrap() {
+        CommitStagedOutcome::Committed(value) => value,
         other => panic!("{other:?}"),
     }
 }
 fn status(client: &mut Control, token: WorkspaceToken) -> layerfs_bridge::control::WorkspaceStatus {
-    match client.call(Request::Status(token)).unwrap() {
-        Reply::Status(value) => *value,
-        other => panic!("{other:?}"),
-    }
+    WorkspaceApi::new(client).status(token).unwrap()
 }
 fn close(client: &mut Control, token: WorkspaceToken) {
-    assert_eq!(
-        client.call(Request::Unmount(token)).unwrap(),
-        Reply::Unmounted(token)
-    );
+    WorkspaceApi::new(client).unmount(token).unwrap();
 }
+
 fn serve(
     service: Arc<Service>,
     tag: Arc<AtomicU8>,
@@ -112,9 +105,9 @@ fn native_mount_commit_status_fork_history_and_terminal_unmount() {
     assert_eq!(observed.binding, original);
     fixture::write(&f.service, a, b'A');
     fixture::write(&f.service, b, b'B');
-    let first = committed(client.call(Request::Commit(a)).unwrap());
+    let first = committed(&mut client, a);
     assert!(
-        matches!(client.call(Request::Commit(a)).unwrap(),Reply::Committed(CommitStagedOutcome::UpToDate{head:Some(head),root}) if head==first.id&&root==first.root)
+        matches!(WorkspaceApi::new(&mut client).commit(a).unwrap(),CommitStagedOutcome::UpToDate{head:Some(head),root} if head==first.id&&root==first.root)
     );
     let sql = f.statements();
     let stale = status(&mut client, b);
@@ -125,58 +118,59 @@ fn native_mount_commit_status_fork_history_and_terminal_unmount() {
         "Status never refreshes the moved Branch"
     );
     tag.store(b'B', Ordering::Release);
-    let overwritten = committed(client.call(Request::Commit(b)).unwrap());
+    let overwritten = committed(&mut client, b);
     assert_eq!(overwritten.parent, original.branch.head_commit);
     assert_ne!(overwritten.root, first.root);
     let fork = BranchId::from_authority([75; 16]);
-    let forked = client
-        .call(Request::Fork(ForkRequest {
-            stack: original.branch.stack,
-            branch: fork,
-            name: HistoryName::new("fork").unwrap(),
-            source: ForkSource::Commit {
-                branch,
-                commit: overwritten.id,
+    let forked = ProjectApi::new()
+        .fork(
+            &mut client,
+            ForkRequest {
+                stack: original.branch.stack,
+                branch: fork,
+                name: HistoryName::new("fork").unwrap(),
+                source: ForkSource::Commit {
+                    branch,
+                    commit: overwritten.id,
+                },
             },
-        }))
+        )
         .unwrap();
-    assert!(matches!(forked,Reply::Forked(value) if value.effective_root==overwritten.root));
+    assert_eq!(forked.effective_root, overwritten.root);
     let (c, binding) = mount(&mut client, identity(73), fork);
     assert_eq!(binding.effective_root, overwritten.root);
     fixture::write(&f.service, a, b'C');
     tag.store(b'C', Ordering::Release);
-    let second = committed(client.call(Request::Commit(a)).unwrap());
+    let second = committed(&mut client, a);
     assert_eq!(second.parent, Some(first.id));
-    let page = match client
-        .call(Request::History(CommitHistoryRequest {
-            branch,
-            start: None,
-            cursor: None,
-            limit: 1,
-        }))
-        .unwrap()
-    {
-        Reply::History(page) => page,
-        other => panic!("{other:?}"),
-    };
+    let page = ProjectApi::new()
+        .history(
+            &mut client,
+            CommitHistoryRequest {
+                branch,
+                start: None,
+                cursor: None,
+                limit: 1,
+            },
+        )
+        .unwrap();
     assert_eq!(page.records, vec![second.clone()]);
     let cursor = page.continuation.unwrap();
     fixture::write(&f.service, a, b'D');
     tag.store(b'D', Ordering::Release);
-    let third = committed(client.call(Request::Commit(a)).unwrap());
+    let third = committed(&mut client, a);
     assert_eq!(third.parent, Some(second.id));
-    let page = match client
-        .call(Request::History(CommitHistoryRequest {
-            branch,
-            start: None,
-            cursor: Some(cursor),
-            limit: 1,
-        }))
-        .unwrap()
-    {
-        Reply::History(page) => page,
-        other => panic!("{other:?}"),
-    };
+    let page = ProjectApi::new()
+        .history(
+            &mut client,
+            CommitHistoryRequest {
+                branch,
+                start: None,
+                cursor: Some(cursor),
+                limit: 1,
+            },
+        )
+        .unwrap();
     assert_eq!(page.records, vec![first]);
     assert!(page.continuation.is_none());
     let stale_token = WorkspaceToken {
@@ -216,13 +210,13 @@ fn control_busy_keeps_the_channel_healthy_for_a_later_explicit_call() {
     let writer =
         held_writer::HeldWriter::acquire(&std::path::PathBuf::from(&f.installed.manifest.locator));
     assert!(
-        matches!(client.call(Request::Commit(token)).unwrap(),Reply::Refused(value) if value.code==ControlCode::Busy)
+        matches!(WorkspaceApi::new(&mut client).commit(token).unwrap_err().cause, OperationCause::Remote(value) if value.code==ControlCode::Busy)
     );
     writer.release();
     let observed = status(&mut client, token);
     assert_eq!(observed.activity, Activity::Idle);
     assert!(observed.local.as_ref().unwrap().dirty_inodes > 0);
-    committed(client.call(Request::Commit(token)).unwrap());
+    committed(&mut client, token);
     close(&mut client, token);
     assert_eq!(worker.join(), 5);
     f.cleanup();
@@ -254,11 +248,16 @@ fn original_lost_control_reply_is_not_replayed_or_settled_by_an_observer() {
     let (token, _) = mount(&mut client, last, branch);
     fixture::write(&f.service, token, b'L');
     let server_fence = fence.recv_timeout(Duration::from_secs(3)).unwrap();
-    let calling = std::thread::spawn(move || client.call(Request::Commit(token)));
+    let calling = std::thread::spawn(move || WorkspaceApi::new(&mut client).commit(token));
     entered.recv_timeout(Duration::from_secs(3)).unwrap();
     server_fence.close().unwrap();
     send_release.send(()).unwrap();
-    let original = calling.join().unwrap().unwrap_err();
+    let failure = calling.join().unwrap().unwrap_err();
+    assert_eq!(failure.request, Request::Commit(token));
+    let OperationCause::Exchange(original) = &failure.cause else {
+        panic!("expected original exchange custody: {failure:?}");
+    };
+    assert_eq!(original.call.request, failure.request);
     assert!(original.attempted && original.received.is_none());
     let delivery = worker.join().unwrap_err();
     let served = delivery.original.as_ref().unwrap();
@@ -292,7 +291,7 @@ fn original_lost_control_reply_is_not_replayed_or_settled_by_an_observer() {
         success.reply, published.capture
     );
     println!("CONTROL_LOST_REPLY client_original_unknown=true daemon_original_known_commit=true replay=false observer_does_not_settle=true");
-    drop((delivery, original));
+    drop((delivery, failure));
     f.cleanup();
 }
 
@@ -341,7 +340,10 @@ fn another_control_channel_observes_running_commit_and_refuses_unmount_before_ef
     );
     observing.join();
     send_release.send(()).unwrap();
-    committed(calling.join().unwrap().unwrap());
+    assert!(matches!(
+        calling.join().unwrap().unwrap(),
+        Reply::Committed(CommitStagedOutcome::Committed(_))
+    ));
     let completed = worker.join().unwrap();
     assert!(completed.outcome.is_ok());
     drop(completed);

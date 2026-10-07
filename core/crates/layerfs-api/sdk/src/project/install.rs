@@ -3,7 +3,9 @@ use crate::{InstallError, InstallFailure, InstallWork, Installed, SealedProject}
 use layerfs_bridge::{
     control::{ControlError, InstallPhase, InstallReply, INSTALL_FINISH},
     native::{Connection, MAX_PLAINTEXT_BYTES},
+    provision::StoreProfile,
 };
+use layerfs_persistence::SqlitePersistenceProfile;
 use std::{
     fs::File,
     io::{self, Read},
@@ -22,6 +24,13 @@ pub fn install(
     let mut accepted = false;
     let mut acknowledged = None;
     let result = (|| {
+        if project.manifest.profile != StoreProfile::Disposable
+            || project.store.profile != SqlitePersistenceProfile::Disposable
+        {
+            return Err(InstallError::Protocol(ControlError(
+                "explicit Disposable Store profile required",
+            )));
+        }
         if project.manifest.daemon_sqlite.is_some() {
             return Err(InstallError::Protocol(ControlError(
                 "already installed manifest",
