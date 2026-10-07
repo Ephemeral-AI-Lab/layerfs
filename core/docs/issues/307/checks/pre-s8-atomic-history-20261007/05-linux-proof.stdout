@@ -1,0 +1,14 @@
+# {"timestamp": "2026-10-07T07:54:51.386367+00:00", "command": ["docker", "run", "--rm", "--name", "layerfs-pre-s8-atomic-history-proof", "-e", "LAYERFS_CONSTRUCTION_WORKERS=1", "-v", "/Users/yifanxu/Ephemeral-AI-Lab/layerfs:/work", "-w", "/work", "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6", "sh", "-c", "set -eu; sha256sum core/target/cluster2-linux/debug/deps/atomic_publication-e74d11753553c69e; timeout --kill-after=1s 100s core/target/cluster2-linux/debug/deps/atomic_publication-e74d11753553c69e --test-threads=1 --nocapture"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "c9dccdf192057b169ed3a26ad5447c1a26cbcb1c6de1d5ac1570af30400ca7ea", "source_parent": "e2f2e62c74d92b782bc4f87fba929cad2d98f589", "wall_stop": "specified in command; build is not test execution"}
+e68ae7d40dfb447e1c835691d34b61958124187e83f509cc31a2e78a03bd4de9  core/target/cluster2-linux/debug/deps/atomic_publication-e74d11753553c69e
+
+running 3 tests
+test an_existing_stage_is_preserved_on_refusal ... ok
+test committed_up_to_date_and_exact_conflict_each_use_one_transaction ... ATOMIC_HISTORY committed=1tx up_to_date=1tx conflict=1tx/1rollback exact_head_moved=true new_stage_rows=0 failed_token_consumption=0
+ok
+test process_contention_is_busy_before_effect_and_later_explicit_call_succeeds ... ATOMIC_HISTORY_BUSY statements=1 successful_write_transactions=0 rollbacks=0 new_stage_rows=0 later_explicit_call=Committed child=released-and-joined
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+# exit=0

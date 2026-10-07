@@ -366,11 +366,8 @@ reading more input. Advisory reuse is not permission to skip validation.
                     |
              candidate filesystem root
                     |
-             stage_changes(request)
-                    |
-          StageRecord with exact token
-                    |
-  commit_staged({ workspace, token })
+        stage_and_commit(request)
+       one history write transaction
                     |
           +---------+-------------------+
           |                             |
@@ -392,10 +389,15 @@ uploads, or Save completion. Populate `StageRequest` from the captured state:
 | `profile`, `scope` | Filesystem profile and inode allocation scope |
 | `generation` | Caller-supplied generation represented by the candidate |
 
-Use the returned stage token in `CommitStagedRequest { workspace, token }`.
-Match both successful outcomes: `Committed(CommitRecord)` and
-`UpToDate { head, root }`. Conflicts and errors are not no-op success.
-Use `discard_stage` only for the exact owned token with a known disposition.
+`stage_and_commit` creates and consumes its stage in one conditional write
+transaction. A definite conflict/refusal leaves no newly created stage or token
+advance; Busy is before effect. Unknown preserves the original request and proves
+no stage disposition. Match both successful outcomes: `Committed(CommitRecord)`
+and `UpToDate { head, root }`; conflicts and errors are not no-op success.
+The earlier separately acknowledged `stage_changes`/`commit_staged` API remains
+for existing exact-token consumers. Only that route uses an acknowledged token
+and `discard_stage` for its exact known ownership. Never compose those two calls
+to emulate the new atomic method.
 `add_layer` is a separate conditional operation when a workflow explicitly
 publishes the Commit as a Layer. Inode reservations are consumed even if unused;
 do not recycle serials after an aborted construction.

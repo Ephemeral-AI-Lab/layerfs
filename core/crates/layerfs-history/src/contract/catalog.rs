@@ -121,6 +121,12 @@ pub trait HistoryCatalog: Send + Sync {
     /// Commits one exact stage against its frozen expectations.
     fn commit_staged(&self, request: &CommitStagedRequest) -> HistoryResult<CommitStagedOutcome>;
 
+    /// Stages a saved candidate and conditionally publishes it in one write
+    /// transaction. A definite refusal leaves no stage created by this attempt;
+    /// a preexisting stage is never removed. Unknown retains the original intent
+    /// and permits no assumed stage disposition, reread-based success or replay.
+    fn stage_and_commit(&self, request: &StageRequest) -> HistoryResult<CommitStagedOutcome>;
+
     /// Publishes one Commit root as a new Layer against the expected stack head.
     fn add_layer(&self, request: &AddLayerRequest) -> HistoryResult<AddLayerOutcome>;
 

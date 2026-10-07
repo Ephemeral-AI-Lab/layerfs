@@ -127,6 +127,20 @@ impl HistoryCatalog for HistoryProvider {
             .map_err(|error| error.with_observed_stage(request.workspace, observed))
     }
 
+    fn stage_and_commit(&self, request: &StageRequest) -> HistoryResult<CommitStagedOutcome> {
+        self.write(|tx| {
+            let stage = staging::stage_changes(tx, request)?;
+            commit::commit_staged(
+                tx,
+                &CommitStagedRequest {
+                    workspace: stage.workspace,
+                    token: stage.token,
+                },
+                &mut None,
+            )
+        })
+    }
+
     fn add_layer(&self, request: &AddLayerRequest) -> HistoryResult<AddLayerOutcome> {
         self.write(|tx| layerstack::add_layer(tx, request))
     }

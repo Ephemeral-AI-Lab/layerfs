@@ -1,0 +1,13 @@
+# {"timestamp": "2026-10-07T07:54:03.231644+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/atomic_publication-5b2574c2848b53b3", "--test-threads=1", "--nocapture"], "construction_workers": "1", "binaries": {"core/target/debug/deps/atomic_publication-5b2574c2848b53b3": "c7bc45fef8bd2e27ba6c4e88297b97ccf68f7ea255154918207369dc009bf4e1"}, "source_diff_sha256": "c9dccdf192057b169ed3a26ad5447c1a26cbcb1c6de1d5ac1570af30400ca7ea", "source_parent": "e2f2e62c74d92b782bc4f87fba929cad2d98f589", "wall_stop": "specified in command; build is not test execution"}
+
+running 3 tests
+test an_existing_stage_is_preserved_on_refusal ... ok
+test committed_up_to_date_and_exact_conflict_each_use_one_transaction ... ATOMIC_HISTORY committed=1tx up_to_date=1tx conflict=1tx/1rollback exact_head_moved=true new_stage_rows=0 failed_token_consumption=0
+ok
+test process_contention_is_busy_before_effect_and_later_explicit_call_succeeds ... ATOMIC_HISTORY_BUSY statements=1 successful_write_transactions=0 rollbacks=0 new_stage_rows=0 later_explicit_call=Committed child=released-and-joined
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+# exit=0

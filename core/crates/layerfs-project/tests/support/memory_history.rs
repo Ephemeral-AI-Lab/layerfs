@@ -104,6 +104,9 @@ impl HistoryCatalog for MemoryHistory {
     fn commit_staged(&self, _request: &CommitStagedRequest) -> HistoryResult<CommitStagedOutcome> {
         Err(HistoryError::Unsupported("memory Init fixture operation"))
     }
+    fn stage_and_commit(&self, _request: &StageRequest) -> HistoryResult<CommitStagedOutcome> {
+        Err(HistoryError::Unsupported("memory Init fixture operation"))
+    }
     fn add_layer(&self, _request: &AddLayerRequest) -> HistoryResult<AddLayerOutcome> {
         Err(HistoryError::Unsupported("memory Init fixture operation"))
     }

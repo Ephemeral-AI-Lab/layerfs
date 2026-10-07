@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-10-07T07:54:22.462816+00:00",
+  "files": {
+    "core/crates/layerfs-history/src/contract/catalog.rs": "a33f44a55cc4eb52b9beeec87d6bdb20b9a611368a2fb337f6c54ef1fde0c177",
+    "core/crates/layerfs-persistence/src/history/catalog.rs": "6357bfca68a4acbf5e209af7c8d14f06c25f85f38233e5a9c14ecd3e89d2f34f",
+    "core/crates/layerfs-persistence/tests/atomic_publication.rs": "4a1e30a7d092ce36bf7ad1aae4b17fe949dbadf19132d17a00a407e0e22ca85e",
+    "core/crates/layerfs-project/tests/support/memory_history.rs": "6a829bcbf27df0fe399843ee20cb467b3764278e8ac6f6def1faa1545a0305db",
+    "core/crates/layerfs-daemon/tests/support/held_writer.rs": "2c48d8dfe072d874881964a2fbae4d86784e3298fa0aa71a0b115f51f3bd4777"
+  },
+  "refresh": "byte-identical copy then rename"
+}

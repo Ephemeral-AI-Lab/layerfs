@@ -4,6 +4,13 @@
 > not a product contract. This paper selects no architecture, freezes no scope and
 > decides no open ruling.
 
+**Atomic publication update,2026-10-07 (parent `e2f2e62c7`):** current
+HistoryCatalog adds one required `stage_and_commit` operation. The combined
+Persistence provider stages and publishes in one short transaction; a definite
+failure leaves no newly staged row. See [the current boundary](62-atomic-history-publication.md).
+Older separately acknowledged-stage descriptions below retain their original
+source/evidence scope.
+
 **Retirement update, 2026-10-05 (parent source `8dd9e37f3`):**
 The retained `layerfs-s3` crate is deleted and `layerfs-metadata` is absent.
 The active six-crate workspace uses the combined `layerfs-persistence` SQLite

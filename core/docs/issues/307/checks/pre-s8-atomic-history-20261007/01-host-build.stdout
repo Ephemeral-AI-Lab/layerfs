@@ -1,0 +1,13 @@
+# {"timestamp": "2026-10-07T07:53:20.794691+00:00", "command": ["cargo", "+1.85.1", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-persistence", "--test", "atomic_publication", "--no-run"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "c9dccdf192057b169ed3a26ad5447c1a26cbcb1c6de1d5ac1570af30400ca7ea", "source_parent": "e2f2e62c74d92b782bc4f87fba929cad2d98f589", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.00s
+  Executable tests/atomic_publication.rs (core/target/debug/deps/atomic_publication-5b2574c2848b53b3)
+
+# exit=0
