@@ -38,7 +38,9 @@ def validate(path):
         require(row.get("attempt_count") == 1 and type(row.get("attempt_count")) is int, "one original Store attempt")
         require(row.get("namespace_files") == 100000, "whole prepared namespace selection")
         require(row.get("outcome") == ("Committed", "UpToDate")[index], "known original Store outcome")
-        require(all(isinstance(row.get(k), str) and SHA.fullmatch(row[k]) for k in ("root", "head")),
+        require(isinstance(row.get("root"), str) and SHA.fullmatch(row["root"]) and
+                isinstance(row.get("head"), str) and row["head"].startswith("12") and
+                SHA.fullmatch(row["head"][2:]),
                 "known root/head identities")
         identity = row["root"], row["head"]
         require(original is None or original == identity, "UpToDate changed the published root/head")
@@ -60,7 +62,7 @@ def validate(path):
                 storage["reserve"] == 1, "one initial reservation in this small Save")
         require(row["store_writer"]["write_commits"] == storage["reserve"] + storage["publish"] + 1,
                 "Save batches plus one history transaction")
-        require(storage["signatures"] == (1 if index == 0 else 0), "fixed signature-ring load count")
+        require(storage["signatures"] == 1, "fixed signature-ring load count")
         require(row["store_writer"]["fullscan_steps"] == storage["signatures"] * 8191,
                 "unexplained scan outside the saturated8192-slot signature ring")
         require(all(reader["write_transactions"] == 0 for reader in row["store_readers"]), "read handle write")

@@ -1,0 +1,233 @@
+# {"timestamp": "2026-10-07T13:28:22.080301+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "-m", "unittest", "discover", "-s", "core/benchmark/fs-bench-pro/tests", "-p", "test_evidence_store_operation.py"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "73210eeb7b36f025288c5a341801f55660a9a1bab9108810645ff99f77b79881", "source_parent": "772bda27a5f360c541f1c89945f2cd8f06f0e34a", "wall_stop": "specified in command; build is not test execution"}
+EFFFFFF.FFFF.FFF
+======================================================================
+ERROR: test_actual_known_pair_counts_only (test_evidence_store_operation.StoreReceipts.test_actual_known_pair_counts_only)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 29, in test_actual_known_pair_counts_only
+    result = store.validate(FIXTURE)
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/shared/evidence_store_operation.py", line 41, in validate
+    require(all(isinstance(row.get(k), str) and SHA.fullmatch(row[k]) for k in ("root", "head")),
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            "known root/head identities")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/shared/evidence_jobs.py", line 52, in require
+    raise ValueError(reason)
+ValueError: known root/head identities
+
+======================================================================
+FAIL: test_duplicate_operation (test_evidence_store_operation.StoreReceipts.test_duplicate_operation)
+----------------------------------------------------------------------
+ValueError: known root/head identities
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 39, in test_duplicate_operation
+    self.rejected(lambda r: r.append(copy.deepcopy(r[1])), "schema/order")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 25, in rejected
+    with self.assertRaisesRegex(ValueError, reason):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: "schema/order" does not match "known root/head identities"
+
+======================================================================
+FAIL: test_extra_transaction (test_evidence_store_operation.StoreReceipts.test_extra_transaction)
+----------------------------------------------------------------------
+ValueError: known root/head identities
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 63, in test_extra_transaction
+    self.rejected(lambda r: r[0]["store_writer"].__setitem__("write_commits", 4), "history transaction")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 25, in rejected
+    with self.assertRaisesRegex(ValueError, reason):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: "history transaction" does not match "known root/head identities"
+
+======================================================================
+FAIL: test_family_omission (test_evidence_store_operation.StoreReceipts.test_family_omission)
+----------------------------------------------------------------------
+ValueError: known root/head identities
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 75, in test_family_omission
+    self.rejected(lambda r: r[0]["engine_whole_commit"]["families"].pop(), "family cardinality")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 25, in rejected
+    with self.assertRaisesRegex(ValueError, reason):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: "family cardinality" does not match "known root/head identities"
+
+======================================================================
+FAIL: test_hidden_ring_load (test_evidence_store_operation.StoreReceipts.test_hidden_ring_load)
+----------------------------------------------------------------------
+ValueError: known root/head identities
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 60, in test_hidden_ring_load
+    self.rejected(lambda r: r[1]["storage"].__setitem__("signatures", 0), "ring load")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 25, in rejected
+    with self.assertRaisesRegex(ValueError, reason):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: "ring load" does not match "known root/head identities"
+
+======================================================================
+FAIL: test_missing_operation (test_evidence_store_operation.StoreReceipts.test_missing_operation)
+----------------------------------------------------------------------
+ValueError: known root/head identities
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 36, in test_missing_operation
+    self.rejected(lambda r: r.pop(), "incomplete original")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 25, in rejected
+    with self.assertRaisesRegex(ValueError, reason):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: "incomplete original" does not match "known root/head identities"
+
+======================================================================
+FAIL: test_missing_reader (test_evidence_store_operation.StoreReceipts.test_missing_reader)
+----------------------------------------------------------------------
+ValueError: known root/head identities
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 66, in test_missing_reader
+    self.rejected(lambda r: r[0]["store_readers"].pop(), "reader inventory")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 25, in rejected
+    with self.assertRaisesRegex(ValueError, reason):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: "reader inventory" does not match "known root/head identities"
+
+======================================================================
+FAIL: test_missing_sql_counter (test_evidence_store_operation.StoreReceipts.test_missing_sql_counter)
+----------------------------------------------------------------------
+ValueError: known root/head identities
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 72, in test_missing_sql_counter
+    self.rejected(lambda r: r[0]["store_writer"].pop("blob_close_calls"), "SQL inventory")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 25, in rejected
+    with self.assertRaisesRegex(ValueError, reason):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: "SQL inventory" does not match "known root/head identities"
+
+======================================================================
+FAIL: test_missing_storage_counter (test_evidence_store_operation.StoreReceipts.test_missing_storage_counter)
+----------------------------------------------------------------------
+ValueError: known root/head identities
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 54, in test_missing_storage_counter
+    self.rejected(lambda r: r[0]["storage"].pop("pack_read_bytes"), "exact counter inventory")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 25, in rejected
+    with self.assertRaisesRegex(ValueError, reason):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: "exact counter inventory" does not match "known root/head identities"
+
+======================================================================
+FAIL: test_reader_write (test_evidence_store_operation.StoreReceipts.test_reader_write)
+----------------------------------------------------------------------
+ValueError: known root/head identities
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 69, in test_reader_write
+    self.rejected(lambda r: r[0]["store_readers"][0].__setitem__("write_transactions", 1), "read handle write")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 25, in rejected
+    with self.assertRaisesRegex(ValueError, reason):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: "read handle write" does not match "known root/head identities"
+
+======================================================================
+FAIL: test_root_changed (test_evidence_store_operation.StoreReceipts.test_root_changed)
+----------------------------------------------------------------------
+ValueError: known root/head identities
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 45, in test_root_changed
+    self.rejected(lambda r: r[1].__setitem__("root", "f" * 64), "UpToDate changed")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 25, in rejected
+    with self.assertRaisesRegex(ValueError, reason):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: "UpToDate changed" does not match "known root/head identities"
+
+======================================================================
+FAIL: test_unexplained_scan (test_evidence_store_operation.StoreReceipts.test_unexplained_scan)
+----------------------------------------------------------------------
+ValueError: known root/head identities
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 57, in test_unexplained_scan
+    self.rejected(lambda r: r[0]["store_writer"].__setitem__("fullscan_steps", 8192), "unexplained scan")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 25, in rejected
+    with self.assertRaisesRegex(ValueError, reason):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: "unexplained scan" does not match "known root/head identities"
+
+======================================================================
+FAIL: test_whole_operation_undercharge (test_evidence_store_operation.StoreReceipts.test_whole_operation_undercharge)
+----------------------------------------------------------------------
+ValueError: known root/head identities
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 81, in test_whole_operation_undercharge
+    self.rejected(edit, "whole Commit engine family")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 25, in rejected
+    with self.assertRaisesRegex(ValueError, reason):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: "whole Commit engine family" does not match "known root/head identities"
+
+======================================================================
+FAIL: test_wrong_result (test_evidence_store_operation.StoreReceipts.test_wrong_result)
+----------------------------------------------------------------------
+ValueError: known root/head identities
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 42, in test_wrong_result
+    self.rejected(lambda r: r[1].__setitem__("outcome", "Committed"), "known original")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro/tests/test_evidence_store_operation.py", line 25, in rejected
+    with self.assertRaisesRegex(ValueError, reason):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: "known original" does not match "known root/head identities"
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.040s
+
+FAILED (failures=13, errors=1)
+
+# complete_command_ns=193700000
+
+# exit=1

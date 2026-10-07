@@ -1,0 +1,10 @@
+# {"timestamp": "2026-10-07T13:28:54.282865+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "python3", "-B", "-m", "unittest", "discover", "-s", "core/benchmark/fs-bench-pro/tests", "-p", "test_evidence_store_operation.py"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "73210eeb7b36f025288c5a341801f55660a9a1bab9108810645ff99f77b79881", "source_parent": "772bda27a5f360c541f1c89945f2cd8f06f0e34a", "wall_stop": "specified in command; build is not test execution"}
+.................
+----------------------------------------------------------------------
+Ran 17 tests in 0.046s
+
+OK
+
+# complete_command_ns=158446084
+
+# exit=0

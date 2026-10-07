@@ -1,0 +1,12 @@
+# {"timestamp": "2026-10-07T13:29:26.181596+00:00", "command": ["cargo", "+1.85.1", "clippy", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-daemon", "--all-targets", "--", "-D", "warnings"], "construction_workers": "1", "binaries": {}, "source_diff_sha256": "73210eeb7b36f025288c5a341801f55660a9a1bab9108810645ff99f77b79881", "source_parent": "772bda27a5f360c541f1c89945f2cd8f06f0e34a", "wall_stop": "specified in command; build is not test execution"}
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.58s
+
+# complete_command_ns=710280875
+
+# exit=0
