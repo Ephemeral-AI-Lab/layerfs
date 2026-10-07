@@ -1,0 +1,129 @@
+{
+  "baseline_commit": "1e81e9b8cf871324341c221a51b0a0239c580da9",
+  "runs": [
+    {
+      "all_correct": true,
+      "all_store_unchanged": true,
+      "file": "comparison-run1.tsv",
+      "gates_pass": true,
+      "key": {
+        "10": {
+          "baseline": {
+            "distant_diff_nodes": 11,
+            "distant_diff_ns": 144847,
+            "metadata_bytes": 0
+          },
+          "fixed-10": {
+            "distant_diff_nodes": 11,
+            "distant_diff_ns": 108503,
+            "metadata_bytes": 410
+          },
+          "multiscale": {
+            "distant_diff_nodes": 4,
+            "distant_diff_ns": 107692,
+            "metadata_bytes": 574
+          }
+        },
+        "100": {
+          "baseline": {
+            "distant_diff_nodes": 101,
+            "distant_diff_ns": 184978,
+            "metadata_bytes": 0
+          },
+          "fixed-10": {
+            "distant_diff_nodes": 20,
+            "distant_diff_ns": 109183,
+            "metadata_bytes": 4469
+          },
+          "multiscale": {
+            "distant_diff_nodes": 6,
+            "distant_diff_ns": 110145,
+            "metadata_bytes": 6109
+          }
+        },
+        "1000": {
+          "baseline": {
+            "distant_diff_nodes": 1001,
+            "distant_diff_ns": 651908,
+            "metadata_bytes": 0
+          },
+          "fixed-10": {
+            "distant_diff_nodes": 110,
+            "distant_diff_ns": 110065,
+            "metadata_bytes": 45059
+          },
+          "multiscale": {
+            "distant_diff_nodes": 10,
+            "distant_diff_ns": 109724,
+            "metadata_bytes": 61459
+          }
+        }
+      },
+      "rows": 56,
+      "sha256": "9232b8dc29eb633085b90e9b6d6c3bbc93e519130410d54473495c5d2b1441f7"
+    },
+    {
+      "all_correct": true,
+      "all_store_unchanged": true,
+      "file": "comparison-run2.tsv",
+      "gates_pass": true,
+      "key": {
+        "10": {
+          "baseline": {
+            "distant_diff_nodes": 11,
+            "distant_diff_ns": 145388,
+            "metadata_bytes": 0
+          },
+          "fixed-10": {
+            "distant_diff_nodes": 11,
+            "distant_diff_ns": 108383,
+            "metadata_bytes": 410
+          },
+          "multiscale": {
+            "distant_diff_nodes": 4,
+            "distant_diff_ns": 107601,
+            "metadata_bytes": 574
+          }
+        },
+        "100": {
+          "baseline": {
+            "distant_diff_nodes": 101,
+            "distant_diff_ns": 182293,
+            "metadata_bytes": 0
+          },
+          "fixed-10": {
+            "distant_diff_nodes": 20,
+            "distant_diff_ns": 108954,
+            "metadata_bytes": 4469
+          },
+          "multiscale": {
+            "distant_diff_nodes": 6,
+            "distant_diff_ns": 108793,
+            "metadata_bytes": 6109
+          }
+        },
+        "1000": {
+          "baseline": {
+            "distant_diff_nodes": 1001,
+            "distant_diff_ns": 684857,
+            "metadata_bytes": 0
+          },
+          "fixed-10": {
+            "distant_diff_nodes": 110,
+            "distant_diff_ns": 110115,
+            "metadata_bytes": 45059
+          },
+          "multiscale": {
+            "distant_diff_nodes": 10,
+            "distant_diff_ns": 109855,
+            "metadata_bytes": 61459
+          }
+        }
+      },
+      "rows": 56,
+      "sha256": "568c375feee53ea9563f69134fb8dfecb2c570b8f41e51aad24f046faa3bbcfa"
+    }
+  ],
+  "schema": "layerfs-history-anchor-evidence-v1",
+  "verdict": "YES — focused PR justified"
+}
