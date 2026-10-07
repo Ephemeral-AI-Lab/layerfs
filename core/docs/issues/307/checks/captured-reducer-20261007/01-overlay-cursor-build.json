@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-overlay",
+    "--test",
+    "indexed_scratch_cursor",
+    "--test",
+    "indexed_scratch",
+    "--no-run"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 11246132292,
+  "kind": "build",
+  "workers": 1
+}

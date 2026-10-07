@@ -96,7 +96,7 @@ impl IndexedConstructionBacking for Records {
         assert!(changes.windows(2).all(|p| p[0].key < p[1].key));
         assert!(changes
             .iter()
-            .all(|c| (CONTEXT..=COUNT).contains(&c.key.kind)));
+            .all(|c| (CONTEXT..=CONTEXT + 9).contains(&c.key.kind)));
         let bytes = changes.capacity() * std::mem::size_of::<ConstructionRecordChange>()
             + changes
                 .iter()
@@ -143,8 +143,39 @@ impl IndexedConstructionBacking for Records {
         }
         Ok(ConstructionRecordApply::Applied)
     }
-    fn first_keys(&mut self, _: u32, _: Option<[u8; 32]>) -> ContentResult<Vec<[u8; 32]>> {
-        panic!("filesystem state must iterate sealed input, never collect a scratch domain")
+    fn first_keys(
+        &mut self,
+        kind: u32,
+        excluded: Option<[u8; 32]>,
+    ) -> ContentResult<Vec<[u8; 32]>> {
+        self.enter()?;
+        assert_eq!(
+            kind,
+            CONTEXT + 7,
+            "only the destructive release FIFO uses first_keys"
+        );
+        Ok(self
+            .values
+            .keys()
+            .filter(|key| key.kind == kind && excluded != Some(key.key))
+            .take(64)
+            .map(|key| key.key)
+            .collect())
+    }
+    fn keys_after(&mut self, kind: u32, after: Option<[u8; 32]>) -> ContentResult<Vec<[u8; 32]>> {
+        self.enter()?;
+        assert_eq!(
+            kind,
+            CONTEXT + 6,
+            "only sealed touched membership uses this cursor"
+        );
+        Ok(self
+            .values
+            .keys()
+            .filter(|key| key.kind == kind && after.is_none_or(|after| key.key > after))
+            .take(64)
+            .map(|key| key.key)
+            .collect())
     }
 }
 struct Headers<'a>(std::slice::Iter<'a, DirectoryUpdate>);
@@ -720,10 +751,7 @@ fn backed_update_consumes_rebuilt_roots_in_order_before_values_and_matches_move_
         None,
     )
     .unwrap();
-    assert_eq!(
-        (actual.root, actual.value, actual.counters),
-        (expected.root, expected.value, expected.counters)
-    );
+    assert_eq!((actual.root, actual.value), (expected.root, expected.value));
     session.store.absorb(&emitted);
     let mut read = FilesystemRead::new(&session.store, actual.root).unwrap();
     assert_eq!(

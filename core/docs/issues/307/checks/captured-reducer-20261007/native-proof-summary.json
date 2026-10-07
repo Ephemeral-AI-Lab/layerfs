@@ -1,0 +1,32 @@
+{
+  "receipt": "31-real-host-linux-proof.json",
+  "profiles": [
+    "Durable",
+    "Disposable"
+  ],
+  "status": "PASS",
+  "wall_ns": 4293307833,
+  "bounds_s": {
+    "docker": 40,
+    "host": 45,
+    "outer": 120
+  },
+  "per_profile": {
+    "real_host_deliveries": 131,
+    "paths": 13,
+    "regular_names": 7,
+    "regular_inodes": 6,
+    "transport_fragments": 262,
+    "transport_live_messages": 0,
+    "transport_credited_bytes": 0,
+    "source_removed": true,
+    "original_refusal": "RemoteRefusal",
+    "idle_maintenance": true,
+    "terminal_cleanup": "Gone"
+  },
+  "functional_scope": "small actual macOS-host/Linux-consumer native proof; cache uncontrolled; no Commit or numerical speed/storage/residency qualification",
+  "binary_identity": "consumer-binary.json",
+  "source_product_tree": "00b5361b5ba60fd6d1b6b3066a71ad54b40ec099",
+  "final_product_tree": "d97312c619f0726ff863e05b9dbe450759cce0e1",
+  "subsequent_change": "one Content external-test assertion whitespace wrapping only; no product or native proof code changed"
+}

@@ -483,3 +483,74 @@ reducer/touched/zero/release backing, complete root qualification and the actual
 Save/history/Commit/install composition remain unfinished. Existing remaining
 state refusals and earlier evidence retain their scope. No whole-operation
 residency, physical I/O, performance or E/Q gate follows from these checks.
+
+### Captured file normalization and indexed reference release, 2026-10-07
+
+The subsequent [captured-file/reducer checkpoint](../issues/307/CAPTURED-FILE-REDUCER-20261007.md)
+adds the Workspace [captured-file adapter](56-captured-file-normalization.md)
+and extends the [indexed filesystem serial state](53-backed-filesystem-serial-state.md).
+`CapturedFileEdits::prepare` derives the operation's BaseView from the Workspace,
+checks its route against the exact retained reader and construction-record owner,
+and rebinds through that same authorized client only when the captured root differs
+from the current binding. Authenticated file identity and cheap length facts,
+one retained FileView classification, and the captured inode point determine the
+base and final sizes. Only logical PathNotFound establishes immutable absence;
+provider absence, denial, identity failure or mismatched length facts retain their
+original failure rather than selecting a new-file branch.
+
+One forward captured cursor normalizes surviving local changes into coalesced
+overwrites and at most one trailing deletion or extension. It splits the
+authenticated base EOF: inherited positions below it preserve the base, while
+inherited positions at or above it are logical Zero, including masked Window
+positions whose pending bytes are ignored. Numbered 25-byte edit records and a
+sealed private context reside behind the original indexed operation owner; the
+adapter retains no complete edit vector. The [fallible borrowed-view entry point](54-run-aware-localized-file-edits.md)
+uses the existing canonical edit engine without reopening or classifying the
+file root. Localized edit boundaries retain their canonical meaning; equality
+with an independently repartitioned whole-file construction is not promised.
+
+Returned data and inherited-mask allocations are checked before retaining a
+Window, and returned raw record allocations are checked before decoding. A
+Continue must advance actual metadata probes monotonically under the same
+reader, serial, logical size and layer identities; claimed work with an unchanged,
+restarted or retreating cursor refuses instead of creating a polling loop. Every
+port shares the first terminal captured, record, Content or provider failure.
+The consuming attempt returns its result with original reader/record/client
+custody, retains already accepted children on failure, and performs no implicit
+owner release or replay. Multiple files can use disjoint file-record scopes under
+one capture and operation owner. Releasing that reader does not resolve an
+in-flight capture. Retained reads can survive logical close; new normalization
+record writes still require a live Workspace and return its actual Closed failure.
+
+The P13 extension stores authenticated count/effect rows, touched membership,
+FIFO zero-release work and directory cursor frames in the same guarded record
+protocol. Bounded full-key windows drive the canonical reducer and release
+decisions without collecting those domains in resident maps or sorting runs.
+Coupled child-count, membership, queue and cursor changes use exact guarded
+updates; required missing records and original failures stop later work. Counts
+derive from authenticated base counts and signed effects. Positive overflow now
+returns LengthOverflow instead of becoming zero. The final-row iterator forwards
+its original error immediately to the fallible inode engine, so a failed row
+cannot masquerade as normal EOF and finalize a filesystem root. Traversing a
+newly accepted directory requires the explicitly supplied accepted-object reader;
+it has no fallback to the initial reader or inferred same-Save authority.
+
+These are file and selected reference/release component implementations with
+public functional proofs. Namespace final-state normalization, grouped validator
+and addition/graph state, whole-base and rebound alias walks, P14 immutable root
+qualification, and actual same-Save/Save/history/install/unknown composition
+remain unfinished. The retained refusal for a newly added child inside a rebuilt
+then released existing directory also remains engineering work. The old resident
+route keeps its allowances; the indexed path establishes no aggregate residency,
+physical I/O, performance or E/Q acceptance. Earlier source-pinned evidence keeps
+its original scope.
+
+The current checkpoint retains 408 distinct passing host bodies: Content 287,
+Overlay 8, Workspace 50, Daemon 25 and SDK 38. Its Linux receipts retain 373:
+Content 287, Overlay 8, Workspace 50, Daemon 25 and the three Linux-enabled SDK
+bodies. The other 35 selected SDK bodies are macOS-only and are omitted on Linux.
+The host captured selection preserves its original thirteen passes and fixture
+failure in receipt 16, then adds only the corrected failed body from receipt 18;
+Linux covers all fourteen under the corrected fixture. Build failures 07/12 and
+fixture failure 16 remain unchanged. These functional results do not supply a
+final lint/native proof, sealed source identity, LOC comparison or E/Q admission.

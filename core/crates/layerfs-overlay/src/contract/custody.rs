@@ -51,6 +51,16 @@ impl CapturedReader {
     pub const fn root(self) -> [u8; 32] {
         self.capture.base_root
     }
+    /// Exact engine-minted reader identity for an owning local input context.
+    /// Copying this number acquires no lease and authorizes no independent job.
+    pub const fn owner_id(self) -> u64 {
+        self.owner
+    }
+    /// Immutable installed-generation floor retained by this reader. Both
+    /// source and retained-reader SQL rows enforce nonnegative generations.
+    pub const fn installed_floor(self) -> u64 {
+        self.installed as u64
+    }
     /// Newness relative to this reader's retained installed floor. The caller
     /// supplies the `born` field from this exact reader's inode point/page.
     pub const fn created_above(self, born: u64) -> bool {

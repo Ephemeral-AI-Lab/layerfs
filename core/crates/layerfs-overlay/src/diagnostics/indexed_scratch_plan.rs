@@ -45,6 +45,12 @@ impl Overlay {
             ("keys", sql::INDEXED_SCRATCH_KEYS, keys.as_slice(), 64),
             ("all-keys", sql::INDEXED_SCRATCH_ALL_KEYS, &keys[..4], 32),
             (
+                "keys-after",
+                sql::INDEXED_SCRATCH_KEYS_AFTER,
+                keys.as_slice(),
+                64,
+            ),
+            (
                 "operation-cleanup",
                 sql::INDEXED_SCRATCH_RECLAIM_OPERATION,
                 operation_params.as_slice(),
@@ -72,6 +78,12 @@ impl Overlay {
             ("put-vm", sql::INDEXED_SCRATCH_PUT, put.as_slice(), 64),
             ("keys-vm", sql::INDEXED_SCRATCH_KEYS, keys.as_slice(), 64),
             ("all-keys-vm", sql::INDEXED_SCRATCH_ALL_KEYS, &keys[..4], 32),
+            (
+                "keys-after-vm",
+                sql::INDEXED_SCRATCH_KEYS_AFTER,
+                keys.as_slice(),
+                64,
+            ),
             (
                 "delete-vm",
                 sql::INDEXED_SCRATCH_DELETE,

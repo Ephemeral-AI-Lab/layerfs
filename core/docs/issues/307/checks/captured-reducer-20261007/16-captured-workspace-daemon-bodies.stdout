@@ -1,0 +1,32 @@
+
+running 3 tests
+test unavailable_capability_retains_typed_original_without_provider_substitution ... ok
+test attempted_and_unattempted_range_failures_keep_original_custody_without_resend ... ok
+test real_owner_preserves_sealed_keys_and_observes_bounded_reply_copies ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 14 tests
+test new_hole_above_four_gib_uses_bounded_original_run_work ... ok
+test occupied_context_and_retired_reader_keep_original_completions_without_replay ... ok
+test same_byte_overwrite_retains_original_root_with_one_classification ... ok
+test prepare_after_actual_binding_install_rebinds_only_the_retained_original_root ... ok
+test logical_close_allows_retained_reads_but_refuses_normalization_record_mutation ... ok
+test overlapping_writes_shrink_regrow_and_cross_cell_spans_match_final_bytes ... ok
+test accepted_children_remain_with_consumer_when_final_file_root_is_refused ... ok
+test length_growth_and_true_new_file_do_not_use_a_fabricated_base ... FAILED
+test unchanged_or_restarted_continuation_refuses_without_spinning_or_output ... ok
+test changed_context_or_missing_edit_is_terminal_before_consumer_acceptance ... ok
+test first_provider_absence_denial_identity_and_length_mismatch_never_prove_newness ... ok
+test inherited_gap_and_window_crossing_authenticated_eof_are_zero_without_base_fallback ... ok
+test small_window_with_oversized_retained_capacity_refuses_before_pending_or_output ... ok
+test many_edits_use_numbered_records_after_install_and_reads_survive_close ... ok
+
+failures:
+
+failures:
+    length_growth_and_true_new_file_do_not_use_a_fabricated_base
+
+test result: FAILED. 13 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s
+

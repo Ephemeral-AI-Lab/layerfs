@@ -29,8 +29,10 @@ pub const DEFAULT_BASE_BATCH: usize = 32;
 /// Work the reducer performed.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ReferenceWork {
-    /// Reference-row insertions and updates. This is work, not cardinality: a
-    /// serial registered by the caller and then observed once counts twice.
+    /// Resident pending-row insertions (including reloads after spill), or
+    /// indexed raw-row creations. This historical work counter is neither the
+    /// total mutation count nor necessarily distinct serial cardinality. Raw
+    /// provider mutation/job work belongs to its own diagnostics.
     pub rows_touched: u64,
     /// Rows spilled to runs.
     pub rows_spilled: u64,
@@ -42,8 +44,8 @@ pub struct ReferenceWork {
     pub final_values: u64,
     /// Final removals emitted.
     pub final_removals: u64,
-    /// Serials collected once, in order, for the zero-count scan. This is the
-    /// operation's only touched-serial collection: one `u64` per touched inode.
+    /// Reference rows visited in order for the zero-count scan. The resident
+    /// route collects touched states; the indexed route visits bounded windows.
     pub serials_scanned: u64,
     /// Largest simultaneous pending rows.
     pub peak_pending: usize,
@@ -109,16 +111,7 @@ impl<'r, 'b> ReferenceReducer<'r, 'b> {
 
     /// Records one retained final binding to `serial`.
     pub fn note_retained_binding(&mut self, serial: u64) -> ContentResult<()> {
-        let row = self.entry(serial)?;
-        match row {
-            Row::Count { count, .. } => {
-                *count = count.checked_add(1).ok_or(ContentError::LengthOverflow)?
-            }
-            Row::Effect { delta, .. } => {
-                *delta = delta.checked_add(1).ok_or(ContentError::LengthOverflow)?
-            }
-        }
-        Ok(())
+        super::meaning::retained(self.entry(serial)?)
     }
 
     /// Records that one binding to `serial` was removed by this operation.
@@ -132,27 +125,12 @@ impl<'r, 'b> ReferenceReducer<'r, 'b> {
     /// declared new inode that ends with no binding is `new inode without
     /// binding`.
     pub fn note_removed_binding(&mut self, serial: u64) -> ContentResult<()> {
-        let row = self.entry(serial)?;
-        match row {
-            Row::Count { .. } => Err(ContentError::InvalidRecord("new inode loses a binding")),
-            Row::Effect { delta, .. } => {
-                *delta = delta.checked_sub(1).ok_or(ContentError::LengthOverflow)?;
-                Ok(())
-            }
-        }
+        super::meaning::removed(self.entry(serial)?)
     }
 
     /// Records the caller's typed final value for `serial`.
     pub fn note_value(&mut self, serial: u64, value: InodeValue) -> ContentResult<()> {
-        let row = self.entry(serial)?;
-        match row {
-            Row::Count {
-                value: existing, ..
-            }
-            | Row::Effect {
-                value: existing, ..
-            } => *existing = Some(value),
-        }
+        super::meaning::value(self.entry(serial)?, value);
         Ok(())
     }
 
@@ -209,10 +187,7 @@ impl<'r, 'b> ReferenceReducer<'r, 'b> {
 
     /// The pending state one row states.
     fn state_of(row: Row) -> PendingState {
-        match row {
-            Row::Count { value, count, .. } => PendingState::New { value, count },
-            Row::Effect { value, delta, .. } => PendingState::Existing { value, delta },
-        }
+        super::meaning::state(row)
     }
 
     /// Charges the one collection the operation performs over touched serials.
@@ -471,92 +446,18 @@ impl<'r> FinalRows<'r> {
             } else {
                 None
             };
-            self.lookahead.push_back(row);
-            let position = self.lookahead.len() - 1;
-            if let Row::Effect {
-                serial,
-                value,
-                delta,
-            } = self.lookahead[position]
-            {
-                // The stored record supplies the base count; a supplied typed
-                // value supplies kind, content and metadata only.
-                let base = base.ok_or(ContentError::InvalidRecord("effect inode record"))?;
-                let merged = InodeValue {
-                    kind: value.map_or(base.kind, |value| value.kind),
-                    namespace_ref_count: base.namespace_ref_count,
-                    content_root: value.map_or(base.content_root, |value| value.content_root),
-                    metadata_root: value.map_or(base.metadata_root, |value| value.metadata_root),
-                };
-                self.lookahead[position] = Row::Effect {
-                    serial,
-                    value: Some(merged),
-                    delta,
-                };
-            }
+            self.lookahead
+                .push_back(super::meaning::with_base(row, base)?);
         }
         Ok(true)
     }
 
     fn finish_row(&mut self, row: Row) -> ContentResult<Option<FinalChange>> {
-        match row {
-            Row::Count {
-                serial,
-                value,
-                count,
-            } => {
-                if count == 0 && serial != self.root_serial {
-                    // A newly allocated identity with no retained binding is a
-                    // disconnected record, not a silent removal. The root
-                    // directory is the one inode whose count is zero by contract.
-                    return Err(ContentError::InvalidRecord("new inode without binding"));
-                }
-                let value = value.ok_or(ContentError::InvalidRecord("new inode value"))?;
-                self.work.final_values = self.work.final_values.saturating_add(1);
-                Ok(Some(FinalChange {
-                    serial,
-                    value: Some(InodeValue {
-                        namespace_ref_count: count,
-                        ..value
-                    }),
-                }))
-            }
-            Row::Effect {
-                serial,
-                value,
-                delta,
-            } => {
-                let base = value.ok_or(ContentError::InvalidRecord("effect inode record"))?;
-                let count = i128::from(base.namespace_ref_count) + i128::from(delta);
-                if count <= 0 && serial == self.root_serial {
-                    // The root directory is the one inode whose count is zero by
-                    // contract; it is retained, never released.
-                    self.work.final_values = self.work.final_values.saturating_add(1);
-                    return Ok(Some(FinalChange {
-                        serial,
-                        value: Some(InodeValue {
-                            namespace_ref_count: 0,
-                            ..base
-                        }),
-                    }));
-                }
-                if count <= 0 {
-                    self.work.final_removals = self.work.final_removals.saturating_add(1);
-                    return Ok(Some(FinalChange {
-                        serial,
-                        value: None,
-                    }));
-                }
-                self.work.final_values = self.work.final_values.saturating_add(1);
-                Ok(Some(FinalChange {
-                    serial,
-                    value: Some(InodeValue {
-                        namespace_ref_count: count as u64,
-                        ..base
-                    }),
-                }))
-            }
-        }
+        Ok(Some(super::meaning::finish(
+            row,
+            self.root_serial,
+            &mut self.work,
+        )?))
     }
 
     fn read_run_row(&mut self) -> ContentResult<Option<Row>> {

@@ -555,3 +555,54 @@ checks are not full-root, scale, process-restart or E/Q acceptance. S9 remains
 CHECKPOINT/unchecked. All 27 E1 proposals keep samples NOT_RUN and qualification
 NOT_EVALUATED; earlier Init/history and diagnostic verdicts retain their original
 scope. No milestone checkbox or historical receipt is changed by this continuation.
+
+## Captured file normalization and reference custody continuation (2026-10-07)
+
+The [captured-file/reducer checkpoint](CAPTURED-FILE-REDUCER-20261007.md)
+adds the operation-bound [Workspace file adapter](../../architecture/56-captured-file-normalization.md)
+over the [borrowed fallible Content source](../../architecture/54-run-aware-localized-file-edits.md).
+It derives root, profile, serial and base/final sizes from the authorized Workspace
+binding, exact retained reader, authenticated file/length facts and captured point.
+Only logical PathNotFound establishes immutable absence. Provider absence, denial,
+identity failure and wrong length facts retain their original errors without a
+new-file fallback. The one retained FileView is not reopened or reclassified.
+Inherited spans beyond authenticated base EOF are logical Zero; locally decided
+spans coalesce across cells into backed edits under the exact reader context.
+
+The [P13 serial-state extension](../../architecture/53-backed-filesystem-serial-state.md)
+uses guarded count/effect, touched, FIFO release and cursor-frame records with
+bounded full-key iteration. Counts retain their authenticated base meaning;
+positive overflow refuses with LengthOverflow. A final-row error reaches the
+fallible inode engine immediately, preserving the original failure and preventing
+EOF finalization. Newly accepted directory traversal requires an explicit
+accepted-object reader, without initial-reader fallback or an inferred same-Save
+capability. This local capability and memory-fixture proof do not establish the
+actual Save producer or publication path.
+
+External actual-Owner proofs cover the same capture and operation owner across
+disjoint file scopes, first-error terminal behavior, accepted children without a
+final root, returned capacity refusal and actual monotone continuation. The
+retained reader survives known install and logical close without changing its
+root. Reader release does not resolve a capture; End/drop releases no owner, and
+normalization writes after close retain the actual Closed failure. The original
+second-Capture fixture refusal and its same-frontier correction remain distinct
+receipts, without product retry or guessed resolution.
+
+Namespace normalization, grouped validator/addition/graph and whole-base/rebound
+alias walks, the retained rebuilt/released-child refusal, P14 immutable root and
+topology qualification, actual same-Save/Save/history/known install/unknown custody
+and full native application/Exec/kernel integration remain unfinished. Functional
+file/reducer equality and custody are not full-root, scale, restart or E/Q
+acceptance. S9 remains CHECKPOINT/unchecked. All 27 E1 proposals retain samples
+NOT_RUN and qualification NOT_EVALUATED; earlier Init/history and diagnostic
+verdicts, milestone checkboxes and historical receipts remain unchanged.
+
+Current functional coverage retains 408 distinct host and 373 Linux passes,
+including all fourteen actual-Owner captured bodies and the three Daemon cursor
+cases on both platforms. The host reuses thirteen captured passes from original
+failed receipt 16 and adds only the corrected failed body from receipt 18. Linux
+receipt 22 executes the final fixture. Its SDK selection executes three enabled
+bodies while 35 selected macOS-only bodies are omitted. Failures 07/12/16 and
+historical checkpoint evidence remain unchanged. Final lint/native verification,
+source identity and exact production LOC are separate owning evidence; none is
+claimed by these functional totals.

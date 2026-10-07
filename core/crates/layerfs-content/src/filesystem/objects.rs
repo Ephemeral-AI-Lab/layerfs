@@ -38,6 +38,7 @@ pub struct ObjectWork {
 pub struct FilesystemObjects<'a> {
     reader: &'a dyn AuthenticatedObjects,
     consumer: &'a mut dyn FinalizedConsumer,
+    accepted: Option<&'a dyn AuthenticatedObjects>,
     work: ObjectWork,
 }
 
@@ -50,8 +51,33 @@ impl<'a> FilesystemObjects<'a> {
         Self {
             reader,
             consumer,
+            accepted: None,
             work: ObjectWork::default(),
         }
+    }
+
+    /// Publishes to `consumer` and explicitly reads objects it accepted during
+    /// this same Save through `accepted`. The caller supplies the actual
+    /// authorized capability; this constructor does not establish authority,
+    /// topology closure or durability. A failed accepted read never falls back.
+    pub fn new_with_accepted(
+        reader: &'a dyn AuthenticatedObjects,
+        consumer: &'a mut dyn FinalizedConsumer,
+        accepted: &'a dyn AuthenticatedObjects,
+    ) -> Self {
+        Self {
+            reader,
+            consumer,
+            accepted: Some(accepted),
+            work: ObjectWork::default(),
+        }
+    }
+
+    /// The explicitly supplied same-Save accepted-object capability.
+    pub fn accepted_reader(&self) -> ContentResult<&'a dyn AuthenticatedObjects> {
+        self.accepted.ok_or(crate::ContentError::ProviderFailure {
+            what: "filesystem accepted-object reader unavailable",
+        })
     }
 
     /// Work performed so far.

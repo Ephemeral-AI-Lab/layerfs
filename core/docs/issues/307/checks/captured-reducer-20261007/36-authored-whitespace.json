@@ -1,0 +1,22 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--cached",
+    "--check",
+    "--",
+    "core/crates",
+    "core/AGENTS.md",
+    "core/docs/architecture",
+    "core/docs/issues/307/CAPTURED-FILE-REDUCER-20261007.md",
+    "core/docs/issues/307/S7-EXIT-AUDIT.md",
+    "core/docs/issues/307/S9-EXIT-AUDIT.md",
+    "core/docs/issues/307/SPARSE-SERIAL-PROGRESS-20261007.md"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 41547417,
+  "kind": "static-authored-only-retained-raw-logs-excluded",
+  "workers": 1
+}

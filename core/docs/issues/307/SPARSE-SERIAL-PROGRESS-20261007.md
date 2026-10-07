@@ -1,9 +1,9 @@
 # Sparse editing, backed serial state and observed supervisor progress
 
-> Status: verified source checkpoint in preparation after local first parent
-> `dcdf527584675849e7839ca4118d71ac9aa4b193`; covering functional and static
-> checks pass. Final staged/committed confirmation follows. S0/S7–S13 remain
-> incomplete and unchecked.
+> Status: verified local source checkpoint `71a3a24b8f25fbb5cb5821c554c050be5e6a1182` after first parent
+> `dcdf527584675849e7839ca4118d71ac9aa4b193`. Covering checks and exact
+> staged/committed source-size confirmation pass. S0/S7–S13 remain incomplete
+> and unchecked.
 
 This continues the [full goal](IMPLEMENTATION-PLAN-S7-S13-20261007.md) through
 three owned Content/filesystem/SDK lanes and the shared captured-input provider.

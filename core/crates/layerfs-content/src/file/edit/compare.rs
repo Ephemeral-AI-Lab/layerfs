@@ -12,7 +12,7 @@ use layerfs_telemetry::timer::TimingScope;
 
 use layerfs_telemetry::timer::Active;
 
-use super::{runs::ReplacementRuns, zero::ZeroEvidence};
+use super::{runs::ReplacementRuns, source::Source, zero::ZeroEvidence};
 use crate::error::{ContentError, ContentResult};
 use crate::file::edit::input::{EditSequence, EditSource, Plan, Segment};
 use crate::file::mapping::{NodeSummary, PageCache, RangeCursor};
@@ -46,6 +46,17 @@ pub fn compare_replacements(
     pages: &mut PageCache,
     scope: TimingScope<'_>,
 ) -> ContentResult<NoOpVerdict> {
+    compare_source(view, reader, stream, Source::Legacy(source), pages, scope)
+}
+
+pub(super) fn compare_source(
+    view: &FileView,
+    reader: &dyn AuthenticatedObjects,
+    stream: &dyn EditSequence,
+    source: Source<'_>,
+    pages: &mut PageCache,
+    scope: TimingScope<'_>,
+) -> ContentResult<NoOpVerdict> {
     scope.run(|compare| match view.file_state()? {
         Some(state) => {
             let mut cursor = RangeCursor::new(reader, state, pages, compare)?;
@@ -70,7 +81,7 @@ fn compare_windows(
     mut cursor: Option<&mut RangeCursor<'_, '_, '_>>,
     pages: &mut PageCache,
     stream: &dyn EditSequence,
-    source: &dyn EditSource,
+    source: Source<'_>,
     compare: &TimingScope<'_, Active>,
 ) -> ContentResult<NoOpVerdict> {
     let mut plan = Plan::new(stream);
@@ -82,9 +93,11 @@ fn compare_windows(
             continue;
         };
         if len != base.1 - base.0 {
+            source.check_indexed_length(index, len)?;
             return Ok(NoOpVerdict::Differs);
         }
         if len == 0 {
+            source.check_indexed_length(index, len)?;
             continue;
         }
         let mut replacement = ReplacementRuns::for_comparison(source, index, len)?;

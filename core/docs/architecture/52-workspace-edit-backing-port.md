@@ -90,3 +90,11 @@ own explicit scope and disjoint kinds. The separate
 [captured point/run port](55-captured-sparse-run-cursor.md) retains reader/root/floor
 custody through existing fair Daemon Read jobs; it still requires the owning
 normalizer to retain the first failure and fence all owners before release.
+
+The additive non-destructive `keys_after` forwards to one exact scoped
+`scratch_keys_after` job. It uses the same ready/observe boundary and source-scoped
+copy counters; an unavailable old-provider capability is retained as its original
+typed Workspace error, with no first-key or point-query substitute. A sealed pass
+retains all rows. Later membership changes require a new phase starting at None,
+not a failed-operation replay. The old first-key methods remain unchanged for
+consuming work queues and detached state.

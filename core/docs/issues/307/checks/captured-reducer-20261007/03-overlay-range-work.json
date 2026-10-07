@@ -1,0 +1,71 @@
+{
+  "test_receipt": "02-overlay-cursor-bodies.json",
+  "passed_by_target": [
+    6,
+    2
+  ],
+  "total": 8,
+  "scope": "Scratch statement family only, root/owner/lease work separate; uncontrolled functional fixture, no physical I/O/residency/performance qualification",
+  "windows": [
+    {
+      "attempts": 1,
+      "executions": 1,
+      "rows_returned": 64,
+      "vm_steps": 336,
+      "bound_bytes": 32,
+      "returned_blob_bytes": 2048,
+      "fullscan_steps": 0,
+      "sorts": 0,
+      "autoindex_rows": 0,
+      "reprepares": 0
+    },
+    {
+      "attempts": 1,
+      "executions": 1,
+      "rows_returned": 64,
+      "vm_steps": 339,
+      "bound_bytes": 64,
+      "returned_blob_bytes": 2048,
+      "fullscan_steps": 0,
+      "sorts": 0,
+      "autoindex_rows": 0,
+      "reprepares": 0
+    },
+    {
+      "attempts": 1,
+      "executions": 1,
+      "rows_returned": 3,
+      "vm_steps": 36,
+      "bound_bytes": 64,
+      "returned_blob_bytes": 96,
+      "fullscan_steps": 0,
+      "sorts": 0,
+      "autoindex_rows": 0,
+      "reprepares": 0
+    },
+    {
+      "attempts": 1,
+      "executions": 1,
+      "rows_returned": 0,
+      "vm_steps": 21,
+      "bound_bytes": 64,
+      "returned_blob_bytes": 0,
+      "fullscan_steps": 0,
+      "sorts": 0,
+      "autoindex_rows": 0,
+      "reprepares": 0
+    }
+  ],
+  "totals": {
+    "attempts": 4,
+    "executions": 4,
+    "rows_returned": 131,
+    "vm_steps": 732,
+    "bound_bytes": 224,
+    "returned_blob_bytes": 4192,
+    "fullscan_steps": 0,
+    "sorts": 0,
+    "autoindex_rows": 0,
+    "reprepares": 0
+  }
+}

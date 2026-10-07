@@ -33,6 +33,9 @@ pub(crate) use operations::file::write;
 pub use base::{BaseRead, BaseStat, BaseView};
 pub use cache::CanonicalCache;
 pub use client::{CanonicalClient, ClientWork};
+pub use construction::{
+    CapturedFileAttempt, CapturedFileCustody, CapturedFileEdits, CapturedFileWork,
+};
 pub use construction::{EditBackingCustody, EditBackingWork, EditInputRefusal, IndexedEditRecords};
 pub use construction::{
     EditBackingCustody as ConstructionBackingCustody, EditBackingWork as ConstructionBackingWork,

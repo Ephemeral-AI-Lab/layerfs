@@ -115,4 +115,24 @@ impl OverlayScratch for OwnerClient {
             _ => Err(WorkspaceError::Service(Box::new(done))),
         }
     }
+    fn scratch_keys_after(
+        &self,
+        scope: IndexedScope,
+        kind: u32,
+        after: Option<[u8; 32]>,
+    ) -> WorkspaceResult<ScratchReply<Vec<[u8; 32]>>> {
+        let done = original_job(
+            self,
+            scope,
+            IndexedScratchJob::KeysAfter { scope, kind, after },
+        )?;
+        match done.result() {
+            Ok(Response::IndexedScratch(IndexedScratchReply::Keys(value))) => {
+                let value = value.clone();
+                let copies = copies(&value);
+                Ok(ScratchReply { value, copies })
+            }
+            _ => Err(WorkspaceError::Service(Box::new(done))),
+        }
+    }
 }

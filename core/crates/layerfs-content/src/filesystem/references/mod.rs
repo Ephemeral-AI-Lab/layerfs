@@ -1,7 +1,13 @@
 //! Reference effects: bounded ordering records, runs and final inode rows.
 
 pub mod backing;
+mod indexed;
+mod indexed_release;
+mod indexed_rows;
+mod indexed_wire;
+mod meaning;
 pub mod merge;
+mod operation;
 pub mod record;
 pub mod reduce;
 pub mod release;
@@ -16,3 +22,6 @@ pub use reduce::{
 };
 pub use release::{release_zero_count, ReleaseWork};
 pub use runs::{RunStore, DEFAULT_MERGE_BUFFER_BYTES};
+
+pub(crate) use meaning::derived_count;
+pub(crate) use operation::OperationReducer;

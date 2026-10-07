@@ -232,4 +232,8 @@ impl<P: OverlayScratch + ?Sized> IndexedEditBacking for IndexedEditRecords<'_, P
         self.ready()?;
         self.observe(self.provider.scratch_keys(self.scope, kind, excluded))
     }
+    fn keys_after(&mut self, kind: u32, after: Option<[u8; 32]>) -> ContentResult<Vec<[u8; 32]>> {
+        self.ready()?;
+        self.observe(self.provider.scratch_keys_after(self.scope, kind, after))
+    }
 }

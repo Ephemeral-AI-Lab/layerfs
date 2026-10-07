@@ -396,3 +396,6 @@ and transport/bounded-import/resource gaps remain explicit in #307 audits.
   sparse Scanner and authenticated positive-zero evidence within fixed windows.
 - [Captured sparse run cursor](55-captured-sparse-run-cursor.md): exact retained
   metadata/root/floor points, indexed forward discovery and original read custody.
+- [Captured file normalization](56-captured-file-normalization.md): authenticated
+  base classification, coalesced final edits, bounded indexed replay and one
+  consuming construction with original custody; namespace/Commit remains open.

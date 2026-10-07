@@ -1,0 +1,25 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+error[E0433]: failed to resolve: could not find `EditCounters` in `layerfs_content`
+   --> crates/layerfs-content/tests/edit_indexed_view.rs:342:54
+    |
+342 |         assert_eq!(result.counters, layerfs_content::EditCounters::default());
+    |                                                      ^^^^^^^^^^^^ could not find `EditCounters` in `layerfs_content`
+    |
+help: consider importing this struct
+    |
+3   + use layerfs_content::file::EditCounters;
+    |
+help: if you import `EditCounters`, refer to it directly
+    |
+342 -         assert_eq!(result.counters, layerfs_content::EditCounters::default());
+342 +         assert_eq!(result.counters, EditCounters::default());
+    |
+
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `layerfs-content` (test "edit_indexed_view") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

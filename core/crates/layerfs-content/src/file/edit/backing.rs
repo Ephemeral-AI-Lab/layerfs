@@ -57,4 +57,14 @@ pub trait IndexedEditBacking {
     /// excludes nothing; no sentinel identity or continuation cursor is used.
     fn first_keys(&mut self, kind: u32, excluded: Option<[u8; 32]>)
         -> ContentResult<Vec<[u8; 32]>>;
+    /// Non-destructive sorted window of at most 64 complete keys strictly after
+    /// `after`. None starts before every identity, including all-zero bytes.
+    /// The caller seals membership before a pass; this is no snapshot across
+    /// independently mutating jobs. Providers without this capability refuse
+    /// explicitly rather than collect state or substitute destructive traversal.
+    fn keys_after(&mut self, _kind: u32, _after: Option<[u8; 32]>) -> ContentResult<Vec<[u8; 32]>> {
+        Err(crate::ContentError::ProviderFailure {
+            what: "indexed construction key enumeration unavailable",
+        })
+    }
 }

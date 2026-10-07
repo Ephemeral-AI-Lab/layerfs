@@ -108,7 +108,7 @@ include index/pager/journal/OS cache residency and do not imply file shrinkage.
 ## Daemon jobs and original result custody
 
 `Command::IndexedScratch` carries `IndexedScratchJob::{Contains,Get,Apply,
-FirstKeys}`. `Response::IndexedScratch` contains the exact typed reply. These
+FirstKeys,FirstKeysAll,KeysAfter}`. `Response::IndexedScratch` contains the exact typed reply. These
 share the existing Scratch service class and fair namespace rotation. Each job
 performs bounded SQL only, releasing the owner before Content/provider work.
 
@@ -151,3 +151,32 @@ and requested windows fixed. No campaign or qualifying cold measurement follows
 from this source. Content aggregate residency, actual sparse/captured editing,
 runtime Save/transport ownership, held cleanup debt and complete Commit speed/
 storage qualification remain separate required work.
+
+## Non-destructive complete-key cursor
+
+The additive `indexed_scratch_keys_after(scope, kind, after)` projects at most
+64 complete keys without changing any record. None uses the existing exact
+no-exclusion query and includes the all-zero identity. Some adds the full BLOB32
+`key > boundary` predicate to the same namespace/operation/file-scope/kind prefix,
+with `ORDER BY key LIMIT 64`; an absent boundary needs no point probe. The exact
+production query is included in both EQP and VM diagnostics.
+
+This cursor serves sealed membership passes. A newly inserted lower key cannot
+appear behind an already consumed boundary; the owning constructor must complete
+its sealed pass before such insertions and restart from None for the later phase.
+Detached/release work queues retain their separate first-key traversal because
+they consume records and may admit new work. These meanings are not interchangeable.
+
+The neutral construction port and Workspace adapter forward this as `keys_after`
+and `scratch_keys_after`. Older providers return an explicit unavailable-capability
+error; there is no whole-set collection, destructive-query substitution or zero
+sentinel. The first original error remains terminal in the existing adapter.
+Daemon charges the fixed typed input plus at most 2,048 reply bytes, copies the
+successful key window while its Completion is held, and preserves original
+attempted/unattempted custody on refusal. No owner acquisition/release or schema
+change is introduced.
+
+External cursor cases correlate full-prefix range EQP/VM with actual returned-key
+bytes and scoped SQL work, preserving all records across several windows. Root/
+lease work, indexed visits, SQL pages/overflow/cache and physical I/O remain
+separate costs; these functional fixtures provide no numerical qualification.

@@ -19,6 +19,7 @@ use crate::filesystem::objects::{
 use crate::filesystem::references::backing::OrderingBacking;
 use crate::filesystem::references::reduce::{PendingState, ReferenceReducer, ReferenceWork};
 use crate::filesystem::references::release::{release_zero_count, ReleaseWork};
+use crate::filesystem::references::OperationReducer;
 use crate::filesystem::root::{profile_id, FilesystemRoot, FilesystemRootId};
 use crate::filesystem::rows::view::{OperationInput, ResidentInput, StreamedInput};
 use crate::filesystem::rows::{check_operation_input, PreparedDirectoryStreams, PreparedRows};
@@ -329,7 +330,7 @@ fn run_body<'b>(
     let resources = input.resources();
     let initial = base_table.is_none();
     if initial {
-        if input.new_rows() > resources.maximum_touched_serials() {
+        if !state.backed() && input.new_rows() > resources.maximum_touched_serials() {
             return Err(ContentError::ObjectLimitExceeded {
                 limit: resources.maximum_touched_serials(),
                 actual: input.new_rows(),
@@ -337,12 +338,7 @@ fn run_body<'b>(
         }
         state.initial_counts(input)?;
     }
-    let mut reducer = ReferenceReducer::new(
-        resources.maximum_pending_records,
-        backing,
-        resources.merge_buffer_bytes,
-        resources.ordering_bytes,
-    );
+    let mut reducer = OperationReducer::new(state, input, &dropped, backing);
     if !initial {
         reducer.check_backing_capacity()?;
         register_values(&mut reducer, input, &dropped)?;
@@ -564,29 +560,41 @@ fn run_body<'b>(
     if checked.topology.table.is_some() {
         // Only an update can release descendants: a new filesystem has no base
         // binding to lose, and its root is never released.
-        let zero = zero_count_serials(
-            reader,
-            table,
-            &mut reducer,
-            resources.base_read_batch,
-            input.root_serial(),
-            &dropped,
-            resources.maximum_touched_serials(),
-        )?;
-        counters.base_records_read = counters.base_records_read.saturating_add(zero.1);
-        counters.release = release_zero_count(
-            reader,
-            table,
-            &mut reducer,
-            &zero.0,
-            resources.base_read_batch,
-            64,
-            crate::filesystem::limits::MAXIMUM_PAGE_BYTES,
-            |reader, serial| {
-                lookup_base(reader, table, serial)?
-                    .ok_or(ContentError::InvalidRecord("released inode record"))
-            },
-        )?;
+        if state.backed() {
+            let (release, reads) = reducer.release_indexed(
+                objects,
+                table,
+                resources.base_read_batch,
+                input.root_serial(),
+            )?;
+            counters.release = release;
+            counters.base_records_read = counters.base_records_read.saturating_add(reads);
+        } else {
+            let memory = reducer.memory().expect("resident reducer");
+            let zero = zero_count_serials(
+                reader,
+                table,
+                memory,
+                resources.base_read_batch,
+                input.root_serial(),
+                &dropped,
+                resources.maximum_touched_serials(),
+            )?;
+            counters.base_records_read = counters.base_records_read.saturating_add(zero.1);
+            counters.release = release_zero_count(
+                reader,
+                table,
+                memory,
+                &zero.0,
+                resources.base_read_batch,
+                64,
+                crate::filesystem::limits::MAXIMUM_PAGE_BYTES,
+                |reader, serial| {
+                    lookup_base(reader, table, serial)?
+                        .ok_or(ContentError::InvalidRecord("released inode record"))
+                },
+            )?;
+        }
     }
     let (inode_table, inode_work) = if initial {
         let mut values = input.inodes()?;
@@ -615,22 +623,14 @@ fn run_body<'b>(
                 input.root_serial(),
             )
         })?;
-        let mut source_error: Option<ContentError> = None;
         let changes = std::iter::from_fn(|| match rows.next_change() {
             Ok(Some(change)) => Some(Ok((change.serial, change.value))),
             Ok(None) => None,
-            Err(error) => {
-                source_error = Some(error);
-                None
-            }
+            Err(error) => Some(Err(error)),
         });
         let built = phases.phase("inodes", || {
             apply_inode_values(objects, base_table, changes, resources.scratch_bytes)
-        });
-        if let Some(error) = source_error {
-            return Err(error);
-        }
-        let built = built?;
+        })?;
         counters.references = rows.work();
         drop(rows);
         built
@@ -701,7 +701,7 @@ fn unreachable_parents(input: &dyn OperationInput, state: &SerialState<'_>) -> C
 }
 
 fn register_values(
-    reducer: &mut ReferenceReducer<'_, '_>,
+    reducer: &mut OperationReducer<'_, '_, '_, '_>,
     input: &dyn OperationInput,
     unreachable: &dyn DroppedParents,
 ) -> ContentResult<()> {
@@ -726,7 +726,7 @@ fn register_values(
 }
 
 fn note_retained_binding(
-    reducer: &mut ReferenceReducer<'_, '_>,
+    reducer: &mut OperationReducer<'_, '_, '_, '_>,
     initial_counts: Option<&SerialState<'_>>,
     input: &dyn OperationInput,
     serial: u64,
@@ -792,8 +792,8 @@ fn zero_count_serials(
             let count = match carried {
                 PendingState::New { count, .. } => *count,
                 PendingState::Existing { delta, .. } => {
-                    let base_count = base.map_or(0, |value| value.namespace_ref_count as i128);
-                    u64::try_from((base_count + i128::from(*delta)).max(0)).unwrap_or(0)
+                    let base_count = base.map_or(0, |value| value.namespace_ref_count);
+                    crate::filesystem::references::derived_count(base_count, *delta)?
                 }
             };
             // A directory this batch drops is not a released inode: it was never

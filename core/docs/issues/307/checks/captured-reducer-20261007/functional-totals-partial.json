@@ -1,0 +1,83 @@
+{
+  "sources": "Content and root Overlay frozen; Workspace/Daemon pending freeze and execution",
+  "results": {
+    "02-overlay-cursor-bodies": {
+      "counts": [
+        6,
+        2
+      ],
+      "total": 8,
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 1821216500
+    },
+    "05-linux-overlay-bodies": {
+      "counts": [
+        6,
+        2
+      ],
+      "total": 8,
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 635497792
+    },
+    "09-content-new-bodies": {
+      "counts": [
+        7,
+        13,
+        10
+      ],
+      "total": 30,
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 2525193708
+    },
+    "11-content-regressions": {
+      "counts": [
+        7,
+        9,
+        7,
+        12,
+        5,
+        3,
+        8,
+        6,
+        7,
+        3,
+        11,
+        11,
+        4,
+        10,
+        12,
+        17,
+        8,
+        6,
+        18,
+        1,
+        3,
+        5,
+        2,
+        6,
+        2,
+        6,
+        7,
+        7,
+        2,
+        19,
+        6,
+        13,
+        4,
+        9,
+        1
+      ],
+      "total": 257,
+      "exit_code": 0,
+      "timed_out": false,
+      "wall_ns": 26287366250
+    }
+  },
+  "host_distinct_so_far": 295,
+  "linux_distinct_so_far": 8,
+  "qualification": "functional only, no numerical/resource admission",
+  "goal": "ACTIVE"
+}

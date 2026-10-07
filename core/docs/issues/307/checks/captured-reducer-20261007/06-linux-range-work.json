@@ -1,0 +1,71 @@
+{
+  "test_receipt": "05-linux-overlay-bodies.json",
+  "passed_by_target": [
+    6,
+    2
+  ],
+  "total": 8,
+  "scope": "Linux Scratch family only; root/owner/lease and all physical/cache costs separate; functional uncontrolled fixture",
+  "windows": [
+    {
+      "attempts": 1,
+      "executions": 1,
+      "rows_returned": 64,
+      "vm_steps": 335,
+      "bound_bytes": 32,
+      "returned_blob_bytes": 2048,
+      "fullscan_steps": 0,
+      "sorts": 0,
+      "autoindex_rows": 0,
+      "reprepares": 0
+    },
+    {
+      "attempts": 1,
+      "executions": 1,
+      "rows_returned": 64,
+      "vm_steps": 338,
+      "bound_bytes": 64,
+      "returned_blob_bytes": 2048,
+      "fullscan_steps": 0,
+      "sorts": 0,
+      "autoindex_rows": 0,
+      "reprepares": 0
+    },
+    {
+      "attempts": 1,
+      "executions": 1,
+      "rows_returned": 3,
+      "vm_steps": 35,
+      "bound_bytes": 64,
+      "returned_blob_bytes": 96,
+      "fullscan_steps": 0,
+      "sorts": 0,
+      "autoindex_rows": 0,
+      "reprepares": 0
+    },
+    {
+      "attempts": 1,
+      "executions": 1,
+      "rows_returned": 0,
+      "vm_steps": 20,
+      "bound_bytes": 64,
+      "returned_blob_bytes": 0,
+      "fullscan_steps": 0,
+      "sorts": 0,
+      "autoindex_rows": 0,
+      "reprepares": 0
+    }
+  ],
+  "totals": {
+    "attempts": 4,
+    "executions": 4,
+    "rows_returned": 131,
+    "vm_steps": 728,
+    "bound_bytes": 224,
+    "returned_blob_bytes": 4192,
+    "fullscan_steps": 0,
+    "sorts": 0,
+    "autoindex_rows": 0,
+    "reprepares": 0
+  }
+}

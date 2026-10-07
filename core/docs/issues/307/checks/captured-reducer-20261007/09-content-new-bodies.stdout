@@ -1,0 +1,45 @@
+
+running 7 tests
+test borrowed_view_consumer_refusal_keeps_original_object_and_hint_without_later_work ... ok
+test borrowed_view_configuration_and_base_length_refuse_before_effects ... ok
+test retained_view_no_ops_precede_occupied_backing_and_empty_edits_request_no_source ... ok
+test original_indexed_comparison_read_refusal_is_not_flattened_or_replayed ... ok
+test late_indexed_run_failure_retains_accepted_chunks_and_does_no_cleanup_job ... ok
+test original_indexed_length_refusals_stop_before_reads_backing_or_output ... ok
+test retained_view_and_fallible_runs_keep_memory_backed_and_transition_roots ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 13 tests
+test missing_work_window_is_not_false_completion_and_no_rows_are_dropped_for_final_scan ... ok
+test missing_fresh_membership_and_stale_row_guard_cannot_change_rows_or_touch_witnesses ... ok
+test authenticated_max_count_plus_one_is_length_overflow_before_release_or_final_root_on_both_routes ... ok
+test new_child_inside_released_rebuilt_parent_remains_an_explicit_refusal_with_known_children_retained ... ok
+test required_row_touch_fresh_and_full_key_grammar_fail_without_final_output_or_later_calls ... ok
+test release_creates_lower_serial_rows_repeated_counts_and_surviving_aliases_without_losing_final_rows ... ok
+test row_plus_touch_mutation_and_child_progress_are_atomic_and_keep_original_refusal_custody ... ok
+test rebuilt_released_directory_requires_same_save_capability_and_keeps_original_accepted_reader_error ... ok
+test complete_zero_seed_finishes_before_any_directory_release_even_across_windows ... ok
+test deep_release_persists_namespace_frames_and_finishes_all_fifo_windows ... ok
+test late_final_row_failure_is_forwarded_as_error_without_eof_finalization_or_later_demand ... ok
+test paged_release_keeps_actual_utf8_name_boundaries_and_all_repeated_parent_pages ... ok
+test wide_multiwindow_direct_rows_remove_the_reducer_quota_and_match_canonical_roots ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 10 tests
+test missing_declared_count_or_directory_root_never_uses_a_default_or_supplied_draft_root ... ok
+test atomic_not_applied_and_malformed_root_are_refusals_not_fallbacks ... ok
+test exact_context_marker_refuses_reuse_before_new_effects_and_retains_original_batch ... ok
+test stale_serial_state_refuses_its_missing_guard_and_file_editor_kinds_remain_separate ... ok
+test original_parent_count_and_post_accept_root_failures_stop_without_another_job ... ok
+test backed_update_consumes_rebuilt_roots_in_order_before_values_and_matches_move_alias_result ... ok
+test disappearing_replayed_root_cannot_be_overwritten_by_a_supplied_directory_value ... ok
+test backed_new_parent_membership_exceeds_only_the_old_map_allowance_and_drops_empty_parent ... ok
+test late_initial_count_read_failure_keeps_accepted_inode_pages_and_no_final_root ... ok
+test backed_initial_counts_and_streamed_final_rows_preserve_real_alias_counts ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

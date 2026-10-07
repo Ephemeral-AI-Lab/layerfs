@@ -11,11 +11,12 @@
 use layerfs_telemetry::timer::{Active, TimingScope};
 
 use super::runs::{PlanRuns, ReplacementRuns};
+use super::source::Source;
 use crate::error::{ContentError, ContentResult};
 use crate::file::content::{begin_whole_file_object, ConstructedFile, WHOLE_VALUE_HEADER};
-use crate::file::edit::compare::{compare_replacements, NoOpVerdict};
+use crate::file::edit::compare::{compare_source, NoOpVerdict};
 use crate::file::edit::finish::{emit_empty_representation, emit_file_state};
-use crate::file::edit::input::{EditSequence, EditSource, Plan, Segment};
+use crate::file::edit::input::{EditSequence, EditSource, IndexedEditSource, Plan, Segment};
 use crate::file::view::FileView;
 use crate::file::{FileRun, FileRuns};
 use crate::object::{
@@ -32,6 +33,25 @@ pub struct EditRequest<'a> {
     pub edits: &'a dyn EditSequence,
     /// Bounded replacement byte source.
     pub source: &'a dyn EditSource,
+}
+
+/// One indexed edit over an already-authenticated, retained base classification.
+///
+/// The caller keeps the view and demand provider in the same authorized operation
+/// context. Construction borrows the view; it never reopens or reclassifies its
+/// root. Source and edit records remain stable across the planned passes.
+pub struct IndexedEditRequest<'a> {
+    /// Retained authenticated base, including its original root bytes.
+    pub view: &'a FileView,
+    /// Ordered final edits in current-result coordinates.
+    pub edits: &'a dyn EditSequence,
+    /// Fallible indexed metadata and replacement runs.
+    pub source: &'a dyn IndexedEditSource,
+}
+
+struct Input<'a> {
+    edits: &'a dyn EditSequence,
+    source: Source<'a>,
 }
 
 /// Applies one known edit and emits the finalized result to `consumer`.
@@ -70,6 +90,42 @@ pub fn apply_edits_backed(
     )
 }
 
+/// Applies the existing canonical driver to a retained view and fallible indexed
+/// source. Policy-derived capacities and declared base length are checked before
+/// source demands, consumer acceptance or mutable backing work. An immutable
+/// no-op returns before the backed editor's scope guard. The caller retains all
+/// providers and original failed/accepted-operation custody and fences them.
+#[allow(clippy::too_many_arguments)]
+pub fn apply_indexed_edits_view_backed(
+    policy: ConstructionPolicy,
+    capacities: &ConstructionCapacities,
+    reader: &dyn AuthenticatedObjects,
+    request: IndexedEditRequest<'_>,
+    consumer: &mut dyn FinalizedConsumer,
+    backing: &mut dyn super::backing::IndexedEditBacking,
+    scope: TimingScope<'_>,
+) -> ContentResult<ConstructedFile> {
+    let policy = policy.validated()?;
+    if *capacities != policy.capacities() {
+        return Err(ContentError::InvalidRecord("edit policy capacities"));
+    }
+    scope.run(|edit| {
+        apply_view(
+            policy,
+            capacities,
+            reader,
+            request.view,
+            Input {
+                edits: request.edits,
+                source: Source::Indexed(request.source),
+            },
+            consumer,
+            Some(backing),
+            edit,
+        )
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn apply_inner(
     policy: ConstructionPolicy,
@@ -83,100 +139,126 @@ fn apply_inner(
     policy.validated()?;
     scope.run(|edit| {
         let view = FileView::open(reader, request.root, edit.child("edit.base"))?;
-        if view.logical_len() != request.edits.base_len() {
-            return Err(ContentError::InvalidEdit {
-                what: "declared base length",
-            });
-        }
-        if request.edits.is_empty() {
-            // Nothing was declared: the base root is the exact result.
-            return Ok(ConstructedFile {
-                root: view.root(),
-                logical_len: view.logical_len(),
-                counters: crate::file::edit::EditCounters::default(),
-            });
-        }
-        let final_len = request.edits.final_len();
-        let representation = policy.representation(final_len);
-        // One mapping-page memo for the whole operation. The comparison pass fills
-        // it as it navigates, and the construction pass reads the pages it names
-        // from it instead of demanding them a second time.
-        let mut pages = crate::file::mapping::PageCache::new();
-        if let NoOpVerdict::Equal = compare_replacements(
-            &view,
+        apply_view(
+            policy,
+            capacities,
             reader,
-            request.edits,
-            request.source,
-            &mut pages,
-            edit.child("edit.compare"),
-        )? {
-            // Every replacement was byte-identical, so the result is the base.
-            return Ok(ConstructedFile {
-                root: view.root(),
-                logical_len: view.logical_len(),
-                counters: crate::file::edit::EditCounters::default(),
-            });
-        }
-        match representation {
-            crate::policy::Representation::Empty => {
-                let emitted = emit_empty_representation(consumer)?;
-                Ok(ConstructedFile {
-                    root: emitted.root,
-                    logical_len: 0,
-                    counters: crate::file::edit::EditCounters::default(),
-                })
-            }
-            crate::policy::Representation::WholeFile => {
-                // The canonical object is the sink: its envelope and value header
-                // are written first and its payload area is reserved exactly, so
-                // the assembly appends into the object that is emitted instead of
-                // building a payload, a value and a canonical copy of it.
-                let mut canonical = begin_whole_file_object(capacities, final_len)?;
-                let logical_len = assemble_into(
-                    &view,
-                    reader,
-                    request.edits,
-                    request.source,
-                    &mut pages,
-                    &mut canonical,
-                    edit.child("edit.assemble"),
-                )?;
-                let payload = crate::object::HEADER_LEN
-                    + crate::object::VALUE_LEN_BYTES
-                    + WHOLE_VALUE_HEADER
-                    + logical_len as usize;
-                if final_len != logical_len || canonical.len() != payload {
-                    return Err(ContentError::LengthMismatch {
-                        expected: final_len,
-                        actual: logical_len,
-                    });
-                }
-                let mut object = edit
-                    .child("content.identify")
-                    .run(|_| FinalizedObject::new(ObjectRole::WholeFile, canonical))?;
-                if view.root() != object.id() {
-                    object = object.with_predecessors(AdvisoryPredecessors::explicit(view.root())?);
-                }
-                let root = object.id();
-                edit.child("content.emit")
-                    .run(|_| consumer.accept(object))?;
-                Ok(ConstructedFile {
-                    root,
-                    logical_len,
-                    counters: crate::file::edit::EditCounters::default(),
-                })
-            }
-            crate::policy::Representation::Chunked => match view.file_state()? {
-                // The view already acquired and decoded the base root, so the
-                // chunked route is handed that decoded state instead of reading
-                // and decoding the same object a second time.
-                Some(state) => replace_chunked(
-                    capacities, state, reader, &request, consumer, &mut pages, backing, edit,
-                ),
-                None => stream_combined(capacities, &view, &request, consumer, edit),
+            &view,
+            Input {
+                edits: request.edits,
+                source: Source::Legacy(request.source),
             },
-        }
+            consumer,
+            backing,
+            edit,
+        )
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_view(
+    policy: ConstructionPolicy,
+    capacities: &ConstructionCapacities,
+    reader: &dyn AuthenticatedObjects,
+    view: &FileView,
+    request: Input<'_>,
+    consumer: &mut dyn FinalizedConsumer,
+    backing: Option<&mut dyn super::backing::IndexedEditBacking>,
+    edit: &TimingScope<'_, Active>,
+) -> ContentResult<ConstructedFile> {
+    if view.logical_len() != request.edits.base_len() {
+        return Err(ContentError::InvalidEdit {
+            what: "declared base length",
+        });
+    }
+    if request.edits.is_empty() {
+        // Nothing was declared: the base root is the exact result.
+        return Ok(ConstructedFile {
+            root: view.root(),
+            logical_len: view.logical_len(),
+            counters: crate::file::edit::EditCounters::default(),
+        });
+    }
+    let final_len = request.edits.final_len();
+    let representation = policy.representation(final_len);
+    // One mapping-page memo for the whole operation. The comparison pass fills
+    // it as it navigates, and the construction pass reads the pages it names
+    // from it instead of demanding them a second time.
+    let mut pages = crate::file::mapping::PageCache::new();
+    if let NoOpVerdict::Equal = compare_source(
+        view,
+        reader,
+        request.edits,
+        request.source,
+        &mut pages,
+        edit.child("edit.compare"),
+    )? {
+        // Every replacement was byte-identical, so the result is the base.
+        return Ok(ConstructedFile {
+            root: view.root(),
+            logical_len: view.logical_len(),
+            counters: crate::file::edit::EditCounters::default(),
+        });
+    }
+    match representation {
+        crate::policy::Representation::Empty => {
+            let emitted = emit_empty_representation(consumer)?;
+            Ok(ConstructedFile {
+                root: emitted.root,
+                logical_len: 0,
+                counters: crate::file::edit::EditCounters::default(),
+            })
+        }
+        crate::policy::Representation::WholeFile => {
+            // The canonical object is the sink: its envelope and value header
+            // are written first and its payload area is reserved exactly, so
+            // the assembly appends into the object that is emitted instead of
+            // building a payload, a value and a canonical copy of it.
+            let mut canonical = begin_whole_file_object(capacities, final_len)?;
+            let logical_len = assemble_into(
+                view,
+                reader,
+                request.edits,
+                request.source,
+                &mut pages,
+                &mut canonical,
+                edit.child("edit.assemble"),
+            )?;
+            let payload = crate::object::HEADER_LEN
+                + crate::object::VALUE_LEN_BYTES
+                + WHOLE_VALUE_HEADER
+                + logical_len as usize;
+            if final_len != logical_len || canonical.len() != payload {
+                return Err(ContentError::LengthMismatch {
+                    expected: final_len,
+                    actual: logical_len,
+                });
+            }
+            let mut object = edit
+                .child("content.identify")
+                .run(|_| FinalizedObject::new(ObjectRole::WholeFile, canonical))?;
+            if view.root() != object.id() {
+                object = object.with_predecessors(AdvisoryPredecessors::explicit(view.root())?);
+            }
+            let root = object.id();
+            edit.child("content.emit")
+                .run(|_| consumer.accept(object))?;
+            Ok(ConstructedFile {
+                root,
+                logical_len,
+                counters: crate::file::edit::EditCounters::default(),
+            })
+        }
+        crate::policy::Representation::Chunked => match view.file_state()? {
+            // The view already acquired and decoded the base root, so the
+            // chunked route is handed that decoded state instead of reading
+            // and decoding the same object a second time.
+            Some(state) => replace_chunked(
+                capacities, state, reader, &request, consumer, &mut pages, backing, edit,
+            ),
+            None => stream_combined(capacities, view, &request, consumer, edit),
+        },
+    }
 }
 
 /// Assembles the whole result into `out`, from retained ranges and replacements,
@@ -191,7 +273,7 @@ fn assemble_into(
     view: &FileView,
     reader: &dyn AuthenticatedObjects,
     stream: &dyn EditSequence,
-    source: &dyn EditSource,
+    source: Source<'_>,
     pages: &mut crate::file::mapping::PageCache,
     out: &mut Vec<u8>,
     scope: TimingScope<'_, layerfs_telemetry::timer::Pending>,
@@ -204,7 +286,7 @@ fn assemble_inner(
     view: &FileView,
     reader: &dyn AuthenticatedObjects,
     stream: &dyn EditSequence,
-    source: &dyn EditSource,
+    source: Source<'_>,
     pages: &mut crate::file::mapping::PageCache,
     out: &mut Vec<u8>,
     scope: &TimingScope<'_, layerfs_telemetry::timer::Active>,
@@ -245,16 +327,12 @@ fn assemble_inner(
 }
 
 fn append_replacement(
-    source: &dyn EditSource,
+    source: Source<'_>,
     index: usize,
     length: u64,
     sink: &mut Vec<u8>,
 ) -> ContentResult<()> {
-    if source.replacement_len(index) != length {
-        return Err(ContentError::InvalidEdit {
-            what: "replacement length",
-        });
-    }
+    source.check_legacy_length(index, length)?;
     let mut source = ReplacementRuns::new(source, index, length)?;
     let mut buffer = [0_u8; 16 * 1024];
     loop {
@@ -286,7 +364,7 @@ fn replace_chunked(
     capacities: &ConstructionCapacities,
     state: crate::file::mapping::FileState,
     reader: &dyn AuthenticatedObjects,
-    request: &EditRequest<'_>,
+    request: &Input<'_>,
     consumer: &mut dyn FinalizedConsumer,
     pages: &mut crate::file::mapping::PageCache,
     backing: Option<&mut dyn super::backing::IndexedEditBacking>,
@@ -312,6 +390,11 @@ fn replace_chunked(
     for index in 0..request.edits.len() {
         let declared = request.edits.edit_at(index)?;
         let replacement_len = declared.replacement_len();
+        // Resolve fallible metadata before boundary mutation or base demands.
+        request
+            .source
+            .check_indexed_length(index, replacement_len)?;
+        let mut source = ReplacementRuns::from_length(request.source, index, replacement_len);
         let (left, tail) = edit.child("edit.split").run(|_| {
             crate::file::edit::tree::split(&mut objects, summary, declared.start(), true)
         })?;
@@ -329,14 +412,9 @@ fn replace_chunked(
         // The replaced range is dropped from the result, so the unfinished node
         // the split built for it is released here and never encoded.
         crate::file::edit::tree::discard(&mut objects, removed)?;
-        // The declared replacement length is checked against the source before any
-        // work: a source that cannot serve the declared bytes is a caller error, not
-        // an I/O failure to be interpreted.
-        if request.source.replacement_len(index) != replacement_len {
-            return Err(ContentError::InvalidEdit {
-                what: "replacement length",
-            });
-        }
+        // Keep the legacy source's original check and failure ordering. The
+        // indexed source already resolved its fallible metadata before splits.
+        request.source.check_legacy_length(index, replacement_len)?;
         let middle = if replacement_len == 0 {
             None
         } else {
@@ -353,7 +431,7 @@ fn replace_chunked(
             };
             edit.child("content.chunk").run(|_| {
                 let mut sink = crate::file::edit::tree::DeferredSink::new(&mut objects);
-                let mut source = ReplacementRuns::new(request.source, index, replacement_len)?;
+                request.source.check_legacy_length(index, replacement_len)?;
                 let build = crate::file::chunk_runs::build(
                     capacities,
                     &mut source,
@@ -429,7 +507,7 @@ fn rightmost_payload(
 fn stream_combined(
     capacities: &ConstructionCapacities,
     view: &FileView,
-    request: &EditRequest<'_>,
+    request: &Input<'_>,
     consumer: &mut dyn FinalizedConsumer,
     edit: &TimingScope<'_, Active>,
 ) -> ContentResult<ConstructedFile> {

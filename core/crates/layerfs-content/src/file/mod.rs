@@ -19,9 +19,10 @@ pub use content::{
     FileContent,
 };
 pub use edit::{
-    apply_edits, apply_edits_backed, Edit, EditCounters, EditObjects, EditRecordApply,
-    EditRecordChange, EditRecordExpected, EditRecordKey, EditRequest, EditSequence, EditSource,
-    IndexedEditBacking, EDIT_DEFERRED_LIMIT,
+    apply_edits, apply_edits_backed, apply_indexed_edits_view_backed, Edit, EditCounters,
+    EditObjects, EditRecordApply, EditRecordChange, EditRecordExpected, EditRecordKey, EditRequest,
+    EditSequence, EditSource, IndexedEditBacking, IndexedEditRequest, IndexedEditSource,
+    EDIT_DEFERRED_LIMIT,
 };
 pub use mapping::{ExtentBuilder, PredecessorBase, ReadCounters};
 pub use read::{read_all, read_all_bounded, read_range};

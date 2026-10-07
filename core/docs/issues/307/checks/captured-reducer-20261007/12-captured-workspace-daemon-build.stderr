@@ -1,0 +1,309 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-persistence v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-persistence)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-api/sdk)
+   Compiling layerfs-project v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-project)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-daemon)
+error[E0308]: mismatched types
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:208:13
+    |
+208 | /             prepared.construct(
+209 | |                 policy,
+210 | |                 &policy.capacities(),
+211 | |                 &mut self.store.clone(),
+212 | |                 timing.child("construct"),
+213 | |             )
+    | |_____________^ expected `Result<_, _>`, found `CapturedFileAttempt`
+    |
+    = note: expected enum `Result<_, _>`
+             found struct `CapturedFileAttempt`
+help: try wrapping the expression in a variant of `Result`
+    |
+208 ~             Ok(prepared.construct(
+209 |                 policy,
+...
+212 |                 timing.child("construct"),
+213 ~             ))
+    |
+208 ~             Err(prepared.construct(
+209 |                 policy,
+...
+212 |                 timing.child("construct"),
+213 ~             ))
+    |
+
+error[E0308]: mismatched types
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:207:9
+    |
+202 |       ) -> CapturedFileAttempt {
+    |            ------------------- expected `CapturedFileAttempt` because of return type
+...
+207 | /         Timing::disabled("captured-proof", |timing| {
+208 | |             prepared.construct(
+209 | |                 policy,
+210 | |                 &policy.capacities(),
+...   |
+214 | |         })
+215 | |         .0
+    | |__________^ expected `CapturedFileAttempt`, found `Result<_, _>`
+    |
+    = note: expected struct `CapturedFileAttempt`
+                 found enum `Result<_, _>`
+help: consider using `Result::expect` to unwrap the `Result<_, _>` value, panicking if the value is a `Result::Err`
+    |
+215 |         .0.expect("REASON")
+    |           +++++++++++++++++
+
+error[E0308]: mismatched types
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:447:9
+    |
+447 | /         prepared.construct(
+448 | |             policy,
+449 | |             &policy.capacities(),
+450 | |             &mut case.store.clone(),
+451 | |             timing.child("construct"),
+452 | |         )
+    | |_________^ expected `Result<_, _>`, found `CapturedFileAttempt`
+    |
+    = note: expected enum `Result<_, _>`
+             found struct `CapturedFileAttempt`
+help: try wrapping the expression in a variant of `Result`
+    |
+447 ~         Ok(prepared.construct(
+448 |             policy,
+...
+451 |             timing.child("construct"),
+452 ~         ))
+    |
+447 ~         Err(prepared.construct(
+448 |             policy,
+...
+451 |             timing.child("construct"),
+452 ~         ))
+    |
+
+error[E0609]: no field `custody` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:456:23
+    |
+456 |         root: attempt.custody.file.as_ref().unwrap().root(),
+    |                       ^^^^^^^ unknown field
+
+error[E0609]: no field `result` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:464:17
+    |
+464 |         attempt.result.as_ref().unwrap().root,
+    |                 ^^^^^^ unknown field
+
+error[E0609]: no field `custody` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:468:24
+    |
+468 |     assert_eq!(attempt.custody.work.normalized_edits, 129);
+    |                        ^^^^^^^ unknown field
+
+error[E0609]: no field `custody` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:507:26
+    |
+507 |     case.release(attempt.custody, false);
+    |                          ^^^^^^^ unknown field
+
+error[E0308]: mismatched types
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:642:9
+    |
+642 | /         prepared.construct(
+643 | |             policy,
+644 | |             &policy.capacities(),
+645 | |             &mut case.store.clone(),
+646 | |             timing.child("construct"),
+647 | |         )
+    | |_________^ expected `Result<_, _>`, found `CapturedFileAttempt`
+    |
+    = note: expected enum `Result<_, _>`
+             found struct `CapturedFileAttempt`
+help: try wrapping the expression in a variant of `Result`
+    |
+642 ~         Ok(prepared.construct(
+643 |             policy,
+...
+646 |             timing.child("construct"),
+647 ~         ))
+    |
+642 ~         Err(prepared.construct(
+643 |             policy,
+...
+646 |             timing.child("construct"),
+647 ~         ))
+    |
+
+error[E0609]: no field `result` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:650:21
+    |
+650 |     assert!(attempt.result.is_err());
+    |                     ^^^^^^ unknown field
+
+error[E0609]: no field `custody` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:651:60
+    |
+651 |     let Some(WorkspaceError::Service(original)) = &attempt.custody.failure else {
+    |                                                            ^^^^^^^ unknown field
+
+error[E0609]: no field `custody` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:661:24
+    |
+661 |     assert_eq!(attempt.custody.work.source_steps, 1);
+    |                        ^^^^^^^ unknown field
+
+error[E0609]: no field `custody` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:662:26
+    |
+662 |     case.release(attempt.custody, true);
+    |                          ^^^^^^^ unknown field
+
+error[E0308]: mismatched types
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:691:9
+    |
+691 | /         prepared.construct(
+692 | |             policy,
+693 | |             &policy.capacities(),
+694 | |             &mut consumer,
+695 | |             timing.child("construct"),
+696 | |         )
+    | |_________^ expected `Result<_, _>`, found `CapturedFileAttempt`
+    |
+    = note: expected enum `Result<_, _>`
+             found struct `CapturedFileAttempt`
+help: try wrapping the expression in a variant of `Result`
+    |
+691 ~         Ok(prepared.construct(
+692 |             policy,
+...
+695 |             timing.child("construct"),
+696 ~         ))
+    |
+691 ~         Err(prepared.construct(
+692 |             policy,
+...
+695 |             timing.child("construct"),
+696 ~         ))
+    |
+
+error[E0609]: no field `result` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:699:24
+    |
+699 |     assert_eq!(attempt.result, Err(ContentError::OutputRejected));
+    |                        ^^^^^^ unknown field
+
+error[E0609]: no field `custody` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:702:18
+    |
+702 |         &attempt.custody.failure,
+    |                  ^^^^^^^ unknown field
+
+error[E0609]: no field `custody` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:722:26
+    |
+722 |     case.release(attempt.custody, false);
+    |                          ^^^^^^^ unknown field
+
+error[E0308]: mismatched types
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:827:13
+    |
+827 | /             prepared.construct(
+828 | |                 policy,
+829 | |                 &policy.capacities(),
+830 | |                 &mut case.store.clone(),
+831 | |                 timing.child("construct"),
+832 | |             )
+    | |_____________^ expected `Result<_, _>`, found `CapturedFileAttempt`
+    |
+    = note: expected enum `Result<_, _>`
+             found struct `CapturedFileAttempt`
+help: try wrapping the expression in a variant of `Result`
+    |
+827 ~             Ok(prepared.construct(
+828 |                 policy,
+...
+831 |                 timing.child("construct"),
+832 ~             ))
+    |
+827 ~             Err(prepared.construct(
+828 |                 policy,
+...
+831 |                 timing.child("construct"),
+832 ~             ))
+    |
+
+error[E0609]: no field `result` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:837:29
+    |
+837 |         case.oracle(attempt.result.as_ref().unwrap().root, &expected, None);
+    |                             ^^^^^^ unknown field
+
+error[E0609]: no field `custody` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:838:28
+    |
+838 |         assert_eq!(attempt.custody.work.normalized_edits, 1);
+    |                            ^^^^^^^ unknown field
+
+error[E0609]: no field `custody` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:839:30
+    |
+839 |         case.release(attempt.custody, false);
+    |                              ^^^^^^^ unknown field
+
+error[E0308]: mismatched types
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:910:13
+    |
+910 | /             prepared.construct(
+911 | |                 policy,
+912 | |                 &policy.capacities(),
+913 | |                 &mut consumer,
+914 | |                 timing.child("construct"),
+915 | |             )
+    | |_____________^ expected `Result<_, _>`, found `CapturedFileAttempt`
+    |
+    = note: expected enum `Result<_, _>`
+             found struct `CapturedFileAttempt`
+help: try wrapping the expression in a variant of `Result`
+    |
+910 ~             Ok(prepared.construct(
+911 |                 policy,
+...
+914 |                 timing.child("construct"),
+915 ~             ))
+    |
+910 ~             Err(prepared.construct(
+911 |                 policy,
+...
+914 |                 timing.child("construct"),
+915 ~             ))
+    |
+
+error[E0609]: no field `result` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:919:21
+    |
+919 |             attempt.result,
+    |                     ^^^^^^ unknown field
+
+error[E0609]: no field `custody` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:925:28
+    |
+925 |         assert_eq!(attempt.custody.work.source_steps, 0);
+    |                            ^^^^^^^ unknown field
+
+error[E0609]: no field `custody` on type `Result<_, _>`
+   --> crates/layerfs-workspace/tests/captured_file_edits.rs:926:30
+    |
+926 |         case.release(attempt.custody, false);
+    |                              ^^^^^^^ unknown field
+
+Some errors have detailed explanations: E0308, E0609.
+For more information about an error, try `rustc --explain E0308`.
+error: could not compile `layerfs-workspace` (test "captured_file_edits") due to 24 previous errors
+warning: build failed, waiting for other jobs to finish...

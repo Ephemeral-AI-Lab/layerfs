@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-workspace",
+    "--test",
+    "captured_file_edits",
+    "length_growth_and_true_new_file_do_not_use_a_fabricated_base",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 1050222459,
+  "kind": "functional",
+  "workers": 1
+}

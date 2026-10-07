@@ -92,3 +92,20 @@ replayable edit/run adapters and their original failure custody are subsequent
 work. Dense stale physical rows still pay every necessary discovery turn; this
 cursor claims no constant-cost hole, universal logarithmic algorithm or qualified
 performance/aggregate resident bound.
+
+`CapturedReader::owner_id` and `installed_floor` expose exact retained binding
+facts for the owning normalized-input context. The SQL source/retained-reader
+rows enforce a nonnegative floor. Reading either identifier acquires no lease,
+authorizes no independent job and creates no serializable restart capability.
+The opaque reader token and exact provider checks still govern every read and
+explicit release; the numeric values alone cannot reconstruct that custody.
+
+The subsequent [captured-file adapter](56-captured-file-normalization.md) uses
+`metadata_advanced_from` to validate a `Continue` against its submitted opaque
+cursor. Reader, serial, logical position/size and stable layer identities must
+match; seeks cannot retreat, completed probes and retained lookahead cannot
+change, and at least one metadata seek must advance. A claimed row count alone
+does not establish progress. The adapter also checks actual returned window and
+mask capacities before retaining either allocation. Malformed continuation or
+allocation ends the operation with its original custody; no iteration cap or
+failed-operation restart substitutes for these checks.

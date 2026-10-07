@@ -1,0 +1,12 @@
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content/tests/edit_indexed_view.rs:339:
+         let mut output = MemoryStore::new();
+         let result = run(&reader, &view, &edits, &source, &mut output, &mut backing).unwrap();
+         assert_eq!(result.root, built.root);
+-        assert_eq!(result.counters, layerfs_content::file::EditCounters::default());
++        assert_eq!(
++            result.counters,
++            layerfs_content::file::EditCounters::default()
++        );
+         assert_eq!(backing.calls, 0);
+         assert!(output.is_empty());
+         assert_eq!(source.reads.borrow().len(), 1);

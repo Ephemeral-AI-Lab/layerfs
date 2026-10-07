@@ -1,35 +1,40 @@
 //! Checked replayable replacement runs and one lazy whole-base Plan cursor.
-use super::input::{EditSequence, EditSource, Plan, Segment};
+use super::{
+    input::{EditSequence, Plan, Segment},
+    source::Source,
+};
 use crate::file::{FileRun, FileRuns, FileView};
 use crate::{ContentError, ContentResult};
 
 pub(super) struct ReplacementRuns<'a> {
-    source: &'a dyn EditSource,
+    source: Source<'a>,
     index: usize,
     position: u64,
     length: u64,
     comparison: bool,
 }
 impl<'a> ReplacementRuns<'a> {
-    pub fn new(source: &'a dyn EditSource, index: usize, length: u64) -> ContentResult<Self> {
-        if source.replacement_len(index) != length {
+    pub fn new(source: Source<'a>, index: usize, length: u64) -> ContentResult<Self> {
+        if source.replacement_len(index)? != length {
             return Err(ContentError::InvalidEdit {
                 what: "replacement length",
             });
         }
-        Ok(Self {
+        Ok(Self::from_length(source, index, length))
+    }
+    // The shared chunked driver preserves legacy metadata-check ordering while
+    // resolving indexed metadata before any boundary effects. It checks that
+    // provider before consuming this cursor; no source request occurs here.
+    pub fn from_length(source: Source<'a>, index: usize, length: u64) -> Self {
+        Self {
             source,
             index,
             position: 0,
             length,
             comparison: false,
-        })
+        }
     }
-    pub fn for_comparison(
-        source: &'a dyn EditSource,
-        index: usize,
-        length: u64,
-    ) -> ContentResult<Self> {
+    pub fn for_comparison(source: Source<'a>, index: usize, length: u64) -> ContentResult<Self> {
         let mut cursor = Self::new(source, index, length)?;
         cursor.comparison = true;
         Ok(cursor)
@@ -83,7 +88,7 @@ enum Current<'a> {
 }
 pub(super) struct PlanRuns<'a> {
     plan: Plan<'a>,
-    source: &'a dyn EditSource,
+    source: Source<'a>,
     payload: &'a [u8],
     current: Option<Current<'a>>,
     done: bool,
@@ -92,7 +97,7 @@ impl<'a> PlanRuns<'a> {
     pub fn new(
         view: &'a FileView,
         stream: &'a dyn EditSequence,
-        source: &'a dyn EditSource,
+        source: Source<'a>,
     ) -> ContentResult<Self> {
         Ok(Self {
             plan: Plan::new(stream),

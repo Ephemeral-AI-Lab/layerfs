@@ -167,4 +167,36 @@ impl Overlay {
             ),
         }
     }
+
+    /// Non-destructive complete-key enumeration within one retained operation
+    /// scope. None includes every identity; Some is an exclusive full-key seek.
+    /// Membership must be sealed by the owning caller for a complete pass.
+    pub fn indexed_scratch_keys_after(
+        &self,
+        scope: IndexedScope,
+        kind: u32,
+        after: Option<[u8; 32]>,
+    ) -> OverlayResult<Vec<[u8; 32]>> {
+        let Some(after) = after else {
+            return self.indexed_scratch_keys(scope, kind, None);
+        };
+        self.check_operation(scope.owner)?;
+        let file = scope.file_scope.to_be_bytes();
+        self.query(
+            StatementKind::Scratch,
+            sql::INDEXED_SCRATCH_KEYS_AFTER,
+            &[
+                &scope.owner.route.ns,
+                &integer(scope.owner.owner)?,
+                &file.as_slice(),
+                &i64::from(kind),
+                &after.as_slice(),
+            ],
+            64,
+            |r| {
+                let key: Vec<u8> = r.get(0)?;
+                key.try_into().map_err(|_| rusqlite::Error::InvalidQuery)
+            },
+        )
+    }
 }

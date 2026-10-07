@@ -1,0 +1,26 @@
+{
+  "command": [
+    "env",
+    "LAYERFS_R4_LINUX_CONSUMER=/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/captured-reducer-binaries/30-consumer",
+    "LAYERFS_R4_PROOF_OUTPUT=/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/issues/307/checks/captured-reducer-20261007/31-native-proof",
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--locked",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "-p",
+    "layerfs-daemon",
+    "--test",
+    "upstream_docker",
+    "--",
+    "--ignored",
+    "--nocapture"
+  ],
+  "wall_timeout_s": 120,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 4293307833,
+  "kind": "functional-native-proof",
+  "workers": 1
+}

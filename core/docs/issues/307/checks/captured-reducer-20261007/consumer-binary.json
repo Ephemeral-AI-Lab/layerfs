@@ -1,0 +1,14 @@
+{
+  "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/captured-reducer-binaries/30-consumer",
+  "sha256": "17a6a58c48b4acabb078734089d470b1d4646b065c72a4bacffc5b7c4e014aa9",
+  "bytes": 72916528,
+  "build_receipt": "30-linux-consumer-build.json",
+  "image": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+  "profile_config": {
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "core/Cargo.toml": "7b9f341f9b091ec20e7f6634d60b9269c528c997de01cc5fb933def6cfd03461",
+    "core/Cargo.lock": "7d9bff0e8d68626efb046cd4f3d4a572fe3c1e6f579f99b5a38cd41376066a7c"
+  },
+  "construction_workers": 1,
+  "role": "functional native consumer, not a sealed performance arm"
+}

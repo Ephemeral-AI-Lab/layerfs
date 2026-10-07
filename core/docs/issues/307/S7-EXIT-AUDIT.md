@@ -358,3 +358,49 @@ remain engineering work. All 27 E1 proposals remain NOT_RUN with qualification
 NOT_EVALUATED; E1–E4 and Q exits remain open. Earlier Init failures, history passes
 and E01 diagnostic receipts retain their exact source and scope. S7 remains
 CHECKPOINT/unchecked; the full goal continues.
+
+## Captured file and indexed release continuation (2026-10-07)
+
+The [captured-file/reducer checkpoint](CAPTURED-FILE-REDUCER-20261007.md)
+records the [Workspace file normalizer](../../architecture/56-captured-file-normalization.md),
+the [borrowed fallible Content source](../../architecture/54-run-aware-localized-file-edits.md)
+and selected [P13 indexed reference/release state](../../architecture/53-backed-filesystem-serial-state.md).
+One authenticated file binding and retained FileView classification feed a
+forward captured cursor, coalesced final-state edits and backed numbered records.
+Window data/mask capacities and raw record capacities are checked before
+retention; metadata Continue requires actual monotone progress. The reducer's
+count/effect, touched, FIFO and cursor-frame state now uses guarded indexed rows
+and bounded key windows. Positive authenticated count overflow is LengthOverflow;
+an original final-row error is forwarded immediately instead of permitting EOF
+finalization. Original failures, accepted children and caller-owned release
+custody remain retained.
+
+The public functional proofs include multiple files under the same capture with
+disjoint file scopes, inherited spans crossing authenticated EOF, bounded returned
+allocations, malformed continuation refusal and retained reads after close with
+actual Closed refusal for new scratch writes. The earlier second-Capture fixture
+failure remains in the original receipt: reader release did not resolve that
+capture. Its corrected proof uses the same original frontier for both files.
+Counts describe their actual scopes: normalization calls and returned metadata,
+record operations and release cursor frames do not become whole-process memory,
+physical I/O or service-rate observations. `ReleaseWork::peak_depth` includes
+simultaneous seed siblings and is not a path-depth bound.
+
+Namespace normalization, grouped validator/addition/graph and whole-base alias
+state, P14 complete root qualification, the retained rebuilt/released-child
+refusal and actual same-Save/Save/history/install/unknown composition remain
+engineering work. No eligible original-operation SQL/page/journal/device I/O,
+physical allocation/reservation/high-water/freelist, aggregate phase residency,
+copy, queue/debt or sustainable-rate gate follows. All 27 E1 proposals remain
+NOT_RUN with qualification NOT_EVALUATED; E1–E4 and Q exits remain open. Earlier
+Init failures, history passes and diagnostic receipts are unchanged. S7 remains
+CHECKPOINT/unchecked; no milestone checkbox or historical receipt is changed.
+
+Current retained functional coverage is 408 distinct host bodies and 373 Linux:
+Content 287 and Overlay 8 each, Workspace 50 and Daemon 25 each, SDK 38 host and
+three Linux-enabled bodies. The remaining 35 selected SDK bodies are macOS-only.
+The host captured fourteen combines unchanged thirteen passes from original
+failed receipt 16 with only the corrected failed body in receipt 18; Linux receipt
+22 covers the final fourteen. Original failures 07/12/16 remain retained. These
+results establish no final lint/native proof, source seal, LOC comparison or new
+numerical/resource verdict; those owning receipts are recorded separately.

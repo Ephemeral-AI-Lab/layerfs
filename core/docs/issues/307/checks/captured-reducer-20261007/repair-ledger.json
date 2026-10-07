@@ -1,0 +1,21 @@
+{
+  "parent": "71a3a24b8f25fbb5cb5821c554c050be5e6a1182",
+  "failures": {
+    "07": "external test named EditCounters at crate root; existing public export is layerfs_content::file::EditCounters; corrected that one test path, no product/API change; no test bodies executed",
+    "12": "24 external diagnostics from six Timing::disabled closures returning CapturedFileAttempt rather than required Result; outer Ok<Attempt,ContentError> and unwrap only outer Result repair preserves inner failure/custody. No product Timing/API change; no bodies ran.",
+    "16": "Daemon3 and13 captured bodies passed; growth/new-file body requested second Capture after reader/operation release without install/resolution, correctly CaptureInFlight. Both files were already mutated before first capture. Test now constructs both from same captured frontier/reader/operation with disjoint file scopes82/83, drops both custodies then releases actual reader/operation once. No product, budget, cache or workload-byte change; no automatic capture retry/guessed resolution. Corrected failed body only after matching17 no-run; unchanged13+3 passes reused.",
+    "23": "Host Clippy comparison_chain refusal at normalize95: three terminal-size branches expressed as if/else comparison. Narrow same cmp Less/Greater/Equal match; preserves delete/insert arithmetic, equal no edit, and original push errors.24 host Clippy PASS. Affected captured bodies rebuilt/rechecked separately after this product-source change; other components keep earlier source-scoped receipts.",
+    "32": "fmt check: one external EditCounters assertion needed multi-line wrapping. Whitespace-only test edit, same AST/meaning and no product change; passing body source remains scope-pinned, formatting recheck32-format-test-wrapping."
+  },
+  "source_review_repairs": {
+    "refcount_positive_overflow": "shared derived_count checked u64 returns LengthOverflow; negative clamp preserved;13 new P13 bodies authored before execution",
+    "final_row_error_EOF": "forward original Err to fallible inode engine, no delayed normal EOF finalization; focused public late row fault authored",
+    "captured_base_EOF": "authenticated base_size in Scan, inherit below EOF retained, inherit beyond EOF logical zero for gap/window masks;14 authored bodies awaiting execution",
+    "returned_capacities": "data<=CELL_BYTES, mask<=MASK_BYTES, raw get<=SCRATCH_BYTES actual owning Vec capacities before retention/decoding; terminal narrow repair/new negative",
+    "continued_metadata_progress": "opaque monotone CapturedRunCursor invariant rejects unchanged/restarted continuation despite claimed row count; no iteration cap;14th malformed-port negative"
+  },
+  "review_scope": "keys_after reviewed no source blocker; P13 targeted repair recheck accepted; captured full static pass and targeted data/mask/raw capacity+monotone continuation repairs rechecked, no blocker in declared scope; all test executions remain separately receipt-owned",
+  "performance_qualification": "NOT_EVALUATED",
+  "E1_samples": 0,
+  "goal": "active; no milestone exits"
+}

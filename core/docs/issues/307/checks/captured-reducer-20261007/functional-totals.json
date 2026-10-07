@@ -1,0 +1,32 @@
+{
+  "parent": "71a3a24b8f25fbb5cb5821c554c050be5e6a1182",
+  "cache": "uncontrolled; functional only",
+  "workers": 1,
+  "host": {
+    "content": 287,
+    "overlay": 8,
+    "workspace": 50,
+    "daemon": 25,
+    "sdk": 38,
+    "distinct_passed": 408
+  },
+  "linux": {
+    "content": 287,
+    "overlay": 8,
+    "workspace": 50,
+    "daemon": 25,
+    "sdk": 3,
+    "distinct_passed": 373,
+    "platform_omission": "35 host-only macOS SDK bodies"
+  },
+  "retained_failures": [
+    "07 external test path compile",
+    "12 external Timing closure compile",
+    "16 one fixture CaptureInFlight body",
+    "23 comparison_chain static"
+  ],
+  "source_repair_followup": "normalize cmp only affects14 captured bodies; final rebuild and source-scoped body recheck recorded separately; repeated bodies never increase distinct count",
+  "numerical_qualification": "NOT_EVALUATED",
+  "E1_samples": 0,
+  "goal": "active"
+}

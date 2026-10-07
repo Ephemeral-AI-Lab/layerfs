@@ -30,7 +30,9 @@ pub struct ReleaseWork {
     pub released: u64,
     /// Directories whose entries were traversed.
     pub traversed_directories: u64,
-    /// Largest simultaneous cursor depth.
+    /// Largest simultaneous release cursor-frame count, including independent
+    /// seeds. Indexed frames are backed. This is neither namespace path depth
+    /// nor a measurement of resident memory.
     pub peak_depth: usize,
 }
 
@@ -161,13 +163,10 @@ pub fn release_zero_count(
                 Some(PendingState::New { value, count }) => {
                     (value.map_or(base.kind, |value| value.kind), count)
                 }
-                Some(PendingState::Existing { value, delta }) => {
-                    let count = i128::from(base.namespace_ref_count) + i128::from(delta);
-                    (
-                        value.map_or(base.kind, |value| value.kind),
-                        u64::try_from(count.max(0)).unwrap_or(0),
-                    )
-                }
+                Some(PendingState::Existing { value, delta }) => (
+                    value.map_or(base.kind, |value| value.kind),
+                    super::meaning::derived_count(base.namespace_ref_count, delta)?,
+                ),
                 None => (base.kind, base.namespace_ref_count),
             };
             if count == 0 && kind == InodeKind::Directory {

@@ -15,7 +15,7 @@ pub(crate) struct Probe {
 /// Forward-only scan of one exact captured regular file. The caller supplies
 /// its already checked logical size, including authenticated base facts when
 /// there is no local inode row. This value acquires/releases no reader owner.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CapturedRunCursor {
     pub(crate) reader: CapturedReader,
     pub(crate) serial: u64,
@@ -64,6 +64,34 @@ impl CapturedRunCursor {
     }
     pub const fn logical_size(self) -> u64 {
         self.size
+    }
+    /// Checks strict forward metadata progress of a Continue reply at the same
+    /// logical position. Existing layer identities and completed probes stay
+    /// fixed; incomplete seeks never retreat and at least one seek advances.
+    /// This is a cursor invariant, not proof of provider I/O or authority.
+    pub fn metadata_advanced_from(self, previous: Self) -> bool {
+        if self.reader != previous.reader
+            || self.serial != previous.serial
+            || self.at != previous.at
+            || self.size != previous.size
+            || self.layer_count.is_none()
+            || previous.layer_count.is_some_and(|count| {
+                self.layer_count != Some(count) || self.generations != previous.generations
+            })
+        {
+            return false;
+        }
+        let mut advanced = false;
+        for (before, after) in previous.probes.iter().zip(&self.probes) {
+            if after.after < before.after || (before.ready && after != before) {
+                return false;
+            }
+            if before.cell.is_some() && before.cell != after.cell {
+                return false;
+            }
+            advanced |= after.after > before.after;
+        }
+        advanced
     }
     /// Skip an already-owned input interval while preserving every forward
     /// metadata seek/lookahead. A backwards pass requires a new cursor.

@@ -147,19 +147,6 @@ impl BaseView {
             logical_len,
         })
     }
-    fn file(&self, value: InodeValue) -> ContentResult<FileView> {
-        if value.kind != InodeKind::RegularFile {
-            return Err(ContentError::WrongLogicalRole);
-        }
-        Timing::disabled("base.file", |scope| {
-            FileView::open(
-                self.client.as_ref(),
-                value.content_root,
-                scope.child("file"),
-            )
-        })
-        .0
-    }
     /// Plans a bounded file read, clamps EOF and retains its immutable source.
     pub fn plan_read(&self, serial: u64, offset: u64, length: u32) -> ContentResult<BaseRead> {
         if length > 128 * 1024 {

@@ -577,3 +577,6 @@ impl layerfs_content::AuthenticatedObjects for Counted<'_> {
         self.store.read_canonical_batch(ids)
     }
 }
+
+pub mod reference_records;
+pub mod reference_rows;

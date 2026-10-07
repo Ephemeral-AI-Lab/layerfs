@@ -98,6 +98,20 @@ pub trait OverlayScratch {
         kind: u32,
         excluded: Option<[u8; 32]>,
     ) -> WorkspaceResult<ScratchReply<Vec<[u8; 32]>>>;
+    /// Non-destructive complete-key cursor, returning at most 64 sorted keys.
+    /// None precedes all identities; Some excludes keys <= that full identity.
+    /// Older providers refuse this separate capability explicitly.
+    fn scratch_keys_after(
+        &self,
+        _scope: IndexedScope,
+        _kind: u32,
+        _after: Option<[u8; 32]>,
+    ) -> WorkspaceResult<ScratchReply<Vec<[u8; 32]>>> {
+        Err(layerfs_content::ContentError::ProviderFailure {
+            what: "indexed construction key enumeration unavailable",
+        }
+        .into())
+    }
 }
 
 impl OverlayScratch for Overlay {
@@ -177,6 +191,16 @@ impl OverlayScratch for Overlay {
         excluded: Option<[u8; 32]>,
     ) -> WorkspaceResult<ScratchReply<Vec<[u8; 32]>>> {
         self.indexed_scratch_keys(scope, kind, excluded)
+            .map(ScratchReply::owned)
+            .map_err(Into::into)
+    }
+    fn scratch_keys_after(
+        &self,
+        scope: IndexedScope,
+        kind: u32,
+        after: Option<[u8; 32]>,
+    ) -> WorkspaceResult<ScratchReply<Vec<[u8; 32]>>> {
+        self.indexed_scratch_keys_after(scope, kind, after)
             .map(ScratchReply::owned)
             .map_err(Into::into)
     }

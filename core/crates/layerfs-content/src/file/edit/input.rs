@@ -133,6 +133,27 @@ pub trait EditSource {
     }
 }
 
+/// Stable indexed replacement runs whose metadata and bytes can both fail.
+///
+/// Each index names the corresponding final edit for the whole operation. Lengths
+/// and offset-addressed runs must remain replayable across the comparison and
+/// construction passes. An original failure stops the operation; construction
+/// neither retries the request nor substitutes another source.
+pub trait IndexedEditSource {
+    /// Exact logical length of one replacement, without reading its byte domain.
+    fn replacement_len(&self, edit_index: usize) -> ContentResult<u64>;
+
+    /// One bounded data window, logical zero span, or exact end at `offset`.
+    /// Data must fit `output`; a nonempty Zero may exceed that byte window but
+    /// must fit the replacement's declared remainder.
+    fn read_run_at(
+        &self,
+        edit_index: usize,
+        offset: u64,
+        output: &mut [u8],
+    ) -> ContentResult<FileRun>;
+}
+
 /// `Read` adapter over one declared replacement range.
 pub struct ReplacementReader<'a> {
     source: &'a dyn EditSource,

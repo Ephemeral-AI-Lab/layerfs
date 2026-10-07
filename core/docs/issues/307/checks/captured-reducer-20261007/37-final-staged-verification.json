@@ -1,0 +1,64 @@
+{
+  "staged_tree": "a3d7c52c1f1070c46dcaacec2c279638f72640ba",
+  "first_parent": "71a3a24b8f25fbb5cb5821c554c050be5e6a1182",
+  "product_tree": "d97312c619f0726ff863e05b9dbe450759cce0e1",
+  "counts": {
+    "combined": 170041,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/captured-final-staged-source",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 7276,
+          "layerfs-bridge": 1259,
+          "layerfs-bridge-legacy": 6834,
+          "layerfs-content": 18613,
+          "layerfs-daemon": 2623,
+          "layerfs-daemon-legacy": 2151,
+          "layerfs-fuse": 1447,
+          "layerfs-history": 817,
+          "layerfs-overlay": 7435,
+          "layerfs-persistence": 6706,
+          "layerfs-project": 1562,
+          "layerfs-sandbox": 1106,
+          "layerfs-sdk-legacy": 505,
+          "layerfs-server": 3996,
+          "layerfs-storage": 9336,
+          "layerfs-telemetry": 2262,
+          "layerfs-workspace": 3861,
+          "layerfs-workspace-legacy": 26835
+        },
+        "files": 736,
+        "lines": 104624
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "archive_sha256": "d1f5e5fc985cde36b95da2579873579f7e25a5337244adb1c1929260062c1e17",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "command": [
+    "python3",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/tools/production_loc.py",
+    "--root",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/cluster2-307/loc/captured-final-staged-source",
+    "--json"
+  ],
+  "matches_prepared": true,
+  "delta": 2365,
+  "scope_change": "none; one subsequent external assertion wrapping contributes0 production LOC",
+  "protected_notes_staged": false
+}

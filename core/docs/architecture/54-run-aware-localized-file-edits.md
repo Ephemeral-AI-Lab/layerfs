@@ -3,7 +3,12 @@
 > Status: source implementation following checkpoint
 > `dcdf527584675849e7839ca4118d71ac9aa4b193`; eleven public cases and affected
 > host/Linux checks pass in the [component checkpoint](../issues/307/SPARSE-SERIAL-PROGRESS-20261007.md).
-> Captured Overlay/Workspace normalization and integrated Commit remain separate.
+> The fallible indexed/borrowed-view extension following `71a3a24b8` has seven
+> public cases passing on host and Linux in the
+> [captured-file/reducer checkpoint](../issues/307/CAPTURED-FILE-REDUCER-20261007.md).
+> The owning Workspace adapter has its separate scope in
+> [captured file normalization](56-captured-file-normalization.md); integrated
+> Commit remains open.
 
 The additive `EditSource::read_run_at` returns the existing `FileRun::Data`,
 `Zero` or `End`. Its default delegates to `read_at`, preserving existing source
@@ -19,6 +24,52 @@ InvalidEdit outcome. Public `ReplacementReader` remains the existing byte adapte
 production construction uses the typed run cursor instead of converting failures
 through std::io. Caller-provided run stability is a contract, not an extra source
 probe or replay after an error.
+
+## Fallible indexed sources and retained base views
+
+The additive `IndexedEditSource` exposes fallible `replacement_len(index)` and
+`read_run_at(index, offset, output)` methods. `IndexedEditRequest` borrows one
+already-authenticated `FileView`, the stable `EditSequence` and that source.
+`apply_indexed_edits_view_backed` checks the accepted policy, exact policy-derived
+capacities and declared base length before source demands or effects. It never
+reopens the file root or repeats its representation classification. The caller
+must retain the view and demand provider in the same authorized operation context;
+the borrowed Content view is not an authority or revocation token.
+
+Both legacy entrypoints and the indexed/view entrypoint enter one private
+`apply_view` driver. A small Copy provider adapter gives that driver fallible
+metadata without changing the public `EditSource` or `ReplacementReader`
+signatures. Comparison, memory/backed chunked editing, WholeFile assembly,
+Empty emission and whole-base streaming keep the same canonical algorithms,
+predecessor hints and output ownership. A no-op still returns before the mutable
+editor's scope guard. A WholeFile-to-chunked stream still has no mutable mapping
+drafts and does not occupy that backing scope.
+
+Indexed comparison checks original length metadata before a length-difference
+shortcut, including an empty replacement. Legacy comparison retains its previous
+metadata-query behavior at those shortcuts. Each chunked construction cursor
+checks its length before boundary splits, then the same cursor supplies its runs.
+Metadata may be requested again in the separately planned construction pass;
+there is no resident length vector, hidden edit-at/source handshake or retry after
+a failure. Every typed length/read refusal propagates directly. Earlier accepted
+chunks and original failed consumer objects remain caller-owned, and construction
+performs no backing cleanup or scope release after the failure.
+
+This additive source implementation follows checkpoint `71a3a24b8`. Seven
+external `edit_indexed_view` cases cover canonical roots across representation
+transitions, explicit root-reacquisition refusal, original length and comparison
+read failures, no-op before occupied backing, pre-effect configuration/base-length
+refusal, accepted chunks before a late run failure and original consumer object
+custody with its predecessor hint. The integration owner's
+[host new-body receipt](../issues/307/checks/captured-reducer-20261007/09-content-new-bodies.json)
+and [Linux Content receipt](../issues/307/checks/captured-reducer-20261007/14-linux-content-bodies.json)
+record these seven cases passing. Together with the selected filesystem cases
+and affected regressions, 287 Content bodies pass on each platform. The prior
+eleven run cases' source-pinned checkpoint evidence remains unchanged; their
+affected host execution also appears in the
+[regression receipt](../issues/307/checks/captured-reducer-20261007/11-content-regressions.json).
+These are functional component proofs. The Content API alone establishes neither
+the Workspace's authenticated capture binding nor an integrated Commit result.
 
 ## One scanner and canonical builder
 
@@ -93,7 +144,10 @@ comparison work rather than construction nodes_read. Complete RunConstruction
 keeps its logical zero versus processed boundary counters.
 
 The caller must still provide stable captured Data/Zero runs and final normalized
-edits over the exact retained generation/root/floor. The existing captured byte
-window alone does not implement indexed sparse normalization. This slice supplies
-no chronological mutation replay, namespace/full-filesystem update, SaveFinish,
-Stage/CommitStaged, local install, release resolver or integrated Commit result.
+edits over the exact retained generation/root/floor. The owning
+[Workspace adapter](56-captured-file-normalization.md) now supplies that selected
+regular-file boundary; a captured byte window alone does not establish it. This
+Content slice supplies no chronological mutation replay, namespace/full-filesystem
+update, SaveFinish, Stage/CommitStaged, local install, release resolver or integrated
+Commit result. Original build failures 07 and 12 and captured fixture failure 16
+remain separate receipts in the later checkpoint; no E/Q qualification follows.

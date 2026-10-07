@@ -95,6 +95,57 @@ root qualification, original release/Commit composition and E/Q numerical/
 resource gates remain open. Component functional checks qualify none of those
 aggregate limits or performance gates.
 
+The subsequent [captured-file/reducer checkpoint](../issues/307/CAPTURED-FILE-REDUCER-20261007.md)
+implements [captured file normalization](56-captured-file-normalization.md) and
+the selected [P13 reference/release state](53-backed-filesystem-serial-state.md).
+The file adapter retains one captured cursor, one pending Gap or Window and one
+decoded Edit cache. A returned Window must have data length and capacity at most
+4,096 bytes, and inherited-mask capacity at most 512 bytes with the exact mask
+length for its data. Every returned raw construction-record allocation must fit
+65,536 bytes before decode. At most 64 numbered edit descriptors are accumulated
+for a guarded batch, within that same capacity allowance; the complete edit
+sequence is backed. These are local retained/transient allocation boundaries,
+separate from the Content engine, provider copies, SQL/pager/OS state and process
+residency. The [borrowed FileView entry point](54-run-aware-localized-file-edits.md)
+avoids another root classification and does not add a length vector or replay.
+
+Captured Continue transitions must advance actual metadata probes while retaining
+the original reader/serial/size/layer context. Unchanged, restarted or retreating
+continuations fail before another demand; there is no iteration cap substituted
+for progress. Inherited positions beyond authenticated base EOF become logical
+Zero, with no pending masked-byte credit. Disjoint file scopes can normalize
+multiple files under one retained capture and operation owner. Reader release
+does not resolve that capture, and retained read-after-close supplies no permission
+for new scratch writes. Such writes retain the actual Closed completion.
+
+P13 places count/effect rows, touched membership, FIFO release work and cursor
+frames behind the same indexed protocol. Each full-key window contains at most
+64 keys and each raw batch pays its actual nested capacities. One current cursor
+frame and bounded directory/base windows remain local; backing rows grow with
+actual work. `ReleaseWork::peak_depth` counts simultaneous cursor frames,
+including independent seed siblings, and is not path depth or a total resident
+bound. Required row/membership/queue records refuse when missing. Positive count
+overflow is typed LengthOverflow, and a final-row error reaches the fallible inode
+engine immediately rather than allowing EOF finalization. Original accepted
+children, failed Completion/command custody and record owners remain retained;
+there is no failed-operation replay or implicit release.
+
+The resident route retains its prior reducer/release allowances. Grouped
+validator/addition/graph containers, ordering-derived validator limits and
+whole-base/rebound alias walks remain open, as do namespace normalization, P14
+qualification and actual same-Save/Save/history/install/unknown integration.
+These component bounds and functional checks supply no E/Q numerical gate,
+eligible phase residency, physical allocation/reservation/high-water/freelist,
+device I/O, sustainable service rate or whole-operation resource acceptance.
+
+The current checkpoint's retained functional bodies total 408 host and 373
+Linux. Linux executes only three of the selected SDK bodies; the other 35 remain
+macOS-only. The captured fourteen pass on both platforms, with the host's unchanged
+thirteen passes retained from failed receipt 16 and only its corrected failed
+fixture added by receipt 18. Earlier build failures 07/12 and the actual
+CaptureInFlight fixture failure remain. No capacity, clock or physical gate is
+inferred from these body counts; final lint/native/source/LOC evidence is separate.
+
 The Service/Bridge file-save limits below describe the #252 source in the same
 commit as this note; older flow diagrams retain their historical source pins.
 The keyed namespace-tree subsection of §9 describes the #256 source of phase

@@ -28,6 +28,11 @@ pub enum IndexedScratchJob {
         scope: IndexedScope,
         kind: u32,
     },
+    KeysAfter {
+        scope: IndexedScope,
+        kind: u32,
+        after: Option<[u8; 32]>,
+    },
 }
 
 /// Original deciding outcomes stay inside the existing credited Completion.
@@ -56,7 +61,9 @@ impl IndexedScratchJob {
                 }
                 (input, SCRATCH_BYTES)
             }
-            Self::FirstKeys { .. } | Self::FirstKeysAll { .. } => (0, PAGE_ROWS * 32),
+            Self::FirstKeys { .. } | Self::FirstKeysAll { .. } | Self::KeysAfter { .. } => {
+                (0, PAGE_ROWS * 32)
+            }
         };
         std::mem::size_of::<Self>()
             .checked_add(std::mem::size_of::<IndexedScratchReply>())?
@@ -70,7 +77,8 @@ impl IndexedScratchJob {
             | Self::Get { scope, .. }
             | Self::Apply { scope, .. }
             | Self::FirstKeys { scope, .. }
-            | Self::FirstKeysAll { scope, .. } => *scope,
+            | Self::FirstKeysAll { scope, .. }
+            | Self::KeysAfter { scope, .. } => *scope,
         };
         if scope.owner.route() != route {
             return Err(OverlayError::Stale);
@@ -94,6 +102,9 @@ impl IndexedScratchJob {
                 .map(IndexedScratchReply::Keys),
             Self::FirstKeysAll { kind, .. } => db
                 .indexed_scratch_keys(scope, kind, None)
+                .map(IndexedScratchReply::Keys),
+            Self::KeysAfter { kind, after, .. } => db
+                .indexed_scratch_keys_after(scope, kind, after)
                 .map(IndexedScratchReply::Keys),
         }
     }

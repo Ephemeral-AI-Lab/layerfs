@@ -1,0 +1,26 @@
+warning: Patch `fuser v0.18.0 (/work/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.29s
+     Running tests/captured_runs.rs (core/target/cluster2-linux/debug/deps/captured_runs-82f9513705accf1e)
+     Running tests/construction_cursor.rs (core/target/cluster2-linux/debug/deps/construction_cursor-b0e41aa3f0faed9b)
+     Running tests/edit_backing.rs (core/target/cluster2-linux/debug/deps/edit_backing-8552214ab09a28b1)
+     Running tests/indexed_scratch.rs (core/target/cluster2-linux/debug/deps/indexed_scratch-f3d060076840d39b)
+     Running tests/job_cost.rs (core/target/cluster2-linux/debug/deps/job_cost-9e5e0d5b60e23c8e)
+     Running tests/owner.rs (core/target/cluster2-linux/debug/deps/owner-00e2738abbdf74df)
+     Running tests/upstream.rs (core/target/cluster2-linux/debug/deps/upstream-bb46ce3560aa9066)
+     Running tests/attachment.rs (core/target/cluster2-linux/debug/deps/attachment-6150b4ce9ebbee40)
+     Running tests/custody.rs (core/target/cluster2-linux/debug/deps/custody-5158bf958b0131ac)
+     Running tests/runtime.rs (core/target/cluster2-linux/debug/deps/runtime-2ea06079303783d8)
+     Running tests/runtime_binding.rs (core/target/cluster2-linux/debug/deps/runtime_binding-dd90b3e5650076e0)
+     Running tests/base.rs (core/target/cluster2-linux/debug/deps/base-6f19aeb96150d118)
+     Running tests/captured_file_edits.rs (core/target/cluster2-linux/debug/deps/captured_file_edits-6dd3cec93c87ddc6)
+     Running tests/namespace.rs (core/target/cluster2-linux/debug/deps/namespace-274bb5fb97e9cb45)
+     Running tests/namespace_daemon.rs (core/target/cluster2-linux/debug/deps/namespace_daemon-70451fe8637ffc96)
+     Running tests/namespace_profile.rs (core/target/cluster2-linux/debug/deps/namespace_profile-adfcc5a827eba1c4)
+     Running tests/namespace_view.rs (core/target/cluster2-linux/debug/deps/namespace_view-45a37ddec13e6a9e)
+     Running tests/nonfile.rs (core/target/cluster2-linux/debug/deps/nonfile-c8a4170c72e1e7dd)
+     Running tests/operation_scope.rs (core/target/cluster2-linux/debug/deps/operation_scope-b362ca1c42fdbb38)
+     Running tests/payload.rs (core/target/cluster2-linux/debug/deps/payload-30931ce7b6eb5d36)

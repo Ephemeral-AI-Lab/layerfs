@@ -38,7 +38,7 @@ impl<'a> SerialState<'a> {
         }
         Ok(())
     }
-    fn read(&self, kind: u32, serial: u64) -> ContentResult<Option<Vec<u8>>> {
+    pub(crate) fn read(&self, kind: u32, serial: u64) -> ContentResult<Option<Vec<u8>>> {
         let backing = self
             .backing
             .as_ref()
@@ -54,7 +54,7 @@ impl<'a> SerialState<'a> {
         }
         Ok(value)
     }
-    fn apply(&self, changes: Vec<ConstructionRecordChange>) -> ContentResult<()> {
+    pub(crate) fn apply(&self, changes: Vec<ConstructionRecordChange>) -> ContentResult<()> {
         let mut bytes = changes
             .capacity()
             .checked_mul(std::mem::size_of::<ConstructionRecordChange>())
@@ -93,6 +93,45 @@ impl<'a> SerialState<'a> {
                 what: "filesystem backing precondition",
             }),
         }
+    }
+    pub(crate) fn keys_after(
+        &self,
+        kind: u32,
+        after: Option<[u8; 32]>,
+    ) -> ContentResult<Vec<[u8; 32]>> {
+        let backing = self
+            .backing
+            .as_ref()
+            .ok_or(ContentError::InvalidRecord("filesystem backing mode"))?;
+        let keys = backing.borrow_mut().keys_after(kind, after)?;
+        Self::check_keys(&keys, keys.capacity(), after)?;
+        Ok(keys)
+    }
+    pub(crate) fn first_keys(&self, kind: u32) -> ContentResult<Vec<[u8; 32]>> {
+        let backing = self
+            .backing
+            .as_ref()
+            .ok_or(ContentError::InvalidRecord("filesystem backing mode"))?;
+        let keys = backing.borrow_mut().first_keys(kind, None)?;
+        Self::check_keys(&keys, keys.capacity(), None)?;
+        Ok(keys)
+    }
+    fn check_keys(
+        keys: &[[u8; 32]],
+        capacity: usize,
+        after: Option<[u8; 32]>,
+    ) -> ContentResult<()> {
+        if capacity > 64 || keys.len() > 64 {
+            return Err(ContentError::InvalidRecord("filesystem backing key window"));
+        }
+        let mut previous = after;
+        for key in keys {
+            if previous.is_some_and(|previous| previous >= *key) {
+                return Err(ContentError::NonCanonicalOrdering);
+            }
+            previous = Some(*key);
+        }
+        Ok(())
     }
     pub fn declare_parent(&self, serial: u64, limit: usize) -> ContentResult<()> {
         let next = self

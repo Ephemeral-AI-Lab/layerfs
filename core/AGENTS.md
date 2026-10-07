@@ -36,8 +36,12 @@ product mental model or campaign-specific benchmark procedures.
   membership, rebuilt roots and initial counts/final row streams. Remaining
   validation/reducer/release state stays under its existing resource limits.
   Captured local inode/run points retain exact reader root/floor and bounded
-  forward metadata progress. Captured normalization and Commit integration
-  remain unfinished.
+  forward metadata progress. Captured regular-file normalization now derives
+  authenticated base facts, coalesces final changes into indexed records and
+  consumes them once through the retained FileView/fallible edit source. Backed
+  reference reduction/release uses fixed rows, sealed membership passes and
+  guarded FIFO/cursor transitions. Namespace normalization, remaining validation/
+  topology state and complete Save/Commit integration remain unfinished.
   The external E01 example records original startup work, diagnostics and Stop
   without creating a Workspace route. It supplies diagnostic receipt consistency,
   not E1/E2 performance admission. Its relocated predecessor remains excluded; native executable/control/

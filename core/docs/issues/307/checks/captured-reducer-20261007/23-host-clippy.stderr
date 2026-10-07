@@ -1,0 +1,28 @@
+warning: Patch `fuser v0.18.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/vendor/fuser-0.18.0)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+    Checking layerfs-overlay v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-overlay)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-history)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-workspace)
+error: `if` chain can be rewritten with `match`
+   --> crates/layerfs-workspace/src/construction/captured/normalize.rs:95:5
+    |
+95  | /     if facts.final_size < facts.base_size {
+96  | |         writer.push(shared, Edit::delete(facts.final_size, facts.base_size))?;
+97  | |     } else if facts.final_size > facts.base_size {
+98  | |         writer.push(
+...   |
+101 | |         )?;
+102 | |     }
+    | |_____^ help: consider rewriting the `if` chain with `match`: `match facts.final_size.cmp(&facts.base_size) {...}`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#comparison_chain
+    = note: `-D clippy::comparison-chain` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::comparison_chain)]`
+
+error: could not compile `layerfs-workspace` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
