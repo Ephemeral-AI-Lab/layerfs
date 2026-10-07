@@ -1,0 +1,22 @@
+# {"timestamp": "2026-10-07T11:50:31.615503+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/complete_installed_roots-551c1b1e305c01ee", "--exact", "all_supported_native_paths_survive_install_with_full_oracles", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/complete_installed_roots-551c1b1e305c01ee": "840a85c23d6ef85c8df40ae0b719ff180c18d01ff0e048d13ef046e118c1417f"}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "b2a9e87b59ff8de204a9ebaab48e9ce40920fc85", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test all_supported_native_paths_survive_install_with_full_oracles ... Q1_INIT shape=Mixed entries=28 sealed_bytes=192512 host_sqlite=3.51.0
+Q1_INSTALL shape=Mixed bytes=192512 records=3 max_record=65519 daemon_sqlite=3.51.0
+
+thread 'all_supported_native_paths_survive_install_with_full_oracles' panicked at crates/layerfs-daemon/tests/support/complete_oracle.rs:88:9:
+assertion `left == right` failed: dependency-link
+  left: PortableMetadata { mode: 511, mtime_seconds: 1791373833, mtime_nanoseconds: 726789732 }
+ right: PortableMetadata { mode: 493, mtime_seconds: 1791373833, mtime_nanoseconds: 726789732 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    all_supported_native_paths_survive_install_with_full_oracles
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.06s
+
+
+# exit=101

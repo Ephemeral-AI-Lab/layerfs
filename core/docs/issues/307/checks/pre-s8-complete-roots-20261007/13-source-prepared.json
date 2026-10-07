@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-10-07T12:06:29.228722+00:00",
+  "parent": "b2a9e87b59ff8de204a9ebaab48e9ce40920fc85",
+  "files": {
+    "core/crates/layerfs-daemon/tests/complete_installed_roots.rs": "6899d851b7547b483e0d5b75c735da836f417dc702286a83c7a5cc67d908dd00",
+    "core/crates/layerfs-daemon/tests/support/complete_bytes.rs": "d05d1e1a6beffb39df95a8f0aac52f11d34226dca12e4b07a98466ffda9933e4",
+    "core/crates/layerfs-daemon/tests/support/complete_fixture.rs": "0212b2860bfc15d7351aa7f3c811cb2d29ef6fc1c51d750471c5b54630b19b7c",
+    "core/crates/layerfs-daemon/tests/support/complete_oracle.rs": "fe6a1c4b6dd967ceac4a6cff66651b37759b5da091e1f72f7df9f794df80c481",
+    "core/crates/layerfs-daemon/tests/support/native_install.rs": "09519cb71b1aeb5186b8ac6c5139faf5099e41ec68912e4d07624d44739cf392",
+    ".cargo/config.toml": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "core/Cargo.toml": "441b1162aacb628b299ed1e660a1bd08f9ce76e82ced5af5f777fb501f254544",
+    "core/Cargo.lock": "1339a41bdfcca8ec0f2f3569d46054f58251ef5d830daabbead35f07fbaf5b29"
+  },
+  "prepared": {
+    "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-24248-Wide/prepared.sqlite": "39d0bd5c614dc3b7d4ed2ec7477b2ff909e5030c817bb9ade1afe91c0e86c08e",
+    "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-24248-Wide/prepared.manifest": "35c1822940d37a1cf3c518f1a880d8ff7bce3bcecaccd7e8f6b82c2d452090ac",
+    "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-q1-24248-Wide/expected-metadata.txt": "6779ec9d025009061aa80b072ac859291490d641c4537743fb3e847943f19b5e"
+  }
+}

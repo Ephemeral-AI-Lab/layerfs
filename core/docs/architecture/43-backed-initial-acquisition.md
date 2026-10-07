@@ -184,3 +184,9 @@ is retained on local branch `codex/init-streaming-candidate` in the attached
 measurement worktree; it is not selected by an error or benchmark switch.
 All source pins, proofs and failed receipts remain in
 [the results](../issues/307/INIT-STREAMING-RESULTS-20261007.md).
+
+The later [F11 installed-root proof](../issues/307/PRE-S8-F11-20261007.md)
+compares all supported mixed paths/portable metadata,100,000 names,500,000,000
+dense bytes and1,000,000,019 sparse bytes after source removal, through daemon
+ports. Actual native files above4GiB are owner-waived; physical phase residency
+remains separately scoped to F14. Earlier receipts and verdicts are unchanged.

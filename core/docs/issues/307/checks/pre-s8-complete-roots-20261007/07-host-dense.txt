@@ -1,0 +1,15 @@
+# {"timestamp": "2026-10-07T11:57:22.701325+00:00", "command": ["perl", "-e", "alarm shift; exec @ARGV", "100", "core/target/debug/deps/complete_installed_roots-551c1b1e305c01ee", "--exact", "dense_500000000_native_bytes_survive_install", "--nocapture", "--test-threads=1"], "construction_workers": "1", "binaries": {"core/target/debug/deps/complete_installed_roots-551c1b1e305c01ee": "7412b4ef46c2501233504a22d6c45a37cc7fb0bbfcee186878918e9bbc12f648"}, "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "source_parent": "b2a9e87b59ff8de204a9ebaab48e9ce40920fc85", "wall_stop": "specified in command; build is not test execution"}
+
+running 1 test
+test dense_500000000_native_bytes_survive_install ... Q1_NATIVE shape=Dense logical=500000000 allocated=500002816
+Q1_INIT shape=Dense entries=2 sealed_bytes=506126336 host_sqlite=3.51.0
+Q1_INSTALL shape=Dense bytes=506126336 records=7725 max_record=65519 daemon_sqlite=3.51.0
+Q1_FULL_BYTES pattern=Dense compared=500000000 window=131072 metadata=exact
+Q1_ORACLE shape=Dense passed=true source_absent=true sealed_absent=true
+Q1_COUNTS shape=Dense post_install_mount_batches=0 warm_mount_batches=0 work=StoreWork { object_batches: 4038, object_ids: 25901, length_batches: 1, length_ids: 1, serial_reservations: 0 } cache=ClientWork { cache_hits: 26741, cache_misses: 25901, upstream_batches: 4038, authenticated_bytes: 501586797, evictions: 25461, charged_cache_bytes: 8386820, cached_objects: 440 }
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 7.71s
+
+
+# exit=0
